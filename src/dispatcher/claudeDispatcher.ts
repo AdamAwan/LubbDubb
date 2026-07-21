@@ -89,9 +89,10 @@ export class ClaudeDispatcher implements Dispatcher {
 
     const actionsRaw = (parsedJson as { actions?: unknown }).actions ?? parsedJson;
     const parsed = parseActions(actionsRaw);
-    const rationale = typeof (parsedJson as { rationale?: unknown }).rationale === 'string'
-      ? (parsedJson as { rationale: string }).rationale
-      : 'Claude dispatcher plan.';
+    const rationale =
+      typeof (parsedJson as { rationale?: unknown }).rationale === 'string'
+        ? (parsedJson as { rationale: string }).rationale
+        : 'Claude dispatcher plan.';
     return { ...parsed, rationale };
   }
 }

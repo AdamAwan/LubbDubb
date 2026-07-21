@@ -18,6 +18,13 @@ export type InjectableEvent =
   | { kind: 'ci_passed'; prNumber: number }
   | { kind: 'pr_comment'; prNumber: number; author: string; body: string }
   | { kind: 'new_pr'; number: number; title: string; branch: string }
-  | { kind: 'new_story'; title: string; priority?: number; description?: string; acceptanceCriteria?: string; wafPillars?: string[] }
+  | {
+      kind: 'new_story';
+      title: string;
+      priority?: number;
+      description?: string;
+      acceptanceCriteria?: string;
+      wafPillars?: string[];
+    }
   | { kind: 'story_state'; storyId: string; state: 'ready' | 'in_progress' | 'blocked' | 'done' }
   | { kind: 'meeting'; title: string; startsAt: string; prepDocs?: string[] };

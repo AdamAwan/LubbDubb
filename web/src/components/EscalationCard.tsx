@@ -11,7 +11,9 @@ export function EscalationCard({ escalation, onAnswer }: { escalation: Escalatio
         <span className="muted">{relTime(escalation.createdAt)}</span>
       </div>
       <div className="escalation-prompt">{escalation.prompt}</div>
-      {escalation.context?.taskTitle ? <div className="muted small">re: {String(escalation.context.taskTitle)}</div> : null}
+      {escalation.context?.taskTitle ? (
+        <div className="muted small">re: {String(escalation.context.taskTitle)}</div>
+      ) : null}
       <form
         className="reply"
         onSubmit={(e) => {
@@ -23,7 +25,9 @@ export function EscalationCard({ escalation, onAnswer }: { escalation: Escalatio
         }}
       >
         <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
-        <button className="btn primary" type="submit">Send</button>
+        <button className="btn primary" type="submit">
+          Send
+        </button>
       </form>
     </div>
   );

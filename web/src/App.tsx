@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, connectWs } from './api.js';
-import type { AppState, Agent, Escalation } from './types.js';
+import type { AppState, Agent } from './types.js';
 import { InjectPanel } from './components/InjectPanel.js';
 import { AgentCard } from './components/AgentCard.js';
 import { EscalationCard } from './components/EscalationCard.js';
@@ -65,8 +65,12 @@ export function App() {
           <span className={`chip ${connected ? 'ok' : 'bad'}`}>{connected ? 'live' : 'disconnected'}</span>
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
           <span className="chip">heartbeat: {Math.round(state.config.heartbeatIntervalMs / 1000)}s</span>
-          <span className="chip">cap: {liveAgents.length}/{state.config.maxConcurrentAgents}</span>
-          <button className="btn primary" onClick={() => api.pulse().then(refresh)}>Pulse now</button>
+          <span className="chip">
+            cap: {liveAgents.length}/{state.config.maxConcurrentAgents}
+          </span>
+          <button className="btn primary" onClick={() => api.pulse().then(refresh)}>
+            Pulse now
+          </button>
         </div>
       </header>
 
@@ -74,10 +78,18 @@ export function App() {
 
       <main className="grid">
         <section className="col">
-          <h2>Fleet <span className="count">{liveAgents.length}</span></h2>
+          <h2>
+            Fleet <span className="count">{liveAgents.length}</span>
+          </h2>
           {liveAgents.length === 0 && <p className="empty">No agents running. The harness is idle.</p>}
           {liveAgents.map((a) => (
-            <AgentCard key={a.id} agent={a} task={taskFor(state, a)} onOpen={() => setSelected(a.id)} onKill={() => api.killAgent(a.id).then(refresh)} />
+            <AgentCard
+              key={a.id}
+              agent={a}
+              task={taskFor(state, a)}
+              onOpen={() => setSelected(a.id)}
+              onKill={() => api.killAgent(a.id).then(refresh)}
+            />
           ))}
 
           {pastAgents.length > 0 && <h3 className="muted">History</h3>}
@@ -87,10 +99,16 @@ export function App() {
         </section>
 
         <section className="col">
-          <h2>Needs you <span className="count urgent">{openEscalations.length}</span></h2>
+          <h2>
+            Needs you <span className="count urgent">{openEscalations.length}</span>
+          </h2>
           {openEscalations.length === 0 && <p className="empty">Inbox zero. Nothing needs your judgment.</p>}
           {openEscalations.map((e) => (
-            <EscalationCard key={e.id} escalation={e} onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)} />
+            <EscalationCard
+              key={e.id}
+              escalation={e}
+              onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)}
+            />
           ))}
 
           <h3 className="muted">World</h3>
@@ -133,7 +151,10 @@ function WorldSummary({ state }: { state: AppState }) {
   const { pullRequests, stories, calendar } = state.world;
   return (
     <div className="world">
-      <div className="world-row"><span>PRs</span><b>{pullRequests.length}</b></div>
+      <div className="world-row">
+        <span>PRs</span>
+        <b>{pullRequests.length}</b>
+      </div>
       {pullRequests.map((pr) => (
         <div key={pr.id} className="world-item">
           {statusDot(pr.ciStatus)} #{pr.number} {pr.title}
@@ -142,7 +163,10 @@ function WorldSummary({ state }: { state: AppState }) {
           )}
         </div>
       ))}
-      <div className="world-row"><span>Stories</span><b>{stories.length}</b></div>
+      <div className="world-row">
+        <span>Stories</span>
+        <b>{stories.length}</b>
+      </div>
       {stories.map((s) => (
         <div key={s.id} className="world-item">
           {s.title} <span className="chip small">{s.state}</span>
@@ -150,7 +174,10 @@ function WorldSummary({ state }: { state: AppState }) {
           {s.wafPillars.length === 0 && <span className="chip small warn">no WAF</span>}
         </div>
       ))}
-      <div className="world-row"><span>Meetings</span><b>{calendar.length}</b></div>
+      <div className="world-row">
+        <span>Meetings</span>
+        <b>{calendar.length}</b>
+      </div>
       {calendar.map((c) => (
         <div key={c.id} className="world-item">
           {c.title} {!c.prepDone && c.prepDocs.length > 0 && <span className="chip small warn">prep pending</span>}

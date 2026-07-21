@@ -74,14 +74,20 @@ export class ActionExecutor {
             break;
           }
           if (liveCount >= this.deps.maxConcurrentAgents) {
-            record('deferred', `Deferred: concurrency cap ${this.deps.maxConcurrentAgents} reached; will retry next cycle.`);
+            record(
+              'deferred',
+              `Deferred: concurrency cap ${this.deps.maxConcurrentAgents} reached; will retry next cycle.`,
+            );
             break;
           }
           try {
             const { task, cwd } = await this.materializeTask(action);
             this.deps.agents.spawn(task, cwd);
             liveCount += 1;
-            record('executed', `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`);
+            record(
+              'executed',
+              `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`,
+            );
           } catch (err) {
             record('rejected', `Failed to start agent: ${(err as Error).message}`);
           }
@@ -102,7 +108,10 @@ export class ActionExecutor {
 
         case 'respond_to_agent': {
           const ok = this.deps.agents.respond(action.agentId, action.response);
-          record(ok ? 'executed' : 'skipped', ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`);
+          record(
+            ok ? 'executed' : 'skipped',
+            ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`,
+          );
           break;
         }
 
@@ -129,9 +138,18 @@ export class ActionExecutor {
               const esc = this.deps.escalations.create({
                 type: 'review_reply',
                 prompt: `Auto-send failed (${(err as Error).message}); review and send manually.\n\nDraft reply for PR #${action.prNumber}:\n\n${action.draft}`,
-                context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft, confidence, autoSendFailed: true },
+                context: {
+                  prNumber: action.prNumber,
+                  commentId: action.commentId,
+                  draft: action.draft,
+                  confidence,
+                  autoSendFailed: true,
+                },
               });
-              record('executed', `Auto-send to PR #${action.prNumber} failed (${(err as Error).message}); drafted and escalated for approval: ${esc.id}.`);
+              record(
+                'executed',
+                `Auto-send to PR #${action.prNumber} failed (${(err as Error).message}); drafted and escalated for approval: ${esc.id}.`,
+              );
             }
             break;
           }
@@ -156,7 +174,9 @@ export class ActionExecutor {
   }
 
   /** Create the task row and its working directory (worktree for code, scratch for desk). */
-  private async materializeTask(action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' }): Promise<{ task: Task; cwd: string }> {
+  private async materializeTask(
+    action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
+  ): Promise<{ task: Task; cwd: string }> {
     const { store } = this.deps;
     if (action.type === 'dispatch_code_agent') {
       const task = store.createTask({
@@ -190,7 +210,8 @@ export class ActionExecutor {
 function autoSendBlockedBy(gate: AutoSendConfig, actionType: string, confidence: number): string | null {
   if (!gate.enabled) return 'auto-send disabled';
   if (!gate.allowedActions.includes(actionType)) return `${actionType} not in allowed auto-send actions`;
-  if (confidence < gate.confidenceThreshold) return `confidence ${confidence.toFixed(2)} < ${gate.confidenceThreshold} threshold`;
+  if (confidence < gate.confidenceThreshold)
+    return `confidence ${confidence.toFixed(2)} < ${gate.confidenceThreshold} threshold`;
   return null;
 }
 

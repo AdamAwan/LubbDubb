@@ -103,7 +103,7 @@ export class PtySession extends EventEmitter {
 
   private handleData(data: string): void {
     this.emit('output', data);
-    const hay = (this.tail + data);
+    const hay = this.tail + data;
 
     // Completion sentinel wins over everything.
     if (hay.includes(this.opts.doneSentinel)) {

@@ -125,7 +125,14 @@ test('auto-sending a threaded reply marks the answered comment handled (world se
     rationale: 'test',
     rejected: [],
     actions: [
-      { type: 'reply_on_pr', prNumber: 42, commentId: before.id, draft: 'Because X.', confidence: 0.9, reason: 'answer' },
+      {
+        type: 'reply_on_pr',
+        prNumber: 42,
+        commentId: before.id,
+        draft: 'Because X.',
+        confidence: 0.9,
+        reason: 'answer',
+      },
     ],
   } as unknown as DispatchResult;
   await system.executor.execute('cyc', plan);

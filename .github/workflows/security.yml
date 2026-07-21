@@ -1,0 +1,49 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, Mondays 06:00 UTC — catches newly-disclosed advisories in existing deps.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Advisory: current transitive advisories (via vite/fastify) require major,
+      # breaking upgrades, so this reports without failing the build. Tighten to a
+      # hard gate (drop continue-on-error) once those upgrades land.
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    # Only runs on PRs — blocks a PR that introduces a new vulnerable dependency,
+    # without failing on advisories that already exist on the base branch.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

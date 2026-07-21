@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/server/main.ts", "test/**/*.test.ts", "scripts/*.ts", "web/src/main.tsx"],
+  "project": ["src/**/*.ts", "web/src/**/*.{ts,tsx}", "scripts/*.ts"],
+  "ignore": ["web/vite.config.ts"],
+  "ignoreDependencies": [],
+  "ignoreBinaries": [],
+  "vite": {
+    "config": ["web/vite.config.ts"]
+  },
+  "rules": {
+    "files": "error",
+    "dependencies": "error",
+    "devDependencies": "error",
+    "unlisted": "error",
+    "binaries": "error",
+    "unresolved": "error",
+    "exports": "warn",
+    "types": "warn",
+    "nsExports": "warn",
+    "nsTypes": "warn",
+    "duplicates": "warn",
+    "enumMembers": "warn"
+  }
+}

@@ -19,7 +19,9 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
 test('failing CI produces a code agent dispatch', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
-    ctx({ pullRequests: [{ id: 'p', number: 42, title: 'X', branch: 'feat', ciStatus: 'failing', unresolvedComments: [] }] }),
+    ctx({
+      pullRequests: [{ id: 'p', number: 42, title: 'X', branch: 'feat', ciStatus: 'failing', unresolvedComments: [] }],
+    }),
   );
   assert.equal(actions.length, 1);
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
@@ -69,7 +71,19 @@ test('a handled comment is ignored', async () => {
 test('story missing description is groomed by a desk agent', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
-    ctx({ stories: [{ id: 's1', title: 'Login', description: null, acceptanceCriteria: null, wafPillars: ['x'], state: 'ready', priority: 1 }] }),
+    ctx({
+      stories: [
+        {
+          id: 's1',
+          title: 'Login',
+          description: null,
+          acceptanceCriteria: null,
+          wafPillars: ['x'],
+          state: 'ready',
+          priority: 1,
+        },
+      ],
+    }),
   );
   assert.equal(actions[0]?.type, 'dispatch_desk_agent');
   assert.equal((actions[0] as { originRef: string }).originRef, 'story:s1:groom');
@@ -80,8 +94,24 @@ test('idle capacity picks up the highest-priority ready story', async () => {
   const { actions } = await d.decide(
     ctx({
       stories: [
-        { id: 'lo', title: 'Low', description: 'd', acceptanceCriteria: 'ac', wafPillars: ['x'], state: 'ready', priority: 1 },
-        { id: 'hi', title: 'High', description: 'd', acceptanceCriteria: 'ac', wafPillars: ['x'], state: 'ready', priority: 9 },
+        {
+          id: 'lo',
+          title: 'Low',
+          description: 'd',
+          acceptanceCriteria: 'ac',
+          wafPillars: ['x'],
+          state: 'ready',
+          priority: 1,
+        },
+        {
+          id: 'hi',
+          title: 'High',
+          description: 'd',
+          acceptanceCriteria: 'ac',
+          wafPillars: ['x'],
+          state: 'ready',
+          priority: 9,
+        },
       ],
     }),
   );
@@ -114,7 +144,18 @@ test('does not duplicate work already in flight for the same origin', async () =
       { pullRequests: [{ id: 'a', number: 1, title: 'A', branch: 'a', ciStatus: 'failing', unresolvedComments: [] }] },
       {
         tasks: [
-          { id: 't1', kind: 'code', title: 'x', prompt: 'x', branch: 'a', originRef: 'pr:1:ci', status: 'running', agentId: 'ag1', createdAt: 'n', updatedAt: 'n' },
+          {
+            id: 't1',
+            kind: 'code',
+            title: 'x',
+            prompt: 'x',
+            branch: 'a',
+            originRef: 'pr:1:ci',
+            status: 'running',
+            agentId: 'ag1',
+            createdAt: 'n',
+            updatedAt: 'n',
+          },
         ],
       },
     ),
