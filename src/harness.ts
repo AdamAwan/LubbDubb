@@ -74,6 +74,7 @@ export class Harness extends EventEmitter {
       const tasks = store.listTasks();
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
+      const recentDecisions = store.listDecisions(200);
       const headroom = Math.max(0, this.deps.maxConcurrentAgents - store.countLiveAgents());
 
       const plan = await this.deps.dispatcher.decide({
@@ -81,6 +82,7 @@ export class Harness extends EventEmitter {
         tasks,
         agents,
         openEscalations,
+        recentDecisions,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
       });
