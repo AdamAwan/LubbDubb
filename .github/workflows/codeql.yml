@@ -1,0 +1,41 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (JavaScript/TypeScript)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      # Advisory for now: the analysis runs, but uploading results needs Code
+      # scanning enabled (Settings → Code security; may require GitHub Advanced
+      # Security on a private repo). Until then the upload errors with "Code
+      # scanning is not enabled for this repository". continue-on-error keeps the
+      # PR green; enable the feature and drop continue-on-error to make findings
+      # gate the PR.
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        continue-on-error: true
+        with:
+          category: '/language:javascript-typescript'

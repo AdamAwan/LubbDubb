@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildClaudeArgs, buildClaudeStreamArgs, buildInitialMessage, PROTOCOL_SYSTEM_PROMPT } from '../src/agents/agentProtocol.js';
+import {
+  buildClaudeArgs,
+  buildClaudeStreamArgs,
+  buildInitialMessage,
+  PROTOCOL_SYSTEM_PROMPT,
+} from '../src/agents/agentProtocol.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -66,7 +71,10 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
 
   // The task prompt is typed into the session (delay 0 -> next tick).
   await new Promise((r) => setTimeout(r, 5));
-  assert.ok(backend.last().writes.some((w) => w.includes('missing')), 'expected the task prompt to be typed in');
+  assert.ok(
+    backend.last().writes.some((w) => w.includes('missing')),
+    'expected the task prompt to be typed in',
+  );
   system.store.close();
 });
 

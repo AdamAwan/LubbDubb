@@ -24,7 +24,9 @@ export class Hub {
   constructor(system: System) {
     const { harness, agents, escalations } = system;
 
-    harness.on('cycle:start', (e: { cycleId: string; source: string }) => this.broadcast({ type: 'cycle:start', ...e }));
+    harness.on('cycle:start', (e: { cycleId: string; source: string }) =>
+      this.broadcast({ type: 'cycle:start', ...e }),
+    );
     harness.on('cycle:end', (r: { cycleId: string; rationale: string; summary: unknown }) => {
       this.broadcast({ type: 'cycle:end', cycleId: r.cycleId, rationale: r.rationale, summary: r.summary });
       this.broadcast({ type: 'dirty' });

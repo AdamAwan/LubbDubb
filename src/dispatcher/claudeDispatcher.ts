@@ -89,9 +89,10 @@ export class ClaudeDispatcher implements Dispatcher {
 
     const actionsRaw = (parsedJson as { actions?: unknown }).actions ?? parsedJson;
     const parsed = parseActions(actionsRaw);
-    const rationale = typeof (parsedJson as { rationale?: unknown }).rationale === 'string'
-      ? (parsedJson as { rationale: string }).rationale
-      : 'Claude dispatcher plan.';
+    const rationale =
+      typeof (parsedJson as { rationale?: unknown }).rationale === 'string'
+        ? (parsedJson as { rationale: string }).rationale
+        : 'Claude dispatcher plan.';
     return { ...parsed, rationale };
   }
 }
@@ -113,6 +114,7 @@ function buildPrompt(ctx: DispatchContext): string {
     `You may start at most ${ctx.agentHeadroom} new agent(s) this cycle.`,
     'Only use these action types: dispatch_code_agent, dispatch_desk_agent, escalate_to_human, respond_to_agent, reply_on_pr, no_op.',
     'Every action must include a short "reason".',
+    'For reply_on_pr, include a "confidence" field (0..1) reflecting how sure you are the draft is correct and safe to send. The harness auto-sends only above its configured threshold; anything less is drafted and escalated for a human. When unsure, omit it or use a low value.',
     `Respond with ONLY a JSON object bracketed exactly like this: ${PLAN_START} {"rationale": "...", "actions": [...]} ${PLAN_END}`,
     steering,
     '',

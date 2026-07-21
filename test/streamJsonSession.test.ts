@@ -9,7 +9,9 @@ class FakeChild extends EventEmitter implements StreamChild {
   writes: string[] = [];
   killed = false;
   private stdoutEmitter = new EventEmitter();
-  stdout = { on: (ev: string, cb: (d: string) => void) => this.stdoutEmitter.on(ev, cb) } as unknown as NodeJS.ReadableStream;
+  stdout = {
+    on: (ev: string, cb: (d: string) => void) => this.stdoutEmitter.on(ev, cb),
+  } as unknown as NodeJS.ReadableStream;
   stderr = null;
   stdin = { write: (d: string) => this.writes.push(d), end: () => {} } as unknown as NodeJS.WritableStream;
 

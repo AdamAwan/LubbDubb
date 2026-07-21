@@ -8,7 +8,7 @@ export class FakePtyProcess implements PtyProcess {
   private dataCbs: ((d: string) => void)[] = [];
   private exitCbs: ((e: { exitCode: number; signal?: number }) => void)[] = [];
 
-  constructor(pid = Math.floor(1000 + Math.abs(hashString(String(Date.now()))) % 9000)) {
+  constructor(pid = Math.floor(1000 + (Math.abs(hashString(String(Date.now()))) % 9000))) {
     this.pid = pid;
   }
 

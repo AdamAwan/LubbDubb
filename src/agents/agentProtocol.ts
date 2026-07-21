@@ -19,7 +19,7 @@ export const PROTOCOL_SYSTEM_PROMPT = [
   '1. When you need a decision, clarification, or approval from the human before you can continue,',
   '   print a line EXACTLY in this form and then stop and wait:',
   '   @@LUBBDUBB_WAITING:<a one-line description of what you need>@@',
-  '   The harness will type the human\'s answer back to you; then continue.',
+  "   The harness will type the human's answer back to you; then continue.",
   '',
   '2. When you have completely finished the task (including any commit/push the task asked for),',
   '   print this on its own line as the very last thing you output:',

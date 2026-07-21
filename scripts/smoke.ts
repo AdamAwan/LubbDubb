@@ -82,7 +82,11 @@ async function main(): Promise<void> {
 
   const transcript = system.store.getTranscript(agent.id);
   log('--- agent transcript (tail) ---');
-  transcript.trim().split('\n').slice(-6).forEach((l) => console.log('    ' + l.trim()));
+  transcript
+    .trim()
+    .split('\n')
+    .slice(-6)
+    .forEach((l) => console.log('    ' + l.trim()));
 
   console.log('5. Simulate a crash + restart: reconcile should be a no-op now (agent already done).');
   const reconciled = reconcileOnBoot(system.store);

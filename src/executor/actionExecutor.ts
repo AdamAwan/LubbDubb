@@ -4,6 +4,8 @@ import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { WorktreeManager } from '../worktree/worktreeManager.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
+import type { ActionSink } from '../sink/actionSink.js';
+import type { AutoSendConfig } from '../config.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import type { Action, DecisionOutcome, Task } from '../types.js';
@@ -13,6 +15,10 @@ export interface ExecutorDeps {
   agents: AgentManager;
   worktrees: WorktreeManager;
   escalations: EscalationInbox;
+  /** Outbound seam for side-effectful actions the harness may auto-send. */
+  sink: ActionSink;
+  /** Confidence-gated auto-send policy. */
+  autoSend: AutoSendConfig;
   deskRoot: string;
   maxConcurrentAgents: number;
 }
@@ -68,14 +74,20 @@ export class ActionExecutor {
             break;
           }
           if (liveCount >= this.deps.maxConcurrentAgents) {
-            record('deferred', `Deferred: concurrency cap ${this.deps.maxConcurrentAgents} reached; will retry next cycle.`);
+            record(
+              'deferred',
+              `Deferred: concurrency cap ${this.deps.maxConcurrentAgents} reached; will retry next cycle.`,
+            );
             break;
           }
           try {
             const { task, cwd } = await this.materializeTask(action);
             this.deps.agents.spawn(task, cwd);
             liveCount += 1;
-            record('executed', `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`);
+            record(
+              'executed',
+              `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`,
+            );
           } catch (err) {
             record('rejected', `Failed to start agent: ${(err as Error).message}`);
           }
@@ -96,18 +108,59 @@ export class ActionExecutor {
 
         case 'respond_to_agent': {
           const ok = this.deps.agents.respond(action.agentId, action.response);
-          record(ok ? 'executed' : 'skipped', ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`);
+          record(
+            ok ? 'executed' : 'skipped',
+            ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`,
+          );
           break;
         }
 
         case 'reply_on_pr': {
-          // v1 safety: never post to a PR autonomously. Draft, then escalate for sign-off.
+          // Absent confidence means "no confidence stated" -> treat as 0 -> never auto-send.
+          const confidence = action.confidence ?? 0;
+          const gate = this.deps.autoSend;
+          const blockedBy = autoSendBlockedBy(gate, 'reply_on_pr', confidence);
+
+          if (!blockedBy) {
+            // Confident enough and enabled: actually send it through the sink.
+            try {
+              const res = await this.deps.sink.postPrReply({
+                prNumber: action.prNumber,
+                commentId: action.commentId,
+                body: action.draft,
+              });
+              record(
+                'executed',
+                `Auto-sent reply on PR #${action.prNumber} (confidence ${confidence.toFixed(2)} ≥ ${gate.confidenceThreshold} threshold).${res.ref ? ` ref=${res.ref}` : ''}`,
+              );
+            } catch (err) {
+              // Send failed — never drop the reply; fall back to draft + escalate.
+              const esc = this.deps.escalations.create({
+                type: 'review_reply',
+                prompt: `Auto-send failed (${(err as Error).message}); review and send manually.\n\nDraft reply for PR #${action.prNumber}:\n\n${action.draft}`,
+                context: {
+                  prNumber: action.prNumber,
+                  commentId: action.commentId,
+                  draft: action.draft,
+                  confidence,
+                  autoSendFailed: true,
+                },
+              });
+              record(
+                'executed',
+                `Auto-send to PR #${action.prNumber} failed (${(err as Error).message}); drafted and escalated for approval: ${esc.id}.`,
+              );
+            }
+            break;
+          }
+
+          // Not eligible for auto-send: draft, then escalate for sign-off (v1 default).
           const esc = this.deps.escalations.create({
             type: 'review_reply',
             prompt: `Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
-            context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft },
+            context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft, confidence },
           });
-          record('executed', `Drafted PR reply and escalated for approval: ${esc.id}.`);
+          record('executed', `Drafted PR reply and escalated for approval (${blockedBy}): ${esc.id}.`);
           break;
         }
 
@@ -121,7 +174,9 @@ export class ActionExecutor {
   }
 
   /** Create the task row and its working directory (worktree for code, scratch for desk). */
-  private async materializeTask(action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' }): Promise<{ task: Task; cwd: string }> {
+  private async materializeTask(
+    action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
+  ): Promise<{ task: Task; cwd: string }> {
     const { store } = this.deps;
     if (action.type === 'dispatch_code_agent') {
       const task = store.createTask({
@@ -145,6 +200,19 @@ export class ActionExecutor {
     mkdirSync(cwd, { recursive: true });
     return { task, cwd };
   }
+}
+
+/**
+ * Why an action may NOT be auto-sent, as a human-readable reason for the audit
+ * log — or `null` if it's clear to send. Centralises the gate so the reason the
+ * harness escalated is always explicit and consistent.
+ */
+function autoSendBlockedBy(gate: AutoSendConfig, actionType: string, confidence: number): string | null {
+  if (!gate.enabled) return 'auto-send disabled';
+  if (!gate.allowedActions.includes(actionType)) return `${actionType} not in allowed auto-send actions`;
+  if (confidence < gate.confidenceThreshold)
+    return `confidence ${confidence.toFixed(2)} < ${gate.confidenceThreshold} threshold`;
+  return null;
 }
 
 function safeJson(v: unknown): string {

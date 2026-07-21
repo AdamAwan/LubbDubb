@@ -30,22 +30,56 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
   return (
     <div className="inject">
       <span className="inject-label">Inject event:</span>
-      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'new_pr', number: nextPr, title: `Feature PR #${nextPr}`, branch: `feature/pr-${nextPr}` })}>
+      <button
+        className="btn"
+        disabled={busy}
+        onClick={() =>
+          inject({ kind: 'new_pr', number: nextPr, title: `Feature PR #${nextPr}`, branch: `feature/pr-${nextPr}` })
+        }
+      >
         + PR #{nextPr}
       </button>
       <button className="btn" disabled={busy} onClick={() => inject({ kind: 'ci_failed', prNumber: firstPr })}>
         CI failed on #{firstPr}
       </button>
-      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'pr_comment', prNumber: firstPr, author: 'reviewer', body: 'Can you rename this variable and add a test?' })}>
+      <button
+        className="btn"
+        disabled={busy}
+        onClick={() =>
+          inject({
+            kind: 'pr_comment',
+            prNumber: firstPr,
+            author: 'reviewer',
+            body: 'Can you rename this variable and add a test?',
+          })
+        }
+      >
         Comment on #{firstPr}
       </button>
-      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'new_story', title: 'Add password reset flow' })}>
+      <button
+        className="btn"
+        disabled={busy}
+        onClick={() => inject({ kind: 'new_story', title: 'Add password reset flow' })}
+      >
         + Story
       </button>
-      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'meeting', title: 'Architecture review', startsAt: inTwoHours, prepDocs: ['design.md', 'ADR-014'] })}>
+      <button
+        className="btn"
+        disabled={busy}
+        onClick={() =>
+          inject({
+            kind: 'meeting',
+            title: 'Architecture review',
+            startsAt: inTwoHours,
+            prepDocs: ['design.md', 'ADR-014'],
+          })
+        }
+      >
         + Meeting
       </button>
-      <button className="btn ghost" onClick={() => setOpen((o) => !o)}>{open ? 'Hide raw' : 'Raw JSON'}</button>
+      <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
+        {open ? 'Hide raw' : 'Raw JSON'}
+      </button>
       {open && (
         <form
           className="raw"
@@ -58,8 +92,14 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
             }
           }}
         >
-          <input placeholder='{"kind":"ci_failed","prNumber":42}' value={raw} onChange={(e) => setRaw(e.target.value)} />
-          <button className="btn primary" type="submit">Inject</button>
+          <input
+            placeholder='{"kind":"ci_failed","prNumber":42}'
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+          />
+          <button className="btn primary" type="submit">
+            Inject
+          </button>
         </form>
       )}
     </div>

@@ -57,7 +57,13 @@ export class Harness extends EventEmitter {
 
   async runCycle(source: 'timer' | 'manual' | 'boot' = 'manual'): Promise<CycleReport> {
     if (this.cycleInFlight) {
-      return { cycleId: 'coalesced', source, rationale: 'cycle already running', summary: { cycleId: 'coalesced', executed: 0, deferred: 0, rejected: 0 }, at: new Date().toISOString() };
+      return {
+        cycleId: 'coalesced',
+        source,
+        rationale: 'cycle already running',
+        summary: { cycleId: 'coalesced', executed: 0, deferred: 0, rejected: 0 },
+        at: new Date().toISOString(),
+      };
     }
     this.cycleInFlight = true;
     const cycleId = `cyc_${nanoid(8)}`;

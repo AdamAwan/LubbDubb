@@ -1,0 +1,58 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, Mondays 06:00 UTC — catches newly-disclosed advisories in existing deps.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Advisory: current transitive advisories (via vite/fastify) require major,
+      # breaking upgrades, so this reports without failing the build. Tighten to a
+      # hard gate (drop continue-on-error) once those upgrades land.
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    # Only runs on PRs — flags a PR that introduces a new vulnerable dependency,
+    # without failing on advisories that already exist on the base branch.
+    #
+    # Advisory for now: the action requires the Dependency graph (and, on a private
+    # repo, GitHub Advanced Security) to be enabled — until then it errors with
+    # "not supported on this repository". continue-on-error keeps the PR green; once
+    # the feature is enabled at Settings → Code security, drop continue-on-error to
+    # make this a hard gate on new high-severity dependencies.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        # Step-level (not job-level) continue-on-error, so the job's own check-run
+        # still concludes success — a job-level flag would leave the check red.
+        continue-on-error: true
+        with:
+          fail-on-severity: high

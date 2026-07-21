@@ -124,7 +124,8 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       if (this.turnText.includes(DONE_SENTINEL)) {
         this.finish('done');
       } else {
-        const reason = extractWaitingReason(this.turnText) ?? 'Agent ended its turn without finishing; awaiting direction.';
+        const reason =
+          extractWaitingReason(this.turnText) ?? 'Agent ended its turn without finishing; awaiting direction.';
         this.setWaiting(reason);
       }
       this.turnText = '';
@@ -170,7 +171,11 @@ interface StreamEvent {
 function extractText(ev: StreamEvent): string {
   const content = ev.message?.content;
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.filter((b) => b.type === 'text' && b.text).map((b) => b.text as string).join('');
+  if (Array.isArray(content))
+    return content
+      .filter((b) => b.type === 'text' && b.text)
+      .map((b) => b.text as string)
+      .join('');
   return '';
 }
 

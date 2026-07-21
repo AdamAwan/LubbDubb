@@ -61,7 +61,10 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
 
   // Agent asks for a decision and ends its turn -> escalation.
-  child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: '@@LUBBDUBB_WAITING:Which auth provider?@@' }] } });
+  child.emitLine({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: '@@LUBBDUBB_WAITING:Which auth provider?@@' }] },
+  });
   child.emitLine({ type: 'result', subtype: 'success' });
   assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
   const esc = system.store.listOpenEscalations()[0]!;

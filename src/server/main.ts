@@ -20,7 +20,9 @@ async function main(): Promise<void> {
   const { app } = await buildApp(system);
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`[lubbdubb] cockpit listening on http://localhost:${config.port}`);
-  console.log(`[lubbdubb] dispatcher=${config.dispatcher} heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`);
+  console.log(
+    `[lubbdubb] dispatcher=${config.dispatcher} heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`,
+  );
 
   system.harness.start();
   await system.harness.runCycle('boot');

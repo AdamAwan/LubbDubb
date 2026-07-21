@@ -45,16 +45,19 @@ export const ActionSchema = z.discriminatedUnion('type', [
     prNumber: z.number().int(),
     commentId: z.string().nullable().default(null),
     draft: z.string().min(1),
+    /**
+     * The dispatcher's self-reported confidence in this reply, 0..1. Gates
+     * auto-send: at or above the configured threshold (and with auto-send
+     * enabled) the harness sends it; otherwise it drafts and escalates. Absent
+     * is treated as 0 — no confidence stated means never auto-send.
+     */
+    confidence: z.number().min(0).max(1).optional(),
     ...base,
   }),
   z.object({ type: z.literal('no_op'), ...base }),
 ]);
 
 export type ValidatedAction = z.infer<typeof ActionSchema>;
-
-export const ActionPlanSchema = z.object({
-  actions: z.array(ActionSchema),
-});
 
 export interface ParseResult {
   actions: ValidatedAction[];
@@ -70,7 +73,11 @@ export function parseActions(raw: unknown): ParseResult {
   for (const item of arr) {
     const result = ActionSchema.safeParse(item);
     if (result.success) actions.push(result.data);
-    else rejected.push({ raw: item, error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
+    else
+      rejected.push({
+        raw: item,
+        error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      });
   }
   return { actions, rejected };
 }
