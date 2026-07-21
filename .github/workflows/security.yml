@@ -47,10 +47,12 @@ jobs:
     # the feature is enabled at Settings → Code security, drop continue-on-error to
     # make this a hard gate on new high-severity dependencies.
     if: github.event_name == 'pull_request'
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Review dependency changes
         uses: actions/dependency-review-action@v4
+        # Step-level (not job-level) continue-on-error, so the job's own check-run
+        # still concludes success — a job-level flag would leave the check red.
+        continue-on-error: true
         with:
           fail-on-severity: high
