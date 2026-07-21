@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css';
 import type { Agent, Task } from '../types.js';
 import { api } from '../api.js';
 import { statusDot } from './util.js';
+import { ConfirmButton } from './ConfirmButton.js';
 
 /**
  * The drill-down: live terminal output for one agent (rendered with xterm.js)
@@ -115,11 +116,7 @@ export function AgentDrawer({
                 Interrupt ⌃C
               </button>
             )}
-            {agent.status !== 'done' && (
-              <button className="btn danger" onClick={onKill}>
-                Kill
-              </button>
-            )}
+            {agent.status !== 'done' && <ConfirmButton label="Kill" confirmLabel="Confirm kill" onConfirm={onKill} />}
             <button className="btn" onClick={onClose}>
               Close
             </button>

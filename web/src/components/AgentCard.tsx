@@ -1,5 +1,6 @@
 import type { Agent, Task } from '../types.js';
 import { statusDot, elapsed } from './util.js';
+import { ConfirmButton } from './ConfirmButton.js';
 
 export function AgentCard({
   agent,
@@ -41,9 +42,7 @@ export function AgentCard({
           Open
         </button>
         {onKill && agent.status !== 'done' && (
-          <button className="btn danger" onClick={onKill}>
-            Kill
-          </button>
+          <ConfirmButton label="Kill" confirmLabel="Confirm kill" onConfirm={onKill} />
         )}
       </div>
     </div>
