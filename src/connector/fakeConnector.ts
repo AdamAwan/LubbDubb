@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { Connector, InjectableEvent } from './connector.js';
+import type { ActionSink, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { CalendarEvent, PullRequest, Story, WorldSnapshot } from '../types.js';
 
@@ -20,7 +21,7 @@ const EMPTY_WORLD: FakeWorld = { pullRequests: [], stories: [], calendar: [] };
  *
  * `now` is injectable so tests are deterministic.
  */
-export class FakeConnector implements Connector {
+export class FakeConnector implements Connector, ActionSink {
   constructor(
     private readonly store: Store,
     private readonly now: () => string = () => new Date().toISOString(),
@@ -29,6 +30,19 @@ export class FakeConnector implements Connector {
   async getState(): Promise<WorldSnapshot> {
     const world = this.read();
     return { takenAt: this.now(), ...world };
+  }
+
+  /**
+   * The outbound side of the fake world. "Sends" a PR reply by reflecting it back
+   * into the fake world — marking the answered comment handled so the loop settles
+   * — and logging a connector event. Nothing leaves the machine; a real GitHub
+   * sink would POST here instead.
+   */
+  async postPrReply(input: PrReplyInput): Promise<SendResult> {
+    if (input.commentId) this.markCommentHandled(input.prNumber, input.commentId);
+    const ref = `fake-reply_${nanoid(6)}`;
+    this.store.recordConnectorEvent('pr_reply_sent', { ...input, ref });
+    return { ok: true, ref };
   }
 
   /** Apply an event to the world, persist it, and log it. Returns the new world. */

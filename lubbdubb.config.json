@@ -5,5 +5,6 @@
   "claudeCommand": "bash",
   "claudeArgs": ["scripts/mock-agent.sh"],
   "whitelistedApprovals": [],
-  "steeringPriorities": []
+  "steeringPriorities": [],
+  "autoSend": { "enabled": false, "confidenceThreshold": 0.85, "allowedActions": ["reply_on_pr"] }
 }

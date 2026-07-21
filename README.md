@@ -4,7 +4,7 @@ A self-hosted, always-running **orchestration harness** for one software enginee
 
 The name is the heartbeat: the server's core is a periodic pulse that drives everything.
 
-> **v1 status — walking skeleton.** The harness *core* is built and tested end-to-end. Real DevOps/calendar/Gmail connectors, metric-driven prioritization, and confidence-gated auto-send are designed *around* but deliberately **not** built yet. See [`docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md`](docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md).
+> **v1 status — walking skeleton.** The harness *core* is built and tested end-to-end, now with **confidence-gated auto-send** (opt-in) for side-effectful actions. Real DevOps/calendar/Gmail connectors and metric-driven prioritization are designed *around* but deliberately **not** built yet. See [`docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md`](docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md).
 
 ---
 
@@ -76,7 +76,8 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
   "claudeCommand": "claude",
   "claudeArgs": [],
   "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
-  "steeringPriorities": []
+  "steeringPriorities": [],
+  "autoSend": { "enabled": false, "confidenceThreshold": 0.85, "allowedActions": ["reply_on_pr"] }
 }
 ```
 
@@ -84,6 +85,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 - **`claudeCommand` / `claudeArgs`** — how an agent session is launched. Defaults to `claude`. The included demo uses a mock agent (see below).
 - **`whitelistedApprovals`** — PTY prompts the harness may auto-answer instead of escalating.
 - **`steeringPriorities`** — optional hints injected into the LLM dispatcher's prompt.
+- **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself *only* when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
 - Env overrides: `PORT`, `LUBBDUBB_DB`.
 
 ### Try the demo without a real model

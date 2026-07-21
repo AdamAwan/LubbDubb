@@ -45,6 +45,13 @@ export const ActionSchema = z.discriminatedUnion('type', [
     prNumber: z.number().int(),
     commentId: z.string().nullable().default(null),
     draft: z.string().min(1),
+    /**
+     * The dispatcher's self-reported confidence in this reply, 0..1. Gates
+     * auto-send: at or above the configured threshold (and with auto-send
+     * enabled) the harness sends it; otherwise it drafts and escalates. Absent
+     * is treated as 0 — no confidence stated means never auto-send.
+     */
+    confidence: z.number().min(0).max(1).optional(),
     ...base,
   }),
   z.object({ type: z.literal('no_op'), ...base }),
