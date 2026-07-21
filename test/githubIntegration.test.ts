@@ -23,8 +23,6 @@ import type {
 } from '../src/integrations/github/githubApi.js';
 import type { MergeMethod } from '../src/sink/actionSink.js';
 
-const FIXED = () => '2026-01-01T00:00:00.000Z';
-
 /** Everything a test wants to script. Every field defaults to empty/benign. */
 interface Script {
   viewer?: string;
@@ -210,7 +208,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
     checkRuns: { sha7: [{ status: 'completed', conclusion: 'success' }] },
   });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED });
+  const sc = new GitHubSourceControlIntegration({ api, store });
   const slice = await sc.snapshot();
   const pr = slice.pullRequests![0]!;
   assert.equal(pr.number, 7);
@@ -229,7 +227,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
 test('snapshot leaves mergeable undefined when GitHub is still computing (null)', async () => {
   const { api } = fakeApi({ pulls: [pull({ number: 7 })], detail: { 7: { mergeable: null, merged: false } } });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED });
+  const sc = new GitHubSourceControlIntegration({ api, store });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.mergeable, undefined);
   store.close();
@@ -240,7 +238,7 @@ test('snapshot applies the prAuthor filter client-side', async () => {
     pulls: [pull({ number: 7, authorLogin: 'alice' }), pull({ number: 8, authorLogin: 'bob' })],
   });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED, prAuthor: 'alice' });
+  const sc = new GitHubSourceControlIntegration({ api, store, prAuthor: 'alice' });
   const prs = (await sc.snapshot()).pullRequests!;
   assert.deepEqual(
     prs.map((p) => p.number),
@@ -252,11 +250,11 @@ test('snapshot applies the prAuthor filter client-side', async () => {
 test('snapshot returns the last-good slice and records an error event on failure', async () => {
   const store = new Store(':memory:');
   const good = fakeApi({ pulls: [pull({ number: 7 })], detail: { 7: { mergeable: true, merged: false } } });
-  const sc = new GitHubSourceControlIntegration({ api: good.api, owner: 'o', repo: 'r', store, now: FIXED });
+  const sc = new GitHubSourceControlIntegration({ api: good.api, store });
   await sc.snapshot(); // warm the last-good cache
 
   const bad = fakeApi({ throwOn: 'listOpenPulls' });
-  const sc2 = new GitHubSourceControlIntegration({ api: bad.api, owner: 'o', repo: 'r', store, now: FIXED });
+  const sc2 = new GitHubSourceControlIntegration({ api: bad.api, store });
   await sc2.snapshot(); // cold + failing → empty, and it must not throw
   const slice = await sc2.snapshot();
   assert.deepEqual(slice.pullRequests, []);
@@ -270,7 +268,7 @@ test('snapshot returns the last-good slice and records an error event on failure
 test('postPrReply threads under a review comment when commentId is set', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED });
+  const sc = new GitHubSourceControlIntegration({ api, store });
   const res = await sc.postPrReply({ prNumber: 7, commentId: '100', body: 'because X' });
   assert.equal(res.ok, true);
   assert.match(res.ref!, /discussion_r100/);
@@ -282,7 +280,7 @@ test('postPrReply threads under a review comment when commentId is set', async (
 test('postPrReply posts a top-level comment when commentId is null', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED });
+  const sc = new GitHubSourceControlIntegration({ api, store });
   const res = await sc.postPrReply({ prNumber: 7, commentId: null, body: 'ping' });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.issueComments, [{ number: 7, body: 'ping' }]);
@@ -293,7 +291,7 @@ test('postPrReply posts a top-level comment when commentId is null', async () =>
 test('mergePr merges with the requested method and returns the merge sha', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED });
+  const sc = new GitHubSourceControlIntegration({ api, store });
   const res = await sc.mergePr({ prNumber: 7, method: 'squash' });
   assert.equal(res.ok, true);
   assert.equal(res.ref, 'mergedsha');
@@ -322,7 +320,7 @@ test('issues snapshot drops PRs and maps state / labels / linked PR', async () =
     timeline: { 101: [{ event: 'cross-referenced', sourcePrNumber: 55 }] },
   });
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED });
+  const issues = new GitHubIssuesIntegration({ api, store });
   const slice = await issues.snapshot();
   assert.equal(slice.issues!.length, 1);
   const issue = slice.issues![0]!;
@@ -337,7 +335,7 @@ test('issues snapshot drops PRs and maps state / labels / linked PR', async () =
 test('issues snapshot passes the issueLabel filter through to the API', async () => {
   const { api, recorded } = fakeApi({ issues: [] });
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, owner: 'o', repo: 'r', store, now: FIXED, issueLabel: 'bug' });
+  const issues = new GitHubIssuesIntegration({ api, store, issueLabel: 'bug' });
   await issues.snapshot();
   assert.deepEqual(recorded.issueLabelQueries, ['bug']);
   store.close();
@@ -346,7 +344,7 @@ test('issues snapshot passes the issueLabel filter through to the API', async ()
 test('issues snapshot returns the last-good slice and records an error event on failure', async () => {
   const store = new Store(':memory:');
   const bad = fakeApi({ throwOn: 'listOpenIssues' });
-  const issues = new GitHubIssuesIntegration({ api: bad.api, owner: 'o', repo: 'r', store, now: FIXED });
+  const issues = new GitHubIssuesIntegration({ api: bad.api, store });
   const slice = await issues.snapshot();
   assert.deepEqual(slice.issues, []);
   store.close();

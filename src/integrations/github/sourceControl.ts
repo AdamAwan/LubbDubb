@@ -5,11 +5,9 @@ import type { Capability, Integration, PrMergeCapable, PrReplyCapable, WorldSlic
 import type { GhCheckRun, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
 
 export interface GitHubSourceControlOpts {
+  /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
-  owner: string;
-  repo: string;
   store: Store;
-  now: () => string;
   /** Only surface PRs opened by this login. Unset = all open PRs. */
   prAuthor?: string;
 }

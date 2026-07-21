@@ -4,11 +4,9 @@ import type { Capability, Integration, WorldSlice } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
 
 export interface GitHubIssuesOpts {
+  /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
-  owner: string;
-  repo: string;
   store: Store;
-  now: () => string;
   /** Only surface issues carrying this label. Unset = all open issues. */
   issueLabel?: string;
 }
