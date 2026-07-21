@@ -20,6 +20,26 @@ export interface Config {
   autoSend: AutoSendConfig;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
+  /**
+   * How agents are launched.
+   * - `stream`: real Claude Code over headless stream-JSON (`-p --output-format
+   *   stream-json`). No TUI, runs unattended, supports the waiting/answer loop.
+   *   The production default.
+   * - `pty`: real Claude Code as an interactive terminal session. Requires a
+   *   claude that has completed first-run onboarding; kept for interactive use.
+   * - `raw`: run `claudeCommand`/`claudeArgs` verbatim, passing the prompt via
+   *   the `LUBBDUBB_PROMPT` env var. Used by the mock-agent demo and tests.
+   *
+   * In all `claude` modes the harness injects its status protocol via an
+   * appended system prompt and sets a permission mode.
+   */
+  agentMode: 'stream' | 'pty' | 'raw';
+  /** Passed to `claude --permission-mode` so unattended tool calls don't hang the agent. */
+  agentPermissionMode: string;
+  /** Wait this long after spawn before typing the task in, giving the REPL time to boot. */
+  agentPromptDelayMs: number;
+  /** Extra literal substrings that mean "the CLI is waiting for input" (backup escalation). */
+  agentWaitingPatterns: string[];
   /** Command used to launch an agent session (overridable for tests). */
   claudeCommand: string;
   /** Extra args passed to the agent command. */
@@ -67,6 +87,10 @@ const DEFAULTS: Config = {
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
   dispatcher: 'rule',
+  agentMode: 'stream',
+  agentPermissionMode: 'acceptEdits',
+  agentPromptDelayMs: 1200,
+  agentWaitingPatterns: [],
   claudeCommand: 'claude',
   claudeArgs: [],
   worktreeRoot: '.lubbdubb/worktrees',

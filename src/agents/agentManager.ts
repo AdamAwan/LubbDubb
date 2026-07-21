@@ -1,14 +1,26 @@
 import { EventEmitter } from 'node:events';
-import { PtySession } from '../pty/ptySession.js';
-import type { PtyBackend } from '../pty/backend.js';
 import type { Store } from '../store/store.js';
 import type { WhitelistRule } from '../config.js';
 import type { Agent, AgentStatus, Task } from '../types.js';
+import type { AgentSession, SessionFactory } from './session.js';
 
 export interface AgentManagerOptions {
   command: string;
   args: string[];
   whitelistedApprovals: WhitelistRule[];
+  /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
+  createSession: SessionFactory;
+  /**
+   * If set, the string it returns is delivered to the session as the first
+   * message once the process has had `promptDelayMs` to boot. Used to hand a
+   * real `claude` agent its task. Return null to send nothing (e.g. the mock
+   * agent, which reads its prompt from the environment).
+   */
+  initialInput?: (task: Task) => string | null;
+  /** Delay before sending the initial input, giving an interactive CLI time to start. */
+  promptDelayMs?: number;
+  /** Extra literal substrings a PTY session treats as "waiting for input". */
+  waitingPatterns?: string[];
 }
 
 interface AgentManagerEvents {
@@ -27,10 +39,9 @@ interface AgentManagerEvents {
  * for the harness to escalate.
  */
 export class AgentManager extends EventEmitter {
-  private readonly sessions = new Map<string, PtySession>();
+  private readonly sessions = new Map<string, AgentSession>();
 
   constructor(
-    private readonly backend: PtyBackend,
     private readonly store: Store,
     private readonly opts: AgentManagerOptions,
   ) {
@@ -39,11 +50,12 @@ export class AgentManager extends EventEmitter {
 
   /** Spawn an agent for a task in the given working directory. */
   spawn(task: Task, cwd: string): Agent {
-    const session = new PtySession(this.backend, {
+    const session = this.opts.createSession({
       command: this.opts.command,
       args: this.opts.args,
       cwd,
       env: { LUBBDUBB_PROMPT: task.prompt, LUBBDUBB_TASK_ID: task.id },
+      waitingPatterns: this.opts.waitingPatterns,
     });
 
     const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting' });
@@ -68,6 +80,27 @@ export class AgentManager extends EventEmitter {
     session.on('failed', () => this.handleTerminal(agent.id, task.id, 'failed'));
 
     session.start();
+
+    // Hand the agent its task. For a real `claude` REPL this is typed in after a
+    // short boot delay; the mock agent takes its prompt from the environment and
+    // opts out by returning null.
+    const initial = this.opts.initialInput?.(task) ?? null;
+    if (initial !== null) {
+      const delay = this.opts.promptDelayMs ?? 0;
+      const deliver = (): void => {
+        if (!this.sessions.has(agent.id)) return; // killed/finished before we could send
+        try {
+          session.send(initial);
+        } catch {
+          /* session already gone */
+        }
+      };
+      // Stream transport: stdin is ready at once, deliver synchronously. Interactive
+      // terminal: wait for the REPL to boot before typing.
+      if (delay <= 0) deliver();
+      else setTimeout(deliver, delay).unref?.();
+    }
+
     return agent;
   }
 

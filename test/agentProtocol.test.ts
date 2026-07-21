@@ -1,0 +1,93 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  buildClaudeArgs,
+  buildClaudeStreamArgs,
+  buildInitialMessage,
+  PROTOCOL_SYSTEM_PROMPT,
+} from '../src/agents/agentProtocol.js';
+import { loadConfig } from '../src/config.js';
+import { buildSystem } from '../src/system.js';
+import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import type { Task } from '../src/types.js';
+
+test('buildClaudeArgs injects the protocol system prompt and permission mode', () => {
+  const args = buildClaudeArgs({ permissionMode: 'acceptEdits', extraArgs: ['--model', 'x'] });
+  const i = args.indexOf('--append-system-prompt');
+  assert.ok(i >= 0);
+  assert.equal(args[i + 1], PROTOCOL_SYSTEM_PROMPT);
+  const p = args.indexOf('--permission-mode');
+  assert.ok(p >= 0);
+  assert.equal(args[p + 1], 'acceptEdits');
+  assert.deepEqual(args.slice(-2), ['--model', 'x']);
+});
+
+test('buildClaudeArgs omits permission mode when unset', () => {
+  const args = buildClaudeArgs({});
+  assert.equal(args.includes('--permission-mode'), false);
+});
+
+test('buildInitialMessage is the task prompt', () => {
+  const task = { prompt: 'do the thing' } as Task;
+  assert.equal(buildInitialMessage(task), 'do the thing');
+});
+
+test('buildClaudeStreamArgs requests headless bidirectional stream-json', () => {
+  const args = buildClaudeStreamArgs({ permissionMode: 'acceptEdits' });
+  assert.ok(args.includes('-p'));
+  assert.equal(args[args.indexOf('--input-format') + 1], 'stream-json');
+  assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
+  assert.ok(args.includes('--append-system-prompt'));
+  assert.ok(args.includes('--permission-mode'));
+});
+
+function claudeModeConfig() {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-claude-'));
+  return loadConfig({
+    dbPath: ':memory:',
+    dispatcher: 'rule',
+    agentMode: 'pty',
+    agentPromptDelayMs: 0, // send immediately in tests
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    heartbeatIntervalMs: 999_999,
+  });
+}
+
+test('claude-mode agents launch with protocol args and get the task typed in', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(claudeModeConfig(), { backend });
+
+  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  await system.harness.runCycle('manual');
+
+  // Spawned with our injected system prompt.
+  const spawn = backend.spawned[0]!;
+  assert.ok(spawn.args.includes('--append-system-prompt'));
+  assert.ok(spawn.args.includes('--permission-mode'));
+
+  // The task prompt is typed into the session (delay 0 -> next tick).
+  await new Promise((r) => setTimeout(r, 5));
+  assert.ok(
+    backend.last().writes.some((w) => w.includes('missing')),
+    'expected the task prompt to be typed in',
+  );
+  system.store.close();
+});
+
+test('claude-mode still detects the protocol sentinels from real output', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(claudeModeConfig(), { backend });
+  system.connector.inject({ kind: 'new_story', title: 'X', wafPillars: ['Cost'] });
+  await system.harness.runCycle('manual');
+
+  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  // Agent (a real claude, following the appended system prompt) announces it needs input.
+  backend.last().emit('I need to know the target framework.\n@@LUBBDUBB_WAITING:Which framework?@@\n');
+  assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  assert.equal(system.store.listOpenEscalations().length, 1);
+  system.store.close();
+});

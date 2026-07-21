@@ -42,6 +42,7 @@ async function main(): Promise<void> {
   const config = loadConfig({
     dbPath: join(scratch, 'db.sqlite'),
     dispatcher: 'rule',
+    agentMode: 'raw',
     claudeCommand: 'bash',
     claudeArgs: [scriptPath],
     repoRoot: repo,

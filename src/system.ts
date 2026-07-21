@@ -5,6 +5,10 @@ import type { ActionSink } from './sink/actionSink.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { WorktreeManager } from './worktree/worktreeManager.js';
 import { AgentManager } from './agents/agentManager.js';
+import { buildClaudeArgs, buildClaudeStreamArgs, buildInitialMessage } from './agents/agentProtocol.js';
+import { PtySession } from './pty/ptySession.js';
+import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
+import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
@@ -28,6 +32,8 @@ export interface BuildOptions {
   backend?: PtyBackend;
   /** Override the outbound sink (tests). Defaults to the FakeConnector. */
   sink?: ActionSink;
+  /** Inject a fake process spawner (tests) for the stream-JSON runtime. */
+  streamSpawner?: Spawner;
 }
 
 /**
@@ -41,10 +47,49 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const backend = opts.backend ?? new NodePtyBackend();
 
   const worktrees = new WorktreeManager(config.repoRoot, config.worktreeRoot);
-  const agents = new AgentManager(backend, store, {
+
+  // Pick the agent runtime and how it's launched from the configured mode.
+  const ptyFactory: SessionFactory = (spec) =>
+    new PtySession(backend, {
+      command: spec.command,
+      args: spec.args,
+      cwd: spec.cwd,
+      env: spec.env,
+      waitingPatterns: spec.waitingPatterns,
+    });
+  const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
+
+  const perm = config.agentPermissionMode;
+  const extraArgs = config.claudeArgs;
+  const agentSetup = {
+    stream: {
+      args: buildClaudeStreamArgs({ permissionMode: perm, extraArgs }),
+      factory: streamFactory,
+      initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
+      promptDelayMs: 0, // stdin is ready immediately; no TUI to wait for
+    },
+    pty: {
+      args: buildClaudeArgs({ permissionMode: perm, extraArgs }),
+      factory: ptyFactory,
+      initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
+      promptDelayMs: config.agentPromptDelayMs,
+    },
+    raw: {
+      args: config.claudeArgs,
+      factory: ptyFactory,
+      initialInput: undefined,
+      promptDelayMs: config.agentPromptDelayMs,
+    },
+  }[config.agentMode];
+
+  const agents = new AgentManager(store, {
     command: config.claudeCommand,
-    args: config.claudeArgs,
+    args: agentSetup.args,
     whitelistedApprovals: config.whitelistedApprovals,
+    createSession: agentSetup.factory,
+    initialInput: agentSetup.initialInput,
+    promptDelayMs: agentSetup.promptDelayMs,
+    waitingPatterns: config.agentWaitingPatterns,
   });
   const escalations = new EscalationInbox(store, agents);
 

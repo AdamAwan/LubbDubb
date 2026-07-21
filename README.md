@@ -41,18 +41,19 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
                                                             CockpitAPI + WebSocket ──► Cockpit SPA (React)
 ```
 
-| Module            | Responsibility                                                                                                                                       |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Heartbeat`       | The pulse — a timer that fires a dispatch cycle; can also be triggered on demand.                                                                    |
-| `Connector`       | The seam to the outside world. `FakeConnector` is an editable, persisted world you inject events into.                                               |
-| `Dispatcher`      | State in → validated action plan out. `RuleDispatcher` (deterministic default) or `ClaudeDispatcher` (drives a real Claude Code session over a PTY). |
-| `ActionExecutor`  | Turns actions into effects; origin de-dup + concurrency cap; writes the audit log.                                                                   |
-| `AgentManager`    | Owns the fleet of PTY agent sessions: spawn, stream, detect waiting/done, feed input, kill.                                                          |
-| `PtySession`      | **All** the PTY waiting/done heuristics, isolated behind one testable abstraction (the top technical risk).                                          |
-| `WorktreeManager` | Lazily creates/reuses git worktrees keyed by branch — code tasks only.                                                                               |
-| `EscalationInbox` | The human-in-the-loop surface; routes answers into live agents or the next cycle.                                                                    |
-| `Store`           | SQLite persistence + reconcile-on-restart.                                                                                                           |
-| `Cockpit SPA`     | The single web page: fleet, inbox, world, live agent output, decision log, inject + kill.                                                            |
+| Module              | Responsibility                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Heartbeat`         | The pulse — a timer that fires a dispatch cycle; can also be triggered on demand.                                                                    |
+| `Connector`         | The seam to the outside world. `FakeConnector` is an editable, persisted world you inject events into.                                               |
+| `Dispatcher`        | State in → validated action plan out. `RuleDispatcher` (deterministic default) or `ClaudeDispatcher` (drives a real Claude Code session over a PTY). |
+| `ActionExecutor`    | Turns actions into effects; origin de-dup + concurrency cap; writes the audit log.                                                                   |
+| `AgentManager`      | Owns the fleet of agent sessions: spawn, stream, detect waiting/done, feed input, kill — over any runtime.                                           |
+| `StreamJsonSession` | The production agent runtime: real `claude` over headless stream-JSON. No TUI, unattended, supports the waiting/answer loop.                         |
+| `PtySession`        | Terminal runtime (mock agent / interactive claude); all PTY waiting/done heuristics isolated behind one testable abstraction.                        |
+| `WorktreeManager`   | Lazily creates/reuses git worktrees keyed by branch — code tasks only.                                                                               |
+| `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle.                                                                    |
+| `Store`             | SQLite persistence + reconcile-on-restart.                                                                                                           |
+| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, inject + kill.                                                            |
 
 ## Getting started
 
@@ -82,15 +83,22 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 ```
 
 - **`dispatcher`** — `"rule"` (deterministic, no model calls) or `"claude"` (an LLM decides each cycle, output still schema-validated).
-- **`claudeCommand` / `claudeArgs`** — how an agent session is launched. Defaults to `claude`. The included demo uses a mock agent (see below).
-- **`whitelistedApprovals`** — PTY prompts the harness may auto-answer instead of escalating.
+- **`agentMode`** — how agents run:
+  - `"stream"` _(default)_ — real Claude Code over headless stream-JSON (`claude -p --output-format stream-json`). No interactive TUI, runs unattended, and stays alive across turns so the waiting/answer loop works. The harness injects its status protocol via an appended system prompt.
+  - `"pty"` — real Claude Code as an interactive terminal. Requires a `claude` that has completed first-run onboarding (theme, trust, login).
+  - `"raw"` — run `claudeCommand`/`claudeArgs` verbatim (the mock-agent demo and tests).
+- **`agentPermissionMode`** — passed to `claude --permission-mode` so unattended tool calls don't hang (default `acceptEdits`). Note: `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root — run the harness as a non-root user if you need it.
+- **`claudeCommand` / `claudeArgs`** — the agent binary and any extra args. Defaults to `claude`.
+- **`whitelistedApprovals`** — waiting prompts the harness may auto-answer instead of escalating.
 - **`steeringPriorities`** — optional hints injected into the LLM dispatcher's prompt.
 - **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself _only_ when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
 - Env overrides: `PORT`, `LUBBDUBB_DB`.
 
 ### Try the demo without a real model
 
-`scripts/mock-agent.sh` is a stand-in that speaks the same PTY protocol as a real `claude` agent. The committed `lubbdubb.config.json` points at it, so `npm start` works with no model auth. Swap `claudeCommand` back to `claude` for the real thing.
+`scripts/mock-agent.sh` is a stand-in that speaks the same protocol as a real `claude` agent. The committed `lubbdubb.config.json` uses `agentMode: "raw"` pointed at it, so `npm start` works with no model auth. For real agents, set `agentMode` to `"stream"` (recommended) and `claudeCommand` to `claude`.
+
+How real agents speak the protocol: the harness appends a system prompt telling the agent to print `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human and `@@LUBBDUBB_DONE@@` when finished. In `stream` mode each turn ends in a `result` event; the harness reads those sentinels to decide _waiting_ (→ escalate, then deliver your answer as the next message) vs _done_. This has been verified end-to-end against a live `claude`.
 
 ## Development
 
