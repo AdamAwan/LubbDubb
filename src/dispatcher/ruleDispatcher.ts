@@ -1,0 +1,160 @@
+import type { Dispatcher, DispatchContext, DispatchResult } from './dispatcher.js';
+import type { ValidatedAction } from './actions.js';
+import { parseActions } from './actions.js';
+import type { Task } from '../types.js';
+
+/**
+ * A deterministic, dependency-free dispatcher that encodes the harness's default
+ * priorities directly from the product vision:
+ *
+ *   1. A PR's CI is failing        -> spin up a code agent to fix it
+ *   2. A PR has an unhandled comment -> spin up a code agent to address it
+ *   3. A meeting today lacks prep    -> desk agent to prepare
+ *   4. A ready story lacks a description / acceptance criteria -> desk agent to groom
+ *   5. A ready story lacks WAF pillars -> desk agent to fill them
+ *   6. Nothing else in flight        -> pick up the highest-priority ready story
+ *   7. Otherwise                     -> no_op (recorded, so idleness is auditable)
+ *
+ * It is the safe default and the reference the LLM dispatcher is measured
+ * against. Every branch produces actions with an explicit `reason`.
+ */
+export class RuleDispatcher implements Dispatcher {
+  async decide(ctx: DispatchContext): Promise<DispatchResult> {
+    const raw: unknown[] = [];
+    const activeOrigins = new Set(
+      ctx.tasks
+        .filter((t) => isActive(t) && t.originRef)
+        .map((t) => t.originRef as string),
+    );
+    let headroom = ctx.agentHeadroom;
+
+    const canDispatch = (origin: string): boolean => headroom > 0 && !activeOrigins.has(origin);
+    const claim = (origin: string): void => {
+      activeOrigins.add(origin);
+      headroom -= 1;
+    };
+
+    // 1 & 2: React to PR signals first — they're time-sensitive.
+    for (const pr of ctx.world.pullRequests) {
+      const ciOrigin = `pr:${pr.number}:ci`;
+      if (pr.ciStatus === 'failing' && canDispatch(ciOrigin)) {
+        raw.push({
+          type: 'dispatch_code_agent',
+          branch: pr.branch,
+          title: `Fix failing CI on PR #${pr.number}`,
+          prompt: `CI is failing on PR #${pr.number} ("${pr.title}", branch ${pr.branch}). Investigate the failure and push a fix.`,
+          originRef: ciOrigin,
+          reason: `PR #${pr.number} has failing CI and no agent is on it.`,
+        } satisfies RawAction);
+        claim(ciOrigin);
+      }
+
+      for (const comment of pr.unresolvedComments) {
+        if (comment.handled) continue;
+        const cOrigin = `pr:${pr.number}:comment:${comment.id}`;
+        if (canDispatch(cOrigin)) {
+          raw.push({
+            type: 'dispatch_code_agent',
+            branch: pr.branch,
+            title: `Address review comment on PR #${pr.number}`,
+            prompt: `A reviewer commented on PR #${pr.number} (branch ${pr.branch}):\n\n"${comment.body}"\n\nDecide whether to fix the code or defend the current approach. If defending, prepare a concise reply.`,
+            originRef: cOrigin,
+            reason: `Unhandled review comment from ${comment.author} on PR #${pr.number}.`,
+          } satisfies RawAction);
+          claim(cOrigin);
+        }
+      }
+    }
+
+    // 3: Meeting prep.
+    for (const ev of ctx.world.calendar) {
+      if (ev.prepDone || ev.prepDocs.length === 0) continue;
+      const origin = `meeting:${ev.id}:prep`;
+      if (canDispatch(origin)) {
+        raw.push({
+          type: 'dispatch_desk_agent',
+          title: `Prep for "${ev.title}"`,
+          prompt: `You have a meeting "${ev.title}" at ${ev.startsAt}. Read and summarise these docs so I'm ready: ${ev.prepDocs.join(', ')}.`,
+          originRef: origin,
+          reason: `Meeting "${ev.title}" has unread prep docs.`,
+        } satisfies RawAction);
+        claim(origin);
+      }
+    }
+
+    // 4 & 5: Backlog hygiene on ready stories.
+    for (const story of ctx.world.stories) {
+      if (story.state !== 'ready') continue;
+
+      if (!story.description || !story.acceptanceCriteria) {
+        const origin = `story:${story.id}:groom`;
+        if (canDispatch(origin)) {
+          raw.push({
+            type: 'dispatch_desk_agent',
+            title: `Groom story "${story.title}"`,
+            prompt: `Story "${story.title}" is missing ${!story.description ? 'a description' : ''}${!story.description && !story.acceptanceCriteria ? ' and ' : ''}${!story.acceptanceCriteria ? 'acceptance criteria' : ''}. Draft them.`,
+            originRef: origin,
+            reason: `Ready story "${story.title}" lacks description/acceptance criteria.`,
+          } satisfies RawAction);
+          claim(origin);
+        }
+      }
+
+      if (story.wafPillars.length === 0) {
+        const origin = `story:${story.id}:waf`;
+        if (canDispatch(origin)) {
+          raw.push({
+            type: 'dispatch_desk_agent',
+            title: `Fill WAF pillars for "${story.title}"`,
+            prompt: `Story "${story.title}" has no Well-Architected Framework pillars set. Determine which pillars apply and document them.`,
+            originRef: origin,
+            reason: `Ready story "${story.title}" has no WAF pillars.`,
+          } satisfies RawAction);
+          claim(origin);
+        }
+      }
+    }
+
+    // 6: If there's still headroom and nothing urgent, pick up work.
+    if (headroom > 0) {
+      const candidate = ctx.world.stories
+        .filter((s) => s.state === 'ready' && s.description && s.acceptanceCriteria)
+        .sort((a, b) => b.priority - a.priority)[0];
+      if (candidate) {
+        const origin = `story:${candidate.id}:work`;
+        if (canDispatch(origin)) {
+          raw.push({
+            type: 'dispatch_code_agent',
+            branch: `story/${candidate.id}`,
+            title: `Implement "${candidate.title}"`,
+            prompt: `Implement story "${candidate.title}".\n\nDescription: ${candidate.description}\n\nAcceptance criteria: ${candidate.acceptanceCriteria}`,
+            originRef: origin,
+            reason: `Idle capacity; "${candidate.title}" is the highest-priority ready story.`,
+          } satisfies RawAction);
+          claim(origin);
+        }
+      }
+    }
+
+    if (raw.length === 0) {
+      raw.push({ type: 'no_op', reason: 'Nothing actionable this cycle.' } satisfies RawAction);
+    }
+
+    const parsed = parseActions(raw);
+    return {
+      ...parsed,
+      rationale: buildRationale(parsed.actions),
+    };
+  }
+}
+
+type RawAction = Record<string, unknown> & { type: string; reason: string };
+
+function isActive(t: Task): boolean {
+  return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
+}
+
+function buildRationale(actions: ValidatedAction[]): string {
+  if (actions.length === 1 && actions[0]?.type === 'no_op') return 'Rule dispatcher: nothing actionable.';
+  return `Rule dispatcher chose ${actions.length} action(s): ` + actions.map((a) => a.type).join(', ');
+}

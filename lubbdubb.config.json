@@ -1,0 +1,9 @@
+{
+  "heartbeatIntervalMs": 300000,
+  "maxConcurrentAgents": 3,
+  "dispatcher": "rule",
+  "claudeCommand": "bash",
+  "claudeArgs": ["scripts/mock-agent.sh"],
+  "whitelistedApprovals": [],
+  "steeringPriorities": []
+}
