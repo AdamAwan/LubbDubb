@@ -88,6 +88,10 @@ test('an open issue with no linked PR is dispatched to a code agent', async () =
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
   assert.equal((actions[0] as { branch: string }).branch, 'issue/101');
   assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101');
+  // The originating issue's human-readable context rides along on the action so
+  // the cockpit can show it without re-fetching from the provider (issue #17).
+  assert.equal((actions[0] as { originTitle: string }).originTitle, 'Login broken');
+  assert.equal((actions[0] as { originSummary: string }).originSummary, 'steps');
 });
 
 test('an issue already linked to a PR is not re-dispatched', async () => {
@@ -261,6 +265,9 @@ test('does not duplicate work already in flight for the same origin', async () =
             prompt: 'x',
             branch: 'a',
             originRef: 'pr:1:ci',
+            originTitle: null,
+            originSummary: null,
+            dispatchReason: null,
             status: 'running',
             agentId: 'ag1',
             createdAt: 'n',

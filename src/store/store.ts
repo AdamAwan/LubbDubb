@@ -30,7 +30,30 @@ export class Store {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.exec(SCHEMA);
+    this.migrate();
     this.now = clock;
+  }
+
+  /**
+   * Additive, idempotent migrations for databases created before a column
+   * existed. `CREATE TABLE IF NOT EXISTS` won't add columns to an existing
+   * table, so we backfill them here. Safe to run on every boot.
+   */
+  private migrate(): void {
+    this.ensureColumns('tasks', {
+      origin_title: 'TEXT',
+      origin_summary: 'TEXT',
+      dispatch_reason: 'TEXT',
+    });
+  }
+
+  private ensureColumns(table: string, columns: Record<string, string>): void {
+    const existing = new Set(
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name),
+    );
+    for (const [name, type] of Object.entries(columns)) {
+      if (!existing.has(name)) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+    }
   }
 
   close(): void {
@@ -56,11 +79,14 @@ export class Store {
       prompt: input.prompt,
       branch: input.branch,
       originRef: input.originRef,
+      originTitle: input.originTitle,
+      originSummary: input.originSummary,
+      dispatchReason: input.dispatchReason,
     };
     this.db
       .prepare(
-        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, status, agent_id, created_at, updated_at)
-         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @status, @agentId, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, status, agent_id, created_at, updated_at)
+         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @status, @agentId, @createdAt, @updatedAt)`,
       )
       .run(task);
     return task;
@@ -289,6 +315,9 @@ interface TaskRow {
   prompt: string;
   branch: string | null;
   origin_ref: string | null;
+  origin_title: string | null;
+  origin_summary: string | null;
+  dispatch_reason: string | null;
   status: string;
   agent_id: string | null;
   created_at: string;
@@ -333,6 +362,9 @@ function rowToTask(r: TaskRow): Task {
     prompt: r.prompt,
     branch: r.branch,
     originRef: r.origin_ref,
+    originTitle: r.origin_title,
+    originSummary: r.origin_summary,
+    dispatchReason: r.dispatch_reason,
     status: r.status as Task['status'],
     agentId: r.agent_id,
     createdAt: r.created_at,

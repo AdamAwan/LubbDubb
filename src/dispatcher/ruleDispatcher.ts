@@ -44,6 +44,8 @@ export class RuleDispatcher implements Dispatcher {
           title: `Fix failing CI on PR #${pr.number}`,
           prompt: `CI is failing on PR #${pr.number} ("${pr.title}", branch ${pr.branch}). Investigate the failure and push a fix.`,
           originRef: ciOrigin,
+          originTitle: pr.title,
+          originSummary: `PR #${pr.number} on branch ${pr.branch} · CI ${pr.ciStatus}${pr.approved ? ' · approved' : ''}`,
           reason: `PR #${pr.number} has failing CI and no agent is on it.`,
         } satisfies RawAction);
         claim(ciOrigin);
@@ -59,6 +61,8 @@ export class RuleDispatcher implements Dispatcher {
             title: `Address review comment on PR #${pr.number}`,
             prompt: `A reviewer commented on PR #${pr.number} (branch ${pr.branch}):\n\n"${comment.body}"\n\nDecide whether to fix the code or defend the current approach. If defending, prepare a concise reply.`,
             originRef: cOrigin,
+            originTitle: pr.title,
+            originSummary: `Review comment from ${comment.author}: ${comment.body}`,
             reason: `Unhandled review comment from ${comment.author} on PR #${pr.number}.`,
           } satisfies RawAction);
           claim(cOrigin);
@@ -96,6 +100,8 @@ export class RuleDispatcher implements Dispatcher {
           title: `Resolve issue #${issue.number}`,
           prompt: `GitHub issue #${issue.number} ("${issue.title}") needs resolving.\n\n${issue.body}\n\nImplement the fix on branch issue/${issue.number} and open a pull request that closes this issue.`,
           originRef: origin,
+          originTitle: issue.title,
+          originSummary: issue.body,
           reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
         } satisfies RawAction);
         claim(origin);
@@ -112,6 +118,8 @@ export class RuleDispatcher implements Dispatcher {
           title: `Prep for "${ev.title}"`,
           prompt: `You have a meeting "${ev.title}" at ${ev.startsAt}. Read and summarise these docs so I'm ready: ${ev.prepDocs.join(', ')}.`,
           originRef: origin,
+          originTitle: ev.title,
+          originSummary: `Starts ${ev.startsAt}. Prep docs: ${ev.prepDocs.join(', ')}.`,
           reason: `Meeting "${ev.title}" has unread prep docs.`,
         } satisfies RawAction);
         claim(origin);
@@ -130,6 +138,8 @@ export class RuleDispatcher implements Dispatcher {
             title: `Groom story "${story.title}"`,
             prompt: `Story "${story.title}" is missing ${!story.description ? 'a description' : ''}${!story.description && !story.acceptanceCriteria ? ' and ' : ''}${!story.acceptanceCriteria ? 'acceptance criteria' : ''}. Draft them.`,
             originRef: origin,
+            originTitle: story.title,
+            originSummary: story.description,
             reason: `Ready story "${story.title}" lacks description/acceptance criteria.`,
           } satisfies RawAction);
           claim(origin);
@@ -144,6 +154,8 @@ export class RuleDispatcher implements Dispatcher {
             title: `Fill WAF pillars for "${story.title}"`,
             prompt: `Story "${story.title}" has no Well-Architected Framework pillars set. Determine which pillars apply and document them.`,
             originRef: origin,
+            originTitle: story.title,
+            originSummary: story.description,
             reason: `Ready story "${story.title}" has no WAF pillars.`,
           } satisfies RawAction);
           claim(origin);
@@ -165,6 +177,8 @@ export class RuleDispatcher implements Dispatcher {
             title: `Implement "${candidate.title}"`,
             prompt: `Implement story "${candidate.title}".\n\nDescription: ${candidate.description}\n\nAcceptance criteria: ${candidate.acceptanceCriteria}`,
             originRef: origin,
+            originTitle: candidate.title,
+            originSummary: candidate.description,
             reason: `Idle capacity; "${candidate.title}" is the highest-priority ready story.`,
           } satisfies RawAction);
           claim(origin);

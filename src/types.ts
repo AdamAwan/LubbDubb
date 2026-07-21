@@ -116,6 +116,16 @@ export interface Task {
   branch: string | null;
   /** Free-form link back to the world object that spawned this (e.g. "pr:42"). */
   originRef: string | null;
+  /**
+   * Human-readable context about the originating item, captured at dispatch
+   * time so the cockpit can explain a running agent without re-fetching from
+   * the source provider (issue #17). `originTitle` is the source item's own
+   * title (issue/PR/story title), `originSummary` a body excerpt or state
+   * summary, and `dispatchReason` the reason the dispatcher started this task.
+   */
+  originTitle: string | null;
+  originSummary: string | null;
+  dispatchReason: string | null;
   status: TaskStatus;
   agentId: string | null;
   createdAt: string;
