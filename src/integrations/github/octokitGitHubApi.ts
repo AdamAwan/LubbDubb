@@ -52,6 +52,7 @@ export class OctokitGitHubApi implements GitHubApi {
       number: p.number,
       title: p.title,
       branch: p.head.ref,
+      baseBranch: p.base.ref,
       headSha: p.head.sha,
       authorLogin: p.user?.login ?? '',
       url: p.html_url,
@@ -60,7 +61,7 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async getPull(number: number): Promise<GhPullDetail> {
     const { data } = await this.octokit.pulls.get({ ...this.base, pull_number: number });
-    return { mergeable: data.mergeable, merged: data.merged };
+    return { mergeable: data.mergeable, mergeableState: data.mergeable_state ?? null, merged: data.merged };
   }
 
   async listPullReviews(number: number): Promise<GhReview[]> {

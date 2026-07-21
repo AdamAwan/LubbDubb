@@ -75,6 +75,13 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
       <button
         className="btn"
         disabled={busy}
+        onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr, mergeable: false, mergeableState: 'dirty' })}
+      >
+        Conflict #{firstPr}
+      </button>
+      <button
+        className="btn"
+        disabled={busy}
         onClick={() => inject({ kind: 'new_story', title: 'Add password reset flow' })}
       >
         + Story

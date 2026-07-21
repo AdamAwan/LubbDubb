@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { System } from '../system.js';
 import { Hub } from './hub.js';
+import { prHealth } from '../prHealth.js';
 import type { InjectableEvent } from '../connector/connector.js';
 
 /**
@@ -138,10 +139,16 @@ export function buildStateSnapshot(system: System) {
     // Live, mutable dispatch controls — the cockpit reads these (not the frozen
     // config block above) for the current cap and pause state.
     control: { cap: runtimeControl.cap, paused: runtimeControl.paused },
-    world,
+    // Fold each PR's signals into a health verdict so the cockpit can show *why*
+    // a PR is stuck rather than leaving it implied by the absence of activity.
+    world: {
+      ...world,
+      pullRequests: world.pullRequests.map((pr) => ({ ...pr, health: prHealth(pr) })),
+    },
     tasks: store.listTasks(),
     agents: store.listAgents(),
     escalations: store.listEscalations(),
     decisions: store.listDecisions(100),
+    worldEvents: store.listWorldEvents(100),
   }));
 }

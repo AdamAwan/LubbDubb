@@ -11,10 +11,12 @@ import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
+import { recentOutputExcerpt } from './escalation/context.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
+import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
 
@@ -118,10 +120,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     runtime: runtimeControl,
   });
 
+  // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
+  // by whichever dispatcher is selected — provider-agnostic.
+  const issuePickup: IssuePickupPolicy = {
+    pickupLabel: config.issuePickupLabel,
+    priorityLabels: config.issuePriorityLabels,
+    defaultPriority: config.issueDefaultPriority,
+  };
   const dispatcher: Dispatcher =
     config.dispatcher === 'claude'
-      ? new ClaudeDispatcher(backend, { command: config.claudeCommand, args: config.claudeArgs, cwd: config.repoRoot })
-      : new RuleDispatcher();
+      ? new ClaudeDispatcher(backend, {
+          command: config.claudeCommand,
+          args: config.claudeArgs,
+          cwd: config.repoRoot,
+          issuePickup,
+        })
+      : new RuleDispatcher(issuePickup);
 
   const harness = new Harness({
     store,
@@ -134,15 +148,32 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.
+  // Enrich with the task's originating signal and a tail of the agent's output so
+  // the human can answer from the card without opening the drawer for context.
   agents.on('waiting', ({ agentId, taskId, reason }) => {
     const task = store.getTask(taskId);
     escalations.create({
       type: 'answer_question',
       prompt: reason,
-      context: { taskTitle: task?.title, agentId, taskId },
+      context: {
+        taskTitle: task?.title,
+        originRef: task?.originRef ?? null,
+        recentOutput: recentOutputExcerpt(store.getTranscript(agentId)),
+      },
       agentId,
       taskId,
     });
+  });
+
+  // A dead agent can never receive an answer, so cascade-dismiss its open
+  // escalations at every terminal-dead transition. Kill surfaces as a `killed`
+  // status; an unexpected exit / crash surfaces as a `failed` done. (Server-restart
+  // orphans are handled separately by reconcileOnBoot, before the heartbeat runs.)
+  agents.on('status', ({ agentId, status }) => {
+    if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');
+  });
+  agents.on('done', ({ agentId, status }) => {
+    if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
   });
 
   return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl };
@@ -150,11 +181,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
 /**
  * Restart reconciliation: any agent still marked live in the store is really
- * dead (its PTY died with the process), so mark it — and its task — interrupted.
- * The next dispatch cycle decides whether to resume. Must run before the
- * heartbeat starts.
+ * dead (its PTY died with the process), so mark it — and its task — interrupted,
+ * and cascade-dismiss its now-orphaned open escalations (the fresh agent re-raises
+ * anything it still needs). The next dispatch cycle decides whether to resume.
+ * Must run before the heartbeat starts.
  */
-export function reconcileOnBoot(store: Store): number {
+export function reconcileOnBoot(store: Store, escalations: EscalationInbox): number {
   const zombies = store.listAgentsByStatus('starting', 'running', 'waiting');
   const at = new Date().toISOString();
   for (const agent of zombies) {
@@ -163,6 +195,7 @@ export function reconcileOnBoot(store: Store): number {
     if (task && (task.status === 'running' || task.status === 'waiting' || task.status === 'queued')) {
       store.updateTask(task.id, { status: 'interrupted' });
     }
+    escalations.dismissEscalationsForAgent(agent.id, 'server restart');
   }
   return zombies.length;
 }
