@@ -164,6 +164,49 @@ export class ActionExecutor {
           break;
         }
 
+        case 'merge_pr': {
+          // Merging is side-effectful, so it runs through the same auto-send gate
+          // as reply_on_pr: send only when enabled, allow-listed, and confident;
+          // otherwise escalate for a human to approve the merge.
+          const confidence = action.confidence ?? 0;
+          const gate = this.deps.autoSend;
+          const blockedBy = autoSendBlockedBy(gate, 'merge_pr', confidence);
+
+          if (!blockedBy) {
+            try {
+              const res = await this.deps.sink.mergePr({ prNumber: action.prNumber, method: action.method });
+              record(
+                'executed',
+                `Auto-merged PR #${action.prNumber} via ${action.method} (confidence ${confidence.toFixed(2)} ≥ ${gate.confidenceThreshold} threshold).${res.ref ? ` ref=${res.ref}` : ''}`,
+              );
+            } catch (err) {
+              // Merge failed — surface it for a human rather than silently dropping it.
+              const esc = this.deps.escalations.create({
+                type: 'approve_change',
+                prompt: `Auto-merge failed (${(err as Error).message}); review and merge PR #${action.prNumber} manually.`,
+                context: { prNumber: action.prNumber, method: action.method, confidence, autoMergeFailed: true },
+              });
+              record(
+                'executed',
+                `Auto-merge of PR #${action.prNumber} failed (${(err as Error).message}); escalated for approval: ${esc.id}.`,
+              );
+            }
+            break;
+          }
+
+          // Not eligible for auto-merge: escalate for explicit human sign-off (v1 default).
+          const esc = this.deps.escalations.create({
+            type: 'approve_change',
+            prompt: `PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
+            context: { prNumber: action.prNumber, method: action.method, confidence },
+          });
+          record(
+            'executed',
+            `PR #${action.prNumber} is merge-ready; escalated for merge approval (${blockedBy}): ${esc.id}.`,
+          );
+          break;
+        }
+
         case 'no_op':
           record('executed', `No-op: ${action.reason}`);
           break;

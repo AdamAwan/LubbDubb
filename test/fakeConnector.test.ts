@@ -14,6 +14,7 @@ test('a fresh connector reports an empty, timestamped world', async () => {
   const world = await connector.getState();
   assert.equal(world.takenAt, '2026-01-01T00:00:00.000Z');
   assert.deepEqual(world.pullRequests, []);
+  assert.deepEqual(world.issues, []);
   assert.deepEqual(world.stories, []);
   assert.deepEqual(world.calendar, []);
   store.close();
@@ -65,6 +66,28 @@ test('postPrReply on a threaded comment marks it handled and returns a ref', asy
 
   const after = (await connector.getState()).pullRequests[0]!.unresolvedComments[0]!;
   assert.equal(after.handled, true);
+  store.close();
+});
+
+test('markIssueLinked links an issue to its resolving PR', async () => {
+  const { store, connector } = newConnector();
+  connector.inject({ kind: 'new_issue', number: 12, title: 'Crash on save' });
+  const issue = (await connector.getState()).issues[0]!;
+  assert.equal(issue.linkedPrNumber, null);
+
+  connector.markIssueLinked(12, 77);
+  const after = (await connector.getState()).issues[0]!;
+  assert.equal(after.linkedPrNumber, 77);
+  store.close();
+});
+
+test('mergePr on the fake connector marks the PR merged', async () => {
+  const { store, connector } = newConnector();
+  connector.inject({ kind: 'new_pr', number: 8, title: 'X', branch: 'b' });
+  const result = await connector.mergePr({ prNumber: 8, method: 'squash' });
+  assert.equal(result.ok, true);
+  assert.match(result.ref!, /^fake-merge_/);
+  assert.equal((await connector.getState()).pullRequests[0]!.merged, true);
   store.close();
 });
 

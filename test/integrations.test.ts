@@ -7,7 +7,7 @@ import { loadConfig } from '../src/config.js';
 import type { IntegrationSelection } from '../src/integrations/integration.js';
 
 const FIXED = () => '2026-01-01T00:00:00.000Z';
-const FAKES: IntegrationSelection = { sourceControl: 'fake', backlog: 'fake', calendar: 'fake' };
+const FAKES: IntegrationSelection = { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' };
 
 function build(selection: IntegrationSelection = FAKES) {
   const store = new Store(':memory:');
@@ -19,7 +19,7 @@ function build(selection: IntegrationSelection = FAKES) {
 test('buildIntegrations resolves the default fake providers into one per capability', () => {
   const store = new Store(':memory:');
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED });
-  assert.deepEqual(integrations.map((i) => i.capability).sort(), ['backlog', 'calendar', 'sourceControl']);
+  assert.deepEqual(integrations.map((i) => i.capability).sort(), ['backlog', 'calendar', 'issues', 'sourceControl']);
   store.close();
 });
 
@@ -98,6 +98,68 @@ test('postPrReply throws when no PrReplyCapable integration is enabled', async (
 test('loadConfig deep-merges a single swapped capability over the fake defaults', () => {
   const config = loadConfig({ integrations: { sourceControl: 'github' } as IntegrationSelection });
   assert.equal(config.integrations.sourceControl, 'github');
+  assert.equal(config.integrations.issues, 'fake');
   assert.equal(config.integrations.backlog, 'fake');
   assert.equal(config.integrations.calendar, 'fake');
+});
+
+test('the issues connector surfaces injected issues in the world', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_issue', number: 101, title: 'Login is broken', labels: ['bug'] });
+  const world = await connector.getState();
+  assert.equal(world.issues.length, 1);
+  assert.equal(world.issues[0]!.number, 101);
+  assert.equal(world.issues[0]!.state, 'open');
+  assert.equal(world.issues[0]!.linkedPrNumber, null);
+  store.close();
+});
+
+test('injecting the same issue number twice does not duplicate it', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_issue', number: 5, title: 'X' });
+  connector.inject({ kind: 'new_issue', number: 5, title: 'X again' });
+  assert.equal((await connector.getState()).issues.length, 1);
+  store.close();
+});
+
+test('issue_linked_pr links an issue to its resolving PR (loop settles)', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_issue', number: 9, title: 'Bug' });
+  connector.inject({ kind: 'issue_linked_pr', number: 9, prNumber: 43 });
+  assert.equal((await connector.getState()).issues[0]!.linkedPrNumber, 43);
+  store.close();
+});
+
+test('PR monitoring: approval + mergeable signals mark a PR merge-ready', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b' });
+  connector.inject({ kind: 'ci_passed', prNumber: 7 });
+  connector.inject({ kind: 'pr_approved', prNumber: 7 });
+  connector.inject({ kind: 'pr_mergeable', prNumber: 7 });
+  const pr = (await connector.getState()).pullRequests[0]!;
+  assert.equal(pr.ciStatus, 'passing');
+  assert.equal(pr.approved, true);
+  assert.equal(pr.mergeable, true);
+  assert.equal(pr.merged, false);
+  store.close();
+});
+
+test('mergePr routes to the sourceControl provider and marks the PR merged', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b' });
+  const result = await connector.mergePr({ prNumber: 7, method: 'squash' });
+  assert.equal(result.ok, true);
+  assert.match(result.ref!, /^fake-merge_/);
+  assert.equal((await connector.getState()).pullRequests[0]!.merged, true);
+  store.close();
+});
+
+test('mergePr throws when no PrMergeCapable integration is enabled', async () => {
+  const store = new Store(':memory:');
+  const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
+    (i) => i.capability !== 'sourceControl',
+  );
+  const connector = new CompositeConnector(integrations, store, FIXED);
+  await assert.rejects(() => connector.mergePr({ prNumber: 1, method: 'squash' }), /no integration can merge PRs/);
+  store.close();
 });

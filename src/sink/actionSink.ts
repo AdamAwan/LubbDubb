@@ -19,6 +19,14 @@ export interface PrReplyInput {
   body: string;
 }
 
+export type MergeMethod = 'merge' | 'squash' | 'rebase';
+
+export interface PrMergeInput {
+  prNumber: number;
+  /** How to land the branch. */
+  method: MergeMethod;
+}
+
 export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
@@ -28,4 +36,6 @@ export interface SendResult {
 export interface ActionSink {
   /** Post a reply on a pull request. Throws if the send fails. */
   postPrReply(input: PrReplyInput): Promise<SendResult>;
+  /** Merge a pull request (the last step of the issue → PR → merge loop). Throws if the merge fails. */
+  mergePr(input: PrMergeInput): Promise<SendResult>;
 }

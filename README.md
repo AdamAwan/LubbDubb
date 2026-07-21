@@ -24,11 +24,17 @@ The default priorities (encoded in the `RuleDispatcher`) come straight from the 
 | ------------------------------------------------------- | -------------------------------------------------- |
 | A PR's CI is failing                                    | Spin up a code agent to fix it                     |
 | A PR has an unhandled review comment                    | Spin up a code agent to address/defend             |
+| A PR is green, approved and mergeable                   | Merge it in (gated by auto-send)                   |
+| An open GitHub issue has no linked PR                   | Spin up a code agent to resolve it into a PR       |
 | A meeting today lacks prep                              | Desk agent reads the docs and summarises           |
 | A ready story lacks a description / acceptance criteria | Desk agent drafts them                             |
 | A ready story lacks WAF pillars                         | Desk agent fills them in                           |
 | Idle capacity                                           | Pick up the highest-priority ready story           |
 | Nothing actionable                                      | `no_op` (still recorded, so idleness is auditable) |
+
+Together the issue and PR rules close the loop the harness is built around: **pick up
+a GitHub issue → resolve it into a PR → drive that PR (CI green, comments handled,
+approved, mergeable) the last mile to merged.**
 
 ## Architecture
 
@@ -79,7 +85,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
   "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
   "steeringPriorities": [],
   "autoSend": { "enabled": false, "confidenceThreshold": 0.85, "allowedActions": ["reply_on_pr"] },
-  "integrations": { "sourceControl": "fake", "backlog": "fake", "calendar": "fake" }
+  "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake", "calendar": "fake" }
 }
 ```
 
@@ -92,7 +98,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 - **`claudeCommand` / `claudeArgs`** — the agent binary and any extra args. Defaults to `claude`.
 - **`whitelistedApprovals`** — waiting prompts the harness may auto-answer instead of escalating.
 - **`steeringPriorities`** — optional hints injected into the LLM dispatcher's prompt.
-- **`integrations`** — which provider fulfils each capability. The world behind the `Connector` is built from one integration per capability — `sourceControl` (pull requests), `backlog` (stories), `calendar` (meetings) — and each capability has interchangeable providers registered in `src/integrations/registry.ts`. This is the **swap switch**: change a value to point a capability at another provider (e.g. `"sourceControl": "github"` to go from the fake source-control world to a real GitHub adapter, or later Azure DevOps) without touching the harness, executor, or the other integrations. Only the built-in `fake` provider ships in v1; a real adapter is a drop-in — add it to the registry and select it here. Unlisted capabilities keep the `fake` default.
+- **`integrations`** — which provider fulfils each capability. The world behind the `Connector` is built from one integration per capability — `sourceControl` (pull requests, including their merge-readiness for PR monitoring), `issues` (GitHub-style issues the harness resolves into PRs), `backlog` (stories), `calendar` (meetings) — and each capability has interchangeable providers registered in `src/integrations/registry.ts`. This is the **swap switch**: change a value to point a capability at another provider (e.g. `"sourceControl": "github"` to go from the fake source-control world to a real GitHub adapter, or later Azure DevOps) without touching the harness, executor, or the other integrations. Only the built-in `fake` provider ships in v1; a real adapter is a drop-in — add it to the registry and select it here. Unlisted capabilities keep the `fake` default.
 - **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself _only_ when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
 - Env overrides: `PORT`, `LUBBDUBB_DB`.
 
@@ -150,4 +156,10 @@ Every push and pull request against `main` runs three GitHub Actions workflows
 
 ## Safety (v1)
 
-Nothing side-effectful leaves the system autonomously. `reply_on_pr` **drafts** a reply and escalates it for your approval; the harness never posts to a PR or pushes on your behalf without an explicit human action.
+Nothing side-effectful leaves the system autonomously. Both outbound PR actions —
+`reply_on_pr` (posting a review reply) and `merge_pr` (landing a PR) — go through the
+same confidence-gated auto-send seam, which is **off by default**: the harness
+**drafts** the reply / **escalates** the merge for your approval and never posts,
+pushes, or merges on your behalf without an explicit human action. Opt a specific
+action into autonomy by enabling `autoSend` and adding it to `allowedActions` (e.g.
+`["reply_on_pr", "merge_pr"]`).

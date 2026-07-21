@@ -94,7 +94,7 @@ const DEFAULTS: Config = {
   whitelistedApprovals: [],
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
-  integrations: { sourceControl: 'fake', backlog: 'fake', calendar: 'fake' },
+  integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',

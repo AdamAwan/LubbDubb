@@ -1,7 +1,7 @@
 import type { Config } from '../config.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
-import type { PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { WorldSnapshot } from '../types.js';
 
 /**
@@ -19,13 +19,13 @@ import type { WorldSnapshot } from '../types.js';
  */
 
 /** The kinds of integration the harness understands. Mirrors {@link WorldSnapshot}. */
-export type Capability = 'sourceControl' | 'backlog' | 'calendar';
+export type Capability = 'sourceControl' | 'issues' | 'backlog' | 'calendar';
 
 /** One provider chosen per capability. This is the swap switch (set in config). */
 export type IntegrationSelection = Record<Capability, string>;
 
 /** One integration's contribution to the world — only the domains it owns. */
-export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'stories' | 'calendar'>>;
+export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'issues' | 'stories' | 'calendar'>>;
 
 /** Everything a provider factory needs to build an integration. */
 export interface IntegrationContext {
@@ -61,6 +61,15 @@ export interface PrReplyCapable {
 
 export function isPrReplyCapable(x: Integration): x is Integration & PrReplyCapable {
   return typeof (x as Partial<PrReplyCapable>).postPrReply === 'function';
+}
+
+/** An integration that can merge a pull request — the outbound side of PR monitoring. */
+export interface PrMergeCapable {
+  mergePr(input: PrMergeInput): Promise<SendResult>;
+}
+
+export function isPrMergeCapable(x: Integration): x is Integration & PrMergeCapable {
+  return typeof (x as Partial<PrMergeCapable>).mergePr === 'function';
 }
 
 // ---------------------------------------------------------------------------

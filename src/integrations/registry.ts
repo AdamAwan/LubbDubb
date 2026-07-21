@@ -1,6 +1,7 @@
 import type { Capability, Integration, IntegrationContext, IntegrationSelection } from './integration.js';
 import { FakeWorldStore } from './fake/fakeWorld.js';
 import { FakeGitHubIntegration } from './fake/fakeGitHub.js';
+import { FakeIssuesIntegration } from './fake/fakeIssues.js';
 import { FakeBacklogIntegration } from './fake/fakeBacklog.js';
 import { FakeCalendarIntegration } from './fake/fakeCalendar.js';
 
@@ -15,6 +16,9 @@ type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integ
 const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   sourceControl: {
     fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.store),
+  },
+  issues: {
+    fake: (_ctx, world) => new FakeIssuesIntegration(world),
   },
   backlog: {
     fake: (_ctx, world) => new FakeBacklogIntegration(world),

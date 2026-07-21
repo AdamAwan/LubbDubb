@@ -101,6 +101,9 @@ test('a send failure never drops the reply — it falls back to escalation', asy
     async postPrReply() {
       throw new Error('network down');
     },
+    async mergePr() {
+      throw new Error('network down');
+    },
   };
   const system = buildSystem(config, { backend: new FakePtyBackend(), sink: failingSink });
   await system.executor.execute('cyc', replyPlan(0.95));
@@ -109,6 +112,71 @@ test('a send failure never drops the reply — it falls back to escalation', asy
   assert.equal(open.length, 1, 'failed send must still surface for a human');
   assert.equal(open[0]!.context.autoSendFailed, true);
   assert.match(replyDecision(system)!.detail, /Auto-send to PR #42 failed \(network down\)/);
+  system.store.close();
+});
+
+/** A plan carrying a single merge_pr action at the given confidence. */
+function mergePlan(confidence?: number): DispatchResult {
+  return {
+    rationale: 'test',
+    rejected: [],
+    actions: [
+      {
+        type: 'merge_pr',
+        prNumber: 42,
+        method: 'squash',
+        ...(confidence === undefined ? {} : { confidence }),
+        reason: 'green, approved and mergeable',
+      },
+    ],
+  } as unknown as DispatchResult;
+}
+
+function mergeDecision(system: ReturnType<typeof buildSystem>) {
+  return system.store.listDecisions().find((d) => d.action.type === 'merge_pr');
+}
+
+test('merge_pr is escalated for approval by default (nothing merges autonomously)', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  await system.executor.execute('cyc', mergePlan(1.0));
+
+  const open = system.store.listOpenEscalations();
+  assert.equal(open.length, 1, 'should escalate, not merge');
+  assert.equal(open[0]!.type, 'approve_change');
+  assert.match(mergeDecision(system)!.detail, /escalated for merge approval/);
+  system.store.close();
+});
+
+test('merge_pr auto-merges when enabled, allow-listed and confident', async () => {
+  const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
+  const system = buildSystem(config, { backend: new FakePtyBackend() });
+
+  system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat' });
+  await system.executor.execute('cyc', mergePlan(0.9));
+
+  assert.equal(system.store.listOpenEscalations().length, 0, 'nothing to escalate — it was merged');
+  assert.match(mergeDecision(system)!.detail, /Auto-merged PR #42 via squash/);
+  assert.equal((await system.connector.getState()).pullRequests[0]!.merged, true);
+  system.store.close();
+});
+
+test('a merge failure never merges silently — it escalates for approval', async () => {
+  const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
+  const failingSink: ActionSink = {
+    async postPrReply() {
+      throw new Error('unused');
+    },
+    async mergePr() {
+      throw new Error('merge conflict');
+    },
+  };
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink: failingSink });
+  await system.executor.execute('cyc', mergePlan(0.95));
+
+  const open = system.store.listOpenEscalations();
+  assert.equal(open.length, 1, 'failed merge must still surface for a human');
+  assert.equal(open[0]!.context.autoMergeFailed, true);
+  assert.match(mergeDecision(system)!.detail, /Auto-merge of PR #42 failed \(merge conflict\)/);
   system.store.close();
 });
 
