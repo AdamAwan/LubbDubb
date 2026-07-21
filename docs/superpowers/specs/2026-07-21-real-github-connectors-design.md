@@ -1,7 +1,7 @@
 # Real GitHub Connectors — Design
 
 **Date:** 2026-07-21
-**Status:** Approved (pending spec review)
+**Status:** Implemented
 
 ## Problem
 
@@ -34,12 +34,12 @@ real provider for both `sourceControl` and `issues`.
 
 ## Decisions (from brainstorming)
 
-| Decision | Choice |
-| --- | --- |
-| HTTP layer | `@octokit/rest` (official SDK), used **REST-only** |
+| Decision           | Choice                                                         |
+| ------------------ | -------------------------------------------------------------- |
+| HTTP layer         | `@octokit/rest` (official SDK), used **REST-only**             |
 | Repo target + auth | `GITHUB_TOKEN` env var for the token; `owner`/`repo` in config |
-| Capabilities | Both `sourceControl` and `issues`, full fidelity |
-| Scope | Optional `prAuthor` / `issueLabel` filters; unset = all open |
+| Capabilities       | Both `sourceControl` and `issues`, full fidelity               |
+| Scope              | Optional `prAuthor` / `issueLabel` filters; unset = all open   |
 
 ## Architecture
 
@@ -54,14 +54,14 @@ export interface GitHubApi {
   /** Authenticated bot login, used to decide whether a comment thread is "handled". */
   viewerLogin(): Promise<string>;
 
-  listOpenPulls(): Promise<GhPullSummary[]>;        // GET /repos/{o}/{r}/pulls?state=open
-  getPull(number: number): Promise<GhPullDetail>;   // GET /pulls/{n} (mergeable, merged, head.sha)
-  listPullReviews(number: number): Promise<GhReview[]>;      // GET /pulls/{n}/reviews
+  listOpenPulls(): Promise<GhPullSummary[]>; // GET /repos/{o}/{r}/pulls?state=open
+  getPull(number: number): Promise<GhPullDetail>; // GET /pulls/{n} (mergeable, merged, head.sha)
+  listPullReviews(number: number): Promise<GhReview[]>; // GET /pulls/{n}/reviews
   listPullReviewComments(number: number): Promise<GhReviewComment[]>; // GET /pulls/{n}/comments
   getCombinedStatus(sha: string): Promise<GhCombinedStatus>; // GET /commits/{sha}/status
-  listCheckRuns(sha: string): Promise<GhCheckRun[]>;         // GET /commits/{sha}/check-runs
+  listCheckRuns(sha: string): Promise<GhCheckRun[]>; // GET /commits/{sha}/check-runs
 
-  listOpenIssues(label?: string): Promise<GhIssue[]>;        // GET /issues?state=open&labels=
+  listOpenIssues(label?: string): Promise<GhIssue[]>; // GET /issues?state=open&labels=
   listIssueTimeline(number: number): Promise<GhTimelineEvent[]>; // GET /issues/{n}/timeline
 
   createPullReviewReply(number: number, inReplyTo: number, body: string): Promise<GhCommentRef>;
@@ -86,6 +86,7 @@ keeps `web/` unaffected). No `as unknown` casts.
 `implements Integration, PrReplyCapable, PrMergeCapable` — **not** `Injectable`.
 
 `snapshot()` → `{ pullRequests }`:
+
 1. `listOpenPulls()`, then apply the optional `prAuthor` filter client-side.
 2. For each PR (in parallel): `getPull` (mergeable/merged/head.sha), reviews,
    review comments, combined status + check-runs.
@@ -98,7 +99,7 @@ keeps `web/` unaffected). No `as unknown` casts.
      `in_reply_to_id` (root id = the comment's own id when it has no parent).
      Surface one `PrComment` per thread using the **root** comment's id/author/
      body; `handled = latest comment in the thread was authored by the viewer
-     login`. (After `postPrReply`, the next poll sees the bot as latest author →
+login`. (After `postPrReply`, the next poll sees the bot as latest author →
      `handled: true` → the deterministic loop settles, exactly like the fake's
      `markCommentHandled`.)
    - `approved`: fold reviews to the latest state per reviewer; `true` iff ≥1
@@ -108,6 +109,7 @@ keeps `web/` unaffected). No `as unknown` casts.
    - `url`: `html_url`.
 
 `postPrReply(input)`:
+
 - `commentId` present → `createPullReviewReply(prNumber, Number(commentId), body)`
   (threaded reply under the review comment).
 - `commentId` null → `createIssueComment(prNumber, body)` (top-level PR comment).
@@ -120,6 +122,7 @@ keeps `web/` unaffected). No `as unknown` casts.
 `implements Integration` (reads only).
 
 `snapshot()` → `{ issues }`:
+
 1. `listOpenIssues(issueLabel)` (native `labels` query param when the filter is set).
 2. **Drop entries with a `pull_request` field** — the Issues API returns PRs as
    issues; we only want real issues.
@@ -145,6 +148,7 @@ issues: {
 ```
 
 `buildGitHub*` helpers:
+
 - Read `GITHUB_TOKEN` from `process.env`. Missing → throw a clear error naming
   the env var.
 - Read `ctx.config.github` (`owner`/`repo`/`filters`). Missing owner/repo → throw
@@ -177,6 +181,7 @@ never serialized or logged.
 ### Resilience
 
 `snapshot()` on both integrations wraps its network work in try/catch:
+
 - On error: `store.recordConnectorEvent('github_snapshot_error', { message, capability })`
   and return the **last-good slice** held in an in-memory field (empty slice on
   cold start). This prevents a transient GitHub/rate-limit blip from making the

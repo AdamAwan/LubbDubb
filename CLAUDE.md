@@ -93,6 +93,14 @@ So you can exercise the whole inject → dispatch → agent → escalate → ans
 without a model or a real terminal. Prefer adding tests at that seam. Put new tests in
 `test/*.test.ts`; don't edit unrelated test files.
 
+The **real `github` provider** (`src/integrations/github/`) follows the same pattern: all
+GitHub HTTP is behind the narrow `GitHubApi` seam (`githubApi.ts`), `OctokitGitHubApi` is the
+only file that imports octokit, and tests (`test/githubIntegration.test.ts`) inject a scripted
+fake `GitHubApi` — no network. The field-mapping logic (CI aggregation, approval folding,
+comment threading, linked-PR-from-timeline) is exported as pure functions and tested directly.
+When you extend it, add to the `GitHubApi` interface + its fake together, and keep new mapping
+logic in pure functions so it stays unit-testable without HTTP.
+
 ## Gotchas
 
 - The default `agentMode` is `stream`, **not** a PTY — don't assume terminal semantics when
@@ -103,3 +111,6 @@ without a model or a real terminal. Prefer adding tests at that seam. Put new te
   root — run as non-root if you need it.
 - Config precedence: explicit overrides → `lubbdubb.config.json` → defaults, with `PORT` and
   `LUBBDUBB_DB` env overrides. `autoSend` is deep-merged.
+- The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`
+  or a config file (so a secret can't be committed). Selecting `github` without the token or
+  without `github.owner`/`github.repo` throws a clear error at `buildIntegrations` time.
