@@ -6,7 +6,7 @@ import type { WorldSnapshot } from '../src/types.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], stories: [], calendar: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], calendar: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],
@@ -66,6 +66,116 @@ test('a handled comment is ignored', async () => {
     }),
   );
   assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('an open issue with no linked PR is dispatched to a code agent', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 101,
+          title: 'Login broken',
+          body: 'steps',
+          labels: ['bug'],
+          state: 'open',
+          linkedPrNumber: null,
+        },
+      ],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  assert.equal((actions[0] as { branch: string }).branch, 'issue/101');
+  assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101');
+});
+
+test('an issue already linked to a PR is not re-dispatched', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('a closed issue is not dispatched', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'closed', linkedPrNumber: null }],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('a green, approved, mergeable PR yields a merge_pr action', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: true,
+          mergeable: true,
+          merged: false,
+        },
+      ],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'merge_pr');
+  assert.equal((actions[0] as { prNumber: number }).prNumber, 42);
+});
+
+test('an already-merged PR is left alone', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: true,
+          mergeable: true,
+          merged: true,
+        },
+      ],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('a merge-ready PR with an unhandled comment is addressed before merging', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          ciStatus: 'passing',
+          unresolvedComments: [{ id: 'c1', author: 'bob', body: 'nit', handled: false }],
+          approved: true,
+          mergeable: true,
+          merged: false,
+        },
+      ],
+    }),
+  );
+  assert.ok(!actions.some((a) => a.type === 'merge_pr'), 'should not merge with an open comment');
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
 });
 
 test('story missing description is groomed by a desk agent', async () => {

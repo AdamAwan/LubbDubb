@@ -20,6 +20,15 @@ export interface PullRequest {
   ciStatus: CiStatus;
   /** Unresolved review comments waiting on the author. */
   unresolvedComments: PrComment[];
+  /**
+   * Merge-readiness signals, tracked by the PR-monitoring connector so the
+   * harness can drive a PR the last mile to merged. All absent = unknown/false.
+   */
+  approved?: boolean;
+  /** No conflicts / branch behind — GitHub reports it mergeable. */
+  mergeable?: boolean;
+  /** Already merged; once true the harness stops acting on it. */
+  merged?: boolean;
   url?: string;
 }
 
@@ -29,6 +38,25 @@ export interface PrComment {
   body: string;
   /** True once the harness has handled (drafted a reply / fixed) this comment. */
   handled: boolean;
+}
+
+export type IssueState = 'open' | 'closed';
+
+/**
+ * A tracker issue (GitHub Issues in v1) the harness may pick up and resolve into
+ * a pull request. Distinct from a {@link Story}: an issue is a bug/feature report
+ * that becomes a PR, not a backlog item to groom.
+ */
+export interface Issue {
+  id: string;
+  number: number;
+  title: string;
+  body: string;
+  labels: string[];
+  state: IssueState;
+  /** The PR opened to resolve this issue, once one exists. Null until linked. */
+  linkedPrNumber: number | null;
+  url?: string;
 }
 
 export type StoryState = 'ready' | 'in_progress' | 'blocked' | 'done';
@@ -58,6 +86,7 @@ export interface CalendarEvent {
 export interface WorldSnapshot {
   takenAt: string; // ISO
   pullRequests: PullRequest[];
+  issues: Issue[];
   stories: Story[];
   calendar: CalendarEvent[];
 }
@@ -138,6 +167,7 @@ export type ActionType =
   | 'escalate_to_human'
   | 'respond_to_agent'
   | 'reply_on_pr'
+  | 'merge_pr'
   | 'no_op';
 
 /** One decision from the dispatcher. Every action carries a reason for the audit log. */

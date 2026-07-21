@@ -1,8 +1,8 @@
 import type { Connector, InjectableEvent } from '../connector/connector.js';
-import type { ActionSink, PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { ActionSink, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
-import { isInjectable, isPrReplyCapable, type Integration } from './integration.js';
+import { isInjectable, isPrMergeCapable, isPrReplyCapable, type Integration } from './integration.js';
 
 /**
  * Assembles the world from many {@link Integration}s and presents it behind the
@@ -26,6 +26,7 @@ export class CompositeConnector implements Connector, ActionSink {
     return {
       takenAt: this.now(),
       pullRequests: slices.flatMap((s) => s.pullRequests ?? []),
+      issues: slices.flatMap((s) => s.issues ?? []),
       stories: slices.flatMap((s) => s.stories ?? []),
       calendar: slices.flatMap((s) => s.calendar ?? []),
     };
@@ -35,6 +36,12 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrReplyCapable);
     if (!handler) throw new Error('no integration can post PR replies (no sourceControl provider is PrReplyCapable)');
     return handler.postPrReply(input);
+  }
+
+  async mergePr(input: PrMergeInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrMergeCapable);
+    if (!handler) throw new Error('no integration can merge PRs (no sourceControl provider is PrMergeCapable)');
+    return handler.mergePr(input);
   }
 
   /**

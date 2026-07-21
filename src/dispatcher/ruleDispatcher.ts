@@ -9,11 +9,13 @@ import type { Task } from '../types.js';
  *
  *   1. A PR's CI is failing        -> spin up a code agent to fix it
  *   2. A PR has an unhandled comment -> spin up a code agent to address it
- *   3. A meeting today lacks prep    -> desk agent to prepare
- *   4. A ready story lacks a description / acceptance criteria -> desk agent to groom
- *   5. A ready story lacks WAF pillars -> desk agent to fill them
- *   6. Nothing else in flight        -> pick up the highest-priority ready story
- *   7. Otherwise                     -> no_op (recorded, so idleness is auditable)
+ *   3. A PR is green/approved/mergeable -> merge it in (gated by auto-send)
+ *   4. An open issue has no linked PR -> code agent to resolve it into a PR
+ *   5. A meeting today lacks prep    -> desk agent to prepare
+ *   6. A ready story lacks a description / acceptance criteria -> desk agent to groom
+ *   7. A ready story lacks WAF pillars -> desk agent to fill them
+ *   8. Nothing else in flight        -> pick up the highest-priority ready story
+ *   9. Otherwise                     -> no_op (recorded, so idleness is auditable)
  *
  * It is the safe default and the reference the LLM dispatcher is measured
  * against. Every branch produces actions with an explicit `reason`.
@@ -62,9 +64,45 @@ export class RuleDispatcher implements Dispatcher {
           claim(cOrigin);
         }
       }
+
+      // 3: Drive a settled PR the last mile — merge it in. `merge_pr` isn't an
+      // agent dispatch (it claims no headroom); the executor's auto-send gate
+      // decides whether to merge autonomously or escalate for approval.
+      const mergeReady =
+        pr.ciStatus === 'passing' &&
+        pr.approved === true &&
+        pr.mergeable === true &&
+        pr.merged !== true &&
+        pr.unresolvedComments.every((c) => c.handled);
+      if (mergeReady) {
+        raw.push({
+          type: 'merge_pr',
+          prNumber: pr.number,
+          method: 'squash',
+          confidence: 0.9,
+          reason: `PR #${pr.number} is green, approved and mergeable; merge it in.`,
+        } satisfies RawAction);
+      }
     }
 
-    // 3: Meeting prep.
+    // 4: Resolve open GitHub issues into PRs — the front of the issue → PR → merge loop.
+    for (const issue of ctx.world.issues) {
+      if (issue.state !== 'open' || issue.linkedPrNumber !== null) continue;
+      const origin = `issue:${issue.number}`;
+      if (canDispatch(origin)) {
+        raw.push({
+          type: 'dispatch_code_agent',
+          branch: `issue/${issue.number}`,
+          title: `Resolve issue #${issue.number}`,
+          prompt: `GitHub issue #${issue.number} ("${issue.title}") needs resolving.\n\n${issue.body}\n\nImplement the fix on branch issue/${issue.number} and open a pull request that closes this issue.`,
+          originRef: origin,
+          reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
+        } satisfies RawAction);
+        claim(origin);
+      }
+    }
+
+    // 5: Meeting prep.
     for (const ev of ctx.world.calendar) {
       if (ev.prepDone || ev.prepDocs.length === 0) continue;
       const origin = `meeting:${ev.id}:prep`;
@@ -80,7 +118,7 @@ export class RuleDispatcher implements Dispatcher {
       }
     }
 
-    // 4 & 5: Backlog hygiene on ready stories.
+    // 6 & 7: Backlog hygiene on ready stories.
     for (const story of ctx.world.stories) {
       if (story.state !== 'ready') continue;
 
@@ -113,7 +151,7 @@ export class RuleDispatcher implements Dispatcher {
       }
     }
 
-    // 6: If there's still headroom and nothing urgent, pick up work.
+    // 8: If there's still headroom and nothing urgent, pick up work.
     if (headroom > 0) {
       const candidate = ctx.world.stories
         .filter((s) => s.state === 'ready' && s.description && s.acceptanceCriteria)

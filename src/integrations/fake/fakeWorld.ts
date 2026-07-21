@@ -1,16 +1,17 @@
 import type { Store } from '../../store/store.js';
-import type { CalendarEvent, PullRequest, Story } from '../../types.js';
+import type { CalendarEvent, Issue, PullRequest, Story } from '../../types.js';
 
 const STATE_KEY = 'fake_world';
 
 /** The editable, persisted document the fake integrations share. */
 export interface FakeWorld {
   pullRequests: PullRequest[];
+  issues: Issue[];
   stories: Story[];
   calendar: CalendarEvent[];
 }
 
-export const EMPTY_WORLD: FakeWorld = { pullRequests: [], stories: [], calendar: [] };
+export const EMPTY_WORLD: FakeWorld = { pullRequests: [], issues: [], stories: [], calendar: [] };
 
 /**
  * A thin read/write wrapper over the single persisted `fake_world` document in
@@ -25,7 +26,9 @@ export class FakeWorldStore {
   read(): FakeWorld {
     const raw = this.store.getConnectorState(STATE_KEY);
     if (!raw) return clone(EMPTY_WORLD);
-    return JSON.parse(raw) as FakeWorld;
+    // Backfill any domain a world persisted before that domain existed lacks, so
+    // a schema-additive change (e.g. adding `issues`) never trips on `undefined`.
+    return { ...clone(EMPTY_WORLD), ...(JSON.parse(raw) as Partial<FakeWorld>) };
   }
 
   write(world: FakeWorld): void {

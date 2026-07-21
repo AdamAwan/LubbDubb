@@ -54,6 +54,15 @@ export const ActionSchema = z.discriminatedUnion('type', [
     confidence: z.number().min(0).max(1).optional(),
     ...base,
   }),
+  z.object({
+    type: z.literal('merge_pr'),
+    prNumber: z.number().int(),
+    /** How to land the branch. Defaults to a squash merge. */
+    method: z.enum(['merge', 'squash', 'rebase']).default('squash'),
+    /** Self-reported confidence, 0..1. Gates auto-merge the same way `reply_on_pr` gates auto-send. */
+    confidence: z.number().min(0).max(1).optional(),
+    ...base,
+  }),
   z.object({ type: z.literal('no_op'), ...base }),
 ]);
 

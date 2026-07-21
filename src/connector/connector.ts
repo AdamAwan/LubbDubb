@@ -21,6 +21,13 @@ export type InjectableEvent =
   | { kind: 'ci_passed'; prNumber: number }
   | { kind: 'pr_comment'; prNumber: number; author: string; body: string }
   | { kind: 'new_pr'; number: number; title: string; branch: string }
+  // PR-monitoring signals that walk a PR toward mergeable.
+  | { kind: 'pr_approved'; prNumber: number }
+  | { kind: 'pr_mergeable'; prNumber: number; mergeable?: boolean }
+  // GitHub-issue signals.
+  | { kind: 'new_issue'; number: number; title: string; body?: string; labels?: string[] }
+  | { kind: 'issue_state'; number: number; state: 'open' | 'closed' }
+  | { kind: 'issue_linked_pr'; number: number; prNumber: number }
   | {
       kind: 'new_story';
       title: string;

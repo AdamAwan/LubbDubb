@@ -13,6 +13,18 @@ export interface PullRequest {
   branch: string;
   ciStatus: string;
   unresolvedComments: PrComment[];
+  approved?: boolean;
+  mergeable?: boolean;
+  merged?: boolean;
+}
+export interface Issue {
+  id: string;
+  number: number;
+  title: string;
+  body: string;
+  labels: string[];
+  state: string;
+  linkedPrNumber: number | null;
 }
 export interface Story {
   id: string;
@@ -33,6 +45,7 @@ export interface CalendarEvent {
 export interface WorldSnapshot {
   takenAt: string;
   pullRequests: PullRequest[];
+  issues: Issue[];
   stories: Story[];
   calendar: CalendarEvent[];
 }

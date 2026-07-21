@@ -24,6 +24,7 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
 
   const nextPr = (world.pullRequests.at(-1)?.number ?? 40) + 1;
   const firstPr = world.pullRequests[0]?.number ?? nextPr;
+  const nextIssue = (world.issues.at(-1)?.number ?? 100) + 1;
   const today = new Date();
   const inTwoHours = new Date(today.getTime() + 2 * 3600_000).toISOString();
 
@@ -55,6 +56,21 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
         }
       >
         Comment on #{firstPr}
+      </button>
+      <button
+        className="btn"
+        disabled={busy}
+        onClick={() =>
+          inject({ kind: 'new_issue', number: nextIssue, title: `Bug report #${nextIssue}`, labels: ['bug'] })
+        }
+      >
+        + Issue #{nextIssue}
+      </button>
+      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'pr_approved', prNumber: firstPr })}>
+        Approve #{firstPr}
+      </button>
+      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr })}>
+        Mergeable #{firstPr}
       </button>
       <button
         className="btn"

@@ -204,7 +204,7 @@ function taskFor(state: AppState, agent: Agent) {
 }
 
 function WorldSummary({ state }: { state: AppState }) {
-  const { pullRequests, stories, calendar } = state.world;
+  const { pullRequests, issues, stories, calendar } = state.world;
   return (
     <div className="world">
       <div className="world-row">
@@ -217,6 +217,24 @@ function WorldSummary({ state }: { state: AppState }) {
           {pr.unresolvedComments.filter((c) => !c.handled).length > 0 && (
             <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
           )}
+          {pr.merged ? (
+            <span className="chip small">merged</span>
+          ) : (
+            pr.ciStatus === 'passing' &&
+            pr.approved &&
+            pr.mergeable && <span className="chip small warn">merge-ready</span>
+          )}
+        </div>
+      ))}
+      <div className="world-row">
+        <span>Issues</span>
+        <b>{issues.length}</b>
+      </div>
+      {issues.map((i) => (
+        <div key={i.id} className="world-item">
+          #{i.number} {i.title} <span className="chip small">{i.state}</span>
+          {i.state === 'open' && i.linkedPrNumber === null && <span className="chip small warn">needs PR</span>}
+          {i.linkedPrNumber !== null && <span className="chip small">→ PR #{i.linkedPrNumber}</span>}
         </div>
       ))}
       <div className="world-row">
