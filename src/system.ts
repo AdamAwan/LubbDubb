@@ -11,6 +11,7 @@ import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
+import { recentOutputExcerpt } from './escalation/context.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
@@ -127,12 +128,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.
+  // Enrich with the task's originating signal and a tail of the agent's output so
+  // the human can answer from the card without opening the drawer for context.
   agents.on('waiting', ({ agentId, taskId, reason }) => {
     const task = store.getTask(taskId);
     escalations.create({
       type: 'answer_question',
       prompt: reason,
-      context: { taskTitle: task?.title, agentId, taskId },
+      context: {
+        taskTitle: task?.title,
+        originRef: task?.originRef ?? null,
+        recentOutput: recentOutputExcerpt(store.getTranscript(agentId)),
+      },
       agentId,
       taskId,
     });

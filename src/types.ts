@@ -141,14 +141,39 @@ export type EscalationType = 'approve_change' | 'answer_question' | 'resolve_amb
 
 export type EscalationStatus = 'open' | 'answered' | 'dismissed';
 
+/**
+ * The extra context an escalation carries so a human can answer it in-place,
+ * without leaving the card. Every key is optional — each escalation type
+ * populates the subset that makes sense — and the index signature keeps it
+ * extensible for new kinds. The cockpit's `EscalationCard` renders whatever is
+ * present (recent output, the originating signal, a draft reply, …).
+ */
+export interface EscalationContext {
+  /** Title of the task this escalation concerns. */
+  taskTitle?: string;
+  /** The world signal that spawned the task, e.g. "pr:42:ci" or "issue:12". */
+  originRef?: string | null;
+  /** Tail of the agent's transcript leading up to the question (sentinels stripped). */
+  recentOutput?: string;
+  // -- reply_on_pr / merge_pr escalations --------------------------------
+  prNumber?: number;
+  commentId?: string | null;
+  draft?: string;
+  confidence?: number;
+  method?: string;
+  autoSendFailed?: boolean;
+  autoMergeFailed?: boolean;
+  [key: string]: unknown;
+}
+
 export interface Escalation {
   id: string;
   type: EscalationType;
   status: EscalationStatus;
   /** What the human needs to weigh in on. */
   prompt: string;
-  /** Task/agent/PR this concerns. */
-  context: Record<string, unknown>;
+  /** Task/agent/PR this concerns — see {@link EscalationContext}. */
+  context: EscalationContext;
   /** If tied to a live parked agent, its answer is typed into that session. */
   agentId: string | null;
   taskId: string | null;

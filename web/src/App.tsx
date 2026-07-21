@@ -171,6 +171,7 @@ export function App() {
               escalation={e}
               now={now}
               onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)}
+              onOpenAgent={(id) => setSelected(id)}
             />
           ))}
 

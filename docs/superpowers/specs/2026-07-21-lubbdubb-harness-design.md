@@ -150,8 +150,9 @@ Each action is schema-validated after the dispatcher returns; malformed items ar
 
 An **escalation** is created when: the dispatcher chooses `escalate_to_human`; an agent hits a `waiting` state that isn't whitelisted; or an agent finishes work needing sign-off.
 
-- Fields: `type` (`approve_change` | `answer_question` | `resolve_ambiguity` | `review_reply`), `context` (task/agent/PR), and the agent's current state.
-- Surfaced in the cockpit **inbox**.
+- Fields: `type` (`approve_change` | `answer_question` | `resolve_ambiguity` | `review_reply`), `context` (a typed `EscalationContext`), and the agent's current state.
+- **`context` carries enough to answer in-place** so the human rarely needs to leave the card: the originating world signal (`originRef`, e.g. `pr:42:ci`/`issue:12`), a sentinel-stripped tail of the agent's output leading up to the question (`recentOutput`), the task title, and — for PR reply/merge escalations — the drafted reply, PR number and confidence. The card links to the agent's transcript drawer and offers one-click Yes/No answers for prompts that read as a yes/no decision.
+- Surfaced in the cockpit **inbox** (the **Needs you** column).
 - **Response routing:** for a *live parked PTY agent*, the user's answer is typed straight into its session and it continues; for a *dispatcher-level* escalation, the answer becomes an input the next dispatch cycle sees.
 - **Safety:** nothing side-effectful (a PR reply, a pushed change) leaves the system without the user's explicit action in v1. The harness drafts; the human approves.
 

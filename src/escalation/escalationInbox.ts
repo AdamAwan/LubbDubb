@@ -1,12 +1,12 @@
 import { EventEmitter } from 'node:events';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
-import type { Escalation, EscalationType } from '../types.js';
+import type { Escalation, EscalationContext, EscalationType } from '../types.js';
 
 export interface CreateEscalationInput {
   type: EscalationType;
   prompt: string;
-  context?: Record<string, unknown>;
+  context?: EscalationContext;
   agentId?: string | null;
   taskId?: string | null;
 }
