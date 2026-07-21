@@ -136,7 +136,7 @@ Each action is schema-validated after the dispatcher returns; malformed items ar
 `AgentManager` runs each Claude Code session via **`node-pty`**:
 
 - **Spawn** — launch `claude` in the task's cwd (worktree for code tasks, scratch dir for desk tasks) and send an initial prompt built from the task.
-- **Stream** — capture stdout continuously, persist the transcript, push deltas to the cockpit over WS.
+- **Stream** — capture stdout continuously, persist the transcript, push deltas to the cockpit over WS. Output is normalised for legibility before display (sentinels stripped, tool calls/results labelled and sanitised — see `src/agents/streamTranscript.ts`).
 - **Detect "waiting for input"** — watch PTY output for Claude Code's prompt/permission/idle signals. On detection, status → `waiting`; the agent either auto-responds (whitelisted approvals from config) or **escalates**.
 - **Detect "done"** — process exit, or a completion sentinel we instruct the agent to emit.
 - **Feed input** — write to the PTY (user response, approval, follow-up).
@@ -154,6 +154,7 @@ An **escalation** is created when: the dispatcher chooses `escalate_to_human`; a
 - **`context` carries enough to answer in-place** so the human rarely needs to leave the card: the originating world signal (`originRef`, e.g. `pr:42:ci`/`issue:12`), a sentinel-stripped tail of the agent's output leading up to the question (`recentOutput`), the task title, and — for PR reply/merge escalations — the drafted reply, PR number and confidence. The card links to the agent's transcript drawer and offers one-click Yes/No answers for prompts that read as a yes/no decision.
 - Surfaced in the cockpit **inbox** (the **Needs you** column).
 - **Response routing:** for a *live parked PTY agent*, the user's answer is typed straight into its session and it continues; for a *dispatcher-level* escalation, the answer becomes an input the next dispatch cycle sees.
+- **Lifecycle on agent death:** when an agent reaches a terminal-dead state (server restart, kill, crash/failure) its open escalations are auto-dismissed (`EscalationInbox.dismissEscalationsForAgent`) — the agent that would receive the answer is gone, so leaving them `open` just clutters the inbox. The reason + timestamp go in the escalation's `context.dismissal` (no schema change) and each dismissal is written to the audit log. The re-dispatched agent re-raises anything it still needs.
 - **Safety:** nothing side-effectful (a PR reply, a pushed change) leaves the system without the user's explicit action in v1. The harness drafts; the human approves.
 
 ---
@@ -161,7 +162,7 @@ An **escalation** is created when: the dispatcher chooses `escalate_to_human`; a
 ## 8. Persistence & restart
 
 - **Store:** SQLite (`better-sqlite3`), one file. Tables: `tasks`, `agents`, `escalations`, `decisions` (audit), `connector_events`.
-- **Reconcile on restart:** on boot, any agent still marked `running` is really dead (its PTY died with the server) → mark `interrupted`. The next dispatch cycle decides whether to resume.
+- **Reconcile on restart:** on boot, any agent still marked `running` is really dead (its PTY died with the server) → mark `interrupted`, and cascade-dismiss its now-orphaned open escalations. The next dispatch cycle decides whether to resume.
 
 ---
 

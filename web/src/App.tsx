@@ -8,6 +8,7 @@ import { EscalationCard } from './components/EscalationCard.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
 import { Vitals } from './components/Vitals.js';
 import { DecisionLog } from './components/DecisionLog.js';
+import { ActivityFeed } from './components/ActivityFeed.js';
 import { statusDot } from './components/util.js';
 import { useNow } from './hooks.js';
 
@@ -46,7 +47,7 @@ export function App() {
     const ws = connectWs(
       (ev) => {
         const e = ev as { type: string; agentId?: string; delta?: string; line?: string };
-        if (e.type === 'dirty' || e.type === 'world:changed') void refresh();
+        if (e.type === 'dirty' || e.type === 'world:changed' || e.type === 'world:events') void refresh();
         else if (e.type === 'agent:output' && e.agentId && e.delta) {
           const cur = liveOutput.current.get(e.agentId) ?? '';
           // Full output now only arrives for the subscribed (open) agent, so we
@@ -182,6 +183,8 @@ export function App() {
         <section className="col">
           <h2>Decision log</h2>
           <DecisionLog decisions={state.decisions} now={now} />
+          <h2 className="feed-heading">Activity</h2>
+          <ActivityFeed events={state.worldEvents} now={now} />
         </section>
       </main>
 
@@ -220,6 +223,11 @@ function WorldSummary({ state }: { state: AppState }) {
           )}
           {pr.merged ? (
             <span className="chip small">merged</span>
+          ) : pr.health?.blocked ? (
+            <span className="chip small warn" title={pr.health.reasons.join(', ')}>
+              {pr.health.reasons[0]}
+              {pr.health.reasons.length > 1 ? ` +${pr.health.reasons.length - 1}` : ''}
+            </span>
           ) : (
             pr.ciStatus === 'passing' &&
             pr.approved &&

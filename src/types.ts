@@ -12,6 +12,9 @@
 
 export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 
+/** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */
+export type MergeableState = 'dirty' | 'behind' | 'blocked' | 'clean' | 'unknown';
+
 export interface PullRequest {
   id: string;
   number: number;
@@ -27,6 +30,14 @@ export interface PullRequest {
   approved?: boolean;
   /** No conflicts / branch behind — GitHub reports it mergeable. */
   mergeable?: boolean;
+  /** The base branch this PR targets (e.g. "main") — needed to pull the base in. */
+  baseBranch?: string;
+  /**
+   * GitHub's `mergeable_state`, normalised. Distinguishes a real conflict
+   * ('dirty') from merely-behind-base ('behind', a safe update) and required
+   * checks/reviews not met ('blocked'). Absent/unrecognised => 'unknown'.
+   */
+  mergeableState?: MergeableState;
   /** Already merged; once true the harness stops acting on it. */
   merged?: boolean;
   url?: string;
@@ -90,6 +101,43 @@ export interface WorldSnapshot {
   stories: Story[];
   calendar: CalendarEvent[];
 }
+
+// ---------------------------------------------------------------------------
+// World change history (observed transitions between snapshots)
+// ---------------------------------------------------------------------------
+
+export type WorldEventKind =
+  | 'pr_opened'
+  | 'pr_ci'
+  | 'pr_approved'
+  | 'pr_mergeable'
+  | 'pr_merged'
+  | 'pr_comment'
+  | 'issue_opened'
+  | 'issue_closed'
+  | 'issue_linked'
+  | 'story_added'
+  | 'story_state'
+  | 'meeting_added'
+  | 'meeting_prep';
+
+/**
+ * One observed world state transition, derived by diffing consecutive
+ * {@link WorldSnapshot}s. The activity feed is the timeline of these — the
+ * counterpart to the decision log, but for the world rather than the harness.
+ */
+export interface WorldEvent {
+  id: string;
+  kind: WorldEventKind;
+  /** The world object this concerns, e.g. "pr:42", "story:abc", "issue:12". Null if global. */
+  ref: string | null;
+  /** Human-readable one-line summary, e.g. "PR #42 CI passing". */
+  summary: string;
+  createdAt: string; // ISO
+}
+
+/** A world event before the store assigns it an id and timestamp. */
+export type WorldEventInput = Omit<WorldEvent, 'id' | 'createdAt'>;
 
 // ---------------------------------------------------------------------------
 // Harness-internal state

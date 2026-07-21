@@ -1,5 +1,7 @@
 import type { WebSocket } from 'ws';
 import type { System } from '../system.js';
+import { stripAnsi } from '../agents/streamTranscript.js';
+import type { WorldEvent } from '../types.js';
 
 export type ServerEvent =
   | { type: 'cycle:start'; cycleId: string; source: string }
@@ -11,7 +13,9 @@ export type ServerEvent =
   | { type: 'agent:done'; agentId: string; taskId: string; status: string }
   | { type: 'escalation:created'; escalation: unknown }
   | { type: 'escalation:answered'; escalation: unknown; routing: string }
+  | { type: 'escalation:dismissed'; escalation: unknown }
   | { type: 'world:changed' }
+  | { type: 'world:events'; events: unknown[] }
   | { type: 'dirty' };
 
 /**
@@ -39,6 +43,10 @@ export class Hub {
       this.broadcast({ type: 'cycle:end', cycleId: r.cycleId, rationale: r.rationale, summary: r.summary });
       this.broadcast({ type: 'dirty' });
     });
+    harness.on('world:events', ({ events }: { events: WorldEvent[] }) => {
+      this.broadcast({ type: 'world:events', events });
+      this.broadcast({ type: 'dirty' });
+    });
 
     agents.on('output', (e) => this.handleOutput(e.agentId, e.delta));
     agents.on('status', (e) => {
@@ -61,6 +69,10 @@ export class Hub {
     });
     escalations.on('answered', ({ escalation, routing }: { escalation: unknown; routing: string }) => {
       this.broadcast({ type: 'escalation:answered', escalation, routing });
+      this.broadcast({ type: 'dirty' });
+    });
+    escalations.on('dismissed', (escalation) => {
+      this.broadcast({ type: 'escalation:dismissed', escalation });
       this.broadcast({ type: 'dirty' });
     });
   }
@@ -116,7 +128,10 @@ export class Hub {
   /** Fold a delta into the agent's rolling tail; return the current tail line (≤200 chars). */
   private updateTail(agentId: string, delta: string): string {
     const state = this.tails.get(agentId) ?? { partial: '', last: '' };
-    const segments = (state.partial + delta).split(/\r?\n/);
+    // Strip ANSI so a coloured transcript label never shows as a literal escape
+    // in the plain-text fleet-card preview. (Escapes never contain newlines, so
+    // stripping before the split is safe.)
+    const segments = stripAnsi(state.partial + delta).split(/\r?\n/);
     const partial = segments.pop() ?? ''; // trailing segment is still an unfinished line
     for (const seg of segments) {
       const trimmed = seg.trim();

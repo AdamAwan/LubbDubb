@@ -172,3 +172,23 @@ body {
 .audit-top { display: flex; align-items: center; gap: 8px; }
 .audit-time { margin-left: auto; font-size: 11px; white-space: nowrap; }
 .audit-reason { color: var(--text); margin-top: 5px; font-style: italic; opacity: 0.85; }
+
+/* Decision log and Activity feed share the third column; cap each so both fit. */
+.auditlog { max-height: 46vh; }
+.feed-heading { margin-top: 24px; }
+
+/* Activity feed — world change history. Per-category accent, reusing the palette. */
+.audit.activity { font-style: normal; }
+.audit.activity .audit-reason { font-style: normal; opacity: 1; }
+.audit.activity.prs { border-color: var(--blue); }
+.audit.activity.issues { border-color: var(--accent); }
+.audit.activity.stories { border-color: var(--green); }
+.audit.activity.meetings { border-color: var(--amber); }
+.badge.prs { color: var(--blue); }
+.badge.issues { color: var(--accent); }
+.badge.stories { color: var(--green); }
+.badge.meetings { color: var(--amber); }
+.filter-chip.prs.active { border-color: var(--blue); background: #14243a; }
+.filter-chip.issues.active { border-color: var(--accent); background: #3a1420; }
+.filter-chip.stories.active { border-color: var(--green); background: #10241a; }
+.filter-chip.meetings.active { border-color: var(--amber); background: #241d0c; }

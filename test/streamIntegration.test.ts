@@ -39,6 +39,44 @@ function streamConfig() {
   });
 }
 
+test('stream-mode: persisted transcript is clean and structured (no leaked sentinels, tools labelled)', async () => {
+  const children: FakeChild[] = [];
+  const spawner: Spawner = () => {
+    const c = new FakeChild();
+    children.push(c);
+    return c;
+  };
+  const system = buildSystem(streamConfig(), { streamSpawner: spawner });
+
+  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  await system.harness.runCycle('manual');
+  const child = children[0]!;
+  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+
+  child.emitLine({
+    type: 'assistant',
+    message: {
+      content: [
+        { type: 'text', text: 'Listing the files.' },
+        { type: 'tool_use', name: 'Bash', input: { command: 'ls src' } },
+      ],
+    },
+  });
+  child.emitLine({ type: 'user', message: { content: [{ type: 'tool_result', content: 'config.ts\nsystem.ts' }] } });
+  child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'All done.\n@@LUBBDUBB_DONE@@' }] } });
+  child.emitLine({ type: 'result', subtype: 'success' });
+
+  assert.equal(system.store.getAgent(agentId)!.status, 'done');
+  const transcript = system.store.getTranscript(agentId);
+  assert.ok(!transcript.includes('@@LUBBDUBB_DONE@@'), 'no leaked sentinel in the persisted transcript');
+  assert.ok(transcript.includes('Listing the files.'), 'assistant prose present');
+  assert.ok(transcript.includes('Bash') && transcript.includes('ls src'), 'tool call labelled');
+  assert.ok(transcript.includes('config.ts'), 'tool result shown');
+  assert.ok(transcript.includes('All done.'), 'closing prose present');
+
+  system.store.close();
+});
+
 test('stream-mode: task typed in, WAITING escalates, answer continues, DONE completes', async () => {
   const children: FakeChild[] = [];
   const spawner: Spawner = () => {

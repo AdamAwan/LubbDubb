@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const system = buildSystem(config);
 
-  const reconciled = reconcileOnBoot(system.store);
+  const reconciled = reconcileOnBoot(system.store, system.escalations);
   if (reconciled > 0) {
     console.log(`[lubbdubb] reconciled ${reconciled} orphaned agent(s) from a previous run`);
   }

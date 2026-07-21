@@ -2,6 +2,7 @@ import { PtySession } from '../pty/ptySession.js';
 import type { PtyBackend } from '../pty/backend.js';
 import type { Dispatcher, DispatchContext, DispatchResult } from './dispatcher.js';
 import { parseActions } from './actions.js';
+import type { IssuePickupPolicy } from './issuePickup.js';
 
 const PLAN_START = '@@LUBBDUBB_PLAN_START@@';
 const PLAN_END = '@@LUBBDUBB_PLAN_END@@';
@@ -12,6 +13,8 @@ export interface ClaudeDispatcherOptions {
   cwd: string;
   /** Give up on a cycle after this long and fall back to no_op. */
   timeoutMs?: number;
+  /** Dispatcher-level issue-pickup gate + priority scheme, surfaced as prompt guidance. */
+  issuePickup?: IssuePickupPolicy;
 }
 
 /**
@@ -31,7 +34,7 @@ export class ClaudeDispatcher implements Dispatcher {
   ) {}
 
   async decide(ctx: DispatchContext): Promise<DispatchResult> {
-    const prompt = buildPrompt(ctx);
+    const prompt = buildPrompt(ctx, this.opts.issuePickup);
     const session = new PtySession(this.backend, {
       command: this.opts.command,
       args: this.opts.args,
@@ -97,6 +100,27 @@ export class ClaudeDispatcher implements Dispatcher {
   }
 }
 
+/**
+ * Turn the issue-pickup policy into prompt guidance so the LLM dispatcher honours
+ * the same gate + priority scheme the rule dispatcher enforces deterministically.
+ */
+function issuePickupGuidance(pickup?: IssuePickupPolicy): string {
+  if (!pickup) return '';
+  const rules: string[] = [];
+  if (pickup.pickupLabel) {
+    rules.push(
+      `Only start a code agent for an open issue whose labels include "${pickup.pickupLabel}". Leave other open issues visible but untouched.`,
+    );
+  }
+  const scheme = Object.entries(pickup.priorityLabels);
+  if (scheme.length) {
+    rules.push(
+      `Issue priority is label-encoded (${scheme.map(([l, w]) => `${l}=${w}`).join(', ')}; default ${pickup.defaultPriority}). Prefer higher-priority issues when you can't start them all this cycle.`,
+    );
+  }
+  return rules.length ? `\n\nIssue pickup policy (respect these):\n- ${rules.join('\n- ')}` : '';
+}
+
 function extractPlan(output: string): string | null {
   const start = output.indexOf(PLAN_START);
   const end = output.indexOf(PLAN_END);
@@ -104,7 +128,7 @@ function extractPlan(output: string): string | null {
   return output.slice(start + PLAN_START.length, end).trim();
 }
 
-function buildPrompt(ctx: DispatchContext): string {
+function buildPrompt(ctx: DispatchContext, pickup?: IssuePickupPolicy): string {
   const steering = ctx.steeringPriorities.length
     ? `\n\nOperator steering priorities (respect these):\n- ${ctx.steeringPriorities.join('\n- ')}`
     : '';
@@ -117,6 +141,7 @@ function buildPrompt(ctx: DispatchContext): string {
     'For reply_on_pr, include a "confidence" field (0..1) reflecting how sure you are the draft is correct and safe to send. The harness auto-sends only above its configured threshold; anything less is drafted and escalated for a human. When unsure, omit it or use a low value.',
     `Respond with ONLY a JSON object bracketed exactly like this: ${PLAN_START} {"rationale": "...", "actions": [...]} ${PLAN_END}`,
     steering,
+    issuePickupGuidance(pickup),
     '',
     'STATE:',
     JSON.stringify(

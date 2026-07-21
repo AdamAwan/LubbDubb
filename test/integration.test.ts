@@ -4,8 +4,9 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
-import { buildSystem, reconcileOnBoot } from '../src/system.js';
+import { buildSystem, reconcileOnBoot, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import type { Escalation } from '../src/types.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -18,6 +19,19 @@ function testConfig() {
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
+}
+
+/** Bring up one live agent parked on a single open escalation. */
+async function agentWithOpenEscalation(
+  system: System,
+  backend: FakePtyBackend,
+): Promise<{ agentId: string; escalationId: string }> {
+  system.connector.inject({ kind: 'new_story', title: 'Needs a call', wafPillars: ['Reliability'] });
+  await system.harness.runCycle('manual');
+  const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
+  backend.last().emit('@@LUBBDUBB_WAITING:Which provider should I use?@@');
+  const escalationId = system.store.listOpenEscalations()[0]!.id;
+  return { agentId, escalationId };
 }
 
 test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answer -> done', async () => {
@@ -63,6 +77,32 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   const task = system.store.getTask(live[0]!.taskId)!;
   assert.equal(task.status, 'done');
 
+  system.store.close();
+});
+
+test('issuePickupLabel gates dispatch at the buildSystem seam; untagged issues stay visible', async () => {
+  const backend = new FakePtyBackend();
+  const config = testConfig();
+  config.issuePickupLabel = 'agent-ready';
+  const system = buildSystem(config, { backend });
+
+  system.connector.inject({ kind: 'new_issue', number: 101, title: 'tagged', labels: ['agent-ready'] });
+  system.connector.inject({ kind: 'new_issue', number: 102, title: 'untagged', labels: ['bug'] });
+  await system.harness.runCycle('manual');
+
+  // Only the labelled issue starts an agent...
+  const live = system.store.listAgentsByStatus('starting', 'running');
+  assert.equal(live.length, 1, 'only the labelled issue is picked up');
+  const task = system.store.getTask(live[0]!.taskId)!;
+  assert.equal(task.branch, 'issue/101');
+
+  // ...but the untagged issue remains visible in the world snapshot.
+  const world = await system.connector.getState();
+  assert.deepEqual(
+    world.issues.map((i) => i.number).sort((a, b) => a - b),
+    [101, 102],
+    'both issues remain in /api/state',
+  );
   system.store.close();
 });
 
@@ -112,9 +152,74 @@ test('reconcile on boot marks orphaned agents interrupted', async () => {
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
   // Simulate a crash: the process is gone but the DB still says "running".
-  const reconciled = reconcileOnBoot(system.store);
+  const reconciled = reconcileOnBoot(system.store, system.escalations);
   assert.equal(reconciled, 1);
   assert.equal(system.store.getAgent(agentId)!.status, 'interrupted');
   assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'interrupted');
+  system.store.close();
+});
+
+test('killing a waiting agent auto-dismisses its open escalations with a reason', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig(), { backend });
+  const { agentId, escalationId } = await agentWithOpenEscalation(system, backend);
+
+  const dismissedEvents: Escalation[] = [];
+  system.escalations.on('dismissed', (e: Escalation) => dismissedEvents.push(e));
+
+  system.agents.kill(agentId);
+
+  const after = system.store.getEscalation(escalationId)!;
+  assert.equal(after.status, 'dismissed');
+  const dismissal = after.context.dismissal as { reason: string; at: string };
+  assert.equal(dismissal.reason, 'agent killed');
+  assert.ok(dismissal.at, 'dismissal timestamp recorded');
+  assert.equal(system.store.listOpenEscalations().length, 0, 'dropped out of "Needs you"');
+  assert.equal(dismissedEvents.length, 1, 'emitted a dismissed event for the live refresh');
+  // Not silent: the dismissal is in the audit log.
+  assert.ok(
+    system.store.listDecisions().some((d) => d.detail.includes(escalationId) && d.detail.includes('agent killed')),
+    'dismissal written to the decision log',
+  );
+  system.store.close();
+});
+
+test('an agent that fails auto-dismisses its open escalations', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig(), { backend });
+  const { escalationId } = await agentWithOpenEscalation(system, backend);
+
+  // Non-zero exit with no done sentinel => the session fails.
+  backend.last().emitExit(1);
+
+  const after = system.store.getEscalation(escalationId)!;
+  assert.equal(after.status, 'dismissed');
+  assert.equal((after.context.dismissal as { reason: string }).reason, 'agent failed');
+  system.store.close();
+});
+
+test('reconcileOnBoot auto-dismisses orphaned agents open escalations', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig(), { backend });
+  const { escalationId } = await agentWithOpenEscalation(system, backend);
+
+  reconcileOnBoot(system.store, system.escalations);
+
+  const after = system.store.getEscalation(escalationId)!;
+  assert.equal(after.status, 'dismissed');
+  assert.equal((after.context.dismissal as { reason: string }).reason, 'server restart');
+  system.store.close();
+});
+
+test('dismissal is scoped: a still-live agents escalations are left untouched', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig(), { backend });
+  const { escalationId } = await agentWithOpenEscalation(system, backend);
+
+  // A different agent dying must not touch this live agent's escalation.
+  system.escalations.dismissEscalationsForAgent('agent_someone_else', 'agent killed');
+
+  assert.equal(system.store.getEscalation(escalationId)!.status, 'open');
+  assert.equal(system.store.listOpenEscalations().length, 1);
   system.store.close();
 });
