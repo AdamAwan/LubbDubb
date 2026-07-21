@@ -92,6 +92,43 @@ export interface WorldSnapshot {
 }
 
 // ---------------------------------------------------------------------------
+// World change history (observed transitions between snapshots)
+// ---------------------------------------------------------------------------
+
+export type WorldEventKind =
+  | 'pr_opened'
+  | 'pr_ci'
+  | 'pr_approved'
+  | 'pr_mergeable'
+  | 'pr_merged'
+  | 'pr_comment'
+  | 'issue_opened'
+  | 'issue_closed'
+  | 'issue_linked'
+  | 'story_added'
+  | 'story_state'
+  | 'meeting_added'
+  | 'meeting_prep';
+
+/**
+ * One observed world state transition, derived by diffing consecutive
+ * {@link WorldSnapshot}s. The activity feed is the timeline of these — the
+ * counterpart to the decision log, but for the world rather than the harness.
+ */
+export interface WorldEvent {
+  id: string;
+  kind: WorldEventKind;
+  /** The world object this concerns, e.g. "pr:42", "story:abc", "issue:12". Null if global. */
+  ref: string | null;
+  /** Human-readable one-line summary, e.g. "PR #42 CI passing". */
+  summary: string;
+  createdAt: string; // ISO
+}
+
+/** A world event before the store assigns it an id and timestamp. */
+export type WorldEventInput = Omit<WorldEvent, 'id' | 'createdAt'>;
+
+// ---------------------------------------------------------------------------
 // Harness-internal state
 // ---------------------------------------------------------------------------
 
