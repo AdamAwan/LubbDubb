@@ -133,6 +133,12 @@ export interface Agent {
   pid: number | null;
   /** Why the agent is waiting, when status === 'waiting'. */
   waitingReason: string | null;
+  /**
+   * Claude Code session id this agent runs under, chosen at spawn so it can be
+   * resumed (`claude --resume <id>`) in the same worktree after a restart. Null
+   * for runtimes that don't support resume, or agents that never got one.
+   */
+  sessionId: string | null;
   startedAt: string;
   endedAt: string | null;
 }

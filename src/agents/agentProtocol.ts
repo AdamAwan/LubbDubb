@@ -33,14 +33,44 @@ export interface ClaudeArgsOptions {
   permissionMode?: string;
   /** Any additional operator-supplied args appended after ours. */
   extraArgs?: string[];
+  /**
+   * The session id to run under. Chosen up front (`--session-id`) so we *own* the
+   * id and can re-attach to this exact conversation after a restart — no scraping
+   * an id out of the terminal. Omitted for runtimes that don't support resume.
+   */
+  sessionId?: string;
+  /**
+   * Re-attach to {@link sessionId} (`--resume <id>`) instead of starting a fresh
+   * session. Used only on boot resume of an orphaned agent.
+   */
+  resume?: boolean;
 }
 
 /** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */
 export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
+  // Re-append the protocol on every launch, including resume: `--resume` replays
+  // the conversation but does not retain the original invocation's appended
+  // system prompt, so waiting/done detection would break without this.
   const args: string[] = ['--append-system-prompt', PROTOCOL_SYSTEM_PROMPT];
+  if (opts.sessionId) {
+    // `--session-id` (pick a new id) and `--resume` (re-open that id) are mutually
+    // exclusive — a resume must not also try to mint the id.
+    if (opts.resume) args.push('--resume', opts.sessionId);
+    else args.push('--session-id', opts.sessionId);
+  }
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;
+}
+
+/**
+ * The first message typed into a *resumed* agent that was mid-work (not parked on
+ * a question) when the server went down. `--resume` re-opens the session idle and
+ * awaiting input, so we nudge it to carry on. An agent that was waiting for a
+ * human instead keeps its escalation and is answered normally.
+ */
+export function buildResumeMessage(): string {
+  return 'You were resumed after a server restart. Continue the task from where you left off.';
 }
 
 /**

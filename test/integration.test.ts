@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
-import { buildSystem, reconcileOnBoot } from '../src/system.js';
+import { buildSystem, reconcileAndResumeOnBoot } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 
 function testConfig() {
@@ -102,9 +102,11 @@ test('reconcile on boot marks orphaned agents interrupted', async () => {
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
-  // Simulate a crash: the process is gone but the DB still says "running".
-  const reconciled = reconcileOnBoot(system.store);
-  assert.equal(reconciled, 1);
+  // Simulate a crash: the process is gone but the DB still says "running". The
+  // raw runtime isn't resumable, so reconciliation falls back to interrupting.
+  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents);
+  assert.equal(resumed, 0);
+  assert.equal(interrupted, 1);
   assert.equal(system.store.getAgent(agentId)!.status, 'interrupted');
   assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'interrupted');
   system.store.close();
