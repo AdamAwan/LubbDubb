@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { System } from '../system.js';
+import type { WorldEvent } from '../types.js';
 
 export type ServerEvent =
   | { type: 'cycle:start'; cycleId: string; source: string }
@@ -12,6 +13,7 @@ export type ServerEvent =
   | { type: 'escalation:created'; escalation: unknown }
   | { type: 'escalation:answered'; escalation: unknown; routing: string }
   | { type: 'world:changed' }
+  | { type: 'world:events'; events: unknown[] }
   | { type: 'dirty' };
 
 /**
@@ -37,6 +39,10 @@ export class Hub {
     );
     harness.on('cycle:end', (r: { cycleId: string; rationale: string; summary: unknown }) => {
       this.broadcast({ type: 'cycle:end', cycleId: r.cycleId, rationale: r.rationale, summary: r.summary });
+      this.broadcast({ type: 'dirty' });
+    });
+    harness.on('world:events', ({ events }: { events: WorldEvent[] }) => {
+      this.broadcast({ type: 'world:events', events });
       this.broadcast({ type: 'dirty' });
     });
 
