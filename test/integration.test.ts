@@ -49,12 +49,21 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   const agentId = live[0]!.id;
   assert.equal(backend.spawned.length, 1);
 
-  // The agent asks for a decision -> should become a waiting escalation.
+  // The agent narrates, then asks for a decision -> a waiting escalation that
+  // carries enough context to answer in-place.
+  backend.last().emit('Reading the login story…\nUnsure which identity provider to target.\n');
   backend.last().emit('@@LUBBDUBB_WAITING:Which auth provider should I assume?@@');
   const open = system.store.listOpenEscalations();
   assert.equal(open.length, 1, 'a waiting agent should raise one escalation');
   assert.equal(open[0]!.agentId, agentId);
   assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
+  // Enriched context: the originating signal and a tail of the agent's output.
+  const ctx = open[0]!.context;
+  // The escalation carries the task's originating signal (a story-grooming ref).
+  assert.equal(ctx.originRef, system.store.getTask(live[0]!.taskId)!.originRef);
+  assert.match(String(ctx.originRef), /^story:.+:groom$/);
+  assert.match(String(ctx.recentOutput), /identity provider/);
+  assert.doesNotMatch(String(ctx.recentOutput), /LUBBDUBB/, 'sentinels are stripped from the excerpt');
 
   // Human answers -> typed straight into the live session.
   const result = system.escalations.answer(open[0]!.id, 'Assume OAuth via Azure AD');

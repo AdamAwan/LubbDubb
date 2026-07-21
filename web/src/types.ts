@@ -76,12 +76,27 @@ export interface Agent {
   startedAt: string;
   endedAt: string | null;
 }
+// Extra context the server attaches so an escalation can be answered in-place.
+// Mirrors the server's EscalationContext; every key is optional.
+export interface EscalationContext {
+  taskTitle?: string;
+  originRef?: string | null;
+  recentOutput?: string;
+  prNumber?: number;
+  commentId?: string | null;
+  draft?: string;
+  confidence?: number;
+  method?: string;
+  autoSendFailed?: boolean;
+  autoMergeFailed?: boolean;
+  [key: string]: unknown;
+}
 export interface Escalation {
   id: string;
   type: string;
   status: string;
   prompt: string;
-  context: Record<string, unknown>;
+  context: EscalationContext;
   agentId: string | null;
   taskId: string | null;
   response: string | null;

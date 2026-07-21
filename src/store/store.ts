@@ -3,7 +3,16 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
-import type { Agent, Decision, Escalation, Task, WorldEvent, WorldEventInput, WorldSnapshot } from '../types.js';
+import type {
+  Agent,
+  Decision,
+  Escalation,
+  EscalationContext,
+  Task,
+  WorldEvent,
+  WorldEventInput,
+  WorldSnapshot,
+} from '../types.js';
 
 /** Injectable clock so tests are deterministic. */
 export type Clock = () => string;
@@ -413,7 +422,7 @@ function rowToEscalation(r: EscalationRow): Escalation {
     type: r.type as Escalation['type'],
     status: r.status as Escalation['status'],
     prompt: r.prompt,
-    context: JSON.parse(r.context) as Record<string, unknown>,
+    context: JSON.parse(r.context) as EscalationContext,
     agentId: r.agent_id,
     taskId: r.task_id,
     response: r.response,
