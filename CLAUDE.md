@@ -55,6 +55,13 @@ in production.
   (better-sqlite3), which keeps the harness logic race-free — lean on that.
 - **`src/harness.ts`** is the pulse: snapshot world → `Dispatcher.decide` → `ActionExecutor`
   → audit. Cycles are coalesced (one in flight at a time).
+- **`src/runtimeControl.ts`** holds the live, in-memory dispatch controls (`cap` +
+  `paused`), seeded from `maxConcurrentAgents`/`startPaused` at boot. Both the `Harness`
+  (headroom) and `ActionExecutor` (the hard dispatch gate) read it **by reference** each
+  cycle — never copy `.cap`/`.paused` into a local at wiring time or runtime changes stop
+  taking effect. Mutated via `POST /api/control`; **not persisted**, so a restart reverts
+  to config. Pausing defers only `dispatch_*` actions (escalate/answer/etc. still run) and
+  scaling the cap down never kills a live agent — both deferrals are audited with a reason.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.

@@ -79,6 +79,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 {
   "heartbeatIntervalMs": 300000,
   "maxConcurrentAgents": 3,
+  "startPaused": false,
   "dispatcher": "rule",
   "claudeCommand": "claude",
   "claudeArgs": [],
@@ -90,6 +91,8 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 }
 ```
 
+- **`maxConcurrentAgents`** — the concurrency cap seeding runtime control (see **Runtime control** below). Adjustable live without a restart; a restart reverts to this value.
+- **`startPaused`** — boot with dispatch paused (default `false`). The only config-level pause knob; live pause/resume is runtime-only and ephemeral, so a restart reverts to this value.
 - **`dispatcher`** — `"rule"` (deterministic, no model calls) or `"claude"` (an LLM decides each cycle, output still schema-validated).
 - **`agentMode`** — how agents run:
   - `"stream"` _(default)_ — real Claude Code over headless stream-JSON (`claude -p --output-format stream-json`). No interactive TUI, runs unattended, and stays alive across turns so the waiting/answer loop works. The harness injects its status protocol via an appended system prompt.
@@ -103,6 +106,32 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 - **`github`** — the target for the real `github` provider (required when `integrations.sourceControl` or `integrations.issues` is `"github"`). `owner`/`repo` name the repository; optional `filters.prAuthor` narrows the PR slice to one author and `filters.issueLabel` narrows issues to one label. The **auth token is not configured here** — it comes from the `GITHUB_TOKEN` environment variable so a secret never lands in a committed config file. Selecting `github` without a `GITHUB_TOKEN` or without `owner`/`repo` is a clear startup error. `github` reads from the GitHub REST API each cycle (PRs with CI/checks status, review approvals, mergeability and unresolved review threads; issues with state and their linked PR) and, for auto-send, posts PR replies and merges through it; a transient GitHub error serves the last-good snapshot rather than dropping items from the world.
 - **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself _only_ when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
 - Env overrides: `PORT`, `LUBBDUBB_DB`. Secrets: `GITHUB_TOKEN` (required by the `github` provider).
+
+### Runtime control (cap + pause, no restart)
+
+The concurrency cap and a pause flag are **live, in-memory controls** — change them
+while the harness is running and they take effect on the next cycle, no restart. They
+are **ephemeral**: a restart reverts to `maxConcurrentAgents` / `startPaused`.
+
+- **Cap** — raise it and more agents spawn immediately (subject to available work);
+  lower it and new dispatch is deferred until the live count drops below the new cap.
+  Scaling down **never kills** a running agent.
+- **Pause** — stops new dispatch only. Live agents keep running to completion, and the
+  harness keeps cycling, so escalations, human answers, world snapshots and the audit
+  log all continue. Unpausing resumes dispatch at the cap you had chosen. Every
+  pause/cap deferral is written to the audit log with its reason.
+
+Drive it from the cockpit topbar (the `−`/`+` cap stepper and the Pause/Resume toggle)
+or the endpoint directly:
+
+```bash
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"cap":5}'
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"paused":true}'
+```
+
+`POST /api/control` accepts `{ cap?, paused? }` (`cap` must be a non-negative integer),
+broadcasts the change over the WebSocket so every open cockpit updates live, and the
+current values appear in `/api/state` under a `control` block.
 
 ### Try the demo without a real model
 
