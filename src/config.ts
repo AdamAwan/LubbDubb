@@ -1,5 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
+import type { IntegrationSelection } from './integrations/integration.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -18,6 +19,13 @@ export interface Config {
   steeringPriorities: string[];
   /** Confidence-gated auto-send policy for side-effectful actions. Off by default. */
   autoSend: AutoSendConfig;
+  /**
+   * Which provider fulfils each integration capability. The swap switch: point a
+   * capability at a different provider (e.g. `sourceControl: "github"`) to change
+   * where that slice of the world comes from — no code change. Defaults to the
+   * built-in `fake` provider for every capability.
+   */
+  integrations: IntegrationSelection;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -86,6 +94,7 @@ const DEFAULTS: Config = {
   whitelistedApprovals: [],
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
+  integrations: { sourceControl: 'fake', backlog: 'fake', calendar: 'fake' },
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
@@ -119,6 +128,11 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // can set just one field (e.g. only `enabled`) without dropping the defaults
   // for the rest.
   merged.autoSend = { ...DEFAULTS.autoSend, ...fromFile.autoSend, ...overrides.autoSend };
+
+  // integrations is a nested per-capability map: deep-merge it too, so a config
+  // file (or override) can swap just one capability's provider without having to
+  // re-list the defaults for the others.
+  merged.integrations = { ...DEFAULTS.integrations, ...fromFile.integrations, ...overrides.integrations };
 
   // Agents run in a worktree/scratch cwd, so any relative script path in
   // claudeArgs (e.g. the demo mock-agent) must be made absolute up front or the

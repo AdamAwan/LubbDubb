@@ -1,153 +1,60 @@
-import { nanoid } from 'nanoid';
 import type { Connector, InjectableEvent } from './connector.js';
 import type { ActionSink, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { CalendarEvent, PullRequest, Story, WorldSnapshot } from '../types.js';
-
-const STATE_KEY = 'fake_world';
-
-interface FakeWorld {
-  pullRequests: PullRequest[];
-  stories: Story[];
-  calendar: CalendarEvent[];
-}
-
-const EMPTY_WORLD: FakeWorld = { pullRequests: [], stories: [], calendar: [] };
+import type { Story, WorldSnapshot } from '../types.js';
+import { CompositeConnector } from '../integrations/compositeConnector.js';
+import { FakeWorldStore } from '../integrations/fake/fakeWorld.js';
+import { FakeGitHubIntegration } from '../integrations/fake/fakeGitHub.js';
+import { FakeBacklogIntegration } from '../integrations/fake/fakeBacklog.js';
+import { FakeCalendarIntegration } from '../integrations/fake/fakeCalendar.js';
 
 /**
- * A connector whose world is an editable, persisted document. Tests and the
- * cockpit "inject event" button push {@link InjectableEvent}s at it to make the
- * world move; everything survives a restart because it lives in the store.
+ * A convenience bundle: the three fake integrations (source control, backlog,
+ * calendar) sharing one persisted world, composed behind {@link Connector} +
+ * {@link ActionSink}. Equivalent to selecting the `fake` provider for every
+ * capability — this is what makes the harness behave identically to before the
+ * integrations were modularised, and gives tests a one-call fake with the
+ * inject/reflect helpers.
  *
- * `now` is injectable so tests are deterministic.
+ * Production wiring builds the composite from config via `buildIntegrations`
+ * (see `system.ts`); this facade is the same modules assembled directly.
  */
 export class FakeConnector implements Connector, ActionSink {
-  constructor(
-    private readonly store: Store,
-    private readonly now: () => string = () => new Date().toISOString(),
-  ) {}
+  private readonly composite: CompositeConnector;
+  private readonly github: FakeGitHubIntegration;
+  private readonly backlog: FakeBacklogIntegration;
+  private readonly calendar: FakeCalendarIntegration;
 
-  async getState(): Promise<WorldSnapshot> {
-    const world = this.read();
-    return { takenAt: this.now(), ...world };
+  constructor(store: Store, now: () => string = () => new Date().toISOString()) {
+    const world = new FakeWorldStore(store);
+    this.github = new FakeGitHubIntegration(world, store);
+    this.backlog = new FakeBacklogIntegration(world);
+    this.calendar = new FakeCalendarIntegration(world);
+    this.composite = new CompositeConnector([this.github, this.backlog, this.calendar], store, now);
   }
 
-  /**
-   * The outbound side of the fake world. "Sends" a PR reply by reflecting it back
-   * into the fake world — marking the answered comment handled so the loop settles
-   * — and logging a connector event. Nothing leaves the machine; a real GitHub
-   * sink would POST here instead.
-   */
-  async postPrReply(input: PrReplyInput): Promise<SendResult> {
-    if (input.commentId) this.markCommentHandled(input.prNumber, input.commentId);
-    const ref = `fake-reply_${nanoid(6)}`;
-    this.store.recordConnectorEvent('pr_reply_sent', { ...input, ref });
-    return { ok: true, ref };
+  getState(): Promise<WorldSnapshot> {
+    return this.composite.getState();
   }
 
-  /** Apply an event to the world, persist it, and log it. Returns the new world. */
-  inject(event: InjectableEvent): FakeWorld {
-    const world = structuredCloneWorld(this.read());
-    switch (event.kind) {
-      case 'ci_failed':
-        this.mutatePr(world, event.prNumber, (pr) => (pr.ciStatus = 'failing'));
-        break;
-      case 'ci_passed':
-        this.mutatePr(world, event.prNumber, (pr) => (pr.ciStatus = 'passing'));
-        break;
-      case 'pr_comment':
-        this.mutatePr(world, event.prNumber, (pr) =>
-          pr.unresolvedComments.push({ id: `c_${nanoid(6)}`, author: event.author, body: event.body, handled: false }),
-        );
-        break;
-      case 'new_pr':
-        if (!world.pullRequests.some((p) => p.number === event.number)) {
-          world.pullRequests.push({
-            id: `pr_${nanoid(6)}`,
-            number: event.number,
-            title: event.title,
-            branch: event.branch,
-            ciStatus: 'pending',
-            unresolvedComments: [],
-          });
-        }
-        break;
-      case 'new_story':
-        world.stories.push({
-          id: `story_${nanoid(6)}`,
-          title: event.title,
-          description: event.description ?? null,
-          acceptanceCriteria: event.acceptanceCriteria ?? null,
-          wafPillars: event.wafPillars ?? [],
-          state: 'ready',
-          priority: event.priority ?? 1,
-        });
-        break;
-      case 'story_state': {
-        const story = world.stories.find((s) => s.id === event.storyId);
-        if (story) story.state = event.state;
-        break;
-      }
-      case 'meeting':
-        world.calendar.push({
-          id: `cal_${nanoid(6)}`,
-          title: event.title,
-          startsAt: event.startsAt,
-          prepDocs: event.prepDocs ?? [],
-          prepDone: false,
-        });
-        break;
-    }
-    this.write(world);
-    this.store.recordConnectorEvent(event.kind, event);
-    return world;
+  postPrReply(input: PrReplyInput): Promise<SendResult> {
+    return this.composite.postPrReply(input);
   }
 
-  /**
-   * Reflect harness progress back into the fake world so the loop can settle
-   * (e.g. once an agent handled a comment, mark it handled; when a story is
-   * picked up, move it to in_progress). Keeps the deterministic dispatcher from
-   * re-triggering on the same signal forever.
-   */
+  /** Apply an event to the fake world (routes to the owning module) and log it. */
+  inject(event: InjectableEvent): void {
+    this.composite.inject(event);
+  }
+
   markCommentHandled(prNumber: number, commentId: string): void {
-    const world = this.read();
-    this.mutatePr(world, prNumber, (pr) => {
-      const c = pr.unresolvedComments.find((x) => x.id === commentId);
-      if (c) c.handled = true;
-    });
-    this.write(world);
+    this.github.markCommentHandled(prNumber, commentId);
   }
 
   markStoryState(storyId: string, state: Story['state']): void {
-    const world = this.read();
-    const story = world.stories.find((s) => s.id === storyId);
-    if (story) story.state = state;
-    this.write(world);
+    this.backlog.markStoryState(storyId, state);
   }
 
   markPrepDone(eventId: string): void {
-    const world = this.read();
-    const ev = world.calendar.find((e) => e.id === eventId);
-    if (ev) ev.prepDone = true;
-    this.write(world);
+    this.calendar.markPrepDone(eventId);
   }
-
-  private mutatePr(world: FakeWorld, prNumber: number, fn: (pr: PullRequest) => void): void {
-    const pr = world.pullRequests.find((p) => p.number === prNumber);
-    if (pr) fn(pr);
-  }
-
-  private read(): FakeWorld {
-    const raw = this.store.getConnectorState(STATE_KEY);
-    if (!raw) return structuredCloneWorld(EMPTY_WORLD);
-    return JSON.parse(raw) as FakeWorld;
-  }
-
-  private write(world: FakeWorld): void {
-    this.store.setConnectorState(STATE_KEY, JSON.stringify(world));
-  }
-}
-
-function structuredCloneWorld(w: FakeWorld): FakeWorld {
-  return JSON.parse(JSON.stringify(w)) as FakeWorld;
 }

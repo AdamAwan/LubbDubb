@@ -1,0 +1,55 @@
+import type { Connector, InjectableEvent } from '../connector/connector.js';
+import type { ActionSink, PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { Store } from '../store/store.js';
+import type { WorldSnapshot } from '../types.js';
+import { isInjectable, isPrReplyCapable, type Integration } from './integration.js';
+
+/**
+ * Assembles the world from many {@link Integration}s and presents it behind the
+ * single {@link Connector} + {@link ActionSink} seams the harness and executor
+ * depend on — so neither of them changes when providers are swapped or added.
+ *
+ * - Reads: fan out `snapshot()` across integrations and merge the slices.
+ * - Outbound: route each side-effectful action to the integration that can
+ *   handle it (by capability), not to a hard-coded provider.
+ * - Inject (fake-only): route an injected event to the fake that owns its kind.
+ */
+export class CompositeConnector implements Connector, ActionSink {
+  constructor(
+    private readonly integrations: Integration[],
+    private readonly store: Store,
+    private readonly now: () => string = () => new Date().toISOString(),
+  ) {}
+
+  async getState(): Promise<WorldSnapshot> {
+    const slices = await Promise.all(this.integrations.map((i) => i.snapshot()));
+    return {
+      takenAt: this.now(),
+      pullRequests: slices.flatMap((s) => s.pullRequests ?? []),
+      stories: slices.flatMap((s) => s.stories ?? []),
+      calendar: slices.flatMap((s) => s.calendar ?? []),
+    };
+  }
+
+  async postPrReply(input: PrReplyInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrReplyCapable);
+    if (!handler) throw new Error('no integration can post PR replies (no sourceControl provider is PrReplyCapable)');
+    return handler.postPrReply(input);
+  }
+
+  /**
+   * Apply an injected event to whichever fake integration owns its kind, then log
+   * it. An event with no fake owner (e.g. its domain is served by a real adapter
+   * that reads from the network) is recorded as an unhandled inject rather than
+   * throwing — you cannot fake-inject onto a real provider.
+   */
+  inject(event: InjectableEvent): void {
+    const target = this.integrations.find((i) => isInjectable(i) && i.handles(event.kind));
+    if (target && isInjectable(target)) {
+      target.inject(event);
+      this.store.recordConnectorEvent(event.kind, event);
+    } else {
+      this.store.recordConnectorEvent('inject_unhandled', event);
+    }
+  }
+}

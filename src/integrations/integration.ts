@@ -1,0 +1,84 @@
+import type { Config } from '../config.js';
+import type { Store } from '../store/store.js';
+import type { InjectableEvent } from '../connector/connector.js';
+import type { PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { WorldSnapshot } from '../types.js';
+
+/**
+ * A modular integration owns exactly one *slice* of the outside world.
+ *
+ * The harness reads the world through a single {@link Connector} and writes
+ * through a single {@link ActionSink}, but behind those seams the world is
+ * assembled from many small integrations — one per **capability** (source
+ * control, backlog, calendar, …). Each capability has interchangeable
+ * **provider** implementations (a fake one here; a real GitHub / Azure DevOps /
+ * Google / Outlook one later) selected in config, so swapping the provider for a
+ * capability is a config change, not a code change. See {@link CompositeConnector}
+ * for how the slices are merged and {@link buildIntegrations} for how config
+ * chooses the providers.
+ */
+
+/** The kinds of integration the harness understands. Mirrors {@link WorldSnapshot}. */
+export type Capability = 'sourceControl' | 'backlog' | 'calendar';
+
+/** One provider chosen per capability. This is the swap switch (set in config). */
+export type IntegrationSelection = Record<Capability, string>;
+
+/** One integration's contribution to the world — only the domains it owns. */
+export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'stories' | 'calendar'>>;
+
+/** Everything a provider factory needs to build an integration. */
+export interface IntegrationContext {
+  store: Store;
+  config: Config;
+  /** Injectable clock so tests stay deterministic. */
+  now: () => string;
+}
+
+/** The base seam: every integration reads some slice of the world. */
+export interface Integration {
+  /** Stable id, e.g. `sourceControl:fake`. For the audit log and diagnostics. */
+  readonly id: string;
+  /** Which capability this integration fulfils. Exactly one provider per capability. */
+  readonly capability: Capability;
+  /** This integration's slice of the world right now. Called every dispatch cycle. */
+  snapshot(): Promise<WorldSlice>;
+}
+
+// ---------------------------------------------------------------------------
+// Outbound capability interfaces
+//
+// Outbound is *not* one fat interface: a provider implements only the outbound
+// capabilities it supports, and the composite routes each action to whichever
+// integration can handle it. New outbound actions add a new capability interface
+// here without widening a shared one.
+// ---------------------------------------------------------------------------
+
+/** An integration that can post a reply on a pull request. */
+export interface PrReplyCapable {
+  postPrReply(input: PrReplyInput): Promise<SendResult>;
+}
+
+export function isPrReplyCapable(x: Integration): x is Integration & PrReplyCapable {
+  return typeof (x as Partial<PrReplyCapable>).postPrReply === 'function';
+}
+
+// ---------------------------------------------------------------------------
+// Injectable (fake-only)
+//
+// Injecting events is a *fake* concern — real providers read from the network,
+// you don't inject into GitHub. Only fake integrations implement this, and the
+// composite routes an injected event to the fake that owns its kind.
+// ---------------------------------------------------------------------------
+
+export interface Injectable {
+  /** True if this integration knows how to apply an event of the given kind. */
+  handles(kind: InjectableEvent['kind']): boolean;
+  /** Apply an injectable event to this integration's world. */
+  inject(event: InjectableEvent): void;
+}
+
+export function isInjectable(x: Integration): x is Integration & Injectable {
+  const maybe = x as Partial<Injectable>;
+  return typeof maybe.handles === 'function' && typeof maybe.inject === 'function';
+}
