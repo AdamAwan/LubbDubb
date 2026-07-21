@@ -4,6 +4,7 @@ import { parseActions } from './actions.js';
 import { needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, Task } from '../types.js';
 import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './issuePickup.js';
+import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 
 /**
  * A deterministic, dependency-free dispatcher that encodes the harness's default
@@ -32,18 +33,24 @@ import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './
  */
 export class RuleDispatcher implements Dispatcher {
   private readonly pickup: IssuePickupPolicy;
+  private readonly cooldown: CooldownPolicy;
 
   /**
    * `pickup` gates and orders issue pickup (rule 4). Omitted/partial => no gate
    * and flat priority, so `new RuleDispatcher()` keeps the pre-gate behaviour of
    * acting on every open issue (used by unit tests; the composition root passes
-   * the operator's config).
+   * the operator's config). `cooldown` throttles re-dispatch of a persistent
+   * concern (see {@link dispatchVerdict}); defaults keep the loop bounded.
    */
-  constructor(pickup: Partial<IssuePickupPolicy> = {}) {
+  constructor(pickup: Partial<IssuePickupPolicy> = {}, cooldown: Partial<CooldownPolicy> = {}) {
     this.pickup = {
       pickupLabel: pickup.pickupLabel,
       priorityLabels: pickup.priorityLabels ?? {},
       defaultPriority: pickup.defaultPriority ?? 0,
+    };
+    this.cooldown = {
+      maxAttempts: cooldown.maxAttempts ?? DEFAULT_COOLDOWN.maxAttempts,
+      cooldownMs: cooldown.cooldownMs ?? DEFAULT_COOLDOWN.cooldownMs,
     };
   }
 
@@ -64,6 +71,18 @@ export class RuleDispatcher implements Dispatcher {
     // recent decision window — a note that ages out is harmless (the agent just
     // gets told again).
     const notified = notifiedOriginsByAgent(ctx.recentDecisions);
+    // "Now" for cooldown arithmetic — the snapshot's own timestamp, so a cycle is
+    // judged against when its world was observed, not wall-clock at decision time.
+    const now = ctx.world.takenAt;
+    // Throttle a persistent concern: a finished agent that didn't clear its origin
+    // cools down instead of re-dispatching every cycle, and escalates once its
+    // attempts are spent. Escalations don't claim headroom (no agent is started).
+    const throttle = (origin: string, onEscalate: (attempts: number) => RawAction, onDispatch: () => void): void => {
+      const verdict = dispatchVerdict(origin, now, ctx.recentDecisions, this.cooldown);
+      if (verdict.kind === 'escalate') raw.push(onEscalate(verdict.attempts));
+      else if (verdict.kind === 'dispatch') onDispatch();
+      // 'cooldown' | 'hold' — leave the origin alone this cycle.
+    };
 
     // 1–3: React to PR signals first — they're time-sensitive. At most one code
     // agent works a given branch, so a fresh signal for a branch that already
@@ -131,19 +150,32 @@ export class RuleDispatcher implements Dispatcher {
             } satisfies RawAction);
           }
         } else if (branch.kind === 'free') {
-          // No agent on this branch — dispatch one for the most urgent concern.
+          // No agent on this branch — dispatch one for the most urgent concern,
+          // unless the origin is cooling down or has exhausted its attempts.
           const top = concerns[0]!;
-          if (canDispatch(top.origin)) {
-            raw.push({
-              type: 'dispatch_code_agent',
-              branch: pr.branch,
-              title: top.title,
-              prompt: top.prompt,
-              originRef: top.origin,
-              reason: top.dispatchReason,
-            } satisfies RawAction);
-            claim(top.origin);
-          }
+          throttle(
+            top.origin,
+            (attempts) => ({
+              type: 'escalate_to_human',
+              escalationType: 'resolve_ambiguity',
+              prompt: `Auto-resolution of "${top.title}" keeps failing: ${attempts} agent attempt(s) on PR #${pr.number} left the concern unresolved. Please handle it manually.`,
+              context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
+              reason: `Origin ${top.origin} hit the ${this.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
+            }),
+            () => {
+              if (canDispatch(top.origin)) {
+                raw.push({
+                  type: 'dispatch_code_agent',
+                  branch: pr.branch,
+                  title: top.title,
+                  prompt: top.prompt,
+                  originRef: top.origin,
+                  reason: top.dispatchReason,
+                } satisfies RawAction);
+                claim(top.origin);
+              }
+            },
+          );
         }
         // branch.kind === 'busy' (queued / starting / parked waiting): hold every
         // note. Injecting into a waiting agent would un-park a human escalation,
@@ -186,17 +218,32 @@ export class RuleDispatcher implements Dispatcher {
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
     for (const { issue } of eligibleIssues) {
       const origin = `issue:${issue.number}`;
-      if (canDispatch(origin)) {
-        raw.push({
-          type: 'dispatch_code_agent',
-          branch: `issue/${issue.number}`,
-          title: `Resolve issue #${issue.number}`,
-          prompt: `GitHub issue #${issue.number} ("${issue.title}") needs resolving.\n\n${issue.body}\n\nImplement the fix on branch issue/${issue.number} and open a pull request that closes this issue.`,
-          originRef: origin,
-          reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
-        } satisfies RawAction);
-        claim(origin);
-      }
+      // An agent already on this issue owns it — don't throttle/escalate over a
+      // live attempt; the active-task de-dup handles it.
+      if (activeOrigins.has(origin)) continue;
+      throttle(
+        origin,
+        (attempts) => ({
+          type: 'escalate_to_human',
+          escalationType: 'resolve_ambiguity',
+          prompt: `Auto-resolution of issue #${issue.number} ("${issue.title}") keeps failing: ${attempts} agent attempt(s) produced no linked PR. Please take a look.`,
+          context: { originRef: origin, taskTitle: `Resolve issue #${issue.number}` },
+          reason: `Origin ${origin} hit the ${this.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
+        }),
+        () => {
+          if (canDispatch(origin)) {
+            raw.push({
+              type: 'dispatch_code_agent',
+              branch: `issue/${issue.number}`,
+              title: `Resolve issue #${issue.number}`,
+              prompt: `GitHub issue #${issue.number} ("${issue.title}") needs resolving.\n\n${issue.body}\n\nImplement the fix on branch issue/${issue.number} and open a pull request that closes this issue.`,
+              originRef: origin,
+              reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
+            } satisfies RawAction);
+            claim(origin);
+          }
+        },
+      );
     }
 
     // 5: Meeting prep.

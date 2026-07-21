@@ -400,6 +400,103 @@ test('a conflicted PR is dispatched ahead of a new issue under headroom 1', asyn
 });
 
 // --------------------------------------------------------------------------
+// Re-dispatch cooldown / attempt cap on a persistent concern (#36)
+// --------------------------------------------------------------------------
+
+const dirtyPr42 = {
+  id: 'p',
+  number: 42,
+  title: 'X',
+  branch: 'feat',
+  baseBranch: 'main',
+  ciStatus: 'passing' as const,
+  unresolvedComments: [],
+  mergeable: false,
+  mergeableState: 'dirty' as const,
+};
+
+/** An executed dispatch decision for `origin` at `createdAt`. */
+const dispatchDecision = (origin: string, createdAt: string) => ({
+  id: `d_${createdAt}`,
+  cycleId: 'c',
+  outcome: 'executed' as const,
+  detail: '',
+  createdAt,
+  action: { type: 'dispatch_code_agent' as const, reason: 'r', originRef: origin },
+});
+
+test('a persistent conflict is not re-dispatched during its cooldown window', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T00:00:30Z', pullRequests: [dirtyPr42] },
+      { recentDecisions: [dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z')] },
+    ),
+  );
+  assert.ok(!actions.some((a) => a.type.startsWith('dispatch_')), 'no re-dispatch 30s after the last attempt');
+  assert.ok(!actions.some((a) => a.type === 'escalate_to_human'), 'not yet at the attempt cap');
+  assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('once the cooldown lapses the conflict is dispatched again', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T01:00:00Z', pullRequests: [dirtyPr42] },
+      { recentDecisions: [dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z')] },
+    ),
+  );
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  assert.equal((actions[0] as { originRef: string }).originRef, 'pr:42:mergeable');
+});
+
+test('after the attempt cap a persistent conflict escalates instead of looping', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T02:00:00Z', pullRequests: [dirtyPr42] },
+      {
+        recentDecisions: [
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:40:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T01:20:00Z'),
+        ],
+      },
+    ),
+  );
+  assert.ok(!actions.some((a) => a.type.startsWith('dispatch_')), 'stops dispatching after three attempts');
+  const esc = actions.find((a) => a.type === 'escalate_to_human');
+  assert.ok(esc, 'escalates to a human');
+  assert.equal((esc as unknown as { context: { originRef: string } }).context.originRef, 'pr:42:mergeable');
+  assert.match((esc as { prompt: string }).prompt, /manually/i);
+});
+
+test('an already-escalated persistent conflict holds silently (no second escalation)', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T02:00:00Z', pullRequests: [dirtyPr42] },
+      {
+        recentDecisions: [
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:40:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T01:20:00Z'),
+          {
+            id: 'e1',
+            cycleId: 'c',
+            outcome: 'executed',
+            detail: '',
+            createdAt: '2026-07-21T01:21:00Z',
+            action: { type: 'escalate_to_human', reason: 'r', context: { originRef: 'pr:42:mergeable' } },
+          },
+        ],
+      },
+    ),
+  );
+  assert.equal(actions[0]?.type, 'no_op', 'no re-dispatch and no duplicate escalation');
+});
+
+// --------------------------------------------------------------------------
 // One code agent per PR branch: notify running, hold waiting, debounce
 // --------------------------------------------------------------------------
 

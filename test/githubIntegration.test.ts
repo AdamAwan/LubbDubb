@@ -8,6 +8,7 @@ import {
   buildUnresolvedComments,
 } from '../src/integrations/github/sourceControl.js';
 import { GitHubIssuesIntegration, linkedPrFromTimeline } from '../src/integrations/github/issues.js';
+import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
 import type {
   GhCheckRun,
   GhCombinedStatus,
@@ -243,6 +244,63 @@ test('snapshot leaves mergeable undefined when GitHub is still computing (null)'
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.mergeable, undefined);
   store.close();
+});
+
+// --------------------------------------------------------------------------
+// resolvePullDetail: chase GitHub's lazily-computed merge state (#35)
+// --------------------------------------------------------------------------
+
+const noSleep = async (): Promise<void> => {};
+
+test('resolvePullDetail re-polls past a transient unknown until a concrete state lands', async () => {
+  const details: GhPullDetail[] = [
+    { mergeable: null, mergeableState: 'unknown', merged: false }, // first read only triggers the compute
+    { mergeable: false, mergeableState: 'dirty', merged: false }, // concrete on the second read
+  ];
+  let calls = 0;
+  const detail = await resolvePullDetail(async () => details[calls++]!, { sleep: noSleep });
+  assert.equal(calls, 2, 'polled again after the unknown');
+  assert.equal(detail.mergeableState, 'dirty');
+  assert.equal(detail.mergeable, false);
+});
+
+test('resolvePullDetail returns immediately when the first read is already concrete', async () => {
+  let calls = 0;
+  const detail = await resolvePullDetail(
+    async () => {
+      calls++;
+      return { mergeable: true, mergeableState: 'clean', merged: false };
+    },
+    { sleep: noSleep },
+  );
+  assert.equal(calls, 1, 'no extra polls when the state is already known');
+  assert.equal(detail.mergeableState, 'clean');
+});
+
+test('resolvePullDetail is bounded: it gives up after the retry budget and falls back to unknown', async () => {
+  let calls = 0;
+  const detail = await resolvePullDetail(
+    async () => {
+      calls++;
+      return { mergeable: null, mergeableState: 'unknown', merged: false };
+    },
+    { retries: 3, sleep: noSleep },
+  );
+  assert.equal(calls, 4, 'the initial read plus three retries');
+  assert.equal(detail.mergeable, null, 'unresolved after the budget — the next heartbeat tries again');
+});
+
+test('resolvePullDetail does not burn retries on a merged PR (mergeable is null but final)', async () => {
+  let calls = 0;
+  const detail = await resolvePullDetail(
+    async () => {
+      calls++;
+      return { mergeable: null, mergeableState: 'unknown', merged: true };
+    },
+    { sleep: noSleep },
+  );
+  assert.equal(calls, 1, 'merged short-circuits the retry loop');
+  assert.equal(detail.merged, true);
 });
 
 test('snapshot maps baseBranch and normalises mergeable_state', async () => {
