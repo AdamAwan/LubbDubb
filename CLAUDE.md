@@ -101,6 +101,16 @@ comment threading, linked-PR-from-timeline) is exported as pure functions and te
 When you extend it, add to the `GitHubApi` interface + its fake together, and keep new mapping
 logic in pure functions so it stays unit-testable without HTTP.
 
+**External references → links.** URL construction lives in the provider, never in `web/`. The
+github providers implement the `RefResolvable` capability (`resolveRefUrl(ref)`, backed by the
+pure `githubRefUrl` in `src/integrations/github/refUrl.ts`); `CompositeConnector.resolveRefUrl`
+routes to it. The server builds a `ref → URL` map (`buildRefUrls`, `src/server/refUrls.ts`) into
+the `/api/state` snapshot as `refUrls`, and the cockpit looks refs up there (`linkify` / `refLink`
+in `web/src/components/util.tsx`) — it never string-builds a `github.com` URL. A provider that
+can't resolve a ref returns `null`; the ref then renders as plain text (the `fake` provider's
+behaviour). If you add a new ref shape, extend `githubRefUrl` (+ its unit test) and, if it's a new
+structured field, feed it into `buildRefUrls`.
+
 ## Gotchas
 
 - The default `agentMode` is `stream`, **not** a PTY — don't assume terminal semantics when
