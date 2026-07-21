@@ -216,6 +216,18 @@ export class Store {
     return { ...existing, status: 'answered', response, answeredAt };
   }
 
+  /**
+   * Flip an escalation to `dismissed`, persisting the caller-built context (which
+   * carries the dismissal reason + timestamp). The store stays a dumb data layer:
+   * the decision of *what* to dismiss and *why* lives in the EscalationInbox.
+   */
+  dismissEscalation(id: string, context: Record<string, unknown>): Escalation {
+    const existing = this.getEscalation(id);
+    if (!existing) throw new Error(`Escalation ${id} not found`);
+    this.db.prepare(`UPDATE escalations SET status='dismissed', context=? WHERE id=?`).run(JSON.stringify(context), id);
+    return { ...existing, status: 'dismissed', context };
+  }
+
   getEscalation(id: string): Escalation | null {
     const row = this.db.prepare(`SELECT * FROM escalations WHERE id=?`).get(id) as EscalationRow | undefined;
     return row ? rowToEscalation(row) : null;

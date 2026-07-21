@@ -11,6 +11,7 @@ export type ServerEvent =
   | { type: 'agent:done'; agentId: string; taskId: string; status: string }
   | { type: 'escalation:created'; escalation: unknown }
   | { type: 'escalation:answered'; escalation: unknown; routing: string }
+  | { type: 'escalation:dismissed'; escalation: unknown }
   | { type: 'world:changed' }
   | { type: 'dirty' };
 
@@ -61,6 +62,10 @@ export class Hub {
     });
     escalations.on('answered', ({ escalation, routing }: { escalation: unknown; routing: string }) => {
       this.broadcast({ type: 'escalation:answered', escalation, routing });
+      this.broadcast({ type: 'dirty' });
+    });
+    escalations.on('dismissed', (escalation) => {
+      this.broadcast({ type: 'escalation:dismissed', escalation });
       this.broadcast({ type: 'dirty' });
     });
   }

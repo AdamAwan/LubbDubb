@@ -138,16 +138,28 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     });
   });
 
+  // A dead agent can never receive an answer, so cascade-dismiss its open
+  // escalations at every terminal-dead transition. Kill surfaces as a `killed`
+  // status; an unexpected exit / crash surfaces as a `failed` done. (Server-restart
+  // orphans are handled separately by reconcileOnBoot, before the heartbeat runs.)
+  agents.on('status', ({ agentId, status }) => {
+    if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');
+  });
+  agents.on('done', ({ agentId, status }) => {
+    if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
+  });
+
   return { config, store, connector, agents, escalations, executor, dispatcher, harness };
 }
 
 /**
  * Restart reconciliation: any agent still marked live in the store is really
- * dead (its PTY died with the process), so mark it — and its task — interrupted.
- * The next dispatch cycle decides whether to resume. Must run before the
- * heartbeat starts.
+ * dead (its PTY died with the process), so mark it — and its task — interrupted,
+ * and cascade-dismiss its now-orphaned open escalations (the fresh agent re-raises
+ * anything it still needs). The next dispatch cycle decides whether to resume.
+ * Must run before the heartbeat starts.
  */
-export function reconcileOnBoot(store: Store): number {
+export function reconcileOnBoot(store: Store, escalations: EscalationInbox): number {
   const zombies = store.listAgentsByStatus('starting', 'running', 'waiting');
   const at = new Date().toISOString();
   for (const agent of zombies) {
@@ -156,6 +168,7 @@ export function reconcileOnBoot(store: Store): number {
     if (task && (task.status === 'running' || task.status === 'waiting' || task.status === 'queued')) {
       store.updateTask(task.id, { status: 'interrupted' });
     }
+    escalations.dismissEscalationsForAgent(agent.id, 'server restart');
   }
   return zombies.length;
 }
