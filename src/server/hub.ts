@@ -15,6 +15,7 @@ export type ServerEvent =
   | { type: 'escalation:answered'; escalation: unknown; routing: string }
   | { type: 'escalation:dismissed'; escalation: unknown }
   | { type: 'world:changed' }
+  | { type: 'control:changed'; cap: number; paused: boolean }
   | { type: 'world:events'; events: unknown[] }
   | { type: 'dirty' };
 

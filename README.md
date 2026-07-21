@@ -102,6 +102,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 {
   "heartbeatIntervalMs": 300000,
   "maxConcurrentAgents": 3,
+  "startPaused": false,
   "dispatcher": "rule",
   "claudeCommand": "claude",
   "claudeArgs": [],
@@ -116,6 +117,8 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 }
 ```
 
+- **`maxConcurrentAgents`** — the concurrency cap seeding runtime control (see **Runtime control** below). Adjustable live without a restart; a restart reverts to this value.
+- **`startPaused`** — boot with dispatch paused (default `false`). The only config-level pause knob; live pause/resume is runtime-only and ephemeral, so a restart reverts to this value.
 - **`dispatcher`** — `"rule"` (deterministic, no model calls) or `"claude"` (an LLM decides each cycle, output still schema-validated).
 - **`agentMode`** — how agents run:
   - `"stream"` _(default)_ — real Claude Code over headless stream-JSON (`claude -p --output-format stream-json`). No interactive TUI, runs unattended, and stays alive across turns so the waiting/answer loop works. The harness injects its status protocol via an appended system prompt.
@@ -131,6 +134,32 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 - **`issuePriorityLabels` / `issueDefaultPriority`** — a label-encoded priority scheme so that, when agent headroom is limited, the important issues are picked up first. `issuePriorityLabels` maps a label to a weight (default `priority:high`→3, `priority:medium`→2, `priority:low`→1); an issue with no matching label gets `issueDefaultPriority` (default 2). The highest weight among an issue's labels wins; equal weights break by issue number (oldest first). Providing your own `issuePriorityLabels` **replaces** the default map wholesale rather than merging, so you can define an entirely different convention (e.g. `p0`/`p1`/`p2`). The `"rule"` dispatcher enforces this deterministically; the `"claude"` dispatcher receives it as prompt guidance.
 - **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself _only_ when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
 - Env overrides: `PORT`, `LUBBDUBB_DB`. Secrets: `GITHUB_TOKEN` (required by the `github` provider).
+
+### Runtime control (cap + pause, no restart)
+
+The concurrency cap and a pause flag are **live, in-memory controls** — change them
+while the harness is running and they take effect on the next cycle, no restart. They
+are **ephemeral**: a restart reverts to `maxConcurrentAgents` / `startPaused`.
+
+- **Cap** — raise it and more agents spawn immediately (subject to available work);
+  lower it and new dispatch is deferred until the live count drops below the new cap.
+  Scaling down **never kills** a running agent.
+- **Pause** — stops new dispatch only. Live agents keep running to completion, and the
+  harness keeps cycling, so escalations, human answers, world snapshots and the audit
+  log all continue. Unpausing resumes dispatch at the cap you had chosen. Every
+  pause/cap deferral is written to the audit log with its reason.
+
+Drive it from the cockpit topbar (the `−`/`+` cap stepper and the Pause/Resume toggle)
+or the endpoint directly:
+
+```bash
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"cap":5}'
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"paused":true}'
+```
+
+`POST /api/control` accepts `{ cap?, paused? }` (`cap` must be a non-negative integer),
+broadcasts the change over the WebSocket so every open cockpit updates live, and the
+current values appear in `/api/state` under a `control` block.
 
 ### Try the demo without a real model
 

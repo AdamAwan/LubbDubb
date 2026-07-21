@@ -142,6 +142,11 @@ export interface AppState {
     dispatcher: string;
     steeringPriorities: string[];
   };
+  /** Live, mutable dispatch controls — the current cap and pause state. */
+  control: {
+    cap: number;
+    paused: boolean;
+  };
   world: WorldSnapshot;
   tasks: Task[];
   agents: Agent[];
@@ -155,4 +160,5 @@ export type ServerEvent =
   | { type: 'agent:output'; agentId: string; delta: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string }
+  | { type: 'control:changed'; cap: number; paused: boolean }
   | { type: string; [k: string]: unknown };
