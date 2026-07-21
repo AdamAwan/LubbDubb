@@ -144,6 +144,20 @@ test('PR monitoring: approval + mergeable signals mark a PR merge-ready', async 
   store.close();
 });
 
+test('new_pr carries a base branch and unknown merge state; pr_mergeable can set a conflict', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b', baseBranch: 'develop' });
+  let pr = (await connector.getState()).pullRequests[0]!;
+  assert.equal(pr.baseBranch, 'develop');
+  assert.equal(pr.mergeableState, 'unknown');
+
+  connector.inject({ kind: 'pr_mergeable', prNumber: 7, mergeable: false, mergeableState: 'dirty' });
+  pr = (await connector.getState()).pullRequests[0]!;
+  assert.equal(pr.mergeableState, 'dirty');
+  assert.equal(pr.mergeable, false);
+  store.close();
+});
+
 test('mergePr routes to the sourceControl provider and marks the PR merged', async () => {
   const { store, connector } = build();
   connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b' });
