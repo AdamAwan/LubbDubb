@@ -120,3 +120,16 @@ test('non-zero exit is a failure', () => {
   assert.equal(failed, true);
   assert.equal(session.status, 'failed');
 });
+
+test('kill marks the session killed even when the exit fires synchronously', () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  let failed = false;
+  session.on('failed', () => (failed = true));
+  session.start();
+  // FakePtyProcess.kill() emits a non-zero exit synchronously; the session must
+  // recognise it as a kill, not misfire a spurious 'failed'.
+  session.kill();
+  assert.equal(session.status, 'killed');
+  assert.equal(failed, false, 'kill must not emit a failure');
+});

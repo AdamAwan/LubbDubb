@@ -1,4 +1,4 @@
-import type { WorldSnapshot } from '../types.js';
+import type { MergeableState, WorldSnapshot } from '../types.js';
 
 /**
  * The seam between the harness and the outside world.
@@ -20,10 +20,10 @@ export type InjectableEvent =
   | { kind: 'ci_failed'; prNumber: number }
   | { kind: 'ci_passed'; prNumber: number }
   | { kind: 'pr_comment'; prNumber: number; author: string; body: string }
-  | { kind: 'new_pr'; number: number; title: string; branch: string }
+  | { kind: 'new_pr'; number: number; title: string; branch: string; baseBranch?: string }
   // PR-monitoring signals that walk a PR toward mergeable.
   | { kind: 'pr_approved'; prNumber: number }
-  | { kind: 'pr_mergeable'; prNumber: number; mergeable?: boolean }
+  | { kind: 'pr_mergeable'; prNumber: number; mergeable?: boolean; mergeableState?: MergeableState }
   // GitHub-issue signals.
   | { kind: 'new_issue'; number: number; title: string; body?: string; labels?: string[] }
   | { kind: 'issue_state'; number: number; state: 'open' | 'closed' }

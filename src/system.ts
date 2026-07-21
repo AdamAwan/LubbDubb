@@ -17,10 +17,12 @@ import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
+import { recentOutputExcerpt } from './escalation/context.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
+import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { Harness } from './harness.js';
 
 export interface System {
@@ -129,10 +131,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     maxConcurrentAgents: config.maxConcurrentAgents,
   });
 
+  // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
+  // by whichever dispatcher is selected — provider-agnostic.
+  const issuePickup: IssuePickupPolicy = {
+    pickupLabel: config.issuePickupLabel,
+    priorityLabels: config.issuePriorityLabels,
+    defaultPriority: config.issueDefaultPriority,
+  };
   const dispatcher: Dispatcher =
     config.dispatcher === 'claude'
-      ? new ClaudeDispatcher(backend, { command: config.claudeCommand, args: config.claudeArgs, cwd: config.repoRoot })
-      : new RuleDispatcher();
+      ? new ClaudeDispatcher(backend, {
+          command: config.claudeCommand,
+          args: config.claudeArgs,
+          cwd: config.repoRoot,
+          issuePickup,
+        })
+      : new RuleDispatcher(issuePickup);
 
   const harness = new Harness({
     store,
@@ -147,16 +161,33 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.
   // Idempotent per agent: an agent already has at most one open escalation, so a
   // repeat 'waiting' (e.g. a resumed agent re-surfacing its park) never doubles up.
+  // Enrich with the task's originating signal and a tail of the agent's output so
+  // the human can answer from the card without opening the drawer for context.
   agents.on('waiting', ({ agentId, taskId, reason }) => {
     if (store.listOpenEscalations().some((e) => e.agentId === agentId)) return;
     const task = store.getTask(taskId);
     escalations.create({
       type: 'answer_question',
       prompt: reason,
-      context: { taskTitle: task?.title, agentId, taskId },
+      context: {
+        taskTitle: task?.title,
+        originRef: task?.originRef ?? null,
+        recentOutput: recentOutputExcerpt(store.getTranscript(agentId)),
+      },
       agentId,
       taskId,
     });
+  });
+
+  // A dead agent can never receive an answer, so cascade-dismiss its open
+  // escalations at every terminal-dead transition. Kill surfaces as a `killed`
+  // status; an unexpected exit / crash surfaces as a `failed` done. (Server-restart
+  // orphans are handled separately by reconcileAndResumeOnBoot, before the heartbeat runs.)
+  agents.on('status', ({ agentId, status }) => {
+    if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');
+  });
+  agents.on('done', ({ agentId, status }) => {
+    if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
   });
 
   return { config, store, connector, agents, escalations, executor, dispatcher, harness };
@@ -171,8 +202,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
  * anything not resumable (no session id, missing worktree, non-PTY runtime)
  * falls back to today's `interrupted` behaviour; boot never blocks on a resume.
  *
- * Resumed agents re-enter the live set, so they count against
- * `maxConcurrentAgents` before the boot cycle dispatches anything new.
+ * Resumed agents re-enter the live set (keeping their pre-restart escalation, so
+ * a queued answer still routes in) and count against `maxConcurrentAgents` before
+ * the boot cycle dispatches anything new. An orphan that *can't* be resumed is
+ * truly dead, so its now-orphaned open escalations are cascade-dismissed.
  *
  * Candidate set (orphans): agents in a live-ish state — `starting`/`running`/
  * `waiting` (crash) or `interrupted` (graceful shutdown) — whose task is still
@@ -180,7 +213,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
  * so it is excluded on both counts and stays dead. A prior boot's give-up leaves
  * both agent and task `interrupted`, so it isn't resurrected on every restart.
  */
-export function reconcileAndResumeOnBoot(store: Store, agents: AgentManager): { resumed: number; interrupted: number } {
+export function reconcileAndResumeOnBoot(
+  store: Store,
+  agents: AgentManager,
+  escalations: EscalationInbox,
+): { resumed: number; interrupted: number } {
   const isActive = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'queued';
   const orphans = store.listAgentsByStatus('starting', 'running', 'waiting', 'interrupted').filter((a) => {
     const task = store.getTask(a.taskId);
@@ -206,9 +243,12 @@ export function reconcileAndResumeOnBoot(store: Store, agents: AgentManager): { 
       continue;
     }
 
-    // Fallback: mark agent and task interrupted (also stops it being retried next boot).
+    // Fallback: agent can't be resumed, so it's truly dead. Mark agent and task
+    // interrupted (also stops it being retried next boot) and cascade-dismiss its
+    // now-orphaned open escalations (a fresh agent re-raises anything still needed).
     store.updateAgent(agent.id, { status: 'interrupted', endedAt: at, pid: null });
     store.updateTask(task.id, { status: 'interrupted' });
+    escalations.dismissEscalationsForAgent(agent.id, 'server restart');
     result.interrupted += 1;
   }
   return result;

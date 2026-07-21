@@ -89,7 +89,7 @@ async function main(): Promise<void> {
     .forEach((l) => console.log('    ' + l.trim()));
 
   console.log('5. Simulate a crash + restart: reconcile should be a no-op now (agent already done).');
-  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents);
+  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
   log(`✓ boot reconcile: resumed ${resumed}, interrupted ${interrupted} (expected 0/0)`);
 
   console.log('\nSMOKE TEST PASSED ✅');

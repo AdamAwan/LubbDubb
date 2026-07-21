@@ -40,7 +40,7 @@ async function spawnAgent(dir: string) {
 function reboot(dir: string) {
   const backend = new FakePtyBackend();
   const system = buildSystem(ptyConfig(dir), { backend });
-  const result = reconcileAndResumeOnBoot(system.store, system.agents);
+  const result = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
   return { backend, system, result };
 }
 
@@ -126,7 +126,7 @@ test('an orphan with no usable session id falls back to interrupted', () => {
   system.store.updateTask(task.id, { status: 'running' });
   const agent = system.store.createAgent({ taskId: task.id, cwd: dir, pid: 1, status: 'running', sessionId: null });
 
-  const result = reconcileAndResumeOnBoot(system.store, system.agents);
+  const result = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
   assert.deepEqual(result, { resumed: 0, interrupted: 1 });
   assert.equal(system.store.getAgent(agent.id)!.status, 'interrupted');
   assert.equal(system.store.getTask(task.id)!.status, 'interrupted');
@@ -174,7 +174,7 @@ test('resuming is idempotent: a second reconcile does not re-spawn', async () =>
   const { backend, system: s2 } = reboot(dir);
   assert.equal(backend.spawned.length, 1);
   // A repeat reconcile (e.g. boot ran twice) must not double-launch the session.
-  reconcileAndResumeOnBoot(s2.store, s2.agents);
+  reconcileAndResumeOnBoot(s2.store, s2.agents, s2.escalations);
   assert.equal(backend.spawned.length, 1, 'already-live agent is not re-spawned');
   s2.store.close();
 });

@@ -1,12 +1,12 @@
 import { EventEmitter } from 'node:events';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
-import type { Escalation, EscalationType } from '../types.js';
+import type { Escalation, EscalationContext, EscalationType } from '../types.js';
 
 export interface CreateEscalationInput {
   type: EscalationType;
   prompt: string;
-  context?: Record<string, unknown>;
+  context?: EscalationContext;
   agentId?: string | null;
   taskId?: string | null;
 }
@@ -60,6 +60,34 @@ export class EscalationInbox extends EventEmitter {
     }
     this.emit('answered', { escalation: updated, routing });
     return { escalation: updated, routing };
+  }
+
+  /**
+   * Cascade-dismiss every open escalation tied to an agent that has reached a
+   * terminal-dead state (server restart / kill / crash). Such an agent can never
+   * receive the answer, so leaving these `open` just clutters "Needs you" with
+   * un-actionable items — answering one would route nowhere. We flip them to the
+   * existing `dismissed` status, recording *why* in the escalation's own context
+   * (`context.dismissal`, so no schema change) and in the audit log, and emit a
+   * `dismissed` event so the cockpit refreshes. Returns the escalations dismissed.
+   */
+  dismissEscalationsForAgent(agentId: string, reason: string): Escalation[] {
+    const at = new Date().toISOString();
+    const dismissed: Escalation[] = [];
+    for (const esc of this.store.listOpenEscalations()) {
+      if (esc.agentId !== agentId) continue;
+      const context = { ...esc.context, dismissal: { reason, at } };
+      const updated = this.store.dismissEscalation(esc.id, context);
+      this.store.recordDecision({
+        cycleId: 'agent-lifecycle',
+        action: { type: 'no_op', reason: 'dismiss orphaned escalation' },
+        outcome: 'executed',
+        detail: `Auto-dismissed escalation ${esc.id} for dead agent ${agentId}: ${reason}`,
+      });
+      this.emit('dismissed', updated);
+      dismissed.push(updated);
+    }
+    return dismissed;
   }
 
   listOpen(): Escalation[] {

@@ -44,12 +44,20 @@ body {
 .btn.primary { background: var(--blue); border-color: var(--blue); color: #04121f; font-weight: 600; }
 .btn.danger { border-color: #4d1e1e; color: var(--red); }
 .btn.danger:hover { background: var(--red); color: #1a0606; }
+/* Armed = one destructive click away; filled red + pulse to demand a deliberate confirm. */
+.btn.danger.armed, .btn.danger.armed:hover { background: var(--red); color: #1a0606; border-color: var(--red); font-weight: 600; animation: armed-pulse 1.2s ease-in-out infinite; }
+@keyframes armed-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 .btn.ghost { background: transparent; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 .inject { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .inject-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-.raw, .reply { display: flex; gap: 6px; flex: 1; min-width: 220px; }
+.raw, .reply { display: flex; gap: 6px; }
+/* .raw sits in the horizontal .inject row, so it grows to fill the width. */
+.raw { flex: 1; min-width: 220px; }
+/* .reply sits in the vertical .drawer column: pin it to its natural height so
+   the terminal keeps the space instead of splitting the drawer 50/50. */
+.reply { flex: 0 0 auto; margin-top: 12px; }
 .raw input, .reply input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 16px 20px; align-items: start; }
@@ -88,7 +96,24 @@ body {
 .dot.grey { background: var(--grey); }
 
 .escalation { border-color: #3a1420; }
+.escalation .card-head { cursor: default; }
+.esc-time { margin-left: auto; }
 .escalation-prompt { margin: 6px 0; }
+.btn.small { padding: 3px 9px; font-size: 12px; }
+
+.esc-context { margin: 8px 0; }
+.esc-context > summary { cursor: pointer; list-style: none; user-select: none; }
+.esc-context > summary::before { content: '▸ '; color: var(--muted); }
+.esc-context[open] > summary::before { content: '▾ '; }
+.esc-output {
+  margin: 6px 0 0; padding: 8px 10px; max-height: 180px; overflow: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  color: var(--muted); white-space: pre-wrap; word-break: break-word;
+}
+.esc-open { padding-left: 0; margin: 4px 0; color: var(--blue); }
+.esc-open:hover { border-color: transparent; text-decoration: underline; }
+.esc-quick { display: flex; gap: 6px; margin: 8px 0; }
 
 .world { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
 .world-row { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 4px; }
@@ -155,3 +180,23 @@ body {
 .audit-top { display: flex; align-items: center; gap: 8px; }
 .audit-time { margin-left: auto; font-size: 11px; white-space: nowrap; }
 .audit-reason { color: var(--text); margin-top: 5px; font-style: italic; opacity: 0.85; }
+
+/* Decision log and Activity feed share the third column; cap each so both fit. */
+.auditlog { max-height: 46vh; }
+.feed-heading { margin-top: 24px; }
+
+/* Activity feed — world change history. Per-category accent, reusing the palette. */
+.audit.activity { font-style: normal; }
+.audit.activity .audit-reason { font-style: normal; opacity: 1; }
+.audit.activity.prs { border-color: var(--blue); }
+.audit.activity.issues { border-color: var(--accent); }
+.audit.activity.stories { border-color: var(--green); }
+.audit.activity.meetings { border-color: var(--amber); }
+.badge.prs { color: var(--blue); }
+.badge.issues { color: var(--accent); }
+.badge.stories { color: var(--green); }
+.badge.meetings { color: var(--amber); }
+.filter-chip.prs.active { border-color: var(--blue); background: #14243a; }
+.filter-chip.issues.active { border-color: var(--accent); background: #3a1420; }
+.filter-chip.stories.active { border-color: var(--green); background: #10241a; }
+.filter-chip.meetings.active { border-color: var(--amber); background: #241d0c; }

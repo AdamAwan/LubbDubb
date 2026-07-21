@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from './session.js';
+import { DONE_SENTINEL, extractWaitingReason } from './sentinels.js';
+import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
 
 /**
  * Minimal child-process shape we depend on — injectable so tests drive a fake
@@ -19,10 +21,6 @@ export type Spawner = (command: string, args: string[], opts: { cwd: string; env
 
 const defaultSpawner: Spawner = (command, args, opts) =>
   nodeSpawn(command, args, { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] }) as unknown as StreamChild;
-
-const DONE_SENTINEL = '@@LUBBDUBB_DONE@@';
-const WAIT_PREFIX = '@@LUBBDUBB_WAITING:';
-const WAIT_SUFFIX = '@@';
 
 /**
  * Drives a real `claude` agent over the streaming-JSON protocol
@@ -120,11 +118,20 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     }
 
     if (ev.type === 'assistant') {
-      const text = extractText(ev);
-      if (text) {
-        this.turnText += text;
-        this.emit('output', text);
-      }
+      const blocks = contentBlocks(ev);
+      // Detection scans the raw assistant text (sentinels intact); display strips them.
+      this.turnText += assistantText(blocks);
+      const display = renderBlocks(blocks);
+      if (display) this.emit('output', display);
+      return;
+    }
+
+    if (ev.type === 'user') {
+      // Incoming user events on stdout are tool results the CLI produced. Render
+      // only those blocks — plain-text user content is our own echoed input.
+      const results = contentBlocks(ev).filter((b) => b.type === 'tool_result');
+      const display = renderBlocks(results);
+      if (display) this.emit('output', display);
       return;
     }
 
@@ -174,25 +181,13 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
 interface StreamEvent {
   type: string;
   subtype?: string;
-  message?: { content?: Array<{ type: string; text?: string }> | string };
+  message?: { content?: ContentBlock[] | string };
 }
 
-function extractText(ev: StreamEvent): string {
+/** Normalise a message's `content` into a block array (a bare string becomes one text block). */
+function contentBlocks(ev: StreamEvent): ContentBlock[] {
   const content = ev.message?.content;
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content))
-    return content
-      .filter((b) => b.type === 'text' && b.text)
-      .map((b) => b.text as string)
-      .join('');
-  return '';
-}
-
-function extractWaitingReason(text: string): string | null {
-  const start = text.indexOf(WAIT_PREFIX);
-  if (start === -1) return null;
-  const from = start + WAIT_PREFIX.length;
-  const end = text.indexOf(WAIT_SUFFIX, from);
-  if (end === -1) return null;
-  return text.slice(from, end).trim();
+  if (Array.isArray(content)) return content;
+  if (typeof content === 'string') return [{ type: 'text', text: content }];
+  return [];
 }

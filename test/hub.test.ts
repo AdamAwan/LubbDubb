@@ -91,6 +91,20 @@ test('agent:tail carries the last non-empty line across delta boundaries and cap
   assert.equal(long.line.length, 200);
 });
 
+test('agent:tail strips ANSI escape codes so the fleet-card preview stays clean', () => {
+  const { system, agents } = fakeSystem();
+  const hub = new Hub(system);
+  const { socket, sent } = fakeSocket();
+  hub.add(socket);
+  const agentId = 'agent_ansi';
+
+  agents.emit('output', { agentId, delta: '\x1b[36m⚙ Bash\x1b[0m npm run check\n' });
+  const tail = sent.filter((e): e is Extract<ServerEvent, { type: 'agent:tail' }> => e.type === 'agent:tail').at(-1)!;
+  assert.ok(!tail.line.includes('\x1b['), 'no raw escape sequences in the preview line');
+  assert.ok(tail.line.includes('⚙ Bash'), 'keeps the visible label text');
+  assert.ok(tail.line.includes('npm run check'));
+});
+
 test('malformed and unknown client frames are ignored', () => {
   const { system, agents } = fakeSystem();
   const hub = new Hub(system);

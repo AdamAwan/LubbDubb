@@ -56,8 +56,10 @@ in production.
 NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
   an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
   won't appear on databases from an older build.
-- **`src/harness.ts`** is the pulse: snapshot world → `Dispatcher.decide` → `ActionExecutor`
-  → audit. Cycles are coalesced (one in flight at a time).
+- **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
+  (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
+  cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are
+  coalesced (one in flight at a time).
 - **`reconcileAndResumeOnBoot` in `src/system.ts`** runs once at boot, _before_
   `harness.runCycle('boot')`, so resumed agents occupy their concurrency slots before new work
   is dispatched. See "Resume on boot" below.
@@ -81,9 +83,21 @@ cockpit are agnostic to which is running:
 
 Both speak the **sentinel protocol**: an agent prints `@@LUBBDUBB_DONE@@` when finished and
 `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human. These are reserved control strings —
-they are detected for status transitions _and_ stripped from displayed output. If you touch
-detection, keep those two behaviors in sync and preserve the cross-chunk handling (sentinels
-can split across two data chunks).
+they are detected for status transitions _and_ stripped from displayed output. The protocol
+strings and the pure `stripSentinels`/`extractWaitingReason` helpers live in
+`src/agents/sentinels.ts`; both runtimes use them. If you touch detection, keep the two
+behaviors in sync. `PtySession` additionally handles the cross-chunk case (a sentinel split
+across two PTY data chunks); on the line-delimited stream-JSON transport a sentinel always
+arrives whole inside one text block, so that machinery isn't needed there.
+
+**Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
+each message's content blocks through the pure `renderBlocks` in
+`src/agents/streamTranscript.ts`: assistant text is passed through (sentinels stripped), a
+`tool_use` becomes a labelled line with a one-line input summary, and a `tool_result` (arriving
+as a `user` event) is sanitised — ANSI/control chars removed — and truncated to `MAX_RESULT_LINES`
+with a "+N more lines" marker. Labels carry SGR colour, which xterm renders in the drawer; the
+`Hub` strips ANSI from the compact fleet-card tail so it never shows as literal escapes. Detection
+still scans the _raw_ turn text, so keep the raw-vs-display split intact if you extend rendering.
 
 ### Resume on boot (PTY only)
 
@@ -133,7 +147,22 @@ only file that imports octokit, and tests (`test/githubIntegration.test.ts`) inj
 fake `GitHubApi` — no network. The field-mapping logic (CI aggregation, approval folding,
 comment threading, linked-PR-from-timeline) is exported as pure functions and tested directly.
 When you extend it, add to the `GitHubApi` interface + its fake together, and keep new mapping
-logic in pure functions so it stays unit-testable without HTTP.
+logic in pure functions so it stays unit-testable without HTTP. `mergeable_state` and `base.ref`
+map through this seam too (→ `PullRequest.mergeableState` / `baseBranch`); add a field to the
+`Gh*` type _and_ the scripted fake in the same change.
+
+## PR health & one-agent-per-branch
+
+- **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr)` (the `{ blocked, reasons }`
+  verdict rendered in the cockpit and included per-PR in `buildStateSnapshot`), plus
+  `needsBaseUpdate(pr)` and `isConflicted(pr)`, which the dispatcher's conflict/behind rule
+  consumes. Keep these pure and unit-tested (`test/prHealth.test.ts`); don't inline the logic.
+- **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
+  already has an active task. When the branch's agent is **running**, a fresh signal is delivered
+  via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's
+  **waiting**, the note is **held** (don't inject — `agents.respond` flips `waiting → running` and
+  would derail a human escalation). Notify de-dup reads `DispatchContext.recentDecisions` (wired in
+  `harness.ts` from `store.listDecisions`), so a persistent signal isn't re-notified every cycle.
 
 ## Gotchas
 
@@ -148,3 +177,11 @@ logic in pure functions so it stays unit-testable without HTTP.
 - The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`
   or a config file (so a secret can't be committed). Selecting `github` without the token or
   without `github.owner`/`github.repo` throws a clear error at `buildIntegrations` time.
+- **Two orthogonal label mechanisms — don't conflate them.** `github.filters.issueLabel` is a
+  provider-level _ingest_ filter: GitHub-only, config-time, and it **hides** non-matching issues
+  from the world. `issuePickupLabel` is a dispatcher-level _pickup gate_ (rule 4 in
+  `ruleDispatcher.ts`, via `src/dispatcher/issuePickup.ts`): provider-agnostic, reads
+  `issue.labels`, and leaves untagged issues **visible** but unacted-on. Priority is
+  label-encoded (`issuePriorityLabels`/`issueDefaultPriority`) and parsed by the pure exported
+  `issuePriority` — keep that parsing pure so it stays unit-testable without a world. The gate
+  is off by default (unset label = act on all open issues), so existing setups don't regress.

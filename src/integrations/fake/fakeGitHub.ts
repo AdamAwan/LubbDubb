@@ -60,7 +60,10 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
           mutatePr(world, event.prNumber, (pr) => (pr.approved = true));
           break;
         case 'pr_mergeable':
-          mutatePr(world, event.prNumber, (pr) => (pr.mergeable = event.mergeable ?? true));
+          mutatePr(world, event.prNumber, (pr) => {
+            pr.mergeable = event.mergeable ?? true;
+            if (event.mergeableState !== undefined) pr.mergeableState = event.mergeableState;
+          });
           break;
         case 'pr_comment':
           mutatePr(world, event.prNumber, (pr) =>
@@ -79,10 +82,13 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
               number: event.number,
               title: event.title,
               branch: event.branch,
+              baseBranch: event.baseBranch ?? 'main',
               ciStatus: 'pending',
               unresolvedComments: [],
               approved: false,
-              mergeable: false,
+              // No `mergeable` yet — GitHub reports null while computing, and a
+              // firm false would wrongly trip the conflict rule on a fresh PR.
+              mergeableState: 'unknown',
               merged: false,
             });
           }
