@@ -7,7 +7,12 @@ import type { ActionSink } from './sink/actionSink.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { WorktreeManager } from './worktree/worktreeManager.js';
 import { AgentManager } from './agents/agentManager.js';
-import { buildClaudeArgs, buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from './agents/agentProtocol.js';
+import {
+  buildClaudeArgs,
+  buildClaudeStreamArgs,
+  buildInitialMessage,
+  buildResumeMessage,
+} from './agents/agentProtocol.js';
 import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import type { SessionFactory } from './agents/session.js';
@@ -175,17 +180,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
  * so it is excluded on both counts and stays dead. A prior boot's give-up leaves
  * both agent and task `interrupted`, so it isn't resurrected on every restart.
  */
-export function reconcileAndResumeOnBoot(
-  store: Store,
-  agents: AgentManager,
-): { resumed: number; interrupted: number } {
+export function reconcileAndResumeOnBoot(store: Store, agents: AgentManager): { resumed: number; interrupted: number } {
   const isActive = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'queued';
-  const orphans = store
-    .listAgentsByStatus('starting', 'running', 'waiting', 'interrupted')
-    .filter((a) => {
-      const task = store.getTask(a.taskId);
-      return task != null && isActive(task.status);
-    });
+  const orphans = store.listAgentsByStatus('starting', 'running', 'waiting', 'interrupted').filter((a) => {
+    const task = store.getTask(a.taskId);
+    return task != null && isActive(task.status);
+  });
 
   const at = new Date().toISOString();
   const result = { resumed: 0, interrupted: 0 };
