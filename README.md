@@ -47,8 +47,9 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 | `Connector` | The seam to the outside world. `FakeConnector` is an editable, persisted world you inject events into. |
 | `Dispatcher` | State in → validated action plan out. `RuleDispatcher` (deterministic default) or `ClaudeDispatcher` (drives a real Claude Code session over a PTY). |
 | `ActionExecutor` | Turns actions into effects; origin de-dup + concurrency cap; writes the audit log. |
-| `AgentManager` | Owns the fleet of PTY agent sessions: spawn, stream, detect waiting/done, feed input, kill. |
-| `PtySession` | **All** the PTY waiting/done heuristics, isolated behind one testable abstraction (the top technical risk). |
+| `AgentManager` | Owns the fleet of agent sessions: spawn, stream, detect waiting/done, feed input, kill — over any runtime. |
+| `StreamJsonSession` | The production agent runtime: real `claude` over headless stream-JSON. No TUI, unattended, supports the waiting/answer loop. |
+| `PtySession` | Terminal runtime (mock agent / interactive claude); all PTY waiting/done heuristics isolated behind one testable abstraction. |
 | `WorktreeManager` | Lazily creates/reuses git worktrees keyed by branch — code tasks only. |
 | `EscalationInbox` | The human-in-the-loop surface; routes answers into live agents or the next cycle. |
 | `Store` | SQLite persistence + reconcile-on-restart. |
@@ -81,14 +82,21 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 ```
 
 - **`dispatcher`** — `"rule"` (deterministic, no model calls) or `"claude"` (an LLM decides each cycle, output still schema-validated).
-- **`claudeCommand` / `claudeArgs`** — how an agent session is launched. Defaults to `claude`. The included demo uses a mock agent (see below).
-- **`whitelistedApprovals`** — PTY prompts the harness may auto-answer instead of escalating.
+- **`agentMode`** — how agents run:
+  - `"stream"` *(default)* — real Claude Code over headless stream-JSON (`claude -p --output-format stream-json`). No interactive TUI, runs unattended, and stays alive across turns so the waiting/answer loop works. The harness injects its status protocol via an appended system prompt.
+  - `"pty"` — real Claude Code as an interactive terminal. Requires a `claude` that has completed first-run onboarding (theme, trust, login).
+  - `"raw"` — run `claudeCommand`/`claudeArgs` verbatim (the mock-agent demo and tests).
+- **`agentPermissionMode`** — passed to `claude --permission-mode` so unattended tool calls don't hang (default `acceptEdits`). Note: `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root — run the harness as a non-root user if you need it.
+- **`claudeCommand` / `claudeArgs`** — the agent binary and any extra args. Defaults to `claude`.
+- **`whitelistedApprovals`** — waiting prompts the harness may auto-answer instead of escalating.
 - **`steeringPriorities`** — optional hints injected into the LLM dispatcher's prompt.
 - Env overrides: `PORT`, `LUBBDUBB_DB`.
 
 ### Try the demo without a real model
 
-`scripts/mock-agent.sh` is a stand-in that speaks the same PTY protocol as a real `claude` agent. The committed `lubbdubb.config.json` points at it, so `npm start` works with no model auth. Swap `claudeCommand` back to `claude` for the real thing.
+`scripts/mock-agent.sh` is a stand-in that speaks the same protocol as a real `claude` agent. The committed `lubbdubb.config.json` uses `agentMode: "raw"` pointed at it, so `npm start` works with no model auth. For real agents, set `agentMode` to `"stream"` (recommended) and `claudeCommand` to `claude`.
+
+How real agents speak the protocol: the harness appends a system prompt telling the agent to print `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human and `@@LUBBDUBB_DONE@@` when finished. In `stream` mode each turn ends in a `result` event; the harness reads those sentinels to decide *waiting* (→ escalate, then deliver your answer as the next message) vs *done*. This has been verified end-to-end against a live `claude`.
 
 ## Development
 
