@@ -97,6 +97,29 @@ export interface Decision {
   createdAt: string;
 }
 
+export type WorldEventKind =
+  | 'pr_opened'
+  | 'pr_ci'
+  | 'pr_approved'
+  | 'pr_mergeable'
+  | 'pr_merged'
+  | 'pr_comment'
+  | 'issue_opened'
+  | 'issue_closed'
+  | 'issue_linked'
+  | 'story_added'
+  | 'story_state'
+  | 'meeting_added'
+  | 'meeting_prep';
+
+export interface WorldEvent {
+  id: string;
+  kind: WorldEventKind;
+  ref: string | null;
+  summary: string;
+  createdAt: string;
+}
+
 export interface AppState {
   config: {
     heartbeatIntervalMs: number;
@@ -109,6 +132,7 @@ export interface AppState {
   agents: Agent[];
   escalations: Escalation[];
   decisions: Decision[];
+  worldEvents: WorldEvent[];
 }
 
 export type ServerEvent =

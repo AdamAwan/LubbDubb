@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
-import type { Agent, Decision, Escalation, Task } from '../types.js';
+import type { Agent, Decision, Escalation, Task, WorldEvent, WorldEventInput, WorldSnapshot } from '../types.js';
 
 /** Injectable clock so tests are deterministic. */
 export type Clock = () => string;
@@ -216,6 +216,18 @@ export class Store {
     return { ...existing, status: 'answered', response, answeredAt };
   }
 
+  /**
+   * Flip an escalation to `dismissed`, persisting the caller-built context (which
+   * carries the dismissal reason + timestamp). The store stays a dumb data layer:
+   * the decision of *what* to dismiss and *why* lives in the EscalationInbox.
+   */
+  dismissEscalation(id: string, context: Record<string, unknown>): Escalation {
+    const existing = this.getEscalation(id);
+    if (!existing) throw new Error(`Escalation ${id} not found`);
+    this.db.prepare(`UPDATE escalations SET status='dismissed', context=? WHERE id=?`).run(JSON.stringify(context), id);
+    return { ...existing, status: 'dismissed', context };
+  }
+
   getEscalation(id: string): Escalation | null {
     const row = this.db.prepare(`SELECT * FROM escalations WHERE id=?`).get(id) as EscalationRow | undefined;
     return row ? rowToEscalation(row) : null;
@@ -276,6 +288,43 @@ export class Store {
       .prepare(`INSERT INTO connector_events (id, kind, payload, created_at) VALUES (?,?,?,?)`)
       .run(`ev_${nanoid(10)}`, kind, JSON.stringify(payload), this.now());
   }
+
+  // -- World change history ------------------------------------------------
+
+  /** Stamp each diffed transition with an id + timestamp, persist, return rows. */
+  recordWorldEvents(inputs: WorldEventInput[]): WorldEvent[] {
+    const at = this.now();
+    const stmt = this.db.prepare(
+      `INSERT INTO world_events (id, kind, ref, summary, created_at) VALUES (@id, @kind, @ref, @summary, @createdAt)`,
+    );
+    const events = inputs.map((input) => ({ id: `we_${nanoid(10)}`, createdAt: at, ...input }));
+    const insertAll = this.db.transaction((rows: WorldEvent[]) => {
+      for (const row of rows) stmt.run(row);
+    });
+    insertAll(events);
+    return events;
+  }
+
+  listWorldEvents(limit = 200): WorldEvent[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM world_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(limit) as WorldEventRow[];
+    return rows.map(rowToWorldEvent);
+  }
+
+  /** The last snapshot the harness diffed against, or null on a fresh store. */
+  getWorldBaseline(): WorldSnapshot | null {
+    const row = this.db.prepare(`SELECT world FROM world_baseline WHERE id=1`).get() as { world: string } | undefined;
+    return row ? (JSON.parse(row.world) as WorldSnapshot) : null;
+  }
+
+  setWorldBaseline(world: WorldSnapshot): void {
+    this.db
+      .prepare(
+        `INSERT INTO world_baseline (id, world) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET world=excluded.world`,
+      )
+      .run(JSON.stringify(world));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +371,13 @@ interface DecisionRow {
   action: string;
   outcome: string;
   detail: string;
+  created_at: string;
+}
+interface WorldEventRow {
+  id: string;
+  kind: string;
+  ref: string | null;
+  summary: string;
   created_at: string;
 }
 
@@ -372,6 +428,15 @@ function rowToDecision(r: DecisionRow): Decision {
     action: JSON.parse(r.action) as Decision['action'],
     outcome: r.outcome as Decision['outcome'],
     detail: r.detail,
+    createdAt: r.created_at,
+  };
+}
+function rowToWorldEvent(r: WorldEventRow): WorldEvent {
+  return {
+    id: r.id,
+    kind: r.kind as WorldEvent['kind'],
+    ref: r.ref,
+    summary: r.summary,
     createdAt: r.created_at,
   };
 }

@@ -3,6 +3,7 @@ import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import { needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, Task } from '../types.js';
+import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './issuePickup.js';
 
 /**
  * A deterministic, dependency-free dispatcher that encodes the harness's default
@@ -30,6 +31,22 @@ import type { Agent, Decision, Task } from '../types.js';
  * against. Every branch produces actions with an explicit `reason`.
  */
 export class RuleDispatcher implements Dispatcher {
+  private readonly pickup: IssuePickupPolicy;
+
+  /**
+   * `pickup` gates and orders issue pickup (rule 4). Omitted/partial => no gate
+   * and flat priority, so `new RuleDispatcher()` keeps the pre-gate behaviour of
+   * acting on every open issue (used by unit tests; the composition root passes
+   * the operator's config).
+   */
+  constructor(pickup: Partial<IssuePickupPolicy> = {}) {
+    this.pickup = {
+      pickupLabel: pickup.pickupLabel,
+      priorityLabels: pickup.priorityLabels ?? {},
+      defaultPriority: pickup.defaultPriority ?? 0,
+    };
+  }
+
   async decide(ctx: DispatchContext): Promise<DispatchResult> {
     const raw: unknown[] = [];
     const activeOrigins = new Set(
@@ -159,8 +176,15 @@ export class RuleDispatcher implements Dispatcher {
     }
 
     // 4: Resolve open GitHub issues into PRs — the front of the issue → PR → merge loop.
-    for (const issue of ctx.world.issues) {
-      if (issue.state !== 'open' || issue.linkedPrNumber !== null) continue;
+    // Gate on the pickup label (when configured) so operators can say "work these,
+    // leave the rest" — untagged issues stay visible in the world, just unacted-on —
+    // and order by label-encoded priority so the important ones claim limited
+    // headroom first (tie-break by issue number for determinism).
+    const eligibleIssues = ctx.world.issues
+      .filter((i) => i.state === 'open' && i.linkedPrNumber === null && isIssuePickupEligible(i, this.pickup))
+      .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
+      .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
+    for (const { issue } of eligibleIssues) {
       const origin = `issue:${issue.number}`;
       if (canDispatch(origin)) {
         raw.push({

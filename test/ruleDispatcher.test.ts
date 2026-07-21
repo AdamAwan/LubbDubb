@@ -91,6 +91,98 @@ test('an open issue with no linked PR is dispatched to a code agent', async () =
   assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101');
 });
 
+test('with a pickup label set, only issues carrying it are dispatched', async () => {
+  const d = new RuleDispatcher({ pickupLabel: 'agent-ready' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 101,
+          title: 'tagged',
+          body: '',
+          labels: ['agent-ready'],
+          state: 'open',
+          linkedPrNumber: null,
+        },
+        { id: 'i2', number: 102, title: 'untagged', body: '', labels: ['bug'], state: 'open', linkedPrNumber: null },
+      ],
+    }),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1, 'only the labelled issue is dispatched');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+});
+
+test('with no pickup label configured, all open issues stay eligible (no regression)', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        { id: 'i1', number: 101, title: 'A', body: '', labels: [], state: 'open', linkedPrNumber: null },
+        { id: 'i2', number: 102, title: 'B', body: '', labels: ['bug'], state: 'open', linkedPrNumber: null },
+      ],
+    }),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 2, 'both issues eligible when no gate is set');
+});
+
+test('higher-priority issues win limited headroom; equal priority breaks by issue number', async () => {
+  const d = new RuleDispatcher({
+    priorityLabels: { 'priority:high': 3, 'priority:low': 1 },
+    defaultPriority: 2,
+  });
+  const { actions } = await d.decide(
+    ctx(
+      {
+        issues: [
+          {
+            id: 'i1',
+            number: 101,
+            title: 'low',
+            body: '',
+            labels: ['priority:low'],
+            state: 'open',
+            linkedPrNumber: null,
+          },
+          {
+            id: 'i2',
+            number: 102,
+            title: 'high',
+            body: '',
+            labels: ['priority:high'],
+            state: 'open',
+            linkedPrNumber: null,
+          },
+          { id: 'i3', number: 103, title: 'default', body: '', labels: [], state: 'open', linkedPrNumber: null },
+        ],
+      },
+      { agentHeadroom: 1 },
+    ),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1, 'headroom of 1 dispatches one issue');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:102', 'the priority:high issue goes first');
+});
+
+test('among equal-priority issues the lowest issue number is dispatched first', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      {
+        issues: [
+          { id: 'i1', number: 205, title: 'later', body: '', labels: [], state: 'open', linkedPrNumber: null },
+          { id: 'i2', number: 101, title: 'earlier', body: '', labels: [], state: 'open', linkedPrNumber: null },
+        ],
+      },
+      { agentHeadroom: 1 },
+    ),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+});
+
 test('an issue already linked to a PR is not re-dispatched', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(

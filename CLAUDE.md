@@ -53,8 +53,10 @@ in production.
 - **`src/store/store.ts` is the _only_ thing that touches SQLite.** Everything else goes
   through the `Store`. Schema is `src/store/schema.ts`. Writes are synchronous
   (better-sqlite3), which keeps the harness logic race-free — lean on that.
-- **`src/harness.ts`** is the pulse: snapshot world → `Dispatcher.decide` → `ActionExecutor`
-  → audit. Cycles are coalesced (one in flight at a time).
+- **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
+  (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
+  cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are
+  coalesced (one in flight at a time).
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
@@ -75,9 +77,21 @@ cockpit are agnostic to which is running:
 
 Both speak the **sentinel protocol**: an agent prints `@@LUBBDUBB_DONE@@` when finished and
 `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human. These are reserved control strings —
-they are detected for status transitions _and_ stripped from displayed output. If you touch
-detection, keep those two behaviors in sync and preserve the cross-chunk handling (sentinels
-can split across two data chunks).
+they are detected for status transitions _and_ stripped from displayed output. The protocol
+strings and the pure `stripSentinels`/`extractWaitingReason` helpers live in
+`src/agents/sentinels.ts`; both runtimes use them. If you touch detection, keep the two
+behaviors in sync. `PtySession` additionally handles the cross-chunk case (a sentinel split
+across two PTY data chunks); on the line-delimited stream-JSON transport a sentinel always
+arrives whole inside one text block, so that machinery isn't needed there.
+
+**Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
+each message's content blocks through the pure `renderBlocks` in
+`src/agents/streamTranscript.ts`: assistant text is passed through (sentinels stripped), a
+`tool_use` becomes a labelled line with a one-line input summary, and a `tool_result` (arriving
+as a `user` event) is sanitised — ANSI/control chars removed — and truncated to `MAX_RESULT_LINES`
+with a "+N more lines" marker. Labels carry SGR colour, which xterm renders in the drawer; the
+`Hub` strips ANSI from the compact fleet-card tail so it never shows as literal escapes. Detection
+still scans the _raw_ turn text, so keep the raw-vs-display split intact if you extend rendering.
 
 ## Testing patterns
 
@@ -129,3 +143,11 @@ map through this seam too (→ `PullRequest.mergeableState` / `baseBranch`); add
 - The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`
   or a config file (so a secret can't be committed). Selecting `github` without the token or
   without `github.owner`/`github.repo` throws a clear error at `buildIntegrations` time.
+- **Two orthogonal label mechanisms — don't conflate them.** `github.filters.issueLabel` is a
+  provider-level _ingest_ filter: GitHub-only, config-time, and it **hides** non-matching issues
+  from the world. `issuePickupLabel` is a dispatcher-level _pickup gate_ (rule 4 in
+  `ruleDispatcher.ts`, via `src/dispatcher/issuePickup.ts`): provider-agnostic, reads
+  `issue.labels`, and leaves untagged issues **visible** but unacted-on. Priority is
+  label-encoded (`issuePriorityLabels`/`issueDefaultPriority`) and parsed by the pure exported
+  `issuePriority` — keep that parsing pure so it stays unit-testable without a world. The gate
+  is off by default (unset label = act on all open issues), so existing setups don't regress.

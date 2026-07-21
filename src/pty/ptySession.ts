@@ -102,8 +102,11 @@ export class PtySession extends EventEmitter {
 
   kill(signal = 'SIGTERM'): void {
     if (this.proc && (this._status === 'running' || this._status === 'waiting' || this._status === 'starting')) {
-      this.proc.kill(signal);
+      // Mark killed *before* signalling: the ensuing exit (which some backends
+      // deliver synchronously) must be recognised as a kill by handleExit, not
+      // misread as a 'failed' finish.
       this.setStatus('killed');
+      this.proc.kill(signal);
     }
   }
 
