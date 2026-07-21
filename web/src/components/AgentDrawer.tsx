@@ -125,6 +125,22 @@ export function AgentDrawer({
             </button>
           </div>
         </div>
+        {task && (task.originTitle || task.originSummary || task.dispatchReason) && (
+          <div className="origin-context">
+            {task.originTitle && (
+              <div className="origin-title">
+                {task.originRef && <span className="chip small">{task.originRef}</span>}
+                <span>{task.originTitle}</span>
+              </div>
+            )}
+            {task.originSummary && <div className="origin-summary">{task.originSummary}</div>}
+            {task.dispatchReason && (
+              <div className="dispatch-reason">
+                <span className="dispatch-reason-label">Dispatched because</span> {task.dispatchReason}
+              </div>
+            )}
+          </div>
+        )}
         <div className="terminal" ref={containerRef} style={{ padding: 8, overflow: 'hidden', minHeight: 240 }} />
         {canRespond && (
           <form

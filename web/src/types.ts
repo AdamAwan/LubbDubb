@@ -57,6 +57,9 @@ export interface Task {
   prompt: string;
   branch: string | null;
   originRef: string | null;
+  originTitle: string | null;
+  originSummary: string | null;
+  dispatchReason: string | null;
   status: string;
   agentId: string | null;
   createdAt: string;

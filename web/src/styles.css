@@ -108,6 +108,13 @@ body {
 .drawer-head .btn { margin-left: 6px; }
 .terminal { flex: 1; background: #05070c; border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; color: #b9c6e0; }
 
+/* ── Origin context: what item this agent is working on (issue #17) ──────── */
+.origin-context { margin-bottom: 12px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+.origin-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); font-size: 13.5px; }
+.origin-summary { color: #8fa0bf; font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; max-height: 8.7em; overflow-y: auto; }
+.dispatch-reason { margin-top: 2px; padding: 6px 8px; background: #1e1809; border: 1px solid #4d3a12; border-radius: 6px; color: var(--amber); font-size: 12px; }
+.dispatch-reason-label { text-transform: uppercase; letter-spacing: 0.5px; font-size: 10.5px; opacity: 0.85; }
+
 /* ── Heartbeat countdown ─────────────────────────────────────────────── */
 .heartbeat { display: flex; align-items: center; gap: 8px; margin-right: 4px; }
 .heartbeat-track { width: 84px; height: 6px; background: var(--panel-2); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
