@@ -170,7 +170,8 @@ An **escalation** is created when: the dispatcher chooses `escalate_to_human`; a
 
 A single config file controls:
 - `heartbeatIntervalMs` (default e.g. 5 min)
-- `maxConcurrentAgents` (default 3)
+- `maxConcurrentAgents` (default 3) — seeds the live cap; adjustable at runtime via `POST /api/control` without a restart (ephemeral — reverts to this on restart)
+- `startPaused` (default `false`) — boot with dispatch paused; the only config-level pause knob (live pause/resume is runtime-only). Pause stops new dispatch only — live agents run on and the harness keeps cycling
 - `whitelistedApprovals` — PTY prompt patterns the harness may auto-answer
 - `steeringPriorities` — optional ordered hints injected into the dispatcher prompt (empty by default)
 - `claudeCommand` / working-dir roots

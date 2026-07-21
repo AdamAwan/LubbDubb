@@ -63,6 +63,13 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
 - **`reconcileAndResumeOnBoot` in `src/system.ts`** runs once at boot, _before_
   `harness.runCycle('boot')`, so resumed agents occupy their concurrency slots before new work
   is dispatched. See "Resume on boot" below.
+- **`src/runtimeControl.ts`** holds the live, in-memory dispatch controls (`cap` +
+  `paused`), seeded from `maxConcurrentAgents`/`startPaused` at boot. Both the `Harness`
+  (headroom) and `ActionExecutor` (the hard dispatch gate) read it **by reference** each
+  cycle — never copy `.cap`/`.paused` into a local at wiring time or runtime changes stop
+  taking effect. Mutated via `POST /api/control`; **not persisted**, so a restart reverts
+  to config. Pausing defers only `dispatch_*` actions (escalate/answer/etc. still run) and
+  scaling the cap down never kills a live agent — both deferrals are audited with a reason.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.

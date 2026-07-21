@@ -102,6 +102,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 {
   "heartbeatIntervalMs": 300000,
   "maxConcurrentAgents": 3,
+  "startPaused": false,
   "dispatcher": "rule",
   "claudeCommand": "claude",
   "claudeArgs": [],
@@ -116,6 +117,8 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 }
 ```
 
+- **`maxConcurrentAgents`** — the concurrency cap seeding runtime control (see **Runtime control** below). Adjustable live without a restart; a restart reverts to this value.
+- **`startPaused`** — boot with dispatch paused (default `false`). The only config-level pause knob; live pause/resume is runtime-only and ephemeral, so a restart reverts to this value.
 - **`dispatcher`** — `"rule"` (deterministic, no model calls) or `"claude"` (an LLM decides each cycle, output still schema-validated).
 - **`agentMode`** — how agents run:
   - `"stream"` _(default)_ — real Claude Code over headless stream-JSON (`claude -p --output-format stream-json`). No interactive TUI, runs unattended, and stays alive across turns so the waiting/answer loop works. The harness injects its status protocol via an appended system prompt.
@@ -139,6 +142,32 @@ Agents are child processes of the server, so restarting it — a crash _or_ a gr
 - Each PTY agent is launched with a session id we choose up front (`claude --session-id <uuid>`), persisted on its `agents` row. The worktree and transcript already persist, so a restart is missing only the live process.
 - On boot, _before_ the harness reacts to any new findings, reconciliation re-attaches each orphaned in-flight agent to the **same** Claude session in its original worktree (`claude --resume <id>`, protocol system prompt re-applied). Resumed agents count against `maxConcurrentAgents` before new work is dispatched. An agent that was mid-work is nudged to continue; one that was parked on a question keeps its escalation, and your answer routes straight into it.
 - It's best-effort: an agent with no usable session id (e.g. it died before one existed) or a missing worktree falls back to the previous `interrupted` behaviour, and boot never blocks on a resume. A deliberate **kill from the cockpit stays dead** — only a restart-induced stop is resumable. The stream-JSON runtime does not resume (out of scope).
+
+### Runtime control (cap + pause, no restart)
+
+The concurrency cap and a pause flag are **live, in-memory controls** — change them
+while the harness is running and they take effect on the next cycle, no restart. They
+are **ephemeral**: a restart reverts to `maxConcurrentAgents` / `startPaused`.
+
+- **Cap** — raise it and more agents spawn immediately (subject to available work);
+  lower it and new dispatch is deferred until the live count drops below the new cap.
+  Scaling down **never kills** a running agent.
+- **Pause** — stops new dispatch only. Live agents keep running to completion, and the
+  harness keeps cycling, so escalations, human answers, world snapshots and the audit
+  log all continue. Unpausing resumes dispatch at the cap you had chosen. Every
+  pause/cap deferral is written to the audit log with its reason.
+
+Drive it from the cockpit topbar (the `−`/`+` cap stepper and the Pause/Resume toggle)
+or the endpoint directly:
+
+```bash
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"cap":5}'
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"paused":true}'
+```
+
+`POST /api/control` accepts `{ cap?, paused? }` (`cap` must be a non-negative integer),
+broadcasts the change over the WebSocket so every open cockpit updates live, and the
+current values appear in `/api/state` under a `control` block.
 
 ### Try the demo without a real model
 

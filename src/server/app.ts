@@ -56,6 +56,28 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     return { ok: true, report };
   });
 
+  // Live dispatch controls (cap + pause). Changes are in-memory and ephemeral;
+  // on success we broadcast so every open cockpit updates without a refetch.
+  app.post('/api/control', async (req, reply) => {
+    const body = (req.body ?? {}) as { cap?: unknown; paused?: unknown };
+    const patch: { cap?: number; paused?: boolean } = {};
+    if (body.cap !== undefined) {
+      if (typeof body.cap !== 'number') return reply.code(400).send({ error: 'cap must be a number' });
+      patch.cap = body.cap;
+    }
+    if (body.paused !== undefined) {
+      if (typeof body.paused !== 'boolean') return reply.code(400).send({ error: 'paused must be a boolean' });
+      patch.paused = body.paused;
+    }
+    try {
+      const next = system.runtimeControl.apply(patch);
+      hub.broadcast({ type: 'control:changed', cap: next.cap, paused: next.paused });
+      return { ok: true, ...next };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
   app.post('/api/escalations/:id/answer', async (req, reply) => {
     const { id } = req.params as { id: string };
     const { response } = (req.body ?? {}) as { response?: string };
@@ -104,7 +126,7 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
 }
 
 export function buildStateSnapshot(system: System) {
-  const { store, connector, config } = system;
+  const { store, connector, config, runtimeControl } = system;
   // getState is async on the interface, but FakeConnector is synchronous under
   // the hood; read the same persisted world directly for a snapshot.
   return connector.getState().then((world) => ({
@@ -114,6 +136,9 @@ export function buildStateSnapshot(system: System) {
       dispatcher: config.dispatcher,
       steeringPriorities: config.steeringPriorities,
     },
+    // Live, mutable dispatch controls — the cockpit reads these (not the frozen
+    // config block above) for the current cap and pause state.
+    control: { cap: runtimeControl.cap, paused: runtimeControl.paused },
     // Fold each PR's signals into a health verdict so the cockpit can show *why*
     // a PR is stuck rather than leaving it implied by the absence of activity.
     world: {
