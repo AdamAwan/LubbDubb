@@ -32,6 +32,23 @@ export interface Config {
    * `GITHUB_TOKEN` env var so a secret never lands in a committed config file.
    */
   github?: GitHubConfig;
+  /**
+   * Dispatcher-level, provider-agnostic gate on issue pickup (rule 4). When set,
+   * the dispatcher only starts an agent for an open issue whose `labels` include
+   * this; untagged issues stay visible in the world/cockpit but are left alone.
+   * Unset (the default) = act on all open issues, as before. Distinct from the
+   * GitHub provider's `github.filters.issueLabel`, which narrows what's *ingested*
+   * into the world in the first place.
+   */
+  issuePickupLabel?: string;
+  /**
+   * Label → priority weight for ordering issue pickup: when headroom is limited,
+   * higher-weight issues are dispatched first. Replaced wholesale by an override
+   * (not merged), so an operator can define their own scheme.
+   */
+  issuePriorityLabels: Record<string, number>;
+  /** Weight for an issue carrying no matching priority label. */
+  issueDefaultPriority: number;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -115,6 +132,8 @@ const DEFAULTS: Config = {
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
   integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
+  issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
+  issueDefaultPriority: 2,
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
