@@ -26,6 +26,12 @@ export interface Config {
    * built-in `fake` provider for every capability.
    */
   integrations: IntegrationSelection;
+  /**
+   * GitHub target + optional scope filters, required when a capability uses the
+   * `github` provider. The auth token is deliberately NOT here — it comes from the
+   * `GITHUB_TOKEN` env var so a secret never lands in a committed config file.
+   */
+  github?: GitHubConfig;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -62,6 +68,20 @@ export interface Config {
   dbPath: string;
   /** HTTP/WS port. */
   port: number;
+}
+
+export interface GitHubConfig {
+  /** Repository owner (user or org). */
+  owner: string;
+  /** Repository name. */
+  repo: string;
+  /** Optional filters narrowing what the harness picks up. */
+  filters?: {
+    /** Only surface PRs opened by this login. Unset = all open PRs. */
+    prAuthor?: string;
+    /** Only surface issues carrying this label. Unset = all open issues. */
+    issueLabel?: string;
+  };
 }
 
 export interface WhitelistRule {
