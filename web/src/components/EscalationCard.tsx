@@ -2,13 +2,21 @@ import { useState } from 'react';
 import type { Escalation } from '../types.js';
 import { relTime } from './util.js';
 
-export function EscalationCard({ escalation, onAnswer }: { escalation: Escalation; onAnswer: (text: string) => void }) {
+export function EscalationCard({
+  escalation,
+  now,
+  onAnswer,
+}: {
+  escalation: Escalation;
+  now?: number;
+  onAnswer: (text: string) => void;
+}) {
   const [text, setText] = useState('');
   return (
     <div className="card escalation">
       <div className="card-head">
         <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
-        <span className="muted">{relTime(escalation.createdAt)}</span>
+        <span className="muted">{relTime(escalation.createdAt, now)}</span>
       </div>
       <div className="escalation-prompt">{escalation.prompt}</div>
       {escalation.context?.taskTitle ? (
