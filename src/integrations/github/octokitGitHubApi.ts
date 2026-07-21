@@ -20,6 +20,44 @@ import type {
  * integrations consume. All GitHub HTTP lives here — nothing else in the repo
  * imports octokit — so the integrations stay network-free and unit-testable.
  */
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Tuning for {@link resolvePullDetail}: how hard to chase a lazily-computed merge state. */
+export interface ResolvePullOpts {
+  /** Extra reads after the first while GitHub is still computing (`mergeable === null`). */
+  retries?: number;
+  /** Pause between reads — GitHub's background compute needs a beat to land. */
+  delayMs?: number;
+  /** Injected for tests so the retry can be driven without real timers. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Re-poll a PR's detail until GitHub reports a concrete merge state, or the
+ * retry budget is spent. GitHub returns `mergeable: null` (state 'unknown') while
+ * it (re-)computes lazily — and it re-invalidates every time the base branch
+ * moves — so a single read races the background compute and often reads
+ * 'unknown', hiding real conflicts (issue #35). Pure over an injected fetch/sleep
+ * so it's unit-testable without HTTP. Bounded: on exhaustion it returns the last
+ * (still-`null`) detail and the next heartbeat tries again.
+ */
+export async function resolvePullDetail(
+  fetchDetail: () => Promise<GhPullDetail>,
+  opts: ResolvePullOpts = {},
+): Promise<GhPullDetail> {
+  const retries = opts.retries ?? 3;
+  const delayMs = opts.delayMs ?? 1000;
+  const sleep = opts.sleep ?? realSleep;
+  let detail = await fetchDetail();
+  // A merged PR reports `mergeable: null` too, but there's nothing to compute —
+  // stop rather than burn the whole retry budget.
+  for (let i = 0; i < retries && detail.mergeable === null && !detail.merged; i++) {
+    await sleep(delayMs);
+    detail = await fetchDetail();
+  }
+  return detail;
+}
+
 export class OctokitGitHubApi implements GitHubApi {
   private viewer: string | null = null;
 
@@ -60,8 +98,14 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   async getPull(number: number): Promise<GhPullDetail> {
-    const { data } = await this.octokit.pulls.get({ ...this.base, pull_number: number });
-    return { mergeable: data.mergeable, mergeableState: data.mergeable_state ?? null, merged: data.merged };
+    // GitHub computes `mergeable` lazily: the first read after the value is
+    // invalidated returns null/'unknown' and only *triggers* the compute. Re-poll
+    // behind this seam so callers get the concrete 'dirty'/'clean'/... instead of
+    // a transient 'unknown' (issue #35).
+    return resolvePullDetail(async () => {
+      const { data } = await this.octokit.pulls.get({ ...this.base, pull_number: number });
+      return { mergeable: data.mergeable, mergeableState: data.mergeable_state ?? null, merged: data.merged };
+    });
   }
 
   async listPullReviews(number: number): Promise<GhReview[]> {
