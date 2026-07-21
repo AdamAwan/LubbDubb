@@ -4,7 +4,7 @@ A self-hosted, always-running **orchestration harness** for one software enginee
 
 The name is the heartbeat: the server's core is a periodic pulse that drives everything.
 
-> **v1 status — walking skeleton.** The harness _core_ is built and tested end-to-end, now with **confidence-gated auto-send** (opt-in) for side-effectful actions. Real DevOps/calendar/Gmail connectors and metric-driven prioritization are designed _around_ but deliberately **not** built yet. See [`docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md`](docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md).
+> **v1 status — walking skeleton.** The harness _core_ is built and tested end-to-end, now with **confidence-gated auto-send** (opt-in) for side-effectful actions. Integrations are now **modular** — one interchangeable provider per capability (source control, backlog, calendar), swappable via config — but the real DevOps/calendar/Gmail provider adapters (and metric-driven prioritization) are designed _around_ and deliberately **not** built yet; v1 ships a `fake` provider per capability. See [`docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md`](docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md).
 
 ---
 
@@ -41,19 +41,19 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
                                                             CockpitAPI + WebSocket ──► Cockpit SPA (React)
 ```
 
-| Module              | Responsibility                                                                                                                                       |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Heartbeat`         | The pulse — a timer that fires a dispatch cycle; can also be triggered on demand.                                                                    |
-| `Connector`         | The seam to the outside world. `FakeConnector` is an editable, persisted world you inject events into.                                               |
-| `Dispatcher`        | State in → validated action plan out. `RuleDispatcher` (deterministic default) or `ClaudeDispatcher` (drives a real Claude Code session over a PTY). |
-| `ActionExecutor`    | Turns actions into effects; origin de-dup + concurrency cap; writes the audit log.                                                                   |
-| `AgentManager`      | Owns the fleet of agent sessions: spawn, stream, detect waiting/done, feed input, kill — over any runtime.                                           |
-| `StreamJsonSession` | The production agent runtime: real `claude` over headless stream-JSON. No TUI, unattended, supports the waiting/answer loop.                         |
-| `PtySession`        | Terminal runtime (mock agent / interactive claude); all PTY waiting/done heuristics isolated behind one testable abstraction.                        |
-| `WorktreeManager`   | Lazily creates/reuses git worktrees keyed by branch — code tasks only.                                                                               |
-| `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle.                                                                    |
-| `Store`             | SQLite persistence + reconcile-on-restart.                                                                                                           |
-| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, inject + kill.                                                            |
+| Module              | Responsibility                                                                                                                                                                                                                                                                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Heartbeat`         | The pulse — a timer that fires a dispatch cycle; can also be triggered on demand.                                                                                                                                                                                                                                                                     |
+| `Connector`         | The seam to the outside world. Behind it, the world is assembled from modular per-capability **integrations** (source control, backlog, calendar), each with an interchangeable provider chosen in config; `CompositeConnector` merges their slices. v1 ships a `fake` provider per capability (an editable, persisted world you inject events into). |
+| `Dispatcher`        | State in → validated action plan out. `RuleDispatcher` (deterministic default) or `ClaudeDispatcher` (drives a real Claude Code session over a PTY).                                                                                                                                                                                                  |
+| `ActionExecutor`    | Turns actions into effects; origin de-dup + concurrency cap; writes the audit log.                                                                                                                                                                                                                                                                    |
+| `AgentManager`      | Owns the fleet of agent sessions: spawn, stream, detect waiting/done, feed input, kill — over any runtime.                                                                                                                                                                                                                                            |
+| `StreamJsonSession` | The production agent runtime: real `claude` over headless stream-JSON. No TUI, unattended, supports the waiting/answer loop.                                                                                                                                                                                                                          |
+| `PtySession`        | Terminal runtime (mock agent / interactive claude); all PTY waiting/done heuristics isolated behind one testable abstraction.                                                                                                                                                                                                                         |
+| `WorktreeManager`   | Lazily creates/reuses git worktrees keyed by branch — code tasks only.                                                                                                                                                                                                                                                                                |
+| `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle.                                                                                                                                                                                                                                                                     |
+| `Store`             | SQLite persistence + reconcile-on-restart.                                                                                                                                                                                                                                                                                                            |
+| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, inject + kill.                                                                                                                                                                                                                                                             |
 
 ## Getting started
 
@@ -78,7 +78,8 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
   "claudeArgs": [],
   "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
   "steeringPriorities": [],
-  "autoSend": { "enabled": false, "confidenceThreshold": 0.85, "allowedActions": ["reply_on_pr"] }
+  "autoSend": { "enabled": false, "confidenceThreshold": 0.85, "allowedActions": ["reply_on_pr"] },
+  "integrations": { "sourceControl": "fake", "backlog": "fake", "calendar": "fake" }
 }
 ```
 
@@ -91,6 +92,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 - **`claudeCommand` / `claudeArgs`** — the agent binary and any extra args. Defaults to `claude`.
 - **`whitelistedApprovals`** — waiting prompts the harness may auto-answer instead of escalating.
 - **`steeringPriorities`** — optional hints injected into the LLM dispatcher's prompt.
+- **`integrations`** — which provider fulfils each capability. The world behind the `Connector` is built from one integration per capability — `sourceControl` (pull requests), `backlog` (stories), `calendar` (meetings) — and each capability has interchangeable providers registered in `src/integrations/registry.ts`. This is the **swap switch**: change a value to point a capability at another provider (e.g. `"sourceControl": "github"` to go from the fake source-control world to a real GitHub adapter, or later Azure DevOps) without touching the harness, executor, or the other integrations. Only the built-in `fake` provider ships in v1; a real adapter is a drop-in — add it to the registry and select it here. Unlisted capabilities keep the `fake` default.
 - **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself _only_ when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
 - Env overrides: `PORT`, `LUBBDUBB_DB`.
 

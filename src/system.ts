@@ -1,6 +1,7 @@
 import type { Config } from './config.js';
 import { Store } from './store/store.js';
-import { FakeConnector } from './connector/fakeConnector.js';
+import { CompositeConnector } from './integrations/compositeConnector.js';
+import { buildIntegrations } from './integrations/registry.js';
 import type { ActionSink } from './sink/actionSink.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { WorktreeManager } from './worktree/worktreeManager.js';
@@ -19,7 +20,7 @@ import { Harness } from './harness.js';
 export interface System {
   config: Config;
   store: Store;
-  connector: FakeConnector;
+  connector: CompositeConnector;
   agents: AgentManager;
   escalations: EscalationInbox;
   executor: ActionExecutor;
@@ -43,7 +44,13 @@ export interface BuildOptions {
  */
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const store = new Store(config.dbPath);
-  const connector = new FakeConnector(store);
+  // The world is assembled from the integrations config selects (default: the
+  // fake provider for every capability), composed behind the Connector/ActionSink
+  // seams the harness and executor depend on. Swapping a provider is a config
+  // change; nothing here changes.
+  const now = (): string => new Date().toISOString();
+  const integrations = buildIntegrations(config.integrations, { store, config, now });
+  const connector = new CompositeConnector(integrations, store, now);
   const backend = opts.backend ?? new NodePtyBackend();
 
   const worktrees = new WorktreeManager(config.repoRoot, config.worktreeRoot);

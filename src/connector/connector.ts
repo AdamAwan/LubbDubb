@@ -3,9 +3,12 @@ import type { WorldSnapshot } from '../types.js';
 /**
  * The seam between the harness and the outside world.
  *
- * v1 ships only `FakeConnector`, but the entire harness depends on nothing more
- * than this interface — a real Azure DevOps / GitHub / calendar / Gmail adapter
- * drops in here without any other module changing.
+ * The harness depends on nothing more than this interface. Behind it the world is
+ * assembled from many small, per-capability integrations (see `src/integrations/`),
+ * each with an interchangeable provider chosen in config — so a real Azure DevOps
+ * / GitHub / calendar / Gmail adapter drops in for one capability without any
+ * other module changing. `CompositeConnector` merges those slices into this seam,
+ * and the outbound mirror lives in `src/sink/actionSink.ts`.
  */
 export interface Connector {
   /** The world as it is right now. Called at the start of every dispatch cycle. */
