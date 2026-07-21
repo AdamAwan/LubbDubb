@@ -1,6 +1,7 @@
 import type { Config } from './config.js';
 import { Store } from './store/store.js';
 import { FakeConnector } from './connector/fakeConnector.js';
+import type { ActionSink } from './sink/actionSink.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { WorktreeManager } from './worktree/worktreeManager.js';
 import { AgentManager } from './agents/agentManager.js';
@@ -25,6 +26,8 @@ export interface System {
 export interface BuildOptions {
   /** Inject a fake PTY backend (tests) instead of the real node-pty one. */
   backend?: PtyBackend;
+  /** Override the outbound sink (tests). Defaults to the FakeConnector. */
+  sink?: ActionSink;
 }
 
 /**
@@ -50,6 +53,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     agents,
     worktrees,
     escalations,
+    sink: opts.sink ?? connector,
+    autoSend: config.autoSend,
     deskRoot: config.deskRoot,
     maxConcurrentAgents: config.maxConcurrentAgents,
   });
