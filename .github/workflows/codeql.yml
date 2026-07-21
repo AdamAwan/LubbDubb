@@ -28,7 +28,14 @@ jobs:
           languages: javascript-typescript
           queries: security-and-quality
 
+      # Advisory for now: the analysis runs, but uploading results needs Code
+      # scanning enabled (Settings → Code security; may require GitHub Advanced
+      # Security on a private repo). Until then the upload errors with "Code
+      # scanning is not enabled for this repository". continue-on-error keeps the
+      # PR green; enable the feature and drop continue-on-error to make findings
+      # gate the PR.
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
+        continue-on-error: true
         with:
           category: '/language:javascript-typescript'

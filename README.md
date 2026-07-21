@@ -127,6 +127,13 @@ Every push and pull request against `main` runs three GitHub Actions workflows
 | **Security** | `npm audit` (advisory), plus a dependency-review gate that blocks any PR introducing a new high-severity vulnerable dependency.           |
 | **CodeQL**   | Static security-and-quality analysis of the JavaScript/TypeScript, also on a weekly schedule.                                             |
 
+> **Enabling the GitHub security features.** CodeQL and dependency-review need
+> **Code scanning** and the **Dependency graph** turned on under _Settings → Code
+> security_ (on a private repo this may require GitHub Advanced Security). Until
+> they're enabled those two jobs run but are marked `continue-on-error`, so they
+> report without blocking. Once the features are on, drop `continue-on-error` from
+> the two jobs to promote them to hard gates.
+
 ### The walking skeleton (Definition of Done)
 
 `npm run smoke` proves the whole loop for real: inject _"CI failed on PR #42"_ → the dispatcher decides (with a logged reason) → a Claude-style agent spawns in a reused-or-new git worktree over a PTY → it hits a `waiting` state that **escalates** to the inbox → you answer → it continues → it finishes — and restart reconciliation is clean.

@@ -38,9 +38,16 @@ jobs:
   dependency-review:
     name: Dependency review
     runs-on: ubuntu-latest
-    # Only runs on PRs — blocks a PR that introduces a new vulnerable dependency,
+    # Only runs on PRs — flags a PR that introduces a new vulnerable dependency,
     # without failing on advisories that already exist on the base branch.
+    #
+    # Advisory for now: the action requires the Dependency graph (and, on a private
+    # repo, GitHub Advanced Security) to be enabled — until then it errors with
+    # "not supported on this repository". continue-on-error keeps the PR green; once
+    # the feature is enabled at Settings → Code security, drop continue-on-error to
+    # make this a hard gate on new high-severity dependencies.
     if: github.event_name == 'pull_request'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Review dependency changes
