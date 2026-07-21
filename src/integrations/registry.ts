@@ -1,9 +1,13 @@
+import type { GitHubConfig } from '../config.js';
 import type { Capability, Integration, IntegrationContext, IntegrationSelection } from './integration.js';
 import { FakeWorldStore } from './fake/fakeWorld.js';
 import { FakeGitHubIntegration } from './fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from './fake/fakeIssues.js';
 import { FakeBacklogIntegration } from './fake/fakeBacklog.js';
 import { FakeCalendarIntegration } from './fake/fakeCalendar.js';
+import { OctokitGitHubApi } from './github/octokitGitHubApi.js';
+import { GitHubSourceControlIntegration } from './github/sourceControl.js';
+import { GitHubIssuesIntegration } from './github/issues.js';
 
 type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
 
@@ -16,9 +20,31 @@ type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integ
 const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   sourceControl: {
     fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.store),
+    github: (ctx) => {
+      const { api, gh } = githubApi(ctx);
+      return new GitHubSourceControlIntegration({
+        api,
+        owner: gh.owner,
+        repo: gh.repo,
+        store: ctx.store,
+        now: ctx.now,
+        prAuthor: gh.filters?.prAuthor,
+      });
+    },
   },
   issues: {
     fake: (_ctx, world) => new FakeIssuesIntegration(world),
+    github: (ctx) => {
+      const { api, gh } = githubApi(ctx);
+      return new GitHubIssuesIntegration({
+        api,
+        owner: gh.owner,
+        repo: gh.repo,
+        store: ctx.store,
+        now: ctx.now,
+        issueLabel: gh.filters?.issueLabel,
+      });
+    },
   },
   backlog: {
     fake: (_ctx, world) => new FakeBacklogIntegration(world),
@@ -29,6 +55,23 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
 };
 
 const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
+
+/**
+ * Build the real GitHub client for a `github`-selected capability. The token comes
+ * from `GITHUB_TOKEN` (never config) and owner/repo from `config.github`; either
+ * missing is a clear, actionable startup error rather than a later network failure.
+ */
+function githubApi(ctx: IntegrationContext): { api: OctokitGitHubApi; gh: GitHubConfig } {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    throw new Error('The github provider needs a token: set the GITHUB_TOKEN environment variable.');
+  }
+  const gh = ctx.config.github;
+  if (!gh?.owner || !gh?.repo) {
+    throw new Error('The github provider needs a target: set `github.owner` and `github.repo` in your config.');
+  }
+  return { api: OctokitGitHubApi.fromToken(token, gh.owner, gh.repo), gh };
+}
 
 /**
  * Resolve a config selection into the enabled integrations. Throws a clear error
