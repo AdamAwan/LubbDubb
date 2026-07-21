@@ -1,13 +1,21 @@
 import { useMemo, useState } from 'react';
 import type { Decision } from '../types.js';
-import { relTime } from './util.js';
+import { relTime, linkify } from './util.js';
 
 /**
  * The audit trail. Every decision the harness made, newest first, each with its
  * outcome, the action it chose, the reason the dispatcher gave, and when. The
  * filter chips let you narrow to just what executed, or just what got deferred.
  */
-export function DecisionLog({ decisions, now }: { decisions: Decision[]; now: number }) {
+export function DecisionLog({
+  decisions,
+  now,
+  refUrls,
+}: {
+  decisions: Decision[];
+  now: number;
+  refUrls: Record<string, string>;
+}) {
   const [filter, setFilter] = useState<string>('all');
 
   const counts = useMemo(() => {
@@ -37,8 +45,8 @@ export function DecisionLog({ decisions, now }: { decisions: Decision[]; now: nu
               <span className="audit-type">{d.action.type}</span>
               <span className="muted audit-time">{relTime(d.createdAt, now)}</span>
             </div>
-            {d.action.reason && <div className="audit-reason">“{d.action.reason}”</div>}
-            {d.detail && <div className="audit-detail">{d.detail}</div>}
+            {d.action.reason && <div className="audit-reason">“{linkify(d.action.reason, refUrls)}”</div>}
+            {d.detail && <div className="audit-detail">{linkify(d.detail, refUrls)}</div>}
           </div>
         ))}
       </div>

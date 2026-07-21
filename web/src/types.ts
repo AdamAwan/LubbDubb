@@ -105,6 +105,12 @@ export interface AppState {
   agents: Agent[];
   escalations: Escalation[];
   decisions: Decision[];
+  /**
+   * External reference → web URL, built entirely by the source-control provider
+   * (never string-built here). Keyed by how a ref appears in the UI: `#42` for an
+   * issue/PR number, or a branch name. Missing key ⇒ render as plain text.
+   */
+  refUrls: Record<string, string>;
 }
 
 export type ServerEvent =

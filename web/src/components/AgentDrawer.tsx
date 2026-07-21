@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import type { Agent, Task } from '../types.js';
 import { api } from '../api.js';
-import { statusDot } from './util.js';
+import { statusDot, linkify } from './util.js';
 
 /**
  * The drill-down: live terminal output for one agent (rendered with xterm.js)
@@ -14,6 +14,7 @@ import { statusDot } from './util.js';
 export function AgentDrawer({
   agent,
   task,
+  refUrls,
   live,
   onClose,
   onRespond,
@@ -22,6 +23,7 @@ export function AgentDrawer({
 }: {
   agent: Agent;
   task: Task | null;
+  refUrls: Record<string, string>;
   live: string | undefined;
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
@@ -106,7 +108,7 @@ export function AgentDrawer({
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
         <div className="drawer-head">
           <div>
-            {statusDot(agent.status)} <b>{task?.title ?? agent.id}</b>
+            {statusDot(agent.status)} <b>{task ? linkify(task.title, refUrls) : agent.id}</b>
             <div className="muted small mono">{agent.cwd}</div>
           </div>
           <div>

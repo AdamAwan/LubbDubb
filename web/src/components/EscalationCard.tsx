@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import type { Escalation } from '../types.js';
-import { relTime } from './util.js';
+import { relTime, linkify } from './util.js';
 
 export function EscalationCard({
   escalation,
   now,
+  refUrls,
   onAnswer,
 }: {
   escalation: Escalation;
   now?: number;
+  refUrls: Record<string, string>;
   onAnswer: (text: string) => void;
 }) {
   const [text, setText] = useState('');
@@ -18,9 +20,9 @@ export function EscalationCard({
         <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
         <span className="muted">{relTime(escalation.createdAt, now)}</span>
       </div>
-      <div className="escalation-prompt">{escalation.prompt}</div>
+      <div className="escalation-prompt">{linkify(escalation.prompt, refUrls)}</div>
       {escalation.context?.taskTitle ? (
-        <div className="muted small">re: {String(escalation.context.taskTitle)}</div>
+        <div className="muted small">re: {linkify(String(escalation.context.taskTitle), refUrls)}</div>
       ) : null}
       <form
         className="reply"
