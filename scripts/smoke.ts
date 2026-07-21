@@ -12,7 +12,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
-import { buildSystem, reconcileOnBoot } from '../src/system.js';
+import { buildSystem, reconcileAndResumeOnBoot } from '../src/system.js';
 
 const scriptPath = join(process.cwd(), 'scripts/mock-agent.sh');
 
@@ -89,8 +89,8 @@ async function main(): Promise<void> {
     .forEach((l) => console.log('    ' + l.trim()));
 
   console.log('5. Simulate a crash + restart: reconcile should be a no-op now (agent already done).');
-  const reconciled = reconcileOnBoot(system.store);
-  log(`✓ reconciled ${reconciled} orphaned agent(s) (expected 0)`);
+  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents);
+  log(`✓ boot reconcile: resumed ${resumed}, interrupted ${interrupted} (expected 0/0)`);
 
   console.log('\nSMOKE TEST PASSED ✅');
   system.store.close();
