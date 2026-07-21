@@ -77,9 +77,21 @@ cockpit are agnostic to which is running:
 
 Both speak the **sentinel protocol**: an agent prints `@@LUBBDUBB_DONE@@` when finished and
 `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human. These are reserved control strings —
-they are detected for status transitions _and_ stripped from displayed output. If you touch
-detection, keep those two behaviors in sync and preserve the cross-chunk handling (sentinels
-can split across two data chunks).
+they are detected for status transitions _and_ stripped from displayed output. The protocol
+strings and the pure `stripSentinels`/`extractWaitingReason` helpers live in
+`src/agents/sentinels.ts`; both runtimes use them. If you touch detection, keep the two
+behaviors in sync. `PtySession` additionally handles the cross-chunk case (a sentinel split
+across two PTY data chunks); on the line-delimited stream-JSON transport a sentinel always
+arrives whole inside one text block, so that machinery isn't needed there.
+
+**Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
+each message's content blocks through the pure `renderBlocks` in
+`src/agents/streamTranscript.ts`: assistant text is passed through (sentinels stripped), a
+`tool_use` becomes a labelled line with a one-line input summary, and a `tool_result` (arriving
+as a `user` event) is sanitised — ANSI/control chars removed — and truncated to `MAX_RESULT_LINES`
+with a "+N more lines" marker. Labels carry SGR colour, which xterm renders in the drawer; the
+`Hub` strips ANSI from the compact fleet-card tail so it never shows as literal escapes. Detection
+still scans the _raw_ turn text, so keep the raw-vs-display split intact if you extend rendering.
 
 ## Testing patterns
 

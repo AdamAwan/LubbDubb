@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { System } from '../system.js';
+import { stripAnsi } from '../agents/streamTranscript.js';
 import type { WorldEvent } from '../types.js';
 
 export type ServerEvent =
@@ -122,7 +123,10 @@ export class Hub {
   /** Fold a delta into the agent's rolling tail; return the current tail line (≤200 chars). */
   private updateTail(agentId: string, delta: string): string {
     const state = this.tails.get(agentId) ?? { partial: '', last: '' };
-    const segments = (state.partial + delta).split(/\r?\n/);
+    // Strip ANSI so a coloured transcript label never shows as a literal escape
+    // in the plain-text fleet-card preview. (Escapes never contain newlines, so
+    // stripping before the split is safe.)
+    const segments = stripAnsi(state.partial + delta).split(/\r?\n/);
     const partial = segments.pop() ?? ''; // trailing segment is still an unfinished line
     for (const seg of segments) {
       const trimmed = seg.trim();
