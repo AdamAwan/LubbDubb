@@ -52,9 +52,15 @@ in production.
   interface, so any one is swappable. If you add a component, thread it through here.
 - **`src/store/store.ts` is the _only_ thing that touches SQLite.** Everything else goes
   through the `Store`. Schema is `src/store/schema.ts`. Writes are synchronous
-  (better-sqlite3), which keeps the harness logic race-free — lean on that.
+  (better-sqlite3), which keeps the harness logic race-free — lean on that. `CREATE TABLE IF
+NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
+  an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
+  won't appear on databases from an older build.
 - **`src/harness.ts`** is the pulse: snapshot world → `Dispatcher.decide` → `ActionExecutor`
   → audit. Cycles are coalesced (one in flight at a time).
+- **`reconcileAndResumeOnBoot` in `src/system.ts`** runs once at boot, _before_
+  `harness.runCycle('boot')`, so resumed agents occupy their concurrency slots before new work
+  is dispatched. See "Resume on boot" below.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
@@ -78,6 +84,34 @@ Both speak the **sentinel protocol**: an agent prints `@@LUBBDUBB_DONE@@` when f
 they are detected for status transitions _and_ stripped from displayed output. If you touch
 detection, keep those two behaviors in sync and preserve the cross-chunk handling (sentinels
 can split across two data chunks).
+
+### Resume on boot (PTY only)
+
+A restart (crash or graceful shutdown) kills every agent, but the PTY runtime **resumes** the
+in-flight ones rather than discarding them. The moving parts:
+
+- **Chosen session id.** `AgentManager.spawn` mints a UUID (only when `opts.resumable`, i.e.
+  PTY) and `buildArgs` passes it as `--session-id`; it's persisted on the `agents` row
+  (`session_id` column). Resume passes `--resume <id>` instead. `buildClaudeArgs` **re-appends**
+  the protocol system prompt on resume — `--resume` does _not_ retain it, so detection would
+  break otherwise.
+- **Shutdown ≠ kill.** `AgentManager.interruptAll()` (server shutdown) marks agents
+  `interrupted` (resumable) and leaves the task status alone; `kill()` (cockpit button) marks
+  `killed` and sets the task `interrupted`. `reconcileAndResumeOnBoot` treats an agent as a
+  resume candidate only if it's in `starting`/`running`/`waiting`/`interrupted` **and its task
+  is still active** — so a cockpit kill (agent `killed`) and a prior give-up (task
+  `interrupted`) both stay dead and aren't resurrected on every boot.
+- **`waitingReason` is the state signal.** `interruptAll` overwrites status to `interrupted`
+  but preserves `waitingReason`, so `resume()` knows whether the agent was parked on a human
+  (restore its escalation, no nudge) or mid-work (nudge it to continue). The pre-restart
+  escalation persists and, once the session is live again, an answer routes into it.
+- Best-effort: no session id or missing worktree → fall back to `interrupted`; boot never
+  blocks on a resume. Stream-JSON resume is out of scope. `spawn`/`resume` share their listener
+  wiring — change one, change both.
+
+Sharp edge in `PtySession.kill()`: it sets status `killed` **before** signalling the process,
+because a synchronously-delivered exit would otherwise be reclassified as `failed` (firing a
+terminal event). Keep that ordering.
 
 ## Testing patterns
 
