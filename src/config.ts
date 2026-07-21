@@ -11,8 +11,14 @@ import type { IntegrationSelection } from './integrations/integration.js';
 export interface Config {
   /** How often the heartbeat fires a dispatch cycle. */
   heartbeatIntervalMs: number;
-  /** Hard cap on concurrently-running agents. */
+  /** Hard cap on concurrently-running agents. Runtime-adjustable via the control endpoint. */
   maxConcurrentAgents: number;
+  /**
+   * Boot in a paused state (no new agents dispatched until resumed). Off by
+   * default. The only config-level pause knob — live pause/resume is runtime-only
+   * and ephemeral, so a restart reverts to this value.
+   */
+  startPaused: boolean;
   /** PTY prompt substrings the harness may auto-answer instead of escalating. */
   whitelistedApprovals: WhitelistRule[];
   /** Optional ordered hints injected into the dispatcher prompt. Empty by default. */
@@ -111,6 +117,7 @@ export interface AutoSendConfig {
 const DEFAULTS: Config = {
   heartbeatIntervalMs: 5 * 60 * 1000,
   maxConcurrentAgents: 3,
+  startPaused: false,
   whitelistedApprovals: [],
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },

@@ -16,6 +16,7 @@ import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import { Harness } from './harness.js';
+import { RuntimeControl } from './runtimeControl.js';
 
 export interface System {
   config: Config;
@@ -26,6 +27,8 @@ export interface System {
   executor: ActionExecutor;
   dispatcher: Dispatcher;
   harness: Harness;
+  /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
+  runtimeControl: RuntimeControl;
 }
 
 export interface BuildOptions {
@@ -100,6 +103,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
   const escalations = new EscalationInbox(store, agents);
 
+  // Live, in-memory dispatch controls both the harness and executor read by
+  // reference each cycle. Ephemeral by design: a restart reverts to config.
+  const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused);
+
   const executor = new ActionExecutor({
     store,
     agents,
@@ -108,7 +115,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sink: opts.sink ?? connector,
     autoSend: config.autoSend,
     deskRoot: config.deskRoot,
-    maxConcurrentAgents: config.maxConcurrentAgents,
+    runtime: runtimeControl,
   });
 
   const dispatcher: Dispatcher =
@@ -122,7 +129,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     executor,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
-    maxConcurrentAgents: config.maxConcurrentAgents,
+    runtime: runtimeControl,
     steeringPriorities: config.steeringPriorities,
   });
 
@@ -138,7 +145,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     });
   });
 
-  return { config, store, connector, agents, escalations, executor, dispatcher, harness };
+  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl };
 }
 
 /**

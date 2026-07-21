@@ -5,6 +5,7 @@ import type { Store } from './store/store.js';
 import type { Connector } from './connector/connector.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
+import type { RuntimeControl } from './runtimeControl.js';
 import type { Action } from './types.js';
 
 export interface HarnessDeps {
@@ -13,7 +14,8 @@ export interface HarnessDeps {
   dispatcher: Dispatcher;
   executor: ActionExecutor;
   heartbeatIntervalMs: number;
-  maxConcurrentAgents: number;
+  /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
+  runtime: RuntimeControl;
   steeringPriorities: string[];
 }
 
@@ -74,7 +76,11 @@ export class Harness extends EventEmitter {
       const tasks = store.listTasks();
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
-      const headroom = Math.max(0, this.deps.maxConcurrentAgents - store.countLiveAgents());
+      // While paused, advertise zero headroom so the dispatcher plans no new
+      // dispatches; the executor also hard-defers them (belt and braces).
+      const headroom = this.deps.runtime.paused
+        ? 0
+        : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
 
       const plan = await this.deps.dispatcher.decide({
         world,
