@@ -23,6 +23,7 @@ The default priorities (encoded in the `RuleDispatcher`) come straight from the 
 | Signal                                                  | Action                                             |
 | ------------------------------------------------------- | -------------------------------------------------- |
 | A PR's CI is failing                                    | Spin up a code agent to fix it                     |
+| A PR's base branch is out of date (conflicts / behind)  | Code agent merges the base in and resolves         |
 | A PR has an unhandled review comment                    | Spin up a code agent to address/defend             |
 | A PR is green, approved and mergeable                   | Merge it in (gated by auto-send)                   |
 | An open GitHub issue has no linked PR                   | Spin up a code agent to resolve it into a PR       |
@@ -34,7 +35,29 @@ The default priorities (encoded in the `RuleDispatcher`) come straight from the 
 
 Together the issue and PR rules close the loop the harness is built around: **pick up
 a GitHub issue → resolve it into a PR → drive that PR (CI green, comments handled,
-approved, mergeable) the last mile to merged.**
+base up to date, approved, mergeable) the last mile to merged.** The PR rules run
+_before_ new-issue pickup, so a PR with problems is always worked ahead of starting
+new tickets under limited headroom.
+
+**Conflict vs behind.** GitHub's `mergeable_state` is mapped through the stack
+(`dirty` / `behind` / `blocked` / `clean` / `unknown`) alongside the PR's `baseBranch`,
+so the harness reacts precisely: a `dirty` PR gets a _resolve-the-conflicts_ agent, a
+`behind` PR gets a clean _bring-it-up-to-date_ update (no conflict framing), and a
+`blocked` PR (required checks/reviews unmet) is surfaced but never auto-acted. When the
+state is `unknown`, a firm `mergeable === false` is treated as a conflict.
+
+**One code agent per PR branch.** A PR can raise several concerns at once (failing CI,
+a conflict, review comments). To avoid two agents racing the same worktree, when a
+signal lands on a branch that already has a **running** agent the harness _tells that
+agent_ (via `respond_to_agent`) instead of spawning a second one — deduped so the same
+signal isn't repeated every cycle. While that branch's agent is parked **waiting** on a
+human, the note is **held** (injecting would un-park the escalation) and delivered on a
+later cycle once the agent is running again.
+
+**PR health.** Every PR in `/api/state` carries a computed `health` (`{ blocked,
+reasons }`) folding conflicts, behind-base, failing CI and unhandled comments, so the
+cockpit shows _why_ a PR is stuck rather than leaving it implied by the absence of
+activity.
 
 ## Architecture
 

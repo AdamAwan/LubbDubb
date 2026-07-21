@@ -99,7 +99,22 @@ only file that imports octokit, and tests (`test/githubIntegration.test.ts`) inj
 fake `GitHubApi` — no network. The field-mapping logic (CI aggregation, approval folding,
 comment threading, linked-PR-from-timeline) is exported as pure functions and tested directly.
 When you extend it, add to the `GitHubApi` interface + its fake together, and keep new mapping
-logic in pure functions so it stays unit-testable without HTTP.
+logic in pure functions so it stays unit-testable without HTTP. `mergeable_state` and `base.ref`
+map through this seam too (→ `PullRequest.mergeableState` / `baseBranch`); add a field to the
+`Gh*` type _and_ the scripted fake in the same change.
+
+## PR health & one-agent-per-branch
+
+- **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr)` (the `{ blocked, reasons }`
+  verdict rendered in the cockpit and included per-PR in `buildStateSnapshot`), plus
+  `needsBaseUpdate(pr)` and `isConflicted(pr)`, which the dispatcher's conflict/behind rule
+  consumes. Keep these pure and unit-tested (`test/prHealth.test.ts`); don't inline the logic.
+- **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
+  already has an active task. When the branch's agent is **running**, a fresh signal is delivered
+  via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's
+  **waiting**, the note is **held** (don't inject — `agents.respond` flips `waiting → running` and
+  would derail a human escalation). Notify de-dup reads `DispatchContext.recentDecisions` (wired in
+  `harness.ts` from `store.listDecisions`), so a persistent signal isn't re-notified every cycle.
 
 ## Gotchas
 
