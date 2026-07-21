@@ -78,9 +78,7 @@ export class Harness extends EventEmitter {
       const openEscalations = store.listOpenEscalations();
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
-      const headroom = this.deps.runtime.paused
-        ? 0
-        : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
+      const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
 
       const plan = await this.deps.dispatcher.decide({
         world,

@@ -28,6 +28,12 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),
     }).then((r) => json(r)),
+  setControl: (patch: { cap?: number; paused?: boolean }) =>
+    fetch('/api/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).then((r) => json<{ ok: true; cap: number; paused: boolean }>(r)),
   killAgent: (id: string) => fetch(`/api/agents/${id}/kill`, { method: 'POST' }).then((r) => json(r)),
   interruptAgent: (id: string) => fetch(`/api/agents/${id}/interrupt`, { method: 'POST' }).then((r) => json(r)),
 };

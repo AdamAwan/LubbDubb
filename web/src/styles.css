@@ -47,6 +47,12 @@ body {
 .btn.ghost { background: transparent; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
+.fleet-control { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--panel-2); }
+.fleet-control.paused { border-color: #4d3a12; }
+.fc-label { color: var(--muted); font-size: 12px; margin-right: 2px; }
+.fc-count { font-variant-numeric: tabular-nums; min-width: 34px; text-align: center; font-size: 13px; }
+.fc-step { padding: 2px 8px; line-height: 1; border-radius: 6px; font-size: 15px; }
+
 .inject { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .inject-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 .raw, .reply { display: flex; gap: 6px; flex: 1; min-width: 220px; }

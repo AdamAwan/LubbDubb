@@ -7,6 +7,7 @@ import { AgentCard } from './components/AgentCard.js';
 import { EscalationCard } from './components/EscalationCard.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
 import { Vitals } from './components/Vitals.js';
+import { FleetControl } from './components/FleetControl.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { statusDot } from './components/util.js';
 import { useNow } from './hooks.js';
@@ -46,7 +47,7 @@ export function App() {
     const ws = connectWs(
       (ev) => {
         const e = ev as { type: string; agentId?: string; delta?: string; line?: string };
-        if (e.type === 'dirty' || e.type === 'world:changed') void refresh();
+        if (e.type === 'dirty' || e.type === 'world:changed' || e.type === 'control:changed') void refresh();
         else if (e.type === 'agent:output' && e.agentId && e.delta) {
           const cur = liveOutput.current.get(e.agentId) ?? '';
           // Full output now only arrives for the subscribed (open) agent, so we
@@ -114,9 +115,8 @@ export function App() {
             <span className={`dot ${connected ? 'green' : 'red'}`} /> {connected ? 'live' : 'offline'}
           </span>
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
-          <span className="chip">
-            cap: {liveAgents.length}/{state.config.maxConcurrentAgents}
-          </span>
+          {state.control.paused && <span className="chip warn">paused</span>}
+          <FleetControl live={liveAgents.length} cap={state.control.cap} paused={state.control.paused} />
           <button className="btn primary" onClick={() => api.pulse().then(refresh)}>
             Pulse now
           </button>
@@ -124,7 +124,7 @@ export function App() {
       </header>
 
       <InjectPanel onInjected={refresh} world={state.world} />
-      <Vitals state={state} liveAgents={liveAgents.length} cap={state.config.maxConcurrentAgents} />
+      <Vitals state={state} liveAgents={liveAgents.length} cap={state.control.cap} />
 
       <main className="grid">
         <section className="col">
