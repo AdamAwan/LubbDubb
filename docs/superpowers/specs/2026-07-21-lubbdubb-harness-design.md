@@ -136,7 +136,7 @@ Each action is schema-validated after the dispatcher returns; malformed items ar
 `AgentManager` runs each Claude Code session via **`node-pty`**:
 
 - **Spawn** — launch `claude` in the task's cwd (worktree for code tasks, scratch dir for desk tasks) and send an initial prompt built from the task.
-- **Stream** — capture stdout continuously, persist the transcript, push deltas to the cockpit over WS.
+- **Stream** — capture stdout continuously, persist the transcript, push deltas to the cockpit over WS. Output is normalised for legibility before display (sentinels stripped, tool calls/results labelled and sanitised — see `src/agents/streamTranscript.ts`).
 - **Detect "waiting for input"** — watch PTY output for Claude Code's prompt/permission/idle signals. On detection, status → `waiting`; the agent either auto-responds (whitelisted approvals from config) or **escalates**.
 - **Detect "done"** — process exit, or a completion sentinel we instruct the agent to emit.
 - **Feed input** — write to the PTY (user response, approval, follow-up).
