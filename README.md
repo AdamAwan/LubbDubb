@@ -59,7 +59,7 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 | `WorktreeManager`   | Lazily creates/reuses git worktrees keyed by branch — code tasks only.                                                                                                                                                                                                                                                                                |
 | `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle.                                                                                                                                                                                                                                                                     |
 | `Store`             | SQLite persistence + reconcile-on-restart.                                                                                                                                                                                                                                                                                                            |
-| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, inject + kill.                                                                                                                                                                                                                                                             |
+| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, activity feed, inject + kill.                                                                                                                                                                                                                                              |
 
 ## Getting started
 
@@ -69,7 +69,7 @@ npm run web:build    # build the cockpit SPA into web/dist
 npm start            # start the server (serves the cockpit at http://localhost:4300)
 ```
 
-Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. Click an agent to see its live terminal and type into it; answer items in **Needs you** to unblock parked agents.
+Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. Click an agent to see its live terminal and type into it; answer items in **Needs you** to unblock parked agents. The **Decision log** shows what the harness decided each cycle; the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved, meeting prep done), so it works for the real GitHub provider too, not just injected events.
 
 ### Configuration
 

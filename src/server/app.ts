@@ -118,5 +118,6 @@ export function buildStateSnapshot(system: System) {
     agents: store.listAgents(),
     escalations: store.listEscalations(),
     decisions: store.listDecisions(100),
+    worldEvents: store.listWorldEvents(100),
   }));
 }

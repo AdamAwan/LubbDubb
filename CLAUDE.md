@@ -53,8 +53,10 @@ in production.
 - **`src/store/store.ts` is the _only_ thing that touches SQLite.** Everything else goes
   through the `Store`. Schema is `src/store/schema.ts`. Writes are synchronous
   (better-sqlite3), which keeps the harness logic race-free — lean on that.
-- **`src/harness.ts`** is the pulse: snapshot world → `Dispatcher.decide` → `ActionExecutor`
-  → audit. Cycles are coalesced (one in flight at a time).
+- **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
+  (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
+  cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are
+  coalesced (one in flight at a time).
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
