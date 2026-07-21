@@ -1,5 +1,7 @@
 node_modules/
 dist/
+web/dist/
+.lubbdubb/
 *.sqlite
 *.db
 .env
