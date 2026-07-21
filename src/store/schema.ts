@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS agents (
   cwd            TEXT NOT NULL,
   pid            INTEGER,
   waiting_reason TEXT,
+  -- Claude Code session id, chosen up front so the agent can be resumed
+  -- (claude --resume <id>) in its original worktree after a server restart.
+  session_id     TEXT,
   started_at     TEXT NOT NULL,
   ended_at       TEXT
 );

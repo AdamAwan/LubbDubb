@@ -1,20 +1,22 @@
 import { loadConfig } from '../config.js';
-import { buildSystem, reconcileOnBoot } from '../system.js';
+import { buildSystem, reconcileAndResumeOnBoot } from '../system.js';
 import { buildApp } from './app.js';
 
 /**
- * Entry point. Wires the system, reconciles any agents orphaned by a previous
- * crash, starts the HTTP/WebSocket server, then starts the heartbeat and runs
- * one boot cycle so the harness reacts to whatever the world looks like on
- * startup.
+ * Entry point. Wires the system, resumes/reconciles any agents orphaned by a
+ * previous run *before* anything else reacts to the world, starts the
+ * HTTP/WebSocket server, then starts the heartbeat and runs one boot cycle so
+ * the harness reacts to whatever the world looks like on startup.
  */
 async function main(): Promise<void> {
   const config = loadConfig();
   const system = buildSystem(config);
 
-  const reconciled = reconcileOnBoot(system.store, system.escalations);
-  if (reconciled > 0) {
-    console.log(`[lubbdubb] reconciled ${reconciled} orphaned agent(s) from a previous run`);
+  // Runs before the boot cycle so resumed agents occupy their concurrency slots
+  // before any new work is dispatched.
+  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
+  if (resumed > 0 || interrupted > 0) {
+    console.log(`[lubbdubb] boot: resumed ${resumed} agent(s), interrupted ${interrupted} from a previous run`);
   }
 
   const { app } = await buildApp(system);
@@ -30,7 +32,8 @@ async function main(): Promise<void> {
   const shutdown = async (): Promise<void> => {
     console.log('\n[lubbdubb] shutting down...');
     system.harness.stop();
-    system.agents.killAll();
+    // Interrupt (not kill) so the next boot can resume this in-flight work.
+    system.agents.interruptAll();
     await app.close();
     system.store.close();
     process.exit(0);

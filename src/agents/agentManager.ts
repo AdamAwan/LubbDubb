@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { randomUUID } from 'node:crypto';
 import type { Store } from '../store/store.js';
 import type { WhitelistRule } from '../config.js';
 import type { Agent, AgentStatus, Task } from '../types.js';
@@ -6,7 +7,12 @@ import type { AgentSession, SessionFactory } from './session.js';
 
 export interface AgentManagerOptions {
   command: string;
-  args: string[];
+  /**
+   * Builds the argv for a launch. `sessionId` is the id the agent runs under and
+   * `resume` re-attaches to it (`claude --resume`) instead of starting fresh.
+   * Runtimes that don't support session ids (mock/stream) ignore both.
+   */
+  buildArgs: (opts: { sessionId: string; resume: boolean }) => string[];
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -17,10 +23,22 @@ export interface AgentManagerOptions {
    * agent, which reads its prompt from the environment).
    */
   initialInput?: (task: Task) => string | null;
+  /**
+   * Message nudging a *resumed* agent to continue. Delivered only when re-attaching
+   * an agent that was mid-work (not parked on a question) — `--resume` re-opens the
+   * session idle and awaiting input. Null to send nothing.
+   */
+  resumeInput?: () => string | null;
   /** Delay before sending the initial input, giving an interactive CLI time to start. */
   promptDelayMs?: number;
   /** Extra literal substrings a PTY session treats as "waiting for input". */
   waitingPatterns?: string[];
+  /**
+   * Whether this runtime can capture a session id and be resumed after a restart.
+   * True only for the interactive PTY `claude`; the mock and stream runtimes leave
+   * agents without a session id, so boot reconciliation falls back to interrupting.
+   */
+  resumable?: boolean;
 }
 
 interface AgentManagerEvents {
@@ -50,58 +68,64 @@ export class AgentManager extends EventEmitter {
 
   /** Spawn an agent for a task in the given working directory. */
   spawn(task: Task, cwd: string): Agent {
+    // Choose the session id up front so we own it and can `--resume` this exact
+    // conversation after a restart. Only resumable runtimes get one.
+    const sessionId = this.opts.resumable ? randomUUID() : null;
     const session = this.opts.createSession({
       command: this.opts.command,
-      args: this.opts.args,
+      args: this.opts.buildArgs({ sessionId: sessionId ?? '', resume: false }),
       cwd,
       env: { LUBBDUBB_PROMPT: task.prompt, LUBBDUBB_TASK_ID: task.id },
       waitingPatterns: this.opts.waitingPatterns,
     });
 
-    const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting' });
+    const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
     this.store.updateTask(task.id, { status: 'running', agentId: agent.id });
     this.sessions.set(agent.id, session);
-
-    session.on('output', (delta: string) => {
-      this.store.appendTranscript(agent.id, delta);
-      this.emit('output', { agentId: agent.id, delta });
-    });
-
-    session.on('status', (status) => {
-      if (status === 'running') {
-        this.store.updateAgent(agent.id, { status: 'running', pid: session.pid, waitingReason: null });
-        this.reflectStatus(agent.id, task.id, 'running');
-      }
-    });
-
-    session.on('waiting', (reason: string) => this.handleWaiting(agent.id, task, reason));
-
-    session.on('done', () => this.handleTerminal(agent.id, task.id, 'done'));
-    session.on('failed', () => this.handleTerminal(agent.id, task.id, 'failed'));
-
+    this.wireSession(session, agent.id, task);
     session.start();
 
     // Hand the agent its task. For a real `claude` REPL this is typed in after a
     // short boot delay; the mock agent takes its prompt from the environment and
     // opts out by returning null.
-    const initial = this.opts.initialInput?.(task) ?? null;
-    if (initial !== null) {
-      const delay = this.opts.promptDelayMs ?? 0;
-      const deliver = (): void => {
-        if (!this.sessions.has(agent.id)) return; // killed/finished before we could send
-        try {
-          session.send(initial);
-        } catch {
-          /* session already gone */
-        }
-      };
-      // Stream transport: stdin is ready at once, deliver synchronously. Interactive
-      // terminal: wait for the REPL to boot before typing.
-      if (delay <= 0) deliver();
-      else setTimeout(deliver, delay).unref?.();
-    }
+    this.deliverAfterBoot(agent.id, session, this.opts.initialInput?.(task) ?? null);
 
     return agent;
+  }
+
+  /**
+   * Re-attach to an agent orphaned by a server restart, continuing its Claude
+   * session in the same worktree rather than starting over. Reuses the existing
+   * agent row, session id and cwd — no new agent is created. Best-effort: returns
+   * false (caller falls back to interrupting) if the runtime can't resume or the
+   * agent has no session id. Idempotent: a no-op if the agent is already live.
+   */
+  resume(agent: Agent, task: Task): boolean {
+    if (!this.opts.resumable || !agent.sessionId) return false;
+    if (this.sessions.has(agent.id)) return true;
+
+    // `waitingReason` survives the restart and tells us whether the agent was
+    // parked on a human question (keep it waiting) or mid-work (nudge it on).
+    const wasWaiting = agent.status === 'waiting' || agent.waitingReason != null;
+    const session = this.opts.createSession({
+      command: this.opts.command,
+      args: this.opts.buildArgs({ sessionId: agent.sessionId, resume: true }),
+      cwd: agent.cwd,
+      env: { LUBBDUBB_PROMPT: task.prompt, LUBBDUBB_TASK_ID: task.id },
+      waitingPatterns: this.opts.waitingPatterns,
+    });
+
+    this.sessions.set(agent.id, session);
+    // The row goes live again, shedding the death markers from the last run.
+    this.store.updateAgent(agent.id, { status: 'running', pid: null, endedAt: null, waitingReason: null });
+    this.store.updateTask(task.id, { status: 'running' });
+    this.wireSession(session, agent.id, task);
+    session.start();
+
+    if (wasWaiting) this.restoreWaiting(agent, task);
+    else this.deliverAfterBoot(agent.id, session, this.opts.resumeInput?.() ?? null);
+
+    return true;
   }
 
   /** Type text into a live agent (a human response or a follow-up prompt). */
@@ -141,11 +165,83 @@ export class AgentManager extends EventEmitter {
     return this.sessions.has(agentId);
   }
 
-  killAll(): void {
-    for (const id of [...this.sessions.keys()]) this.kill(id);
+  /**
+   * Stop every live agent because the *server* is going down — distinct from
+   * {@link kill}, which is a deliberate per-agent stop. Agents are left in the
+   * resumable `interrupted` state (not `killed`) so the next boot re-attaches
+   * them; `waitingReason` and the task status are preserved as the signal for
+   * how to resume. A cockpit kill stays dead because it alone marks `killed`.
+   */
+  interruptAll(): void {
+    const at = new Date().toISOString();
+    for (const id of [...this.sessions.keys()]) {
+      const session = this.sessions.get(id);
+      try {
+        session?.kill();
+      } catch {
+        /* process already gone */
+      }
+      this.store.flushTranscript(id); // make the transcript durable before we exit
+      this.store.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
+      this.sessions.delete(id);
+    }
   }
 
   // -- internals -----------------------------------------------------------
+
+  /** Attach the store-update + re-emit listeners shared by fresh spawns and resumes. */
+  private wireSession(session: AgentSession, agentId: string, task: Task): void {
+    session.on('output', (delta: string) => {
+      this.store.appendTranscript(agentId, delta);
+      this.emit('output', { agentId, delta });
+    });
+
+    session.on('status', (status) => {
+      if (status === 'running') {
+        this.store.updateAgent(agentId, { status: 'running', pid: session.pid, waitingReason: null });
+        this.reflectStatus(agentId, task.id, 'running');
+      }
+    });
+
+    session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
+    session.on('done', () => this.handleTerminal(agentId, task.id, 'done'));
+    session.on('failed', () => this.handleTerminal(agentId, task.id, 'failed'));
+  }
+
+  /**
+   * Deliver a first message once the process has had `promptDelayMs` to boot.
+   * Stream transport is ready at once (deliver synchronously); an interactive
+   * terminal needs the REPL to come up first. No-op when `text` is null.
+   */
+  private deliverAfterBoot(agentId: string, session: AgentSession, text: string | null): void {
+    if (text === null) return;
+    const delay = this.opts.promptDelayMs ?? 0;
+    const deliver = (): void => {
+      if (!this.sessions.has(agentId)) return; // killed/finished before we could send
+      try {
+        session.send(text);
+      } catch {
+        /* session already gone */
+      }
+    };
+    if (delay <= 0) deliver();
+    else setTimeout(deliver, delay).unref?.();
+  }
+
+  /**
+   * Put a resumed agent back into the parked `waiting` state it held before the
+   * restart. The escalation raised then is persisted and, now that the session is
+   * live again, an answer routes straight into it; if it's somehow gone, re-raise
+   * one so the human is still prompted.
+   */
+  private restoreWaiting(agent: Agent, task: Task): void {
+    const reason = agent.waitingReason ?? 'Resumed agent is awaiting your input.';
+    this.store.updateAgent(agent.id, { status: 'waiting', waitingReason: reason });
+    this.store.updateTask(task.id, { status: 'waiting' });
+    this.reflectStatus(agent.id, task.id, 'waiting');
+    const hasOpen = this.store.listOpenEscalations().some((e) => e.agentId === agent.id);
+    if (!hasOpen) this.emit('waiting', { agentId: agent.id, taskId: task.id, reason });
+  }
 
   private handleWaiting(agentId: string, task: Task, reason: string): void {
     const rule = this.opts.whitelistedApprovals.find((r) => reason.includes(r.match));

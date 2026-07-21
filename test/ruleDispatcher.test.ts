@@ -409,6 +409,7 @@ const runningAgent = (id: string) => ({
   status: 'running' as const,
   cwd: '/tmp',
   pid: 1,
+  sessionId: null,
   waitingReason: null,
   startedAt: 'n',
   endedAt: null,

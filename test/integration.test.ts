@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
-import { buildSystem, reconcileOnBoot, type System } from '../src/system.js';
+import { buildSystem, reconcileAndResumeOnBoot, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Escalation } from '../src/types.js';
 
@@ -151,9 +151,11 @@ test('reconcile on boot marks orphaned agents interrupted', async () => {
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
-  // Simulate a crash: the process is gone but the DB still says "running".
-  const reconciled = reconcileOnBoot(system.store, system.escalations);
-  assert.equal(reconciled, 1);
+  // Simulate a crash: the process is gone but the DB still says "running". The
+  // raw runtime isn't resumable, so reconciliation falls back to interrupting.
+  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
+  assert.equal(resumed, 0);
+  assert.equal(interrupted, 1);
   assert.equal(system.store.getAgent(agentId)!.status, 'interrupted');
   assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'interrupted');
   system.store.close();
@@ -198,12 +200,14 @@ test('an agent that fails auto-dismisses its open escalations', async () => {
   system.store.close();
 });
 
-test('reconcileOnBoot auto-dismisses orphaned agents open escalations', async () => {
+test('reconcileAndResumeOnBoot auto-dismisses a non-resumable orphan open escalations', async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
   const { escalationId } = await agentWithOpenEscalation(system, backend);
 
-  reconcileOnBoot(system.store, system.escalations);
+  // The raw runtime isn't resumable, so the orphan falls back to interrupted and
+  // its now-orphaned escalation is dismissed.
+  reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
 
   const after = system.store.getEscalation(escalationId)!;
   assert.equal(after.status, 'dismissed');

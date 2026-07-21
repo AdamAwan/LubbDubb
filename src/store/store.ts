@@ -39,7 +39,22 @@ export class Store {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.exec(SCHEMA);
+    this.migrate();
     this.now = clock;
+  }
+
+  /**
+   * Additive, idempotent migrations for columns introduced after a table's
+   * original `CREATE`. `CREATE TABLE IF NOT EXISTS` never alters an existing
+   * table, so a column added to the schema is invisible on databases created by
+   * an older build until we `ADD COLUMN` it here.
+   */
+  private migrate(): void {
+    const hasColumn = (table: string, column: string): boolean =>
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
+    if (!hasColumn('agents', 'session_id')) {
+      this.db.exec(`ALTER TABLE agents ADD COLUMN session_id TEXT`);
+    }
   }
 
   close(): void {
@@ -104,7 +119,13 @@ export class Store {
 
   // -- Agents --------------------------------------------------------------
 
-  createAgent(input: { taskId: string; cwd: string; pid: number | null; status?: Agent['status'] }): Agent {
+  createAgent(input: {
+    taskId: string;
+    cwd: string;
+    pid: number | null;
+    status?: Agent['status'];
+    sessionId?: string | null;
+  }): Agent {
     const agent: Agent = {
       id: `agent_${nanoid(10)}`,
       taskId: input.taskId,
@@ -112,13 +133,14 @@ export class Store {
       cwd: input.cwd,
       pid: input.pid,
       waitingReason: null,
+      sessionId: input.sessionId ?? null,
       startedAt: this.now(),
       endedAt: null,
     };
     this.db
       .prepare(
-        `INSERT INTO agents (id, task_id, status, cwd, pid, waiting_reason, started_at, ended_at)
-         VALUES (@id, @taskId, @status, @cwd, @pid, @waitingReason, @startedAt, @endedAt)`,
+        `INSERT INTO agents (id, task_id, status, cwd, pid, waiting_reason, session_id, started_at, ended_at)
+         VALUES (@id, @taskId, @status, @cwd, @pid, @waitingReason, @sessionId, @startedAt, @endedAt)`,
       )
       .run(agent);
     return agent;
@@ -359,6 +381,7 @@ interface AgentRow {
   cwd: string;
   pid: number | null;
   waiting_reason: string | null;
+  session_id: string | null;
   started_at: string;
   ended_at: string | null;
 }
@@ -412,6 +435,7 @@ function rowToAgent(r: AgentRow): Agent {
     cwd: r.cwd,
     pid: r.pid,
     waitingReason: r.waiting_reason,
+    sessionId: r.session_id,
     startedAt: r.started_at,
     endedAt: r.ended_at,
   };
