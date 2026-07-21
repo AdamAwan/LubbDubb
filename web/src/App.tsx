@@ -219,6 +219,11 @@ function WorldSummary({ state }: { state: AppState }) {
           )}
           {pr.merged ? (
             <span className="chip small">merged</span>
+          ) : pr.health?.blocked ? (
+            <span className="chip small warn" title={pr.health.reasons.join(', ')}>
+              {pr.health.reasons[0]}
+              {pr.health.reasons.length > 1 ? ` +${pr.health.reasons.length - 1}` : ''}
+            </span>
           ) : (
             pr.ciStatus === 'passing' &&
             pr.approved &&
