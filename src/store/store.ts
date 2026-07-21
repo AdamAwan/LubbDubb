@@ -3,7 +3,16 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
-import type { Agent, Decision, Escalation, EscalationContext, Task, WorldEvent, WorldEventInput, WorldSnapshot } from '../types.js';
+import type {
+  Agent,
+  Decision,
+  Escalation,
+  EscalationContext,
+  Task,
+  WorldEvent,
+  WorldEventInput,
+  WorldSnapshot,
+} from '../types.js';
 
 /** Injectable clock so tests are deterministic. */
 export type Clock = () => string;
