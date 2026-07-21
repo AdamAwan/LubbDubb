@@ -52,7 +52,12 @@ body {
 
 .inject { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .inject-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-.raw, .reply { display: flex; gap: 6px; flex: 1; min-width: 220px; }
+.raw, .reply { display: flex; gap: 6px; }
+/* .raw sits in the horizontal .inject row, so it grows to fill the width. */
+.raw { flex: 1; min-width: 220px; }
+/* .reply sits in the vertical .drawer column: pin it to its natural height so
+   the terminal keeps the space instead of splitting the drawer 50/50. */
+.reply { flex: 0 0 auto; margin-top: 12px; }
 .raw input, .reply input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding: 16px 20px; align-items: start; }
