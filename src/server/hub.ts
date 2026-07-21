@@ -5,6 +5,7 @@ export type ServerEvent =
   | { type: 'cycle:start'; cycleId: string; source: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string; summary: unknown }
   | { type: 'agent:output'; agentId: string; delta: string }
+  | { type: 'agent:tail'; agentId: string; line: string }
   | { type: 'agent:status'; agentId: string; taskId: string; status: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'agent:done'; agentId: string; taskId: string; status: string }
@@ -20,6 +21,13 @@ export type ServerEvent =
  */
 export class Hub {
   private readonly sockets = new Set<WebSocket>();
+  // Which agentIds each socket wants full `agent:output` for. Output is high
+  // volume, so it's delivered scoped to subscribers instead of broadcast.
+  private readonly subscriptions = new Map<WebSocket, Set<string>>();
+  // Per-agent rolling tail state: the still-growing partial last line plus the
+  // last non-empty trimmed line seen so far, so the compact tail is correct
+  // across delta boundaries.
+  private readonly tails = new Map<string, { partial: string; last: string }>();
 
   constructor(system: System) {
     const { harness, agents, escalations } = system;
@@ -32,7 +40,7 @@ export class Hub {
       this.broadcast({ type: 'dirty' });
     });
 
-    agents.on('output', (e) => this.broadcast({ type: 'agent:output', ...e }));
+    agents.on('output', (e) => this.handleOutput(e.agentId, e.delta));
     agents.on('status', (e) => {
       this.broadcast({ type: 'agent:status', ...e });
       this.broadcast({ type: 'dirty' });
@@ -44,6 +52,7 @@ export class Hub {
     agents.on('done', (e) => {
       this.broadcast({ type: 'agent:done', ...e });
       this.broadcast({ type: 'dirty' });
+      this.tails.delete(e.agentId); // agent finished; drop its rolling tail buffer
     });
 
     escalations.on('created', (escalation) => {
@@ -58,7 +67,28 @@ export class Hub {
 
   add(socket: WebSocket): void {
     this.sockets.add(socket);
-    socket.on('close', () => this.sockets.delete(socket));
+    this.subscriptions.set(socket, new Set());
+    socket.on('close', () => {
+      this.sockets.delete(socket);
+      this.subscriptions.delete(socket);
+    });
+  }
+
+  /** Handle an inbound client frame: (un)subscribe a socket to an agent's output. */
+  handleClientMessage(socket: WebSocket, raw: string): void {
+    let msg: unknown;
+    try {
+      msg = JSON.parse(raw);
+    } catch {
+      return; // ignore malformed frames
+    }
+    if (!msg || typeof msg !== 'object') return;
+    const { type, agentId } = msg as { type?: unknown; agentId?: unknown };
+    if (typeof agentId !== 'string') return;
+    const subs = this.subscriptions.get(socket);
+    if (!subs) return;
+    if (type === 'subscribe') subs.add(agentId);
+    else if (type === 'unsubscribe') subs.delete(agentId);
   }
 
   broadcast(event: ServerEvent): void {
@@ -66,5 +96,36 @@ export class Hub {
     for (const socket of this.sockets) {
       if (socket.readyState === socket.OPEN) socket.send(payload);
     }
+  }
+
+  /**
+   * Deliver an agent's output: the full `agent:output` frame goes only to sockets
+   * subscribed to that agent, while a compact `agent:tail` (last non-empty line,
+   * capped) is broadcast to everyone so the fleet view can show live status.
+   */
+  private handleOutput(agentId: string, delta: string): void {
+    const payload = JSON.stringify({ type: 'agent:output', agentId, delta } satisfies ServerEvent);
+    for (const socket of this.sockets) {
+      if (socket.readyState !== socket.OPEN) continue;
+      if (this.subscriptions.get(socket)?.has(agentId)) socket.send(payload);
+    }
+    const line = this.updateTail(agentId, delta);
+    if (line) this.broadcast({ type: 'agent:tail', agentId, line });
+  }
+
+  /** Fold a delta into the agent's rolling tail; return the current tail line (≤200 chars). */
+  private updateTail(agentId: string, delta: string): string {
+    const state = this.tails.get(agentId) ?? { partial: '', last: '' };
+    const segments = (state.partial + delta).split(/\r?\n/);
+    const partial = segments.pop() ?? ''; // trailing segment is still an unfinished line
+    for (const seg of segments) {
+      const trimmed = seg.trim();
+      if (trimmed) state.last = trimmed;
+    }
+    const partialTrimmed = partial.trim();
+    if (partialTrimmed) state.last = partialTrimmed;
+    state.partial = partial.slice(-256); // cap the partial-line buffer
+    this.tails.set(agentId, state);
+    return state.last.slice(0, 200);
   }
 }

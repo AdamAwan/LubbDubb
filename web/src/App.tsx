@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, connectWs } from './api.js';
+import type { WsClient } from './api.js';
 import type { AppState, Agent } from './types.js';
 import { InjectPanel } from './components/InjectPanel.js';
 import { AgentCard } from './components/AgentCard.js';
@@ -20,8 +21,13 @@ export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [connected, setConnected] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  // Live per-agent output accumulated from WS deltas.
+  // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
+  // Last output line per agent, fed by compact `agent:tail` frames — used for
+  // fleet-card previews since full output no longer reaches every client.
+  const tails = useRef<Map<string, string>>(new Map());
+  // Stable reconnecting WS client so subscribe/unsubscribe survives effect churn.
+  const wsRef = useRef<WsClient | null>(null);
   const [, forceRender] = useState(0);
   // Anchor for the heartbeat countdown: when the last pulse landed.
   const lastPulse = useRef<number>(Date.now());
@@ -37,22 +43,41 @@ export function App() {
 
   useEffect(() => {
     void refresh();
-    const ws = connectWs((ev) => {
-      const e = ev as { type: string; agentId?: string; delta?: string };
-      if (e.type === 'dirty' || e.type === 'world:changed') void refresh();
-      else if (e.type === 'agent:output' && e.agentId && e.delta) {
-        const cur = liveOutput.current.get(e.agentId) ?? '';
-        liveOutput.current.set(e.agentId, (cur + e.delta).slice(-20000));
-        forceRender((n) => n + 1);
-      } else if (e.type === 'cycle:end') {
-        lastPulse.current = Date.now();
-        void refresh();
-      }
-    });
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    return () => ws.close();
+    const ws = connectWs(
+      (ev) => {
+        const e = ev as { type: string; agentId?: string; delta?: string; line?: string };
+        if (e.type === 'dirty' || e.type === 'world:changed') void refresh();
+        else if (e.type === 'agent:output' && e.agentId && e.delta) {
+          const cur = liveOutput.current.get(e.agentId) ?? '';
+          // Full output now only arrives for the subscribed (open) agent, so we
+          // keep a large scrollback (~1M chars) instead of the old 20k window —
+          // the watched session no longer loses history. Capped to bound memory.
+          liveOutput.current.set(e.agentId, (cur + e.delta).slice(-1_000_000));
+          forceRender((n) => n + 1);
+        } else if (e.type === 'agent:tail' && e.agentId && e.line) {
+          tails.current.set(e.agentId, e.line);
+          forceRender((n) => n + 1);
+        } else if (e.type === 'cycle:end') {
+          lastPulse.current = Date.now();
+          void refresh();
+        }
+      },
+      (isConnected) => setConnected(isConnected),
+    );
+    wsRef.current = ws;
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
   }, [refresh]);
+
+  // Subscribe to full output only while a drawer is open; unsubscribe on close/switch.
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws || !selected) return;
+    ws.subscribe(selected);
+    return () => ws.unsubscribe(selected);
+  }, [selected]);
 
   if (!state) return <div className="loading">Connecting to the cockpit…</div>;
 
@@ -67,15 +92,9 @@ export function App() {
   const nextIn = Math.max(0, Math.ceil((interval - (sincePulse % interval)) / 1000));
   const beatPct = Math.min(100, ((sincePulse % interval) / interval) * 100);
 
-  const lastLineFor = (id: string): string | undefined => {
-    const out = liveOutput.current.get(id);
-    if (!out) return undefined;
-    const lines = out
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
-    return lines.at(-1);
-  };
+  // Previews read the compact per-agent tail (last non-empty line) — full output
+  // is no longer streamed to non-subscribed fleet cards.
+  const lastLineFor = (id: string): string | undefined => tails.current.get(id);
 
   return (
     <div className="app">
@@ -173,6 +192,7 @@ export function App() {
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}
           onKill={() => api.killAgent(selectedAgent.id).then(refresh)}
+          onInterrupt={() => void api.interruptAgent(selectedAgent.id)}
         />
       )}
     </div>

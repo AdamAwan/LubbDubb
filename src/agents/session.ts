@@ -18,6 +18,11 @@ export interface AgentSession extends EventEmitter {
   start(): void;
   /** Deliver text to the agent (initial task, or a human's answer to continue). */
   send(text: string): void;
+  /**
+   * Write raw bytes to the agent with no added newline/framing (e.g. control chars like \x03).
+   * Best-effort: transports without a TTY may no-op.
+   */
+  sendRaw(data: string): void;
   kill(signal?: string): void;
 }
 

@@ -113,10 +113,22 @@ export class AgentManager extends EventEmitter {
     return true;
   }
 
+  /**
+   * Send Ctrl-C (raw ETX) to a live agent to interrupt its current work. Status
+   * is not mutated here — the agent's own output/exit drives what happens next.
+   */
+  interrupt(agentId: string): boolean {
+    const session = this.sessions.get(agentId);
+    if (!session) return false;
+    session.sendRaw('\x03');
+    return true;
+  }
+
   kill(agentId: string): boolean {
     const session = this.sessions.get(agentId);
     if (!session) return false;
     session.kill();
+    this.store.flushTranscript(agentId); // make the killed agent's transcript durable
     const agent = this.store.getAgent(agentId);
     this.store.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
     if (agent) this.store.updateTask(agent.taskId, { status: 'interrupted' });
@@ -150,6 +162,7 @@ export class AgentManager extends EventEmitter {
   }
 
   private handleTerminal(agentId: string, taskId: string, status: 'done' | 'failed'): void {
+    this.store.flushTranscript(agentId); // make the finished agent's transcript durable
     this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status });
     this.sessions.delete(agentId);

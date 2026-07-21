@@ -14,6 +14,48 @@ test('emits output deltas as they arrive', () => {
   assert.deepEqual(chunks, ['hello ', 'world']);
 });
 
+test('done sentinel is stripped from output but still finishes the session', () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  const chunks: string[] = [];
+  let done = false;
+  session.on('output', (d: string) => chunks.push(d));
+  session.on('done', () => (done = true));
+  session.start();
+  backend.last().emit('all finished @@LUBBDUBB_DONE@@');
+  assert.equal(done, true);
+  assert.equal(session.status, 'done');
+  const out = chunks.join('');
+  assert.equal(out.includes('@@LUBBDUBB_DONE@@'), false);
+  assert.equal(out, 'all finished ');
+});
+
+test('waiting sentinel is stripped from output while waiting fires with the reason', () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  const chunks: string[] = [];
+  let reason: string | null = null;
+  session.on('output', (d: string) => chunks.push(d));
+  session.on('waiting', (r: string) => (reason = r));
+  session.start();
+  backend.last().emit('working...\n@@LUBBDUBB_WAITING:need a decision@@\n');
+  assert.equal(session.status, 'waiting');
+  assert.equal(reason, 'need a decision');
+  const out = chunks.join('');
+  assert.equal(out.includes('@@LUBBDUBB_WAITING:'), false);
+  assert.equal(out.includes('need a decision'), false);
+  assert.equal(out.includes('@@'), false);
+  assert.equal(out, 'working...\n\n');
+});
+
+test('sendRaw writes bytes verbatim with no carriage return appended', () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  session.start();
+  session.sendRaw('\x03');
+  assert.equal(backend.last().writes.at(-1), '\x03');
+});
+
 test('detects a waiting sentinel and extracts the reason', () => {
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });

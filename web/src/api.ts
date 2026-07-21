@@ -29,18 +29,112 @@ export const api = {
       body: JSON.stringify({ text }),
     }).then((r) => json(r)),
   killAgent: (id: string) => fetch(`/api/agents/${id}/kill`, { method: 'POST' }).then((r) => json(r)),
+  interruptAgent: (id: string) => fetch(`/api/agents/${id}/interrupt`, { method: 'POST' }).then((r) => json(r)),
 };
 
-/** Open the live event socket, calling `onEvent` for every message. */
-export function connectWs(onEvent: (ev: unknown) => void): WebSocket {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.onmessage = (msg) => {
-    try {
-      onEvent(JSON.parse(msg.data as string));
-    } catch {
-      /* ignore malformed frames */
+/**
+ * Reconnecting live-event socket. Opens `ws(s)://host/ws`, auto-reconnects with
+ * exponential backoff on unexpected close/error, and re-asserts the desired set
+ * of agent subscriptions on every (re)connect so a drawer keeps streaming across
+ * a dropped connection. Call `.close()` to tear it down permanently.
+ */
+class ReconnectingWs {
+  private ws: WebSocket | null = null;
+  private closed = false;
+  private backoff: number;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly subs = new Set<string>();
+  private static readonly BASE = 500;
+  private static readonly CAP = 8000;
+
+  constructor(
+    private readonly onEvent: (ev: unknown) => void,
+    private readonly onStatus?: (connected: boolean) => void,
+  ) {
+    this.backoff = ReconnectingWs.BASE;
+    this.open();
+  }
+
+  private open(): void {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    this.ws = ws;
+    ws.onopen = () => {
+      this.backoff = ReconnectingWs.BASE; // reset backoff on a good connection
+      this.onStatus?.(true);
+      // Re-send every desired subscription so they survive reconnects.
+      for (const id of this.subs) this.rawSend({ type: 'subscribe', agentId: id });
+    };
+    ws.onmessage = (msg) => {
+      try {
+        this.onEvent(JSON.parse(msg.data as string));
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+    ws.onclose = () => {
+      this.onStatus?.(false);
+      this.scheduleReconnect();
+    };
+    ws.onerror = () => {
+      // Let onclose drive the reconnect; force the socket shut if it lingers.
+      try {
+        ws.close();
+      } catch {
+        /* noop */
+      }
+    };
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closed || this.reconnectTimer) return;
+    const delay = this.backoff;
+    this.backoff = Math.min(this.backoff * 2, ReconnectingWs.CAP);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.closed) this.open();
+    }, delay);
+  }
+
+  /** Send a frame only if the socket is currently OPEN; otherwise no-op. */
+  private rawSend(frame: unknown): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(frame));
     }
-  };
-  return ws;
+  }
+
+  subscribe(agentId: string): void {
+    this.subs.add(agentId);
+    this.rawSend({ type: 'subscribe', agentId });
+  }
+
+  unsubscribe(agentId: string): void {
+    this.subs.delete(agentId);
+    this.rawSend({ type: 'unsubscribe', agentId });
+  }
+
+  /** Tear down permanently — stops reconnection. */
+  close(): void {
+    this.closed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      this.ws.onclose = null; // don't schedule a reconnect for our own close
+      try {
+        this.ws.close();
+      } catch {
+        /* noop */
+      }
+      this.ws = null;
+    }
+  }
+}
+
+export type WsClient = ReconnectingWs;
+
+/** Open the reconnecting live event socket. */
+export function connectWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
+  return new ReconnectingWs(onEvent, onStatus);
 }
