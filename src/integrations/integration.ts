@@ -72,6 +72,19 @@ export function isPrMergeCapable(x: Integration): x is Integration & PrMergeCapa
   return typeof (x as Partial<PrMergeCapable>).mergePr === 'function';
 }
 
+/**
+ * An integration that can turn a harness reference into a canonical web URL — the
+ * seam that keeps URL construction in the provider (which knows the repo identity)
+ * rather than the provider-agnostic cockpit. Refs it can't map return `null`.
+ */
+export interface RefResolvable {
+  resolveRefUrl(ref: string): string | null;
+}
+
+export function isRefResolvable(x: Integration): x is Integration & RefResolvable {
+  return typeof (x as Partial<RefResolvable>).resolveRefUrl === 'function';
+}
+
 // ---------------------------------------------------------------------------
 // Injectable (fake-only)
 //

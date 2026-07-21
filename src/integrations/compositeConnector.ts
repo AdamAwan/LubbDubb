@@ -2,7 +2,7 @@ import type { Connector, InjectableEvent } from '../connector/connector.js';
 import type { ActionSink, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
-import { isInjectable, isPrMergeCapable, isPrReplyCapable, type Integration } from './integration.js';
+import { isInjectable, isPrMergeCapable, isPrReplyCapable, isRefResolvable, type Integration } from './integration.js';
 
 /**
  * Assembles the world from many {@link Integration}s and presents it behind the
@@ -42,6 +42,16 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrMergeCapable);
     if (!handler) throw new Error('no integration can merge PRs (no sourceControl provider is PrMergeCapable)');
     return handler.mergePr(input);
+  }
+
+  /**
+   * Resolve a ref to a web URL via the first integration that can, or `null` when
+   * none can (e.g. an all-fake world with no real repo behind it). Used by the
+   * server to build the cockpit's link map without any provider-specific logic.
+   */
+  resolveRefUrl(ref: string): string | null {
+    const resolver = this.integrations.find(isRefResolvable);
+    return resolver ? resolver.resolveRefUrl(ref) : null;
   }
 
   /**

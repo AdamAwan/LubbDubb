@@ -22,14 +22,26 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
     fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.store),
     github: (ctx) => {
       const { api, gh } = githubApi(ctx);
-      return new GitHubSourceControlIntegration({ api, store: ctx.store, prAuthor: gh.filters?.prAuthor });
+      return new GitHubSourceControlIntegration({
+        api,
+        store: ctx.store,
+        prAuthor: gh.filters?.prAuthor,
+        owner: gh.owner,
+        repo: gh.repo,
+      });
     },
   },
   issues: {
     fake: (_ctx, world) => new FakeIssuesIntegration(world),
     github: (ctx) => {
       const { api, gh } = githubApi(ctx);
-      return new GitHubIssuesIntegration({ api, store: ctx.store, issueLabel: gh.filters?.issueLabel });
+      return new GitHubIssuesIntegration({
+        api,
+        store: ctx.store,
+        issueLabel: gh.filters?.issueLabel,
+        owner: gh.owner,
+        repo: gh.repo,
+      });
     },
   },
   backlog: {

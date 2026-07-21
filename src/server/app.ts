@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { System } from '../system.js';
 import { Hub } from './hub.js';
+import { buildRefUrls } from './refUrls.js';
 import type { InjectableEvent } from '../connector/connector.js';
 
 /**
@@ -106,17 +107,29 @@ export function buildStateSnapshot(system: System) {
   const { store, connector, config } = system;
   // getState is async on the interface, but FakeConnector is synchronous under
   // the hood; read the same persisted world directly for a snapshot.
-  return connector.getState().then((world) => ({
-    config: {
-      heartbeatIntervalMs: config.heartbeatIntervalMs,
-      maxConcurrentAgents: config.maxConcurrentAgents,
-      dispatcher: config.dispatcher,
-      steeringPriorities: config.steeringPriorities,
-    },
-    world,
-    tasks: store.listTasks(),
-    agents: store.listAgents(),
-    escalations: store.listEscalations(),
-    decisions: store.listDecisions(100),
-  }));
+  return connector.getState().then((world) => {
+    const tasks = store.listTasks();
+    // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
+    // cockpit only looks refs up in this map, so it stays provider-agnostic.
+    const refUrls = buildRefUrls({
+      pullRequests: world.pullRequests,
+      issues: world.issues,
+      taskBranches: tasks.map((t) => t.branch),
+      resolve: (ref) => connector.resolveRefUrl(ref),
+    });
+    return {
+      config: {
+        heartbeatIntervalMs: config.heartbeatIntervalMs,
+        maxConcurrentAgents: config.maxConcurrentAgents,
+        dispatcher: config.dispatcher,
+        steeringPriorities: config.steeringPriorities,
+      },
+      world,
+      tasks,
+      agents: store.listAgents(),
+      escalations: store.listEscalations(),
+      decisions: store.listDecisions(100),
+      refUrls,
+    };
+  });
 }
