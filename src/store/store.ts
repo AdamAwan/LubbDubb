@@ -17,6 +17,12 @@ const systemClock: Clock = () => new Date().toISOString();
 export class Store {
   private readonly db: Database.Database;
   private readonly now: Clock;
+  // Per-agent in-memory transcript accumulator. Output arrives as many tiny
+  // deltas; buffering them into one INSERT per ~16KB avoids a DB write (plus a
+  // MAX(seq) SELECT) on every chunk. Flushed on threshold, read, and close so
+  // read-your-writes stays intact.
+  private readonly transcriptBuffers = new Map<string, { chunks: string[]; bytes: number }>();
+  private static readonly TRANSCRIPT_FLUSH_BYTES = 16384;
 
   constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
@@ -28,6 +34,8 @@ export class Store {
   }
 
   close(): void {
+    // Persist anything still buffered before the handle goes away.
+    for (const agentId of [...this.transcriptBuffers.keys()]) this.flushTranscript(agentId);
     this.db.close();
   }
 
@@ -139,6 +147,22 @@ export class Store {
   // -- Transcripts ---------------------------------------------------------
 
   appendTranscript(agentId: string, chunk: string): void {
+    let buf = this.transcriptBuffers.get(agentId);
+    if (!buf) {
+      buf = { chunks: [], bytes: 0 };
+      this.transcriptBuffers.set(agentId, buf);
+    }
+    buf.chunks.push(chunk);
+    buf.bytes += Buffer.byteLength(chunk);
+    if (buf.bytes >= Store.TRANSCRIPT_FLUSH_BYTES) this.flushTranscript(agentId);
+  }
+
+  /** Persist one agent's buffered transcript as a single row, preserving order. */
+  flushTranscript(agentId: string): void {
+    const buf = this.transcriptBuffers.get(agentId);
+    if (!buf || buf.chunks.length === 0) return;
+    this.transcriptBuffers.delete(agentId);
+    const chunk = buf.chunks.join('');
     const seq = (
       this.db.prepare(`SELECT COALESCE(MAX(seq),-1)+1 AS n FROM agent_transcripts WHERE agent_id=?`).get(agentId) as {
         n: number;
@@ -150,6 +174,8 @@ export class Store {
   }
 
   getTranscript(agentId: string): string {
+    // Flush first so a read always reflects every appended chunk.
+    this.flushTranscript(agentId);
     const rows = this.db.prepare(`SELECT chunk FROM agent_transcripts WHERE agent_id=? ORDER BY seq`).all(agentId) as {
       chunk: string;
     }[];

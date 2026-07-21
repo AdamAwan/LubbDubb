@@ -48,6 +48,8 @@ export class PtySession extends EventEmitter {
   private proc: PtyProcess | null = null;
   private _status: PtySessionStatus = 'starting';
   private tail = '';
+  /** Trailing bytes withheld from 'output' because they might be the leading half of a sentinel. */
+  private outPending = '';
   private readonly opts: Required<PtySessionOptions>;
 
   constructor(
@@ -92,6 +94,12 @@ export class PtySession extends EventEmitter {
     if (this._status === 'waiting') this.setStatus('running');
   }
 
+  /** Write raw bytes to the pty as-is — no appended carriage return, unlike {@link send} — for control chars like \x03. Does not change status. */
+  sendRaw(data: string): void {
+    if (!this.proc) throw new Error('PtySession not started');
+    this.proc.write(data);
+  }
+
   kill(signal = 'SIGTERM'): void {
     if (this.proc && (this._status === 'running' || this._status === 'waiting' || this._status === 'starting')) {
       this.proc.kill(signal);
@@ -102,17 +110,23 @@ export class PtySession extends EventEmitter {
   // -- internals -----------------------------------------------------------
 
   private handleData(data: string): void {
-    this.emit('output', data);
+    // Display and detection are separated: emit output with the control
+    // sentinels stripped (so they never leak into the visible terminal), while
+    // detection below still scans the full, unfiltered tail window so its
+    // heuristics are unchanged.
+    this.emitFiltered(data);
+
     const hay = this.tail + data;
 
-    // Completion sentinel wins over everything.
-    if (hay.includes(this.opts.doneSentinel)) {
+    // Completion sentinel wins over everything. Require it on a token boundary
+    // so an agent echoing the literal string mid-line can't fake a finish.
+    if (findDelimited(hay, this.opts.doneSentinel) !== -1) {
       this.tail = '';
       if (this._status !== 'done') this.finish('done');
       return;
     }
 
-    // Structured waiting sentinel with an embedded reason.
+    // Structured waiting sentinel with an embedded reason (also boundary-guarded).
     const reason = this.extractWaitingReason(hay);
     if (reason !== null) {
       this.tail = '';
@@ -121,7 +135,9 @@ export class PtySession extends EventEmitter {
       return;
     }
 
-    // Generic literal patterns that mean "awaiting input".
+    // Generic literal patterns that mean "awaiting input". Sharp edge: these are
+    // matched anywhere in the tail with no boundary guard, so keep each pattern
+    // specific — a short or common substring risks false positives on echoes.
     for (const pat of this.opts.waitingPatterns) {
       if (pat && hay.includes(pat)) {
         this.setWaiting(pat);
@@ -134,14 +150,82 @@ export class PtySession extends EventEmitter {
     this.tail = keepTail(hay);
   }
 
+  /** Emit `data` with complete sentinels removed, buffering an ambiguous trailing fragment that a following chunk might complete into a sentinel. */
+  private emitFiltered(data: string): void {
+    const cleaned = this.stripCompleteSentinels(this.outPending + data);
+    const hold = this.ambiguousTailStart(cleaned);
+    this.outPending = cleaned.slice(hold);
+    const out = cleaned.slice(0, hold);
+    if (out) this.emit('output', out);
+  }
+
+  /** Remove fully-formed done and waiting (`PREFIX…SUFFIX`) sentinels; incomplete ones are left for {@link ambiguousTailStart} to hold. */
+  private stripCompleteSentinels(s: string): string {
+    const { doneSentinel: done, waitingSentinelPrefix: pre, waitingSentinelSuffix: suf } = this.opts;
+    if (done) s = s.split(done).join('');
+    if (pre && suf) {
+      let out = '';
+      let i = 0;
+      for (;;) {
+        const start = s.indexOf(pre, i);
+        if (start === -1) {
+          out += s.slice(i);
+          break;
+        }
+        const end = s.indexOf(suf, start + pre.length);
+        if (end === -1) {
+          out += s.slice(i); // no closing suffix yet: keep, held back below
+          break;
+        }
+        out += s.slice(i, start);
+        i = end + suf.length;
+      }
+      s = out;
+    }
+    return s;
+  }
+
+  /** Index from which the tail is an incomplete sentinel we must withhold (`s.length` = emit everything). */
+  private ambiguousTailStart(s: string): number {
+    const { doneSentinel: done, waitingSentinelPrefix: pre } = this.opts;
+    // An un-terminated waiting prefix: its reason and closing suffix may still
+    // be arriving, so hold from the prefix onward.
+    if (pre) {
+      const p = s.indexOf(pre);
+      if (p !== -1) return p;
+    }
+    // Otherwise hold the longest trailing run that is a proper prefix of a
+    // sentinel token, so a boundary-split sentinel is never half-emitted.
+    const tokens = [done, pre].filter((t) => t);
+    const maxLen = Math.max(0, ...tokens.map((t) => t.length - 1));
+    for (let k = Math.min(maxLen, s.length); k >= 1; k--) {
+      const suffix = s.slice(s.length - k);
+      if (tokens.some((t) => t.length > k && t.startsWith(suffix))) return s.length - k;
+    }
+    return s.length;
+  }
+
   private extractWaitingReason(hay: string): string | null {
     const { waitingSentinelPrefix: pre, waitingSentinelSuffix: suf } = this.opts;
-    const start = hay.indexOf(pre);
-    if (start === -1) return null;
-    const from = start + pre.length;
-    const end = hay.indexOf(suf, from);
-    if (end === -1) return null; // suffix not yet arrived; wait for more data
-    return hay.slice(from, end).trim();
+    let from = 0;
+    for (;;) {
+      const start = hay.indexOf(pre, from);
+      if (start === -1) return null;
+      // Boundary-guard the prefix so an echoed sentinel mid-token doesn't park us.
+      if (!isBoundary(start === 0 ? undefined : hay[start - 1])) {
+        from = start + 1;
+        continue;
+      }
+      const reasonAt = start + pre.length;
+      const end = hay.indexOf(suf, reasonAt);
+      if (end === -1) return null; // suffix not yet arrived; wait for more data
+      const after = end + suf.length;
+      if (!isBoundary(after >= hay.length ? undefined : hay[after])) {
+        from = start + 1;
+        continue;
+      }
+      return hay.slice(reasonAt, end).trim();
+    }
   }
 
   private setWaiting(reason: string): void {
@@ -172,4 +256,24 @@ export class PtySession extends EventEmitter {
 
 function keepTail(s: string): string {
   return s.length > TAIL_WINDOW ? s.slice(-TAIL_WINDOW) : s;
+}
+
+/** A sentinel boundary: start/end of the buffer, or a whitespace char. */
+function isBoundary(ch: string | undefined): boolean {
+  return ch === undefined || /\s/.test(ch);
+}
+
+/** First index of `token` in `hay` where it sits on a boundary both sides (not mid-token), else -1. */
+function findDelimited(hay: string, token: string): number {
+  if (!token) return -1;
+  let from = 0;
+  for (;;) {
+    const i = hay.indexOf(token, from);
+    if (i === -1) return -1;
+    const before = i === 0 ? undefined : hay[i - 1];
+    const afterIdx = i + token.length;
+    const after = afterIdx >= hay.length ? undefined : hay[afterIdx];
+    if (isBoundary(before) && isBoundary(after)) return i;
+    from = i + 1;
+  }
 }

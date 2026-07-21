@@ -78,6 +78,15 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     if (this._status === 'waiting') this.setStatus('running');
   }
 
+  /**
+   * No-op: the stream-JSON protocol carries structured user messages, not a raw
+   * TTY, so control chars like \x03 aren't meaningful over this transport. Kept
+   * to satisfy the {@link AgentSession} contract.
+   */
+  sendRaw(_data: string): void {
+    /* intentionally empty — no raw byte channel on the JSON transport */
+  }
+
   kill(signal: NodeJS.Signals = 'SIGTERM'): void {
     if (this.child && ['starting', 'running', 'waiting'].includes(this._status)) {
       try {

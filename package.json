@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@fastify/static": "^7.0.4",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "@fastify/websocket": "^10.0.1",
     "better-sqlite3": "^11.3.0",
     "fastify": "^4.28.1",

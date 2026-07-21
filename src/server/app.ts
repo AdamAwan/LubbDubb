@@ -24,6 +24,7 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   app.register(async (scoped) => {
     scoped.get('/ws', { websocket: true }, (socket) => {
       hub.add(socket);
+      socket.on('message', (raw) => hub.handleClientMessage(socket, raw.toString()));
       socket.send(JSON.stringify({ type: 'dirty' }));
     });
   });
@@ -77,6 +78,12 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   app.post('/api/agents/:id/kill', async (req, reply) => {
     const { id } = req.params as { id: string };
     const ok = agents.kill(id);
+    return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
+  });
+
+  app.post('/api/agents/:id/interrupt', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ok = agents.interrupt(id);
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
