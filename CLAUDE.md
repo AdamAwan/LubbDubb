@@ -114,3 +114,11 @@ logic in pure functions so it stays unit-testable without HTTP.
 - The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`
   or a config file (so a secret can't be committed). Selecting `github` without the token or
   without `github.owner`/`github.repo` throws a clear error at `buildIntegrations` time.
+- **Two orthogonal label mechanisms — don't conflate them.** `github.filters.issueLabel` is a
+  provider-level _ingest_ filter: GitHub-only, config-time, and it **hides** non-matching issues
+  from the world. `issuePickupLabel` is a dispatcher-level _pickup gate_ (rule 4 in
+  `ruleDispatcher.ts`, via `src/dispatcher/issuePickup.ts`): provider-agnostic, reads
+  `issue.labels`, and leaves untagged issues **visible** but unacted-on. Priority is
+  label-encoded (`issuePriorityLabels`/`issueDefaultPriority`) and parsed by the pure exported
+  `issuePriority` — keep that parsing pure so it stays unit-testable without a world. The gate
+  is off by default (unset label = act on all open issues), so existing setups don't regress.

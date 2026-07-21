@@ -15,6 +15,7 @@ import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
+import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { Harness } from './harness.js';
 
 export interface System {
@@ -111,10 +112,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     maxConcurrentAgents: config.maxConcurrentAgents,
   });
 
+  // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
+  // by whichever dispatcher is selected — provider-agnostic.
+  const issuePickup: IssuePickupPolicy = {
+    pickupLabel: config.issuePickupLabel,
+    priorityLabels: config.issuePriorityLabels,
+    defaultPriority: config.issueDefaultPriority,
+  };
   const dispatcher: Dispatcher =
     config.dispatcher === 'claude'
-      ? new ClaudeDispatcher(backend, { command: config.claudeCommand, args: config.claudeArgs, cwd: config.repoRoot })
-      : new RuleDispatcher();
+      ? new ClaudeDispatcher(backend, {
+          command: config.claudeCommand,
+          args: config.claudeArgs,
+          cwd: config.repoRoot,
+          issuePickup,
+        })
+      : new RuleDispatcher(issuePickup);
 
   const harness = new Harness({
     store,

@@ -57,6 +57,32 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   system.store.close();
 });
 
+test('issuePickupLabel gates dispatch at the buildSystem seam; untagged issues stay visible', async () => {
+  const backend = new FakePtyBackend();
+  const config = testConfig();
+  config.issuePickupLabel = 'agent-ready';
+  const system = buildSystem(config, { backend });
+
+  system.connector.inject({ kind: 'new_issue', number: 101, title: 'tagged', labels: ['agent-ready'] });
+  system.connector.inject({ kind: 'new_issue', number: 102, title: 'untagged', labels: ['bug'] });
+  await system.harness.runCycle('manual');
+
+  // Only the labelled issue starts an agent...
+  const live = system.store.listAgentsByStatus('starting', 'running');
+  assert.equal(live.length, 1, 'only the labelled issue is picked up');
+  const task = system.store.getTask(live[0]!.taskId)!;
+  assert.equal(task.branch, 'issue/101');
+
+  // ...but the untagged issue remains visible in the world snapshot.
+  const world = await system.connector.getState();
+  assert.deepEqual(
+    world.issues.map((i) => i.number).sort((a, b) => a - b),
+    [101, 102],
+    'both issues remain in /api/state',
+  );
+  system.store.close();
+});
+
 test('whitelisted waiting prompts are auto-answered without escalating', async () => {
   const backend = new FakePtyBackend();
   const config = testConfig();
