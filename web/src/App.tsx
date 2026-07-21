@@ -5,7 +5,10 @@ import { InjectPanel } from './components/InjectPanel.js';
 import { AgentCard } from './components/AgentCard.js';
 import { EscalationCard } from './components/EscalationCard.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
+import { Vitals } from './components/Vitals.js';
+import { DecisionLog } from './components/DecisionLog.js';
 import { statusDot } from './components/util.js';
+import { useNow } from './hooks.js';
 
 /**
  * The cockpit. One page: fleet + tasks on the left, the escalation inbox in the
@@ -20,6 +23,9 @@ export function App() {
   // Live per-agent output accumulated from WS deltas.
   const liveOutput = useRef<Map<string, string>>(new Map());
   const [, forceRender] = useState(0);
+  // Anchor for the heartbeat countdown: when the last pulse landed.
+  const lastPulse = useRef<number>(Date.now());
+  const now = useNow(1000);
 
   const refresh = useCallback(async () => {
     try {
@@ -39,6 +45,7 @@ export function App() {
         liveOutput.current.set(e.agentId, (cur + e.delta).slice(-20000));
         forceRender((n) => n + 1);
       } else if (e.type === 'cycle:end') {
+        lastPulse.current = Date.now();
         void refresh();
       }
     });
@@ -54,6 +61,22 @@ export function App() {
   const openEscalations = state.escalations.filter((e) => e.status === 'open');
   const selectedAgent = state.agents.find((a) => a.id === selected) ?? null;
 
+  // Heartbeat countdown: fraction of the interval elapsed since the last pulse.
+  const interval = state.config.heartbeatIntervalMs;
+  const sincePulse = now - lastPulse.current;
+  const nextIn = Math.max(0, Math.ceil((interval - (sincePulse % interval)) / 1000));
+  const beatPct = Math.min(100, ((sincePulse % interval) / interval) * 100);
+
+  const lastLineFor = (id: string): string | undefined => {
+    const out = liveOutput.current.get(id);
+    if (!out) return undefined;
+    const lines = out
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    return lines.at(-1);
+  };
+
   return (
     <div className="app">
       <header className="topbar">
@@ -62,9 +85,16 @@ export function App() {
           <span className="tagline">autonomous engineering cockpit</span>
         </div>
         <div className="topbar-meta">
-          <span className={`chip ${connected ? 'ok' : 'bad'}`}>{connected ? 'live' : 'disconnected'}</span>
+          <div className="heartbeat" title={`Next heartbeat in ~${nextIn}s`}>
+            <div className="heartbeat-track">
+              <div className="heartbeat-fill" style={{ width: `${beatPct}%` }} />
+            </div>
+            <span className="heartbeat-label">next pulse ~{nextIn}s</span>
+          </div>
+          <span className={`chip ${connected ? 'ok' : 'bad'}`}>
+            <span className={`dot ${connected ? 'green' : 'red'}`} /> {connected ? 'live' : 'offline'}
+          </span>
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
-          <span className="chip">heartbeat: {Math.round(state.config.heartbeatIntervalMs / 1000)}s</span>
           <span className="chip">
             cap: {liveAgents.length}/{state.config.maxConcurrentAgents}
           </span>
@@ -75,18 +105,26 @@ export function App() {
       </header>
 
       <InjectPanel onInjected={refresh} world={state.world} />
+      <Vitals state={state} liveAgents={liveAgents.length} cap={state.config.maxConcurrentAgents} />
 
       <main className="grid">
         <section className="col">
           <h2>
             Fleet <span className="count">{liveAgents.length}</span>
           </h2>
-          {liveAgents.length === 0 && <p className="empty">No agents running. The harness is idle.</p>}
+          {liveAgents.length === 0 && (
+            <div className="empty-panel">
+              <span className="empty-mark">♥</span>
+              <p>No agents running. The harness is idle — inject an event to wake it.</p>
+            </div>
+          )}
           {liveAgents.map((a) => (
             <AgentCard
               key={a.id}
               agent={a}
               task={taskFor(state, a)}
+              now={now}
+              lastLine={lastLineFor(a.id)}
               onOpen={() => setSelected(a.id)}
               onKill={() => api.killAgent(a.id).then(refresh)}
             />
@@ -94,7 +132,7 @@ export function App() {
 
           {pastAgents.length > 0 && <h3 className="muted">History</h3>}
           {pastAgents.slice(0, 8).map((a) => (
-            <AgentCard key={a.id} agent={a} task={taskFor(state, a)} onOpen={() => setSelected(a.id)} past />
+            <AgentCard key={a.id} agent={a} task={taskFor(state, a)} now={now} onOpen={() => setSelected(a.id)} past />
           ))}
         </section>
 
@@ -102,11 +140,17 @@ export function App() {
           <h2>
             Needs you <span className="count urgent">{openEscalations.length}</span>
           </h2>
-          {openEscalations.length === 0 && <p className="empty">Inbox zero. Nothing needs your judgment.</p>}
+          {openEscalations.length === 0 && (
+            <div className="empty-panel calm">
+              <span className="empty-mark">✓</span>
+              <p>Inbox zero. Nothing needs your judgment.</p>
+            </div>
+          )}
           {openEscalations.map((e) => (
             <EscalationCard
               key={e.id}
               escalation={e}
+              now={now}
               onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)}
             />
           ))}
@@ -117,15 +161,7 @@ export function App() {
 
         <section className="col">
           <h2>Decision log</h2>
-          <div className="auditlog">
-            {state.decisions.map((d) => (
-              <div key={d.id} className={`audit ${d.outcome}`}>
-                <span className={`badge ${d.outcome}`}>{d.outcome}</span>
-                <span className="audit-type">{d.action.type}</span>
-                <div className="audit-detail">{d.detail}</div>
-              </div>
-            ))}
-          </div>
+          <DecisionLog decisions={state.decisions} now={now} />
         </section>
       </main>
 
