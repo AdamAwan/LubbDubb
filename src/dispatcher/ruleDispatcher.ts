@@ -1,17 +1,26 @@
 import type { Dispatcher, DispatchContext, DispatchResult } from './dispatcher.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
+import { needsBaseUpdate } from '../prHealth.js';
+import type { Agent, Decision, Task } from '../types.js';
 import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './issuePickup.js';
-import type { Task } from '../types.js';
 
 /**
  * A deterministic, dependency-free dispatcher that encodes the harness's default
  * priorities directly from the product vision:
  *
  *   1. A PR's CI is failing        -> spin up a code agent to fix it
- *   2. A PR has an unhandled comment -> spin up a code agent to address it
+ *   2. A PR's base is out of date  -> code agent to merge base in (resolve
+ *                                     conflicts if 'dirty', clean update if 'behind')
+ *   2b. A PR has an unhandled comment -> spin up a code agent to address it
  *   3. A PR is green/approved/mergeable -> merge it in (gated by auto-send)
  *   4. An open issue has no linked PR -> code agent to resolve it into a PR
+ *
+ * At most one code agent works a given PR branch: when a fresh signal lands on a
+ * branch that already has a *running* agent, it's delivered to that agent via
+ * `respond_to_agent` (deduped through `recentDecisions`) rather than spawning a
+ * second one; while the branch's agent is `waiting`, the note is held so a
+ * pending human escalation is never disturbed.
  *   5. A meeting today lacks prep    -> desk agent to prepare
  *   6. A ready story lacks a description / acceptance criteria -> desk agent to groom
  *   7. A ready story lacks WAF pillars -> desk agent to fill them
@@ -50,46 +59,110 @@ export class RuleDispatcher implements Dispatcher {
       activeOrigins.add(origin);
       headroom -= 1;
     };
+    // Origins we've already told a live agent about (from the audit log), so a
+    // persistent signal isn't re-notified every cycle. Best-effort over the
+    // recent decision window — a note that ages out is harmless (the agent just
+    // gets told again).
+    const notified = notifiedOriginsByAgent(ctx.recentDecisions);
 
-    // 1 & 2: React to PR signals first — they're time-sensitive.
+    // 1–3: React to PR signals first — they're time-sensitive. At most one code
+    // agent works a given branch, so a fresh signal for a branch that already
+    // has a running agent is delivered to it, never a second dispatch.
     for (const pr of ctx.world.pullRequests) {
-      const ciOrigin = `pr:${pr.number}:ci`;
-      if (pr.ciStatus === 'failing' && canDispatch(ciOrigin)) {
-        raw.push({
-          type: 'dispatch_code_agent',
-          branch: pr.branch,
+      if (pr.merged) continue; // a merged PR is done — never act on it.
+
+      // Every concern that would, on its own, warrant a code agent on this
+      // branch, ordered by urgency: CI > base-update > review comments.
+      const concerns: PrConcern[] = [];
+      if (pr.ciStatus === 'failing') {
+        concerns.push({
+          origin: `pr:${pr.number}:ci`,
           title: `Fix failing CI on PR #${pr.number}`,
           prompt: `CI is failing on PR #${pr.number} ("${pr.title}", branch ${pr.branch}). Investigate the failure and push a fix.`,
-          originRef: ciOrigin,
-          reason: `PR #${pr.number} has failing CI and no agent is on it.`,
-        } satisfies RawAction);
-        claim(ciOrigin);
+          dispatchReason: `PR #${pr.number} has failing CI and no agent is on it.`,
+          note: `CI is now failing on PR #${pr.number} — investigate and push a fix.`,
+        });
       }
-
+      if (needsBaseUpdate(pr)) {
+        const base = pr.baseBranch ?? 'main';
+        const behind = pr.mergeableState === 'behind';
+        concerns.push({
+          origin: `pr:${pr.number}:mergeable`,
+          title: behind ? `Update PR #${pr.number} with ${base}` : `Resolve merge conflicts on PR #${pr.number}`,
+          prompt: behind
+            ? `PR #${pr.number} ("${pr.title}") is behind its base branch ${base}. Merge ${base} into ${pr.branch} to bring it up to date, then push. No conflicts are expected — this is a routine update.`
+            : `PR #${pr.number} ("${pr.title}") has merge conflicts with its base branch ${base}. Merge ${base} into ${pr.branch}, resolve the conflicts, and push. If you cannot resolve them cleanly, escalate for a human.`,
+          dispatchReason: behind
+            ? `PR #${pr.number} is behind ${base} and no agent is on it.`
+            : `PR #${pr.number} has merge conflicts with ${base} and no agent is on it.`,
+          note: behind
+            ? `PR #${pr.number} is now behind ${base} — merge ${base} in to bring it up to date, then push.`
+            : `The base branch ${base} now conflicts with PR #${pr.number} — merge ${base} in, resolve the conflicts, and push.`,
+        });
+      }
       for (const comment of pr.unresolvedComments) {
         if (comment.handled) continue;
-        const cOrigin = `pr:${pr.number}:comment:${comment.id}`;
-        if (canDispatch(cOrigin)) {
-          raw.push({
-            type: 'dispatch_code_agent',
-            branch: pr.branch,
-            title: `Address review comment on PR #${pr.number}`,
-            prompt: `A reviewer commented on PR #${pr.number} (branch ${pr.branch}):\n\n"${comment.body}"\n\nDecide whether to fix the code or defend the current approach. If defending, prepare a concise reply.`,
-            originRef: cOrigin,
-            reason: `Unhandled review comment from ${comment.author} on PR #${pr.number}.`,
-          } satisfies RawAction);
-          claim(cOrigin);
+        concerns.push({
+          origin: `pr:${pr.number}:comment:${comment.id}`,
+          title: `Address review comment on PR #${pr.number}`,
+          prompt: `A reviewer commented on PR #${pr.number} (branch ${pr.branch}):\n\n"${comment.body}"\n\nDecide whether to fix the code or defend the current approach. If defending, prepare a concise reply.`,
+          dispatchReason: `Unhandled review comment from ${comment.author} on PR #${pr.number}.`,
+          note: `New review comment from ${comment.author} on PR #${pr.number}: "${comment.body}" — address it or prepare a reply.`,
+        });
+      }
+
+      if (concerns.length > 0) {
+        const branch = resolveBranchAgent(ctx, pr.branch);
+        if (branch.kind === 'running') {
+          // A running agent already owns this branch — notify it, don't duplicate.
+          // Collapse all fresh, not-yet-notified concerns into one note.
+          const fresh = concerns.filter(
+            (c) => !activeOrigins.has(c.origin) && !notified.has(`${branch.agent.id}::${c.origin}`),
+          );
+          if (fresh.length > 0) {
+            raw.push({
+              type: 'respond_to_agent',
+              agentId: branch.agent.id,
+              response:
+                `An update on the branch you're working (PR #${pr.number}):\n` +
+                fresh.map((c) => `- ${c.note}`).join('\n'),
+              originRefs: fresh.map((c) => c.origin),
+              reason: `New PR signal(s) for a branch already staffed by agent ${branch.agent.id}.`,
+            } satisfies RawAction);
+          }
+        } else if (branch.kind === 'free') {
+          // No agent on this branch — dispatch one for the most urgent concern.
+          const top = concerns[0]!;
+          if (canDispatch(top.origin)) {
+            raw.push({
+              type: 'dispatch_code_agent',
+              branch: pr.branch,
+              title: top.title,
+              prompt: top.prompt,
+              originRef: top.origin,
+              reason: top.dispatchReason,
+            } satisfies RawAction);
+            claim(top.origin);
+          }
         }
+        // branch.kind === 'busy' (queued / starting / parked waiting): hold every
+        // note. Injecting into a waiting agent would un-park a human escalation,
+        // and a starting agent has no live session yet. The signals persist, so a
+        // later cycle delivers them once the agent is running.
       }
 
       // 3: Drive a settled PR the last mile — merge it in. `merge_pr` isn't an
       // agent dispatch (it claims no headroom); the executor's auto-send gate
-      // decides whether to merge autonomously or escalate for approval.
+      // decides whether to merge autonomously or escalate for approval. A
+      // 'behind'/'blocked'/'dirty' state is handled above, so it never counts as
+      // merge-ready here.
       const mergeReady =
         pr.ciStatus === 'passing' &&
         pr.approved === true &&
         pr.mergeable === true &&
-        pr.merged !== true &&
+        pr.mergeableState !== 'behind' &&
+        pr.mergeableState !== 'blocked' &&
+        pr.mergeableState !== 'dirty' &&
         pr.unresolvedComments.every((c) => c.handled);
       if (mergeReady) {
         raw.push({
@@ -209,6 +282,41 @@ export class RuleDispatcher implements Dispatcher {
 }
 
 type RawAction = Record<string, unknown> & { type: string; reason: string };
+
+/** One thing wrong with a PR that would warrant a code agent on its branch. */
+interface PrConcern {
+  origin: string;
+  title: string;
+  prompt: string;
+  dispatchReason: string;
+  note: string;
+}
+
+/** The agent state of a PR's branch: a running agent to notify, busy (hold), or free (dispatch). */
+type BranchAgent = { kind: 'running'; agent: Agent } | { kind: 'busy' } | { kind: 'free' };
+
+function resolveBranchAgent(ctx: DispatchContext, branch: string): BranchAgent {
+  const task = ctx.tasks.find((t) => isActive(t) && t.branch === branch);
+  if (!task) return { kind: 'free' };
+  const agent = task.agentId ? ctx.agents.find((a) => a.id === task.agentId) : undefined;
+  if (agent && agent.status === 'running') return { kind: 'running', agent };
+  return { kind: 'busy' }; // queued / starting / waiting — hold new notes.
+}
+
+/** Agent+origin pairs we've already notified, from executed respond_to_agent decisions. */
+function notifiedOriginsByAgent(decisions: Decision[]): Set<string> {
+  const set = new Set<string>();
+  for (const d of decisions) {
+    if (d.outcome !== 'executed') continue;
+    const a = d.action;
+    if (a.type !== 'respond_to_agent') continue;
+    const agentId = a.agentId;
+    const origins = a.originRefs;
+    if (typeof agentId !== 'string' || !Array.isArray(origins)) continue;
+    for (const o of origins) if (typeof o === 'string') set.add(`${agentId}::${o}`);
+  }
+  return set;
+}
 
 function isActive(t: Task): boolean {
   return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';

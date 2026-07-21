@@ -9,6 +9,9 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
   const needsYou = state.escalations.filter((e) => e.status === 'open').length;
   const waiting = state.agents.filter((a) => a.status === 'waiting').length;
   const redPrs = state.world.pullRequests.filter((p) => p.ciStatus === 'failing').length;
+  const conflicted = state.world.pullRequests.filter(
+    (p) => !p.merged && (p.mergeableState === 'dirty' || p.mergeableState === 'behind'),
+  ).length;
   const openComments = state.world.pullRequests.reduce(
     (n, p) => n + p.unresolvedComments.filter((c) => !c.handled).length,
     0,
@@ -23,6 +26,12 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
     { label: 'Needs you', value: needsYou, tone: needsYou ? 'urgent' : undefined, hint: 'open escalations' },
     { label: 'Parked', value: waiting, tone: waiting ? 'warn' : undefined, hint: 'agents awaiting input' },
     { label: 'CI red', value: redPrs, tone: redPrs ? 'urgent' : undefined, hint: 'PRs with failing CI' },
+    {
+      label: 'Conflicts',
+      value: conflicted,
+      tone: conflicted ? 'urgent' : undefined,
+      hint: 'PRs behind / conflicting with base',
+    },
     {
       label: 'Comments',
       value: openComments,

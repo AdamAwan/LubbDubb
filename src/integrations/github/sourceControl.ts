@@ -1,6 +1,6 @@
 import type { Store } from '../../store/store.js';
 import type { PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
-import type { CiStatus, PrComment, PullRequest } from '../../types.js';
+import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type { Capability, Integration, PrMergeCapable, PrReplyCapable, WorldSlice } from '../integration.js';
 import type { GhCheckRun, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
 
@@ -50,9 +50,11 @@ export class GitHubSourceControlIntegration implements Integration, PrReplyCapab
             number: p.number,
             title: p.title,
             branch: p.branch,
+            baseBranch: p.baseBranch,
             ciStatus: aggregateCiStatus(checks, status),
             unresolvedComments: buildUnresolvedComments(comments, viewer),
             approved: computeApproved(reviews),
+            mergeableState: normalizeMergeState(detail.mergeableState),
             merged: detail.merged,
             url: p.url,
           };
@@ -88,6 +90,20 @@ export class GitHubSourceControlIntegration implements Integration, PrReplyCapab
     const result = await this.opts.api.mergePull(input.prNumber, input.method);
     this.opts.store.recordConnectorEvent('pr_merge_sent', { ...input, ref: result.sha });
     return { ok: result.merged, ref: result.sha };
+  }
+}
+
+/** Fold GitHub's `mergeable_state` down to the values the harness reacts to. */
+export function normalizeMergeState(state: string | null): MergeableState {
+  switch (state) {
+    case 'dirty':
+    case 'behind':
+    case 'blocked':
+    case 'clean':
+      return state;
+    default:
+      // 'unstable' | 'has_hooks' | 'draft' | 'unknown' | null | anything new.
+      return 'unknown';
   }
 }
 

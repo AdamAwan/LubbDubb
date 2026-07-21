@@ -15,7 +15,11 @@ export interface PullRequest {
   unresolvedComments: PrComment[];
   approved?: boolean;
   mergeable?: boolean;
+  baseBranch?: string;
+  mergeableState?: string;
   merged?: boolean;
+  /** Server-computed health: why the PR is stuck (empty reasons = healthy). */
+  health?: { blocked: boolean; reasons: string[] };
 }
 export interface Issue {
   id: string;

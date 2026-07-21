@@ -55,7 +55,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
       return script.pulls ?? [];
     },
     async getPull(number) {
-      return script.detail?.[number] ?? { mergeable: null, merged: false };
+      return script.detail?.[number] ?? { mergeable: null, mergeableState: null, merged: false };
     },
     async listPullReviews(number) {
       return script.reviews?.[number] ?? [];
@@ -94,7 +94,16 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
 }
 
 function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
-  return { number: 7, title: 'X', branch: 'feat', headSha: 'sha7', authorLogin: 'alice', url: 'u', ...over };
+  return {
+    number: 7,
+    title: 'X',
+    branch: 'feat',
+    baseBranch: 'main',
+    headSha: 'sha7',
+    authorLogin: 'alice',
+    url: 'u',
+    ...over,
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -201,7 +210,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
   const { api } = fakeApi({
     viewer: 'lubbdubb-bot',
     pulls: [pull({ number: 7, title: 'Add widget', branch: 'feat/widget', headSha: 'sha7', url: 'https://pr/7' })],
-    detail: { 7: { mergeable: true, merged: false } },
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
     reviews: { 7: [{ reviewerLogin: 'bob', state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' }] },
     reviewComments: { 7: [{ id: 100, authorLogin: 'bob', body: 'why?', inReplyToId: null }] },
     combinedStatus: { sha7: { state: 'success', totalCount: 1 } },
@@ -225,11 +234,40 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
 });
 
 test('snapshot leaves mergeable undefined when GitHub is still computing (null)', async () => {
-  const { api } = fakeApi({ pulls: [pull({ number: 7 })], detail: { 7: { mergeable: null, merged: false } } });
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: null, mergeableState: null, merged: false } },
+  });
   const store = new Store(':memory:');
   const sc = new GitHubSourceControlIntegration({ api, store });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.mergeable, undefined);
+  store.close();
+});
+
+test('snapshot maps baseBranch and normalises mergeable_state', async () => {
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7, baseBranch: 'develop' })],
+    detail: { 7: { mergeable: false, mergeableState: 'dirty', merged: false } },
+  });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+  const pr = (await sc.snapshot()).pullRequests![0]!;
+  assert.equal(pr.baseBranch, 'develop');
+  assert.equal(pr.mergeableState, 'dirty');
+  assert.equal(pr.mergeable, false);
+  store.close();
+});
+
+test('an unrecognised mergeable_state normalises to unknown', async () => {
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: true, mergeableState: 'unstable', merged: false } },
+  });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+  const pr = (await sc.snapshot()).pullRequests![0]!;
+  assert.equal(pr.mergeableState, 'unknown');
   store.close();
 });
 
@@ -249,7 +287,10 @@ test('snapshot applies the prAuthor filter client-side', async () => {
 
 test('snapshot returns the last-good slice and records an error event on failure', async () => {
   const store = new Store(':memory:');
-  const good = fakeApi({ pulls: [pull({ number: 7 })], detail: { 7: { mergeable: true, merged: false } } });
+  const good = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
+  });
   const sc = new GitHubSourceControlIntegration({ api: good.api, store });
   await sc.snapshot(); // warm the last-good cache
 

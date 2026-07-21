@@ -12,6 +12,9 @@
 
 export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 
+/** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */
+export type MergeableState = 'dirty' | 'behind' | 'blocked' | 'clean' | 'unknown';
+
 export interface PullRequest {
   id: string;
   number: number;
@@ -27,6 +30,14 @@ export interface PullRequest {
   approved?: boolean;
   /** No conflicts / branch behind — GitHub reports it mergeable. */
   mergeable?: boolean;
+  /** The base branch this PR targets (e.g. "main") — needed to pull the base in. */
+  baseBranch?: string;
+  /**
+   * GitHub's `mergeable_state`, normalised. Distinguishes a real conflict
+   * ('dirty') from merely-behind-base ('behind', a safe update) and required
+   * checks/reviews not met ('blocked'). Absent/unrecognised => 'unknown'.
+   */
+  mergeableState?: MergeableState;
   /** Already merged; once true the harness stops acting on it. */
   merged?: boolean;
   url?: string;

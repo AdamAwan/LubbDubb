@@ -1,4 +1,4 @@
-import type { Agent, Escalation, Task, WorldSnapshot } from '../types.js';
+import type { Agent, Decision, Escalation, Task, WorldSnapshot } from '../types.js';
 import type { ParseResult } from './actions.js';
 
 /** Everything the dispatcher gets to look at when deciding what to do this cycle. */
@@ -12,6 +12,8 @@ export interface DispatchContext {
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */
   agentHeadroom: number;
+  /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */
+  recentDecisions: Decision[];
 }
 
 export interface DispatchResult extends ParseResult {

@@ -46,6 +46,8 @@ export interface GhPullSummary {
   title: string;
   /** head.ref */
   branch: string;
+  /** base.ref — the branch this PR merges into. */
+  baseBranch: string;
   /** head.sha — the commit CI runs against. */
   headSha: string;
   /** user.login of the PR author. */
@@ -57,6 +59,8 @@ export interface GhPullSummary {
 export interface GhPullDetail {
   /** GitHub tri-state: true / false / null (still computing). */
   mergeable: boolean | null;
+  /** raw `mergeable_state`: clean | dirty | behind | blocked | unstable | ... | null. */
+  mergeableState: string | null;
   merged: boolean;
 }
 
