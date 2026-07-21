@@ -28,8 +28,14 @@ export function AgentCard({
       </div>
       {agent.waitingReason && <div className="waiting-reason">⏳ {agent.waitingReason}</div>}
       <div className="card-actions">
-        <button className="btn" onClick={onOpen}>Open</button>
-        {onKill && agent.status !== 'done' && <button className="btn danger" onClick={onKill}>Kill</button>}
+        <button className="btn" onClick={onOpen}>
+          Open
+        </button>
+        {onKill && agent.status !== 'done' && (
+          <button className="btn danger" onClick={onKill}>
+            Kill
+          </button>
+        )}
       </div>
     </div>
   );

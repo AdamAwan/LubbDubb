@@ -33,7 +33,9 @@ export class Store {
 
   // -- Tasks ---------------------------------------------------------------
 
-  createTask(input: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'agentId'> & { status?: Task['status'] }): Task {
+  createTask(
+    input: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'agentId'> & { status?: Task['status'] },
+  ): Task {
     const ts = this.now();
     const task: Task = {
       id: `task_${nanoid(10)}`,
@@ -110,7 +112,9 @@ export class Store {
     if (!existing) throw new Error(`Agent ${id} not found`);
     const next = { ...existing, ...patch };
     this.db
-      .prepare(`UPDATE agents SET status=@status, pid=@pid, waiting_reason=@waitingReason, ended_at=@endedAt WHERE id=@id`)
+      .prepare(
+        `UPDATE agents SET status=@status, pid=@pid, waiting_reason=@waitingReason, ended_at=@endedAt WHERE id=@id`,
+      )
       .run({ id, status: next.status, pid: next.pid, waitingReason: next.waitingReason, endedAt: next.endedAt });
   }
 
@@ -135,14 +139,20 @@ export class Store {
   // -- Transcripts ---------------------------------------------------------
 
   appendTranscript(agentId: string, chunk: string): void {
-    const seq = (this.db.prepare(`SELECT COALESCE(MAX(seq),-1)+1 AS n FROM agent_transcripts WHERE agent_id=?`).get(agentId) as { n: number }).n;
+    const seq = (
+      this.db.prepare(`SELECT COALESCE(MAX(seq),-1)+1 AS n FROM agent_transcripts WHERE agent_id=?`).get(agentId) as {
+        n: number;
+      }
+    ).n;
     this.db
       .prepare(`INSERT INTO agent_transcripts (agent_id, seq, chunk, at) VALUES (?,?,?,?)`)
       .run(agentId, seq, chunk, this.now());
   }
 
   getTranscript(agentId: string): string {
-    const rows = this.db.prepare(`SELECT chunk FROM agent_transcripts WHERE agent_id=? ORDER BY seq`).all(agentId) as { chunk: string }[];
+    const rows = this.db.prepare(`SELECT chunk FROM agent_transcripts WHERE agent_id=? ORDER BY seq`).all(agentId) as {
+      chunk: string;
+    }[];
     return rows.map((r) => r.chunk).join('');
   }
 
@@ -200,25 +210,38 @@ export class Store {
     const decision: Decision = { id: `dec_${nanoid(10)}`, createdAt: this.now(), ...input };
     this.db
       .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, created_at) VALUES (?,?,?,?,?,?)`)
-      .run(decision.id, decision.cycleId, JSON.stringify(decision.action), decision.outcome, decision.detail, decision.createdAt);
+      .run(
+        decision.id,
+        decision.cycleId,
+        JSON.stringify(decision.action),
+        decision.outcome,
+        decision.detail,
+        decision.createdAt,
+      );
     return decision;
   }
 
   listDecisions(limit = 200): Decision[] {
-    const rows = this.db.prepare(`SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?`).all(limit) as DecisionRow[];
+    const rows = this.db
+      .prepare(`SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?`)
+      .all(limit) as DecisionRow[];
     return rows.map(rowToDecision);
   }
 
   // -- Connector persistence ----------------------------------------------
 
   getConnectorState(key: string): string | null {
-    const row = this.db.prepare(`SELECT value FROM connector_state WHERE key=?`).get(key) as { value: string } | undefined;
+    const row = this.db.prepare(`SELECT value FROM connector_state WHERE key=?`).get(key) as
+      | { value: string }
+      | undefined;
     return row?.value ?? null;
   }
 
   setConnectorState(key: string, value: string): void {
     this.db
-      .prepare(`INSERT INTO connector_state (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`)
+      .prepare(
+        `INSERT INTO connector_state (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      )
       .run(key, value);
   }
 
@@ -233,20 +256,96 @@ export class Store {
 // Row <-> domain mapping (snake_case columns -> camelCase objects)
 // ---------------------------------------------------------------------------
 
-interface TaskRow { id: string; kind: string; title: string; prompt: string; branch: string | null; origin_ref: string | null; status: string; agent_id: string | null; created_at: string; updated_at: string; }
-interface AgentRow { id: string; task_id: string; status: string; cwd: string; pid: number | null; waiting_reason: string | null; started_at: string; ended_at: string | null; }
-interface EscalationRow { id: string; type: string; status: string; prompt: string; context: string; agent_id: string | null; task_id: string | null; response: string | null; created_at: string; answered_at: string | null; }
-interface DecisionRow { id: string; cycle_id: string; action: string; outcome: string; detail: string; created_at: string; }
+interface TaskRow {
+  id: string;
+  kind: string;
+  title: string;
+  prompt: string;
+  branch: string | null;
+  origin_ref: string | null;
+  status: string;
+  agent_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+interface AgentRow {
+  id: string;
+  task_id: string;
+  status: string;
+  cwd: string;
+  pid: number | null;
+  waiting_reason: string | null;
+  started_at: string;
+  ended_at: string | null;
+}
+interface EscalationRow {
+  id: string;
+  type: string;
+  status: string;
+  prompt: string;
+  context: string;
+  agent_id: string | null;
+  task_id: string | null;
+  response: string | null;
+  created_at: string;
+  answered_at: string | null;
+}
+interface DecisionRow {
+  id: string;
+  cycle_id: string;
+  action: string;
+  outcome: string;
+  detail: string;
+  created_at: string;
+}
 
 function rowToTask(r: TaskRow): Task {
-  return { id: r.id, kind: r.kind as Task['kind'], title: r.title, prompt: r.prompt, branch: r.branch, originRef: r.origin_ref, status: r.status as Task['status'], agentId: r.agent_id, createdAt: r.created_at, updatedAt: r.updated_at };
+  return {
+    id: r.id,
+    kind: r.kind as Task['kind'],
+    title: r.title,
+    prompt: r.prompt,
+    branch: r.branch,
+    originRef: r.origin_ref,
+    status: r.status as Task['status'],
+    agentId: r.agent_id,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
 }
 function rowToAgent(r: AgentRow): Agent {
-  return { id: r.id, taskId: r.task_id, status: r.status as Agent['status'], cwd: r.cwd, pid: r.pid, waitingReason: r.waiting_reason, startedAt: r.started_at, endedAt: r.ended_at };
+  return {
+    id: r.id,
+    taskId: r.task_id,
+    status: r.status as Agent['status'],
+    cwd: r.cwd,
+    pid: r.pid,
+    waitingReason: r.waiting_reason,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
+  };
 }
 function rowToEscalation(r: EscalationRow): Escalation {
-  return { id: r.id, type: r.type as Escalation['type'], status: r.status as Escalation['status'], prompt: r.prompt, context: JSON.parse(r.context) as Record<string, unknown>, agentId: r.agent_id, taskId: r.task_id, response: r.response, createdAt: r.created_at, answeredAt: r.answered_at };
+  return {
+    id: r.id,
+    type: r.type as Escalation['type'],
+    status: r.status as Escalation['status'],
+    prompt: r.prompt,
+    context: JSON.parse(r.context) as Record<string, unknown>,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    response: r.response,
+    createdAt: r.created_at,
+    answeredAt: r.answered_at,
+  };
 }
 function rowToDecision(r: DecisionRow): Decision {
-  return { id: r.id, cycleId: r.cycle_id, action: JSON.parse(r.action) as Decision['action'], outcome: r.outcome as Decision['outcome'], detail: r.detail, createdAt: r.created_at };
+  return {
+    id: r.id,
+    cycleId: r.cycle_id,
+    action: JSON.parse(r.action) as Decision['action'],
+    outcome: r.outcome as Decision['outcome'],
+    detail: r.detail,
+    createdAt: r.created_at,
+  };
 }

@@ -59,10 +59,6 @@ export const ActionSchema = z.discriminatedUnion('type', [
 
 export type ValidatedAction = z.infer<typeof ActionSchema>;
 
-export const ActionPlanSchema = z.object({
-  actions: z.array(ActionSchema),
-});
-
 export interface ParseResult {
   actions: ValidatedAction[];
   /** Items that failed validation, kept for the audit log. */
@@ -77,7 +73,11 @@ export function parseActions(raw: unknown): ParseResult {
   for (const item of arr) {
     const result = ActionSchema.safeParse(item);
     if (result.success) actions.push(result.data);
-    else rejected.push({ raw: item, error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
+    else
+      rejected.push({
+        raw: item,
+        error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      });
   }
   return { actions, rejected };
 }

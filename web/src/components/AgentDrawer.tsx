@@ -29,7 +29,10 @@ export function AgentDrawer({
 
   useEffect(() => {
     let active = true;
-    api.getTranscript(agent.id).then((r) => active && setSeed(r.transcript)).catch(() => {});
+    api
+      .getTranscript(agent.id)
+      .then((r) => active && setSeed(r.transcript))
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -51,11 +54,19 @@ export function AgentDrawer({
             <div className="muted small mono">{agent.cwd}</div>
           </div>
           <div>
-            {agent.status !== 'done' && <button className="btn danger" onClick={onKill}>Kill</button>}
-            <button className="btn" onClick={onClose}>Close</button>
+            {agent.status !== 'done' && (
+              <button className="btn danger" onClick={onKill}>
+                Kill
+              </button>
+            )}
+            <button className="btn" onClick={onClose}>
+              Close
+            </button>
           </div>
         </div>
-        <pre className="terminal" ref={bodyRef}>{output || '(no output yet)'}</pre>
+        <pre className="terminal" ref={bodyRef}>
+          {output || '(no output yet)'}
+        </pre>
         {canRespond && (
           <form
             className="reply"
@@ -68,7 +79,9 @@ export function AgentDrawer({
             }}
           >
             <input placeholder="Type into this agent…" value={text} onChange={(e) => setText(e.target.value)} />
-            <button className="btn primary" type="submit">Send</button>
+            <button className="btn primary" type="submit">
+              Send
+            </button>
           </form>
         )}
       </div>

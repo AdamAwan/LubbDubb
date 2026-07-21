@@ -22,9 +22,7 @@ export class RuleDispatcher implements Dispatcher {
   async decide(ctx: DispatchContext): Promise<DispatchResult> {
     const raw: unknown[] = [];
     const activeOrigins = new Set(
-      ctx.tasks
-        .filter((t) => isActive(t) && t.originRef)
-        .map((t) => t.originRef as string),
+      ctx.tasks.filter((t) => isActive(t) && t.originRef).map((t) => t.originRef as string),
     );
     let headroom = ctx.agentHeadroom;
 
