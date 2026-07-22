@@ -80,6 +80,24 @@ export interface Config {
   /** Weight for an issue carrying no matching priority label. */
   issueDefaultPriority: number;
   /**
+   * Dispatcher-level, state-based pickup gate. When non-empty, only issues whose
+   * provider-native workflow state is in this list are picked up — e.g.
+   * `["Ready", "Doing"]` for Azure DevOps, so items sitting in "In Review"/"New"
+   * are left alone. Meaningful only for providers with a richer state model than
+   * open/closed (Azure work items); GitHub issues carry no such state and are
+   * unaffected. Unset/empty (the default) = no state gate, act on all open issues.
+   */
+  issuePickupStates?: string[];
+  /**
+   * The state a work item is moved to once a pull request is open for it, so agents
+   * stop re-picking work that's already done and waiting on review/CI — e.g.
+   * `"In Review"` for Azure DevOps. Takes effect only alongside `issuePickupStates`
+   * (the dispatcher advances an item *out of* a pickup state) and needs a provider
+   * that can write the state back (Azure). Unset (the default) = no automatic
+   * transition.
+   */
+  issueInReviewState?: string;
+  /**
    * The PR **exclusion tag**: a PR carrying this label is left alone — the
    * dispatcher never acts on it (no CI fix, base update, comment handling, or
    * merge), for PRs blocked on something the harness can't fix (a design

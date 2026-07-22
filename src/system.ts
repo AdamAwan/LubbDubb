@@ -145,6 +145,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     requireOwnLabel: config.issuePickupRequireOwnLabel,
     priorityLabels: config.issuePriorityLabels,
     defaultPriority: config.issueDefaultPriority,
+    pickupStates: config.issuePickupStates,
+    inReviewState: config.issueInReviewState,
   };
   const dispatcher: Dispatcher =
     config.dispatcher === 'claude'

@@ -77,6 +77,14 @@ export const ActionSchema = z.discriminatedUnion('type', [
     confidence: z.number().min(0).max(1).optional(),
     ...base,
   }),
+  z.object({
+    type: z.literal('set_work_item_state'),
+    /** The work item / issue number to transition. */
+    number: z.number().int(),
+    /** The provider-native state to move it to (e.g. Azure "In Review"). */
+    state: z.string().min(1),
+    ...base,
+  }),
   z.object({ type: z.literal('no_op'), ...base }),
 ]);
 

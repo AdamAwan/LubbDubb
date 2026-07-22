@@ -210,6 +210,23 @@ export class ActionExecutor {
           break;
         }
 
+        case 'set_work_item_state': {
+          // A mechanical bookkeeping transition (e.g. move a work item to "In
+          // Review" once its PR is open), not a publish-to-the-world action — so it
+          // runs directly rather than through the auto-send gate. Idempotent, so a
+          // repeat before the next snapshot reflects the change is harmless.
+          try {
+            const res = await this.deps.sink.setWorkItemState({ number: action.number, state: action.state });
+            record(
+              'executed',
+              `Set work item #${action.number} to "${action.state}".${res.ref ? ` ref=${res.ref}` : ''}`,
+            );
+          } catch (err) {
+            record('rejected', `Failed to set work item #${action.number} state: ${(err as Error).message}`);
+          }
+          break;
+        }
+
         case 'no_op':
           record('executed', `No-op: ${action.reason}`);
           break;

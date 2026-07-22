@@ -178,6 +178,21 @@ provider-agnostic pickup/priority gates work unchanged. Merging is Azure "comple
 needs the head commit — the source-control integration caches each PR's `lastMergeSourceCommit`
 from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle.
 
+The work item's raw **`System.State`** (unlike `Issue.state`, which collapses to open/closed) is
+preserved on `Issue.workItemState`, which drives two _state-based_ (not label-based) dispatcher
+knobs — orthogonal to the three label mechanisms below, don't conflate them. Both are off unless
+configured, so standard setups don't regress: **(1)** `issuePickupStates` gates rule-4 pickup to
+items in an allowed workflow state (e.g. `["Ready","Doing"]`) via the pure `isIssuePickupEligible`
+— items with no `workItemState` (github/fake) bypass it. **(2)** `issueInReviewState` (e.g.
+`"In Review"`) is the back-off: when a PR is open for a still-in-pickup work item (matched by its
+`issue/{n}` branch or `linkedPrNumber`), the dispatcher emits a new **`set_work_item_state`** action
+that PATCHes `System.State`, so the item drops out of pickup while it waits on review/CI instead of
+being re-picked every cycle. It's idempotent (once moved, it no longer matches) and routes through
+a new outbound capability, `WorkItemStateCapable.setWorkItemState` on the `ActionSink` seam (the
+same add-to-the-seam-and-its-fake pattern as `setPrLabel`), implemented by the fake + azure `issues`
+providers. Unlike `reply_on_pr`/`merge_pr` it is _not_ auto-send gated — it's mechanical bookkeeping,
+so the executor runs it directly.
+
 ## PR health & one-agent-per-branch
 
 - **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr)` (the `{ blocked, reasons }`

@@ -61,6 +61,9 @@ export interface AzureDevOpsApi {
   ): Promise<AzMergeResult>;
   /** Add (`present`) or remove a label on a PR. Idempotent. */
   setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void>;
+
+  /** Set a work item's `System.State` (e.g. "In Review"). Idempotent — a no-op when already there. */
+  setWorkItemState(id: number, state: string): Promise<void>;
 }
 
 export interface AzPull {
