@@ -59,6 +59,13 @@ reasons }`) folding conflicts, behind-base, failing CI and unhandled comments, s
 cockpit shows _why_ a PR is stuck rather than leaving it implied by the absence of
 activity.
 
+**Claude usage.** Each agent's cumulative cost, tokens and turns (from the stream
+runtime's per-turn `result` events) are persisted and shown on its fleet card and
+drawer, and a topbar chip tracks account-level usage: the real subscriber 5h/weekly
+limits when available (captured from the status-line payload in `pty` mode — Pro/Max
+only), otherwise self-computed rolling 5h/7d cost windows summed from the per-turn
+reports. Absent data degrades gracefully — no chip until there is something to show.
+
 ## Architecture
 
 A single Node/TypeScript process (HTTP + WebSocket) built as isolated modules that talk only through interfaces — any one (especially the `Connector`) can be swapped without touching the rest.

@@ -257,6 +257,10 @@ class DemoServer {
         waitingReason: null,
         startedAt: nowIso,
         endedAt: null,
+        costUsd: null,
+        inputTokens: null,
+        outputTokens: null,
+        numTurns: null,
       },
       ...this.state.agents,
     ];

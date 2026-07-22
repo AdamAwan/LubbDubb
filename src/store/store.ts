@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
 import type {
   Agent,
+  AgentUsage,
   Decision,
   DeskBriefing,
   ErrorLogEntry,
@@ -60,6 +61,10 @@ export class Store {
     });
     this.ensureColumns('agents', {
       session_id: 'TEXT',
+      cost_usd: 'REAL',
+      input_tokens: 'INTEGER',
+      output_tokens: 'INTEGER',
+      num_turns: 'INTEGER',
     });
     this.ensureColumns('decisions', {
       rule: 'TEXT',
@@ -167,6 +172,10 @@ export class Store {
       sessionId: input.sessionId ?? null,
       startedAt: this.now(),
       endedAt: null,
+      costUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      numTurns: null,
     };
     this.db
       .prepare(
@@ -196,6 +205,42 @@ export class Store {
   listAgents(): Agent[] {
     const rows = this.db.prepare(`SELECT * FROM agents ORDER BY started_at DESC`).all() as AgentRow[];
     return rows.map(rowToAgent);
+  }
+
+  /**
+   * Fold a session's *cumulative* usage report onto the agent row, and record
+   * the cost delta since the previous report as a timestamped `usage_events`
+   * row — so rolling account windows (5h/7d) are a plain SUM later, with no
+   * delta re-derivation.
+   */
+  recordAgentUsage(id: string, usage: AgentUsage): void {
+    const existing = this.getAgent(id);
+    if (!existing) throw new Error(`Agent ${id} not found`);
+    const next = {
+      costUsd: usage.costUsd ?? existing.costUsd,
+      inputTokens: usage.inputTokens ?? existing.inputTokens,
+      outputTokens: usage.outputTokens ?? existing.outputTokens,
+      numTurns: usage.numTurns ?? existing.numTurns,
+    };
+    this.db
+      .prepare(
+        `UPDATE agents SET cost_usd=@costUsd, input_tokens=@inputTokens, output_tokens=@outputTokens, num_turns=@numTurns WHERE id=@id`,
+      )
+      .run({ id, ...next });
+    // Clamp: a cumulative total should never regress, but a restarted CLI would
+    // reset it — never let that poison the window sum with a negative delta.
+    const delta = Math.max(0, (usage.costUsd ?? 0) - (existing.costUsd ?? 0));
+    if (delta > 0) {
+      this.db.prepare(`INSERT INTO usage_events (agent_id, cost_usd, at) VALUES (?,?,?)`).run(id, delta, this.now());
+    }
+  }
+
+  /** Total agent cost recorded since `sinceIso` — the rolling-window aggregate. */
+  sumUsageCostSince(sinceIso: string): number {
+    const row = this.db
+      .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`)
+      .get(sinceIso) as { total: number };
+    return row.total;
   }
 
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
@@ -463,6 +508,10 @@ interface AgentRow {
   session_id: string | null;
   started_at: string;
   ended_at: string | null;
+  cost_usd: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  num_turns: number | null;
 }
 interface EscalationRow {
   id: string;
@@ -528,6 +577,10 @@ function rowToAgent(r: AgentRow): Agent {
     sessionId: r.session_id,
     startedAt: r.started_at,
     endedAt: r.ended_at,
+    costUsd: r.cost_usd,
+    inputTokens: r.input_tokens,
+    outputTokens: r.output_tokens,
+    numTurns: r.num_turns,
   };
 }
 function rowToEscalation(r: EscalationRow): Escalation {

@@ -8,6 +8,7 @@ import { EscalationCard } from './components/EscalationCard.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
 import { Vitals } from './components/Vitals.js';
 import { FleetControl } from './components/FleetControl.js';
+import { UsageChip } from './components/UsageChip.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
@@ -129,6 +130,7 @@ export function App() {
           <span className={`chip ${connected ? 'ok' : 'bad'}`}>
             <span className={`dot ${connected ? 'green' : 'red'}`} /> {connected ? 'live' : 'offline'}
           </span>
+          <UsageChip usage={state.usage} now={now} />
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
           {state.control.paused && <span className="chip warn">paused</span>}
           <FleetControl live={liveAgents.length} cap={state.control.cap} paused={state.control.paused} />

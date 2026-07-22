@@ -192,6 +192,10 @@ export function buildDemoState(): DemoSeed {
         waitingReason: null,
         startedAt: ago(8),
         endedAt: null,
+        costUsd: 0.84,
+        inputTokens: 412_000,
+        outputTokens: 18_400,
+        numTurns: 3,
       },
       {
         id: 'agent-a2',
@@ -202,6 +206,10 @@ export function buildDemoState(): DemoSeed {
         waitingReason: 'Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?',
         startedAt: ago(4),
         endedAt: null,
+        costUsd: 0.31,
+        inputTokens: 168_000,
+        outputTokens: 6_200,
+        numTurns: 2,
       },
       {
         id: 'agent-a0',
@@ -212,6 +220,10 @@ export function buildDemoState(): DemoSeed {
         waitingReason: null,
         startedAt: ago(40),
         endedAt: ago(22),
+        costUsd: 2.17,
+        inputTokens: 1_240_000,
+        outputTokens: 54_000,
+        numTurns: 9,
       },
     ],
     escalations: [
@@ -450,6 +462,16 @@ export function buildDemoState(): DemoSeed {
           relevance: 'mine',
         },
       ],
+    },
+    // Claude usage: canned subscriber limits (as the PTY status-line capture
+    // would report) plus rolling cost windows summed from agent turn reports.
+    usage: {
+      windows: { fiveHourCostUsd: 1.15, sevenDayCostUsd: 12.4 },
+      rateLimits: {
+        fiveHour: { usedPercentage: 62, resetsAt: ahead(140) },
+        sevenDay: { usedPercentage: 30, resetsAt: ahead(3 * 24 * 60) },
+        capturedAt: ago(1),
+      },
     },
   };
 

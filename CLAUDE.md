@@ -121,6 +121,20 @@ with a "+N more lines" marker. Labels carry SGR colour, which xterm renders in t
 `Hub` strips ANSI from the compact fleet-card tail so it never shows as literal escapes. Detection
 still scans the _raw_ turn text, so keep the raw-vs-display split intact if you extend rendering.
 
+**Usage capture (issue #60) — two mode-specific sources, don't conflate them.** Stream
+mode: each `result` event's _cumulative_ `total_cost_usd`/`usage`/`num_turns` becomes a
+`usage` session event (cache tokens folded into input), which `AgentManager` persists via
+`Store.recordAgentUsage` — cumulative values onto the `agents` row, the cost _delta_ as a
+timestamped `usage_events` row so `/api/state` can SUM rolling 5h/7d cost windows. PTY
+mode reports no per-turn usage; instead it captures the **account rate limits** (the
+Pro/Max `rate_limits` in the status-line payload — the one programmatic surface for
+them): `buildClaudeArgs({ statusLine: true })` wires a `--settings` status command that
+atomically dumps each payload to `$LUBBDUBB_STATUS_FILE` (per session id, set in the
+spawn env, under the OS tmpdir), and `StatusFileRateLimits.readLatest()` feeds the
+freshest one into the snapshot's `usage.rateLimits` (null when absent — the cockpit chip
+then falls back to the cost windows). Parsing is pure (`parseStatusLinePayload`,
+`src/agents/statusLine.ts`); tests in `test/usage.test.ts`.
+
 ### Resume on boot (PTY only)
 
 A restart (crash or graceful shutdown) kills every agent, but the PTY runtime **resumes** the

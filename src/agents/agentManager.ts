@@ -4,7 +4,7 @@ import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
-import type { Agent, AgentStatus, Task } from '../types.js';
+import type { Agent, AgentStatus, AgentUsage, Task } from '../types.js';
 import type { AgentSession, SessionFactory } from './session.js';
 
 export interface AgentManagerOptions {
@@ -41,6 +41,12 @@ export interface AgentManagerOptions {
    * agents without a session id, so boot reconciliation falls back to interrupting.
    */
   resumable?: boolean;
+  /**
+   * Per-session path the PTY status-line capture writes its payload to,
+   * exported to the spawned process as LUBBDUBB_STATUS_FILE. Only meaningful
+   * for runtimes with a session id (PTY); unset for stream/mock.
+   */
+  statusFile?: (sessionId: string) => string;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
 }
@@ -51,6 +57,7 @@ interface AgentManagerEvents {
   autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
   done: [{ agentId: string; taskId: string; status: AgentStatus }];
   status: [{ agentId: string; taskId: string; status: AgentStatus }];
+  usage: [{ agentId: string; taskId: string; usage: AgentUsage }];
 }
 
 /**
@@ -82,7 +89,11 @@ export class AgentManager extends EventEmitter {
       command: this.opts.command,
       args: this.opts.buildArgs({ sessionId: sessionId ?? '', resume: false }),
       cwd,
-      env: { LUBBDUBB_PROMPT: task.prompt, LUBBDUBB_TASK_ID: task.id },
+      env: {
+        LUBBDUBB_PROMPT: task.prompt,
+        LUBBDUBB_TASK_ID: task.id,
+        ...this.statusFileEnv(sessionId),
+      },
       waitingPatterns: this.opts.waitingPatterns,
     });
 
@@ -127,7 +138,11 @@ export class AgentManager extends EventEmitter {
       command: this.opts.command,
       args: this.opts.buildArgs({ sessionId: agent.sessionId, resume: true }),
       cwd: agent.cwd,
-      env: { LUBBDUBB_PROMPT: task.prompt, LUBBDUBB_TASK_ID: task.id },
+      env: {
+        LUBBDUBB_PROMPT: task.prompt,
+        LUBBDUBB_TASK_ID: task.id,
+        ...this.statusFileEnv(agent.sessionId),
+      },
       waitingPatterns: this.opts.waitingPatterns,
     });
 
@@ -214,6 +229,12 @@ export class AgentManager extends EventEmitter {
 
   // -- internals -----------------------------------------------------------
 
+  /** The LUBBDUBB_STATUS_FILE env entry for a launch, when status capture is wired. */
+  private statusFileEnv(sessionId: string | null): Record<string, string> {
+    if (!sessionId || !this.opts.statusFile) return {};
+    return { LUBBDUBB_STATUS_FILE: this.opts.statusFile(sessionId) };
+  }
+
   /** Attach the store-update + re-emit listeners shared by fresh spawns and resumes. */
   private wireSession(session: AgentSession, agentId: string, task: Task): void {
     session.on('output', (delta: string) => {
@@ -226,6 +247,11 @@ export class AgentManager extends EventEmitter {
         this.store.updateAgent(agentId, { status: 'running', pid: session.pid, waitingReason: null });
         this.reflectStatus(agentId, task.id, 'running');
       }
+    });
+
+    session.on('usage', (usage: AgentUsage) => {
+      this.store.recordAgentUsage(agentId, usage);
+      this.emit('usage', { agentId, taskId: task.id, usage });
     });
 
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
