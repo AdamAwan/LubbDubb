@@ -248,6 +248,9 @@ export class ActionExecutor {
         prompt: action.prompt,
         branch: action.branch,
         originRef: action.originRef,
+        originTitle: action.originTitle,
+        originSummary: action.originSummary,
+        dispatchReason: action.reason,
       });
       const cwd = await this.deps.worktrees.ensure(action.branch);
       return { task, cwd };
@@ -258,6 +261,9 @@ export class ActionExecutor {
       prompt: action.prompt,
       branch: null,
       originRef: action.originRef,
+      originTitle: action.originTitle,
+      originSummary: action.originSummary,
+      dispatchReason: action.reason,
     });
     const cwd = resolve(this.deps.deskRoot, task.id);
     mkdirSync(cwd, { recursive: true });

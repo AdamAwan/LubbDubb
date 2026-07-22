@@ -9,6 +9,16 @@ import { z } from 'zod';
 
 const base = { reason: z.string().min(1) };
 
+/**
+ * Human-readable context about the item that triggered a dispatch, carried onto
+ * the task so the cockpit can explain a running agent at a glance (issue #17).
+ * Optional — an LLM dispatcher may omit it — so both default to null.
+ */
+const origin = {
+  originTitle: z.string().nullable().default(null),
+  originSummary: z.string().nullable().default(null),
+};
+
 export const ActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('dispatch_code_agent'),
@@ -16,6 +26,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     prompt: z.string().min(1),
     originRef: z.string().nullable().default(null),
+    ...origin,
     ...base,
   }),
   z.object({
@@ -23,6 +34,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     prompt: z.string().min(1),
     originRef: z.string().nullable().default(null),
+    ...origin,
     ...base,
   }),
   z.object({

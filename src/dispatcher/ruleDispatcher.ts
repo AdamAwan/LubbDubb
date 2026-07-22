@@ -103,6 +103,8 @@ export class RuleDispatcher implements Dispatcher {
           prompt: `CI is failing on PR #${pr.number} ("${pr.title}", branch ${pr.branch}). Investigate the failure and push a fix.`,
           dispatchReason: `PR #${pr.number} has failing CI and no agent is on it.`,
           note: `CI is now failing on PR #${pr.number} — investigate and push a fix.`,
+          originTitle: pr.title,
+          originSummary: `PR #${pr.number} on branch ${pr.branch} · CI ${pr.ciStatus}${pr.approved ? ' · approved' : ''}`,
         });
       }
       if (needsBaseUpdate(pr)) {
@@ -120,6 +122,8 @@ export class RuleDispatcher implements Dispatcher {
           note: behind
             ? `PR #${pr.number} is now behind ${base} — merge ${base} in to bring it up to date, then push.`
             : `The base branch ${base} now conflicts with PR #${pr.number} — merge ${base} in, resolve the conflicts, and push.`,
+          originTitle: pr.title,
+          originSummary: `PR #${pr.number} on branch ${pr.branch} · ${behind ? `behind ${base}` : `conflicts with ${base}`}`,
         });
       }
       for (const comment of pr.unresolvedComments) {
@@ -130,6 +134,8 @@ export class RuleDispatcher implements Dispatcher {
           prompt: `A reviewer commented on PR #${pr.number} (branch ${pr.branch}):\n\n"${comment.body}"\n\nDecide whether to fix the code or defend the current approach. If defending, prepare a concise reply.`,
           dispatchReason: `Unhandled review comment from ${comment.author} on PR #${pr.number}.`,
           note: `New review comment from ${comment.author} on PR #${pr.number}: "${comment.body}" — address it or prepare a reply.`,
+          originTitle: pr.title,
+          originSummary: `Review comment from ${comment.author}: ${comment.body}`,
         });
       }
 
@@ -173,6 +179,8 @@ export class RuleDispatcher implements Dispatcher {
                   title: top.title,
                   prompt: top.prompt,
                   originRef: top.origin,
+                  originTitle: top.originTitle,
+                  originSummary: top.originSummary,
                   reason: top.dispatchReason,
                 } satisfies RawAction);
                 claim(top.origin);
@@ -269,6 +277,8 @@ export class RuleDispatcher implements Dispatcher {
               title: `Resolve issue #${issue.number}`,
               prompt: `GitHub issue #${issue.number} ("${issue.title}") needs resolving.\n\n${issue.body}\n\nImplement the fix on branch issue/${issue.number} and open a pull request that closes this issue.`,
               originRef: origin,
+              originTitle: issue.title,
+              originSummary: issue.body,
               reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
             } satisfies RawAction);
             claim(origin);
@@ -287,6 +297,8 @@ export class RuleDispatcher implements Dispatcher {
           title: `Prep for "${ev.title}"`,
           prompt: `You have a meeting "${ev.title}" at ${ev.startsAt}. Read and summarise these docs so I'm ready: ${ev.prepDocs.join(', ')}.`,
           originRef: origin,
+          originTitle: ev.title,
+          originSummary: `Starts ${ev.startsAt}. Prep docs: ${ev.prepDocs.join(', ')}.`,
           reason: `Meeting "${ev.title}" has unread prep docs.`,
         } satisfies RawAction);
         claim(origin);
@@ -305,6 +317,8 @@ export class RuleDispatcher implements Dispatcher {
             title: `Groom story "${story.title}"`,
             prompt: `Story "${story.title}" is missing ${!story.description ? 'a description' : ''}${!story.description && !story.acceptanceCriteria ? ' and ' : ''}${!story.acceptanceCriteria ? 'acceptance criteria' : ''}. Draft them.`,
             originRef: origin,
+            originTitle: story.title,
+            originSummary: story.description,
             reason: `Ready story "${story.title}" lacks description/acceptance criteria.`,
           } satisfies RawAction);
           claim(origin);
@@ -319,6 +333,8 @@ export class RuleDispatcher implements Dispatcher {
             title: `Fill WAF pillars for "${story.title}"`,
             prompt: `Story "${story.title}" has no Well-Architected Framework pillars set. Determine which pillars apply and document them.`,
             originRef: origin,
+            originTitle: story.title,
+            originSummary: story.description,
             reason: `Ready story "${story.title}" has no WAF pillars.`,
           } satisfies RawAction);
           claim(origin);
@@ -340,6 +356,8 @@ export class RuleDispatcher implements Dispatcher {
             title: `Implement "${candidate.title}"`,
             prompt: `Implement story "${candidate.title}".\n\nDescription: ${candidate.description}\n\nAcceptance criteria: ${candidate.acceptanceCriteria}`,
             originRef: origin,
+            originTitle: candidate.title,
+            originSummary: candidate.description,
             reason: `Idle capacity; "${candidate.title}" is the highest-priority ready story.`,
           } satisfies RawAction);
           claim(origin);
@@ -368,6 +386,10 @@ interface PrConcern {
   prompt: string;
   dispatchReason: string;
   note: string;
+  // Human-readable context about the originating item, carried onto the task so
+  // the cockpit can explain a running agent at a glance (issue #17).
+  originTitle: string;
+  originSummary: string;
 }
 
 /** The agent state of a PR's branch: a running agent to notify, busy (hold), or free (dispatch). */

@@ -47,13 +47,25 @@ export class Store {
    * Additive, idempotent migrations for columns introduced after a table's
    * original `CREATE`. `CREATE TABLE IF NOT EXISTS` never alters an existing
    * table, so a column added to the schema is invisible on databases created by
-   * an older build until we `ADD COLUMN` it here.
+   * an older build until we `ADD COLUMN` it here. Safe to run on every boot.
    */
   private migrate(): void {
-    const hasColumn = (table: string, column: string): boolean =>
-      (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
-    if (!hasColumn('agents', 'session_id')) {
-      this.db.exec(`ALTER TABLE agents ADD COLUMN session_id TEXT`);
+    this.ensureColumns('tasks', {
+      origin_title: 'TEXT',
+      origin_summary: 'TEXT',
+      dispatch_reason: 'TEXT',
+    });
+    this.ensureColumns('agents', {
+      session_id: 'TEXT',
+    });
+  }
+
+  private ensureColumns(table: string, columns: Record<string, string>): void {
+    const existing = new Set(
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name),
+    );
+    for (const [name, type] of Object.entries(columns)) {
+      if (!existing.has(name)) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
     }
   }
 
@@ -66,7 +78,17 @@ export class Store {
   // -- Tasks ---------------------------------------------------------------
 
   createTask(
-    input: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'agentId'> & { status?: Task['status'] },
+    input: Omit<
+      Task,
+      'id' | 'createdAt' | 'updatedAt' | 'status' | 'agentId' | 'originTitle' | 'originSummary' | 'dispatchReason'
+    > & {
+      status?: Task['status'];
+      // Origin context is optional at creation (issue #17): the rule dispatcher
+      // supplies it, but callers that don't have it default to null.
+      originTitle?: string | null;
+      originSummary?: string | null;
+      dispatchReason?: string | null;
+    },
   ): Task {
     const ts = this.now();
     const task: Task = {
@@ -80,11 +102,14 @@ export class Store {
       prompt: input.prompt,
       branch: input.branch,
       originRef: input.originRef,
+      originTitle: input.originTitle ?? null,
+      originSummary: input.originSummary ?? null,
+      dispatchReason: input.dispatchReason ?? null,
     };
     this.db
       .prepare(
-        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, status, agent_id, created_at, updated_at)
-         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @status, @agentId, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, status, agent_id, created_at, updated_at)
+         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @status, @agentId, @createdAt, @updatedAt)`,
       )
       .run(task);
     return task;
@@ -369,6 +394,9 @@ interface TaskRow {
   prompt: string;
   branch: string | null;
   origin_ref: string | null;
+  origin_title: string | null;
+  origin_summary: string | null;
+  dispatch_reason: string | null;
   status: string;
   agent_id: string | null;
   created_at: string;
@@ -421,6 +449,9 @@ function rowToTask(r: TaskRow): Task {
     prompt: r.prompt,
     branch: r.branch,
     originRef: r.origin_ref,
+    originTitle: r.origin_title,
+    originSummary: r.origin_summary,
+    dispatchReason: r.dispatch_reason,
     status: r.status as Task['status'],
     agentId: r.agent_id,
     createdAt: r.created_at,
