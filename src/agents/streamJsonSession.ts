@@ -216,7 +216,9 @@ function resultUsage(ev: StreamEvent): AgentUsage | null {
     costUsd: ev.total_cost_usd ?? null,
     // Cache tokens count as input: with caching on, bare input_tokens is a tiny
     // residue and would wildly under-report what the turn actually consumed.
-    inputTokens: u ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) : null,
+    inputTokens: u
+      ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
+      : null,
     outputTokens: u?.output_tokens ?? null,
     numTurns: ev.num_turns ?? null,
   };

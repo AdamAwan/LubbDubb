@@ -218,7 +218,9 @@ export class Store {
       numTurns: usage.numTurns ?? existing.numTurns,
     };
     this.db
-      .prepare(`UPDATE agents SET cost_usd=@costUsd, input_tokens=@inputTokens, output_tokens=@outputTokens, num_turns=@numTurns WHERE id=@id`)
+      .prepare(
+        `UPDATE agents SET cost_usd=@costUsd, input_tokens=@inputTokens, output_tokens=@outputTokens, num_turns=@numTurns WHERE id=@id`,
+      )
       .run({ id, ...next });
     // Clamp: a cumulative total should never regress, but a restarted CLI would
     // reset it — never let that poison the window sum with a negative delta.
@@ -230,7 +232,9 @@ export class Store {
 
   /** Total agent cost recorded since `sinceIso` — the rolling-window aggregate. */
   sumUsageCostSince(sinceIso: string): number {
-    const row = this.db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`).get(sinceIso) as { total: number };
+    const row = this.db
+      .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`)
+      .get(sinceIso) as { total: number };
     return row.total;
   }
 

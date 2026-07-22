@@ -1,5 +1,5 @@
 import type { Agent, Task } from '../types.js';
-import { statusDot, elapsed, linkify, refLink } from './util.js';
+import { statusDot, elapsed, linkify, refLink, agentUsageLine } from './util.js';
 import { ConfirmButton } from './ConfirmButton.js';
 
 export function AgentCard({
@@ -22,6 +22,7 @@ export function AgentCard({
   past?: boolean;
 }) {
   const active = agent.status === 'running' || agent.status === 'starting';
+  const usage = agentUsageLine(agent);
   return (
     <div className={`card agent ${agent.status} ${past ? 'past' : ''}`}>
       <div className="card-head" onClick={onOpen}>
@@ -36,6 +37,11 @@ export function AgentCard({
         </span>
         {task?.branch && <span className="mono">{refLink(task.branch, refUrls)}</span>}
         <span className="muted mono-time">{elapsed(agent.startedAt, agent.endedAt, now)}</span>
+        {usage && (
+          <span className="muted mono-time" title="Claude cost · input→output tokens · turns (cumulative)">
+            {usage}
+          </span>
+        )}
       </div>
       {agent.waitingReason && <div className="waiting-reason">⏳ {agent.waitingReason}</div>}
       {active && lastLine && <div className="last-line mono">{lastLine}</div>}

@@ -64,6 +64,34 @@ export function relTime(iso: string, now: number = Date.now()): string {
   return `${Math.round(secs / 3600)}h ago`;
 }
 
+/** Compact USD cost: "$0.42", "$12.30", "$142" — cents only while they matter. */
+export function fmtUsd(n: number): string {
+  return n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`;
+}
+
+/** Compact token count: "830", "12.3k", "1.2M". */
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return `${n}`;
+}
+
+/** One-line usage summary for an agent ("$0.42 · 61.2k→3.4k tok · 7 turns"), or null when the runtime reported none. */
+export function agentUsageLine(a: {
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  numTurns: number | null;
+}): string | null {
+  if (a.costUsd == null && a.inputTokens == null && a.outputTokens == null) return null;
+  const parts: string[] = [];
+  if (a.costUsd != null) parts.push(fmtUsd(a.costUsd));
+  if (a.inputTokens != null || a.outputTokens != null)
+    parts.push(`${fmtTokens(a.inputTokens ?? 0)}→${fmtTokens(a.outputTokens ?? 0)} tok`);
+  if (a.numTurns != null) parts.push(`${a.numTurns} turns`);
+  return parts.join(' · ');
+}
+
 /** Compact elapsed duration between two instants, e.g. "3m 12s" or "0:07". */
 export function elapsed(fromIso: string, toIso: string | null, now: number = Date.now()): string {
   const from = new Date(fromIso).getTime();

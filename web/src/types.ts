@@ -129,6 +129,28 @@ export interface Agent {
   waitingReason: string | null;
   startedAt: string;
   endedAt: string | null;
+  /** Cumulative Claude usage from the stream runtime; null when unreported (PTY). */
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  numTurns: number | null;
+}
+
+// Account-level Claude usage (issue #60): rolling cost windows self-computed by
+// the server from per-turn usage reports, plus the real subscriber limits when
+// the PTY status-line capture has seen any (Pro/Max only, else null).
+interface RateLimitWindow {
+  usedPercentage: number;
+  resetsAt: string | null;
+}
+interface AccountRateLimits {
+  fiveHour: RateLimitWindow | null;
+  sevenDay: RateLimitWindow | null;
+  capturedAt: string;
+}
+export interface UsageSnapshot {
+  windows: { fiveHourCostUsd: number; sevenDayCostUsd: number };
+  rateLimits: AccountRateLimits | null;
 }
 // Extra context the server attaches so an escalation can be answered in-place.
 // Mirrors the server's EscalationContext; every key is optional.
@@ -211,6 +233,8 @@ export interface AppState {
   worldEvents: WorldEvent[];
   /** The Claude-bridged desk briefing, or null until a bridge has posted one. */
   briefing: DeskBriefing | null;
+  /** Claude usage: rolling cost windows + account rate limits when captured. */
+  usage: UsageSnapshot;
   /**
    * External reference → web URL, built entirely by the source-control provider
    * (never string-built here). Keyed by how a ref appears in the UI: `#42` for an
