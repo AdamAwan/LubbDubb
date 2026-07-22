@@ -7,7 +7,8 @@ import {
   computeApproved,
   buildUnresolvedComments,
 } from '../src/integrations/github/sourceControl.js';
-import { GitHubIssuesIntegration, linkedPrFromTimeline } from '../src/integrations/github/issues.js';
+import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from '../src/integrations/github/issues.js';
+import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
 import type {
   GhCheckRun,
   GhCombinedStatus,
@@ -42,10 +43,17 @@ interface Recorded {
   issueComments: Array<{ number: number; body: string }>;
   merges: Array<{ number: number; method: MergeMethod }>;
   issueLabelQueries: Array<string | undefined>;
+  labelSets: Array<{ number: number; label: string; present: boolean }>;
 }
 
 function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
-  const recorded: Recorded = { reviewReplies: [], issueComments: [], merges: [], issueLabelQueries: [] };
+  const recorded: Recorded = {
+    reviewReplies: [],
+    issueComments: [],
+    merges: [],
+    issueLabelQueries: [],
+    labelSets: [],
+  };
   const api: GitHubApi = {
     async viewerLogin() {
       return script.viewer ?? 'lubbdubb-bot';
@@ -55,7 +63,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
       return script.pulls ?? [];
     },
     async getPull(number) {
-      return script.detail?.[number] ?? { mergeable: null, merged: false };
+      return script.detail?.[number] ?? { mergeable: null, mergeableState: null, merged: false };
     },
     async listPullReviews(number) {
       return script.reviews?.[number] ?? [];
@@ -89,12 +97,25 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
       recorded.merges.push({ number, method });
       return { sha: 'mergedsha', merged: true };
     },
+    async setPullLabel(number, label, present) {
+      recorded.labelSets.push({ number, label, present });
+    },
   };
   return { api, recorded };
 }
 
 function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
-  return { number: 7, title: 'X', branch: 'feat', headSha: 'sha7', authorLogin: 'alice', url: 'u', ...over };
+  return {
+    number: 7,
+    title: 'X',
+    branch: 'feat',
+    baseBranch: 'main',
+    headSha: 'sha7',
+    authorLogin: 'alice',
+    url: 'u',
+    labels: [],
+    ...over,
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -182,15 +203,18 @@ test('buildUnresolvedComments: not handled while the human commented last', () =
 
 test('linkedPrFromTimeline: takes the most recent PR cross-reference', () => {
   const events: GhTimelineEvent[] = [
-    { event: 'cross-referenced', sourcePrNumber: 40 },
-    { event: 'labeled', sourcePrNumber: null },
-    { event: 'connected', sourcePrNumber: 43 },
+    { event: 'cross-referenced', sourcePrNumber: 40, label: null, actorLogin: null },
+    { event: 'labeled', sourcePrNumber: null, label: 'bug', actorLogin: 'someone' },
+    { event: 'connected', sourcePrNumber: 43, label: null, actorLogin: null },
   ];
   assert.equal(linkedPrFromTimeline(events), 43);
 });
 
 test('linkedPrFromTimeline: null when nothing links a PR', () => {
-  assert.equal(linkedPrFromTimeline([{ event: 'labeled', sourcePrNumber: null }]), null);
+  assert.equal(
+    linkedPrFromTimeline([{ event: 'labeled', sourcePrNumber: null, label: 'bug', actorLogin: 'me' }]),
+    null,
+  );
 });
 
 // --------------------------------------------------------------------------
@@ -201,7 +225,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
   const { api } = fakeApi({
     viewer: 'lubbdubb-bot',
     pulls: [pull({ number: 7, title: 'Add widget', branch: 'feat/widget', headSha: 'sha7', url: 'https://pr/7' })],
-    detail: { 7: { mergeable: true, merged: false } },
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
     reviews: { 7: [{ reviewerLogin: 'bob', state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' }] },
     reviewComments: { 7: [{ id: 100, authorLogin: 'bob', body: 'why?', inReplyToId: null }] },
     combinedStatus: { sha7: { state: 'success', totalCount: 1 } },
@@ -225,11 +249,97 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
 });
 
 test('snapshot leaves mergeable undefined when GitHub is still computing (null)', async () => {
-  const { api } = fakeApi({ pulls: [pull({ number: 7 })], detail: { 7: { mergeable: null, merged: false } } });
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: null, mergeableState: null, merged: false } },
+  });
   const store = new Store(':memory:');
   const sc = new GitHubSourceControlIntegration({ api, store });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.mergeable, undefined);
+  store.close();
+});
+
+// --------------------------------------------------------------------------
+// resolvePullDetail: chase GitHub's lazily-computed merge state (#35)
+// --------------------------------------------------------------------------
+
+const noSleep = async (): Promise<void> => {};
+
+test('resolvePullDetail re-polls past a transient unknown until a concrete state lands', async () => {
+  const details: GhPullDetail[] = [
+    { mergeable: null, mergeableState: 'unknown', merged: false }, // first read only triggers the compute
+    { mergeable: false, mergeableState: 'dirty', merged: false }, // concrete on the second read
+  ];
+  let calls = 0;
+  const detail = await resolvePullDetail(async () => details[calls++]!, { sleep: noSleep });
+  assert.equal(calls, 2, 'polled again after the unknown');
+  assert.equal(detail.mergeableState, 'dirty');
+  assert.equal(detail.mergeable, false);
+});
+
+test('resolvePullDetail returns immediately when the first read is already concrete', async () => {
+  let calls = 0;
+  const detail = await resolvePullDetail(
+    async () => {
+      calls++;
+      return { mergeable: true, mergeableState: 'clean', merged: false };
+    },
+    { sleep: noSleep },
+  );
+  assert.equal(calls, 1, 'no extra polls when the state is already known');
+  assert.equal(detail.mergeableState, 'clean');
+});
+
+test('resolvePullDetail is bounded: it gives up after the retry budget and falls back to unknown', async () => {
+  let calls = 0;
+  const detail = await resolvePullDetail(
+    async () => {
+      calls++;
+      return { mergeable: null, mergeableState: 'unknown', merged: false };
+    },
+    { retries: 3, sleep: noSleep },
+  );
+  assert.equal(calls, 4, 'the initial read plus three retries');
+  assert.equal(detail.mergeable, null, 'unresolved after the budget — the next heartbeat tries again');
+});
+
+test('resolvePullDetail does not burn retries on a merged PR (mergeable is null but final)', async () => {
+  let calls = 0;
+  const detail = await resolvePullDetail(
+    async () => {
+      calls++;
+      return { mergeable: null, mergeableState: 'unknown', merged: true };
+    },
+    { sleep: noSleep },
+  );
+  assert.equal(calls, 1, 'merged short-circuits the retry loop');
+  assert.equal(detail.merged, true);
+});
+
+test('snapshot maps baseBranch and normalises mergeable_state', async () => {
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7, baseBranch: 'develop' })],
+    detail: { 7: { mergeable: false, mergeableState: 'dirty', merged: false } },
+  });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+  const pr = (await sc.snapshot()).pullRequests![0]!;
+  assert.equal(pr.baseBranch, 'develop');
+  assert.equal(pr.mergeableState, 'dirty');
+  assert.equal(pr.mergeable, false);
+  store.close();
+});
+
+test('an unrecognised mergeable_state normalises to unknown', async () => {
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: true, mergeableState: 'unstable', merged: false } },
+  });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+  const pr = (await sc.snapshot()).pullRequests![0]!;
+  assert.equal(pr.mergeableState, 'unknown');
   store.close();
 });
 
@@ -249,7 +359,10 @@ test('snapshot applies the prAuthor filter client-side', async () => {
 
 test('snapshot returns the last-good slice and records an error event on failure', async () => {
   const store = new Store(':memory:');
-  const good = fakeApi({ pulls: [pull({ number: 7 })], detail: { 7: { mergeable: true, merged: false } } });
+  const good = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
+  });
   const sc = new GitHubSourceControlIntegration({ api: good.api, store });
   await sc.snapshot(); // warm the last-good cache
 
@@ -299,6 +412,30 @@ test('mergePr merges with the requested method and returns the merge sha', async
   store.close();
 });
 
+test('snapshot maps the PR labels through (the exclusion-tag signal)', async () => {
+  const { api } = fakeApi({ pulls: [pull({ number: 7, labels: ['lubbdubb-ignore', 'bug'] })] });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+  const prSlice = (await sc.snapshot()).pullRequests![0]!;
+  assert.deepEqual(prSlice.labels, ['lubbdubb-ignore', 'bug']);
+  store.close();
+});
+
+test('setPrLabel adds or removes a label through the API', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+
+  const added = await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: true });
+  assert.equal(added.ok, true);
+  await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: false });
+  assert.deepEqual(recorded.labelSets, [
+    { number: 7, label: 'lubbdubb-ignore', present: true },
+    { number: 7, label: 'lubbdubb-ignore', present: false },
+  ]);
+  store.close();
+});
+
 // --------------------------------------------------------------------------
 // Ref → URL resolution (RefResolvable)
 // --------------------------------------------------------------------------
@@ -339,7 +476,7 @@ test('issues snapshot drops PRs and maps state / labels / linked PR', async () =
       },
       { number: 200, title: 'A PR', body: '', labels: [], state: 'open', url: 'https://i/200', isPullRequest: true },
     ],
-    timeline: { 101: [{ event: 'cross-referenced', sourcePrNumber: 55 }] },
+    timeline: { 101: [{ event: 'cross-referenced', sourcePrNumber: 55, label: null, actorLogin: null }] },
   });
   const store = new Store(':memory:');
   const issues = new GitHubIssuesIntegration({ api, store });
@@ -351,6 +488,78 @@ test('issues snapshot drops PRs and maps state / labels / linked PR', async () =
   assert.deepEqual(issue.labels, ['bug']);
   assert.equal(issue.linkedPrNumber, 55);
   assert.equal(issue.url, 'https://i/101');
+  store.close();
+});
+
+test('viewerAddedLabels: keeps only current labels the viewer most recently added', () => {
+  const events: GhTimelineEvent[] = [
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' },
+    { event: 'labeled', sourcePrNumber: null, label: 'bug', actorLogin: 'someone-else' },
+  ];
+  assert.deepEqual(viewerAddedLabels(events, 'me', ['agent-ready', 'bug']), ['agent-ready']);
+});
+
+test('viewerAddedLabels: a re-add by someone else transfers ownership away', () => {
+  const events: GhTimelineEvent[] = [
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' },
+    { event: 'unlabeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'someone-else' },
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'someone-else' },
+  ];
+  assert.deepEqual(viewerAddedLabels(events, 'me', ['agent-ready']), []);
+});
+
+test('viewerAddedLabels: ignores a since-removed label even if the viewer once added it', () => {
+  const events: GhTimelineEvent[] = [
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' },
+  ];
+  // The label is no longer on the issue, so it must not count.
+  assert.deepEqual(viewerAddedLabels(events, 'me', ['bug']), []);
+});
+
+test('issues snapshot resolves tag ownership when the ownership gate is on', async () => {
+  const { api } = fakeApi({
+    viewer: 'me',
+    issues: [
+      { number: 1, title: 'mine', body: '', labels: ['agent-ready'], state: 'open', url: 'u1', isPullRequest: false },
+      {
+        number: 2,
+        title: 'theirs',
+        body: '',
+        labels: ['agent-ready'],
+        state: 'open',
+        url: 'u2',
+        isPullRequest: false,
+      },
+      { number: 3, title: 'untagged', body: '', labels: ['bug'], state: 'open', url: 'u3', isPullRequest: false },
+    ],
+    timeline: {
+      1: [{ event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' }],
+      2: [{ event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'attacker' }],
+      3: [],
+    },
+  });
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api, store, ownershipLabel: 'agent-ready' });
+  const slice = await issues.snapshot();
+  const byNumber = new Map(slice.issues!.map((i) => [i.number, i]));
+  // Both tagged issues carry the label, but only #1's was added by the viewer.
+  assert.deepEqual(byNumber.get(1)!.labelsAddedByViewer, ['agent-ready']);
+  assert.deepEqual(byNumber.get(2)!.labelsAddedByViewer, []);
+  // #3 doesn't carry the gate label, so authorship is left untracked.
+  assert.equal(byNumber.get(3)!.labelsAddedByViewer, undefined);
+  store.close();
+});
+
+test('issues snapshot leaves ownership untracked when the gate is off', async () => {
+  const { api } = fakeApi({
+    issues: [
+      { number: 1, title: 'x', body: '', labels: ['agent-ready'], state: 'open', url: 'u1', isPullRequest: false },
+    ],
+  });
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api, store });
+  const slice = await issues.snapshot();
+  assert.equal(slice.issues![0]!.labelsAddedByViewer, undefined);
   store.close();
 });
 

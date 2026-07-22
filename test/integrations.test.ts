@@ -144,6 +144,20 @@ test('PR monitoring: approval + mergeable signals mark a PR merge-ready', async 
   store.close();
 });
 
+test('new_pr carries a base branch and unknown merge state; pr_mergeable can set a conflict', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b', baseBranch: 'develop' });
+  let pr = (await connector.getState()).pullRequests[0]!;
+  assert.equal(pr.baseBranch, 'develop');
+  assert.equal(pr.mergeableState, 'unknown');
+
+  connector.inject({ kind: 'pr_mergeable', prNumber: 7, mergeable: false, mergeableState: 'dirty' });
+  pr = (await connector.getState()).pullRequests[0]!;
+  assert.equal(pr.mergeableState, 'dirty');
+  assert.equal(pr.mergeable, false);
+  store.close();
+});
+
 test('mergePr routes to the sourceControl provider and marks the PR merged', async () => {
   const { store, connector } = build();
   connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b' });
@@ -161,5 +175,30 @@ test('mergePr throws when no PrMergeCapable integration is enabled', async () =>
   );
   const connector = new CompositeConnector(integrations, store, FIXED);
   await assert.rejects(() => connector.mergePr({ prNumber: 1, method: 'squash' }), /no integration can merge PRs/);
+  store.close();
+});
+
+test('setPrLabel routes to the sourceControl provider and tags the PR', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b' });
+  const result = await connector.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: true });
+  assert.equal(result.ok, true);
+  assert.deepEqual((await connector.getState()).pullRequests[0]!.labels, ['lubbdubb-ignore']);
+  // Removing it is idempotent and clears the tag.
+  await connector.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: false });
+  assert.deepEqual((await connector.getState()).pullRequests[0]!.labels, []);
+  store.close();
+});
+
+test('setPrLabel throws when no PrLabelCapable integration is enabled', async () => {
+  const store = new Store(':memory:');
+  const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
+    (i) => i.capability !== 'sourceControl',
+  );
+  const connector = new CompositeConnector(integrations, store, FIXED);
+  await assert.rejects(
+    () => connector.setPrLabel({ prNumber: 1, label: 'x', present: true }),
+    /no integration can label PRs/,
+  );
   store.close();
 });

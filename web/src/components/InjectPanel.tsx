@@ -1,25 +1,22 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import type { WorldSnapshot } from '../types.js';
+import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
 /**
  * The "make the world move" panel. Since v1 runs on a FakeConnector, this is how
  * you simulate the outside world: a CI failure, a review comment, a new story, a
- * meeting. Each injection provokes an immediate dispatch cycle server-side.
+ * meeting. Each injection provokes an immediate dispatch cycle server-side. Every
+ * button spins while its injection is in flight so the click reads as "saving".
  */
 export function InjectPanel({ onInjected, world }: { onInjected: () => void; world: WorldSnapshot }) {
-  const [busy, setBusy] = useState(false);
   const [raw, setRaw] = useState('');
   const [open, setOpen] = useState(false);
+  const rawSubmit = useAsyncAction();
 
   const inject = async (event: unknown) => {
-    setBusy(true);
-    try {
-      await api.inject(event);
-      onInjected();
-    } finally {
-      setBusy(false);
-    }
+    await api.inject(event);
+    onInjected();
   };
 
   const nextPr = (world.pullRequests.at(-1)?.number ?? 40) + 1;
@@ -31,21 +28,17 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
   return (
     <div className="inject">
       <span className="inject-label">Inject event:</span>
-      <button
-        className="btn"
-        disabled={busy}
+      <AsyncButton
         onClick={() =>
           inject({ kind: 'new_pr', number: nextPr, title: `Feature PR #${nextPr}`, branch: `feature/pr-${nextPr}` })
         }
       >
         + PR #{nextPr}
-      </button>
-      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'ci_failed', prNumber: firstPr })}>
+      </AsyncButton>
+      <AsyncButton onClick={() => inject({ kind: 'ci_failed', prNumber: firstPr })}>
         CI failed on #{firstPr}
-      </button>
-      <button
-        className="btn"
-        disabled={busy}
+      </AsyncButton>
+      <AsyncButton
         onClick={() =>
           inject({
             kind: 'pr_comment',
@@ -56,32 +49,25 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
         }
       >
         Comment on #{firstPr}
-      </button>
-      <button
-        className="btn"
-        disabled={busy}
+      </AsyncButton>
+      <AsyncButton
         onClick={() =>
           inject({ kind: 'new_issue', number: nextIssue, title: `Bug report #${nextIssue}`, labels: ['bug'] })
         }
       >
         + Issue #{nextIssue}
-      </button>
-      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'pr_approved', prNumber: firstPr })}>
-        Approve #{firstPr}
-      </button>
-      <button className="btn" disabled={busy} onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr })}>
+      </AsyncButton>
+      <AsyncButton onClick={() => inject({ kind: 'pr_approved', prNumber: firstPr })}>Approve #{firstPr}</AsyncButton>
+      <AsyncButton onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr })}>
         Mergeable #{firstPr}
-      </button>
-      <button
-        className="btn"
-        disabled={busy}
-        onClick={() => inject({ kind: 'new_story', title: 'Add password reset flow' })}
+      </AsyncButton>
+      <AsyncButton
+        onClick={() => inject({ kind: 'pr_mergeable', prNumber: firstPr, mergeable: false, mergeableState: 'dirty' })}
       >
-        + Story
-      </button>
-      <button
-        className="btn"
-        disabled={busy}
+        Conflict #{firstPr}
+      </AsyncButton>
+      <AsyncButton onClick={() => inject({ kind: 'new_story', title: 'Add password reset flow' })}>+ Story</AsyncButton>
+      <AsyncButton
         onClick={() =>
           inject({
             kind: 'meeting',
@@ -92,7 +78,7 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
         }
       >
         + Meeting
-      </button>
+      </AsyncButton>
       <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
         {open ? 'Hide raw' : 'Raw JSON'}
       </button>
@@ -101,11 +87,14 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
           className="raw"
           onSubmit={(e) => {
             e.preventDefault();
+            let parsed: unknown;
             try {
-              inject(JSON.parse(raw));
+              parsed = JSON.parse(raw);
             } catch {
               alert('Invalid JSON');
+              return;
             }
+            void rawSubmit.run(() => inject(parsed));
           }}
         >
           <input
@@ -113,9 +102,9 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
           />
-          <button className="btn primary" type="submit">
+          <SubmitButton phase={rawSubmit.phase} className="primary">
             Inject
-          </button>
+          </SubmitButton>
         </form>
       )}
     </div>

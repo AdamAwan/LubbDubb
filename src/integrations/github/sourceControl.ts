@@ -1,9 +1,10 @@
 import type { Store } from '../../store/store.js';
-import type { PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
-import type { CiStatus, PrComment, PullRequest } from '../../types.js';
+import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
+import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
   Capability,
   Integration,
+  PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
   RefResolvable,
@@ -31,7 +32,9 @@ export interface GitHubSourceControlOpts {
  * reading from the network instead of an injected fake world, so it is *not*
  * `Injectable`.
  */
-export class GitHubSourceControlIntegration implements Integration, PrReplyCapable, PrMergeCapable, RefResolvable {
+export class GitHubSourceControlIntegration
+  implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable, RefResolvable
+{
   readonly id = 'sourceControl:github';
   readonly capability: Capability = 'sourceControl';
 
@@ -61,10 +64,13 @@ export class GitHubSourceControlIntegration implements Integration, PrReplyCapab
             number: p.number,
             title: p.title,
             branch: p.branch,
+            baseBranch: p.baseBranch,
             ciStatus: aggregateCiStatus(checks, status),
             unresolvedComments: buildUnresolvedComments(comments, viewer),
             approved: computeApproved(reviews),
+            mergeableState: normalizeMergeState(detail.mergeableState),
             merged: detail.merged,
+            labels: p.labels,
             url: p.url,
           };
           // GitHub's tri-state `mergeable`: true/false is a real signal, null means
@@ -104,6 +110,26 @@ export class GitHubSourceControlIntegration implements Integration, PrReplyCapab
   resolveRefUrl(ref: string): string | null {
     const { owner, repo } = this.opts;
     return owner && repo ? githubRefUrl(owner, repo, ref) : null;
+  }
+
+  async setPrLabel(input: PrLabelInput): Promise<SendResult> {
+    await this.opts.api.setPullLabel(input.prNumber, input.label, input.present);
+    this.opts.store.recordConnectorEvent('pr_label_set', { ...input });
+    return { ok: true };
+  }
+}
+
+/** Fold GitHub's `mergeable_state` down to the values the harness reacts to. */
+export function normalizeMergeState(state: string | null): MergeableState {
+  switch (state) {
+    case 'dirty':
+    case 'behind':
+    case 'blocked':
+    case 'clean':
+      return state;
+    default:
+      // 'unstable' | 'has_hooks' | 'draft' | 'unknown' | null | anything new.
+      return 'unknown';
   }
 }
 

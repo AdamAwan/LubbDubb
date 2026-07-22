@@ -12,6 +12,9 @@
 
 export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 
+/** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */
+export type MergeableState = 'dirty' | 'behind' | 'blocked' | 'clean' | 'unknown';
+
 export interface PullRequest {
   id: string;
   number: number;
@@ -27,8 +30,23 @@ export interface PullRequest {
   approved?: boolean;
   /** No conflicts / branch behind — GitHub reports it mergeable. */
   mergeable?: boolean;
+  /** The base branch this PR targets (e.g. "main") — needed to pull the base in. */
+  baseBranch?: string;
+  /**
+   * GitHub's `mergeable_state`, normalised. Distinguishes a real conflict
+   * ('dirty') from merely-behind-base ('behind', a safe update) and required
+   * checks/reviews not met ('blocked'). Absent/unrecognised => 'unknown'.
+   */
+  mergeableState?: MergeableState;
   /** Already merged; once true the harness stops acting on it. */
   merged?: boolean;
+  /**
+   * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR
+   * carrying `config.prExclusionLabel` is left alone by the dispatcher. Absent when
+   * the PR carries no labels (or the provider/persisted row predates this field) —
+   * treat missing as `[]`.
+   */
+  labels?: string[];
   url?: string;
 }
 
@@ -53,6 +71,15 @@ export interface Issue {
   title: string;
   body: string;
   labels: string[];
+  /**
+   * The subset of `labels` the authenticated viewer added themselves, when the
+   * provider resolves tag authorship (GitHub timeline / Azure work-item revisions).
+   * `undefined` when authorship isn't tracked — the fake provider, or the ownership
+   * gate being off. The dispatcher consults this instead of `labels` only when
+   * `issuePickupRequireOwnLabel` is set, so a tag added by someone else can't get an
+   * item picked up.
+   */
+  labelsAddedByViewer?: string[];
   state: IssueState;
   /** The PR opened to resolve this issue, once one exists. Null until linked. */
   linkedPrNumber: number | null;
@@ -90,6 +117,43 @@ export interface WorldSnapshot {
   stories: Story[];
   calendar: CalendarEvent[];
 }
+
+// ---------------------------------------------------------------------------
+// World change history (observed transitions between snapshots)
+// ---------------------------------------------------------------------------
+
+export type WorldEventKind =
+  | 'pr_opened'
+  | 'pr_ci'
+  | 'pr_approved'
+  | 'pr_mergeable'
+  | 'pr_merged'
+  | 'pr_comment'
+  | 'issue_opened'
+  | 'issue_closed'
+  | 'issue_linked'
+  | 'story_added'
+  | 'story_state'
+  | 'meeting_added'
+  | 'meeting_prep';
+
+/**
+ * One observed world state transition, derived by diffing consecutive
+ * {@link WorldSnapshot}s. The activity feed is the timeline of these — the
+ * counterpart to the decision log, but for the world rather than the harness.
+ */
+export interface WorldEvent {
+  id: string;
+  kind: WorldEventKind;
+  /** The world object this concerns, e.g. "pr:42", "story:abc", "issue:12". Null if global. */
+  ref: string | null;
+  /** Human-readable one-line summary, e.g. "PR #42 CI passing". */
+  summary: string;
+  createdAt: string; // ISO
+}
+
+/** A world event before the store assigns it an id and timestamp. */
+export type WorldEventInput = Omit<WorldEvent, 'id' | 'createdAt'>;
 
 // ---------------------------------------------------------------------------
 // Harness-internal state
@@ -133,6 +197,12 @@ export interface Agent {
   pid: number | null;
   /** Why the agent is waiting, when status === 'waiting'. */
   waitingReason: string | null;
+  /**
+   * Claude Code session id this agent runs under, chosen at spawn so it can be
+   * resumed (`claude --resume <id>`) in the same worktree after a restart. Null
+   * for runtimes that don't support resume, or agents that never got one.
+   */
+  sessionId: string | null;
   startedAt: string;
   endedAt: string | null;
 }
@@ -141,14 +211,39 @@ export type EscalationType = 'approve_change' | 'answer_question' | 'resolve_amb
 
 export type EscalationStatus = 'open' | 'answered' | 'dismissed';
 
+/**
+ * The extra context an escalation carries so a human can answer it in-place,
+ * without leaving the card. Every key is optional — each escalation type
+ * populates the subset that makes sense — and the index signature keeps it
+ * extensible for new kinds. The cockpit's `EscalationCard` renders whatever is
+ * present (recent output, the originating signal, a draft reply, …).
+ */
+export interface EscalationContext {
+  /** Title of the task this escalation concerns. */
+  taskTitle?: string;
+  /** The world signal that spawned the task, e.g. "pr:42:ci" or "issue:12". */
+  originRef?: string | null;
+  /** Tail of the agent's transcript leading up to the question (sentinels stripped). */
+  recentOutput?: string;
+  // -- reply_on_pr / merge_pr escalations --------------------------------
+  prNumber?: number;
+  commentId?: string | null;
+  draft?: string;
+  confidence?: number;
+  method?: string;
+  autoSendFailed?: boolean;
+  autoMergeFailed?: boolean;
+  [key: string]: unknown;
+}
+
 export interface Escalation {
   id: string;
   type: EscalationType;
   status: EscalationStatus;
   /** What the human needs to weigh in on. */
   prompt: string;
-  /** Task/agent/PR this concerns. */
-  context: Record<string, unknown>;
+  /** Task/agent/PR this concerns — see {@link EscalationContext}. */
+  context: EscalationContext;
   /** If tied to a live parked agent, its answer is typed into that session. */
   agentId: string | null;
   taskId: string | null;

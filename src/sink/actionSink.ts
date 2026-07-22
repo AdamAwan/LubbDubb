@@ -27,6 +27,14 @@ export interface PrMergeInput {
   method: MergeMethod;
 }
 
+export interface PrLabelInput {
+  prNumber: number;
+  /** The label to add or remove. */
+  label: string;
+  /** True to add the label, false to remove it. Idempotent either way. */
+  present: boolean;
+}
+
 export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
@@ -38,4 +46,6 @@ export interface ActionSink {
   postPrReply(input: PrReplyInput): Promise<SendResult>;
   /** Merge a pull request (the last step of the issue → PR → merge loop). Throws if the merge fails. */
   mergePr(input: PrMergeInput): Promise<SendResult>;
+  /** Add/remove a label on a PR — the operator's exclusion tag toggle. Throws if it fails. */
+  setPrLabel(input: PrLabelInput): Promise<SendResult>;
 }

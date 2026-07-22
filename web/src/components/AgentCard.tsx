@@ -1,5 +1,6 @@
 import type { Agent, Task } from '../types.js';
 import { statusDot, elapsed, linkify, refLink } from './util.js';
+import { ConfirmButton } from './ConfirmButton.js';
 
 export function AgentCard({
   agent,
@@ -17,7 +18,7 @@ export function AgentCard({
   refUrls: Record<string, string>;
   lastLine?: string;
   onOpen: () => void;
-  onKill?: () => void;
+  onKill?: () => Promise<unknown> | unknown;
   past?: boolean;
 }) {
   const active = agent.status === 'running' || agent.status === 'starting';
@@ -43,9 +44,7 @@ export function AgentCard({
           Open
         </button>
         {onKill && agent.status !== 'done' && (
-          <button className="btn danger" onClick={onKill}>
-            Kill
-          </button>
+          <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />
         )}
       </div>
     </div>

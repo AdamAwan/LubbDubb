@@ -1,7 +1,7 @@
 import type { Config } from '../config.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
-import type { PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { WorldSnapshot } from '../types.js';
 
 /**
@@ -83,6 +83,15 @@ export interface RefResolvable {
 
 export function isRefResolvable(x: Integration): x is Integration & RefResolvable {
   return typeof (x as Partial<RefResolvable>).resolveRefUrl === 'function';
+}
+
+/** An integration that can add/remove a label on a pull request — the exclusion-tag toggle. */
+export interface PrLabelCapable {
+  setPrLabel(input: PrLabelInput): Promise<SendResult>;
+}
+
+export function isPrLabelCapable(x: Integration): x is Integration & PrLabelCapable {
+  return typeof (x as Partial<PrLabelCapable>).setPrLabel === 'function';
 }
 
 // ---------------------------------------------------------------------------

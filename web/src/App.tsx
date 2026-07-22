@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, connectWs } from './api.js';
+import { api, connectWs, isDemo } from './api.js';
 import type { WsClient } from './api.js';
 import type { AppState, Agent } from './types.js';
 import { InjectPanel } from './components/InjectPanel.js';
@@ -7,7 +7,10 @@ import { AgentCard } from './components/AgentCard.js';
 import { EscalationCard } from './components/EscalationCard.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
 import { Vitals } from './components/Vitals.js';
+import { FleetControl } from './components/FleetControl.js';
 import { DecisionLog } from './components/DecisionLog.js';
+import { ActivityFeed } from './components/ActivityFeed.js';
+import { AsyncButton } from './components/AsyncButton.js';
 import { statusDot, refLink } from './components/util.js';
 import { useNow } from './hooks.js';
 
@@ -46,7 +49,13 @@ export function App() {
     const ws = connectWs(
       (ev) => {
         const e = ev as { type: string; agentId?: string; delta?: string; line?: string };
-        if (e.type === 'dirty' || e.type === 'world:changed') void refresh();
+        if (
+          e.type === 'dirty' ||
+          e.type === 'world:changed' ||
+          e.type === 'control:changed' ||
+          e.type === 'world:events'
+        )
+          void refresh();
         else if (e.type === 'agent:output' && e.agentId && e.delta) {
           const cur = liveOutput.current.get(e.agentId) ?? '';
           // Full output now only arrives for the subscribed (open) agent, so we
@@ -102,6 +111,11 @@ export function App() {
         <div className="brand">
           <span className="pulse-mark">♥</span> LubbDubb
           <span className="tagline">autonomous engineering cockpit</span>
+          {isDemo && (
+            <span className="chip warn" title="Simulated data — no server or real integrations">
+              demo
+            </span>
+          )}
         </div>
         <div className="topbar-meta">
           <div className="heartbeat" title={`Next heartbeat in ~${nextIn}s`}>
@@ -114,17 +128,16 @@ export function App() {
             <span className={`dot ${connected ? 'green' : 'red'}`} /> {connected ? 'live' : 'offline'}
           </span>
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
-          <span className="chip">
-            cap: {liveAgents.length}/{state.config.maxConcurrentAgents}
-          </span>
-          <button className="btn primary" onClick={() => api.pulse().then(refresh)}>
+          {state.control.paused && <span className="chip warn">paused</span>}
+          <FleetControl live={liveAgents.length} cap={state.control.cap} paused={state.control.paused} />
+          <AsyncButton className="primary" onClick={() => api.pulse().then(refresh)}>
             Pulse now
-          </button>
+          </AsyncButton>
         </div>
       </header>
 
       <InjectPanel onInjected={refresh} world={state.world} />
-      <Vitals state={state} liveAgents={liveAgents.length} cap={state.config.maxConcurrentAgents} />
+      <Vitals state={state} liveAgents={liveAgents.length} cap={state.control.cap} />
 
       <main className="grid">
         <section className="col">
@@ -181,16 +194,22 @@ export function App() {
               now={now}
               refUrls={state.refUrls}
               onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)}
+              onOpenAgent={(id) => setSelected(id)}
             />
           ))}
 
           <h3 className="muted">World</h3>
-          <WorldSummary state={state} />
+          <WorldSummary
+            state={state}
+            onToggleExclude={(prNumber, excluded) => api.setPrExcluded(prNumber, excluded).then(refresh)}
+          />
         </section>
 
         <section className="col">
           <h2>Decision log</h2>
           <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} />
+          <h2 className="feed-heading">Activity</h2>
+          <ActivityFeed events={state.worldEvents} now={now} />
         </section>
       </main>
 
@@ -203,7 +222,7 @@ export function App() {
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}
           onKill={() => api.killAgent(selectedAgent.id).then(refresh)}
-          onInterrupt={() => void api.interruptAgent(selectedAgent.id)}
+          onInterrupt={() => api.interruptAgent(selectedAgent.id)}
         />
       )}
     </div>
@@ -214,30 +233,62 @@ function taskFor(state: AppState, agent: Agent) {
   return state.tasks.find((t) => t.id === agent.taskId) ?? null;
 }
 
-function WorldSummary({ state }: { state: AppState }) {
+function WorldSummary({
+  state,
+  onToggleExclude,
+}: {
+  state: AppState;
+  onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
+}) {
   const { pullRequests, issues, stories, calendar } = state.world;
   const { refUrls } = state;
+  const tag = state.config.prExclusionLabel;
   return (
     <div className="world">
       <div className="world-row">
         <span>PRs</span>
         <b>{pullRequests.length}</b>
       </div>
-      {pullRequests.map((pr) => (
-        <div key={pr.id} className="world-item">
-          {statusDot(pr.ciStatus)} {refLink(`#${pr.number}`, refUrls)} {pr.title}
-          {pr.unresolvedComments.filter((c) => !c.handled).length > 0 && (
-            <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
-          )}
-          {pr.merged ? (
-            <span className="chip small">merged</span>
-          ) : (
-            pr.ciStatus === 'passing' &&
-            pr.approved &&
-            pr.mergeable && <span className="chip small warn">merge-ready</span>
-          )}
-        </div>
-      ))}
+      {pullRequests.map((pr) => {
+        const isExcluded = (pr.labels ?? []).includes(tag);
+        return (
+          <div key={pr.id} className={`world-item${isExcluded ? ' excluded' : ''}`}>
+            {statusDot(pr.ciStatus)} {refLink(`#${pr.number}`, refUrls)} {pr.title}
+            {pr.unresolvedComments.filter((c) => !c.handled).length > 0 && (
+              <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
+            )}
+            {isExcluded ? (
+              <span className="chip small" title={`Tagged "${tag}" — the harness is leaving this PR alone`}>
+                ignored
+              </span>
+            ) : pr.merged ? (
+              <span className="chip small">merged</span>
+            ) : pr.health?.blocked ? (
+              <span className="chip small warn" title={pr.health.reasons.join(', ')}>
+                {pr.health.reasons[0]}
+                {pr.health.reasons.length > 1 ? ` +${pr.health.reasons.length - 1}` : ''}
+              </span>
+            ) : (
+              pr.ciStatus === 'passing' &&
+              pr.approved &&
+              pr.mergeable && <span className="chip small warn">merge-ready</span>
+            )}
+            {!pr.merged && (
+              <AsyncButton
+                className="ghost world-toggle"
+                onClick={() => onToggleExclude(pr.number, !isExcluded)}
+                title={
+                  isExcluded
+                    ? `Remove the "${tag}" tag and let the harness work this PR again`
+                    : `Tag this PR "${tag}" so the harness leaves it alone (for a PR blocked on something it can't fix)`
+                }
+              >
+                {isExcluded ? 'watch' : 'ignore'}
+              </AsyncButton>
+            )}
+          </div>
+        );
+      })}
       <div className="world-row">
         <span>Issues</span>
         <b>{issues.length}</b>

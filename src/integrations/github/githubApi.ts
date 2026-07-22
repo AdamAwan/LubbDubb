@@ -39,6 +39,8 @@ export interface GitHubApi {
   /** Top-level comment on a PR or issue (PRs are issues for the comments API). */
   createIssueComment(number: number, body: string): Promise<GhCommentRef>;
   mergePull(number: number, method: MergeMethod): Promise<GhMergeResult>;
+  /** Add (`present`) or remove a label on a PR. PRs are issues for the labels API. Idempotent. */
+  setPullLabel(number: number, label: string, present: boolean): Promise<void>;
 }
 
 export interface GhPullSummary {
@@ -46,17 +48,23 @@ export interface GhPullSummary {
   title: string;
   /** head.ref */
   branch: string;
+  /** base.ref — the branch this PR merges into. */
+  baseBranch: string;
   /** head.sha — the commit CI runs against. */
   headSha: string;
   /** user.login of the PR author. */
   authorLogin: string;
   /** html_url. */
   url: string;
+  /** Label names on the PR (the Issues/PR `labels` array). */
+  labels: string[];
 }
 
 export interface GhPullDetail {
   /** GitHub tri-state: true / false / null (still computing). */
   mergeable: boolean | null;
+  /** raw `mergeable_state`: clean | dirty | behind | blocked | unstable | ... | null. */
+  mergeableState: string | null;
   merged: boolean;
 }
 
@@ -103,10 +111,14 @@ export interface GhIssue {
 }
 
 export interface GhTimelineEvent {
-  /** cross-referenced | connected | disconnected | closed | ... */
+  /** cross-referenced | connected | disconnected | closed | labeled | unlabeled | ... */
   event: string;
   /** For a PR cross-reference/connection: the referencing PR's number; else null. */
   sourcePrNumber: number | null;
+  /** For a `labeled`/`unlabeled` event: the label name; else null. The tag-authorship signal. */
+  label: string | null;
+  /** For a `labeled`/`unlabeled` event: the actor's login (who set/cleared it); else null. */
+  actorLogin: string | null;
 }
 
 export interface GhCommentRef {
