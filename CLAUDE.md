@@ -56,6 +56,12 @@ in production.
 NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
   an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
   won't appear on databases from an older build.
+- **`src/dispatcher/rules.ts`** is the RuleDispatcher's rule book as data (`DISPATCH_RULES`):
+  every action the rule dispatcher emits carries a `rule` id from it, the store lifts the id
+  into the `decisions.rule` column at `recordDecision` time, and `/api/state` ships the
+  registry so the cockpit's Decision log can expand a row into the rule that fired. If you add
+  a dispatcher branch, add its registry entry and tag the emitted actions. LLM-dispatcher
+  actions carry no rule (null) by design.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are

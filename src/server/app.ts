@@ -9,6 +9,7 @@ import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import { DeskBriefingSchema } from '../integrations/ingested/briefingSchema.js';
+import { DISPATCH_RULES } from '../dispatcher/rules.js';
 
 /**
  * Builds the cockpit HTTP + WebSocket surface. REST for actions and state,
@@ -214,6 +215,9 @@ export function buildStateSnapshot(system: System) {
       decisions: store.listDecisions(100),
       worldEvents: store.listWorldEvents(100),
       refUrls,
+      // The rule book, as data: decision rows carry a rule id; the cockpit looks
+      // the id up here to expand a decision into "which rule fired, and why".
+      dispatchRules: DISPATCH_RULES,
       // The read-only desk briefing (mail + Teams pings + meetings). Nullable until
       // a bridge has posted one. Meetings also flow through the world's calendar.
       briefing: store.getDeskBriefing(),

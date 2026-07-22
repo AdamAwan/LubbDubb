@@ -163,7 +163,16 @@ export interface Decision {
   action: { type: string; reason?: string };
   outcome: string;
   detail: string;
+  /** The dispatcher rule that produced the action (a `dispatchRules` key), or null. */
+  rule: string | null;
   createdAt: string;
+}
+
+/** One entry of the rule dispatcher's rule book (mirrors the server's DispatchRule). */
+export interface DispatchRule {
+  number: string;
+  name: string;
+  description: string;
 }
 
 export type WorldEventKind =
@@ -217,6 +226,12 @@ export interface AppState {
    * issue/PR number, or a branch name. Missing key ⇒ render as plain text.
    */
   refUrls: Record<string, string>;
+  /**
+   * The rule dispatcher's rule book, keyed by the rule id a decision carries.
+   * The Decision log looks `decision.rule` up here to expand a row into the
+   * rule that fired; a missing key ⇒ no rule identity to show.
+   */
+  dispatchRules: Record<string, DispatchRule>;
 }
 
 export type ServerEvent =
