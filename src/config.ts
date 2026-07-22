@@ -55,6 +55,15 @@ export interface Config {
    */
   issuePickupLabel?: string;
   /**
+   * Tighten the `issuePickupLabel` gate so the tag only counts if *you* (the
+   * authenticated account the provider runs as) added it — a tag someone else adds
+   * is ignored. Stops another user from tagging a work item / issue to get an agent
+   * onto it. Off by default (any tagger counts, as before). Only meaningful with
+   * `issuePickupLabel` set and a real provider (`github`/`azure`) that can resolve
+   * tag authorship; the `fake` provider doesn't track it, so nothing passes the gate.
+   */
+  issuePickupRequireOwnLabel: boolean;
+  /**
    * Label → priority weight for ordering issue pickup: when headroom is limited,
    * higher-weight issues are dispatched first. Replaced wholesale by an override
    * (not merged), so an operator can define their own scheme.
@@ -174,6 +183,7 @@ const DEFAULTS: Config = {
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
   integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
+  issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   prExclusionLabel: 'lubbdubb-ignore',

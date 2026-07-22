@@ -71,6 +71,15 @@ export interface Issue {
   title: string;
   body: string;
   labels: string[];
+  /**
+   * The subset of `labels` the authenticated viewer added themselves, when the
+   * provider resolves tag authorship (GitHub timeline / Azure work-item revisions).
+   * `undefined` when authorship isn't tracked — the fake provider, or the ownership
+   * gate being off. The dispatcher consults this instead of `labels` only when
+   * `issuePickupRequireOwnLabel` is set, so a tag added by someone else can't get an
+   * item picked up.
+   */
+  labelsAddedByViewer?: string[];
   state: IssueState;
   /** The PR opened to resolve this issue, once one exists. Null until linked. */
   linkedPrNumber: number | null;

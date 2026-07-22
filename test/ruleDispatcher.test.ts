@@ -114,6 +114,39 @@ test('with a pickup label set, only issues carrying it are dispatched', async ()
   assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
 });
 
+test('requireOwnLabel: a pickup tag added by someone else does not dispatch', async () => {
+  const d = new RuleDispatcher({ pickupLabel: 'agent-ready', requireOwnLabel: true });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 101,
+          title: 'mine',
+          body: '',
+          labels: ['agent-ready'],
+          labelsAddedByViewer: ['agent-ready'],
+          state: 'open',
+          linkedPrNumber: null,
+        },
+        {
+          id: 'i2',
+          number: 102,
+          title: 'theirs',
+          body: '',
+          labels: ['agent-ready'],
+          labelsAddedByViewer: [],
+          state: 'open',
+          linkedPrNumber: null,
+        },
+      ],
+    }),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1, 'only the issue the viewer tagged is dispatched');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+});
+
 test('with no pickup label configured, all open issues stay eligible (no regression)', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(

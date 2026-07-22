@@ -222,6 +222,15 @@ from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle
   label-encoded (`issuePriorityLabels`/`issueDefaultPriority`) and parsed by the pure exported
   `issuePriority` — keep that parsing pure so it stays unit-testable without a world. The gate
   is off by default (unset label = act on all open issues), so existing setups don't regress.
+  `issuePickupRequireOwnLabel` is a _refinement_ of the pickup gate, not a fourth mechanism:
+  when on, `isIssuePickupEligible` consumes `issue.labelsAddedByViewer` (the viewer-added subset
+  of `labels`) instead of `labels`, so a pickup tag someone else added is ignored (anti-abuse).
+  Authorship is resolved only in the real providers — GitHub reads the issue timeline's
+  `labeled`/`unlabeled` events (`viewerAddedLabels`), Azure diffs work-item revision updates
+  (`viewerAddedTags`, via the new `listWorkItemUpdates` seam method) — and only for items already
+  carrying the gate tag (the registry passes `issuePickupLabel` as the `ownershipLabel`/`ownershipTag`
+  opt only when the flag is set), so the extra history lookups stay bounded. Keep the folds pure;
+  the `fake` provider leaves `labelsAddedByViewer` unset, so the gate fails closed there.
   A **third** label mechanism, `prExclusionLabel`, is the mirror on the PR side: it reads
   `PullRequest.labels` to _exclude_ a tagged PR from action (see "PR health" above). Don't
   conflate the three.

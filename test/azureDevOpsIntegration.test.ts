@@ -15,6 +15,8 @@ import {
   AzureDevOpsWorkItemsIntegration,
   linkedPrFromRelations,
   normalizeState,
+  parseTags,
+  viewerAddedTags,
 } from '../src/integrations/azure/workItems.js';
 import { buildOpenWorkItemQuery } from '../src/integrations/azure/restAzureDevOpsApi.js';
 import type {
@@ -24,6 +26,7 @@ import type {
   AzPull,
   AzThread,
   AzWorkItem,
+  AzWorkItemUpdate,
   AzureDevOpsApi,
 } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { MergeMethod } from '../src/sink/actionSink.js';
@@ -36,6 +39,7 @@ interface Script {
   policyEvals?: Record<number, AzPolicyEvaluation[]>;
   labels?: Record<number, string[]>;
   workItems?: AzWorkItem[];
+  updates?: Record<number, AzWorkItemUpdate[]>;
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems';
 }
 
@@ -44,11 +48,19 @@ interface Recorded {
   newThreads: Array<{ prId: number; content: string }>;
   completions: Array<{ prId: number; commit: string; method: MergeMethod }>;
   tagQueries: Array<string | undefined>;
+  updateQueries: number[];
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
-  const recorded: Recorded = { threadReplies: [], newThreads: [], completions: [], tagQueries: [], labelSets: [] };
+  const recorded: Recorded = {
+    threadReplies: [],
+    newThreads: [],
+    completions: [],
+    tagQueries: [],
+    updateQueries: [],
+    labelSets: [],
+  };
   const api: AzureDevOpsApi = {
     async viewerUniqueName() {
       return script.viewer ?? 'bot@acme.com';
@@ -70,6 +82,10 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.tagQueries.push(tag);
       if (script.throwOn === 'listOpenWorkItems') throw new Error('boom');
       return script.workItems ?? [];
+    },
+    async listWorkItemUpdates(id) {
+      recorded.updateQueries.push(id);
+      return script.updates?.[id] ?? [];
     },
     async createThreadReply(prId, threadId, parentCommentId, content): Promise<AzCommentRef> {
       recorded.threadReplies.push({ prId, threadId, parentCommentId, content });
@@ -497,5 +513,74 @@ test('work items snapshot returns the last-good slice and records an error event
   const issues = new AzureDevOpsWorkItemsIntegration({ api: bad.api, store });
   const slice = await issues.snapshot();
   assert.deepEqual(slice.issues, []);
+  store.close();
+});
+
+// --------------------------------------------------------------------------
+// Tag-ownership resolution (viewerAddedTags / parseTags / snapshot wiring)
+// --------------------------------------------------------------------------
+
+test('parseTags: splits, trims and drops empties', () => {
+  assert.deepEqual(parseTags('bug; agent-ready ;;'), ['bug', 'agent-ready']);
+  assert.deepEqual(parseTags(undefined), []);
+});
+
+test('viewerAddedTags: attributes each add to the revision author', () => {
+  const updates: AzWorkItemUpdate[] = [
+    { revisedByUniqueName: 'me@acme.com', tagsOld: '', tagsNew: 'agent-ready' },
+    { revisedByUniqueName: 'other@acme.com', tagsOld: 'agent-ready', tagsNew: 'agent-ready; extra' },
+  ];
+  assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], ['agent-ready']);
+});
+
+test('viewerAddedTags: a re-add by someone else transfers ownership away', () => {
+  const updates: AzWorkItemUpdate[] = [
+    { revisedByUniqueName: 'me@acme.com', tagsOld: '', tagsNew: 'agent-ready' },
+    { revisedByUniqueName: 'other@acme.com', tagsOld: 'agent-ready', tagsNew: '' },
+    { revisedByUniqueName: 'other@acme.com', tagsOld: '', tagsNew: 'agent-ready' },
+  ];
+  assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], []);
+});
+
+test('viewerAddedTags: a revision that leaves tags untouched preserves ownership', () => {
+  const updates: AzWorkItemUpdate[] = [
+    { revisedByUniqueName: 'me@acme.com', tagsOld: '', tagsNew: 'agent-ready' },
+    { revisedByUniqueName: 'other@acme.com' }, // e.g. a title edit — no System.Tags diff
+  ];
+  assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], ['agent-ready']);
+});
+
+test('work items snapshot resolves tag ownership only for items carrying the gate tag', async () => {
+  const { api, recorded } = fakeApi({
+    viewer: 'me@acme.com',
+    workItems: [
+      workItem({ id: 1, tags: ['agent-ready'] }),
+      workItem({ id: 2, tags: ['agent-ready'] }),
+      workItem({ id: 3, tags: ['bug'] }),
+    ],
+    updates: {
+      1: [{ revisedByUniqueName: 'me@acme.com', tagsOld: '', tagsNew: 'agent-ready' }],
+      2: [{ revisedByUniqueName: 'attacker@acme.com', tagsOld: '', tagsNew: 'agent-ready' }],
+    },
+  });
+  const store = new Store(':memory:');
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, store, ownershipTag: 'agent-ready' });
+  const slice = await issues.snapshot();
+  const byNumber = new Map(slice.issues!.map((i) => [i.number, i]));
+  assert.deepEqual(byNumber.get(1)!.labelsAddedByViewer, ['agent-ready']);
+  assert.deepEqual(byNumber.get(2)!.labelsAddedByViewer, []);
+  assert.equal(byNumber.get(3)!.labelsAddedByViewer, undefined);
+  // Only the two tagged items triggered the extra revision fetch — #3 was skipped.
+  assert.deepEqual(recorded.updateQueries.sort(), [1, 2]);
+  store.close();
+});
+
+test('work items snapshot leaves ownership untracked when the gate is off', async () => {
+  const { api, recorded } = fakeApi({ workItems: [workItem({ id: 1, tags: ['agent-ready'] })] });
+  const store = new Store(':memory:');
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, store });
+  const slice = await issues.snapshot();
+  assert.equal(slice.issues![0]!.labelsAddedByViewer, undefined);
+  assert.deepEqual(recorded.updateQueries, []);
   store.close();
 });
