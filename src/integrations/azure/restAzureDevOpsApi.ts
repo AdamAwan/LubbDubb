@@ -239,7 +239,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
   async listPullStatuses(pullRequestId: number): Promise<AzStatus[]> {
     const data = await this.request<{ value: Array<{ state?: string | null }> }>(
-      this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/statuses`),
+      // latestOnly collapses each status context to its most recent post; without it
+      // ADO returns every superseded status too, so a re-run's stale failure would still
+      // sway aggregateCiStatus.
+      this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/statuses`, { latestOnly: 'true' }),
     );
     return data.value.map((s) => ({ state: s.state ?? null }));
   }
