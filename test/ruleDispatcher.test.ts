@@ -458,6 +458,7 @@ const dispatchDecision = (origin: string, createdAt: string) => ({
   cycleId: 'c',
   outcome: 'executed' as const,
   detail: '',
+  rule: null,
   createdAt,
   action: { type: 'dispatch_code_agent' as const, reason: 'r', originRef: origin },
 });
@@ -523,6 +524,7 @@ test('an already-escalated persistent conflict holds silently (no second escalat
             cycleId: 'c',
             outcome: 'executed',
             detail: '',
+            rule: null,
             createdAt: '2026-07-21T01:21:00Z',
             action: { type: 'escalate_to_human', reason: 'r', context: { originRef: 'pr:42:mergeable' } },
           },
@@ -658,6 +660,7 @@ test('an already-notified concern is not re-notified', async () => {
             cycleId: 'c',
             outcome: 'executed',
             detail: '',
+            rule: null,
             createdAt: 'n',
             action: { type: 'respond_to_agent', reason: 'r', agentId: 'ag1', originRefs: ['pr:42:mergeable'] },
           },

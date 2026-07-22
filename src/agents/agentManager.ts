@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import type { Store } from '../store/store.js';
+import type { ErrorRecorder } from '../errorLog.js';
+import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
 import type { Agent, AgentStatus, AgentUsage, Task } from '../types.js';
 import type { AgentSession, SessionFactory } from './session.js';
@@ -45,6 +47,8 @@ export interface AgentManagerOptions {
    * for runtimes with a session id (PTY); unset for stream/mock.
    */
   statusFile?: (sessionId: string) => string;
+  /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
+  errors?: ErrorRecorder;
 }
 
 interface AgentManagerEvents {
@@ -65,6 +69,9 @@ interface AgentManagerEvents {
  */
 export class AgentManager extends EventEmitter {
   private readonly sessions = new Map<string, AgentSession>();
+  // Exit code per agent, captured from the session's `exit` event so a `failed`
+  // terminal can be recorded with its cause (the code arrives before `failed`).
+  private readonly exitCodes = new Map<string, number>();
 
   constructor(
     private readonly store: Store,
@@ -146,11 +153,11 @@ export class AgentManager extends EventEmitter {
     this.wireSession(session, agent.id, task);
     try {
       session.start();
-    } catch {
+    } catch (err) {
       // Resume is best-effort; a spawn failure here just drops the session so the
       // boot reconciler falls back to marking the agent interrupted.
       this.sessions.delete(agent.id);
-      throw new Error(`resume spawn failed for agent ${agent.id}`);
+      throw new Error(`resume spawn failed for agent ${agent.id}: ${(err as Error).message}`);
     }
 
     if (wasWaiting) this.restoreWaiting(agent, task);
@@ -188,6 +195,7 @@ export class AgentManager extends EventEmitter {
     this.store.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
     if (agent) this.store.updateTask(agent.taskId, { status: 'interrupted' });
     this.sessions.delete(agentId);
+    this.exitCodes.delete(agentId); // a deliberate kill's exit code is not a failure cause
     if (agent) this.reflectStatus(agentId, agent.taskId, 'killed');
     return true;
   }
@@ -215,6 +223,7 @@ export class AgentManager extends EventEmitter {
       this.store.flushTranscript(id); // make the transcript durable before we exit
       this.store.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
       this.sessions.delete(id);
+      this.exitCodes.delete(id);
     }
   }
 
@@ -246,6 +255,9 @@ export class AgentManager extends EventEmitter {
     });
 
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
+    // Both runtimes emit `exit` (with the process exit code) before `failed`, so
+    // the code is in hand by the time the terminal transition is recorded.
+    session.on('exit', (code: number) => this.exitCodes.set(agentId, code));
     session.on('done', () => this.handleTerminal(agentId, task.id, 'done'));
     session.on('failed', () => this.handleTerminal(agentId, task.id, 'failed'));
   }
@@ -306,6 +318,10 @@ export class AgentManager extends EventEmitter {
     this.store.flushTranscript(agentId);
     this.store.updateAgent(agentId, { status: 'failed', endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status: 'failed' });
+    this.opts.errors?.record({
+      source: 'agent',
+      message: `Agent ${agentId} failed to spawn (task ${taskId}): ${err.message}`,
+    });
     this.reflectStatus(agentId, taskId, 'failed');
   }
 
@@ -314,6 +330,18 @@ export class AgentManager extends EventEmitter {
     this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status });
     this.sessions.delete(agentId);
+    const exitCode = this.exitCodes.get(agentId);
+    this.exitCodes.delete(agentId);
+    if (status === 'failed') {
+      // Surface the crash with its cause: the exit code (when the session exposed
+      // one) plus a tail of the agent's output, so "why did it die" is answerable
+      // from the Errors panel without digging through the transcript.
+      this.opts.errors?.record({
+        source: 'agent',
+        message: `Agent ${agentId} failed (task ${taskId})${exitCode !== undefined ? `, exit code ${exitCode}` : ''}`,
+        detail: recentOutputExcerpt(this.store.getTranscript(agentId)) || null,
+      });
+    }
     this.reflectStatus(agentId, taskId, status);
     this.emit('done', { agentId, taskId, status });
   }

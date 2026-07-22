@@ -31,6 +31,8 @@ export function buildDemoState(): DemoSeed {
       dispatcher: 'rule',
       steeringPriorities: ['unblock humans', 'keep CI green', 'ship reviewed work'],
       prExclusionLabel: 'lubbdubb-ignore',
+      // The demo world is all-fake, so the inject panel stays available.
+      injectable: true,
     },
     control: { cap: 3, paused: false },
     world: {
@@ -275,6 +277,7 @@ export function buildDemoState(): DemoSeed {
         action: { type: 'reply_on_pr', reason: 'reviewer asked for a config change on #142' },
         outcome: 'executed',
         detail: 'Drafted a reply and escalated for approval (confidence 0.62 below threshold)',
+        rule: null,
         createdAt: ago(1),
       },
       {
@@ -283,6 +286,7 @@ export function buildDemoState(): DemoSeed {
         action: { type: 'dispatch_fix_ci', reason: 'PR #142 CI is failing' },
         outcome: 'ok',
         detail: 'Dispatched agent onto feature/rate-limit',
+        rule: 'pr-ci-failing',
         createdAt: ago(8),
       },
       {
@@ -291,6 +295,7 @@ export function buildDemoState(): DemoSeed {
         action: { type: 'escalate', reason: 'agent parked on a human' },
         outcome: 'ok',
         detail: 'Rebase conflict on PR #139 needs a call',
+        rule: 'pr-base-update',
         createdAt: ago(2),
       },
       {
@@ -299,7 +304,24 @@ export function buildDemoState(): DemoSeed {
         action: { type: 'merge_pr', reason: 'PR #141 is merge-ready' },
         outcome: 'held',
         detail: 'auto-merge disabled — leaving for a human',
+        rule: 'pr-merge-ready',
         createdAt: ago(12),
+      },
+    ],
+    errors: [
+      {
+        id: 'err-2',
+        source: 'agent',
+        message: 'Agent agent-a0 failed (task task-a0), exit code 1',
+        detail: 'npm test\n✗ rate-limit window resets on rollover\nProcess exited with code 1',
+        createdAt: ago(11),
+      },
+      {
+        id: 'err-1',
+        source: 'provider',
+        message: 'sourceControl:github snapshot failed: request to api.github.com timed out',
+        detail: null,
+        createdAt: ago(25),
       },
     ],
     worldEvents: [
@@ -317,6 +339,40 @@ export function buildDemoState(): DemoSeed {
       '#139': 'https://github.com/example/lubbdubb/pull/139',
       '#208': 'https://github.com/example/lubbdubb/issues/208',
       '#205': 'https://github.com/example/lubbdubb/issues/205',
+    },
+    // The rule book the server ships in /api/state (src/dispatcher/rules.ts) —
+    // canned to just the rules the demo's decisions reference.
+    dispatchRules: {
+      'pr-ci-failing': {
+        number: '1',
+        name: 'Failing CI',
+        description:
+          'A PR with failing CI gets a code agent on its branch to investigate and push a fix — broken builds block everything downstream, so this outranks all other work.',
+      },
+      'pr-base-update': {
+        number: '2',
+        name: 'Base out of date',
+        description:
+          'A PR that is behind its base branch (clean update) or conflicts with it (resolve and push) gets a code agent, so it never sits unmergeable while the base moves on.',
+      },
+      'branch-notify': {
+        number: '1–2b',
+        name: 'One agent per branch',
+        description:
+          'At most one code agent works a PR branch: a fresh signal for a branch that already has a running agent is delivered to that agent as a note instead of spawning a second one.',
+      },
+      'pr-merge-ready': {
+        number: '3',
+        name: 'Merge-ready PR',
+        description:
+          'A green, approved, mergeable PR with no open comments is driven the last mile — merged in, gated by the auto-send policy (below the confidence bar it escalates for approval instead).',
+      },
+      idle: {
+        number: '9',
+        name: 'Nothing actionable',
+        description:
+          'No rule matched this cycle, so a no-op is recorded — idleness is a decision too, and stays auditable.',
+      },
     },
     // The Claude-bridged desk briefing — mail + Teams pings + meetings, all canned.
     briefing: {

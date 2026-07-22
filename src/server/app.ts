@@ -8,7 +8,20 @@ import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
 import type { InjectableEvent } from '../connector/connector.js';
+import type { IntegrationSelection } from '../integrations/integration.js';
 import { DeskBriefingSchema } from '../integrations/ingested/briefingSchema.js';
+import { DISPATCH_RULES } from '../dispatcher/rules.js';
+
+/**
+ * Whether the configured world accepts synthetic events: only the `fake`
+ * provider is injectable (`CompositeConnector.inject` records anything else as
+ * `inject_unhandled`). Gates both the `/api/inject` route and the cockpit's
+ * inject panel (via the state snapshot), so a real-integration deployment
+ * doesn't expose a demo affordance.
+ */
+export function isWorldInjectable(integrations: IntegrationSelection): boolean {
+  return Object.values(integrations).some((provider) => provider === 'fake');
+}
 
 /**
  * Builds the cockpit HTTP + WebSocket surface. REST for actions and state,
@@ -21,7 +34,19 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   const hub = new Hub(system);
   await app.register(websocket);
 
-  const { store, connector, harness, agents, escalations, config } = system;
+  const { store, connector, harness, agents, escalations, config, errors } = system;
+
+  // An unanticipated throw in a route must not vanish into a silent 500: record
+  // it to the error log (which also mirrors it to stderr and streams it to the
+  // cockpit), then return a plain 500.
+  app.setErrorHandler((err, req, reply) => {
+    errors.record({
+      source: 'server',
+      message: `${req.method} ${req.url} failed: ${err.message}`,
+      detail: err.stack ?? null,
+    });
+    return reply.code(500).send({ error: err.message });
+  });
 
   // -- Live stream ---------------------------------------------------------
   app.register(async (scoped) => {
@@ -44,6 +69,10 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
 
   // -- Actions -------------------------------------------------------------
   app.post('/api/inject', async (req, reply) => {
+    // Defence in depth: the cockpit hides the panel, but the route itself also
+    // refuses when no fake provider is configured to receive the event.
+    if (!isWorldInjectable(config.integrations))
+      return reply.code(403).send({ error: 'event injection is only available with fake integrations' });
     const event = req.body as InjectableEvent;
     if (!event || typeof event.kind !== 'string') return reply.code(400).send({ error: 'invalid event' });
     connector.inject(event);
@@ -198,6 +227,9 @@ export function buildStateSnapshot(system: System) {
         // The exclusion tag name, so the cockpit knows which label its ignore/watch
         // toggle sets and which PRs to render as ignored.
         prExclusionLabel: config.prExclusionLabel,
+        // Whether the inject panel should render: synthetic events only land on
+        // the `fake` provider, so real-integration deployments hide it.
+        injectable: isWorldInjectable(config.integrations),
       },
       // Live, mutable dispatch controls — the cockpit reads these (not the frozen
       // config block above) for the current cap and pause state.
@@ -213,7 +245,13 @@ export function buildStateSnapshot(system: System) {
       escalations: store.listEscalations(),
       decisions: store.listDecisions(100),
       worldEvents: store.listWorldEvents(100),
+      // Recorded failures (cycle exceptions, provider outages, agent crashes,
+      // route 500s) for the cockpit's Errors panel.
+      errors: store.listErrors(100),
       refUrls,
+      // The rule book, as data: decision rows carry a rule id; the cockpit looks
+      // the id up here to expand a decision into "which rule fired, and why".
+      dispatchRules: DISPATCH_RULES,
       // The read-only desk briefing (mail + Teams pings + meetings). Nullable until
       // a bridge has posted one. Meetings also flow through the world's calendar.
       briefing: store.getDeskBriefing(),

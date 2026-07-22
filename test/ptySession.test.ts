@@ -89,15 +89,35 @@ test('done sentinel finishes the session', () => {
   assert.equal(session.status, 'done');
 });
 
-test('send un-parks a waiting session and writes with a carriage return', () => {
+test('send un-parks a waiting session and submits with a separate carriage return', async () => {
   const backend = new FakePtyBackend();
-  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 5 });
   session.start();
   backend.last().emit('@@LUBBDUBB_WAITING:go?@@');
   assert.equal(session.status, 'waiting');
   session.send('yes');
   assert.equal(session.status, 'running');
-  assert.equal(backend.last().writes.at(-1), 'yes\r');
+  // The payload is written on its own; the submitting CR follows separately so the
+  // claude TUI doesn't fold it into the paste and leave the text unsubmitted.
+  assert.equal(backend.last().writes.at(-1), 'yes');
+  await new Promise((r) => setTimeout(r, 15));
+  assert.deepEqual(backend.last().writes, ['yes', '\r']);
+});
+
+test('send strips a trailing newline from the payload so the CR alone submits', async () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
+  session.start();
+  session.send('line1\nline2\n');
+  assert.deepEqual(backend.last().writes, ['line1\nline2', '\r']);
+});
+
+test('submitDelayMs 0 writes the payload and CR synchronously', () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
+  session.start();
+  session.send('go');
+  assert.deepEqual(backend.last().writes, ['go', '\r']);
 });
 
 test('clean exit with no sentinel still counts as done', () => {

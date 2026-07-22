@@ -19,6 +19,11 @@ export interface PtySessionOptions {
   waitingSentinelSuffix?: string;
   /** Additional literal substrings that mean "waiting for input" (e.g. tool-permission prompts). */
   waitingPatterns?: string[];
+  /**
+   * Gap (ms) between writing a message's text and the submitting carriage return.
+   * See {@link PtySession.send} for why the two are split. 0 writes both at once.
+   */
+  submitDelayMs?: number;
 }
 
 const DEFAULTS = {
@@ -26,6 +31,7 @@ const DEFAULTS = {
   waitingSentinelPrefix: '@@LUBBDUBB_WAITING:',
   waitingSentinelSuffix: '@@',
   waitingPatterns: [] as string[],
+  submitDelayMs: 60,
 };
 
 /** How many trailing characters we keep to match sentinels that straddle two data chunks. */
@@ -63,6 +69,7 @@ export class PtySession extends EventEmitter {
       doneSentinel: DEFAULTS.doneSentinel,
       waitingSentinelPrefix: DEFAULTS.waitingSentinelPrefix,
       waitingSentinelSuffix: DEFAULTS.waitingSentinelSuffix,
+      submitDelayMs: DEFAULTS.submitDelayMs,
       ...options,
     };
   }
@@ -86,12 +93,35 @@ export class PtySession extends EventEmitter {
     this.proc.onExit(({ exitCode }) => this.handleExit(exitCode));
   }
 
-  /** Type text into the session. Appends a carriage return so it's submitted. */
+  /**
+   * Type text into the session and submit it. The payload and the submitting
+   * carriage return are written *separately*, with a `submitDelayMs` gap: the
+   * claude TUI folds a single input burst into a paste and treats a trailing CR
+   * as a literal newline, so a glued-on CR leaves the message sitting in the
+   * input unsubmitted. The gap lets the CR land as a distinct Enter keypress.
+   * Trailing newlines in `text` are dropped so our lone CR does the submitting.
+   */
   send(text: string): void {
     if (!this.proc) throw new Error('PtySession not started');
-    this.proc.write(text.endsWith('\r') || text.endsWith('\n') ? text : text + '\r');
+    this.proc.write(text.replace(/[\r\n]+$/, ''));
+    this.submit();
     // Sending input un-parks the session.
     if (this._status === 'waiting') this.setStatus('running');
+  }
+
+  /** Write the submitting carriage return, after {@link PtySessionOptions.submitDelayMs}. */
+  private submit(): void {
+    const write = (): void => {
+      // The session may have finished/been killed during the gap.
+      if (!this.proc || this._status === 'done' || this._status === 'killed' || this._status === 'failed') return;
+      try {
+        this.proc.write('\r');
+      } catch {
+        /* session already gone */
+      }
+    };
+    if (this.opts.submitDelayMs <= 0) write();
+    else setTimeout(write, this.opts.submitDelayMs).unref?.();
   }
 
   /** Write raw bytes to the pty as-is — no appended carriage return, unlike {@link send} — for control chars like \x03. Does not change status. */

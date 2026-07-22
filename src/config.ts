@@ -129,6 +129,13 @@ export interface Config {
   agentPermissionMode: string;
   /** Wait this long after spawn before typing the task in, giving the REPL time to boot. */
   agentPromptDelayMs: number;
+  /**
+   * Gap between typing a message and sending the submitting carriage return (PTY
+   * only). The claude TUI folds a single input burst into a paste and treats a
+   * trailing CR as a literal newline, so a glued-on CR leaves the text sitting in
+   * the input unsubmitted; the gap lands the CR as a distinct Enter keypress.
+   */
+  agentSubmitDelayMs: number;
   /** Extra literal substrings that mean "the CLI is waiting for input" (backup escalation). */
   agentWaitingPatterns: string[];
   /** Command used to launch an agent session (overridable for tests). */
@@ -228,6 +235,7 @@ const DEFAULTS: Config = {
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
   agentPromptDelayMs: 1200,
+  agentSubmitDelayMs: 60,
   agentWaitingPatterns: [],
   claudeCommand: 'claude',
   claudeArgs: [],

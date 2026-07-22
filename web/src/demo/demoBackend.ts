@@ -54,7 +54,7 @@ class DemoServer {
 
   async pulse(): Promise<{ ok: true }> {
     // A heartbeat with nothing new to do — just advance the clock + audit it.
-    this.addDecision('heartbeat', 'ok', 'nothing to dispatch this cycle');
+    this.addDecision('heartbeat', 'ok', 'nothing to dispatch this cycle', undefined, 'idle');
     this.emit({ type: 'cycle:end', cycleId: this.id('cycle'), rationale: 'manual pulse' });
     this.dirty();
     return { ok: true };
@@ -187,13 +187,14 @@ class DemoServer {
     return this.state.agents.filter((a) => ['starting', 'running', 'waiting'].includes(a.status)).length;
   }
 
-  private addDecision(type: string, outcome: string, detail: string, reason?: string): void {
+  private addDecision(type: string, outcome: string, detail: string, reason?: string, rule?: string): void {
     const dec: Decision = {
       id: this.id('dec'),
       cycleId: this.id('cycle'),
       action: reason ? { type, reason } : { type },
       outcome,
       detail,
+      rule: rule ?? null,
       createdAt: new Date().toISOString(),
     };
     this.state.decisions = [dec, ...this.state.decisions].slice(0, 40);
@@ -313,7 +314,13 @@ class DemoServer {
             { id: this.id('c'), author: String(ev.author ?? 'reviewer'), body: String(ev.body ?? ''), handled: false },
           ];
           this.addWorldEvent('pr_comment', `pr:${n}`, `${String(ev.author ?? 'reviewer')} commented on PR #${n}`);
-          this.addDecision('respond_to_agent', 'ok', `notified branch agent about comment on PR #${n}`);
+          this.addDecision(
+            'respond_to_agent',
+            'ok',
+            `notified branch agent about comment on PR #${n}`,
+            undefined,
+            'branch-notify',
+          );
         }
         break;
       }

@@ -31,6 +31,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new GitHubSourceControlIntegration({
         api,
         store: ctx.store,
+        errors: ctx.errors,
         prAuthor: gh.filters?.prAuthor,
         owner: gh.owner,
         repo: gh.repo,
@@ -38,7 +39,12 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
     },
     azure: (ctx) => {
       const { api, az } = azureApi(ctx);
-      return new AzureDevOpsSourceControlIntegration({ api, store: ctx.store, prAuthor: az.filters?.prAuthor });
+      return new AzureDevOpsSourceControlIntegration({
+        api,
+        store: ctx.store,
+        errors: ctx.errors,
+        prAuthor: az.filters?.prAuthor,
+      });
     },
   },
   issues: {
@@ -48,6 +54,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new GitHubIssuesIntegration({
         api,
         store: ctx.store,
+        errors: ctx.errors,
         issueLabel: gh.filters?.issueLabel,
         owner: gh.owner,
         repo: gh.repo,
@@ -59,6 +66,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new AzureDevOpsWorkItemsIntegration({
         api,
         store: ctx.store,
+        errors: ctx.errors,
         workItemTag: az.filters?.workItemTag,
         ownershipTag: ownershipLabel(ctx),
       });
@@ -71,7 +79,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
     fake: (_ctx, world) => new FakeCalendarIntegration(world),
     microsoft365: (ctx) => {
       const { api, windowDays } = microsoftApi(ctx);
-      return new MicrosoftCalendarIntegration({ api, store: ctx.store, windowDays });
+      return new MicrosoftCalendarIntegration({ api, store: ctx.store, errors: ctx.errors, windowDays });
     },
     ingested: (ctx) => new IngestedCalendarIntegration({ store: ctx.store }),
   },
