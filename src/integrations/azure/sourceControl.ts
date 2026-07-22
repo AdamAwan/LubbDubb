@@ -9,7 +9,7 @@ import type {
   PrReplyCapable,
   WorldSlice,
 } from '../integration.js';
-import type { AzStatus, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
+import type { AzPolicyEvaluation, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
 
 export interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
@@ -49,9 +49,9 @@ export class AzureDevOpsSourceControlIntegration
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [threads, statuses, labels] = await Promise.all([
+          const [threads, policyEvals, labels] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
-            api.listPullStatuses(p.pullRequestId),
+            api.listPolicyEvaluations(p.pullRequestId),
             api.listPullLabels(p.pullRequestId),
           ]);
           this.mergeCommits.set(p.pullRequestId, p.lastMergeSourceCommit);
@@ -61,7 +61,7 @@ export class AzureDevOpsSourceControlIntegration
             title: p.title,
             branch: p.branch,
             baseBranch: p.baseBranch,
-            ciStatus: aggregateCiStatus(statuses),
+            ciStatus: aggregatePolicyCiStatus(policyEvals),
             unresolvedComments: buildUnresolvedComments(threads, viewer),
             approved: computeApproved(p.reviewerVotes),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
@@ -155,28 +155,58 @@ export function mergeableFromStatus(mergeStatus: string): boolean | undefined {
   return undefined;
 }
 
-const FAILING_STATES: ReadonlySet<string> = new Set(['failed', 'error']);
+/**
+ * Azure's well-known branch-policy type GUIDs (stable across every organization).
+ * Only these two are *automated checks* — build validation and external status
+ * posts. Reviewer / comment / work-item / merge-strategy policies are human or
+ * process gates and already map onto `approved` / `unresolvedComments` /
+ * `mergeableState`, so folding them into `ciStatus` would spuriously report "CI
+ * failing" for e.g. an unmet minimum-reviewers rule.
+ */
+const BUILD_POLICY_TYPE = '0609b952-1397-4640-95ec-e00a01b2c241';
+const STATUS_POLICY_TYPE = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
+const CI_POLICY_TYPES: ReadonlySet<string> = new Set([BUILD_POLICY_TYPE, STATUS_POLICY_TYPE]);
 
 /**
- * Fold a PR's statuses into one {@link CiStatus}: any failure wins, else any
- * still-pending signal is `pending`, else a present success is `passing`, else
- * `unknown` (nothing has reported yet). Mirrors the GitHub aggregation.
+ * Fold a PR's *branch-policy evaluations* into one {@link CiStatus} — the
+ * authoritative "are the required checks passing?" signal.
+ *
+ * This replaces aggregating the PR *statuses* endpoint, which returns every
+ * status ever posted across *all* iterations: one stale `failed` from a
+ * superseded push permanently poisoned the PR to `failing`. Policy evaluations
+ * instead reflect only the current state of the policies that apply now, so no
+ * per-iteration de-dup is needed. We consider only *enabled, blocking* CI-type
+ * policies: a `rejected`/`broken` one wins (`failing`), else a `queued`/`running`
+ * one is `pending`, else an `approved` one is `passing`, else `unknown` (no CI
+ * policy applies — a repo with no build/status branch policy has no required
+ * check to gate on).
  */
-export function aggregateCiStatus(statuses: AzStatus[]): CiStatus {
+export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
   let failing = false;
   let pending = false;
-  let success = false;
+  let passing = false;
 
-  for (const s of statuses) {
-    if (s.state === 'pending' || s.state === 'notSet') pending = true;
-    else if (s.state && FAILING_STATES.has(s.state)) failing = true;
-    else if (s.state === 'succeeded') success = true;
-    // 'notApplicable' / null contribute no signal.
+  for (const e of evals) {
+    if (!e.isEnabled || !e.isBlocking || !CI_POLICY_TYPES.has(e.typeId)) continue;
+    switch (e.status) {
+      case 'rejected':
+      case 'broken': // the policy errored — it still blocks the merge, so treat it as failing.
+        failing = true;
+        break;
+      case 'queued':
+      case 'running':
+        pending = true;
+        break;
+      case 'approved':
+        passing = true;
+        break;
+      // 'notApplicable' / null contribute no signal.
+    }
   }
 
   if (failing) return 'failing';
   if (pending) return 'pending';
-  if (success) return 'passing';
+  if (passing) return 'passing';
   return 'unknown';
 }
 

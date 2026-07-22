@@ -22,8 +22,16 @@ export interface AzureDevOpsApi {
   listActivePullRequests(): Promise<AzPull[]>;
   /** Comment threads on a PR — the review-comment signal. */
   listPullThreads(pullRequestId: number): Promise<AzThread[]>;
-  /** PR statuses (build-validation / custom status posts) — the CI signal. */
-  listPullStatuses(pullRequestId: number): Promise<AzStatus[]>;
+  /**
+   * Branch-policy evaluations for a PR — the authoritative required-checks signal.
+   *
+   * The PR *statuses* endpoint is the wrong source for "are the checks passing":
+   * it returns every status ever posted across *all* iterations, so a single
+   * stale `failed` from a superseded push poisons the PR forever. Policy
+   * evaluations instead reflect only the current state of the policies that
+   * actually apply to this PR, and mark which are `isBlocking` (i.e. required).
+   */
+  listPolicyEvaluations(pullRequestId: number): Promise<AzPolicyEvaluation[]>;
   /** Label names on a PR — the exclusion-tag signal. */
   listPullLabels(pullRequestId: number): Promise<string[]>;
 
@@ -87,9 +95,19 @@ export interface AzComment {
   commentType: string;
 }
 
-export interface AzStatus {
-  /** succeeded | failed | pending | notApplicable | notSet | error | null. */
-  state: string | null;
+export interface AzPolicyEvaluation {
+  /**
+   * The policy configuration's well-known type GUID (stable across every org).
+   * Identifies build-validation vs status vs required-reviewers vs … so callers
+   * can keep `ciStatus` to *automated* checks only.
+   */
+  typeId: string;
+  /** queued | running | approved | rejected | notApplicable | broken | null. */
+  status: string | null;
+  /** True when the policy blocks completion — i.e. a *required* check. */
+  isBlocking: boolean;
+  /** False when the policy is disabled; a disabled policy's evaluation is noise. */
+  isEnabled: boolean;
 }
 
 export interface AzWorkItem {

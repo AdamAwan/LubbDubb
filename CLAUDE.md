@@ -162,9 +162,16 @@ The **`azure` provider** (`src/integrations/azure/`, Azure DevOps Repos + Boards
 same shape: all HTTP behind the narrow `AzureDevOpsApi` seam (`azureDevOpsApi.ts`),
 `RestAzureDevOpsApi` (`restAzureDevOpsApi.ts`) the only file that touches the network _and_
 resolves auth, and tests (`test/azureDevOpsIntegration.test.ts`) inject a scripted fake
-`AzureDevOpsApi`. Mapping logic — CI aggregation from PR statuses, approval from reviewer votes,
-`mergeStatus`→`MergeableState`, thread→comment folding, linked-PR-from-relations — is exported as
-pure functions and tested directly. Auth is unlike GitHub's single env token: `resolveAzureAuth`
+`AzureDevOpsApi`. Mapping logic — CI aggregation from branch-**policy evaluations**, approval from
+reviewer votes, `mergeStatus`→`MergeableState`, thread→comment folding, linked-PR-from-relations —
+is exported as pure functions and tested directly. **CI status comes from policy evaluations, not
+the PR `statuses` endpoint**: that endpoint returns every status ever posted across _all_ iterations,
+so a stale `failed` from a superseded push poisons the PR forever (the false-"failing" bug).
+`aggregatePolicyCiStatus` instead reads `listPolicyEvaluations` (`/_apis/policy/evaluations`, keyed by
+the `vstfs:///CodeReview/CodeReviewId/{projectId}/{prId}` artifact — so `RestAzureDevOpsApi` resolves
+the project GUID once) and folds only _enabled, blocking_ CI-type policies (build-validation +
+status; reviewer/comment/work-item policies are human gates that map to `approved`/`unresolvedComments`
+instead). Auth is unlike GitHub's single env token: `resolveAzureAuth`
 prefers `AZURE_DEVOPS_PAT` (Basic) and otherwise shells out to the logged-in `az` CLI (Bearer,
 cached), so it's the one place `az` is invoked. Work-item **tags** map onto `Issue.labels`, so the
 provider-agnostic pickup/priority gates work unchanged. Merging is Azure "complete PR", which
