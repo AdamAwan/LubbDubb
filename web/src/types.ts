@@ -189,6 +189,15 @@ export interface WorldEvent {
   createdAt: string;
 }
 
+/** One recorded failure (cycle exception, provider outage, agent crash, route 500). */
+export interface ErrorLogEntry {
+  id: string;
+  source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
+  message: string;
+  detail: string | null;
+  createdAt: string;
+}
+
 export interface AppState {
   config: {
     heartbeatIntervalMs: number;
@@ -209,6 +218,8 @@ export interface AppState {
   escalations: Escalation[];
   decisions: Decision[];
   worldEvents: WorldEvent[];
+  /** Recorded failures, newest first — the Errors panel. */
+  errors: ErrorLogEntry[];
   /** The Claude-bridged desk briefing, or null until a bridge has posted one. */
   briefing: DeskBriefing | null;
   /**

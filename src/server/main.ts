@@ -14,7 +14,12 @@ async function main(): Promise<void> {
 
   // Runs before the boot cycle so resumed agents occupy their concurrency slots
   // before any new work is dispatched.
-  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
+  const { resumed, interrupted } = reconcileAndResumeOnBoot(
+    system.store,
+    system.agents,
+    system.escalations,
+    system.errors,
+  );
   if (resumed > 0 || interrupted > 0) {
     console.log(`[lubbdubb] boot: resumed ${resumed} agent(s), interrupted ${interrupted} from a previous run`);
   }

@@ -90,8 +90,19 @@ CREATE TABLE IF NOT EXISTS world_baseline (
   world TEXT NOT NULL
 );
 
+-- Recorded failures (cycle exceptions, provider outages, agent crashes, route
+-- 500s) — the Errors panel's backing store. See src/errorLog.ts.
+CREATE TABLE IF NOT EXISTS error_events (
+  id         TEXT PRIMARY KEY,
+  source     TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  detail     TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_error_events_created ON error_events(created_at);
 `;

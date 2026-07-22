@@ -7,6 +7,8 @@ import type {
   Agent,
   Decision,
   DeskBriefing,
+  ErrorLogEntry,
+  ErrorLogInput,
   Escalation,
   EscalationContext,
   Task,
@@ -360,6 +362,29 @@ export class Store {
       .run(`ev_${nanoid(10)}`, kind, JSON.stringify(payload), this.now());
   }
 
+  // -- Error log -----------------------------------------------------------
+
+  recordError(input: ErrorLogInput): ErrorLogEntry {
+    const entry: ErrorLogEntry = {
+      id: `err_${nanoid(10)}`,
+      createdAt: this.now(),
+      source: input.source,
+      message: input.message,
+      detail: input.detail ?? null,
+    };
+    this.db
+      .prepare(`INSERT INTO error_events (id, source, message, detail, created_at) VALUES (?,?,?,?,?)`)
+      .run(entry.id, entry.source, entry.message, entry.detail, entry.createdAt);
+    return entry;
+  }
+
+  listErrors(limit = 100): ErrorLogEntry[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM error_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(limit) as ErrorEventRow[];
+    return rows.map(rowToErrorEntry);
+  }
+
   // -- World change history ------------------------------------------------
 
   /** Stamp each diffed transition with an id + timestamp, persist, return rows. */
@@ -455,6 +480,13 @@ interface WorldEventRow {
   summary: string;
   created_at: string;
 }
+interface ErrorEventRow {
+  id: string;
+  source: string;
+  message: string;
+  detail: string | null;
+  created_at: string;
+}
 
 function rowToTask(r: TaskRow): Task {
   return {
@@ -506,6 +538,15 @@ function rowToDecision(r: DecisionRow): Decision {
     cycleId: r.cycle_id,
     action: JSON.parse(r.action) as Decision['action'],
     outcome: r.outcome as Decision['outcome'],
+    detail: r.detail,
+    createdAt: r.created_at,
+  };
+}
+function rowToErrorEntry(r: ErrorEventRow): ErrorLogEntry {
+  return {
+    id: r.id,
+    source: r.source as ErrorLogEntry['source'],
+    message: r.message,
     detail: r.detail,
     createdAt: r.created_at,
   };

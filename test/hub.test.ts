@@ -7,13 +7,14 @@ import type { WebSocket } from 'ws';
 
 const OPEN = 1;
 
-/** Minimal System: Hub only wires `.on` handlers on these three emitters. */
+/** Minimal System: Hub only wires `.on` handlers on these four emitters. */
 function fakeSystem(): { system: System; agents: EventEmitter } {
   const agents = new EventEmitter();
   const system = {
     harness: new EventEmitter(),
     agents,
     escalations: new EventEmitter(),
+    errors: new EventEmitter(),
   } as unknown as System;
   return { system, agents };
 }

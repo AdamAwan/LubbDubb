@@ -10,6 +10,7 @@ import { Vitals } from './components/Vitals.js';
 import { FleetControl } from './components/FleetControl.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
+import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { Briefing } from './components/Briefing.js';
 import { AsyncButton } from './components/AsyncButton.js';
 import { statusDot, refLink } from './components/util.js';
@@ -214,6 +215,10 @@ export function App() {
           <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} />
           <h2 className="feed-heading">Activity</h2>
           <ActivityFeed events={state.worldEvents} now={now} />
+          <h2 className="feed-heading">
+            Errors <span className={`count${state.errors.length > 0 ? ' urgent' : ''}`}>{state.errors.length}</span>
+          </h2>
+          <ErrorsPanel errors={state.errors} now={now} />
         </section>
       </main>
 
