@@ -20,6 +20,11 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
     (s) => !s.description || !s.acceptanceCriteria || s.wafPillars.length === 0,
   ).length;
   const meetingsToPrep = state.world.calendar.filter((c) => !c.prepDone && c.prepDocs.length > 0).length;
+  // Desk items awaiting a look: unread/flagged mail plus every Teams ping. Zero
+  // when no briefing has been ingested.
+  const needsReply = state.briefing
+    ? state.briefing.mail.filter((m) => m.isUnread || m.isFlagged).length + state.briefing.pings.length
+    : 0;
 
   const items: { label: string; value: number; tone?: 'urgent' | 'warn' | 'ok'; hint: string }[] = [
     { label: 'Running', value: liveAgents, tone: liveAgents ? 'ok' : undefined, hint: `${liveAgents} of ${cap} slots` },
@@ -40,6 +45,12 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
     },
     { label: 'Grooming', value: grooming, tone: grooming ? 'warn' : undefined, hint: 'stories missing detail' },
     { label: 'Prep', value: meetingsToPrep, tone: meetingsToPrep ? 'warn' : undefined, hint: 'meetings needing prep' },
+    {
+      label: 'Needs reply',
+      value: needsReply,
+      tone: needsReply ? 'warn' : undefined,
+      hint: 'unread/flagged mail + Teams pings',
+    },
   ];
 
   return (

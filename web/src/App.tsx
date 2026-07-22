@@ -10,6 +10,7 @@ import { Vitals } from './components/Vitals.js';
 import { FleetControl } from './components/FleetControl.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
+import { Briefing } from './components/Briefing.js';
 import { AsyncButton } from './components/AsyncButton.js';
 import { statusDot, refLink } from './components/util.js';
 import { useNow } from './hooks.js';
@@ -203,6 +204,9 @@ export function App() {
             state={state}
             onToggleExclude={(prNumber, excluded) => api.setPrExcluded(prNumber, excluded).then(refresh)}
           />
+
+          <h3 className="muted">Desk</h3>
+          <Briefing briefing={state.briefing} now={now} />
         </section>
 
         <section className="col">

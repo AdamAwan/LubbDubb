@@ -265,6 +265,56 @@ export function buildDemoState(): DemoSeed {
       '#208': 'https://github.com/example/lubbdubb/issues/208',
       '#205': 'https://github.com/example/lubbdubb/issues/205',
     },
+    // The Claude-bridged desk briefing — mail + Teams pings + meetings, all canned.
+    briefing: {
+      generatedAt: ago(20),
+      windowStart: ago(20),
+      windowEnd: ahead(600),
+      owner: { email: 'you@example.com', name: 'You' },
+      areas: ['me', 'statements'],
+      meetings: [
+        {
+          id: 'evt-1',
+          subject: 'Architecture review',
+          start: ahead(95),
+          end: ahead(155),
+          isOnline: true,
+          joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo',
+          webLink: 'https://outlook.office365.com/owa/?itemid=evt-1',
+          organizer: 'Priya',
+          attendeeCount: 6,
+          responseRequested: true,
+          showAs: 'busy',
+          relevance: 'mine',
+        },
+      ],
+      mail: [
+        {
+          id: 'mail-1',
+          subject: 'Q3 statements ready for review',
+          from: 'finance@example.com',
+          receivedAt: ago(45),
+          isUnread: true,
+          isFlagged: true,
+          webLink: 'https://outlook.office365.com/mail/inbox/id/mail-1',
+          preview: 'The consolidated statements are attached — please confirm the revenue split by EOD.',
+          relevance: 'area',
+          area: 'statements',
+        },
+      ],
+      pings: [
+        {
+          id: 'ping-1',
+          source: 'teams',
+          chatOrChannel: 'Platform',
+          from: 'Jo',
+          sentAt: ago(12),
+          preview: 'Did the rate-limit fix land? CI still looks red on my end.',
+          webLink: 'https://teams.microsoft.com/l/message/demo/ping-1',
+          relevance: 'mine',
+        },
+      ],
+    },
   };
 
   const transcripts: Record<string, string> = {

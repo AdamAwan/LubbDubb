@@ -129,6 +129,72 @@ export interface WorldSnapshot {
 }
 
 // ---------------------------------------------------------------------------
+// Desk briefing (Claude-bridged Microsoft 365 ingest)
+// ---------------------------------------------------------------------------
+
+/**
+ * A read-only snapshot of the operator's Microsoft 365 desk — calendar, mail and
+ * Teams pings — gathered by a Claude session (which already holds an authenticated
+ * M365 connector) and POSTed to `/api/briefing`. It sidesteps the Graph auth the
+ * `microsoft365` calendar provider lacks. Only the `meetings` half feeds the harness
+ * world (via the `calendar:ingested` provider); `mail`/`pings` stay a passive doc
+ * surfaced in `/api/state` and the cockpit, never entering the dispatcher.
+ */
+export interface DeskBriefing {
+  /** ISO — when the bridge gathered the data. The staleness source for the cockpit badge. */
+  generatedAt: string;
+  windowStart: string; // ISO
+  windowEnd: string; // ISO
+  owner: { email: string; name?: string };
+  /** The ownership filters the bridge applied, e.g. ["me","statements"]. */
+  areas: string[];
+  meetings: BriefingMeeting[];
+  mail: BriefingMail[];
+  pings: BriefingPing[];
+}
+
+export interface BriefingMeeting {
+  id: string;
+  subject: string;
+  start: string; // ISO UTC
+  end: string; // ISO UTC
+  isOnline: boolean;
+  joinUrl?: string;
+  webLink?: string;
+  organizer?: string;
+  attendeeCount?: number;
+  /** Am I a required attendee / the organizer. */
+  responseRequested?: boolean;
+  showAs?: 'free' | 'tentative' | 'busy' | 'oof' | 'workingElsewhere' | 'unknown';
+  relevance: 'mine' | 'area';
+}
+
+export interface BriefingMail {
+  id: string;
+  subject: string;
+  from: string;
+  receivedAt: string; // ISO
+  isUnread: boolean;
+  isFlagged: boolean;
+  webLink?: string;
+  /** Sanitised body excerpt, <=200 chars. */
+  preview?: string;
+  relevance: 'mine' | 'area';
+  area?: string;
+}
+
+export interface BriefingPing {
+  id: string;
+  source: 'teams';
+  chatOrChannel: string;
+  from: string;
+  sentAt: string; // ISO
+  preview?: string;
+  webLink?: string;
+  relevance: 'mine' | 'area';
+}
+
+// ---------------------------------------------------------------------------
 // World change history (observed transitions between snapshots)
 // ---------------------------------------------------------------------------
 

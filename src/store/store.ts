@@ -6,6 +6,7 @@ import { SCHEMA } from './schema.js';
 import type {
   Agent,
   Decision,
+  DeskBriefing,
   Escalation,
   EscalationContext,
   Task,
@@ -337,6 +338,20 @@ export class Store {
         `INSERT INTO connector_state (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
       )
       .run(key, value);
+  }
+
+  /**
+   * The latest ingested desk briefing, or null if none has been posted. Stored as
+   * JSON under the single `desk_briefing` connector-state key — no schema change,
+   * reusing the existing KV table.
+   */
+  getDeskBriefing(): DeskBriefing | null {
+    const raw = this.getConnectorState('desk_briefing');
+    return raw ? (JSON.parse(raw) as DeskBriefing) : null;
+  }
+
+  setDeskBriefing(briefing: DeskBriefing): void {
+    this.setConnectorState('desk_briefing', JSON.stringify(briefing));
   }
 
   recordConnectorEvent(kind: string, payload: unknown): void {

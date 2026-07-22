@@ -8,6 +8,7 @@ import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
 import type { InjectableEvent } from '../connector/connector.js';
+import { DeskBriefingSchema } from '../integrations/ingested/briefingSchema.js';
 
 /**
  * Builds the cockpit HTTP + WebSocket surface. REST for actions and state,
@@ -50,6 +51,32 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     // An injected event should provoke an immediate cycle.
     const report = await harness.runCycle('manual');
     return { ok: true, report };
+  });
+
+  // Ingest a Claude-bridged desk briefing (calendar + mail + Teams pings). The
+  // bridge is an untrusted client, so the body is validated before it lands. Like
+  // `/api/inject`, a successful ingest kicks a cycle so the meeting half emits its
+  // `worldDiff` events promptly (the mail/pings half is a passive doc).
+  app.post('/api/briefing', async (req, reply) => {
+    const parsed = DeskBriefingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const error = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+      return reply.code(400).send({ error });
+    }
+    const briefing = parsed.data;
+    store.setDeskBriefing(briefing);
+    // Log/echo the owner the bridge acted as, so an ingest is auditable.
+    store.recordConnectorEvent('desk_briefing_ingested', {
+      owner: briefing.owner,
+      areas: briefing.areas,
+      counts: { meetings: briefing.meetings.length, mail: briefing.mail.length, pings: briefing.pings.length },
+    });
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return {
+      ok: true,
+      counts: { meetings: briefing.meetings.length, mail: briefing.mail.length, pings: briefing.pings.length },
+    };
   });
 
   app.post('/api/pulse', async () => {
@@ -187,6 +214,9 @@ export function buildStateSnapshot(system: System) {
       decisions: store.listDecisions(100),
       worldEvents: store.listWorldEvents(100),
       refUrls,
+      // The read-only desk briefing (mail + Teams pings + meetings). Nullable until
+      // a bridge has posted one. Meetings also flow through the world's calendar.
+      briefing: store.getDeskBriefing(),
     };
   });
 }
