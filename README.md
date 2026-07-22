@@ -184,6 +184,14 @@ How real agents speak the protocol: the harness appends a system prompt telling 
 
 The sentinels are detected for status _and_ stripped from the displayed transcript, so they never leak into the cockpit. In `stream` mode the transcript is also normalised for legibility: assistant reasoning is shown as plain text, tool calls appear on their own labelled line with a concise input summary, and tool results are sanitised (ANSI/control noise removed) and truncated to keep the view scannable. The fleet-card one-line preview is ANSI-stripped so coloured labels never show as raw escapes.
 
+### Hosted demo (GitHub Pages)
+
+The cockpit is a static Vite SPA, so it can be published to GitHub Pages on its own — with the server, SQLite, and every integration replaced by an **in-browser fake backend**. There is no Node process, no network, and no real repositories behind it; the connections are simulated.
+
+- **Build it:** `npm run web:build:demo` — sets `VITE_DEMO=1` (see `web/.env.demo`) and a Pages base path, then bundles to `web/dist`. `npm run web:dev:demo` runs the same mode with HMR at `localhost:5173`.
+- **How it works:** `web/src/demo/` provides `demoApi` and `connectDemoWs`, drop-in replacements for the `/api/*` REST surface and the `/ws` socket. `web/src/api.ts` swaps them in when `VITE_DEMO=1`; the flag is dead-code-eliminated from the production build, so nothing demo-related ships in the real server bundle. `App.tsx` is unchanged — it can't tell the fake backend from the real one. The demo is fully interactive: inject events, pulse, answer escalations, pause/scale the fleet, and open an agent's live transcript.
+- **Deploy:** `.github/workflows/pages.yml` builds the demo and publishes it on every push to `main`. Enable it once under **Settings → Pages → Source → GitHub Actions**; the site lands at `https://<user>.github.io/LubbDubb/`. If your repo name or owner differs, adjust the `--base` in the `web:build:demo` script to match (`/<repo>/`).
+
 ## Development
 
 ```bash
