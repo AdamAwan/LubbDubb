@@ -214,6 +214,31 @@ export function buildDemoState(): DemoSeed {
     ],
     escalations: [
       {
+        // A drafted PR reply held for sign-off — the auto-send gate wrote a
+        // response to the reviewer's comment on #142 but wasn't confident enough
+        // to send it unattended, so it escalates for approval (the "Draft reply"
+        // panel + approve flow).
+        id: 'esc-2',
+        type: 'review_reply',
+        status: 'open',
+        prompt:
+          'Draft reply for PR #142:\n\nGood call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.',
+        context: {
+          taskTitle: 'Fix failing CI on PR #142',
+          originRef: 'pr:142',
+          prNumber: 142,
+          commentId: 'c-1',
+          draft:
+            'Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.',
+          confidence: 0.62,
+        },
+        agentId: 'agent-a1',
+        taskId: 'task-a1',
+        response: null,
+        createdAt: ago(1),
+        answeredAt: null,
+      },
+      {
         id: 'esc-1',
         type: 'agent_waiting',
         status: 'open',
@@ -232,6 +257,14 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     decisions: [
+      {
+        id: 'dec-4',
+        cycleId: 'cycle-103',
+        action: { type: 'reply_on_pr', reason: 'reviewer asked for a config change on #142' },
+        outcome: 'executed',
+        detail: 'Drafted a reply and escalated for approval (confidence 0.62 below threshold)',
+        createdAt: ago(1),
+      },
       {
         id: 'dec-3',
         cycleId: 'cycle-102',
