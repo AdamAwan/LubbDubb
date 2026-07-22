@@ -191,7 +191,14 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   const fromEnv: Partial<Config> = {};
   if (process.env.PORT) fromEnv.port = Number(process.env.PORT);
   if (process.env.LUBBDUBB_DB) fromEnv.dbPath = process.env.LUBBDUBB_DB;
+  if (process.env.LUBBDUBB_REPO_ROOT) fromEnv.repoRoot = process.env.LUBBDUBB_REPO_ROOT;
   const merged = { ...DEFAULTS, ...fromFile, ...fromEnv, ...overrides };
+
+  // The repo defaults to wherever the app is launched (`process.cwd()`). A
+  // relative override (config file or env) is resolved to absolute here: git runs
+  // with `cwd: repoRoot` and agents run in a worktree/scratch cwd, so a path left
+  // relative would resolve against the wrong directory once work is dispatched.
+  merged.repoRoot = resolve(process.cwd(), merged.repoRoot);
 
   // autoSend is a nested object: deep-merge it so a config file (or override)
   // can set just one field (e.g. only `enabled`) without dropping the defaults
