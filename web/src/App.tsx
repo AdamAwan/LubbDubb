@@ -8,8 +8,10 @@ import { EscalationCard } from './components/EscalationCard.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
 import { Vitals } from './components/Vitals.js';
 import { FleetControl } from './components/FleetControl.js';
+import { UsageChip } from './components/UsageChip.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
+import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { Briefing } from './components/Briefing.js';
 import { AsyncButton } from './components/AsyncButton.js';
 import { statusDot, refLink } from './components/util.js';
@@ -128,6 +130,7 @@ export function App() {
           <span className={`chip ${connected ? 'ok' : 'bad'}`}>
             <span className={`dot ${connected ? 'green' : 'red'}`} /> {connected ? 'live' : 'offline'}
           </span>
+          <UsageChip usage={state.usage} now={now} />
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
           {state.control.paused && <span className="chip warn">paused</span>}
           <FleetControl live={liveAgents.length} cap={state.control.cap} paused={state.control.paused} />
@@ -137,7 +140,7 @@ export function App() {
         </div>
       </header>
 
-      <InjectPanel onInjected={refresh} world={state.world} />
+      {state.config.injectable && <InjectPanel onInjected={refresh} world={state.world} />}
       <Vitals state={state} liveAgents={liveAgents.length} cap={state.control.cap} />
 
       <main className="grid">
@@ -148,7 +151,10 @@ export function App() {
           {liveAgents.length === 0 && (
             <div className="empty-panel">
               <span className="empty-mark">♥</span>
-              <p>No agents running. The harness is idle — inject an event to wake it.</p>
+              <p>
+                No agents running. The harness is idle
+                {state.config.injectable ? ' — inject an event to wake it' : ' — waiting for the world to change'}.
+              </p>
             </div>
           )}
           {liveAgents.map((a) => (
@@ -211,9 +217,13 @@ export function App() {
 
         <section className="col">
           <h2>Decision log</h2>
-          <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} />
+          <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} rules={state.dispatchRules} />
           <h2 className="feed-heading">Activity</h2>
           <ActivityFeed events={state.worldEvents} now={now} />
+          <h2 className="feed-heading">
+            Errors <span className={`count${state.errors.length > 0 ? ' urgent' : ''}`}>{state.errors.length}</span>
+          </h2>
+          <ErrorsPanel errors={state.errors} now={now} />
         </section>
       </main>
 

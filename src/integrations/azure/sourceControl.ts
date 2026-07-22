@@ -1,4 +1,5 @@
 import type { Store } from '../../store/store.js';
+import type { ErrorRecorder } from '../../errorLog.js';
 import type { MergeMethod, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
 import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
@@ -15,6 +16,8 @@ export interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
   api: AzureDevOpsApi;
   store: Store;
+  /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
+  errors?: ErrorRecorder;
   /** Only surface PRs opened by this uniqueName. Unset = all active PRs. */
   prAuthor?: string;
 }
@@ -81,9 +84,9 @@ export class AzureDevOpsSourceControlIntegration
       this.lastGood = pullRequests;
       return { pullRequests };
     } catch (err) {
-      this.opts.store.recordConnectorEvent('azure_snapshot_error', {
-        capability: this.capability,
-        message: (err as Error).message,
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
       return { pullRequests: this.lastGood };
     }

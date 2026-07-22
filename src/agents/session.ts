@@ -8,7 +8,9 @@ import type { EventEmitter } from 'node:events';
  *     unattended default: no TUI, structured events, bidirectional streaming.
  *
  * Both emit: 'output'(delta), 'waiting'(reason), 'done'(), 'failed'(),
- * 'status'(status), 'exit'(code).
+ * 'status'(status), 'exit'(code). The stream runtime additionally emits
+ * 'usage'(AgentUsage) at each turn end — cumulative cost/tokens/turns off the
+ * `result` event; the PTY runtime has no such channel and never emits it.
  */
 export type AgentSessionStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'failed';
 

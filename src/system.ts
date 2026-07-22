@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Config } from './config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
@@ -15,6 +17,7 @@ import {
 } from './agents/agentProtocol.js';
 import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
+import { StatusFileRateLimits } from './agents/statusLine.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
 import { recentOutputExcerpt } from './escalation/context.js';
@@ -25,6 +28,8 @@ import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
+import { ErrorLog } from './errorLog.js';
+import type { ErrorLogEntry } from './types.js';
 
 export interface System {
   config: Config;
@@ -42,6 +47,14 @@ export interface System {
    * compute the same per-issue pickup verdict the dispatcher will act on.
    */
   issuePickup: IssuePickupPolicy;
+  /**
+   * Account rate-limit capture (status-line payloads), wired only for the PTY
+   * runtime — the status line never fires headless. Null in other modes; the
+   * snapshot then falls back to the rolling cost windows from `usage_events`.
+   */
+  rateLimits: StatusFileRateLimits | null;
+  /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
+  errors: ErrorLog;
 }
 
 export interface BuildOptions {
@@ -51,6 +64,8 @@ export interface BuildOptions {
   sink?: ActionSink;
   /** Inject a fake process spawner (tests) for the stream-JSON runtime. */
   streamSpawner?: Spawner;
+  /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
+  errorMirror?: (entry: ErrorLogEntry) => void;
 }
 
 /**
@@ -65,7 +80,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // seams the harness and executor depend on. Swapping a provider is a config
   // change; nothing here changes.
   const now = (): string => new Date().toISOString();
-  const integrations = buildIntegrations(config.integrations, { store, config, now });
+  // The one error-recording path: everything that catches a failure routes it
+  // here so it's durable, mirrored to stderr, and streamed to the cockpit.
+  const errors = new ErrorLog(store, opts.errorMirror);
+  const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, store, now);
   const backend = opts.backend ?? new NodePtyBackend();
 
@@ -79,6 +97,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       cwd: spec.cwd,
       env: spec.env,
       waitingPatterns: spec.waitingPatterns,
+      submitDelayMs: config.agentSubmitDelayMs,
     });
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
 
@@ -98,7 +117,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pty: {
       // The one resumable runtime: pin the session id up front, `--resume` it later.
       buildArgs: (({ sessionId, resume }) =>
-        buildClaudeArgs({ permissionMode: perm, extraArgs, sessionId, resume })) as ArgsBuilder,
+        buildClaudeArgs({ permissionMode: perm, extraArgs, sessionId, resume, statusLine: true })) as ArgsBuilder,
       factory: ptyFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
       resumeInput: buildResumeMessage,
@@ -115,6 +134,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
   }[config.agentMode];
 
+  // PTY-only: capture the status-line payloads (the one surface carrying the
+  // account 5h/weekly limits) into per-session files under the OS tmpdir — a
+  // stable spot so the last known limits survive a restart.
+  const rateLimits = config.agentMode === 'pty' ? new StatusFileRateLimits(join(tmpdir(), 'lubbdubb', 'status')) : null;
+
   const agents = new AgentManager(store, {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
@@ -125,6 +149,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     promptDelayMs: agentSetup.promptDelayMs,
     waitingPatterns: config.agentWaitingPatterns,
     resumable: agentSetup.resumable,
+    statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
+    errors,
   });
   const escalations = new EscalationInbox(store, agents);
 
@@ -169,6 +195,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     executor,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
+    errors,
     runtime: runtimeControl,
     steeringPriorities: config.steeringPriorities,
     prExclusionLabel: config.prExclusionLabel,
@@ -206,7 +233,20 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
   });
 
-  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl, issuePickup };
+  return {
+    config,
+    store,
+    connector,
+    agents,
+    escalations,
+    executor,
+    dispatcher,
+    harness,
+    runtimeControl,
+    issuePickup,
+    rateLimits,
+    errors,
+  };
 }
 
 /**
@@ -233,6 +273,7 @@ export function reconcileAndResumeOnBoot(
   store: Store,
   agents: AgentManager,
   escalations: EscalationInbox,
+  errors?: ErrorLog,
 ): { resumed: number; interrupted: number } {
   const isActive = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'queued';
   const orphans = store.listAgentsByStatus('starting', 'running', 'waiting', 'interrupted').filter((a) => {
@@ -250,8 +291,9 @@ export function reconcileAndResumeOnBoot(
     if (agent.sessionId && existsSync(agent.cwd)) {
       try {
         resumed = agents.resume(agent, task);
-      } catch {
-        resumed = false; // never let a bad resume block boot
+      } catch (err) {
+        resumed = false; // never let a bad resume block boot — but do record why it failed
+        errors?.record({ source: 'boot', message: `Boot resume failed: ${(err as Error).message}` });
       }
     }
     if (resumed) {

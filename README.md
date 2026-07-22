@@ -67,6 +67,13 @@ fleet) — so the cockpit says what the harness is doing with each item (`agent
 running`, `eligible`, `has open PR #N`) or exactly why it's leaving it alone
 (`no pickup label "agent-ready"`, `dispatch paused`, `on cooldown after 2 attempts`).
 
+**Claude usage.** Each agent's cumulative cost, tokens and turns (from the stream
+runtime's per-turn `result` events) are persisted and shown on its fleet card and
+drawer, and a topbar chip tracks account-level usage: the real subscriber 5h/weekly
+limits when available (captured from the status-line payload in `pty` mode — Pro/Max
+only), otherwise self-computed rolling 5h/7d cost windows summed from the per-turn
+reports. Absent data degrades gracefully — no chip until there is something to show.
+
 ## Architecture
 
 A single Node/TypeScript process (HTTP + WebSocket) built as isolated modules that talk only through interfaces — any one (especially the `Connector`) can be swapped without touching the rest.
@@ -90,21 +97,24 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 | `WorktreeManager`   | Lazily creates/reuses git worktrees keyed by branch — code tasks only.                                                                                                                                                                                                                                                                                |
 | `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle, and auto-dismisses an agent's open escalations when it dies (restart/kill/crash) so "Needs you" never lingers un-actionable.                                                                                                                                        |
 | `Store`             | SQLite persistence + reconcile-on-restart.                                                                                                                                                                                                                                                                                                            |
-| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, activity feed, inject + kill. External references (issues, PRs, branches) render as clickable links, using URLs the provider supplies.                                                                                                                                     |
+| `ErrorLog`          | The central error-recording path: every caught failure (cycle exceptions, provider outages, agent crashes + exit codes, route 500s) is persisted, mirrored to stderr, and streamed to the cockpit's Errors panel.                                                                                                                                     |
+| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, activity feed, error log, inject + kill. External references (issues, PRs, branches) render as clickable links, using URLs the provider supplies.                                                                                                                          |
 
 ## Getting started
 
 ```bash
-npm install          # builds native deps (better-sqlite3, node-pty)
-npm run web:build    # build the cockpit SPA into web/dist
-npm start            # start the server (serves the cockpit at http://localhost:4300)
+npm install                                        # builds native deps (better-sqlite3, node-pty)
+cp lubbdubb.config.example.json lubbdubb.config.json # your local config (gitignored); the example runs the mock agent, no auth needed
+npm run web:build                                  # build the cockpit SPA into web/dist
+npm start                                          # start the server (serves the cockpit at http://localhost:4300)
 ```
 
-Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Answer items in **Needs you** to unblock parked agents. The **Decision log** shows what the harness decided each cycle; the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved, meeting prep done), so it works for the real GitHub provider too, not just injected events.
+Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. The inject bar (and its `/api/inject` route) only exists while a `fake` provider is configured — synthetic events can't land on real integrations, so a real deployment hides it. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Answer items in **Needs you** to unblock parked agents. The **Decision log** shows what the harness decided each cycle — click a row to expand the dispatcher rule that produced it (its number, name and standing rationale); the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved, meeting prep done), so it works for the real GitHub provider too, not just injected events.
 
 ### Configuration
 
-Create `lubbdubb.config.json` at the repo root (all keys optional):
+Config lives in `lubbdubb.config.json` at the repo root (gitignored — it's your local file).
+Copy the tracked `lubbdubb.config.example.json` as a starting point. All keys are optional:
 
 ```json
 {
@@ -140,6 +150,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
   - `"stream"` _(default)_ — real Claude Code over headless stream-JSON (`claude -p --output-format stream-json`). No interactive TUI, runs unattended, and stays alive across turns so the waiting/answer loop works. The harness injects its status protocol via an appended system prompt.
   - `"pty"` — real Claude Code as an interactive terminal. Requires a `claude` that has completed first-run onboarding (theme, trust, login). This is the runtime that **resumes across restarts** (see below).
   - `"raw"` — run `claudeCommand`/`claudeArgs` verbatim (the mock-agent demo and tests).
+- **`agentPromptDelayMs` / `agentSubmitDelayMs`** — PTY timing knobs (`agentMode: "pty"` only; ignored by `stream`). `agentPromptDelayMs` (default `1200`) waits for the interactive TUI to boot before the task is typed in. `agentSubmitDelayMs` (default `60`) is the gap between typing a message and sending its submitting carriage return: the claude TUI folds a single input burst into a paste and treats a trailing CR as a literal newline, so without the gap the message just sits in the input unsubmitted. Set it to `0` to write both at once.
 - **`agentPermissionMode`** — passed to `claude --permission-mode` so unattended tool calls don't hang (default `acceptEdits`). Note: `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root — run the harness as a non-root user if you need it.
 - **`claudeCommand` / `claudeArgs`** — the agent binary and any extra args. Defaults to `claude`.
 - **`whitelistedApprovals`** — waiting prompts the harness may auto-answer instead of escalating.
@@ -217,7 +228,7 @@ in the repo; create it once in the repo's Labels settings.)
 
 ### Try the demo without a real model
 
-`scripts/mock-agent.sh` is a stand-in that speaks the same protocol as a real `claude` agent. The committed `lubbdubb.config.json` uses `agentMode: "raw"` pointed at it, so `npm start` works with no model auth. For real agents, set `agentMode` to `"stream"` (recommended) and `claudeCommand` to `claude`.
+`scripts/mock-agent.sh` is a stand-in that speaks the same protocol as a real `claude` agent. The tracked `lubbdubb.config.example.json` uses `agentMode: "raw"` pointed at it, so copying it to `lubbdubb.config.json` makes `npm start` work with no model auth. For real agents, set `agentMode` to `"stream"` (recommended) and `claudeCommand` to `claude`.
 
 How real agents speak the protocol: the harness appends a system prompt telling the agent to print `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human and `@@LUBBDUBB_DONE@@` when finished. In `stream` mode each turn ends in a `result` event; the harness reads those sentinels to decide _waiting_ (→ escalate, then deliver your answer as the next message) vs _done_. This has been verified end-to-end against a live `claude`.
 

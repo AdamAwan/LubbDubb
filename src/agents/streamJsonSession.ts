@@ -4,6 +4,7 @@ import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from './sessi
 import { DONE_SENTINEL, extractWaitingReason } from './sentinels.js';
 import { resolveExecutable } from './resolveCommand.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
+import type { AgentUsage } from '../types.js';
 
 /**
  * Minimal child-process shape we depend on — injectable so tests drive a fake
@@ -145,6 +146,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     }
 
     if (ev.type === 'result') {
+      // Surface the usage metadata riding on the turn-end event (cumulative
+      // cost/tokens/turns) before the status transition, so listeners persist
+      // it ahead of the waiting/done fan-out.
+      const usage = resultUsage(ev);
+      if (usage) this.emit('usage', usage);
       // End of a turn: decide done vs waiting from the sentinels the agent printed.
       if (this.turnText.includes(DONE_SENTINEL)) {
         this.finish('done');
@@ -191,6 +197,31 @@ interface StreamEvent {
   type: string;
   subtype?: string;
   message?: { content?: ContentBlock[] | string };
+  // `result`-event usage metadata, all cumulative across the session.
+  total_cost_usd?: number;
+  num_turns?: number;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+}
+
+/** Pull the cumulative usage off a `result` event, or null when it carries none. */
+function resultUsage(ev: StreamEvent): AgentUsage | null {
+  const u = ev.usage;
+  if (ev.total_cost_usd === undefined && ev.num_turns === undefined && u === undefined) return null;
+  return {
+    costUsd: ev.total_cost_usd ?? null,
+    // Cache tokens count as input: with caching on, bare input_tokens is a tiny
+    // residue and would wildly under-report what the turn actually consumed.
+    inputTokens: u
+      ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
+      : null,
+    outputTokens: u?.output_tokens ?? null,
+    numTurns: ev.num_turns ?? null,
+  };
 }
 
 /** Normalise a message's `content` into a block array (a bare string becomes one text block). */

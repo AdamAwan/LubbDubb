@@ -157,6 +157,7 @@ function dispatched(origin: string, createdAt: string): Decision {
     cycleId: 'c',
     outcome: 'executed',
     detail: '',
+    rule: null,
     createdAt,
     action: { type: 'dispatch_code_agent', reason: 'r', originRef: origin },
   };

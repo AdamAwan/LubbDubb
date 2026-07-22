@@ -1,4 +1,5 @@
 import type { Store } from '../../store/store.js';
+import type { ErrorRecorder } from '../../errorLog.js';
 import type { CalendarEvent } from '../../types.js';
 import type { Capability, Integration, WorldSlice } from '../integration.js';
 import type { MicrosoftGraphApi, MsCalendarEvent, MsDateTimeZone } from './microsoftGraphApi.js';
@@ -7,6 +8,8 @@ export interface MicrosoftCalendarOpts {
   /** The Graph client, already bound to a single calendar (delegated `me` or a target user). */
   api: MicrosoftGraphApi;
   store: Store;
+  /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
+  errors?: ErrorRecorder;
   /** How many days ahead to surface events. */
   windowDays: number;
 }
@@ -36,9 +39,9 @@ export class MicrosoftCalendarIntegration implements Integration {
       this.lastGood = calendar;
       return { calendar };
     } catch (err) {
-      this.opts.store.recordConnectorEvent('microsoft_snapshot_error', {
-        capability: this.capability,
-        message: (err as Error).message,
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
       return { calendar: this.lastGood };
     }

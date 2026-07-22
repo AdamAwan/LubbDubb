@@ -27,7 +27,21 @@ CREATE TABLE IF NOT EXISTS agents (
   -- (claude --resume <id>) in its original worktree after a server restart.
   session_id     TEXT,
   started_at     TEXT NOT NULL,
-  ended_at       TEXT
+  ended_at       TEXT,
+  -- Cumulative Claude usage from the stream runtime's result events (issue #60).
+  -- Null for runtimes that report none (PTY).
+  cost_usd       REAL,
+  input_tokens   INTEGER,
+  output_tokens  INTEGER,
+  num_turns      INTEGER
+);
+
+-- Timestamped per-report cost deltas (not cumulative), so account-level rolling
+-- usage windows (5h / 7d) are a plain SUM over the window (issue #60).
+CREATE TABLE IF NOT EXISTS usage_events (
+  agent_id TEXT NOT NULL,
+  cost_usd REAL NOT NULL,
+  at       TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS agent_transcripts (
@@ -57,6 +71,9 @@ CREATE TABLE IF NOT EXISTS decisions (
   action     TEXT NOT NULL,
   outcome    TEXT NOT NULL,
   detail     TEXT NOT NULL,
+  -- The dispatcher rule that produced the action (see src/dispatcher/rules.ts);
+  -- NULL when the decision has no rule identity (LLM dispatcher, bookkeeping).
+  rule       TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -90,8 +107,20 @@ CREATE TABLE IF NOT EXISTS world_baseline (
   world TEXT NOT NULL
 );
 
+-- Recorded failures (cycle exceptions, provider outages, agent crashes, route
+-- 500s) — the Errors panel's backing store. See src/errorLog.ts.
+CREATE TABLE IF NOT EXISTS error_events (
+  id         TEXT PRIMARY KEY,
+  source     TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  detail     TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_usage_events_at ON usage_events(at);
+CREATE INDEX IF NOT EXISTS idx_error_events_created ON error_events(created_at);
 `;

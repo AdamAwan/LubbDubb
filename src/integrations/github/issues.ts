@@ -1,4 +1,5 @@
 import type { Store } from '../../store/store.js';
+import type { ErrorRecorder } from '../../errorLog.js';
 import type { Issue, IssueState } from '../../types.js';
 import type { Capability, Integration, RefResolvable, WorldSlice } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
@@ -8,6 +9,8 @@ export interface GitHubIssuesOpts {
   /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
   store: Store;
+  /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
+  errors?: ErrorRecorder;
   /** Only surface issues carrying this label. Unset = all open issues. */
   issueLabel?: string;
   /** Repo identity for building web URLs. When unset, ref resolution returns null. */
@@ -72,9 +75,9 @@ export class GitHubIssuesIntegration implements Integration, RefResolvable {
       this.lastGood = issues;
       return { issues };
     } catch (err) {
-      this.opts.store.recordConnectorEvent('github_snapshot_error', {
-        capability: this.capability,
-        message: (err as Error).message,
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
       return { issues: this.lastGood };
     }

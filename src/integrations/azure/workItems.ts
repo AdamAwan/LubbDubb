@@ -1,4 +1,5 @@
 import type { Store } from '../../store/store.js';
+import type { ErrorRecorder } from '../../errorLog.js';
 import type { SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
 import type { Issue, IssueState } from '../../types.js';
 import type { Capability, Integration, WorkItemStateCapable, WorldSlice } from '../integration.js';
@@ -8,6 +9,8 @@ export interface AzureWorkItemsOpts {
   /** The Azure DevOps client, already bound to a single organization/project. */
   api: AzureDevOpsApi;
   store: Store;
+  /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
+  errors?: ErrorRecorder;
   /** Only surface work items carrying this tag. Unset = all open work items. */
   workItemTag?: string;
   /**
@@ -67,9 +70,9 @@ export class AzureDevOpsWorkItemsIntegration implements Integration, WorkItemSta
       this.lastGood = issues;
       return { issues };
     } catch (err) {
-      this.opts.store.recordConnectorEvent('azure_snapshot_error', {
-        capability: this.capability,
-        message: (err as Error).message,
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
       return { issues: this.lastGood };
     }

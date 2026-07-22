@@ -5,6 +5,7 @@ import type { Store } from './store/store.js';
 import type { Connector } from './connector/connector.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
+import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { isPrExcluded } from './prHealth.js';
@@ -16,6 +17,8 @@ export interface HarnessDeps {
   dispatcher: Dispatcher;
   executor: ActionExecutor;
   heartbeatIntervalMs: number;
+  /** Central error sink: a cycle exception is recorded here, never thrown away. */
+  errors: ErrorRecorder;
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
   steeringPriorities: string[];
@@ -126,6 +129,24 @@ export class Harness extends EventEmitter {
 
       const summary = await this.deps.executor.execute(cycleId, plan);
       const report: CycleReport = { cycleId, source, rationale: plan.rationale, summary, at: new Date().toISOString() };
+      this.emit('cycle:end', report);
+      return report;
+    } catch (err) {
+      // A throw anywhere in the cycle must not vanish as an unhandled rejection
+      // (timer cycles run via `void fire('timer')`). Record it, report the cycle
+      // as failed, and let the next pulse try again.
+      this.deps.errors.record({
+        source: 'cycle',
+        message: `Cycle ${cycleId} (${source}) failed: ${(err as Error).message}`,
+        detail: (err as Error).stack ?? null,
+      });
+      const report: CycleReport = {
+        cycleId,
+        source,
+        rationale: `cycle failed: ${(err as Error).message}`,
+        summary: { cycleId, executed: 0, deferred: 0, rejected: 0 },
+        at: new Date().toISOString(),
+      };
       this.emit('cycle:end', report);
       return report;
     } finally {

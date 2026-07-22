@@ -134,6 +134,28 @@ export interface Agent {
   waitingReason: string | null;
   startedAt: string;
   endedAt: string | null;
+  /** Cumulative Claude usage from the stream runtime; null when unreported (PTY). */
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  numTurns: number | null;
+}
+
+// Account-level Claude usage (issue #60): rolling cost windows self-computed by
+// the server from per-turn usage reports, plus the real subscriber limits when
+// the PTY status-line capture has seen any (Pro/Max only, else null).
+interface RateLimitWindow {
+  usedPercentage: number;
+  resetsAt: string | null;
+}
+interface AccountRateLimits {
+  fiveHour: RateLimitWindow | null;
+  sevenDay: RateLimitWindow | null;
+  capturedAt: string;
+}
+export interface UsageSnapshot {
+  windows: { fiveHourCostUsd: number; sevenDayCostUsd: number };
+  rateLimits: AccountRateLimits | null;
 }
 // Extra context the server attaches so an escalation can be answered in-place.
 // Mirrors the server's EscalationContext; every key is optional.
@@ -168,7 +190,16 @@ export interface Decision {
   action: { type: string; reason?: string };
   outcome: string;
   detail: string;
+  /** The dispatcher rule that produced the action (a `dispatchRules` key), or null. */
+  rule: string | null;
   createdAt: string;
+}
+
+/** One entry of the rule dispatcher's rule book (mirrors the server's DispatchRule). */
+export interface DispatchRule {
+  number: string;
+  name: string;
+  description: string;
 }
 
 export type WorldEventKind =
@@ -194,6 +225,15 @@ export interface WorldEvent {
   createdAt: string;
 }
 
+/** One recorded failure (cycle exception, provider outage, agent crash, route 500). */
+export interface ErrorLogEntry {
+  id: string;
+  source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
+  message: string;
+  detail: string | null;
+  createdAt: string;
+}
+
 export interface AppState {
   config: {
     heartbeatIntervalMs: number;
@@ -202,6 +242,8 @@ export interface AppState {
     steeringPriorities: string[];
     /** The PR exclusion tag: the label the ignore/watch toggle sets, and marks ignored PRs. */
     prExclusionLabel: string;
+    /** Whether the world accepts injected events (a `fake` provider is configured) — gates the inject panel. */
+    injectable: boolean;
   };
   /** Live, mutable dispatch controls — the current cap and pause state. */
   control: {
@@ -214,14 +256,24 @@ export interface AppState {
   escalations: Escalation[];
   decisions: Decision[];
   worldEvents: WorldEvent[];
+  /** Recorded failures, newest first — the Errors panel. */
+  errors: ErrorLogEntry[];
   /** The Claude-bridged desk briefing, or null until a bridge has posted one. */
   briefing: DeskBriefing | null;
+  /** Claude usage: rolling cost windows + account rate limits when captured. */
+  usage: UsageSnapshot;
   /**
    * External reference → web URL, built entirely by the source-control provider
    * (never string-built here). Keyed by how a ref appears in the UI: `#42` for an
    * issue/PR number, or a branch name. Missing key ⇒ render as plain text.
    */
   refUrls: Record<string, string>;
+  /**
+   * The rule dispatcher's rule book, keyed by the rule id a decision carries.
+   * The Decision log looks `decision.rule` up here to expand a row into the
+   * rule that fired; a missing key ⇒ no rule identity to show.
+   */
+  dispatchRules: Record<string, DispatchRule>;
 }
 
 export type ServerEvent =

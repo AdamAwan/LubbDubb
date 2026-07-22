@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import type { Agent, Task } from '../types.js';
 import { api } from '../api.js';
-import { statusDot, linkify } from './util.js';
+import { statusDot, linkify, agentUsageLine } from './util.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
@@ -113,6 +113,11 @@ export function AgentDrawer({
           <div>
             {statusDot(agent.status)} <b>{task ? linkify(task.title, refUrls) : agent.id}</b>
             <div className="muted small mono">{agent.cwd}</div>
+            {agentUsageLine(agent) && (
+              <div className="muted small mono" title="Claude cost · input→output tokens · turns (cumulative)">
+                {agentUsageLine(agent)}
+              </div>
+            )}
           </div>
           <div>
             {isLive && (

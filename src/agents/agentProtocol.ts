@@ -1,4 +1,5 @@
 import type { Task } from '../types.js';
+import { STATUS_LINE_SETTINGS } from './statusLine.js';
 
 /**
  * How a real Claude Code session is made to speak the harness's PTY protocol.
@@ -44,6 +45,12 @@ export interface ClaudeArgsOptions {
    * session. Used only on boot resume of an orphaned agent.
    */
   resume?: boolean;
+  /**
+   * Wire the status-line capture in (`--settings`), so account rate limits can
+   * be read from the payload the TUI feeds it. PTY launches only — the status
+   * line never renders headless, so it would be dead weight on stream args.
+   */
+  statusLine?: boolean;
 }
 
 /** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */
@@ -58,6 +65,7 @@ export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
     if (opts.resume) args.push('--resume', opts.sessionId);
     else args.push('--session-id', opts.sessionId);
   }
+  if (opts.statusLine) args.push('--settings', STATUS_LINE_SETTINGS);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;

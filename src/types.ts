@@ -232,6 +232,29 @@ export interface WorldEvent {
 export type WorldEventInput = Omit<WorldEvent, 'id' | 'createdAt'>;
 
 // ---------------------------------------------------------------------------
+// Error log (failures surfaced to the cockpit)
+// ---------------------------------------------------------------------------
+
+/**
+ * One recorded failure — a harness cycle exception, a provider snapshot error, an
+ * agent crash, a route 500, … Durable (persisted to the store) and streamed to the
+ * cockpit's Errors panel so an operator can see things going wrong as they happen.
+ */
+export interface ErrorLogEntry {
+  id: string;
+  /** Which part of the system the failure came from. */
+  source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
+  /** Human-readable one-line summary of what failed. */
+  message: string;
+  /** Optional longer context (stack trace, output tail). Null if none. */
+  detail: string | null;
+  createdAt: string; // ISO
+}
+
+/** An error before the store assigns it an id and timestamp. */
+export type ErrorLogInput = Omit<ErrorLogEntry, 'id' | 'createdAt' | 'detail'> & { detail?: string | null };
+
+// ---------------------------------------------------------------------------
 // Harness-internal state
 // ---------------------------------------------------------------------------
 
@@ -291,6 +314,43 @@ export interface Agent {
   sessionId: string | null;
   startedAt: string;
   endedAt: string | null;
+  /**
+   * Cumulative Claude usage as last reported by the session's `result` events
+   * (stream runtime only — a PTY session reports none, so these stay null).
+   * `costUsd` is the session's total API cost so far; tokens/turns likewise
+   * accumulate across the whole session.
+   */
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  numTurns: number | null;
+}
+
+/** One cumulative usage report from a session's turn-end `result` event. */
+export interface AgentUsage {
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  numTurns: number | null;
+}
+
+/** One subscriber rate-limit window (5h or weekly) as Claude Code reports it. */
+export interface RateLimitWindow {
+  usedPercentage: number;
+  /** ISO timestamp the window resets at, when reported. */
+  resetsAt: string | null;
+}
+
+/**
+ * Account-level Claude rate limits captured from a PTY agent's status-line
+ * payload. Pro/Max only — API-key auth carries no `rate_limits`, and each
+ * window can be independently absent.
+ */
+export interface AccountRateLimits {
+  fiveHour: RateLimitWindow | null;
+  sevenDay: RateLimitWindow | null;
+  /** When the payload this was parsed from was written. */
+  capturedAt: string;
 }
 
 export type EscalationType = 'approve_change' | 'answer_question' | 'resolve_ambiguity' | 'review_reply';
@@ -356,6 +416,8 @@ export type ActionType =
 export interface Action {
   type: ActionType;
   reason: string;
+  /** The dispatcher rule that produced this action (a `DISPATCH_RULES` id), when one did. */
+  rule?: string | null;
   /** Payload shape depends on `type`; validated by zod at the boundary. */
   [key: string]: unknown;
 }
@@ -368,5 +430,11 @@ export interface Decision {
   action: Action;
   outcome: DecisionOutcome;
   detail: string;
+  /**
+   * The dispatcher rule that produced the action, lifted off it at record time
+   * so the audit log can answer "which rule fired" first-class. Null for
+   * decisions with no rule identity (LLM dispatcher, lifecycle bookkeeping).
+   */
+  rule: string | null;
   createdAt: string;
 }

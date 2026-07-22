@@ -5,8 +5,11 @@ import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
 import type {
   Agent,
+  AgentUsage,
   Decision,
   DeskBriefing,
+  ErrorLogEntry,
+  ErrorLogInput,
   Escalation,
   EscalationContext,
   Task,
@@ -58,6 +61,13 @@ export class Store {
     });
     this.ensureColumns('agents', {
       session_id: 'TEXT',
+      cost_usd: 'REAL',
+      input_tokens: 'INTEGER',
+      output_tokens: 'INTEGER',
+      num_turns: 'INTEGER',
+    });
+    this.ensureColumns('decisions', {
+      rule: 'TEXT',
     });
   }
 
@@ -162,6 +172,10 @@ export class Store {
       sessionId: input.sessionId ?? null,
       startedAt: this.now(),
       endedAt: null,
+      costUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      numTurns: null,
     };
     this.db
       .prepare(
@@ -191,6 +205,42 @@ export class Store {
   listAgents(): Agent[] {
     const rows = this.db.prepare(`SELECT * FROM agents ORDER BY started_at DESC`).all() as AgentRow[];
     return rows.map(rowToAgent);
+  }
+
+  /**
+   * Fold a session's *cumulative* usage report onto the agent row, and record
+   * the cost delta since the previous report as a timestamped `usage_events`
+   * row — so rolling account windows (5h/7d) are a plain SUM later, with no
+   * delta re-derivation.
+   */
+  recordAgentUsage(id: string, usage: AgentUsage): void {
+    const existing = this.getAgent(id);
+    if (!existing) throw new Error(`Agent ${id} not found`);
+    const next = {
+      costUsd: usage.costUsd ?? existing.costUsd,
+      inputTokens: usage.inputTokens ?? existing.inputTokens,
+      outputTokens: usage.outputTokens ?? existing.outputTokens,
+      numTurns: usage.numTurns ?? existing.numTurns,
+    };
+    this.db
+      .prepare(
+        `UPDATE agents SET cost_usd=@costUsd, input_tokens=@inputTokens, output_tokens=@outputTokens, num_turns=@numTurns WHERE id=@id`,
+      )
+      .run({ id, ...next });
+    // Clamp: a cumulative total should never regress, but a restarted CLI would
+    // reset it — never let that poison the window sum with a negative delta.
+    const delta = Math.max(0, (usage.costUsd ?? 0) - (existing.costUsd ?? 0));
+    if (delta > 0) {
+      this.db.prepare(`INSERT INTO usage_events (agent_id, cost_usd, at) VALUES (?,?,?)`).run(id, delta, this.now());
+    }
+  }
+
+  /** Total agent cost recorded since `sinceIso` — the rolling-window aggregate. */
+  sumUsageCostSince(sinceIso: string): number {
+    const row = this.db
+      .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`)
+      .get(sinceIso) as { total: number };
+    return row.total;
   }
 
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
@@ -301,16 +351,24 @@ export class Store {
 
   // -- Decisions (audit) ---------------------------------------------------
 
-  recordDecision(input: Omit<Decision, 'id' | 'createdAt'>): Decision {
-    const decision: Decision = { id: `dec_${nanoid(10)}`, createdAt: this.now(), ...input };
+  recordDecision(input: Omit<Decision, 'id' | 'createdAt' | 'rule'>): Decision {
+    // The rule id rides on the action (its transport from the dispatcher); lift
+    // it into its own column here so it's first-class on the decision row.
+    const decision: Decision = {
+      id: `dec_${nanoid(10)}`,
+      createdAt: this.now(),
+      rule: input.action.rule ?? null,
+      ...input,
+    };
     this.db
-      .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, created_at) VALUES (?,?,?,?,?,?)`)
+      .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, rule, created_at) VALUES (?,?,?,?,?,?,?)`)
       .run(
         decision.id,
         decision.cycleId,
         JSON.stringify(decision.action),
         decision.outcome,
         decision.detail,
+        decision.rule,
         decision.createdAt,
       );
     return decision;
@@ -358,6 +416,29 @@ export class Store {
     this.db
       .prepare(`INSERT INTO connector_events (id, kind, payload, created_at) VALUES (?,?,?,?)`)
       .run(`ev_${nanoid(10)}`, kind, JSON.stringify(payload), this.now());
+  }
+
+  // -- Error log -----------------------------------------------------------
+
+  recordError(input: ErrorLogInput): ErrorLogEntry {
+    const entry: ErrorLogEntry = {
+      id: `err_${nanoid(10)}`,
+      createdAt: this.now(),
+      source: input.source,
+      message: input.message,
+      detail: input.detail ?? null,
+    };
+    this.db
+      .prepare(`INSERT INTO error_events (id, source, message, detail, created_at) VALUES (?,?,?,?,?)`)
+      .run(entry.id, entry.source, entry.message, entry.detail, entry.createdAt);
+    return entry;
+  }
+
+  listErrors(limit = 100): ErrorLogEntry[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM error_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(limit) as ErrorEventRow[];
+    return rows.map(rowToErrorEntry);
   }
 
   // -- World change history ------------------------------------------------
@@ -427,6 +508,10 @@ interface AgentRow {
   session_id: string | null;
   started_at: string;
   ended_at: string | null;
+  cost_usd: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  num_turns: number | null;
 }
 interface EscalationRow {
   id: string;
@@ -446,6 +531,7 @@ interface DecisionRow {
   action: string;
   outcome: string;
   detail: string;
+  rule: string | null;
   created_at: string;
 }
 interface WorldEventRow {
@@ -453,6 +539,13 @@ interface WorldEventRow {
   kind: string;
   ref: string | null;
   summary: string;
+  created_at: string;
+}
+interface ErrorEventRow {
+  id: string;
+  source: string;
+  message: string;
+  detail: string | null;
   created_at: string;
 }
 
@@ -484,6 +577,10 @@ function rowToAgent(r: AgentRow): Agent {
     sessionId: r.session_id,
     startedAt: r.started_at,
     endedAt: r.ended_at,
+    costUsd: r.cost_usd,
+    inputTokens: r.input_tokens,
+    outputTokens: r.output_tokens,
+    numTurns: r.num_turns,
   };
 }
 function rowToEscalation(r: EscalationRow): Escalation {
@@ -506,6 +603,16 @@ function rowToDecision(r: DecisionRow): Decision {
     cycleId: r.cycle_id,
     action: JSON.parse(r.action) as Decision['action'],
     outcome: r.outcome as Decision['outcome'],
+    detail: r.detail,
+    rule: r.rule,
+    createdAt: r.created_at,
+  };
+}
+function rowToErrorEntry(r: ErrorEventRow): ErrorLogEntry {
+  return {
+    id: r.id,
+    source: r.source as ErrorLogEntry['source'],
+    message: r.message,
     detail: r.detail,
     createdAt: r.created_at,
   };

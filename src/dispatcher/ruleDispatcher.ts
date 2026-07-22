@@ -5,6 +5,7 @@ import { needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, Task } from '../types.js';
 import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
+import type { DispatchRuleId } from './rules.js';
 
 /**
  * A deterministic, dependency-free dispatcher that encodes the harness's default
@@ -29,7 +30,9 @@ import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispat
  *   9. Otherwise                     -> no_op (recorded, so idleness is auditable)
  *
  * It is the safe default and the reference the LLM dispatcher is measured
- * against. Every branch produces actions with an explicit `reason`.
+ * against. Every branch produces actions with an explicit `reason` and tags
+ * them with its rule id from the {@link DISPATCH_RULES} registry (`rules.ts`),
+ * so the audit log can show *which rule* fired, not just a sentence.
  */
 export class RuleDispatcher implements Dispatcher {
   private readonly pickup: IssuePickupPolicy;
@@ -98,6 +101,7 @@ export class RuleDispatcher implements Dispatcher {
       const concerns: PrConcern[] = [];
       if (pr.ciStatus === 'failing') {
         concerns.push({
+          rule: 'pr-ci-failing',
           origin: `pr:${pr.number}:ci`,
           title: `Fix failing CI on PR #${pr.number}`,
           prompt: `CI is failing on PR #${pr.number} ("${pr.title}", branch ${pr.branch}). Investigate the failure and push a fix.`,
@@ -111,6 +115,7 @@ export class RuleDispatcher implements Dispatcher {
         const base = pr.baseBranch ?? 'main';
         const behind = pr.mergeableState === 'behind';
         concerns.push({
+          rule: 'pr-base-update',
           origin: `pr:${pr.number}:mergeable`,
           title: behind ? `Update PR #${pr.number} with ${base}` : `Resolve merge conflicts on PR #${pr.number}`,
           prompt: behind
@@ -129,6 +134,7 @@ export class RuleDispatcher implements Dispatcher {
       for (const comment of pr.unresolvedComments) {
         if (comment.handled) continue;
         concerns.push({
+          rule: 'pr-review-comment',
           origin: `pr:${pr.number}:comment:${comment.id}`,
           title: `Address review comment on PR #${pr.number}`,
           prompt: `A reviewer commented on PR #${pr.number} (branch ${pr.branch}):\n\n"${comment.body}"\n\nDecide whether to fix the code or defend the current approach. If defending, prepare a concise reply.`,
@@ -155,6 +161,7 @@ export class RuleDispatcher implements Dispatcher {
                 `An update on the branch you're working (PR #${pr.number}):\n` +
                 fresh.map((c) => `- ${c.note}`).join('\n'),
               originRefs: fresh.map((c) => c.origin),
+              rule: 'branch-notify',
               reason: `New PR signal(s) for a branch already staffed by agent ${branch.agent.id}.`,
             } satisfies RawAction);
           }
@@ -169,6 +176,7 @@ export class RuleDispatcher implements Dispatcher {
               escalationType: 'resolve_ambiguity',
               prompt: `Auto-resolution of "${top.title}" keeps failing: ${attempts} agent attempt(s) on PR #${pr.number} left the concern unresolved. Please handle it manually.`,
               context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
+              rule: 'cooldown-escalate',
               reason: `Origin ${top.origin} hit the ${this.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
             }),
             () => {
@@ -181,6 +189,7 @@ export class RuleDispatcher implements Dispatcher {
                   originRef: top.origin,
                   originTitle: top.originTitle,
                   originSummary: top.originSummary,
+                  rule: top.rule,
                   reason: top.dispatchReason,
                 } satisfies RawAction);
                 claim(top.origin);
@@ -213,6 +222,7 @@ export class RuleDispatcher implements Dispatcher {
           prNumber: pr.number,
           method: 'squash',
           confidence: 0.9,
+          rule: 'pr-merge-ready',
           reason: `PR #${pr.number} is green, approved and mergeable; merge it in.`,
         } satisfies RawAction);
       }
@@ -241,6 +251,7 @@ export class RuleDispatcher implements Dispatcher {
           type: 'set_work_item_state',
           number: issue.number,
           state: inReviewState,
+          rule: 'work-item-in-review',
           reason: `PR #${pr.number} is open for work item #${issue.number}; move it to "${inReviewState}" so it isn't re-picked while under review.`,
         } satisfies RawAction);
       }
@@ -267,6 +278,7 @@ export class RuleDispatcher implements Dispatcher {
           escalationType: 'resolve_ambiguity',
           prompt: `Auto-resolution of issue #${issue.number} ("${issue.title}") keeps failing: ${attempts} agent attempt(s) produced no linked PR. Please take a look.`,
           context: { originRef: origin, taskTitle: `Resolve issue #${issue.number}` },
+          rule: 'cooldown-escalate',
           reason: `Origin ${origin} hit the ${this.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
         }),
         () => {
@@ -279,6 +291,7 @@ export class RuleDispatcher implements Dispatcher {
               originRef: origin,
               originTitle: issue.title,
               originSummary: issue.body,
+              rule: 'issue-pickup',
               reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
             } satisfies RawAction);
             claim(origin);
@@ -299,6 +312,7 @@ export class RuleDispatcher implements Dispatcher {
           originRef: origin,
           originTitle: ev.title,
           originSummary: `Starts ${ev.startsAt}. Prep docs: ${ev.prepDocs.join(', ')}.`,
+          rule: 'meeting-prep',
           reason: `Meeting "${ev.title}" has unread prep docs.`,
         } satisfies RawAction);
         claim(origin);
@@ -319,6 +333,7 @@ export class RuleDispatcher implements Dispatcher {
             originRef: origin,
             originTitle: story.title,
             originSummary: story.description,
+            rule: 'story-groom',
             reason: `Ready story "${story.title}" lacks description/acceptance criteria.`,
           } satisfies RawAction);
           claim(origin);
@@ -335,6 +350,7 @@ export class RuleDispatcher implements Dispatcher {
             originRef: origin,
             originTitle: story.title,
             originSummary: story.description,
+            rule: 'story-waf',
             reason: `Ready story "${story.title}" has no WAF pillars.`,
           } satisfies RawAction);
           claim(origin);
@@ -358,6 +374,7 @@ export class RuleDispatcher implements Dispatcher {
             originRef: origin,
             originTitle: candidate.title,
             originSummary: candidate.description,
+            rule: 'story-pickup',
             reason: `Idle capacity; "${candidate.title}" is the highest-priority ready story.`,
           } satisfies RawAction);
           claim(origin);
@@ -366,7 +383,7 @@ export class RuleDispatcher implements Dispatcher {
     }
 
     if (raw.length === 0) {
-      raw.push({ type: 'no_op', reason: 'Nothing actionable this cycle.' } satisfies RawAction);
+      raw.push({ type: 'no_op', rule: 'idle', reason: 'Nothing actionable this cycle.' } satisfies RawAction);
     }
 
     const parsed = parseActions(raw);
@@ -377,10 +394,12 @@ export class RuleDispatcher implements Dispatcher {
   }
 }
 
-type RawAction = Record<string, unknown> & { type: string; reason: string };
+type RawAction = Record<string, unknown> & { type: string; reason: string; rule: DispatchRuleId };
 
 /** One thing wrong with a PR that would warrant a code agent on its branch. */
 interface PrConcern {
+  /** Which dispatcher rule raised this concern, carried onto the emitted action. */
+  rule: DispatchRuleId;
   origin: string;
   title: string;
   prompt: string;

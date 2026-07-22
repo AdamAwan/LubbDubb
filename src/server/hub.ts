@@ -17,6 +17,7 @@ export type ServerEvent =
   | { type: 'world:changed' }
   | { type: 'control:changed'; cap: number; paused: boolean }
   | { type: 'world:events'; events: unknown[] }
+  | { type: 'error:logged'; error: unknown }
   | { type: 'dirty' };
 
 /**
@@ -35,7 +36,14 @@ export class Hub {
   private readonly tails = new Map<string, { partial: string; last: string }>();
 
   constructor(system: System) {
-    const { harness, agents, escalations } = system;
+    const { harness, agents, escalations, errors } = system;
+
+    // Recorded failures stream to the cockpit's Errors panel live; the `dirty`
+    // makes the panel durable-consistent via the /api/state refetch.
+    errors.on('logged', (error) => {
+      this.broadcast({ type: 'error:logged', error });
+      this.broadcast({ type: 'dirty' });
+    });
 
     harness.on('cycle:start', (e: { cycleId: string; source: string }) =>
       this.broadcast({ type: 'cycle:start', ...e }),
@@ -50,6 +58,9 @@ export class Hub {
     });
 
     agents.on('output', (e) => this.handleOutput(e.agentId, e.delta));
+    // Usage lands on the agent row at turn end; a coarse dirty repaints the
+    // fleet cards' cost/tokens without a dedicated frame type.
+    agents.on('usage', () => this.broadcast({ type: 'dirty' }));
     agents.on('status', (e) => {
       this.broadcast({ type: 'agent:status', ...e });
       this.broadcast({ type: 'dirty' });
