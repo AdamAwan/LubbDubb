@@ -1,11 +1,12 @@
 import type { AppState } from './types.js';
+import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return (await res.json()) as T;
 }
 
-export const api = {
+const realApi = {
   getState: () => fetch('/api/state').then((r) => json<AppState>(r)),
   getTranscript: (agentId: string) =>
     fetch(`/api/agents/${agentId}/transcript`).then((r) => json<{ transcript: string }>(r)),
@@ -138,9 +139,25 @@ class ReconnectingWs {
   }
 }
 
-export type WsClient = ReconnectingWs;
+/** The narrow socket surface the cockpit uses — satisfied by both the real
+ * reconnecting socket and the demo's in-browser fake. */
+export interface WsClient {
+  subscribe(agentId: string): void;
+  unsubscribe(agentId: string): void;
+  close(): void;
+}
 
 /** Open the reconnecting live event socket. */
-export function connectWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
+function connectRealWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
   return new ReconnectingWs(onEvent, onStatus);
 }
+
+// The Pages demo runs the SPA against an in-browser fake backend so there's no
+// server to talk to. `VITE_DEMO=1` (web/.env.demo) is baked in at build time and
+// statically dead-code-eliminates the demo path out of the production bundle.
+const DEMO = import.meta.env.VITE_DEMO === '1';
+
+/** True when running against the fake backend (the GitHub Pages demo build). */
+export const isDemo = DEMO;
+export const api = DEMO ? demoApi : realApi;
+export const connectWs: typeof connectRealWs = DEMO ? connectDemoWs : connectRealWs;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, connectWs } from './api.js';
+import { api, connectWs, isDemo } from './api.js';
 import type { WsClient } from './api.js';
 import type { AppState, Agent } from './types.js';
 import { InjectPanel } from './components/InjectPanel.js';
@@ -110,6 +110,11 @@ export function App() {
         <div className="brand">
           <span className="pulse-mark">♥</span> LubbDubb
           <span className="tagline">autonomous engineering cockpit</span>
+          {isDemo && (
+            <span className="chip warn" title="Simulated data — no server or real integrations">
+              demo
+            </span>
+          )}
         </div>
         <div className="topbar-meta">
           <div className="heartbeat" title={`Next heartbeat in ~${nextIn}s`}>
