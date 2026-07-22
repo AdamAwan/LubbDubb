@@ -134,6 +134,13 @@ Sharp edge in `PtySession.kill()`: it sets status `killed` **before** signalling
 because a synchronously-delivered exit would otherwise be reclassified as `failed` (firing a
 terminal event). Keep that ordering.
 
+Sharp edge in `PtySession.send()`: the message text and its submitting carriage return are
+written as **two separate writes**, `agentSubmitDelayMs` apart (default 60ms). The claude TUI
+coalesces a single input burst into a paste and treats a trailing CR as a literal newline, so a
+glued-on CR leaves the message sitting in the input unsubmitted. Trailing newlines in the text
+are stripped so the lone CR does the submitting. This is why `send`-related test assertions look
+for the payload as its own write (not `payload\r`) and await the delayed CR — don't re-glue them.
+
 ## Testing patterns
 
 Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
