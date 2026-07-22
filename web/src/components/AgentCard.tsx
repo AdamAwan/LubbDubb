@@ -16,7 +16,7 @@ export function AgentCard({
   now: number;
   lastLine?: string;
   onOpen: () => void;
-  onKill?: () => void;
+  onKill?: () => Promise<unknown> | unknown;
   past?: boolean;
 }) {
   const active = agent.status === 'running' || agent.status === 'starting';
@@ -42,7 +42,7 @@ export function AgentCard({
           Open
         </button>
         {onKill && agent.status !== 'done' && (
-          <ConfirmButton label="Kill" confirmLabel="Confirm kill" onConfirm={onKill} />
+          <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />
         )}
       </div>
     </div>

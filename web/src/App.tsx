@@ -10,6 +10,7 @@ import { Vitals } from './components/Vitals.js';
 import { FleetControl } from './components/FleetControl.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
+import { AsyncButton } from './components/AsyncButton.js';
 import { statusDot } from './components/util.js';
 import { useNow } from './hooks.js';
 
@@ -129,9 +130,9 @@ export function App() {
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
           {state.control.paused && <span className="chip warn">paused</span>}
           <FleetControl live={liveAgents.length} cap={state.control.cap} paused={state.control.paused} />
-          <button className="btn primary" onClick={() => api.pulse().then(refresh)}>
+          <AsyncButton className="primary" onClick={() => api.pulse().then(refresh)}>
             Pulse now
-          </button>
+          </AsyncButton>
         </div>
       </header>
 
@@ -190,7 +191,7 @@ export function App() {
           <h3 className="muted">World</h3>
           <WorldSummary
             state={state}
-            onToggleExclude={(prNumber, excluded) => void api.setPrExcluded(prNumber, excluded).then(refresh)}
+            onToggleExclude={(prNumber, excluded) => api.setPrExcluded(prNumber, excluded).then(refresh)}
           />
         </section>
 
@@ -210,7 +211,7 @@ export function App() {
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}
           onKill={() => api.killAgent(selectedAgent.id).then(refresh)}
-          onInterrupt={() => void api.interruptAgent(selectedAgent.id)}
+          onInterrupt={() => api.interruptAgent(selectedAgent.id)}
         />
       )}
     </div>
@@ -226,7 +227,7 @@ function WorldSummary({
   onToggleExclude,
 }: {
   state: AppState;
-  onToggleExclude: (prNumber: number, excluded: boolean) => void;
+  onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
 }) {
   const { pullRequests, issues, stories, calendar } = state.world;
   const tag = state.config.prExclusionLabel;
@@ -261,8 +262,8 @@ function WorldSummary({
               pr.mergeable && <span className="chip small warn">merge-ready</span>
             )}
             {!pr.merged && (
-              <button
-                className="btn ghost world-toggle"
+              <AsyncButton
+                className="ghost world-toggle"
                 onClick={() => onToggleExclude(pr.number, !isExcluded)}
                 title={
                   isExcluded
@@ -271,7 +272,7 @@ function WorldSummary({
                 }
               >
                 {isExcluded ? 'watch' : 'ignore'}
-              </button>
+              </AsyncButton>
             )}
           </div>
         );

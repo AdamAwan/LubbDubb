@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Escalation } from '../types.js';
 import { relTime } from './util.js';
+import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
 export function EscalationCard({
   escalation,
@@ -10,19 +11,15 @@ export function EscalationCard({
 }: {
   escalation: Escalation;
   now?: number;
-  onAnswer: (text: string) => void;
+  onAnswer: (text: string) => Promise<unknown> | unknown;
   /** Open the originating agent's drawer for the full transcript. */
   onOpenAgent?: (agentId: string) => void;
 }) {
   const [text, setText] = useState('');
+  const send = useAsyncAction();
   const { context } = escalation;
   const signal = describeSignal(context.originRef, context.prNumber);
   const quick = quickAnswers(escalation.prompt);
-
-  const answer = (value: string): void => {
-    onAnswer(value);
-    setText('');
-  };
 
   return (
     <div className="card escalation">
@@ -59,9 +56,9 @@ export function EscalationCard({
       {quick.length > 0 && (
         <div className="esc-quick">
           {quick.map((q) => (
-            <button key={q} className="btn small" onClick={() => answer(q)}>
+            <AsyncButton key={q} className="small" onClick={() => onAnswer(q)}>
               {q}
-            </button>
+            </AsyncButton>
           ))}
         </div>
       )}
@@ -70,13 +67,18 @@ export function EscalationCard({
         className="reply"
         onSubmit={(e) => {
           e.preventDefault();
-          if (text.trim()) answer(text.trim());
+          const value = text.trim();
+          if (!value) return;
+          void send.run(async () => {
+            await onAnswer(value);
+            setText('');
+          });
         }}
       >
         <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
-        <button className="btn primary" type="submit">
+        <SubmitButton phase={send.phase} className="primary">
           Send
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );
