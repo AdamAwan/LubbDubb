@@ -48,6 +48,8 @@ export class RuleDispatcher implements Dispatcher {
       requireOwnLabel: pickup.requireOwnLabel,
       priorityLabels: pickup.priorityLabels ?? {},
       defaultPriority: pickup.defaultPriority ?? 0,
+      pickupStates: pickup.pickupStates,
+      inReviewState: pickup.inReviewState,
     };
     this.cooldown = {
       maxAttempts: cooldown.maxAttempts ?? DEFAULT_COOLDOWN.maxAttempts,
@@ -204,6 +206,34 @@ export class RuleDispatcher implements Dispatcher {
           method: 'squash',
           confidence: 0.9,
           reason: `PR #${pr.number} is green, approved and mergeable; merge it in.`,
+        } satisfies RawAction);
+      }
+    }
+
+    // 3b: Back off a work item once a PR is open for it. When an item still in a
+    // pickup state ("Ready"/"Doing") has an open PR, move it to the review state so
+    // it isn't re-picked while it waits on CI/review. Idempotent: once it's in the
+    // review state it no longer matches, so nothing is emitted next cycle. Opt-in —
+    // off unless the operator set both a review state and pickup states, and only
+    // fires for items that carry a native state (Azure work items; GitHub issues
+    // have none, so this is a no-op for them).
+    const { inReviewState } = this.pickup;
+    if (inReviewState && this.pickup.pickupStates && this.pickup.pickupStates.length > 0) {
+      const openPrs = ctx.world.pullRequests.filter((p) => !p.merged);
+      for (const issue of ctx.world.issues) {
+        const state = issue.workItemState;
+        if (state === undefined || !this.pickup.pickupStates.includes(state)) continue;
+        // The agent for issue N works branch `issue/N` (see rule 4), so its PR lands
+        // on that branch — the reliable link even when Azure hasn't wired the
+        // ArtifactLink relation. Fall back to an explicit linked-PR number too.
+        const branch = `issue/${issue.number}`;
+        const pr = openPrs.find((p) => p.branch === branch || p.number === issue.linkedPrNumber);
+        if (!pr) continue;
+        raw.push({
+          type: 'set_work_item_state',
+          number: issue.number,
+          state: inReviewState,
+          reason: `PR #${pr.number} is open for work item #${issue.number}; move it to "${inReviewState}" so it isn't re-picked while under review.`,
         } satisfies RawAction);
       }
     }

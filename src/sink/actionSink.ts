@@ -35,6 +35,13 @@ export interface PrLabelInput {
   present: boolean;
 }
 
+export interface WorkItemStateInput {
+  /** The work item / issue number to transition. */
+  number: number;
+  /** The provider-native state to move it to (e.g. Azure "In Review"). */
+  state: string;
+}
+
 export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
@@ -48,4 +55,10 @@ export interface ActionSink {
   mergePr(input: PrMergeInput): Promise<SendResult>;
   /** Add/remove a label on a PR — the operator's exclusion tag toggle. Throws if it fails. */
   setPrLabel(input: PrLabelInput): Promise<SendResult>;
+  /**
+   * Move a work item to a provider-native state (e.g. Azure "In Review" once a PR
+   * is open), so it stops being re-picked while under review. Idempotent. Throws if
+   * it fails. Only providers with a rich state model implement it.
+   */
+  setWorkItemState(input: WorkItemStateInput): Promise<SendResult>;
 }

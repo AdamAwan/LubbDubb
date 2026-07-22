@@ -27,10 +27,32 @@ export interface IssuePickupPolicy {
   priorityLabels: Record<string, number>;
   /** Weight for an issue carrying no matching priority label. */
   defaultPriority: number;
+  /**
+   * When non-empty, only issues whose provider-native `workItemState` is in this
+   * list are eligible for pickup (e.g. `["Ready", "Doing"]` for Azure DevOps).
+   * Issues with no `workItemState` (GitHub, the fake) skip this gate entirely, so
+   * it stays a no-op for providers with only open/closed. Unset/empty = no state
+   * gate (the backward-compatible default).
+   */
+  pickupStates?: string[];
+  /**
+   * The state a work item is moved to once a pull request is open for it, so it
+   * stops being re-picked while under review (e.g. Azure "In Review"). When set
+   * *and* `pickupStates` is non-empty, the dispatcher emits a `set_work_item_state`
+   * action for a still-in-pickup item that has an open PR. Unset = no automatic
+   * transition (the default). Needs a provider that can write the state back.
+   */
+  inReviewState?: string;
 }
 
 /** Whether an open, unlinked issue may be picked up under the policy's gate. */
 export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): boolean {
+  // State gate (Azure work items): only pick up items in an allowed workflow state
+  // — e.g. "Ready"/"Doing", not "In Review". Items with no tracked state (GitHub,
+  // fake) bypass this entirely, so it's a no-op unless the provider populates it.
+  if (policy.pickupStates && policy.pickupStates.length > 0 && issue.workItemState !== undefined) {
+    if (!policy.pickupStates.includes(issue.workItemState)) return false;
+  }
   if (!policy.pickupLabel) return true;
   const labels = policy.requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
   return labels.includes(policy.pickupLabel);

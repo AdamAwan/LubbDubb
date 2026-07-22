@@ -1,7 +1,7 @@
 import type { Config } from '../config.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
-import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult, WorkItemStateInput } from '../sink/actionSink.js';
 import type { WorldSnapshot } from '../types.js';
 
 /**
@@ -79,6 +79,15 @@ export interface PrLabelCapable {
 
 export function isPrLabelCapable(x: Integration): x is Integration & PrLabelCapable {
   return typeof (x as Partial<PrLabelCapable>).setPrLabel === 'function';
+}
+
+/** An integration that can move a work item to a provider-native state — the "in review" back-off. */
+export interface WorkItemStateCapable {
+  setWorkItemState(input: WorkItemStateInput): Promise<SendResult>;
+}
+
+export function isWorkItemStateCapable(x: Integration): x is Integration & WorkItemStateCapable {
+  return typeof (x as Partial<WorkItemStateCapable>).setWorkItemState === 'function';
 }
 
 // ---------------------------------------------------------------------------
