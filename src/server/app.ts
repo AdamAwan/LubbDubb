@@ -7,6 +7,8 @@ import type { System } from '../system.js';
 import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
+import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
+import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import { DeskBriefingSchema } from '../integrations/ingested/briefingSchema.js';
 
@@ -181,6 +183,19 @@ export function buildStateSnapshot(system: System) {
   // the hood; read the same persisted world directly for a snapshot.
   return connector.getState().then((world) => {
     const tasks = store.listTasks();
+    const control = runtimeControl.snapshot();
+    // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
+    // below predicts what actually happens next cycle. The decision window (200)
+    // and the headroom arithmetic mirror `Harness.runCycle`.
+    const pickupCtx: IssuePickupContext = {
+      policy: system.issuePickup,
+      cooldown: DEFAULT_COOLDOWN,
+      now: world.takenAt,
+      tasks,
+      recentDecisions: store.listDecisions(200),
+      headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
+      paused: control.paused,
+    };
     // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
     // cockpit only looks refs up in this map, so it stays provider-agnostic.
     const refUrls = buildRefUrls({
@@ -201,12 +216,14 @@ export function buildStateSnapshot(system: System) {
       },
       // Live, mutable dispatch controls — the cockpit reads these (not the frozen
       // config block above) for the current cap and pause state.
-      control: runtimeControl.snapshot(),
-      // Fold each PR's signals into a health verdict so the cockpit can show *why*
-      // a PR is stuck rather than leaving it implied by the absence of activity.
+      control,
+      // Fold each PR's signals into a health verdict, and each issue's gates into
+      // a pickup verdict, so the cockpit can show *why* an item is stuck or
+      // untouched rather than leaving it implied by the absence of activity.
       world: {
         ...world,
         pullRequests: world.pullRequests.map((pr) => ({ ...pr, health: prHealth(pr) })),
+        issues: world.issues.map((issue) => ({ ...issue, pickup: issuePickupStatus(issue, pickupCtx) })),
       },
       tasks,
       agents: store.listAgents(),

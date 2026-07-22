@@ -37,6 +37,11 @@ export interface System {
   harness: Harness;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
+  /**
+   * The issue-pickup policy both dispatchers honour, exposed so the snapshot can
+   * compute the same per-issue pickup verdict the dispatcher will act on.
+   */
+  issuePickup: IssuePickupPolicy;
 }
 
 export interface BuildOptions {
@@ -201,7 +206,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
   });
 
-  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl };
+  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl, issuePickup };
 }
 
 /**
