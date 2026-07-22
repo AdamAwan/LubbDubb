@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
 import { loadConfig } from '../src/config.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
@@ -64,6 +65,41 @@ test('an explicit override beats an env var for the same key', () => {
   } finally {
     if (prev === undefined) delete process.env.PORT;
     else process.env.PORT = prev;
+  }
+});
+
+test('repoRoot defaults to the launch directory (cwd)', () => {
+  const cfg = loadConfig();
+  assert.equal(cfg.repoRoot, process.cwd());
+});
+
+test('LUBBDUBB_REPO_ROOT env var overrides repoRoot', () => {
+  const prev = process.env.LUBBDUBB_REPO_ROOT;
+  try {
+    process.env.LUBBDUBB_REPO_ROOT = '/srv/some-repo';
+    const cfg = loadConfig();
+    assert.equal(cfg.repoRoot, '/srv/some-repo');
+  } finally {
+    if (prev === undefined) delete process.env.LUBBDUBB_REPO_ROOT;
+    else process.env.LUBBDUBB_REPO_ROOT = prev;
+  }
+});
+
+test('a relative repoRoot override is resolved to an absolute path', () => {
+  const cfg = loadConfig({ repoRoot: 'some/nested/repo' });
+  assert.ok(cfg.repoRoot.startsWith('/'), 'a relative repoRoot is made absolute');
+  assert.equal(cfg.repoRoot, resolve(process.cwd(), 'some/nested/repo'));
+});
+
+test('an explicit repoRoot override beats the env var', () => {
+  const prev = process.env.LUBBDUBB_REPO_ROOT;
+  try {
+    process.env.LUBBDUBB_REPO_ROOT = '/srv/from-env';
+    const cfg = loadConfig({ repoRoot: '/srv/from-override' });
+    assert.equal(cfg.repoRoot, '/srv/from-override');
+  } finally {
+    if (prev === undefined) delete process.env.LUBBDUBB_REPO_ROOT;
+    else process.env.LUBBDUBB_REPO_ROOT = prev;
   }
 });
 
