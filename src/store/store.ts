@@ -7,6 +7,8 @@ import type {
   Agent,
   Decision,
   DeskBriefing,
+  ErrorLogEntry,
+  ErrorLogInput,
   Escalation,
   EscalationContext,
   Task,
@@ -58,6 +60,9 @@ export class Store {
     });
     this.ensureColumns('agents', {
       session_id: 'TEXT',
+    });
+    this.ensureColumns('decisions', {
+      rule: 'TEXT',
     });
   }
 
@@ -301,16 +306,24 @@ export class Store {
 
   // -- Decisions (audit) ---------------------------------------------------
 
-  recordDecision(input: Omit<Decision, 'id' | 'createdAt'>): Decision {
-    const decision: Decision = { id: `dec_${nanoid(10)}`, createdAt: this.now(), ...input };
+  recordDecision(input: Omit<Decision, 'id' | 'createdAt' | 'rule'>): Decision {
+    // The rule id rides on the action (its transport from the dispatcher); lift
+    // it into its own column here so it's first-class on the decision row.
+    const decision: Decision = {
+      id: `dec_${nanoid(10)}`,
+      createdAt: this.now(),
+      rule: input.action.rule ?? null,
+      ...input,
+    };
     this.db
-      .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, created_at) VALUES (?,?,?,?,?,?)`)
+      .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, rule, created_at) VALUES (?,?,?,?,?,?,?)`)
       .run(
         decision.id,
         decision.cycleId,
         JSON.stringify(decision.action),
         decision.outcome,
         decision.detail,
+        decision.rule,
         decision.createdAt,
       );
     return decision;
@@ -358,6 +371,29 @@ export class Store {
     this.db
       .prepare(`INSERT INTO connector_events (id, kind, payload, created_at) VALUES (?,?,?,?)`)
       .run(`ev_${nanoid(10)}`, kind, JSON.stringify(payload), this.now());
+  }
+
+  // -- Error log -----------------------------------------------------------
+
+  recordError(input: ErrorLogInput): ErrorLogEntry {
+    const entry: ErrorLogEntry = {
+      id: `err_${nanoid(10)}`,
+      createdAt: this.now(),
+      source: input.source,
+      message: input.message,
+      detail: input.detail ?? null,
+    };
+    this.db
+      .prepare(`INSERT INTO error_events (id, source, message, detail, created_at) VALUES (?,?,?,?,?)`)
+      .run(entry.id, entry.source, entry.message, entry.detail, entry.createdAt);
+    return entry;
+  }
+
+  listErrors(limit = 100): ErrorLogEntry[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM error_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(limit) as ErrorEventRow[];
+    return rows.map(rowToErrorEntry);
   }
 
   // -- World change history ------------------------------------------------
@@ -446,6 +482,7 @@ interface DecisionRow {
   action: string;
   outcome: string;
   detail: string;
+  rule: string | null;
   created_at: string;
 }
 interface WorldEventRow {
@@ -453,6 +490,13 @@ interface WorldEventRow {
   kind: string;
   ref: string | null;
   summary: string;
+  created_at: string;
+}
+interface ErrorEventRow {
+  id: string;
+  source: string;
+  message: string;
+  detail: string | null;
   created_at: string;
 }
 
@@ -506,6 +550,16 @@ function rowToDecision(r: DecisionRow): Decision {
     cycleId: r.cycle_id,
     action: JSON.parse(r.action) as Decision['action'],
     outcome: r.outcome as Decision['outcome'],
+    detail: r.detail,
+    rule: r.rule,
+    createdAt: r.created_at,
+  };
+}
+function rowToErrorEntry(r: ErrorEventRow): ErrorLogEntry {
+  return {
+    id: r.id,
+    source: r.source as ErrorLogEntry['source'],
+    message: r.message,
     detail: r.detail,
     createdAt: r.created_at,
   };

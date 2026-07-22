@@ -25,6 +25,8 @@ import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
+import { ErrorLog } from './errorLog.js';
+import type { ErrorLogEntry } from './types.js';
 
 export interface System {
   config: Config;
@@ -37,6 +39,8 @@ export interface System {
   harness: Harness;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
+  /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
+  errors: ErrorLog;
 }
 
 export interface BuildOptions {
@@ -46,6 +50,8 @@ export interface BuildOptions {
   sink?: ActionSink;
   /** Inject a fake process spawner (tests) for the stream-JSON runtime. */
   streamSpawner?: Spawner;
+  /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
+  errorMirror?: (entry: ErrorLogEntry) => void;
 }
 
 /**
@@ -60,7 +66,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // seams the harness and executor depend on. Swapping a provider is a config
   // change; nothing here changes.
   const now = (): string => new Date().toISOString();
-  const integrations = buildIntegrations(config.integrations, { store, config, now });
+  // The one error-recording path: everything that catches a failure routes it
+  // here so it's durable, mirrored to stderr, and streamed to the cockpit.
+  const errors = new ErrorLog(store, opts.errorMirror);
+  const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, store, now);
   const backend = opts.backend ?? new NodePtyBackend();
 
@@ -74,6 +83,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       cwd: spec.cwd,
       env: spec.env,
       waitingPatterns: spec.waitingPatterns,
+      submitDelayMs: config.agentSubmitDelayMs,
     });
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
 
@@ -120,6 +130,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     promptDelayMs: agentSetup.promptDelayMs,
     waitingPatterns: config.agentWaitingPatterns,
     resumable: agentSetup.resumable,
+    errors,
   });
   const escalations = new EscalationInbox(store, agents);
 
@@ -164,6 +175,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     executor,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
+    errors,
     runtime: runtimeControl,
     steeringPriorities: config.steeringPriorities,
     prExclusionLabel: config.prExclusionLabel,
@@ -201,7 +213,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
   });
 
-  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl };
+  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl, errors };
 }
 
 /**
@@ -228,6 +240,7 @@ export function reconcileAndResumeOnBoot(
   store: Store,
   agents: AgentManager,
   escalations: EscalationInbox,
+  errors?: ErrorLog,
 ): { resumed: number; interrupted: number } {
   const isActive = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'queued';
   const orphans = store.listAgentsByStatus('starting', 'running', 'waiting', 'interrupted').filter((a) => {
@@ -245,8 +258,9 @@ export function reconcileAndResumeOnBoot(
     if (agent.sessionId && existsSync(agent.cwd)) {
       try {
         resumed = agents.resume(agent, task);
-      } catch {
-        resumed = false; // never let a bad resume block boot
+      } catch (err) {
+        resumed = false; // never let a bad resume block boot — but do record why it failed
+        errors?.record({ source: 'boot', message: `Boot resume failed: ${(err as Error).message}` });
       }
     }
     if (resumed) {

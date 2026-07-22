@@ -56,6 +56,12 @@ in production.
 NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
   an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
   won't appear on databases from an older build.
+- **`src/dispatcher/rules.ts`** is the RuleDispatcher's rule book as data (`DISPATCH_RULES`):
+  every action the rule dispatcher emits carries a `rule` id from it, the store lifts the id
+  into the `decisions.rule` column at `recordDecision` time, and `/api/state` ships the
+  registry so the cockpit's Decision log can expand a row into the rule that fired. If you add
+  a dispatcher branch, add its registry entry and tag the emitted actions. LLM-dispatcher
+  actions carry no rule (null) by design.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are
@@ -70,6 +76,15 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   taking effect. Mutated via `POST /api/control`; **not persisted**, so a restart reverts
   to config. Pausing defers only `dispatch_*` actions (escalate/answer/etc. still run) and
   scaling the cap down never kills a live agent — both deferrals are audited with a reason.
+- **`src/errorLog.ts`** is the one error-recording path. Anything that catches a failure —
+  the harness's cycle `catch`, provider snapshot `catch`es (via the optional `errors` in
+  `IntegrationContext`/provider opts), `AgentManager` terminal failures (with the exit code
+  captured from the session's `exit` event), the Fastify `setErrorHandler`, boot resume —
+  calls `errors.record(...)`, which persists to the `error_events` table, mirrors to stderr,
+  and emits `logged` (fanned out over WS for the cockpit's Errors panel). Don't add new
+  swallowed `catch`es; route them here. The event is named `logged`, not `error` — an
+  unlistened `error` event throws, and recording a failure must never throw. Tests silence
+  the stderr mirror with `buildSystem(config, { errorMirror: () => {} })`.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
@@ -133,6 +148,13 @@ in-flight ones rather than discarding them. The moving parts:
 Sharp edge in `PtySession.kill()`: it sets status `killed` **before** signalling the process,
 because a synchronously-delivered exit would otherwise be reclassified as `failed` (firing a
 terminal event). Keep that ordering.
+
+Sharp edge in `PtySession.send()`: the message text and its submitting carriage return are
+written as **two separate writes**, `agentSubmitDelayMs` apart (default 60ms). The claude TUI
+coalesces a single input burst into a paste and treats a trailing CR as a literal newline, so a
+glued-on CR leaves the message sitting in the input unsubmitted. Trailing newlines in the text
+are stripped so the lone CR does the submitting. This is why `send`-related test assertions look
+for the payload as its own write (not `payload\r`) and await the delayed CR — don't re-glue them.
 
 ## Testing patterns
 

@@ -163,7 +163,16 @@ export interface Decision {
   action: { type: string; reason?: string };
   outcome: string;
   detail: string;
+  /** The dispatcher rule that produced the action (a `dispatchRules` key), or null. */
+  rule: string | null;
   createdAt: string;
+}
+
+/** One entry of the rule dispatcher's rule book (mirrors the server's DispatchRule). */
+export interface DispatchRule {
+  number: string;
+  name: string;
+  description: string;
 }
 
 export type WorldEventKind =
@@ -189,6 +198,15 @@ export interface WorldEvent {
   createdAt: string;
 }
 
+/** One recorded failure (cycle exception, provider outage, agent crash, route 500). */
+export interface ErrorLogEntry {
+  id: string;
+  source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
+  message: string;
+  detail: string | null;
+  createdAt: string;
+}
+
 export interface AppState {
   config: {
     heartbeatIntervalMs: number;
@@ -211,6 +229,8 @@ export interface AppState {
   escalations: Escalation[];
   decisions: Decision[];
   worldEvents: WorldEvent[];
+  /** Recorded failures, newest first — the Errors panel. */
+  errors: ErrorLogEntry[];
   /** The Claude-bridged desk briefing, or null until a bridge has posted one. */
   briefing: DeskBriefing | null;
   /**
@@ -219,6 +239,12 @@ export interface AppState {
    * issue/PR number, or a branch name. Missing key ⇒ render as plain text.
    */
   refUrls: Record<string, string>;
+  /**
+   * The rule dispatcher's rule book, keyed by the rule id a decision carries.
+   * The Decision log looks `decision.rule` up here to expand a row into the
+   * rule that fired; a missing key ⇒ no rule identity to show.
+   */
+  dispatchRules: Record<string, DispatchRule>;
 }
 
 export type ServerEvent =

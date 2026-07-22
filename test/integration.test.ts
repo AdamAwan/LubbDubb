@@ -117,7 +117,11 @@ test('whitelisted waiting prompts are auto-answered without escalating', async (
 
   backend.last().emit('@@LUBBDUBB_WAITING:Allow running tests?@@');
   assert.equal(system.store.listOpenEscalations().length, 0, 'whitelisted prompt should not escalate');
-  assert.equal(backend.last().writes.at(-1), 'yes\r');
+  // The whitelisted response is typed in; the payload and its submitting CR are
+  // written separately (see PtySession.send), so the last write is the CR.
+  assert.ok(backend.last().writes.includes('yes'), 'the whitelisted response is typed in');
+  await new Promise((r) => setTimeout(r, 90));
+  assert.equal(backend.last().writes.at(-1), '\r');
   system.store.close();
 });
 
