@@ -4,8 +4,8 @@ import type { MergeMethod } from '../../sink/actionSink.js';
 import type {
   AzCommentRef,
   AzMergeResult,
+  AzPolicyEvaluation,
   AzPull,
-  AzStatus,
   AzThread,
   AzWorkItem,
   AzureDevOpsApi,
@@ -21,6 +21,9 @@ const API_VERSION = '7.1';
 
 /** connectionData is a preview-only resource: 7.1 is rejected without the -preview suffix. */
 const CONNECTION_DATA_API_VERSION = '7.1-preview.1';
+
+/** The policy evaluations resource is preview-only under 7.1. */
+const POLICY_API_VERSION = '7.1-preview.1';
 
 /**
  * How the harness authenticates to Azure DevOps. Two implementations ship, chosen
@@ -129,6 +132,15 @@ interface RawWorkItem {
   relations?: Array<{ rel?: string; url?: string }>;
 }
 
+interface RawPolicyEvaluation {
+  status?: string | null;
+  configuration?: {
+    isBlocking?: boolean;
+    isEnabled?: boolean;
+    type?: { id?: string };
+  };
+}
+
 /**
  * The real {@link AzureDevOpsApi}: one bound `organization`/`project`/`repository`,
  * all HTTP behind `fetch`, mapping Azure's responses down to the minimal `Az*`
@@ -138,6 +150,8 @@ interface RawWorkItem {
  */
 export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewer: string | null = null;
+  /** The bound project's GUID, resolved once — the policy artifactId needs the id, not the name. */
+  private projectId: string | null = null;
 
   constructor(
     private readonly organization: string,
@@ -237,11 +251,32 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     }));
   }
 
-  async listPullStatuses(pullRequestId: number): Promise<AzStatus[]> {
-    const data = await this.request<{ value: Array<{ state?: string | null }> }>(
-      this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/statuses`),
+  /** Resolve (and cache) the bound project's GUID — the policy artifactId needs the id, not the name. */
+  private async resolveProjectId(): Promise<string> {
+    if (this.projectId === null) {
+      // The projects endpoint accepts either a name or an id, so passing the
+      // configured project name works whether it was already a GUID or not.
+      const data = await this.request<{ id?: string }>(
+        this.withApiVersion(`${this.orgUrl}/_apis/projects/${encodeURIComponent(this.project)}`),
+      );
+      this.projectId = data.id ?? '';
+    }
+    return this.projectId;
+  }
+
+  async listPolicyEvaluations(pullRequestId: number): Promise<AzPolicyEvaluation[]> {
+    const projectId = await this.resolveProjectId();
+    // A PR is addressed as a "CodeReview" artifact; the id must carry the project GUID.
+    const artifactId = `vstfs:///CodeReview/CodeReviewId/${projectId}/${pullRequestId}`;
+    const data = await this.request<{ value: RawPolicyEvaluation[] }>(
+      this.withApiVersion(`${this.projectUrl}/_apis/policy/evaluations`, { artifactId }, POLICY_API_VERSION),
     );
-    return data.value.map((s) => ({ state: s.state ?? null }));
+    return data.value.map((e) => ({
+      typeId: e.configuration?.type?.id ?? '',
+      status: e.status ?? null,
+      isBlocking: e.configuration?.isBlocking ?? false,
+      isEnabled: e.configuration?.isEnabled ?? false,
+    }));
   }
 
   async listPullLabels(pullRequestId: number): Promise<string[]> {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import {
   AzureDevOpsSourceControlIntegration,
-  aggregateCiStatus,
+  aggregatePolicyCiStatus,
   buildUnresolvedComments,
   computeApproved,
   mergeStrategyFor,
@@ -20,8 +20,8 @@ import { buildOpenWorkItemQuery } from '../src/integrations/azure/restAzureDevOp
 import type {
   AzCommentRef,
   AzMergeResult,
+  AzPolicyEvaluation,
   AzPull,
-  AzStatus,
   AzThread,
   AzWorkItem,
   AzureDevOpsApi,
@@ -33,7 +33,7 @@ interface Script {
   viewer?: string;
   pulls?: AzPull[];
   threads?: Record<number, AzThread[]>;
-  statuses?: Record<number, AzStatus[]>;
+  policyEvals?: Record<number, AzPolicyEvaluation[]>;
   labels?: Record<number, string[]>;
   workItems?: AzWorkItem[];
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems';
@@ -60,8 +60,8 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async listPullThreads(prId) {
       return script.threads?.[prId] ?? [];
     },
-    async listPullStatuses(prId) {
-      return script.statuses?.[prId] ?? [];
+    async listPolicyEvaluations(prId) {
+      return script.policyEvals?.[prId] ?? [];
     },
     async listPullLabels(prId) {
       return script.labels?.[prId] ?? [];
@@ -135,22 +135,47 @@ test('mergeableFromStatus is tri-state: concrete for succeeded/conflicts, undefi
   assert.equal(mergeableFromStatus('notSet'), undefined);
 });
 
-test('aggregateCiStatus: any failing status wins', () => {
-  const statuses: AzStatus[] = [{ state: 'succeeded' }, { state: 'failed' }];
-  assert.equal(aggregateCiStatus(statuses), 'failing');
+/** The well-known build-validation and status branch-policy type GUIDs. */
+const BUILD_TYPE = '0609b952-1397-4640-95ec-e00a01b2c241';
+const STATUS_TYPE = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
+const REVIEWERS_TYPE = 'fa4e907d-c16b-4a4c-9dfa-4906e5d171dd';
+
+function evalRec(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation {
+  return { typeId: BUILD_TYPE, status: 'approved', isBlocking: true, isEnabled: true, ...over };
+}
+
+test('aggregatePolicyCiStatus: a rejected required build policy is failing', () => {
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'approved' }), evalRec({ status: 'rejected' })]), 'failing');
 });
 
-test('aggregateCiStatus: pending when a status is pending and none failed', () => {
-  assert.equal(aggregateCiStatus([{ state: 'succeeded' }, { state: 'pending' }]), 'pending');
+test('aggregatePolicyCiStatus: a broken policy still blocks — treated as failing', () => {
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'broken' })]), 'failing');
 });
 
-test('aggregateCiStatus: passing when all signals succeed', () => {
-  assert.equal(aggregateCiStatus([{ state: 'succeeded' }]), 'passing');
+test('aggregatePolicyCiStatus: queued/running with none rejected is pending', () => {
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'approved' }), evalRec({ status: 'running' })]), 'pending');
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'queued' })]), 'pending');
 });
 
-test('aggregateCiStatus: unknown when there are no signals (or only notApplicable)', () => {
-  assert.equal(aggregateCiStatus([]), 'unknown');
-  assert.equal(aggregateCiStatus([{ state: 'notApplicable' }, { state: null }]), 'unknown');
+test('aggregatePolicyCiStatus: passing when the required build/status checks are approved', () => {
+  assert.equal(
+    aggregatePolicyCiStatus([evalRec({ status: 'approved' }), evalRec({ typeId: STATUS_TYPE, status: 'approved' })]),
+    'passing',
+  );
+});
+
+test('aggregatePolicyCiStatus: unknown when no CI policy applies (empty / only notApplicable)', () => {
+  assert.equal(aggregatePolicyCiStatus([]), 'unknown');
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'notApplicable' }), evalRec({ status: null })]), 'unknown');
+});
+
+test('aggregatePolicyCiStatus: non-blocking, disabled, and non-CI policies are ignored', () => {
+  // An optional (non-blocking) build failure isn't a required-check failure.
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'rejected', isBlocking: false })]), 'unknown');
+  // A disabled policy's evaluation is stale noise.
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'rejected', isEnabled: false })]), 'unknown');
+  // A rejected *reviewers* policy is a human gate, not CI — must not read as failing.
+  assert.equal(aggregatePolicyCiStatus([evalRec({ typeId: REVIEWERS_TYPE, status: 'rejected' })]), 'unknown');
 });
 
 test('computeApproved: approved on a positive vote with none negative', () => {
@@ -284,7 +309,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
         reviewerVotes: [10],
       }),
     ],
-    statuses: { 7: [{ state: 'succeeded' }] },
+    policyEvals: { 7: [evalRec({ status: 'approved' })] },
     threads: {
       7: [
         {
