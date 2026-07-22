@@ -137,7 +137,7 @@ export function App() {
         </div>
       </header>
 
-      <InjectPanel onInjected={refresh} world={state.world} />
+      {state.config.injectable && <InjectPanel onInjected={refresh} world={state.world} />}
       <Vitals state={state} liveAgents={liveAgents.length} cap={state.control.cap} />
 
       <main className="grid">
@@ -148,7 +148,10 @@ export function App() {
           {liveAgents.length === 0 && (
             <div className="empty-panel">
               <span className="empty-mark">♥</span>
-              <p>No agents running. The harness is idle — inject an event to wake it.</p>
+              <p>
+                No agents running. The harness is idle
+                {state.config.injectable ? ' — inject an event to wake it' : ' — waiting for the world to change'}.
+              </p>
             </div>
           )}
           {liveAgents.map((a) => (
