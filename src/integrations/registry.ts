@@ -13,6 +13,7 @@ import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
 import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
 import { RestMicrosoftGraphApi, resolveMicrosoftGraphAuth } from './microsoft/restMicrosoftGraphApi.js';
 import { MicrosoftCalendarIntegration } from './microsoft/calendar.js';
+import { IngestedCalendarIntegration } from './ingested/calendar.js';
 
 type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
 
@@ -72,6 +73,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       const { api, windowDays } = microsoftApi(ctx);
       return new MicrosoftCalendarIntegration({ api, store: ctx.store, windowDays });
     },
+    ingested: (ctx) => new IngestedCalendarIntegration({ store: ctx.store }),
   },
 };
 

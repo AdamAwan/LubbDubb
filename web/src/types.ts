@@ -56,6 +56,55 @@ export interface WorldSnapshot {
   calendar: CalendarEvent[];
 }
 
+// The Claude-bridged desk briefing (mirrors the server's DeskBriefing — the web
+// bundle keeps its own copy and never imports server code). Read-only in the UI.
+export interface BriefingMeeting {
+  id: string;
+  subject: string;
+  start: string;
+  end: string;
+  isOnline: boolean;
+  joinUrl?: string;
+  webLink?: string;
+  organizer?: string;
+  attendeeCount?: number;
+  responseRequested?: boolean;
+  showAs?: 'free' | 'tentative' | 'busy' | 'oof' | 'workingElsewhere' | 'unknown';
+  relevance: 'mine' | 'area';
+}
+export interface BriefingMail {
+  id: string;
+  subject: string;
+  from: string;
+  receivedAt: string;
+  isUnread: boolean;
+  isFlagged: boolean;
+  webLink?: string;
+  preview?: string;
+  relevance: 'mine' | 'area';
+  area?: string;
+}
+export interface BriefingPing {
+  id: string;
+  source: 'teams';
+  chatOrChannel: string;
+  from: string;
+  sentAt: string;
+  preview?: string;
+  webLink?: string;
+  relevance: 'mine' | 'area';
+}
+export interface DeskBriefing {
+  generatedAt: string;
+  windowStart: string;
+  windowEnd: string;
+  owner: { email: string; name?: string };
+  areas: string[];
+  meetings: BriefingMeeting[];
+  mail: BriefingMail[];
+  pings: BriefingPing[];
+}
+
 export interface Task {
   id: string;
   kind: string;
@@ -160,6 +209,8 @@ export interface AppState {
   escalations: Escalation[];
   decisions: Decision[];
   worldEvents: WorldEvent[];
+  /** The Claude-bridged desk briefing, or null until a bridge has posted one. */
+  briefing: DeskBriefing | null;
   /**
    * External reference → web URL, built entirely by the source-control provider
    * (never string-built here). Keyed by how a ref appears in the UI: `#42` for an

@@ -144,6 +144,16 @@ body {
 .world-item.excluded { opacity: 0.55; }
 .world-toggle { margin-left: auto; padding: 1px 8px; font-size: 11px; }
 
+/* Desk briefing panel — same visual language as .world, read-only. */
+.briefing { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.briefing-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.briefing-asof { color: var(--muted); font-size: 11px; }
+.briefing-section { margin-top: 4px; }
+.briefing-item { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 13px; flex-wrap: wrap; }
+.briefing-when { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.briefing-from { color: var(--muted); font-size: 12px; }
+.briefing-preview { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+
 .auditlog { max-height: 75vh; overflow-y: auto; }
 .audit { border-left: 2px solid var(--border); padding: 6px 10px; margin-bottom: 6px; font-size: 12px; }
 .audit.executed { border-color: var(--green); }
