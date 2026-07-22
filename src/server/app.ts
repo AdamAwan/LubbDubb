@@ -217,6 +217,25 @@ export function buildStateSnapshot(system: System) {
       // The read-only desk briefing (mail + Teams pings + meetings). Nullable until
       // a bridge has posted one. Meetings also flow through the world's calendar.
       briefing: store.getDeskBriefing(),
+      usage: buildUsage(system),
     };
   });
+}
+
+/**
+ * Account-level Claude usage for the cockpit chip (issue #60): the rolling cost
+ * windows summed from stream-mode turn reports (all modes, self-computed), plus
+ * the real subscriber 5h/weekly limits when the PTY status-line capture has
+ * seen any (Pro/Max only — null otherwise, and the UI degrades to cost).
+ */
+function buildUsage(system: System) {
+  const now = Date.now();
+  const iso = (msAgo: number): string => new Date(now - msAgo).toISOString();
+  return {
+    windows: {
+      fiveHourCostUsd: system.store.sumUsageCostSince(iso(5 * 60 * 60 * 1000)),
+      sevenDayCostUsd: system.store.sumUsageCostSince(iso(7 * 24 * 60 * 60 * 1000)),
+    },
+    rateLimits: system.rateLimits?.readLatest() ?? null,
+  };
 }

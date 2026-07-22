@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Config } from './config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
@@ -15,6 +17,7 @@ import {
 } from './agents/agentProtocol.js';
 import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
+import { StatusFileRateLimits } from './agents/statusLine.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
 import { recentOutputExcerpt } from './escalation/context.js';
@@ -37,6 +40,12 @@ export interface System {
   harness: Harness;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
+  /**
+   * Account rate-limit capture (status-line payloads), wired only for the PTY
+   * runtime — the status line never fires headless. Null in other modes; the
+   * snapshot then falls back to the rolling cost windows from `usage_events`.
+   */
+  rateLimits: StatusFileRateLimits | null;
 }
 
 export interface BuildOptions {
@@ -93,7 +102,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pty: {
       // The one resumable runtime: pin the session id up front, `--resume` it later.
       buildArgs: (({ sessionId, resume }) =>
-        buildClaudeArgs({ permissionMode: perm, extraArgs, sessionId, resume })) as ArgsBuilder,
+        buildClaudeArgs({ permissionMode: perm, extraArgs, sessionId, resume, statusLine: true })) as ArgsBuilder,
       factory: ptyFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
       resumeInput: buildResumeMessage,
@@ -110,6 +119,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
   }[config.agentMode];
 
+  // PTY-only: capture the status-line payloads (the one surface carrying the
+  // account 5h/weekly limits) into per-session files under the OS tmpdir — a
+  // stable spot so the last known limits survive a restart.
+  const rateLimits = config.agentMode === 'pty' ? new StatusFileRateLimits(join(tmpdir(), 'lubbdubb', 'status')) : null;
+
   const agents = new AgentManager(store, {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
@@ -120,6 +134,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     promptDelayMs: agentSetup.promptDelayMs,
     waitingPatterns: config.agentWaitingPatterns,
     resumable: agentSetup.resumable,
+    statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
   });
   const escalations = new EscalationInbox(store, agents);
 
@@ -201,7 +216,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
   });
 
-  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl };
+  return { config, store, connector, agents, escalations, executor, dispatcher, harness, runtimeControl, rateLimits };
 }
 
 /**

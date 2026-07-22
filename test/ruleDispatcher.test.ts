@@ -547,6 +547,10 @@ const runningAgent = (id: string) => ({
   waitingReason: null,
   startedAt: 'n',
   endedAt: null,
+  costUsd: null,
+  inputTokens: null,
+  outputTokens: null,
+  numTurns: null,
 });
 const branchTask = (branch: string, originRef: string, agentId: string) => ({
   id: 't1',

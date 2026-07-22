@@ -50,6 +50,9 @@ export class Hub {
     });
 
     agents.on('output', (e) => this.handleOutput(e.agentId, e.delta));
+    // Usage lands on the agent row at turn end; a coarse dirty repaints the
+    // fleet cards' cost/tokens without a dedicated frame type.
+    agents.on('usage', () => this.broadcast({ type: 'dirty' }));
     agents.on('status', (e) => {
       this.broadcast({ type: 'agent:status', ...e });
       this.broadcast({ type: 'dirty' });

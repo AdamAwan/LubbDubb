@@ -291,6 +291,43 @@ export interface Agent {
   sessionId: string | null;
   startedAt: string;
   endedAt: string | null;
+  /**
+   * Cumulative Claude usage as last reported by the session's `result` events
+   * (stream runtime only — a PTY session reports none, so these stay null).
+   * `costUsd` is the session's total API cost so far; tokens/turns likewise
+   * accumulate across the whole session.
+   */
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  numTurns: number | null;
+}
+
+/** One cumulative usage report from a session's turn-end `result` event. */
+export interface AgentUsage {
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  numTurns: number | null;
+}
+
+/** One subscriber rate-limit window (5h or weekly) as Claude Code reports it. */
+export interface RateLimitWindow {
+  usedPercentage: number;
+  /** ISO timestamp the window resets at, when reported. */
+  resetsAt: string | null;
+}
+
+/**
+ * Account-level Claude rate limits captured from a PTY agent's status-line
+ * payload. Pro/Max only — API-key auth carries no `rate_limits`, and each
+ * window can be independently absent.
+ */
+export interface AccountRateLimits {
+  fiveHour: RateLimitWindow | null;
+  sevenDay: RateLimitWindow | null;
+  /** When the payload this was parsed from was written. */
+  capturedAt: string;
 }
 
 export type EscalationType = 'approve_change' | 'answer_question' | 'resolve_ambiguity' | 'review_reply';
