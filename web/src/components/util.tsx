@@ -1,4 +1,45 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
+
+/** An external link that opens safely in a new tab. */
+function ExtLink({ href, children }: { href: string; children: ReactNode }): JSX.Element {
+  return (
+    <a className="ext-ref" href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
+
+/**
+ * Render one reference token (e.g. `#42`, `issue/13`) as a link when the provider
+ * gave us a URL for it, else as plain text. URLs come from the server-built
+ * `refUrls` map — the cockpit never constructs them.
+ */
+export function refLink(token: string, refUrls: Record<string, string>): ReactNode {
+  const url = refUrls[token];
+  return url ? <ExtLink href={url}>{token}</ExtLink> : token;
+}
+
+// Issue/PR mentions in free text — the universal `#<number>` GitHub syntax.
+const REF_TOKEN = /#\d+/g;
+
+/**
+ * Turn every recognised external reference in a run of text into a clickable
+ * link, leaving the rest as-is. Used for labels, decision reasons and escalation
+ * prompts, which embed refs like "PR #42" as plain strings.
+ */
+export function linkify(text: string, refUrls: Record<string, string>): ReactNode {
+  const out: ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  for (const m of text.matchAll(REF_TOKEN)) {
+    const at = m.index;
+    if (at > last) out.push(text.slice(last, at));
+    out.push(<span key={key++}>{refLink(m[0], refUrls)}</span>);
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
 
 /** A coloured status dot for CI / agent status. */
 export function statusDot(status: string): JSX.Element {

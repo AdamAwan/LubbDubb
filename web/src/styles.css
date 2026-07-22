@@ -85,6 +85,10 @@ body {
 .col h2 { font-size: 15px; margin: 4px 0 12px; display: flex; align-items: center; gap: 8px; }
 .col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; margin: 18px 0 8px; }
 .muted { color: var(--muted); }
+
+/* External references (issues, PRs, branches) — clickable, subtle until hovered. */
+.ext-ref { color: var(--blue); text-decoration: none; border-bottom: 1px dotted transparent; }
+.ext-ref:hover { border-bottom-color: var(--blue); }
 .small { font-size: 12px; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
 .count { background: var(--panel-2); border-radius: 20px; padding: 1px 9px; font-size: 12px; color: var(--muted); }

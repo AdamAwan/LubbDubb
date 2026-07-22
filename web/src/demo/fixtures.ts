@@ -256,6 +256,15 @@ export function buildDemoState(): DemoSeed {
       { id: 'we-2', kind: 'issue_opened', ref: 'issue:208', summary: 'Issue #208 opened', createdAt: ago(15) },
       { id: 'we-1', kind: 'pr_merged', ref: 'pr:138', summary: 'PR #138 merged', createdAt: ago(30) },
     ],
+    // Ref → URL map the real provider builds; canned here so the demo's issue/PR
+    // references render as clickable links, keyed by how they appear in the UI (`#N`).
+    refUrls: {
+      '#142': 'https://github.com/example/lubbdubb/pull/142',
+      '#141': 'https://github.com/example/lubbdubb/pull/141',
+      '#139': 'https://github.com/example/lubbdubb/pull/139',
+      '#208': 'https://github.com/example/lubbdubb/issues/208',
+      '#205': 'https://github.com/example/lubbdubb/issues/205',
+    },
   };
 
   const transcripts: Record<string, string> = {

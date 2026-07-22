@@ -1,7 +1,8 @@
 import type { Store } from '../../store/store.js';
 import type { Issue, IssueState } from '../../types.js';
-import type { Capability, Integration, WorldSlice } from '../integration.js';
+import type { Capability, Integration, RefResolvable, WorldSlice } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
+import { githubRefUrl } from './refUrl.js';
 
 export interface GitHubIssuesOpts {
   /** The GitHub client, already bound to a single owner/repo. */
@@ -9,6 +10,9 @@ export interface GitHubIssuesOpts {
   store: Store;
   /** Only surface issues carrying this label. Unset = all open issues. */
   issueLabel?: string;
+  /** Repo identity for building web URLs. When unset, ref resolution returns null. */
+  owner?: string;
+  repo?: string;
   /**
    * When set, resolve tag authorship for issues carrying this label and expose the
    * viewer-added subset as `labelsAddedByViewer`, so the dispatcher's ownership gate
@@ -24,13 +28,18 @@ export interface GitHubIssuesOpts {
  * reading from the network instead of an injected fake world (so it is *not*
  * `Injectable`).
  */
-export class GitHubIssuesIntegration implements Integration {
+export class GitHubIssuesIntegration implements Integration, RefResolvable {
   readonly id = 'issues:github';
   readonly capability: Capability = 'issues';
 
   private lastGood: Issue[] = [];
 
   constructor(private readonly opts: GitHubIssuesOpts) {}
+
+  resolveRefUrl(ref: string): string | null {
+    const { owner, repo } = this.opts;
+    return owner && repo ? githubRefUrl(owner, repo, ref) : null;
+  }
 
   async snapshot(): Promise<WorldSlice> {
     try {

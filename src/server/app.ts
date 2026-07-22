@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { System } from '../system.js';
 import { Hub } from './hub.js';
+import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
 import type { InjectableEvent } from '../connector/connector.js';
 
@@ -151,29 +152,41 @@ export function buildStateSnapshot(system: System) {
   const { store, connector, config, runtimeControl } = system;
   // getState is async on the interface, but FakeConnector is synchronous under
   // the hood; read the same persisted world directly for a snapshot.
-  return connector.getState().then((world) => ({
-    config: {
-      heartbeatIntervalMs: config.heartbeatIntervalMs,
-      maxConcurrentAgents: config.maxConcurrentAgents,
-      dispatcher: config.dispatcher,
-      steeringPriorities: config.steeringPriorities,
-      // The exclusion tag name, so the cockpit knows which label its ignore/watch
-      // toggle sets and which PRs to render as ignored.
-      prExclusionLabel: config.prExclusionLabel,
-    },
-    // Live, mutable dispatch controls — the cockpit reads these (not the frozen
-    // config block above) for the current cap and pause state.
-    control: runtimeControl.snapshot(),
-    // Fold each PR's signals into a health verdict so the cockpit can show *why*
-    // a PR is stuck rather than leaving it implied by the absence of activity.
-    world: {
-      ...world,
-      pullRequests: world.pullRequests.map((pr) => ({ ...pr, health: prHealth(pr) })),
-    },
-    tasks: store.listTasks(),
-    agents: store.listAgents(),
-    escalations: store.listEscalations(),
-    decisions: store.listDecisions(100),
-    worldEvents: store.listWorldEvents(100),
-  }));
+  return connector.getState().then((world) => {
+    const tasks = store.listTasks();
+    // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
+    // cockpit only looks refs up in this map, so it stays provider-agnostic.
+    const refUrls = buildRefUrls({
+      pullRequests: world.pullRequests,
+      issues: world.issues,
+      taskBranches: tasks.map((t) => t.branch),
+      resolve: (ref) => connector.resolveRefUrl(ref),
+    });
+    return {
+      config: {
+        heartbeatIntervalMs: config.heartbeatIntervalMs,
+        maxConcurrentAgents: config.maxConcurrentAgents,
+        dispatcher: config.dispatcher,
+        steeringPriorities: config.steeringPriorities,
+        // The exclusion tag name, so the cockpit knows which label its ignore/watch
+        // toggle sets and which PRs to render as ignored.
+        prExclusionLabel: config.prExclusionLabel,
+      },
+      // Live, mutable dispatch controls — the cockpit reads these (not the frozen
+      // config block above) for the current cap and pause state.
+      control: runtimeControl.snapshot(),
+      // Fold each PR's signals into a health verdict so the cockpit can show *why*
+      // a PR is stuck rather than leaving it implied by the absence of activity.
+      world: {
+        ...world,
+        pullRequests: world.pullRequests.map((pr) => ({ ...pr, health: prHealth(pr) })),
+      },
+      tasks,
+      agents: store.listAgents(),
+      escalations: store.listEscalations(),
+      decisions: store.listDecisions(100),
+      worldEvents: store.listWorldEvents(100),
+      refUrls,
+    };
+  });
 }

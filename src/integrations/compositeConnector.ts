@@ -14,6 +14,7 @@ import {
   isPrLabelCapable,
   isPrMergeCapable,
   isPrReplyCapable,
+  isRefResolvable,
   isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
@@ -69,6 +70,16 @@ export class CompositeConnector implements Connector, ActionSink {
     if (!handler)
       throw new Error('no integration can set work item state (no issues provider is WorkItemStateCapable)');
     return handler.setWorkItemState(input);
+  }
+
+  /**
+   * Resolve a ref to a web URL via the first integration that can, or `null` when
+   * none can (e.g. an all-fake world with no real repo behind it). Used by the
+   * server to build the cockpit's link map without any provider-specific logic.
+   */
+  resolveRefUrl(ref: string): string | null {
+    const resolver = this.integrations.find(isRefResolvable);
+    return resolver ? resolver.resolveRefUrl(ref) : null;
   }
 
   /**

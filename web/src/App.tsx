@@ -11,7 +11,7 @@ import { FleetControl } from './components/FleetControl.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { AsyncButton } from './components/AsyncButton.js';
-import { statusDot } from './components/util.js';
+import { statusDot, refLink } from './components/util.js';
 import { useNow } from './hooks.js';
 
 /**
@@ -156,6 +156,7 @@ export function App() {
               agent={a}
               task={taskFor(state, a)}
               now={now}
+              refUrls={state.refUrls}
               lastLine={lastLineFor(a.id)}
               onOpen={() => setSelected(a.id)}
               onKill={() => api.killAgent(a.id).then(refresh)}
@@ -164,7 +165,15 @@ export function App() {
 
           {pastAgents.length > 0 && <h3 className="muted">History</h3>}
           {pastAgents.slice(0, 8).map((a) => (
-            <AgentCard key={a.id} agent={a} task={taskFor(state, a)} now={now} onOpen={() => setSelected(a.id)} past />
+            <AgentCard
+              key={a.id}
+              agent={a}
+              task={taskFor(state, a)}
+              now={now}
+              refUrls={state.refUrls}
+              onOpen={() => setSelected(a.id)}
+              past
+            />
           ))}
         </section>
 
@@ -183,6 +192,7 @@ export function App() {
               key={e.id}
               escalation={e}
               now={now}
+              refUrls={state.refUrls}
               onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)}
               onOpenAgent={(id) => setSelected(id)}
             />
@@ -197,7 +207,7 @@ export function App() {
 
         <section className="col">
           <h2>Decision log</h2>
-          <DecisionLog decisions={state.decisions} now={now} />
+          <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} />
           <h2 className="feed-heading">Activity</h2>
           <ActivityFeed events={state.worldEvents} now={now} />
         </section>
@@ -207,6 +217,7 @@ export function App() {
         <AgentDrawer
           agent={selectedAgent}
           task={taskFor(state, selectedAgent)}
+          refUrls={state.refUrls}
           live={liveOutput.current.get(selectedAgent.id)}
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}
@@ -230,6 +241,7 @@ function WorldSummary({
   onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
 }) {
   const { pullRequests, issues, stories, calendar } = state.world;
+  const { refUrls } = state;
   const tag = state.config.prExclusionLabel;
   return (
     <div className="world">
@@ -241,7 +253,7 @@ function WorldSummary({
         const isExcluded = (pr.labels ?? []).includes(tag);
         return (
           <div key={pr.id} className={`world-item${isExcluded ? ' excluded' : ''}`}>
-            {statusDot(pr.ciStatus)} #{pr.number} {pr.title}
+            {statusDot(pr.ciStatus)} {refLink(`#${pr.number}`, refUrls)} {pr.title}
             {pr.unresolvedComments.filter((c) => !c.handled).length > 0 && (
               <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
             )}
@@ -283,9 +295,11 @@ function WorldSummary({
       </div>
       {issues.map((i) => (
         <div key={i.id} className="world-item">
-          #{i.number} {i.title} <span className="chip small">{i.state}</span>
+          {refLink(`#${i.number}`, refUrls)} {i.title} <span className="chip small">{i.state}</span>
           {i.state === 'open' && i.linkedPrNumber === null && <span className="chip small warn">needs PR</span>}
-          {i.linkedPrNumber !== null && <span className="chip small">→ PR #{i.linkedPrNumber}</span>}
+          {i.linkedPrNumber !== null && (
+            <span className="chip small">→ PR {refLink(`#${i.linkedPrNumber}`, refUrls)}</span>
+          )}
         </div>
       ))}
       <div className="world-row">

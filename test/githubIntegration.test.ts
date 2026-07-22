@@ -437,6 +437,28 @@ test('setPrLabel adds or removes a label through the API', async () => {
 });
 
 // --------------------------------------------------------------------------
+// Ref → URL resolution (RefResolvable)
+// --------------------------------------------------------------------------
+
+test('sourceControl resolves refs to canonical URLs using its owner/repo', () => {
+  const { api } = fakeApi();
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store, owner: 'octo', repo: 'demo' });
+  assert.equal(sc.resolveRefUrl('pr:42:ci'), 'https://github.com/octo/demo/pull/42');
+  assert.equal(sc.resolveRefUrl('issue:13'), 'https://github.com/octo/demo/issues/13');
+  assert.equal(sc.resolveRefUrl('story:s1:groom'), null);
+  store.close();
+});
+
+test('issues provider is also a ref resolver', () => {
+  const { api } = fakeApi();
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api, store, owner: 'octo', repo: 'demo' });
+  assert.equal(issues.resolveRefUrl('#7'), 'https://github.com/octo/demo/issues/7');
+  store.close();
+});
+
+// --------------------------------------------------------------------------
 // GitHubIssuesIntegration.snapshot
 // --------------------------------------------------------------------------
 

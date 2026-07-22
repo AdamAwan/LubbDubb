@@ -131,6 +131,27 @@ login`. (After `postPrReply`, the next poll sees the bot as latest author →
    `cross-referenced`/`connected` event whose source is a PR in this repo; `null`
    if none.
 
+### Ref → URL resolution (`RefResolvable`, issue #19)
+
+So the cockpit can render every external reference as a clickable link **without**
+string-building `github.com` URLs in the web layer, both github integrations also
+`implement RefResolvable`: `resolveRefUrl(ref)` → the canonical web URL, or `null`.
+
+- The mapping is a pure function, `githubRefUrl(owner, repo, ref)`
+  (`src/integrations/github/refUrl.ts`, unit-tested): `pr:<n>[:…]` → `/pull/<n>`,
+  `issue:<n>` → `/issues/<n>`, `#<n>`/bare number → `/issues/<n>` (GitHub redirects
+  PRs), `commit:<sha>` → `/commit/<sha>`, otherwise a branch name → `/tree/<branch>`.
+  Non-source-control refs (`story:…`, `meeting:…`) return `null`.
+- Repo identity comes from the same `github.owner`/`github.repo` config the client
+  uses; when unset (never, for a github provider) resolution returns `null`.
+- `CompositeConnector.resolveRefUrl` delegates to the first `RefResolvable`
+  integration (or `null` when none — the all-`fake` world).
+- The server assembles a `ref → URL` map for the current snapshot with
+  `buildRefUrls` (`src/server/refUrls.ts`, pure + unit-tested): each PR/issue keyed
+  by `#<number>` (preferring the item's own `html_url`), plus PR and task branches.
+  It ships as `refUrls` on `/api/state`, and the cockpit (`linkify`/`refLink`) looks
+  refs up there — a missing key renders as plain text.
+
 ### Registry & config wiring
 
 `src/integrations/registry.ts` — add a `github` factory under `sourceControl`

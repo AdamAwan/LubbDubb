@@ -1,11 +1,12 @@
 import type { Agent, Task } from '../types.js';
-import { statusDot, elapsed } from './util.js';
+import { statusDot, elapsed, linkify, refLink } from './util.js';
 import { ConfirmButton } from './ConfirmButton.js';
 
 export function AgentCard({
   agent,
   task,
   now,
+  refUrls,
   lastLine,
   onOpen,
   onKill,
@@ -14,6 +15,7 @@ export function AgentCard({
   agent: Agent;
   task: Task | null;
   now: number;
+  refUrls: Record<string, string>;
   lastLine?: string;
   onOpen: () => void;
   onKill?: () => Promise<unknown> | unknown;
@@ -24,7 +26,7 @@ export function AgentCard({
     <div className={`card agent ${agent.status} ${past ? 'past' : ''}`}>
       <div className="card-head" onClick={onOpen}>
         {statusDot(agent.status)}
-        <span className="card-title">{task?.title ?? agent.taskId}</span>
+        <span className="card-title">{task ? linkify(task.title, refUrls) : agent.taskId}</span>
         <span className="chip small">{task?.kind ?? '—'}</span>
       </div>
       <div className="card-meta">
@@ -32,7 +34,7 @@ export function AgentCard({
           {active && <span className="spinner" aria-hidden />}
           {agent.status}
         </span>
-        {task?.branch && <span className="mono">{task.branch}</span>}
+        {task?.branch && <span className="mono">{refLink(task.branch, refUrls)}</span>}
         <span className="muted mono-time">{elapsed(agent.startedAt, agent.endedAt, now)}</span>
       </div>
       {agent.waitingReason && <div className="waiting-reason">⏳ {agent.waitingReason}</div>}

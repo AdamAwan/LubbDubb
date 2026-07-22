@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { Escalation } from '../types.js';
-import { relTime } from './util.js';
+import { relTime, linkify } from './util.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
 export function EscalationCard({
   escalation,
   now,
+  refUrls,
   onAnswer,
   onOpenAgent,
 }: {
   escalation: Escalation;
   now?: number;
+  refUrls: Record<string, string>;
   onAnswer: (text: string) => Promise<unknown> | unknown;
   /** Open the originating agent's drawer for the full transcript. */
   onOpenAgent?: (agentId: string) => void;
@@ -28,10 +30,9 @@ export function EscalationCard({
         {signal && <span className="chip small">{signal}</span>}
         <span className="muted small esc-time">{relTime(escalation.createdAt, now)}</span>
       </div>
+      <div className="escalation-prompt">{linkify(escalation.prompt, refUrls)}</div>
 
-      <div className="escalation-prompt">{escalation.prompt}</div>
-
-      {context.taskTitle ? <div className="muted small">re: {context.taskTitle}</div> : null}
+      {context.taskTitle ? <div className="muted small">re: {linkify(String(context.taskTitle), refUrls)}</div> : null}
 
       {context.recentOutput ? (
         <details className="esc-context" open>

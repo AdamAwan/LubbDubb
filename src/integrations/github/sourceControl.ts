@@ -7,9 +7,11 @@ import type {
   PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
+  RefResolvable,
   WorldSlice,
 } from '../integration.js';
 import type { GhCheckRun, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
+import { githubRefUrl } from './refUrl.js';
 
 export interface GitHubSourceControlOpts {
   /** The GitHub client, already bound to a single owner/repo. */
@@ -17,6 +19,9 @@ export interface GitHubSourceControlOpts {
   store: Store;
   /** Only surface PRs opened by this login. Unset = all open PRs. */
   prAuthor?: string;
+  /** Repo identity for building web URLs. When unset, ref resolution returns null. */
+  owner?: string;
+  repo?: string;
 }
 
 /**
@@ -27,7 +32,9 @@ export interface GitHubSourceControlOpts {
  * reading from the network instead of an injected fake world, so it is *not*
  * `Injectable`.
  */
-export class GitHubSourceControlIntegration implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable {
+export class GitHubSourceControlIntegration
+  implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable, RefResolvable
+{
   readonly id = 'sourceControl:github';
   readonly capability: Capability = 'sourceControl';
 
@@ -98,6 +105,11 @@ export class GitHubSourceControlIntegration implements Integration, PrReplyCapab
     const result = await this.opts.api.mergePull(input.prNumber, input.method);
     this.opts.store.recordConnectorEvent('pr_merge_sent', { ...input, ref: result.sha });
     return { ok: result.merged, ref: result.sha };
+  }
+
+  resolveRefUrl(ref: string): string | null {
+    const { owner, repo } = this.opts;
+    return owner && repo ? githubRefUrl(owner, repo, ref) : null;
   }
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {
