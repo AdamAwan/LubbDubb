@@ -44,3 +44,39 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
   assert.equal(snap.refUrls['issue/13'], 'https://example.test/issue/13');
   system.store.close();
 });
+
+test('buildStateSnapshot attaches a pickup verdict to every issue', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  system.connector.inject({ kind: 'new_issue', number: 7, title: 'Bug' });
+  system.connector.inject({ kind: 'new_issue', number: 8, title: 'Staffed' });
+  // Issue 8 has an active task on its origin → 'active', not 'eligible'.
+  system.store.createTask({
+    kind: 'code',
+    title: 'Resolve issue #8',
+    prompt: 'p',
+    branch: 'issue/8',
+    originRef: 'issue:8',
+  });
+
+  const snap = await buildStateSnapshot(system);
+
+  const byNumber = new Map(snap.world.issues.map((i) => [i.number, i]));
+  assert.deepEqual(byNumber.get(7)?.pickup, { eligible: true, status: 'eligible', reasons: [] });
+  assert.deepEqual(byNumber.get(8)?.pickup, { eligible: false, status: 'active', reasons: ['agent queued'] });
+  system.store.close();
+});
+
+test('buildStateSnapshot pickup verdict reflects paused dispatch', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  system.connector.inject({ kind: 'new_issue', number: 9, title: 'Bug' });
+  system.runtimeControl.apply({ paused: true });
+
+  const snap = await buildStateSnapshot(system);
+
+  assert.deepEqual(snap.world.issues[0]?.pickup, {
+    eligible: false,
+    status: 'blocked',
+    reasons: ['dispatch paused'],
+  });
+  system.store.close();
+});

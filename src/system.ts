@@ -43,6 +43,11 @@ export interface System {
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
   /**
+   * The issue-pickup policy both dispatchers honour, exposed so the snapshot can
+   * compute the same per-issue pickup verdict the dispatcher will act on.
+   */
+  issuePickup: IssuePickupPolicy;
+  /**
    * Account rate-limit capture (status-line payloads), wired only for the PTY
    * runtime — the status line never fires headless. Null in other modes; the
    * snapshot then falls back to the rolling cost windows from `usage_events`.
@@ -238,6 +243,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     harness,
     runtimeControl,
+    issuePickup,
     rateLimits,
     errors,
   };

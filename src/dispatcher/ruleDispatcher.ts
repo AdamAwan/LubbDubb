@@ -263,7 +263,7 @@ export class RuleDispatcher implements Dispatcher {
     // and order by label-encoded priority so the important ones claim limited
     // headroom first (tie-break by issue number for determinism).
     const eligibleIssues = ctx.world.issues
-      .filter((i) => i.state === 'open' && i.linkedPrNumber === null && isIssuePickupEligible(i, this.pickup))
+      .filter((i) => i.state === 'open' && i.linkedPrNumber === null && isIssuePickupEligible(i, this.pickup).eligible)
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
     for (const { issue } of eligibleIssues) {
