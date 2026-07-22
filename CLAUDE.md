@@ -140,6 +140,22 @@ bytes synchronously and is unaffected), and `PtySession.handleExit` settles the 
 _before_ reporting `exit`/`done`/`failed` so the final text never races the terminal
 transition. Tests: `test/terminalTranscript.test.ts`, `test/ptyLegibleTranscript.test.ts`.
 
+**Exit on done (issue #66).** The interactive claude REPL has no natural end — after a turn
+it sits at the prompt forever — so the done sentinel alone would orphan the process and leak
+its worktree. `PtySession` with `exitOnDone: true` (wired for `agentMode: 'pty'` only, like
+`legibleTranscript`; raw/mock processes exit by themselves) therefore tears the REPL down
+after the sentinel-driven `finish('done')`: it writes `/exit` + a delayed Enter (the same
+paste-vs-keypress split as `send`, but bypassing the status guards — status is already
+`done`), with a `SIGTERM` backstop after `exitGraceMs` (default 5s); `reportExit` already
+ignores exits on a `done` session, so neither path reclassifies the finish as `failed`.
+`AgentManager` then emits **`reaped`** once a finished (done/failed) agent's process has
+_actually exited_ — the two signals arrive in either order (PTY: sentinel first; stream:
+exit first) — and the composition root reacts to a `done` reap by removing the task's
+worktree via `WorktreeManager.remove` (its only caller). Sequencing matters: a live process
+pins the worktree cwd. Failed/killed agents keep their worktree for debugging, and a
+shared branch with another active task is left alone. Tests: `test/ptyExitOnDone.test.ts`,
+`test/worktreeCleanup.test.ts`.
+
 **Usage capture (issue #60) — two mode-specific sources, don't conflate them.** Stream
 mode: each `result` event's _cumulative_ `total_cost_usd`/`usage`/`num_turns` becomes a
 `usage` session event (cache tokens folded into input), which `AgentManager` persists via

@@ -34,6 +34,16 @@ export interface PtySessionOptions {
   legibleTranscript?: boolean;
   /** Quiet period before a legible-transcript update is emitted. */
   transcriptDebounceMs?: number;
+  /**
+   * Actively terminate the process after the done sentinel. The interactive
+   * claude REPL has no natural end — after a turn it just sits at the prompt —
+   * so without this the process (and the worktree its cwd pins) leaks forever
+   * (issue #66). On for `agentMode: 'pty'`; off for raw/mock sessions, whose
+   * processes exit by themselves.
+   */
+  exitOnDone?: boolean;
+  /** How long a graceful `/exit` gets before the SIGTERM backstop. */
+  exitGraceMs?: number;
 }
 
 const DEFAULTS = {
@@ -44,6 +54,8 @@ const DEFAULTS = {
   submitDelayMs: 60,
   legibleTranscript: false,
   transcriptDebounceMs: 200,
+  exitOnDone: false,
+  exitGraceMs: 5_000,
 };
 
 /** How many trailing characters we keep to match sentinels that straddle two data chunks. */
@@ -73,6 +85,8 @@ export class PtySession extends EventEmitter {
   private outPending = '';
   /** Legible mode: the emulator standing between raw bytes and the 'output' event. */
   private readonly mirror: TerminalTranscript | null;
+  /** Pending exit-on-done timers (the delayed Enter + the SIGTERM backstop), cleared once the process exits. */
+  private teardownTimers: ReturnType<typeof setTimeout>[] = [];
   private readonly opts: Required<PtySessionOptions>;
 
   constructor(
@@ -89,6 +103,8 @@ export class PtySession extends EventEmitter {
       submitDelayMs: DEFAULTS.submitDelayMs,
       legibleTranscript: DEFAULTS.legibleTranscript,
       transcriptDebounceMs: DEFAULTS.transcriptDebounceMs,
+      exitOnDone: DEFAULTS.exitOnDone,
+      exitGraceMs: DEFAULTS.exitGraceMs,
       ...options,
     };
     this.mirror = this.opts.legibleTranscript
@@ -180,7 +196,12 @@ export class PtySession extends EventEmitter {
     // so an agent echoing the literal string mid-line can't fake a finish.
     if (findDelimited(hay, this.opts.doneSentinel) !== -1) {
       this.tail = '';
-      if (this._status !== 'done') this.finish('done');
+      if (this._status !== 'done') {
+        this.finish('done');
+        // The sentinel means the *work* is finished, but an interactive REPL
+        // keeps running — actively shut it down or it leaks (issue #66).
+        if (this.opts.exitOnDone) this.beginTeardown();
+      }
       return;
     }
 
@@ -296,7 +317,41 @@ export class PtySession extends EventEmitter {
     this.emit('waiting', reason);
   }
 
+  /**
+   * Ask the finished REPL to exit — `/exit`, then its submitting Enter after the
+   * same paste-vs-keypress gap {@link send} uses — with a SIGTERM backstop if it
+   * hasn't exited within `exitGraceMs`. Runs *after* the 'done' transition, so it
+   * bypasses `send`/`kill` (both guard against terminal states by design) and
+   * writes/kills the process directly. `handleExit` clears the timers, and
+   * `reportExit` already ignores exits on a 'done' session, so neither the
+   * graceful nor the forced exit is reclassified as a failure.
+   */
+  private beginTeardown(): void {
+    const proc = this.proc;
+    if (!proc) return;
+    try {
+      proc.write('/exit');
+    } catch {
+      /* process already gone */
+    }
+    const settimer = (ms: number, fn: () => void): void => {
+      const t = setTimeout(() => {
+        try {
+          fn();
+        } catch {
+          /* process already gone */
+        }
+      }, ms);
+      t.unref?.();
+      this.teardownTimers.push(t);
+    };
+    settimer(this.opts.submitDelayMs, () => proc.write('\r'));
+    settimer(this.opts.exitGraceMs, () => proc.kill('SIGTERM'));
+  }
+
   private handleExit(code: number): void {
+    for (const t of this.teardownTimers) clearTimeout(t);
+    this.teardownTimers = [];
     // Legible mode: flush the emulator's final settled text *before* the exit is
     // reported, so a terminal transition never races the tail of the transcript.
     const mirror = this.mirror;
