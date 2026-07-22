@@ -92,8 +92,19 @@ export class Harness extends EventEmitter {
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
 
+      // Excluded PRs are the operator's "leave this alone" list. Hide them from
+      // the dispatch view (read by reference each cycle) so *both* dispatchers
+      // ignore them uniformly — no CI fix, base update, comment note, or merge.
+      // The world used for diffing/baseline above is untouched, and the cockpit
+      // snapshot reads the connector directly, so an excluded PR stays fully
+      // visible (with its health) — it's just not acted on.
+      const excluded = this.deps.runtime.excludedPrs;
+      const dispatchWorld: WorldSnapshot = excluded.size
+        ? { ...world, pullRequests: world.pullRequests.filter((pr) => !excluded.has(pr.number)) }
+        : world;
+
       const plan = await this.deps.dispatcher.decide({
-        world,
+        world: dispatchWorld,
         tasks,
         agents,
         openEscalations,

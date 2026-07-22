@@ -23,7 +23,7 @@ export function buildDemoState(): DemoSeed {
       dispatcher: 'rule',
       steeringPriorities: ['unblock humans', 'keep CI green', 'ship reviewed work'],
     },
-    control: { cap: 3, paused: false },
+    control: { cap: 3, paused: false, excludedPrs: [] },
     world: {
       takenAt: ago(0),
       pullRequests: [
