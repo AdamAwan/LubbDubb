@@ -39,6 +39,13 @@ export interface Config {
    */
   github?: GitHubConfig;
   /**
+   * Azure DevOps target + optional scope filters, required when a capability uses
+   * the `azure` provider. Auth is deliberately NOT here: a PAT comes from the
+   * `AZURE_DEVOPS_PAT` env var, and if that is unset the logged-in `az` CLI is
+   * used — so a secret never lands in a committed config file.
+   */
+  azureDevOps?: AzureDevOpsConfig;
+  /**
    * Dispatcher-level, provider-agnostic gate on issue pickup (rule 4). When set,
    * the dispatcher only starts an agent for an open issue whose `labels` include
    * this; untagged issues stay visible in the world/cockpit but are left alone.
@@ -104,6 +111,22 @@ export interface GitHubConfig {
     prAuthor?: string;
     /** Only surface issues carrying this label. Unset = all open issues. */
     issueLabel?: string;
+  };
+}
+
+export interface AzureDevOpsConfig {
+  /** Organization (the `dev.azure.com/{organization}` segment). */
+  organization: string;
+  /** Project name — work items are scoped to it. */
+  project: string;
+  /** Git repository name within the project. */
+  repository: string;
+  /** Optional filters narrowing what the harness picks up. */
+  filters?: {
+    /** Only surface PRs opened by this uniqueName (UPN). Unset = all active PRs. */
+    prAuthor?: string;
+    /** Only surface work items carrying this tag. Unset = all open work items. */
+    workItemTag?: string;
   };
 }
 

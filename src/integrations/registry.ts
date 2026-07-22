@@ -1,4 +1,4 @@
-import type { GitHubConfig } from '../config.js';
+import type { AzureDevOpsConfig, GitHubConfig } from '../config.js';
 import type { Capability, Integration, IntegrationContext, IntegrationSelection } from './integration.js';
 import { FakeWorldStore } from './fake/fakeWorld.js';
 import { FakeGitHubIntegration } from './fake/fakeGitHub.js';
@@ -8,6 +8,9 @@ import { FakeCalendarIntegration } from './fake/fakeCalendar.js';
 import { OctokitGitHubApi } from './github/octokitGitHubApi.js';
 import { GitHubSourceControlIntegration } from './github/sourceControl.js';
 import { GitHubIssuesIntegration } from './github/issues.js';
+import { RestAzureDevOpsApi, resolveAzureAuth } from './azure/restAzureDevOpsApi.js';
+import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
+import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
 
 type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
 
@@ -24,12 +27,20 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       const { api, gh } = githubApi(ctx);
       return new GitHubSourceControlIntegration({ api, store: ctx.store, prAuthor: gh.filters?.prAuthor });
     },
+    azure: (ctx) => {
+      const { api, az } = azureApi(ctx);
+      return new AzureDevOpsSourceControlIntegration({ api, store: ctx.store, prAuthor: az.filters?.prAuthor });
+    },
   },
   issues: {
     fake: (_ctx, world) => new FakeIssuesIntegration(world),
     github: (ctx) => {
       const { api, gh } = githubApi(ctx);
       return new GitHubIssuesIntegration({ api, store: ctx.store, issueLabel: gh.filters?.issueLabel });
+    },
+    azure: (ctx) => {
+      const { api, az } = azureApi(ctx);
+      return new AzureDevOpsWorkItemsIntegration({ api, store: ctx.store, workItemTag: az.filters?.workItemTag });
     },
   },
   backlog: {
@@ -57,6 +68,23 @@ function githubApi(ctx: IntegrationContext): { api: OctokitGitHubApi; gh: GitHub
     throw new Error('The github provider needs a target: set `github.owner` and `github.repo` in your config.');
   }
   return { api: OctokitGitHubApi.fromToken(token, gh.owner, gh.repo), gh };
+}
+
+/**
+ * Build the real Azure DevOps client for an `azure`-selected capability.
+ * organization/project/repository come from `config.azureDevOps`; auth is resolved
+ * lazily ({@link resolveAzureAuth} — a PAT from `AZURE_DEVOPS_PAT`, else the
+ * logged-in `az` CLI), so a missing login surfaces as a clear connector error at
+ * snapshot time rather than blocking boot. A missing target *is* a startup error.
+ */
+function azureApi(ctx: IntegrationContext): { api: RestAzureDevOpsApi; az: AzureDevOpsConfig } {
+  const az = ctx.config.azureDevOps;
+  if (!az?.organization || !az?.project || !az?.repository) {
+    throw new Error(
+      'The azure provider needs a target: set `azureDevOps.organization`, `azureDevOps.project` and `azureDevOps.repository` in your config.',
+    );
+  }
+  return { api: RestAzureDevOpsApi.create(az, resolveAzureAuth()), az };
 }
 
 /**
