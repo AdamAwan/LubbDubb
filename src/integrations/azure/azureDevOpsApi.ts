@@ -90,6 +90,14 @@ export interface AzComment {
 export interface AzStatus {
   /** succeeded | failed | pending | notApplicable | notSet | error | null. */
   state: string | null;
+  /**
+   * Monotonic status id — Azure posts statuses append-only, so a higher id is a more
+   * recent post. Used to pick the latest status per {@link context} when a check has
+   * been re-posted across re-runs.
+   */
+  id?: number;
+  /** genre/name identify the check; every re-post of the same check shares this context. */
+  context?: { genre: string | null; name: string | null };
 }
 
 export interface AzWorkItem {

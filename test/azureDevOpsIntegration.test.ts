@@ -6,6 +6,7 @@ import {
   aggregateCiStatus,
   buildUnresolvedComments,
   computeApproved,
+  latestStatusesByContext,
   mergeStrategyFor,
   mergeableFromStatus,
   normalizeMergeState,
@@ -151,6 +152,39 @@ test('aggregateCiStatus: passing when all signals succeed', () => {
 test('aggregateCiStatus: unknown when there are no signals (or only notApplicable)', () => {
   assert.equal(aggregateCiStatus([]), 'unknown');
   assert.equal(aggregateCiStatus([{ state: 'notApplicable' }, { state: null }]), 'unknown');
+});
+
+test('latestStatusesByContext: a re-run supersedes an earlier failure in the same context', () => {
+  const build = { genre: 'continuous-integration', name: 'ci-build' };
+  const statuses: AzStatus[] = [
+    { state: 'failed', id: 1, context: build },
+    { state: 'succeeded', id: 2, context: build },
+  ];
+  const latest = latestStatusesByContext(statuses);
+  assert.deepEqual(
+    latest.map((s) => s.state),
+    ['succeeded'],
+  );
+  // The stale failure no longer sways the aggregate.
+  assert.equal(aggregateCiStatus(latest), 'passing');
+});
+
+test('latestStatusesByContext: distinct contexts are each kept', () => {
+  const statuses: AzStatus[] = [
+    { state: 'succeeded', id: 3, context: { genre: 'ci', name: 'lint' } },
+    { state: 'failed', id: 4, context: { genre: 'ci', name: 'test' } },
+    { state: 'succeeded', id: 5, context: { genre: 'ci', name: 'test' } },
+  ];
+  const latest = latestStatusesByContext(statuses);
+  assert.equal(latest.length, 2);
+  // 'lint' passes, latest 'test' passes -> passing overall.
+  assert.equal(aggregateCiStatus(latest), 'passing');
+});
+
+test('latestStatusesByContext: statuses without a context pass through untouched', () => {
+  const statuses: AzStatus[] = [{ state: 'failed', id: 1 }, { state: 'succeeded' }];
+  const latest = latestStatusesByContext(statuses);
+  assert.equal(latest.length, 2);
 });
 
 test('computeApproved: approved on a positive vote with none negative', () => {

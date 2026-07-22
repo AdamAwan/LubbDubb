@@ -238,13 +238,21 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async listPullStatuses(pullRequestId: number): Promise<AzStatus[]> {
-    const data = await this.request<{ value: Array<{ state?: string | null }> }>(
-      // latestOnly collapses each status context to its most recent post; without it
-      // ADO returns every superseded status too, so a re-run's stale failure would still
-      // sway aggregateCiStatus.
-      this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/statuses`, { latestOnly: 'true' }),
-    );
-    return data.value.map((s) => ({ state: s.state ?? null }));
+    // ADO returns every status ever posted per context (the `latestOnly` query param is
+    // ignored on our API version), so we carry `id` + `context` and dedupe to the latest
+    // per check in `latestStatusesByContext` before aggregating.
+    const data = await this.request<{
+      value: Array<{
+        id?: number;
+        state?: string | null;
+        context?: { genre?: string | null; name?: string | null } | null;
+      }>;
+    }>(this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/statuses`));
+    return data.value.map((s) => ({
+      state: s.state ?? null,
+      id: s.id ?? 0,
+      context: { genre: s.context?.genre ?? null, name: s.context?.name ?? null },
+    }));
   }
 
   async listPullLabels(pullRequestId: number): Promise<string[]> {
