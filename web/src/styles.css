@@ -49,6 +49,19 @@ body {
 @keyframes armed-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 .btn.ghost { background: transparent; }
 .btn:disabled { opacity: 0.5; cursor: default; }
+.btn[aria-busy='true'] { cursor: progress; opacity: 0.85; }
+/* Saving feedback: a green ✓ / red ✕ ring that flashes when an async action settles.
+   A box-shadow ring layers over any button background without shifting layout. */
+.btn.is-done { animation: btn-flash-ok 0.9s ease-out; }
+.btn.is-error { animation: btn-flash-err 0.9s ease-out; border-color: var(--red); }
+@keyframes btn-flash-ok {
+  0% { box-shadow: 0 0 0 2px rgba(55, 214, 122, 0.65); }
+  100% { box-shadow: 0 0 0 2px rgba(55, 214, 122, 0); }
+}
+@keyframes btn-flash-err {
+  0% { box-shadow: 0 0 0 2px rgba(255, 92, 92, 0.75); }
+  100% { box-shadow: 0 0 0 2px rgba(255, 92, 92, 0); }
+}
 
 .fleet-control { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--panel-2); }
 .fleet-control.paused { border-color: #4d3a12; }
