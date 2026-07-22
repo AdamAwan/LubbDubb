@@ -280,6 +280,19 @@ export class Store {
       .run(agentId, seq, chunk, this.now());
   }
 
+  /**
+   * Replace an agent's entire transcript. The legible PTY mode re-renders its
+   * settled text in place when the TUI rewrites already-emitted content, so the
+   * stored transcript must follow the rewrite rather than append onto it.
+   */
+  setTranscript(agentId: string, text: string): void {
+    this.transcriptBuffers.delete(agentId);
+    this.db.prepare(`DELETE FROM agent_transcripts WHERE agent_id=?`).run(agentId);
+    this.db
+      .prepare(`INSERT INTO agent_transcripts (agent_id, seq, chunk, at) VALUES (?,0,?,?)`)
+      .run(agentId, text, this.now());
+  }
+
   getTranscript(agentId: string): string {
     // Flush first so a read always reflects every appended chunk.
     this.flushTranscript(agentId);

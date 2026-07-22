@@ -56,7 +56,7 @@ export function AgentDrawer({
   // Mount the terminal once; fit it to the container and keep it fitted on resize.
   useEffect(() => {
     const term = new Terminal({
-      convertEol: true, // render \n as a newline (output is not raw PTY)
+      convertEol: true, // output is legible text in every mode (renderBlocks / settled PTY text), never raw TUI bytes
       scrollback: 100000,
       fontSize: 12.5,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',

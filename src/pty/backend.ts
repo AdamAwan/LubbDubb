@@ -25,6 +25,12 @@ export interface PtyBackend {
   spawn(command: string, args: string[], opts: SpawnOptions): PtyProcess;
 }
 
+// Default PTY geometry. The legible-transcript emulator (terminalTranscript.ts)
+// must model the same screen size or cursor-addressed redraws land on the wrong
+// rows, so both read these constants.
+export const PTY_COLS = 120;
+export const PTY_ROWS = 40;
+
 /**
  * Real backend backed by node-pty. Imported lazily so environments/tests that
  * never spawn a real terminal don't need the native addon built.
@@ -41,8 +47,8 @@ export class NodePtyBackend implements PtyBackend {
     const command = resolveExecutable(file, env);
     const proc = pty.spawn(command, args, {
       name: 'xterm-color',
-      cols: opts.cols ?? 120,
-      rows: opts.rows ?? 40,
+      cols: opts.cols ?? PTY_COLS,
+      rows: opts.rows ?? PTY_ROWS,
       cwd: opts.cwd,
       env,
     });

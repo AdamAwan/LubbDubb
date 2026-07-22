@@ -53,6 +53,8 @@ export interface AgentManagerOptions {
 
 interface AgentManagerEvents {
   output: [{ agentId: string; delta: string }];
+  /** Legible PTY mode only: the settled transcript was rewritten in place — replaces all prior output. */
+  transcript: [{ agentId: string; text: string }];
   waiting: [{ agentId: string; taskId: string; reason: string }];
   autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
   done: [{ agentId: string; taskId: string; status: AgentStatus }];
@@ -240,6 +242,13 @@ export class AgentManager extends EventEmitter {
     session.on('output', (delta: string) => {
       this.store.appendTranscript(agentId, delta);
       this.emit('output', { agentId, delta });
+    });
+
+    // Legible PTY sessions occasionally re-render the settled text wholesale
+    // (an in-place TUI rewrite); the stored transcript follows the rewrite.
+    session.on('transcript', (text: string) => {
+      this.store.setTranscript(agentId, text);
+      this.emit('transcript', { agentId, text });
     });
 
     session.on('status', (status) => {

@@ -10,7 +10,9 @@ import type { EventEmitter } from 'node:events';
  * Both emit: 'output'(delta), 'waiting'(reason), 'done'(), 'failed'(),
  * 'status'(status), 'exit'(code). The stream runtime additionally emits
  * 'usage'(AgentUsage) at each turn end — cumulative cost/tokens/turns off the
- * `result` event; the PTY runtime has no such channel and never emits it.
+ * `result` event; the PTY runtime has no such channel and never emits it. A
+ * legible PTY session (agentMode 'pty') may also emit 'transcript'(text): a
+ * full replacement of all prior output after an in-place TUI rewrite.
  */
 export type AgentSessionStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'failed';
 

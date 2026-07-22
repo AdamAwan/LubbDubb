@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { PtyBackend, PtyProcess } from './backend.js';
+import { TerminalTranscript } from './terminalTranscript.js';
 
 export type PtySessionStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'failed';
 
@@ -24,6 +25,15 @@ export interface PtySessionOptions {
    * See {@link PtySession.send} for why the two are split. 0 writes both at once.
    */
   submitDelayMs?: number;
+  /**
+   * Render output through a headless terminal emulator into settled, legible
+   * text instead of raw TUI bytes (see {@link TerminalTranscript}). On for the
+   * real `claude` TUI (`agentMode: 'pty'`); off for `raw`/mock sessions, whose
+   * plain line output is already legible as-is.
+   */
+  legibleTranscript?: boolean;
+  /** Quiet period before a legible-transcript update is emitted. */
+  transcriptDebounceMs?: number;
 }
 
 const DEFAULTS = {
@@ -32,6 +42,8 @@ const DEFAULTS = {
   waitingSentinelSuffix: '@@',
   waitingPatterns: [] as string[],
   submitDelayMs: 60,
+  legibleTranscript: false,
+  transcriptDebounceMs: 200,
 };
 
 /** How many trailing characters we keep to match sentinels that straddle two data chunks. */
@@ -44,7 +56,10 @@ const TAIL_WINDOW = 4096;
  * unit-tested without touching the rest of the harness.
  *
  * Events:
- *   'output' (delta: string)  — raw terminal output as it arrives
+ *   'output' (delta: string)  — terminal output as it arrives (raw bytes, or —
+ *                               with `legibleTranscript` — settled-text appends)
+ *   'transcript' (text: string) — legible mode only: the settled text was
+ *                               rewritten in place; replaces all prior output
  *   'waiting' (reason: string)— session is parked awaiting input
  *   'done'   ()               — clean completion (sentinel or exit code 0)
  *   'exit'   (code: number)   — process ended (any code)
@@ -56,6 +71,8 @@ export class PtySession extends EventEmitter {
   private tail = '';
   /** Trailing bytes withheld from 'output' because they might be the leading half of a sentinel. */
   private outPending = '';
+  /** Legible mode: the emulator standing between raw bytes and the 'output' event. */
+  private readonly mirror: TerminalTranscript | null;
   private readonly opts: Required<PtySessionOptions>;
 
   constructor(
@@ -70,8 +87,16 @@ export class PtySession extends EventEmitter {
       waitingSentinelPrefix: DEFAULTS.waitingSentinelPrefix,
       waitingSentinelSuffix: DEFAULTS.waitingSentinelSuffix,
       submitDelayMs: DEFAULTS.submitDelayMs,
+      legibleTranscript: DEFAULTS.legibleTranscript,
+      transcriptDebounceMs: DEFAULTS.transcriptDebounceMs,
       ...options,
     };
+    this.mirror = this.opts.legibleTranscript
+      ? new TerminalTranscript({
+          debounceMs: this.opts.transcriptDebounceMs,
+          onUpdate: (u) => (u.kind === 'append' ? this.emit('output', u.delta) : this.emit('transcript', u.text)),
+        })
+      : null;
   }
 
   get status(): PtySessionStatus {
@@ -189,7 +214,11 @@ export class PtySession extends EventEmitter {
     const hold = this.ambiguousTailStart(cleaned);
     this.outPending = cleaned.slice(hold);
     const out = cleaned.slice(0, hold);
-    if (out) this.emit('output', out);
+    if (!out) return;
+    // Legible mode routes the (sentinel-stripped) bytes through the emulator,
+    // which emits settled 'output'/'transcript' updates on its own debounce.
+    if (this.mirror) this.mirror.write(out);
+    else this.emit('output', out);
   }
 
   /** Remove fully-formed done and waiting (`PREFIX…SUFFIX`) sentinels; incomplete ones are left for {@link ambiguousTailStart} to hold. */
@@ -268,6 +297,20 @@ export class PtySession extends EventEmitter {
   }
 
   private handleExit(code: number): void {
+    // Legible mode: flush the emulator's final settled text *before* the exit is
+    // reported, so a terminal transition never races the tail of the transcript.
+    const mirror = this.mirror;
+    if (mirror) {
+      void mirror.settle().then(() => {
+        mirror.dispose();
+        this.reportExit(code);
+      });
+    } else {
+      this.reportExit(code);
+    }
+  }
+
+  private reportExit(code: number): void {
     this.emit('exit', code);
     if (this._status === 'killed') return;
     if (this._status === 'done') return;

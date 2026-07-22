@@ -7,6 +7,7 @@ export type ServerEvent =
   | { type: 'cycle:start'; cycleId: string; source: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string; summary: unknown }
   | { type: 'agent:output'; agentId: string; delta: string }
+  | { type: 'agent:transcript'; agentId: string; text: string }
   | { type: 'agent:tail'; agentId: string; line: string }
   | { type: 'agent:status'; agentId: string; taskId: string; status: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
@@ -58,6 +59,7 @@ export class Hub {
     });
 
     agents.on('output', (e) => this.handleOutput(e.agentId, e.delta));
+    agents.on('transcript', (e) => this.handleTranscript(e.agentId, e.text));
     // Usage lands on the agent row at turn end; a coarse dirty repaints the
     // fleet cards' cost/tokens without a dedicated frame type.
     agents.on('usage', () => this.broadcast({ type: 'dirty' }));
@@ -135,6 +137,27 @@ export class Hub {
     }
     const line = this.updateTail(agentId, delta);
     if (line) this.broadcast({ type: 'agent:tail', agentId, line });
+  }
+
+  /**
+   * A legible PTY session rewrote its settled text in place: ship the full
+   * replacement to subscribers (like `agent:output`, it's high volume) and
+   * rebuild the rolling tail from the new text so later deltas fold onto the
+   * post-rewrite state.
+   */
+  private handleTranscript(agentId: string, text: string): void {
+    const payload = JSON.stringify({ type: 'agent:transcript', agentId, text } satisfies ServerEvent);
+    for (const socket of this.sockets) {
+      if (socket.readyState !== socket.OPEN) continue;
+      if (this.subscriptions.get(socket)?.has(agentId)) socket.send(payload);
+    }
+    let last = '';
+    for (const seg of stripAnsi(text).split(/\r?\n/)) {
+      const trimmed = seg.trim();
+      if (trimmed) last = trimmed;
+    }
+    this.tails.set(agentId, { partial: '', last });
+    if (last) this.broadcast({ type: 'agent:tail', agentId, line: last.slice(0, 200) });
   }
 
   /** Fold a delta into the agent's rolling tail; return the current tail line (≤200 chars). */

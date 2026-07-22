@@ -51,7 +51,7 @@ export function App() {
     void refresh();
     const ws = connectWs(
       (ev) => {
-        const e = ev as { type: string; agentId?: string; delta?: string; line?: string };
+        const e = ev as { type: string; agentId?: string; delta?: string; line?: string; text?: string };
         if (
           e.type === 'dirty' ||
           e.type === 'world:changed' ||
@@ -65,6 +65,11 @@ export function App() {
           // keep a large scrollback (~1M chars) instead of the old 20k window —
           // the watched session no longer loses history. Capped to bound memory.
           liveOutput.current.set(e.agentId, (cur + e.delta).slice(-1_000_000));
+          forceRender((n) => n + 1);
+        } else if (e.type === 'agent:transcript' && e.agentId && typeof e.text === 'string') {
+          // Legible PTY sessions occasionally rewrite their settled text in
+          // place; the frame replaces everything accumulated so far.
+          liveOutput.current.set(e.agentId, e.text.slice(-1_000_000));
           forceRender((n) => n + 1);
         } else if (e.type === 'agent:tail' && e.agentId && e.line) {
           tails.current.set(e.agentId, e.line);
