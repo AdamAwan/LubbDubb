@@ -244,7 +244,7 @@ function WorldSummary({
   state: AppState;
   onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
 }) {
-  const { pullRequests, issues, stories, calendar } = state.world;
+  const { pullRequests, issues, stories } = state.world;
   const { refUrls } = state;
   const tag = state.config.prExclusionLabel;
   return (
@@ -315,15 +315,6 @@ function WorldSummary({
           {s.title} <span className="chip small">{s.state}</span>
           {(!s.description || !s.acceptanceCriteria) && <span className="chip small warn">needs grooming</span>}
           {s.wafPillars.length === 0 && <span className="chip small warn">no WAF</span>}
-        </div>
-      ))}
-      <div className="world-row">
-        <span>Meetings</span>
-        <b>{calendar.length}</b>
-      </div>
-      {calendar.map((c) => (
-        <div key={c.id} className="world-item">
-          {c.title} {!c.prepDone && c.prepDocs.length > 0 && <span className="chip small warn">prep pending</span>}
         </div>
       ))}
     </div>

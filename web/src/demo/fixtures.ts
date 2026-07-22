@@ -14,6 +14,14 @@ export function buildDemoState(): DemoSeed {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
   const ahead = (mins: number) => new Date(now + mins * 60_000).toISOString();
+  // A fixed local wall-clock time, `offsetDays` from today — so the demo agenda
+  // reliably spans Today and Tomorrow regardless of when it's opened.
+  const dayAt = (offsetDays: number, h: number, m: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + offsetDays);
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  };
 
   const state: AppState = {
     config: {
@@ -274,10 +282,23 @@ export function buildDemoState(): DemoSeed {
       areas: ['me', 'statements'],
       meetings: [
         {
+          id: 'evt-0',
+          subject: 'Standup — Platform',
+          start: ago(180),
+          end: ago(150),
+          isOnline: true,
+          joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo0',
+          webLink: 'https://outlook.office365.com/owa/?itemid=evt-0',
+          organizer: 'You',
+          attendeeCount: 8,
+          showAs: 'busy',
+          relevance: 'mine',
+        },
+        {
           id: 'evt-1',
           subject: 'Architecture review',
-          start: ahead(95),
-          end: ahead(155),
+          start: ahead(25),
+          end: ahead(85),
           isOnline: true,
           joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo',
           webLink: 'https://outlook.office365.com/owa/?itemid=evt-1',
@@ -286,6 +307,32 @@ export function buildDemoState(): DemoSeed {
           responseRequested: true,
           showAs: 'busy',
           relevance: 'mine',
+        },
+        {
+          id: 'evt-2',
+          subject: 'Sprint planning',
+          start: dayAt(1, 10, 0),
+          end: dayAt(1, 10, 45),
+          isOnline: true,
+          joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo2',
+          webLink: 'https://outlook.office365.com/owa/?itemid=evt-2',
+          organizer: 'Priya',
+          attendeeCount: 9,
+          responseRequested: true,
+          showAs: 'busy',
+          relevance: 'mine',
+        },
+        {
+          id: 'evt-3',
+          subject: 'Vendor sync — payments',
+          start: dayAt(1, 16, 0),
+          end: dayAt(1, 16, 30),
+          isOnline: false,
+          webLink: 'https://outlook.office365.com/owa/?itemid=evt-3',
+          organizer: 'Dana',
+          attendeeCount: 4,
+          showAs: 'busy',
+          relevance: 'area',
         },
       ],
       mail: [
