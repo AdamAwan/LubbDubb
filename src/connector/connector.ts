@@ -20,7 +20,7 @@ export type InjectableEvent =
   | { kind: 'ci_failed'; prNumber: number }
   | { kind: 'ci_passed'; prNumber: number }
   | { kind: 'pr_comment'; prNumber: number; author: string; body: string }
-  | { kind: 'new_pr'; number: number; title: string; branch: string; baseBranch?: string }
+  | { kind: 'new_pr'; number: number; title: string; branch: string; baseBranch?: string; labels?: string[] }
   // PR-monitoring signals that walk a PR toward mergeable.
   | { kind: 'pr_approved'; prNumber: number }
   | { kind: 'pr_mergeable'; prNumber: number; mergeable?: boolean; mergeableState?: MergeableState }

@@ -22,8 +22,9 @@ export function buildDemoState(): DemoSeed {
       maxConcurrentAgents: 3,
       dispatcher: 'rule',
       steeringPriorities: ['unblock humans', 'keep CI green', 'ship reviewed work'],
+      prExclusionLabel: 'lubbdubb-ignore',
     },
-    control: { cap: 3, paused: false, excludedPrs: [] },
+    control: { cap: 3, paused: false },
     world: {
       takenAt: ago(0),
       pullRequests: [

@@ -40,6 +40,13 @@ export interface PullRequest {
   mergeableState?: MergeableState;
   /** Already merged; once true the harness stops acting on it. */
   merged?: boolean;
+  /**
+   * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR
+   * carrying `config.prExclusionLabel` is left alone by the dispatcher. Absent when
+   * the PR carries no labels (or the provider/persisted row predates this field) —
+   * treat missing as `[]`.
+   */
+  labels?: string[];
   url?: string;
 }
 

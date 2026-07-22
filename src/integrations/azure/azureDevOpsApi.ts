@@ -24,6 +24,8 @@ export interface AzureDevOpsApi {
   listPullThreads(pullRequestId: number): Promise<AzThread[]>;
   /** PR statuses (build-validation / custom status posts) — the CI signal. */
   listPullStatuses(pullRequestId: number): Promise<AzStatus[]>;
+  /** Label names on a PR — the exclusion-tag signal. */
+  listPullLabels(pullRequestId: number): Promise<string[]>;
 
   /** Open work items, optionally narrowed to a tag. Includes ArtifactLink relations. */
   listOpenWorkItems(tag?: string): Promise<AzWorkItem[]>;
@@ -43,6 +45,8 @@ export interface AzureDevOpsApi {
     lastMergeSourceCommit: string,
     method: MergeMethod,
   ): Promise<AzMergeResult>;
+  /** Add (`present`) or remove a label on a PR. Idempotent. */
+  setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void>;
 }
 
 export interface AzPull {

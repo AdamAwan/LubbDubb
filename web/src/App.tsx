@@ -190,11 +190,7 @@ export function App() {
           <h3 className="muted">World</h3>
           <WorldSummary
             state={state}
-            onToggleExclude={(prNumber) => {
-              const current = state.control.excludedPrs;
-              const next = current.includes(prNumber) ? current.filter((n) => n !== prNumber) : [...current, prNumber];
-              void api.setControl({ excludedPrs: next }).then(refresh);
-            }}
+            onToggleExclude={(prNumber, excluded) => void api.setPrExcluded(prNumber, excluded).then(refresh)}
           />
         </section>
 
@@ -225,9 +221,15 @@ function taskFor(state: AppState, agent: Agent) {
   return state.tasks.find((t) => t.id === agent.taskId) ?? null;
 }
 
-function WorldSummary({ state, onToggleExclude }: { state: AppState; onToggleExclude: (prNumber: number) => void }) {
+function WorldSummary({
+  state,
+  onToggleExclude,
+}: {
+  state: AppState;
+  onToggleExclude: (prNumber: number, excluded: boolean) => void;
+}) {
   const { pullRequests, issues, stories, calendar } = state.world;
-  const excluded = new Set(state.control.excludedPrs);
+  const tag = state.config.prExclusionLabel;
   return (
     <div className="world">
       <div className="world-row">
@@ -235,7 +237,7 @@ function WorldSummary({ state, onToggleExclude }: { state: AppState; onToggleExc
         <b>{pullRequests.length}</b>
       </div>
       {pullRequests.map((pr) => {
-        const isExcluded = excluded.has(pr.number);
+        const isExcluded = (pr.labels ?? []).includes(tag);
         return (
           <div key={pr.id} className={`world-item${isExcluded ? ' excluded' : ''}`}>
             {statusDot(pr.ciStatus)} #{pr.number} {pr.title}
@@ -243,10 +245,7 @@ function WorldSummary({ state, onToggleExclude }: { state: AppState; onToggleExc
               <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
             )}
             {isExcluded ? (
-              <span
-                className="chip small"
-                title="The harness is ignoring this PR — it won't dispatch agents or merge it"
-              >
+              <span className="chip small" title={`Tagged "${tag}" — the harness is leaving this PR alone`}>
                 ignored
               </span>
             ) : pr.merged ? (
@@ -264,11 +263,11 @@ function WorldSummary({ state, onToggleExclude }: { state: AppState; onToggleExc
             {!pr.merged && (
               <button
                 className="btn ghost world-toggle"
-                onClick={() => onToggleExclude(pr.number)}
+                onClick={() => onToggleExclude(pr.number, !isExcluded)}
                 title={
                   isExcluded
-                    ? 'Resume the harness on this PR'
-                    : "Ignore this PR — leave it alone if it's blocked for reasons the harness can't fix"
+                    ? `Remove the "${tag}" tag and let the harness work this PR again`
+                    : `Tag this PR "${tag}" so the harness leaves it alone (for a PR blocked on something it can't fix)`
                 }
               >
                 {isExcluded ? 'watch' : 'ignore'}

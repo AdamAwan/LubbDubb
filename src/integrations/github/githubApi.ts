@@ -39,6 +39,8 @@ export interface GitHubApi {
   /** Top-level comment on a PR or issue (PRs are issues for the comments API). */
   createIssueComment(number: number, body: string): Promise<GhCommentRef>;
   mergePull(number: number, method: MergeMethod): Promise<GhMergeResult>;
+  /** Add (`present`) or remove a label on a PR. PRs are issues for the labels API. Idempotent. */
+  setPullLabel(number: number, label: string, present: boolean): Promise<void>;
 }
 
 export interface GhPullSummary {
@@ -54,6 +56,8 @@ export interface GhPullSummary {
   authorLogin: string;
   /** html_url. */
   url: string;
+  /** Label names on the PR (the Issues/PR `labels` array). */
+  labels: string[];
 }
 
 export interface GhPullDetail {

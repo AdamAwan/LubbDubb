@@ -97,17 +97,27 @@ class DemoServer {
     return { ok: true };
   }
 
-  async setControl(patch: {
-    cap?: number;
-    paused?: boolean;
-    excludedPrs?: number[];
-  }): Promise<{ ok: true; cap: number; paused: boolean; excludedPrs: number[] }> {
+  async setControl(patch: { cap?: number; paused?: boolean }): Promise<{ ok: true; cap: number; paused: boolean }> {
     if (typeof patch.cap === 'number') this.state.control.cap = Math.max(0, Math.floor(patch.cap));
     if (typeof patch.paused === 'boolean') this.state.control.paused = patch.paused;
-    if (Array.isArray(patch.excludedPrs)) this.state.control.excludedPrs = [...patch.excludedPrs];
-    const { cap, paused, excludedPrs } = this.state.control;
-    this.emit({ type: 'control:changed', cap, paused, excludedPrs });
-    return { ok: true, cap, paused, excludedPrs };
+    const { cap, paused } = this.state.control;
+    this.emit({ type: 'control:changed', cap, paused });
+    return { ok: true, cap, paused };
+  }
+
+  /** Toggle the exclusion tag on a PR — the demo mirror of the real label write-back. */
+  async setPrExcluded(prNumber: number, excluded: boolean): Promise<{ ok: true; excluded: boolean }> {
+    const tag = this.state.config.prExclusionLabel;
+    const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
+    if (pr) {
+      const labels = new Set(pr.labels ?? []);
+      if (excluded) labels.add(tag);
+      else labels.delete(tag);
+      pr.labels = [...labels];
+      this.addDecision('pr_label_set', 'ok', `${excluded ? 'tagged' : 'untagged'} PR #${prNumber} (${tag})`);
+      this.dirty();
+    }
+    return { ok: true, excluded };
   }
 
   async killAgent(id: string): Promise<{ ok: true }> {
@@ -198,10 +208,12 @@ class DemoServer {
   // Spawn an agent for a piece of work — honouring pause + the concurrency cap,
   // so the FleetControl and pause button visibly matter in the demo.
   private trySpawn(kind: string, title: string, branch: string | null, originRef: string | null): void {
-    // Excluded PRs are left alone — mirrors the server harness filtering them out
-    // of the dispatch view, so the ignore toggle visibly matters in the demo.
+    // A PR tagged with the exclusion label is left alone — mirrors the server
+    // harness filtering tagged PRs out of the dispatch view, so the ignore toggle
+    // visibly matters in the demo.
     const prNumber = originRef?.startsWith('pr:') ? Number(originRef.slice(3)) : NaN;
-    if (!Number.isNaN(prNumber) && this.state.control.excludedPrs.includes(prNumber)) {
+    const taggedPr = this.state.world.pullRequests.find((p) => p.number === prNumber);
+    if (taggedPr && (taggedPr.labels ?? []).includes(this.state.config.prExclusionLabel)) {
       this.addDecision(`dispatch_${kind}`, 'skipped', `PR #${prNumber} is ignored — held ${title}`, 'pr excluded');
       return;
     }
@@ -420,6 +432,7 @@ export const demoApi = {
   answerEscalation: (id: string, response: string) => getServer().answerEscalation(id, response),
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
+  setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
   killAgent: (id: string) => getServer().killAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
 };

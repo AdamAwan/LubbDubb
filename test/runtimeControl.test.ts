@@ -42,51 +42,26 @@ test('RuntimeControl seeds cap and paused from constructor', () => {
   const rc = new RuntimeControl(3, false);
   assert.equal(rc.cap, 3);
   assert.equal(rc.paused, false);
-  assert.deepEqual(rc.snapshot(), { cap: 3, paused: false, excludedPrs: [] });
+  assert.deepEqual(rc.snapshot(), { cap: 3, paused: false });
 });
 
 test('RuntimeControl.apply mutates only the provided fields and returns the new state', () => {
   const rc = new RuntimeControl(3, false);
 
-  assert.deepEqual(rc.apply({ cap: 5 }), { cap: 5, paused: false, excludedPrs: [] });
+  assert.deepEqual(rc.apply({ cap: 5 }), { cap: 5, paused: false });
   assert.equal(rc.cap, 5);
   assert.equal(rc.paused, false);
 
-  assert.deepEqual(rc.apply({ paused: true }), { cap: 5, paused: true, excludedPrs: [] });
+  assert.deepEqual(rc.apply({ paused: true }), { cap: 5, paused: true });
   assert.equal(rc.cap, 5);
   assert.equal(rc.paused, true);
 
-  assert.deepEqual(rc.apply({ cap: 0, paused: false }), { cap: 0, paused: false, excludedPrs: [] });
+  assert.deepEqual(rc.apply({ cap: 0, paused: false }), { cap: 0, paused: false });
 });
 
 test('RuntimeControl.apply({}) is a no-op that returns current state', () => {
   const rc = new RuntimeControl(2, true);
-  assert.deepEqual(rc.apply({}), { cap: 2, paused: true, excludedPrs: [] });
-});
-
-test('RuntimeControl seeds and exposes the excluded-PR set', () => {
-  const rc = new RuntimeControl(3, false, [7, 3, 7]);
-  // Deduped by the Set, sorted in the snapshot for a stable shape.
-  assert.deepEqual(rc.snapshot().excludedPrs, [3, 7]);
-  assert.equal(rc.excludedPrs.has(3), true);
-  assert.equal(rc.excludedPrs.has(9), false);
-});
-
-test('RuntimeControl.apply replaces the excluded set wholesale', () => {
-  const rc = new RuntimeControl(3, false, [1]);
-
-  assert.deepEqual(rc.apply({ excludedPrs: [4, 2] }).excludedPrs, [2, 4]);
-  assert.equal(rc.excludedPrs.has(1), false, 'the old membership is gone');
-  assert.equal(rc.excludedPrs.has(4), true);
-  // Emptying the set is valid.
-  assert.deepEqual(rc.apply({ excludedPrs: [] }).excludedPrs, []);
-});
-
-test('RuntimeControl.apply rejects a non-integer/negative PR and leaves the set untouched', () => {
-  const rc = new RuntimeControl(3, false, [5]);
-  assert.throws(() => rc.apply({ excludedPrs: [1, -2] }), /non-negative integer/);
-  assert.throws(() => rc.apply({ excludedPrs: [1, 2.5] }), /non-negative integer/);
-  assert.deepEqual(rc.snapshot().excludedPrs, [5], 'a rejected patch does not mutate');
+  assert.deepEqual(rc.apply({}), { cap: 2, paused: true });
 });
 
 test('RuntimeControl.apply accepts cap 0 (a valid non-negative integer)', () => {

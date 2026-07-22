@@ -44,3 +44,14 @@ export function needsBaseUpdate(pr: PullRequest): boolean {
   if (pr.merged) return false;
   return isConflicted(pr) || pr.mergeableState === 'behind';
 }
+
+/**
+ * The operator's "leave this PR alone" tag: true when the PR carries the
+ * configured exclusion label. Pure and provider-agnostic — reads `PullRequest.labels`,
+ * so it gates the fake/github/azure providers identically. An empty `label` (feature
+ * off) or a PR with no labels is never excluded.
+ */
+export function isPrExcluded(pr: PullRequest, label: string): boolean {
+  if (!label) return false;
+  return (pr.labels ?? []).includes(label);
+}

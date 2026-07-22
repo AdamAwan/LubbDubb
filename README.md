@@ -120,7 +120,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
   "issuePickupLabel": "agent-ready",
   "issuePriorityLabels": { "priority:high": 3, "priority:medium": 2, "priority:low": 1 },
   "issueDefaultPriority": 2,
-  "excludedPrs": []
+  "prExclusionLabel": "lubbdubb-ignore"
 }
 ```
 
@@ -139,7 +139,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 - **`github`** — the target for the real `github` provider (required when `integrations.sourceControl` or `integrations.issues` is `"github"`). `owner`/`repo` name the repository; optional `filters.prAuthor` narrows the PR slice to one author and `filters.issueLabel` narrows issues to one label. The **auth token is not configured here** — it comes from the `GITHUB_TOKEN` environment variable so a secret never lands in a committed config file. Selecting `github` without a `GITHUB_TOKEN` or without `owner`/`repo` is a clear startup error. `github` reads from the GitHub REST API each cycle (PRs with CI/checks status, review approvals, mergeability and unresolved review threads; issues with state and their linked PR) and, for auto-send, posts PR replies and merges through it; a transient GitHub error serves the last-good snapshot rather than dropping items from the world.
 - **`azureDevOps`** — the target for the real `azure` provider (required when `integrations.sourceControl` or `integrations.issues` is `"azure"`). `organization`/`project`/`repository` name the Azure DevOps Repo; optional `filters.prAuthor` narrows the PR slice to one author (by uniqueName/UPN) and `filters.workItemTag` narrows work items to one tag. As with `github`, the **auth is not configured here**: set `AZURE_DEVOPS_PAT` to a Personal Access Token, or — if that's unset — the provider falls back to an access token from the logged-in **`az` CLI** (`az login`). Selecting `azure` without `organization`/`project`/`repository` is a clear startup error; an auth/login problem surfaces at snapshot time (logged, last-good snapshot served) rather than blocking boot. `azure` maps Azure DevOps Repos **pull requests** onto `sourceControl` — reading branch, CI/build **PR statuses**, reviewer **votes** (approval), `mergeStatus` (conflict/clean/blocked) and comment **threads**, and posting PR comment replies + completing (merging) PRs — and Azure Boards **work items** onto `issues` (open work items with their tags→labels and any linked PR, via the WIQL + batch API). Work-item **tags** map onto issue labels, so `issuePickupLabel` / `issuePriorityLabels` gate Azure exactly as they gate GitHub.
 - **`issuePickupLabel`** — a **dispatcher-level, provider-agnostic gate on issue pickup**. Unset (the default) = the harness resolves _every_ open issue with no linked PR, as before. Set it (e.g. `"agent-ready"`) and the harness only starts an agent for issues whose labels include it — untagged open issues **stay visible** in the cockpit and `/api/state`, they're just left alone. This is distinct from `github.filters.issueLabel`: that filter narrows what's _ingested_ into the world at all (GitHub-only, hides non-matching issues); the pickup label gates what's _acted on_ (works identically for the `fake` and `github` providers). Keep both if you want to both narrow the source and gate within it, or use just one.
-- **`excludedPrs`** — PR numbers the harness should **leave alone**, for PRs blocked on something it can't fix (a design decision, an upstream dependency, a deliberate hold). An excluded PR stays fully visible in the cockpit and `/api/state` (with its health verdict, so you still see _why_ it's stuck) but the dispatcher never acts on it — no CI fix, base update, review-comment handling, or merge. This is the config **seed** for the live, runtime-adjustable exclusion set (see **Runtime control** below): toggle it per-PR from the cockpit or via `POST /api/control`, ephemeral like the cap/pause knobs, so a restart reverts to this list.
+- **`prExclusionLabel`** — the **PR exclusion tag** (default `"lubbdubb-ignore"`). A PR carrying this label is **left alone**: the dispatcher never acts on it — no CI fix, base update, review-comment handling, or merge — for PRs blocked on something the harness can't fix (a design decision, an upstream dependency, a deliberate hold). An excluded PR stays fully visible in the cockpit and `/api/state` (with its health verdict, so you still see _why_ it's stuck); it's just not acted on. Provider-agnostic — it reads `PullRequest.labels`, so it gates the `fake`, `github` and `azure` providers identically. Tag a PR from the cockpit's per-PR **ignore / watch** toggle (which adds/removes the label on the PR through the provider) or apply the label directly in GitHub/Azure. Distinct from `issuePickupLabel` (which gates _issue_ pickup): this gates _PR_ action.
 - **`issuePriorityLabels` / `issueDefaultPriority`** — a label-encoded priority scheme so that, when agent headroom is limited, the important issues are picked up first. `issuePriorityLabels` maps a label to a weight (default `priority:high`→3, `priority:medium`→2, `priority:low`→1); an issue with no matching label gets `issueDefaultPriority` (default 2). The highest weight among an issue's labels wins; equal weights break by issue number (oldest first). Providing your own `issuePriorityLabels` **replaces** the default map wholesale rather than merging, so you can define an entirely different convention (e.g. `p0`/`p1`/`p2`). The `"rule"` dispatcher enforces this deterministically; the `"claude"` dispatcher receives it as prompt guidance.
 - **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself _only_ when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
 - **`repoRoot`** — the git repository the harness operates on; per-branch worktrees are cut from it. **Defaults to the directory you launch the app from (`process.cwd()`)**, so the common case needs no configuration. Set it (in the config file or via the `LUBBDUBB_REPO_ROOT` env override) to point the harness at a repo elsewhere; a relative path is resolved against the launch directory. (`worktreeRoot`/`deskRoot` — where worktrees and no-code scratch dirs live — default to `.lubbdubb/worktrees` and `.lubbdubb/desk`.)
@@ -153,12 +153,11 @@ Agents are child processes of the server, so restarting it — a crash _or_ a gr
 - On boot, _before_ the harness reacts to any new findings, reconciliation re-attaches each orphaned in-flight agent to the **same** Claude session in its original worktree (`claude --resume <id>`, protocol system prompt re-applied). Resumed agents count against `maxConcurrentAgents` before new work is dispatched. An agent that was mid-work is nudged to continue; one that was parked on a question keeps its escalation, and your answer routes straight into it.
 - It's best-effort: an agent with no usable session id (e.g. it died before one existed) or a missing worktree falls back to the previous `interrupted` behaviour, and boot never blocks on a resume. A deliberate **kill from the cockpit stays dead** — only a restart-induced stop is resumable. The stream-JSON runtime does not resume (out of scope).
 
-### Runtime control (cap + pause + PR exclusions, no restart)
+### Runtime control (cap + pause, no restart)
 
-The concurrency cap, a pause flag, and the set of **excluded PRs** are **live, in-memory
-controls** — change them while the harness is running and they take effect on the next
-cycle, no restart. They are **ephemeral**: a restart reverts to `maxConcurrentAgents` /
-`startPaused` / `excludedPrs`.
+The concurrency cap and a pause flag are **live, in-memory controls** — change them
+while the harness is running and they take effect on the next cycle, no restart. They
+are **ephemeral**: a restart reverts to `maxConcurrentAgents` / `startPaused`.
 
 - **Cap** — raise it and more agents spawn immediately (subject to available work);
   lower it and new dispatch is deferred until the live count drops below the new cap.
@@ -167,27 +166,44 @@ cycle, no restart. They are **ephemeral**: a restart reverts to `maxConcurrentAg
   harness keeps cycling, so escalations, human answers, world snapshots and the audit
   log all continue. Unpausing resumes dispatch at the cap you had chosen. Every
   pause/cap deferral is written to the audit log with its reason.
-- **PR exclusions** — mark a PR to have the harness **ignore** it: a PR blocked on
-  something the harness can't fix (a design decision, an upstream dependency, a
-  deliberate hold). An excluded PR is filtered out of the dispatch view — no CI fix,
-  base update, review-comment note, or merge — but stays fully visible in the cockpit
-  and `/api/state` with its health verdict, so you still see why it's stuck. Excluding a
-  PR that already has a live agent never kills it; it just stops _new_ signals for that
-  PR from being acted on.
 
 Drive it from the cockpit topbar (the `−`/`+` cap stepper and the Pause/Resume toggle)
-and the per-PR **ignore / watch** toggle in the World panel, or the endpoint directly:
+or the endpoint directly:
 
 ```bash
 curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"cap":5}'
 curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"paused":true}'
-curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"excludedPrs":[42,57]}'
 ```
 
-`POST /api/control` accepts `{ cap?, paused?, excludedPrs? }` (`cap` must be a
-non-negative integer; `excludedPrs` is the full desired list of PR numbers, replacing the
-set wholesale), broadcasts the change over the WebSocket so every open cockpit updates
-live, and the current values appear in `/api/state` under a `control` block.
+`POST /api/control` accepts `{ cap?, paused? }` (`cap` must be a non-negative integer),
+broadcasts the change over the WebSocket so every open cockpit updates live, and the
+current values appear in `/api/state` under a `control` block.
+
+### Ignore a PR (the exclusion tag, no restart)
+
+Some PRs are blocked on things the harness can't fix — a design decision, an upstream
+dependency, a deliberate hold. Tag such a PR with the **exclusion label**
+(`prExclusionLabel`, default `lubbdubb-ignore`) and the harness leaves it alone: it's
+filtered out of the dispatch view — no CI fix, base update, review-comment note, or
+merge — but stays fully visible in the cockpit and `/api/state` with its health verdict,
+so you still see why it's stuck. Tagging a PR that already has a live agent never kills
+it; it just stops _new_ signals for that PR from being acted on.
+
+Because it's a real label on the PR, it's **provider-driven and durable** (it survives a
+restart) and works identically for the `fake`, `github` and `azure` providers. Toggle it
+from the cockpit's per-PR **ignore / watch** button in the World panel — which adds or
+removes the label on the PR through the provider — apply the label directly in
+GitHub/Azure, or call the endpoint:
+
+```bash
+curl -XPOST localhost:4300/api/prs/42/exclude -H 'content-type: application/json' -d '{"excluded":true}'
+curl -XPOST localhost:4300/api/prs/42/exclude -H 'content-type: application/json' -d '{"excluded":false}'
+```
+
+`POST /api/prs/:number/exclude` accepts `{ excluded: boolean }`, adds/removes
+`prExclusionLabel` on the PR through the source-control provider, and triggers a cycle so
+the change takes effect immediately. (For the real `github` provider the label must exist
+in the repo; create it once in the repo's Labels settings.)
 
 ### Try the demo without a real model
 
