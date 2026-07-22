@@ -87,6 +87,10 @@ export class ActionExecutor {
             const { task, cwd } = await this.materializeTask(action);
             this.deps.agents.spawn(task, cwd);
             liveCount += 1;
+            // An operator-launched job leaves the queue only once its agent is
+            // actually running — so a deferred (capped/paused) dispatch keeps it
+            // queued for a later cycle.
+            if (action.jobId) store.markJobDispatched(action.jobId, task.id);
             record(
               'executed',
               `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`,

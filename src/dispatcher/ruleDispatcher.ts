@@ -90,6 +90,45 @@ export class RuleDispatcher implements Dispatcher {
       // 'cooldown' | 'hold' — leave the origin alone this cycle.
     };
 
+    // 0: Operator-launched jobs outrank every world-driven rule. Drain the queue
+    // oldest-first, claiming headroom before anything else so a manual request
+    // wins the next free slot; a job that doesn't fit this cycle stays queued
+    // (the executor defers its dispatch) and is retried next cycle. The `jobId`
+    // rides on the action so the executor marks the job dispatched once its agent
+    // spawns, taking it out of the queue.
+    for (const job of ctx.queuedJobs) {
+      const origin = `job:${job.id}`;
+      if (activeOrigins.has(origin) || !canDispatch(origin)) continue;
+      const reason = `Operator-launched job "${job.title}" takes priority for the next free slot.`;
+      if (job.kind === 'code') {
+        raw.push({
+          type: 'dispatch_code_agent',
+          branch: job.branch ?? `job/${job.id}`,
+          title: job.title,
+          prompt: job.prompt,
+          originRef: origin,
+          originTitle: job.title,
+          originSummary: 'Operator-launched job.',
+          jobId: job.id,
+          rule: 'manual-job',
+          reason,
+        } satisfies RawAction);
+      } else {
+        raw.push({
+          type: 'dispatch_desk_agent',
+          title: job.title,
+          prompt: job.prompt,
+          originRef: origin,
+          originTitle: job.title,
+          originSummary: 'Operator-launched job.',
+          jobId: job.id,
+          rule: 'manual-job',
+          reason,
+        } satisfies RawAction);
+      }
+      claim(origin);
+    }
+
     // 1–3: React to PR signals first — they're time-sensitive. At most one code
     // agent works a given branch, so a fresh signal for a branch that already
     // has a running agent is delivered to it, never a second dispatch.

@@ -27,6 +27,15 @@ const origin = {
   originSummary: z.string().nullable().default(null),
 };
 
+/**
+ * Links a dispatch back to the operator-launched {@link Job} it drains, so the
+ * executor can mark that job dispatched once its agent spawns. Null for every
+ * world-driven dispatch — only the queue-draining rule sets it.
+ */
+const job = {
+  jobId: z.string().nullable().default(null),
+};
+
 export const ActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('dispatch_code_agent'),
@@ -35,6 +44,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     prompt: z.string().min(1),
     originRef: z.string().nullable().default(null),
     ...origin,
+    ...job,
     ...base,
   }),
   z.object({
@@ -43,6 +53,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     prompt: z.string().min(1),
     originRef: z.string().nullable().default(null),
     ...origin,
+    ...job,
     ...base,
   }),
   z.object({

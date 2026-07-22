@@ -159,6 +159,39 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     }
   });
 
+  // Queue an operator-launched job. It persists as `queued` and is drained by
+  // the dispatcher ahead of world-driven work — taking the next free slot, or
+  // waiting in the queue when the fleet is at capacity. A cycle is kicked so a
+  // job dispatches immediately when there's headroom.
+  app.post('/api/jobs', async (req, reply) => {
+    const body = (req.body ?? {}) as { prompt?: unknown; title?: unknown; kind?: unknown; branch?: unknown };
+    if (typeof body.prompt !== 'string' || body.prompt.trim() === '')
+      return reply.code(400).send({ error: 'prompt required' });
+    const kind = body.kind ?? 'code';
+    if (kind !== 'code' && kind !== 'desk') return reply.code(400).send({ error: "kind must be 'code' or 'desk'" });
+    if (body.title !== undefined && typeof body.title !== 'string')
+      return reply.code(400).send({ error: 'title must be a string' });
+    if (body.branch !== undefined && body.branch !== null && typeof body.branch !== 'string')
+      return reply.code(400).send({ error: 'branch must be a string' });
+    const prompt = body.prompt.trim();
+    // Fall back to a title derived from the prompt's first line when none is given.
+    const title = (typeof body.title === 'string' && body.title.trim()) || deriveTitle(prompt);
+    const job = store.createJob({ title, prompt, kind, branch: (body.branch as string | undefined) ?? null });
+    hub.broadcast({ type: 'world:changed' });
+    const report = await harness.runCycle('manual');
+    return { ok: true, job, report };
+  });
+
+  // Drop a still-queued job before it runs. A job already dispatched can't be
+  // cancelled here — kill its agent instead.
+  app.post('/api/jobs/:id/cancel', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const job = store.cancelJob(id);
+    if (!job) return reply.code(409).send({ error: 'job not found or no longer queued' });
+    hub.broadcast({ type: 'world:changed' });
+    return { ok: true, job };
+  });
+
   app.post('/api/escalations/:id/answer', async (req, reply) => {
     const { id } = req.params as { id: string };
     const { response } = (req.body ?? {}) as { response?: string };
@@ -258,6 +291,9 @@ export function buildStateSnapshot(system: System) {
         issues: world.issues.map((issue) => ({ ...issue, pickup: issuePickupStatus(issue, pickupCtx) })),
       },
       tasks,
+      // Operator-launched jobs (newest first) — the cockpit shows the queued
+      // ones and their place in line, plus recently-dispatched/cancelled history.
+      jobs: store.listJobs(),
       agents: store.listAgents(),
       escalations: store.listEscalations(),
       decisions: store.listDecisions(100),
@@ -275,6 +311,16 @@ export function buildStateSnapshot(system: System) {
       usage: buildUsage(system),
     };
   });
+}
+
+/** A concise task/job title from a free-form prompt: its first non-empty line, capped. */
+function deriveTitle(prompt: string): string {
+  const firstLine =
+    prompt
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) ?? 'Operator job';
+  return firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine;
 }
 
 /**

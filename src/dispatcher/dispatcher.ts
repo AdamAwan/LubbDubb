@@ -1,4 +1,4 @@
-import type { Agent, Decision, Escalation, Task, WorldSnapshot } from '../types.js';
+import type { Agent, Decision, Escalation, Job, Task, WorldSnapshot } from '../types.js';
 import type { ParseResult } from './actions.js';
 
 /** Everything the dispatcher gets to look at when deciding what to do this cycle. */
@@ -8,6 +8,12 @@ export interface DispatchContext {
   tasks: Task[];
   agents: Agent[];
   openEscalations: Escalation[];
+  /**
+   * Operator-launched jobs still awaiting a slot, oldest first. Drained before
+   * any world-driven rule so a manual request takes priority for the next free
+   * slot; the rest stay queued when the fleet is at capacity.
+   */
+  queuedJobs: Job[];
   /** Optional operator hints, injected only as a corrective. */
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */

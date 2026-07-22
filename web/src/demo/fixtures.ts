@@ -194,6 +194,7 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(22),
       },
     ],
+    jobs: [],
     agents: [
       {
         id: 'agent-a1',
