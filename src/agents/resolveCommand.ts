@@ -16,19 +16,39 @@ import { delimiter, isAbsolute, join } from 'node:path';
  */
 export function resolveExecutable(command: string, env: NodeJS.ProcessEnv = process.env): string {
   // An explicit path (absolute or containing a separator) is taken as-is — only checked.
-  if (isAbsolute(command) || command.includes('/')) {
-    if (isExecutableFile(command)) return command;
+  if (isAbsolute(command) || command.includes('/') || command.includes('\\')) {
+    for (const candidate of withExecExtensions(command, env)) {
+      if (isExecutableFile(candidate)) return candidate;
+    }
     throw new Error(`Agent command not found or not executable: ${command}`);
   }
   for (const dir of (env.PATH ?? '').split(delimiter)) {
     if (!dir) continue;
-    const candidate = join(dir, command);
-    if (isExecutableFile(candidate)) return candidate;
+    for (const candidate of withExecExtensions(join(dir, command), env)) {
+      if (isExecutableFile(candidate)) return candidate;
+    }
   }
   throw new Error(
     `Agent command '${command}' was not found on PATH. ` +
       `Install it, or set "claudeCommand" in the config to its absolute path.`,
   );
+}
+
+/**
+ * On Windows an executable is found by appending a PATHEXT extension (`.EXE`,
+ * `.CMD`, …) — a bare `claude` never matches `claude.exe`. Yield the base path
+ * first (it already has an extension, or we're on a POSIX system) then each
+ * PATHEXT candidate. On non-Windows this is just the base path, so POSIX
+ * resolution is unchanged.
+ */
+function withExecExtensions(base: string, env: NodeJS.ProcessEnv): string[] {
+  if (process.platform !== 'win32') return [base];
+  const exts = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  if (exts.some((e) => base.toLowerCase().endsWith(e.toLowerCase()))) return [base];
+  return [base, ...exts.map((e) => base + e)];
 }
 
 function isExecutableFile(p: string): boolean {
