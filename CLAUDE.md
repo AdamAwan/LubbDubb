@@ -158,6 +158,19 @@ logic in pure functions so it stays unit-testable without HTTP. `mergeable_state
 map through this seam too (→ `PullRequest.mergeableState` / `baseBranch`); add a field to the
 `Gh*` type _and_ the scripted fake in the same change.
 
+The **`azure` provider** (`src/integrations/azure/`, Azure DevOps Repos + Boards) is the exact
+same shape: all HTTP behind the narrow `AzureDevOpsApi` seam (`azureDevOpsApi.ts`),
+`RestAzureDevOpsApi` (`restAzureDevOpsApi.ts`) the only file that touches the network _and_
+resolves auth, and tests (`test/azureDevOpsIntegration.test.ts`) inject a scripted fake
+`AzureDevOpsApi`. Mapping logic — CI aggregation from PR statuses, approval from reviewer votes,
+`mergeStatus`→`MergeableState`, thread→comment folding, linked-PR-from-relations — is exported as
+pure functions and tested directly. Auth is unlike GitHub's single env token: `resolveAzureAuth`
+prefers `AZURE_DEVOPS_PAT` (Basic) and otherwise shells out to the logged-in `az` CLI (Bearer,
+cached), so it's the one place `az` is invoked. Work-item **tags** map onto `Issue.labels`, so the
+provider-agnostic pickup/priority gates work unchanged. Merging is Azure "complete PR", which
+needs the head commit — the source-control integration caches each PR's `lastMergeSourceCommit`
+from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle.
+
 ## PR health & one-agent-per-branch
 
 - **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr)` (the `{ blocked, reasons }`
