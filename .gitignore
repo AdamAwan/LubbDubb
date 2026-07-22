@@ -3,6 +3,7 @@ dist/
 web/dist/
 .lubbdubb/
 coverage/
+lubbdubb.config.json
 *.sqlite
 *.db
 .env

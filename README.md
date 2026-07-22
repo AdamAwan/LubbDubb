@@ -87,16 +87,18 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 ## Getting started
 
 ```bash
-npm install          # builds native deps (better-sqlite3, node-pty)
-npm run web:build    # build the cockpit SPA into web/dist
-npm start            # start the server (serves the cockpit at http://localhost:4300)
+npm install                                        # builds native deps (better-sqlite3, node-pty)
+cp lubbdubb.config.example.json lubbdubb.config.json # your local config (gitignored); the example runs the mock agent, no auth needed
+npm run web:build                                  # build the cockpit SPA into web/dist
+npm start                                          # start the server (serves the cockpit at http://localhost:4300)
 ```
 
 Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Answer items in **Needs you** to unblock parked agents. The **Decision log** shows what the harness decided each cycle; the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved, meeting prep done), so it works for the real GitHub provider too, not just injected events.
 
 ### Configuration
 
-Create `lubbdubb.config.json` at the repo root (all keys optional):
+Config lives in `lubbdubb.config.json` at the repo root (gitignored — it's your local file).
+Copy the tracked `lubbdubb.config.example.json` as a starting point. All keys are optional:
 
 ```json
 {
@@ -209,7 +211,7 @@ in the repo; create it once in the repo's Labels settings.)
 
 ### Try the demo without a real model
 
-`scripts/mock-agent.sh` is a stand-in that speaks the same protocol as a real `claude` agent. The committed `lubbdubb.config.json` uses `agentMode: "raw"` pointed at it, so `npm start` works with no model auth. For real agents, set `agentMode` to `"stream"` (recommended) and `claudeCommand` to `claude`.
+`scripts/mock-agent.sh` is a stand-in that speaks the same protocol as a real `claude` agent. The tracked `lubbdubb.config.example.json` uses `agentMode: "raw"` pointed at it, so copying it to `lubbdubb.config.json` makes `npm start` work with no model auth. For real agents, set `agentMode` to `"stream"` (recommended) and `claudeCommand` to `claude`.
 
 How real agents speak the protocol: the harness appends a system prompt telling the agent to print `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human and `@@LUBBDUBB_DONE@@` when finished. In `stream` mode each turn ends in a `result` event; the harness reads those sentinels to decide _waiting_ (→ escalate, then deliver your answer as the next message) vs _done_. This has been verified end-to-end against a live `claude`.
 
