@@ -62,3 +62,37 @@ test('isIssuePickupEligible: requireOwnLabel is ignored when no pickup label is 
   const policy: IssuePickupPolicy = { requireOwnLabel: true, priorityLabels: {}, defaultPriority: 0 };
   assert.equal(isIssuePickupEligible(issue({ labels: ['bug'] }), policy), true);
 });
+
+test('isIssuePickupEligible: state gate only picks up items in an allowed workItemState', () => {
+  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, pickupStates: ['Ready', 'Doing'] };
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready' }), policy), true);
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Doing' }), policy), true);
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'In Review' }), policy), false);
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'New' }), policy), false);
+});
+
+test('isIssuePickupEligible: the state gate is a no-op for issues with no workItemState', () => {
+  // GitHub / fake issues carry no native state, so a state gate must not exclude them.
+  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, pickupStates: ['Ready'] };
+  assert.equal(isIssuePickupEligible(issue({ workItemState: undefined }), policy), true);
+});
+
+test('isIssuePickupEligible: an empty pickupStates list leaves the state gate off', () => {
+  const policy: IssuePickupPolicy = { priorityLabels: {}, defaultPriority: 0, pickupStates: [] };
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Anything' }), policy), true);
+});
+
+test('isIssuePickupEligible: the state and label gates are both required when both are set', () => {
+  const policy: IssuePickupPolicy = {
+    pickupLabel: 'agent-ready',
+    priorityLabels: {},
+    defaultPriority: 0,
+    pickupStates: ['Ready'],
+  };
+  // Right state, right label → eligible.
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready', labels: ['agent-ready'] }), policy), true);
+  // Right state, missing label → not eligible.
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready', labels: [] }), policy), false);
+  // Wrong state, right label → not eligible.
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'In Review', labels: ['agent-ready'] }), policy), false);
+});

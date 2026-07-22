@@ -81,6 +81,16 @@ export interface Issue {
    */
   labelsAddedByViewer?: string[];
   state: IssueState;
+  /**
+   * The provider's *native* workflow state, when it has a richer model than
+   * open/closed — e.g. an Azure DevOps work item's `System.State`
+   * ("New"/"Ready"/"Doing"/"In Review"/…). `state` above collapses this to
+   * open/closed; this preserves the raw value so the dispatcher can gate pickup on
+   * it and move an item to a review state once a PR is open. `undefined` for
+   * providers with no such model (GitHub issues, the fake), which leaves every
+   * state-based gate off for them.
+   */
+  workItemState?: string;
   /** The PR opened to resolve this issue, once one exists. Null until linked. */
   linkedPrNumber: number | null;
   url?: string;
@@ -263,6 +273,7 @@ export type ActionType =
   | 'respond_to_agent'
   | 'reply_on_pr'
   | 'merge_pr'
+  | 'set_work_item_state'
   | 'no_op';
 
 /** One decision from the dispatcher. Every action carries a reason for the audit log. */

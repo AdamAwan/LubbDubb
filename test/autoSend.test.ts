@@ -107,6 +107,9 @@ test('a send failure never drops the reply — it falls back to escalation', asy
     async setPrLabel() {
       throw new Error('network down');
     },
+    async setWorkItemState() {
+      throw new Error('network down');
+    },
   };
   const system = buildSystem(config, { backend: new FakePtyBackend(), sink: failingSink });
   await system.executor.execute('cyc', replyPlan(0.95));
@@ -173,6 +176,9 @@ test('a merge failure never merges silently — it escalates for approval', asyn
       throw new Error('merge conflict');
     },
     async setPrLabel() {
+      throw new Error('unused');
+    },
+    async setWorkItemState() {
       throw new Error('unused');
     },
   };

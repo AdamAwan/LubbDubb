@@ -50,6 +50,7 @@ interface Recorded {
   tagQueries: Array<string | undefined>;
   updateQueries: number[];
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
+  stateSets: Array<{ id: number; state: string }>;
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -60,6 +61,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     tagQueries: [],
     updateQueries: [],
     labelSets: [],
+    stateSets: [],
   };
   const api: AzureDevOpsApi = {
     async viewerUniqueName() {
@@ -101,6 +103,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setPullLabel(prId, label, present) {
       recorded.labelSets.push({ prId, label, present });
+    },
+    async setWorkItemState(id, state) {
+      recorded.stateSets.push({ id, state });
     },
   };
   return { api, recorded };
@@ -492,9 +497,21 @@ test('work items snapshot maps state / tags→labels / linked PR', async () => {
   const issue = slice.issues![0]!;
   assert.equal(issue.number, 101);
   assert.equal(issue.state, 'open');
+  // The raw System.State is preserved alongside the open/closed collapse.
+  assert.equal(issue.workItemState, 'Active');
   assert.deepEqual(issue.labels, ['bug']);
   assert.equal(issue.linkedPrNumber, 55);
   assert.equal(issue.url, 'https://dev.azure.com/o/p/_workitems/edit/101');
+  store.close();
+});
+
+test('setWorkItemState transitions the work item and records a connector event', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, store });
+  const res = await issues.setWorkItemState({ number: 101, state: 'In Review' });
+  assert.equal(res.ok, true);
+  assert.deepEqual(recorded.stateSets, [{ id: 101, state: 'In Review' }]);
   store.close();
 });
 

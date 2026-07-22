@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
-import type { Capability, Injectable, Integration, WorldSlice } from '../integration.js';
+import type { SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
+import type { Capability, Injectable, Integration, WorkItemStateCapable, WorldSlice } from '../integration.js';
 import type { FakeWorldStore } from './fakeWorld.js';
 
 const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue_state', 'issue_linked_pr']);
@@ -11,7 +12,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue
  * adapter drops in under `issues` in its place, reading from the Issues API instead
  * of an injected fake world.
  */
-export class FakeIssuesIntegration implements Integration, Injectable {
+export class FakeIssuesIntegration implements Integration, Injectable, WorkItemStateCapable {
   readonly id = 'issues:fake';
   readonly capability: Capability = 'issues';
 
@@ -53,6 +54,15 @@ export class FakeIssuesIntegration implements Integration, Injectable {
         }
       }
     });
+  }
+
+  /** Reflect an "in review" back-off into the fake world, so the state gate sees it next cycle. */
+  async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      const issue = world.issues.find((i) => i.number === input.number);
+      if (issue) issue.workItemState = input.state;
+    });
+    return { ok: true };
   }
 
   /** Reflect harness progress: an agent opened a PR that resolves this issue. */

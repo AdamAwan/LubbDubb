@@ -751,3 +751,162 @@ test('does not duplicate work already in flight for the same origin', async () =
   );
   assert.equal(actions[0]?.type, 'no_op');
 });
+
+// --------------------------------------------------------------------------
+// Work-item state gate + "in review" back-off (Azure DevOps)
+// --------------------------------------------------------------------------
+
+test('state gate: only work items in a pickup state are dispatched', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'] });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 1,
+          title: 'ready',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'Ready',
+          linkedPrNumber: null,
+        },
+        {
+          id: 'i2',
+          number: 2,
+          title: 'doing',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'Doing',
+          linkedPrNumber: null,
+        },
+        {
+          id: 'i3',
+          number: 3,
+          title: 'review',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'In Review',
+          linkedPrNumber: null,
+        },
+        {
+          id: 'i4',
+          number: 4,
+          title: 'new',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'New',
+          linkedPrNumber: null,
+        },
+      ],
+    }),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.deepEqual(
+    dispatched.map((a) => (a as { originRef: string }).originRef).sort(),
+    ['issue:1', 'issue:2'],
+    'only Ready/Doing items are dispatched; In Review and New are left alone',
+  );
+});
+
+test('in-review back-off: an open PR on a work item branch moves it to the review state', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 5,
+          title: 'doing',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'Doing',
+          linkedPrNumber: null,
+        },
+      ],
+      pullRequests: [
+        { id: 'p', number: 90, title: 'wip', branch: 'issue/5', ciStatus: 'pending', unresolvedComments: [] },
+      ],
+    }),
+  );
+  const transition = actions.find((a) => a.type === 'set_work_item_state');
+  assert.ok(transition, 'a set_work_item_state action is emitted');
+  assert.equal((transition as { number: number }).number, 5);
+  assert.equal((transition as { state: string }).state, 'In Review');
+});
+
+test('in-review back-off: matches via linkedPrNumber when the branch differs', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 6,
+          title: 'ready',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'Ready',
+          linkedPrNumber: 91,
+        },
+      ],
+      pullRequests: [
+        { id: 'p', number: 91, title: 'wip', branch: 'some-other-branch', ciStatus: 'pending', unresolvedComments: [] },
+      ],
+    }),
+  );
+  assert.ok(actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+test('in-review back-off: an item already in the review state is not re-transitioned', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 7,
+          title: 'reviewing',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'In Review',
+          linkedPrNumber: 92,
+        },
+      ],
+      pullRequests: [
+        { id: 'p', number: 92, title: 'wip', branch: 'issue/7', ciStatus: 'pending', unresolvedComments: [] },
+      ],
+    }),
+  );
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'), 'no transition once already in review');
+});
+
+test('in-review back-off is off unless both pickupStates and inReviewState are set', async () => {
+  const d = new RuleDispatcher({ inReviewState: 'In Review' }); // no pickupStates
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 8,
+          title: 'doing',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'Doing',
+          linkedPrNumber: null,
+        },
+      ],
+      pullRequests: [
+        { id: 'p', number: 93, title: 'wip', branch: 'issue/8', ciStatus: 'pending', unresolvedComments: [] },
+      ],
+    }),
+  );
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+});

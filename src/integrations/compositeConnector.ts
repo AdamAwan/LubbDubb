@@ -1,5 +1,12 @@
 import type { Connector, InjectableEvent } from '../connector/connector.js';
-import type { ActionSink, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type {
+  ActionSink,
+  PrLabelInput,
+  PrMergeInput,
+  PrReplyInput,
+  SendResult,
+  WorkItemStateInput,
+} from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
 import {
@@ -8,6 +15,7 @@ import {
   isPrMergeCapable,
   isPrReplyCapable,
   isRefResolvable,
+  isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
 
@@ -55,6 +63,13 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrLabelCapable);
     if (!handler) throw new Error('no integration can label PRs (no sourceControl provider is PrLabelCapable)');
     return handler.setPrLabel(input);
+  }
+
+  async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
+    const handler = this.integrations.find(isWorkItemStateCapable);
+    if (!handler)
+      throw new Error('no integration can set work item state (no issues provider is WorkItemStateCapable)');
+    return handler.setWorkItemState(input);
   }
 
   /**

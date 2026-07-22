@@ -389,6 +389,17 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return { status: data.status ?? 'unknown' };
   }
 
+  async setWorkItemState(id: number, state: string): Promise<void> {
+    // Work item updates are a JSON Patch document, not a plain JSON body — the
+    // dedicated content type is required or Azure rejects the request. `add` on an
+    // existing field replaces it, so this doubles as an idempotent set.
+    await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json-patch+json' },
+      body: JSON.stringify([{ op: 'add', path: '/fields/System.State', value: state }]),
+    });
+  }
+
   async setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void> {
     const labelsUrl = `${this.repoUrl}/pullRequests/${pullRequestId}/labels`;
     if (present) {
