@@ -90,9 +90,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const worktrees = new WorktreeManager(config.repoRoot, config.worktreeRoot);
 
   // Pick the agent runtime and how it's launched from the configured mode.
-  // `legible` turns on the terminal-emulation transcript (settled text instead of
-  // raw TUI bytes) — wanted for the real claude TUI, not for raw/mock sessions.
-  const ptyFactory = (legible: boolean): SessionFactory => {
+  // `claudeTui` marks the real interactive claude REPL, which needs two things
+  // raw/mock sessions don't: the terminal-emulation transcript (settled text
+  // instead of raw TUI bytes), and an active exit-on-done — the REPL never ends
+  // a session by itself, so without it the process and its worktree leak (#66).
+  const ptyFactory = (claudeTui: boolean): SessionFactory => {
     return (spec) =>
       new PtySession(backend, {
         command: spec.command,
@@ -101,7 +103,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         env: spec.env,
         waitingPatterns: spec.waitingPatterns,
         submitDelayMs: config.agentSubmitDelayMs,
-        legibleTranscript: legible,
+        legibleTranscript: claudeTui,
+        exitOnDone: claudeTui,
       });
   };
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
@@ -236,6 +239,23 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
   agents.on('done', ({ agentId, status }) => {
     if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
+  });
+
+  // A cleanly finished code agent's worktree is removed once its process has
+  // actually exited ('reaped' — a live process pins the cwd and would block the
+  // removal). Failed/killed agents keep theirs for debugging; a next dispatch on
+  // the branch recreates it via `ensure`. Worktrees are shared per-branch, so
+  // hands off while any sibling task on the branch is still active.
+  agents.on('reaped', ({ taskId, status }) => {
+    if (status !== 'done') return;
+    const task = store.getTask(taskId);
+    const branch = task?.branch;
+    if (!branch) return;
+    const active = (s: string): boolean => s === 'queued' || s === 'running' || s === 'waiting';
+    if (store.listTasks().some((t) => t.id !== taskId && t.branch === branch && active(t.status))) return;
+    void worktrees.remove(branch).catch((err: Error) => {
+      errors.record({ source: 'agent', message: `Failed to remove worktree for ${branch}: ${err.message}` });
+    });
   });
 
   return {

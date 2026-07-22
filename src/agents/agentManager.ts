@@ -58,6 +58,13 @@ interface AgentManagerEvents {
   waiting: [{ agentId: string; taskId: string; reason: string }];
   autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
   done: [{ agentId: string; taskId: string; status: AgentStatus }];
+  /**
+   * The agent finished (done/failed) *and* its OS process has actually exited —
+   * the two arrive in either order (PTY: sentinel first, exit later; stream:
+   * exit first). Only now is it safe to touch resources the process pinned,
+   * e.g. removing its worktree cwd.
+   */
+  reaped: [{ agentId: string; taskId: string; status: 'done' | 'failed' }];
   status: [{ agentId: string; taskId: string; status: AgentStatus }];
   usage: [{ agentId: string; taskId: string; usage: AgentUsage }];
 }
@@ -74,6 +81,10 @@ export class AgentManager extends EventEmitter {
   // Exit code per agent, captured from the session's `exit` event so a `failed`
   // terminal can be recorded with its cause (the code arrives before `failed`).
   private readonly exitCodes = new Map<string, number>();
+  // The two halves of a 'reaped' emission: terminal status recorded vs process
+  // exit observed. Their order differs per runtime, so track both.
+  private readonly terminals = new Map<string, 'done' | 'failed'>();
+  private readonly exited = new Set<string>();
 
   constructor(
     private readonly store: Store,
@@ -198,6 +209,7 @@ export class AgentManager extends EventEmitter {
     if (agent) this.store.updateTask(agent.taskId, { status: 'interrupted' });
     this.sessions.delete(agentId);
     this.exitCodes.delete(agentId); // a deliberate kill's exit code is not a failure cause
+    this.exited.delete(agentId); // and a killed agent is never 'reaped' — its worktree stays
     if (agent) this.reflectStatus(agentId, agent.taskId, 'killed');
     return true;
   }
@@ -226,6 +238,7 @@ export class AgentManager extends EventEmitter {
       this.store.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
       this.sessions.delete(id);
       this.exitCodes.delete(id);
+      this.exited.delete(id);
     }
   }
 
@@ -266,7 +279,11 @@ export class AgentManager extends EventEmitter {
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
     // Both runtimes emit `exit` (with the process exit code) before `failed`, so
     // the code is in hand by the time the terminal transition is recorded.
-    session.on('exit', (code: number) => this.exitCodes.set(agentId, code));
+    session.on('exit', (code: number) => {
+      this.exitCodes.set(agentId, code);
+      this.exited.add(agentId);
+      this.maybeReap(agentId, task.id);
+    });
     session.on('done', () => this.handleTerminal(agentId, task.id, 'done'));
     session.on('failed', () => this.handleTerminal(agentId, task.id, 'failed'));
   }
@@ -353,6 +370,17 @@ export class AgentManager extends EventEmitter {
     }
     this.reflectStatus(agentId, taskId, status);
     this.emit('done', { agentId, taskId, status });
+    this.terminals.set(agentId, status);
+    this.maybeReap(agentId, taskId);
+  }
+
+  /** Emit 'reaped' once a finished agent's process has also exited (whichever came second). */
+  private maybeReap(agentId: string, taskId: string): void {
+    const status = this.terminals.get(agentId);
+    if (!status || !this.exited.has(agentId)) return;
+    this.terminals.delete(agentId);
+    this.exited.delete(agentId);
+    this.emit('reaped', { agentId, taskId, status });
   }
 
   private reflectStatus(agentId: string, taskId: string, status: AgentStatus): void {
