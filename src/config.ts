@@ -213,6 +213,17 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // relative would resolve against the wrong directory once work is dispatched.
   merged.repoRoot = resolve(process.cwd(), merged.repoRoot);
 
+  // Agents' working roots belong to the repo the harness operates on, not to
+  // wherever the app happens to be launched. `git worktree add` runs with
+  // `cwd: repoRoot`, but the worktree directory is built from `worktreeRoot`, and
+  // the desk scratch dir from `deskRoot` — both default to relative paths. Resolve
+  // them against `repoRoot` (not `process.cwd()`) so running LubbDubb from its own
+  // folder against a repo elsewhere doesn't scatter that repo's worktrees into the
+  // app's directory. An absolute override is honoured as-is. When repoRoot is the
+  // launch dir (the single-repo default) this is a no-op.
+  merged.worktreeRoot = resolve(merged.repoRoot, merged.worktreeRoot);
+  merged.deskRoot = resolve(merged.repoRoot, merged.deskRoot);
+
   // autoSend is a nested object: deep-merge it so a config file (or override)
   // can set just one field (e.g. only `enabled`) without dropping the defaults
   // for the rest.
