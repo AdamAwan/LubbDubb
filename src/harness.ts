@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { Heartbeat } from './heartbeat.js';
 import type { Store } from './store/store.js';
 import type { Connector } from './connector/connector.js';
-import type { Dispatcher } from './dispatcher/dispatcher.js';
+import type { Dispatcher, QueueItem } from './dispatcher/dispatcher.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
 import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
@@ -24,6 +24,17 @@ export interface HarnessDeps {
   steeringPriorities: string[];
   /** PRs carrying this label are excluded from dispatch (the operator's "leave it alone" tag). */
   prExclusionLabel: string;
+}
+
+/**
+ * The last cycle's ordered pickup plan (issue #69) — "what's next as of this
+ * pulse". A projection recomputed every cycle, not a persisted queue; `at` is
+ * the world snapshot it was planned against.
+ */
+export interface UpcomingPlan {
+  cycleId: string;
+  at: string;
+  items: QueueItem[];
 }
 
 export interface CycleReport {
@@ -52,6 +63,14 @@ export class Harness extends EventEmitter {
   // Last snapshot we diffed against. Seeded from the persisted baseline on the
   // first cycle so a restart doesn't re-emit the whole world as "new".
   private prevWorld: WorldSnapshot | null = null;
+  // The last cycle's ranked pickup plan, cached for the state snapshot. Null
+  // until a cycle runs, or when the dispatcher reports no plan (LLM dispatcher).
+  private lastPlan: UpcomingPlan | null = null;
+
+  /** The "Up next" queue from the last pulse, for `/api/state`. */
+  get upcoming(): UpcomingPlan | null {
+    return this.lastPlan;
+  }
 
   constructor(private readonly deps: HarnessDeps) {
     super();
@@ -118,6 +137,8 @@ export class Harness extends EventEmitter {
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
       });
+
+      this.lastPlan = plan.upcoming ? { cycleId, at: world.takenAt, items: plan.upcoming } : null;
 
       // The dispatcher's reasoning is itself an audit record.
       store.recordDecision({

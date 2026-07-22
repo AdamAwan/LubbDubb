@@ -1,5 +1,6 @@
 import type { Agent, Decision, Escalation, Task, WorldSnapshot } from '../types.js';
 import type { ParseResult } from './actions.js';
+import type { DispatchRuleId } from './rules.js';
 
 /** Everything the dispatcher gets to look at when deciding what to do this cycle. */
 export interface DispatchContext {
@@ -16,9 +17,34 @@ export interface DispatchContext {
   recentDecisions: Decision[];
 }
 
+/**
+ * One ranked agent-dispatch candidate from a cycle's plan — the "Up next" queue
+ * (issue #69). A projection, not a persisted FIFO: the dispatcher recomputes it
+ * from the world every cycle, so it's "what's next as of this pulse".
+ */
+export interface QueueItem {
+  origin: string;
+  /** The dispatcher rule that raised the candidate (a DISPATCH_RULES key). */
+  rule: DispatchRuleId;
+  title: string;
+  kind: 'code' | 'desk';
+  branch: string | null;
+  /**
+   * Where the candidate sits relative to the headroom cut: dispatched this
+   * cycle, waiting on a free slot, or throttled by the re-dispatch cooldown.
+   */
+  status: 'dispatching' | 'waiting' | 'cooldown';
+  reason: string;
+}
+
 export interface DispatchResult extends ParseResult {
   /** Free-form reasoning the dispatcher produced, kept for the audit trail. */
   rationale: string;
+  /**
+   * The full ordered pickup plan, including candidates below the headroom cut.
+   * Only the rule dispatcher materialises one; the LLM dispatcher omits it.
+   */
+  upcoming?: QueueItem[];
 }
 
 /**
