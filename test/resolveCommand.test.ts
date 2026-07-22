@@ -41,3 +41,13 @@ test('a non-executable file on PATH is skipped', () => {
   chmodSync(p, 0o644);
   assert.throws(() => resolveExecutable('plain', { PATH: dir }), /was not found on PATH/);
 });
+
+// Windows resolves a bare command via PATHEXT — `claude` must find `claude.exe`.
+test('resolves a bare command via PATHEXT on Windows', { skip: process.platform !== 'win32' }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'resolve-'));
+  const bin = join(dir, 'my-agent.exe');
+  writeFileSync(bin, 'MZ');
+  const got = resolveExecutable('my-agent', { PATH: dir, PATHEXT: '.EXE;.CMD' });
+  // PATHEXT casing is preserved verbatim (`.EXE`); Windows' case-insensitive FS still matches.
+  assert.equal(got.toLowerCase(), bin.toLowerCase());
+});
