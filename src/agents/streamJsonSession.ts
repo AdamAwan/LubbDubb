@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from './session.js';
 import { DONE_SENTINEL, extractWaitingReason } from './sentinels.js';
+import { resolveExecutable } from './resolveCommand.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
 
 /**
@@ -19,8 +20,16 @@ export interface StreamChild {
 
 export type Spawner = (command: string, args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv }) => StreamChild;
 
-const defaultSpawner: Spawner = (command, args, opts) =>
-  nodeSpawn(command, args, { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] }) as unknown as StreamChild;
+const defaultSpawner: Spawner = (command, args, opts) => {
+  // Resolve the command the same way the PTY backend does, so a missing `claude`
+  // fails synchronously with a clear message instead of an unhandled async ENOENT.
+  const resolved = resolveExecutable(command, opts.env);
+  return nodeSpawn(resolved, args, {
+    cwd: opts.cwd,
+    env: opts.env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  }) as unknown as StreamChild;
+};
 
 /**
  * Drives a real `claude` agent over the streaming-JSON protocol

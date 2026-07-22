@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { resolveExecutable } from '../agents/resolveCommand.js';
 
 /**
  * The tiny slice of a pseudo-terminal the harness actually needs. Abstracting it
@@ -29,16 +30,21 @@ export interface PtyBackend {
  * never spawn a real terminal don't need the native addon built.
  */
 export class NodePtyBackend implements PtyBackend {
-  spawn(command: string, args: string[], opts: SpawnOptions): PtyProcess {
+  spawn(file: string, args: string[], opts: SpawnOptions): PtyProcess {
     // Lazy require keeps the native dependency off the import path for tests.
     const require = createRequire(import.meta.url);
     const pty = require('node-pty') as typeof import('node-pty');
+    const env = { ...process.env, ...opts.env } as Record<string, string>;
+    // Resolve up front: node-pty reports a missing binary only by exiting 1 with
+    // `execvp(3) failed` in the terminal, so a bad command would otherwise look
+    // like an agent that spawned and instantly "failed" for no visible reason.
+    const command = resolveExecutable(file, env);
     const proc = pty.spawn(command, args, {
       name: 'xterm-color',
       cols: opts.cols ?? 120,
       rows: opts.rows ?? 40,
       cwd: opts.cwd,
-      env: { ...process.env, ...opts.env } as Record<string, string>,
+      env,
     });
     return {
       pid: proc.pid,

@@ -83,7 +83,16 @@ export class AgentManager extends EventEmitter {
     this.store.updateTask(task.id, { status: 'running', agentId: agent.id });
     this.sessions.set(agent.id, session);
     this.wireSession(session, agent.id, task);
-    session.start();
+    try {
+      session.start();
+    } catch (err) {
+      // A synchronous spawn failure (e.g. the claude command can't be resolved)
+      // must not leave a half-created agent stuck in `starting`. Tear it down and
+      // record the reason on the transcript, then rethrow so the executor surfaces
+      // it as a rejected dispatch instead of a mystery `failed` agent.
+      this.failSpawn(agent.id, task.id, err as Error);
+      throw err;
+    }
 
     // Hand the agent its task. For a real `claude` REPL this is typed in after a
     // short boot delay; the mock agent takes its prompt from the environment and
@@ -120,7 +129,14 @@ export class AgentManager extends EventEmitter {
     this.store.updateAgent(agent.id, { status: 'running', pid: null, endedAt: null, waitingReason: null });
     this.store.updateTask(task.id, { status: 'running' });
     this.wireSession(session, agent.id, task);
-    session.start();
+    try {
+      session.start();
+    } catch {
+      // Resume is best-effort; a spawn failure here just drops the session so the
+      // boot reconciler falls back to marking the agent interrupted.
+      this.sessions.delete(agent.id);
+      throw new Error(`resume spawn failed for agent ${agent.id}`);
+    }
 
     if (wasWaiting) this.restoreWaiting(agent, task);
     else this.deliverAfterBoot(agent.id, session, this.opts.resumeInput?.() ?? null);
@@ -255,6 +271,16 @@ export class AgentManager extends EventEmitter {
     this.store.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
     this.emit('waiting', { agentId, taskId: task.id, reason });
+  }
+
+  /** Roll back a spawn that threw before the session ever came up. */
+  private failSpawn(agentId: string, taskId: string, err: Error): void {
+    this.sessions.delete(agentId);
+    this.store.appendTranscript(agentId, err.message);
+    this.store.flushTranscript(agentId);
+    this.store.updateAgent(agentId, { status: 'failed', endedAt: new Date().toISOString(), pid: null });
+    this.store.updateTask(taskId, { status: 'failed' });
+    this.reflectStatus(agentId, taskId, 'failed');
   }
 
   private handleTerminal(agentId: string, taskId: string, status: 'done' | 'failed'): void {
