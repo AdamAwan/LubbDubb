@@ -74,6 +74,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       cwd: spec.cwd,
       env: spec.env,
       waitingPatterns: spec.waitingPatterns,
+      submitDelayMs: config.agentSubmitDelayMs,
     });
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
 
