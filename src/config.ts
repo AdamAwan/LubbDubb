@@ -46,6 +46,14 @@ export interface Config {
    */
   azureDevOps?: AzureDevOpsConfig;
   /**
+   * Microsoft 365 target, used when a capability uses the `microsoft365` provider
+   * (currently the `calendar` slice, read from Outlook/Teams via Microsoft Graph).
+   * Auth is deliberately NOT here: a bearer token comes from the
+   * `MICROSOFT_GRAPH_TOKEN` env var, and if that is unset the logged-in `az` CLI is
+   * used — so a secret never lands in a committed config file.
+   */
+  microsoft365?: Microsoft365Config;
+  /**
    * Dispatcher-level, provider-agnostic gate on issue pickup (rule 4). When set,
    * the dispatcher only starts an agent for an open issue whose `labels` include
    * this; untagged issues stay visible in the world/cockpit but are left alone.
@@ -140,6 +148,17 @@ export interface AzureDevOpsConfig {
     /** Only surface work items carrying this tag. Unset = all open work items. */
     workItemTag?: string;
   };
+}
+
+export interface Microsoft365Config {
+  /**
+   * Target mailbox for the calendar (UPN or object id). Required for app-only
+   * (client-credential) tokens, which have no `me`; omit when using a delegated
+   * token to read the signed-in user's own calendar.
+   */
+  userId?: string;
+  /** How many days ahead to surface events. Defaults to 7. */
+  windowDays?: number;
 }
 
 export interface WhitelistRule {

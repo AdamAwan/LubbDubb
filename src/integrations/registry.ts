@@ -11,6 +11,8 @@ import { GitHubIssuesIntegration } from './github/issues.js';
 import { RestAzureDevOpsApi, resolveAzureAuth } from './azure/restAzureDevOpsApi.js';
 import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
 import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
+import { RestMicrosoftGraphApi, resolveMicrosoftGraphAuth } from './microsoft/restMicrosoftGraphApi.js';
+import { MicrosoftCalendarIntegration } from './microsoft/calendar.js';
 
 type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
 
@@ -48,8 +50,15 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   },
   calendar: {
     fake: (_ctx, world) => new FakeCalendarIntegration(world),
+    microsoft365: (ctx) => {
+      const { api, windowDays } = microsoftApi(ctx);
+      return new MicrosoftCalendarIntegration({ api, store: ctx.store, windowDays });
+    },
   },
 };
+
+/** Default look-ahead window for the Microsoft 365 calendar when config doesn't set one. */
+const DEFAULT_CALENDAR_WINDOW_DAYS = 7;
 
 const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
 
@@ -85,6 +94,22 @@ function azureApi(ctx: IntegrationContext): { api: RestAzureDevOpsApi; az: Azure
     );
   }
   return { api: RestAzureDevOpsApi.create(az, resolveAzureAuth()), az };
+}
+
+/**
+ * Build the real Microsoft Graph client for a `microsoft365`-selected capability.
+ * Config is optional: with no `microsoft365` block it reads the delegated signed-in
+ * user's calendar over the default window. Auth is resolved lazily
+ * ({@link resolveMicrosoftGraphAuth} — a bearer from `MICROSOFT_GRAPH_TOKEN`, else the
+ * logged-in `az` CLI), so a missing login surfaces as a clear connector error at
+ * snapshot time rather than blocking boot.
+ */
+function microsoftApi(ctx: IntegrationContext): { api: RestMicrosoftGraphApi; windowDays: number } {
+  const cfg = ctx.config.microsoft365 ?? {};
+  return {
+    api: RestMicrosoftGraphApi.create(cfg, resolveMicrosoftGraphAuth()),
+    windowDays: cfg.windowDays ?? DEFAULT_CALENDAR_WINDOW_DAYS,
+  };
 }
 
 /**
