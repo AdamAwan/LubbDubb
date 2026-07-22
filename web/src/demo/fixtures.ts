@@ -92,6 +92,7 @@ export function buildDemoState(): DemoSeed {
           labels: ['bug', 'priority:high'],
           state: 'open',
           linkedPrNumber: null,
+          pickup: { eligible: true, status: 'eligible', reasons: [] },
         },
         {
           id: 'iss-205',
@@ -101,6 +102,17 @@ export function buildDemoState(): DemoSeed {
           labels: ['docs'],
           state: 'open',
           linkedPrNumber: 141,
+          pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #141'] },
+        },
+        {
+          id: 'iss-210',
+          number: 210,
+          title: 'Explore a Slack notification channel',
+          body: 'Nice-to-have: mirror escalations into a Slack channel.',
+          labels: ['idea'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'skipped', reasons: ['no pickup label "agent-ready"'] },
         },
       ],
       stories: [
@@ -305,6 +317,7 @@ export function buildDemoState(): DemoSeed {
       '#139': 'https://github.com/example/lubbdubb/pull/139',
       '#208': 'https://github.com/example/lubbdubb/issues/208',
       '#205': 'https://github.com/example/lubbdubb/issues/205',
+      '#210': 'https://github.com/example/lubbdubb/issues/210',
     },
     // The Claude-bridged desk briefing — mail + Teams pings + meetings, all canned.
     briefing: {

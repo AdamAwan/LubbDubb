@@ -137,7 +137,11 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   );
   if (active) {
     const reason =
-      active.status === 'running' ? 'agent running' : active.status === 'queued' ? 'agent queued' : 'agent waiting on you';
+      active.status === 'running'
+        ? 'agent running'
+        : active.status === 'queued'
+          ? 'agent queued'
+          : 'agent waiting on you';
     return { eligible: false, status: 'active', reasons: [reason] };
   }
 

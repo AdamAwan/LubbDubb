@@ -200,6 +200,16 @@ so the executor runs it directly.
   `needsBaseUpdate(pr)` and `isConflicted(pr)`, which the dispatcher's conflict/behind rule
   consumes, and `isPrExcluded(pr, label)`. Keep these pure and unit-tested (`test/prHealth.test.ts` /
   `test/prExclusion.test.ts`); don't inline the logic.
+- **Issue pickup state is the mirror on the issue side.** `isIssuePickupEligible` returns
+  `{ eligible, reasons }` (not a bare bool) for the intrinsic policy gates, and the pure
+  `issuePickupStatus(issue, ctx)` (both in `src/dispatcher/issuePickup.ts`) folds in the
+  contextual gates — active task on the origin, `dispatchVerdict` cooldown/escalation, and
+  pause/headroom — into one per-item `{ eligible, status, reasons }` verdict.
+  `buildStateSnapshot` attaches it per-issue as `pickup` (reading the policy via
+  `System.issuePickup` and `DEFAULT_COOLDOWN` — the same inputs rule 4 consults, so the
+  verdict predicts the next cycle), and the cockpit renders it as the per-issue chip
+  (`pickupChip` in `web/src/App.tsx`). If you add a pickup gate, extend both the pure
+  verdict and its tests (`test/issuePickup.test.ts`) in the same change.
 - **PR exclusion tag.** A PR whose `labels` include `config.prExclusionLabel` is the operator's
   "leave it alone" signal: `harness.ts` filters excluded PRs out of the world it hands the
   dispatcher (read via `isPrExcluded`), so **both** dispatchers ignore them uniformly, while the

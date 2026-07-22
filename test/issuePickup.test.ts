@@ -114,7 +114,10 @@ test('isIssuePickupEligible: the state and label gates both report their reasons
     pickupStates: ['Ready'],
   };
   // Right state, right label → eligible.
-  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready', labels: ['agent-ready'] }), policy).eligible, true);
+  assert.equal(
+    isIssuePickupEligible(issue({ workItemState: 'Ready', labels: ['agent-ready'] }), policy).eligible,
+    true,
+  );
   // Right state, missing label → not eligible.
   assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready', labels: [] }), policy).eligible, false);
   // Wrong state *and* missing label → both reasons, state first.

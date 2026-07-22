@@ -31,6 +31,11 @@ export interface Issue {
   labels: string[];
   state: string;
   linkedPrNumber: number | null;
+  /**
+   * Server-computed pickup verdict (mirrors PR `health`): what the harness is
+   * doing with this item — or why it's leaving it alone.
+   */
+  pickup?: { eligible: boolean; status: string; reasons: string[] };
 }
 export interface Story {
   id: string;

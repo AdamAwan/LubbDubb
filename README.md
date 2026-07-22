@@ -59,6 +59,14 @@ reasons }`) folding conflicts, behind-base, failing CI and unhandled comments, s
 cockpit shows _why_ a PR is stuck rather than leaving it implied by the absence of
 activity.
 
+**Issue pickup state.** Likewise every issue/work item carries a computed `pickup`
+(`{ eligible, status, reasons }`) folding every gate that decides pickup — the policy
+gates (pickup label, tag ownership, workflow state) _and_ the runtime ones (an agent
+already on it, dispatch cooldown / spent attempt cap, paused or capacity-exhausted
+fleet) — so the cockpit says what the harness is doing with each item (`agent
+running`, `eligible`, `has open PR #N`) or exactly why it's leaving it alone
+(`no pickup label "agent-ready"`, `dispatch paused`, `on cooldown after 2 attempts`).
+
 ## Architecture
 
 A single Node/TypeScript process (HTTP + WebSocket) built as isolated modules that talk only through interfaces — any one (especially the `Connector`) can be swapped without touching the rest.

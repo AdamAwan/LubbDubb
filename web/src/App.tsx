@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, connectWs, isDemo } from './api.js';
 import type { WsClient } from './api.js';
-import type { AppState, Agent } from './types.js';
+import type { AppState, Agent, Issue } from './types.js';
 import { InjectPanel } from './components/InjectPanel.js';
 import { AgentCard } from './components/AgentCard.js';
 import { EscalationCard } from './components/EscalationCard.js';
@@ -237,6 +237,30 @@ function taskFor(state: AppState, agent: Agent) {
   return state.tasks.find((t) => t.id === agent.taskId) ?? null;
 }
 
+/**
+ * The per-issue pickup chip (mirrors the PR health chip): what the harness is
+ * doing with the item, or the first reason it's leaving it alone — full reasons
+ * in the title. `done`/`has_pr` stay silent: the state chip and the "→ PR" chip
+ * already say it. No verdict (older server) renders nothing.
+ */
+function pickupChip(pickup: Issue['pickup']) {
+  if (!pickup || pickup.status === 'done' || pickup.status === 'has_pr') return null;
+  if (pickup.status === 'eligible') {
+    return (
+      <span className="chip small" title="Would be picked up next cycle">
+        eligible
+      </span>
+    );
+  }
+  const calm = pickup.status === 'active'; // an agent on it is progress, not a warning
+  return (
+    <span className={`chip small${calm ? '' : ' warn'}`} title={pickup.reasons.join(', ')}>
+      {pickup.reasons[0] ?? pickup.status}
+      {pickup.reasons.length > 1 ? ` +${pickup.reasons.length - 1}` : ''}
+    </span>
+  );
+}
+
 function WorldSummary({
   state,
   onToggleExclude,
@@ -300,7 +324,7 @@ function WorldSummary({
       {issues.map((i) => (
         <div key={i.id} className="world-item">
           {refLink(`#${i.number}`, refUrls)} {i.title} <span className="chip small">{i.state}</span>
-          {i.state === 'open' && i.linkedPrNumber === null && <span className="chip small warn">needs PR</span>}
+          {pickupChip(i.pickup)}
           {i.linkedPrNumber !== null && (
             <span className="chip small">→ PR {refLink(`#${i.linkedPrNumber}`, refUrls)}</span>
           )}
