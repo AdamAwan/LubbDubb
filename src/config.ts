@@ -62,6 +62,16 @@ export interface Config {
   issuePriorityLabels: Record<string, number>;
   /** Weight for an issue carrying no matching priority label. */
   issueDefaultPriority: number;
+  /**
+   * PRs the harness should leave alone — e.g. blocked on something it can't fix
+   * (a design decision, an upstream dependency, a deliberate hold). Listed by PR
+   * number, this seeds the live, runtime-adjustable exclusion set: an excluded PR
+   * stays visible in the cockpit (with its health) but the dispatcher never acts
+   * on it (no CI fix, base update, comment handling, or merge). Toggled per-PR
+   * from the cockpit via the control endpoint; ephemeral like the cap/pause knobs,
+   * so a restart reverts to this list.
+   */
+  excludedPrs: number[];
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -164,6 +174,7 @@ const DEFAULTS: Config = {
   integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
+  excludedPrs: [],
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',

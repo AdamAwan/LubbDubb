@@ -30,11 +30,11 @@ test('POST /api/control changes the cap and reflects it in /api/state', async ()
 
   const res = await app.inject({ method: 'POST', url: '/api/control', payload: { cap: 5 } });
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.json(), { ok: true, cap: 5, paused: false });
+  assert.deepEqual(res.json(), { ok: true, cap: 5, paused: false, excludedPrs: [] });
   assert.equal(system.runtimeControl.cap, 5);
 
   const state = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
-  assert.deepEqual(state.control, { cap: 5, paused: false });
+  assert.deepEqual(state.control, { cap: 5, paused: false, excludedPrs: [] });
 
   await app.close();
   system.store.close();
@@ -46,7 +46,7 @@ test('POST /api/control toggles pause independently of the cap', async () => {
 
   const res = await app.inject({ method: 'POST', url: '/api/control', payload: { paused: true } });
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.json(), { ok: true, cap: 4, paused: true });
+  assert.deepEqual(res.json(), { ok: true, cap: 4, paused: true, excludedPrs: [] });
   assert.equal(system.runtimeControl.paused, true);
   assert.equal(system.runtimeControl.cap, 4, 'pausing leaves the chosen cap intact');
 
@@ -86,6 +86,65 @@ test('POST /api/control broadcasts control:changed to connected cockpits', async
   assert.ok(ev, 'a control:changed event is broadcast');
   assert.equal(ev.type === 'control:changed' && ev.cap, 2);
   assert.equal(ev.type === 'control:changed' && ev.paused, true);
+
+  await app.close();
+  system.store.close();
+});
+
+test('POST /api/control sets the excluded-PR list and reflects it in /api/state', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const { app } = await buildApp(system);
+
+  const res = await app.inject({ method: 'POST', url: '/api/control', payload: { excludedPrs: [42, 7] } });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json(), { ok: true, cap: 3, paused: false, excludedPrs: [7, 42] });
+  assert.deepEqual(
+    [...system.runtimeControl.excludedPrs].sort((a, b) => a - b),
+    [7, 42],
+  );
+
+  const state = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
+  assert.deepEqual(state.control, { cap: 3, paused: false, excludedPrs: [7, 42] });
+
+  // Clearing the list is a plain wholesale replace with [].
+  await app.inject({ method: 'POST', url: '/api/control', payload: { excludedPrs: [] } });
+  assert.equal(system.runtimeControl.excludedPrs.size, 0);
+
+  await app.close();
+  system.store.close();
+});
+
+test('POST /api/control rejects a malformed excludedPrs with 400 and does not mutate', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const { app } = await buildApp(system);
+
+  for (const excludedPrs of [42, 'nope', [1, 'x'], [1, -2]] as const) {
+    const res = await app.inject({ method: 'POST', url: '/api/control', payload: { excludedPrs } });
+    assert.equal(res.statusCode, 400, `excludedPrs=${JSON.stringify(excludedPrs)} should be rejected`);
+  }
+  assert.equal(system.runtimeControl.excludedPrs.size, 0, 'set unchanged after rejected requests');
+
+  await app.close();
+  system.store.close();
+});
+
+test('POST /api/control broadcasts excludedPrs on control:changed', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const { app, hub } = await buildApp(system);
+
+  const sent: ServerEvent[] = [];
+  const socket = {
+    OPEN: 1,
+    readyState: 1,
+    send: (raw: string) => sent.push(JSON.parse(raw) as ServerEvent),
+    on: () => {},
+  } as unknown as WebSocket;
+  hub.add(socket);
+
+  await app.inject({ method: 'POST', url: '/api/control', payload: { excludedPrs: [9] } });
+  const ev = sent.find((e) => e.type === 'control:changed');
+  assert.ok(ev && ev.type === 'control:changed');
+  assert.deepEqual(ev.excludedPrs, [9]);
 
   await app.close();
   system.store.close();

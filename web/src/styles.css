@@ -124,6 +124,8 @@ body {
 .world { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
 .world-row { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 4px; }
 .world-item { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 13px; flex-wrap: wrap; }
+.world-item.excluded { opacity: 0.55; }
+.world-toggle { margin-left: auto; padding: 1px 8px; font-size: 11px; }
 
 .auditlog { max-height: 75vh; overflow-y: auto; }
 .audit { border-left: 2px solid var(--border); padding: 6px 10px; margin-bottom: 6px; font-size: 12px; }

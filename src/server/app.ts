@@ -59,8 +59,8 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   // Live dispatch controls (cap + pause). Changes are in-memory and ephemeral;
   // on success we broadcast so every open cockpit updates without a refetch.
   app.post('/api/control', async (req, reply) => {
-    const body = (req.body ?? {}) as { cap?: unknown; paused?: unknown };
-    const patch: { cap?: number; paused?: boolean } = {};
+    const body = (req.body ?? {}) as { cap?: unknown; paused?: unknown; excludedPrs?: unknown };
+    const patch: { cap?: number; paused?: boolean; excludedPrs?: number[] } = {};
     if (body.cap !== undefined) {
       if (typeof body.cap !== 'number') return reply.code(400).send({ error: 'cap must be a number' });
       patch.cap = body.cap;
@@ -69,9 +69,15 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
       if (typeof body.paused !== 'boolean') return reply.code(400).send({ error: 'paused must be a boolean' });
       patch.paused = body.paused;
     }
+    if (body.excludedPrs !== undefined) {
+      if (!Array.isArray(body.excludedPrs) || body.excludedPrs.some((n) => typeof n !== 'number')) {
+        return reply.code(400).send({ error: 'excludedPrs must be an array of numbers' });
+      }
+      patch.excludedPrs = body.excludedPrs as number[];
+    }
     try {
       const next = system.runtimeControl.apply(patch);
-      hub.broadcast({ type: 'control:changed', cap: next.cap, paused: next.paused });
+      hub.broadcast({ type: 'control:changed', cap: next.cap, paused: next.paused, excludedPrs: next.excludedPrs });
       return { ok: true, ...next };
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
@@ -137,8 +143,8 @@ export function buildStateSnapshot(system: System) {
       steeringPriorities: config.steeringPriorities,
     },
     // Live, mutable dispatch controls — the cockpit reads these (not the frozen
-    // config block above) for the current cap and pause state.
-    control: { cap: runtimeControl.cap, paused: runtimeControl.paused },
+    // config block above) for the current cap, pause state, and excluded PRs.
+    control: runtimeControl.snapshot(),
     // Fold each PR's signals into a health verdict so the cockpit can show *why*
     // a PR is stuck rather than leaving it implied by the absence of activity.
     world: {

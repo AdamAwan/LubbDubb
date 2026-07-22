@@ -97,12 +97,17 @@ class DemoServer {
     return { ok: true };
   }
 
-  async setControl(patch: { cap?: number; paused?: boolean }): Promise<{ ok: true; cap: number; paused: boolean }> {
+  async setControl(patch: {
+    cap?: number;
+    paused?: boolean;
+    excludedPrs?: number[];
+  }): Promise<{ ok: true; cap: number; paused: boolean; excludedPrs: number[] }> {
     if (typeof patch.cap === 'number') this.state.control.cap = Math.max(0, Math.floor(patch.cap));
     if (typeof patch.paused === 'boolean') this.state.control.paused = patch.paused;
-    const { cap, paused } = this.state.control;
-    this.emit({ type: 'control:changed', cap, paused });
-    return { ok: true, cap, paused };
+    if (Array.isArray(patch.excludedPrs)) this.state.control.excludedPrs = [...patch.excludedPrs];
+    const { cap, paused, excludedPrs } = this.state.control;
+    this.emit({ type: 'control:changed', cap, paused, excludedPrs });
+    return { ok: true, cap, paused, excludedPrs };
   }
 
   async killAgent(id: string): Promise<{ ok: true }> {
@@ -193,6 +198,13 @@ class DemoServer {
   // Spawn an agent for a piece of work — honouring pause + the concurrency cap,
   // so the FleetControl and pause button visibly matter in the demo.
   private trySpawn(kind: string, title: string, branch: string | null, originRef: string | null): void {
+    // Excluded PRs are left alone — mirrors the server harness filtering them out
+    // of the dispatch view, so the ignore toggle visibly matters in the demo.
+    const prNumber = originRef?.startsWith('pr:') ? Number(originRef.slice(3)) : NaN;
+    if (!Number.isNaN(prNumber) && this.state.control.excludedPrs.includes(prNumber)) {
+      this.addDecision(`dispatch_${kind}`, 'skipped', `PR #${prNumber} is ignored — held ${title}`, 'pr excluded');
+      return;
+    }
     if (this.state.control.paused) {
       this.addDecision(`dispatch_${kind}`, 'deferred', `paused — held ${title}`, 'dispatch paused');
       return;

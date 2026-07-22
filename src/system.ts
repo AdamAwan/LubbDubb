@@ -125,7 +125,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // Live, in-memory dispatch controls both the harness and executor read by
   // reference each cycle. Ephemeral by design: a restart reverts to config.
-  const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused);
+  const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused, config.excludedPrs);
 
   const executor = new ActionExecutor({
     store,

@@ -142,10 +142,12 @@ export interface AppState {
     dispatcher: string;
     steeringPriorities: string[];
   };
-  /** Live, mutable dispatch controls — the current cap and pause state. */
+  /** Live, mutable dispatch controls — the current cap, pause state, and excluded PRs. */
   control: {
     cap: number;
     paused: boolean;
+    /** PR numbers the harness is told to leave alone. */
+    excludedPrs: number[];
   };
   world: WorldSnapshot;
   tasks: Task[];
@@ -160,5 +162,5 @@ export type ServerEvent =
   | { type: 'agent:output'; agentId: string; delta: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string }
-  | { type: 'control:changed'; cap: number; paused: boolean }
+  | { type: 'control:changed'; cap: number; paused: boolean; excludedPrs: number[] }
   | { type: string; [k: string]: unknown };

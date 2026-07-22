@@ -188,7 +188,14 @@ export function App() {
           ))}
 
           <h3 className="muted">World</h3>
-          <WorldSummary state={state} />
+          <WorldSummary
+            state={state}
+            onToggleExclude={(prNumber) => {
+              const current = state.control.excludedPrs;
+              const next = current.includes(prNumber) ? current.filter((n) => n !== prNumber) : [...current, prNumber];
+              void api.setControl({ excludedPrs: next }).then(refresh);
+            }}
+          />
         </section>
 
         <section className="col">
@@ -218,34 +225,58 @@ function taskFor(state: AppState, agent: Agent) {
   return state.tasks.find((t) => t.id === agent.taskId) ?? null;
 }
 
-function WorldSummary({ state }: { state: AppState }) {
+function WorldSummary({ state, onToggleExclude }: { state: AppState; onToggleExclude: (prNumber: number) => void }) {
   const { pullRequests, issues, stories, calendar } = state.world;
+  const excluded = new Set(state.control.excludedPrs);
   return (
     <div className="world">
       <div className="world-row">
         <span>PRs</span>
         <b>{pullRequests.length}</b>
       </div>
-      {pullRequests.map((pr) => (
-        <div key={pr.id} className="world-item">
-          {statusDot(pr.ciStatus)} #{pr.number} {pr.title}
-          {pr.unresolvedComments.filter((c) => !c.handled).length > 0 && (
-            <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
-          )}
-          {pr.merged ? (
-            <span className="chip small">merged</span>
-          ) : pr.health?.blocked ? (
-            <span className="chip small warn" title={pr.health.reasons.join(', ')}>
-              {pr.health.reasons[0]}
-              {pr.health.reasons.length > 1 ? ` +${pr.health.reasons.length - 1}` : ''}
-            </span>
-          ) : (
-            pr.ciStatus === 'passing' &&
-            pr.approved &&
-            pr.mergeable && <span className="chip small warn">merge-ready</span>
-          )}
-        </div>
-      ))}
+      {pullRequests.map((pr) => {
+        const isExcluded = excluded.has(pr.number);
+        return (
+          <div key={pr.id} className={`world-item${isExcluded ? ' excluded' : ''}`}>
+            {statusDot(pr.ciStatus)} #{pr.number} {pr.title}
+            {pr.unresolvedComments.filter((c) => !c.handled).length > 0 && (
+              <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
+            )}
+            {isExcluded ? (
+              <span
+                className="chip small"
+                title="The harness is ignoring this PR — it won't dispatch agents or merge it"
+              >
+                ignored
+              </span>
+            ) : pr.merged ? (
+              <span className="chip small">merged</span>
+            ) : pr.health?.blocked ? (
+              <span className="chip small warn" title={pr.health.reasons.join(', ')}>
+                {pr.health.reasons[0]}
+                {pr.health.reasons.length > 1 ? ` +${pr.health.reasons.length - 1}` : ''}
+              </span>
+            ) : (
+              pr.ciStatus === 'passing' &&
+              pr.approved &&
+              pr.mergeable && <span className="chip small warn">merge-ready</span>
+            )}
+            {!pr.merged && (
+              <button
+                className="btn ghost world-toggle"
+                onClick={() => onToggleExclude(pr.number)}
+                title={
+                  isExcluded
+                    ? 'Resume the harness on this PR'
+                    : "Ignore this PR — leave it alone if it's blocked for reasons the harness can't fix"
+                }
+              >
+                {isExcluded ? 'watch' : 'ignore'}
+              </button>
+            )}
+          </div>
+        );
+      })}
       <div className="world-row">
         <span>Issues</span>
         <b>{issues.length}</b>
