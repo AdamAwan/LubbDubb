@@ -59,6 +59,9 @@ export class Store {
     this.ensureColumns('agents', {
       session_id: 'TEXT',
     });
+    this.ensureColumns('decisions', {
+      rule: 'TEXT',
+    });
   }
 
   private ensureColumns(table: string, columns: Record<string, string>): void {
@@ -301,16 +304,24 @@ export class Store {
 
   // -- Decisions (audit) ---------------------------------------------------
 
-  recordDecision(input: Omit<Decision, 'id' | 'createdAt'>): Decision {
-    const decision: Decision = { id: `dec_${nanoid(10)}`, createdAt: this.now(), ...input };
+  recordDecision(input: Omit<Decision, 'id' | 'createdAt' | 'rule'>): Decision {
+    // The rule id rides on the action (its transport from the dispatcher); lift
+    // it into its own column here so it's first-class on the decision row.
+    const decision: Decision = {
+      id: `dec_${nanoid(10)}`,
+      createdAt: this.now(),
+      rule: input.action.rule ?? null,
+      ...input,
+    };
     this.db
-      .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, created_at) VALUES (?,?,?,?,?,?)`)
+      .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, rule, created_at) VALUES (?,?,?,?,?,?,?)`)
       .run(
         decision.id,
         decision.cycleId,
         JSON.stringify(decision.action),
         decision.outcome,
         decision.detail,
+        decision.rule,
         decision.createdAt,
       );
     return decision;
@@ -446,6 +457,7 @@ interface DecisionRow {
   action: string;
   outcome: string;
   detail: string;
+  rule: string | null;
   created_at: string;
 }
 interface WorldEventRow {
@@ -507,6 +519,7 @@ function rowToDecision(r: DecisionRow): Decision {
     action: JSON.parse(r.action) as Decision['action'],
     outcome: r.outcome as Decision['outcome'],
     detail: r.detail,
+    rule: r.rule,
     createdAt: r.created_at,
   };
 }

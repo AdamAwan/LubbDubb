@@ -12,6 +12,7 @@ function dispatched(origin: string, createdAt: string): Decision {
     cycleId: 'c',
     outcome: 'executed',
     detail: '',
+    rule: null,
     createdAt,
     action: { type: 'dispatch_code_agent', reason: 'r', originRef: origin },
   };
@@ -55,6 +56,7 @@ test('once escalated for an origin, the cap holds silently (no re-escalation)', 
       cycleId: 'c',
       outcome: 'executed',
       detail: '',
+      rule: null,
       createdAt: '2026-07-21T00:41:00Z',
       action: { type: 'escalate_to_human', reason: 'r', context: { originRef: 'pr:1:mergeable' } },
     },
@@ -69,6 +71,7 @@ test('deferred dispatches are not attempts (they never ran)', () => {
     cycleId: 'c',
     outcome: 'deferred',
     detail: '',
+    rule: null,
     createdAt: '2026-07-21T00:00:30Z',
     action: { type: 'dispatch_code_agent', reason: 'r', originRef: 'pr:1:mergeable' },
   };

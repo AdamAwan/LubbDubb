@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS decisions (
   action     TEXT NOT NULL,
   outcome    TEXT NOT NULL,
   detail     TEXT NOT NULL,
+  -- The dispatcher rule that produced the action (see src/dispatcher/rules.ts);
+  -- NULL when the decision has no rule identity (LLM dispatcher, bookkeeping).
+  rule       TEXT,
   created_at TEXT NOT NULL
 );
 

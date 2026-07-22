@@ -211,7 +211,7 @@ export function App() {
 
         <section className="col">
           <h2>Decision log</h2>
-          <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} />
+          <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} rules={state.dispatchRules} />
           <h2 className="feed-heading">Activity</h2>
           <ActivityFeed events={state.worldEvents} now={now} />
         </section>

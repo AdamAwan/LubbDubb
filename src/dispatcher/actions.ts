@@ -7,7 +7,15 @@ import { z } from 'zod';
  * keeps an LLM decision-maker safe: it can only ever ask for one of these.
  */
 
-const base = { reason: z.string().min(1) };
+const base = {
+  reason: z.string().min(1),
+  /**
+   * Which dispatcher rule produced this action (a `DISPATCH_RULES` id), so the
+   * audit log can explain the decision beyond its free-text reason. Optional —
+   * the LLM dispatcher reasons freely and omits it — so it defaults to null.
+   */
+  rule: z.string().nullable().default(null),
+};
 
 /**
  * Human-readable context about the item that triggered a dispatch, carried onto

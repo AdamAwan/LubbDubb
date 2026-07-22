@@ -356,6 +356,8 @@ export type ActionType =
 export interface Action {
   type: ActionType;
   reason: string;
+  /** The dispatcher rule that produced this action (a `DISPATCH_RULES` id), when one did. */
+  rule?: string | null;
   /** Payload shape depends on `type`; validated by zod at the boundary. */
   [key: string]: unknown;
 }
@@ -368,5 +370,11 @@ export interface Decision {
   action: Action;
   outcome: DecisionOutcome;
   detail: string;
+  /**
+   * The dispatcher rule that produced the action, lifted off it at record time
+   * so the audit log can answer "which rule fired" first-class. Null for
+   * decisions with no rule identity (LLM dispatcher, lifecycle bookkeeping).
+   */
+  rule: string | null;
   createdAt: string;
 }

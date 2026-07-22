@@ -1027,6 +1027,45 @@ body {
   font-style: italic;
   opacity: 0.85;
 }
+/* Decision rows expand on click to show the dispatcher rule that produced them. */
+.audit.clickable {
+  cursor: pointer;
+}
+.audit-chevron {
+  color: var(--muted);
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+.audit-chevron.open {
+  transform: rotate(90deg);
+}
+.audit-rule {
+  margin-top: 6px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: rgba(127, 127, 127, 0.08);
+  font-style: normal;
+}
+.audit-rule-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 3px;
+}
+.audit-rule-number {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--blue);
+  white-space: nowrap;
+}
+.audit-rule-name {
+  font-weight: 600;
+}
+.audit-rule-desc {
+  opacity: 0.85;
+}
 
 /* Decision log and Activity feed share the third column; cap each so both fit. */
 .auditlog {
