@@ -50,6 +50,8 @@ export const ActionSchema = z.discriminatedUnion('type', [
     type: z.literal('respond_to_agent'),
     agentId: z.string().min(1),
     response: z.string().min(1),
+    /** The PR concern origins this note covers, for the audit log + notify de-dup. */
+    originRefs: z.array(z.string()).optional(),
     ...base,
   }),
   z.object({

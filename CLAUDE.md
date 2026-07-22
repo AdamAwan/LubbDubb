@@ -52,9 +52,24 @@ in production.
   interface, so any one is swappable. If you add a component, thread it through here.
 - **`src/store/store.ts` is the _only_ thing that touches SQLite.** Everything else goes
   through the `Store`. Schema is `src/store/schema.ts`. Writes are synchronous
-  (better-sqlite3), which keeps the harness logic race-free — lean on that.
-- **`src/harness.ts`** is the pulse: snapshot world → `Dispatcher.decide` → `ActionExecutor`
-  → audit. Cycles are coalesced (one in flight at a time).
+  (better-sqlite3), which keeps the harness logic race-free — lean on that. `CREATE TABLE IF
+NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
+  an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
+  won't appear on databases from an older build.
+- **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
+  (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
+  cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are
+  coalesced (one in flight at a time).
+- **`reconcileAndResumeOnBoot` in `src/system.ts`** runs once at boot, _before_
+  `harness.runCycle('boot')`, so resumed agents occupy their concurrency slots before new work
+  is dispatched. See "Resume on boot" below.
+- **`src/runtimeControl.ts`** holds the live, in-memory dispatch controls (`cap` +
+  `paused`), seeded from `maxConcurrentAgents`/`startPaused` at boot. Both the `Harness`
+  (headroom) and `ActionExecutor` (the hard dispatch gate) read it **by reference** each
+  cycle — never copy `.cap`/`.paused` into a local at wiring time or runtime changes stop
+  taking effect. Mutated via `POST /api/control`; **not persisted**, so a restart reverts
+  to config. Pausing defers only `dispatch_*` actions (escalate/answer/etc. still run) and
+  scaling the cap down never kills a live agent — both deferrals are audited with a reason.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
@@ -75,9 +90,49 @@ cockpit are agnostic to which is running:
 
 Both speak the **sentinel protocol**: an agent prints `@@LUBBDUBB_DONE@@` when finished and
 `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human. These are reserved control strings —
-they are detected for status transitions _and_ stripped from displayed output. If you touch
-detection, keep those two behaviors in sync and preserve the cross-chunk handling (sentinels
-can split across two data chunks).
+they are detected for status transitions _and_ stripped from displayed output. The protocol
+strings and the pure `stripSentinels`/`extractWaitingReason` helpers live in
+`src/agents/sentinels.ts`; both runtimes use them. If you touch detection, keep the two
+behaviors in sync. `PtySession` additionally handles the cross-chunk case (a sentinel split
+across two PTY data chunks); on the line-delimited stream-JSON transport a sentinel always
+arrives whole inside one text block, so that machinery isn't needed there.
+
+**Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
+each message's content blocks through the pure `renderBlocks` in
+`src/agents/streamTranscript.ts`: assistant text is passed through (sentinels stripped), a
+`tool_use` becomes a labelled line with a one-line input summary, and a `tool_result` (arriving
+as a `user` event) is sanitised — ANSI/control chars removed — and truncated to `MAX_RESULT_LINES`
+with a "+N more lines" marker. Labels carry SGR colour, which xterm renders in the drawer; the
+`Hub` strips ANSI from the compact fleet-card tail so it never shows as literal escapes. Detection
+still scans the _raw_ turn text, so keep the raw-vs-display split intact if you extend rendering.
+
+### Resume on boot (PTY only)
+
+A restart (crash or graceful shutdown) kills every agent, but the PTY runtime **resumes** the
+in-flight ones rather than discarding them. The moving parts:
+
+- **Chosen session id.** `AgentManager.spawn` mints a UUID (only when `opts.resumable`, i.e.
+  PTY) and `buildArgs` passes it as `--session-id`; it's persisted on the `agents` row
+  (`session_id` column). Resume passes `--resume <id>` instead. `buildClaudeArgs` **re-appends**
+  the protocol system prompt on resume — `--resume` does _not_ retain it, so detection would
+  break otherwise.
+- **Shutdown ≠ kill.** `AgentManager.interruptAll()` (server shutdown) marks agents
+  `interrupted` (resumable) and leaves the task status alone; `kill()` (cockpit button) marks
+  `killed` and sets the task `interrupted`. `reconcileAndResumeOnBoot` treats an agent as a
+  resume candidate only if it's in `starting`/`running`/`waiting`/`interrupted` **and its task
+  is still active** — so a cockpit kill (agent `killed`) and a prior give-up (task
+  `interrupted`) both stay dead and aren't resurrected on every boot.
+- **`waitingReason` is the state signal.** `interruptAll` overwrites status to `interrupted`
+  but preserves `waitingReason`, so `resume()` knows whether the agent was parked on a human
+  (restore its escalation, no nudge) or mid-work (nudge it to continue). The pre-restart
+  escalation persists and, once the session is live again, an answer routes into it.
+- Best-effort: no session id or missing worktree → fall back to `interrupted`; boot never
+  blocks on a resume. Stream-JSON resume is out of scope. `spawn`/`resume` share their listener
+  wiring — change one, change both.
+
+Sharp edge in `PtySession.kill()`: it sets status `killed` **before** signalling the process,
+because a synchronously-delivered exit would otherwise be reclassified as `failed` (firing a
+terminal event). Keep that ordering.
 
 ## Testing patterns
 
@@ -99,7 +154,52 @@ only file that imports octokit, and tests (`test/githubIntegration.test.ts`) inj
 fake `GitHubApi` — no network. The field-mapping logic (CI aggregation, approval folding,
 comment threading, linked-PR-from-timeline) is exported as pure functions and tested directly.
 When you extend it, add to the `GitHubApi` interface + its fake together, and keep new mapping
-logic in pure functions so it stays unit-testable without HTTP.
+logic in pure functions so it stays unit-testable without HTTP. `mergeable_state` and `base.ref`
+map through this seam too (→ `PullRequest.mergeableState` / `baseBranch`); add a field to the
+`Gh*` type _and_ the scripted fake in the same change.
+
+The **`azure` provider** (`src/integrations/azure/`, Azure DevOps Repos + Boards) is the exact
+same shape: all HTTP behind the narrow `AzureDevOpsApi` seam (`azureDevOpsApi.ts`),
+`RestAzureDevOpsApi` (`restAzureDevOpsApi.ts`) the only file that touches the network _and_
+resolves auth, and tests (`test/azureDevOpsIntegration.test.ts`) inject a scripted fake
+`AzureDevOpsApi`. Mapping logic — CI aggregation from branch-**policy evaluations**, approval from
+reviewer votes, `mergeStatus`→`MergeableState`, thread→comment folding, linked-PR-from-relations —
+is exported as pure functions and tested directly. **CI status comes from policy evaluations, not
+the PR `statuses` endpoint**: that endpoint returns every status ever posted across _all_ iterations,
+so a stale `failed` from a superseded push poisons the PR forever (the false-"failing" bug).
+`aggregatePolicyCiStatus` instead reads `listPolicyEvaluations` (`/_apis/policy/evaluations`, keyed by
+the `vstfs:///CodeReview/CodeReviewId/{projectId}/{prId}` artifact — so `RestAzureDevOpsApi` resolves
+the project GUID once) and folds only _enabled, blocking_ CI-type policies (build-validation +
+status; reviewer/comment/work-item policies are human gates that map to `approved`/`unresolvedComments`
+instead). Auth is unlike GitHub's single env token: `resolveAzureAuth`
+prefers `AZURE_DEVOPS_PAT` (Basic) and otherwise shells out to the logged-in `az` CLI (Bearer,
+cached), so it's the one place `az` is invoked. Work-item **tags** map onto `Issue.labels`, so the
+provider-agnostic pickup/priority gates work unchanged. Merging is Azure "complete PR", which
+needs the head commit — the source-control integration caches each PR's `lastMergeSourceCommit`
+from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle.
+
+## PR health & one-agent-per-branch
+
+- **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr)` (the `{ blocked, reasons }`
+  verdict rendered in the cockpit and included per-PR in `buildStateSnapshot`), plus
+  `needsBaseUpdate(pr)` and `isConflicted(pr)`, which the dispatcher's conflict/behind rule
+  consumes, and `isPrExcluded(pr, label)`. Keep these pure and unit-tested (`test/prHealth.test.ts` /
+  `test/prExclusion.test.ts`); don't inline the logic.
+- **PR exclusion tag.** A PR whose `labels` include `config.prExclusionLabel` is the operator's
+  "leave it alone" signal: `harness.ts` filters excluded PRs out of the world it hands the
+  dispatcher (read via `isPrExcluded`), so **both** dispatchers ignore them uniformly, while the
+  cockpit snapshot (which reads the connector directly) still shows them with their health. The
+  cockpit's ignore/watch toggle writes the tag back through a **new outbound capability** —
+  `PrLabelCapable.setPrLabel` on the `ActionSink` seam, routed by `CompositeConnector`, implemented
+  by the fake + `github` + `azure` sourceControl providers (`setPullLabel` on each `*Api` seam). Add
+  to the seam + its scripted fake together, same as the other outbound actions. `POST
+/api/prs/:number/exclude` is the endpoint; it's a label write, **not** a dispatcher action.
+- **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
+  already has an active task. When the branch's agent is **running**, a fresh signal is delivered
+  via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's
+  **waiting**, the note is **held** (don't inject — `agents.respond` flips `waiting → running` and
+  would derail a human escalation). Notify de-dup reads `DispatchContext.recentDecisions` (wired in
+  `harness.ts` from `store.listDecisions`), so a persistent signal isn't re-notified every cycle.
 
 ## Gotchas
 
@@ -114,3 +214,23 @@ logic in pure functions so it stays unit-testable without HTTP.
 - The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`
   or a config file (so a secret can't be committed). Selecting `github` without the token or
   without `github.owner`/`github.repo` throws a clear error at `buildIntegrations` time.
+- **Two orthogonal label mechanisms — don't conflate them.** `github.filters.issueLabel` is a
+  provider-level _ingest_ filter: GitHub-only, config-time, and it **hides** non-matching issues
+  from the world. `issuePickupLabel` is a dispatcher-level _pickup gate_ (rule 4 in
+  `ruleDispatcher.ts`, via `src/dispatcher/issuePickup.ts`): provider-agnostic, reads
+  `issue.labels`, and leaves untagged issues **visible** but unacted-on. Priority is
+  label-encoded (`issuePriorityLabels`/`issueDefaultPriority`) and parsed by the pure exported
+  `issuePriority` — keep that parsing pure so it stays unit-testable without a world. The gate
+  is off by default (unset label = act on all open issues), so existing setups don't regress.
+  `issuePickupRequireOwnLabel` is a _refinement_ of the pickup gate, not a fourth mechanism:
+  when on, `isIssuePickupEligible` consumes `issue.labelsAddedByViewer` (the viewer-added subset
+  of `labels`) instead of `labels`, so a pickup tag someone else added is ignored (anti-abuse).
+  Authorship is resolved only in the real providers — GitHub reads the issue timeline's
+  `labeled`/`unlabeled` events (`viewerAddedLabels`), Azure diffs work-item revision updates
+  (`viewerAddedTags`, via the new `listWorkItemUpdates` seam method) — and only for items already
+  carrying the gate tag (the registry passes `issuePickupLabel` as the `ownershipLabel`/`ownershipTag`
+  opt only when the flag is set), so the extra history lookups stay bounded. Keep the folds pure;
+  the `fake` provider leaves `labelsAddedByViewer` unset, so the gate fails closed there.
+  A **third** label mechanism, `prExclusionLabel`, is the mirror on the PR side: it reads
+  `PullRequest.labels` to _exclude_ a tagged PR from action (see "PR health" above). Don't
+  conflate the three.

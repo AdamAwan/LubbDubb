@@ -11,8 +11,14 @@ import type { IntegrationSelection } from './integrations/integration.js';
 export interface Config {
   /** How often the heartbeat fires a dispatch cycle. */
   heartbeatIntervalMs: number;
-  /** Hard cap on concurrently-running agents. */
+  /** Hard cap on concurrently-running agents. Runtime-adjustable via the control endpoint. */
   maxConcurrentAgents: number;
+  /**
+   * Boot in a paused state (no new agents dispatched until resumed). Off by
+   * default. The only config-level pause knob — live pause/resume is runtime-only
+   * and ephemeral, so a restart reverts to this value.
+   */
+  startPaused: boolean;
   /** PTY prompt substrings the harness may auto-answer instead of escalating. */
   whitelistedApprovals: WhitelistRule[];
   /** Optional ordered hints injected into the dispatcher prompt. Empty by default. */
@@ -32,6 +38,59 @@ export interface Config {
    * `GITHUB_TOKEN` env var so a secret never lands in a committed config file.
    */
   github?: GitHubConfig;
+  /**
+   * Azure DevOps target + optional scope filters, required when a capability uses
+   * the `azure` provider. Auth is deliberately NOT here: a PAT comes from the
+   * `AZURE_DEVOPS_PAT` env var, and if that is unset the logged-in `az` CLI is
+   * used — so a secret never lands in a committed config file.
+   */
+  azureDevOps?: AzureDevOpsConfig;
+  /**
+   * Microsoft 365 target, used when a capability uses the `microsoft365` provider
+   * (currently the `calendar` slice, read from Outlook/Teams via Microsoft Graph).
+   * Auth is deliberately NOT here: a bearer token comes from the
+   * `MICROSOFT_GRAPH_TOKEN` env var, and if that is unset the logged-in `az` CLI is
+   * used — so a secret never lands in a committed config file.
+   */
+  microsoft365?: Microsoft365Config;
+  /**
+   * Dispatcher-level, provider-agnostic gate on issue pickup (rule 4). When set,
+   * the dispatcher only starts an agent for an open issue whose `labels` include
+   * this; untagged issues stay visible in the world/cockpit but are left alone.
+   * Unset (the default) = act on all open issues, as before. Distinct from the
+   * GitHub provider's `github.filters.issueLabel`, which narrows what's *ingested*
+   * into the world in the first place.
+   */
+  issuePickupLabel?: string;
+  /**
+   * Tighten the `issuePickupLabel` gate so the tag only counts if *you* (the
+   * authenticated account the provider runs as) added it — a tag someone else adds
+   * is ignored. Stops another user from tagging a work item / issue to get an agent
+   * onto it. Off by default (any tagger counts, as before). Only meaningful with
+   * `issuePickupLabel` set and a real provider (`github`/`azure`) that can resolve
+   * tag authorship; the `fake` provider doesn't track it, so nothing passes the gate.
+   */
+  issuePickupRequireOwnLabel: boolean;
+  /**
+   * Label → priority weight for ordering issue pickup: when headroom is limited,
+   * higher-weight issues are dispatched first. Replaced wholesale by an override
+   * (not merged), so an operator can define their own scheme.
+   */
+  issuePriorityLabels: Record<string, number>;
+  /** Weight for an issue carrying no matching priority label. */
+  issueDefaultPriority: number;
+  /**
+   * The PR **exclusion tag**: a PR carrying this label is left alone — the
+   * dispatcher never acts on it (no CI fix, base update, comment handling, or
+   * merge), for PRs blocked on something the harness can't fix (a design
+   * decision, an upstream dependency, a deliberate hold). An excluded PR stays
+   * fully visible in the cockpit and `/api/state` (with its health verdict) — it's
+   * just not acted on. Provider-agnostic: it reads `PullRequest.labels`, so it
+   * gates the `fake`, `github` and `azure` providers identically. The cockpit's
+   * per-PR ignore/watch toggle adds/removes this label on the PR through the
+   * provider. Defaults to `lubbdubb-ignore`.
+   */
+  prExclusionLabel: string;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -84,6 +143,33 @@ export interface GitHubConfig {
   };
 }
 
+export interface AzureDevOpsConfig {
+  /** Organization (the `dev.azure.com/{organization}` segment). */
+  organization: string;
+  /** Project name — work items are scoped to it. */
+  project: string;
+  /** Git repository name within the project. */
+  repository: string;
+  /** Optional filters narrowing what the harness picks up. */
+  filters?: {
+    /** Only surface PRs opened by this uniqueName (UPN). Unset = all active PRs. */
+    prAuthor?: string;
+    /** Only surface work items carrying this tag. Unset = all open work items. */
+    workItemTag?: string;
+  };
+}
+
+export interface Microsoft365Config {
+  /**
+   * Target mailbox for the calendar (UPN or object id). Required for app-only
+   * (client-credential) tokens, which have no `me`; omit when using a delegated
+   * token to read the signed-in user's own calendar.
+   */
+  userId?: string;
+  /** How many days ahead to surface events. Defaults to 7. */
+  windowDays?: number;
+}
+
 export interface WhitelistRule {
   /** Substring matched against the agent's waiting prompt. */
   match: string;
@@ -111,10 +197,15 @@ export interface AutoSendConfig {
 const DEFAULTS: Config = {
   heartbeatIntervalMs: 5 * 60 * 1000,
   maxConcurrentAgents: 3,
+  startPaused: false,
   whitelistedApprovals: [],
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
   integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
+  issuePickupRequireOwnLabel: false,
+  issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
+  issueDefaultPriority: 2,
+  prExclusionLabel: 'lubbdubb-ignore',
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
@@ -142,7 +233,25 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   const fromEnv: Partial<Config> = {};
   if (process.env.PORT) fromEnv.port = Number(process.env.PORT);
   if (process.env.LUBBDUBB_DB) fromEnv.dbPath = process.env.LUBBDUBB_DB;
+  if (process.env.LUBBDUBB_REPO_ROOT) fromEnv.repoRoot = process.env.LUBBDUBB_REPO_ROOT;
   const merged = { ...DEFAULTS, ...fromFile, ...fromEnv, ...overrides };
+
+  // The repo defaults to wherever the app is launched (`process.cwd()`). A
+  // relative override (config file or env) is resolved to absolute here: git runs
+  // with `cwd: repoRoot` and agents run in a worktree/scratch cwd, so a path left
+  // relative would resolve against the wrong directory once work is dispatched.
+  merged.repoRoot = resolve(process.cwd(), merged.repoRoot);
+
+  // Agents' working roots belong to the repo the harness operates on, not to
+  // wherever the app happens to be launched. `git worktree add` runs with
+  // `cwd: repoRoot`, but the worktree directory is built from `worktreeRoot`, and
+  // the desk scratch dir from `deskRoot` — both default to relative paths. Resolve
+  // them against `repoRoot` (not `process.cwd()`) so running LubbDubb from its own
+  // folder against a repo elsewhere doesn't scatter that repo's worktrees into the
+  // app's directory. An absolute override is honoured as-is. When repoRoot is the
+  // launch dir (the single-repo default) this is a no-op.
+  merged.worktreeRoot = resolve(merged.repoRoot, merged.worktreeRoot);
+  merged.deskRoot = resolve(merged.repoRoot, merged.deskRoot);
 
   // autoSend is a nested object: deep-merge it so a config file (or override)
   // can set just one field (e.g. only `enabled`) without dropping the defaults

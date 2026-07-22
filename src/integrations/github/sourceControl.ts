@@ -1,7 +1,14 @@
 import type { Store } from '../../store/store.js';
-import type { PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
-import type { CiStatus, PrComment, PullRequest } from '../../types.js';
-import type { Capability, Integration, PrMergeCapable, PrReplyCapable, WorldSlice } from '../integration.js';
+import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
+import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
+import type {
+  Capability,
+  Integration,
+  PrLabelCapable,
+  PrMergeCapable,
+  PrReplyCapable,
+  WorldSlice,
+} from '../integration.js';
 import type { GhCheckRun, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
 
 export interface GitHubSourceControlOpts {
@@ -20,7 +27,7 @@ export interface GitHubSourceControlOpts {
  * reading from the network instead of an injected fake world, so it is *not*
  * `Injectable`.
  */
-export class GitHubSourceControlIntegration implements Integration, PrReplyCapable, PrMergeCapable {
+export class GitHubSourceControlIntegration implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable {
   readonly id = 'sourceControl:github';
   readonly capability: Capability = 'sourceControl';
 
@@ -50,10 +57,13 @@ export class GitHubSourceControlIntegration implements Integration, PrReplyCapab
             number: p.number,
             title: p.title,
             branch: p.branch,
+            baseBranch: p.baseBranch,
             ciStatus: aggregateCiStatus(checks, status),
             unresolvedComments: buildUnresolvedComments(comments, viewer),
             approved: computeApproved(reviews),
+            mergeableState: normalizeMergeState(detail.mergeableState),
             merged: detail.merged,
+            labels: p.labels,
             url: p.url,
           };
           // GitHub's tri-state `mergeable`: true/false is a real signal, null means
@@ -88,6 +98,26 @@ export class GitHubSourceControlIntegration implements Integration, PrReplyCapab
     const result = await this.opts.api.mergePull(input.prNumber, input.method);
     this.opts.store.recordConnectorEvent('pr_merge_sent', { ...input, ref: result.sha });
     return { ok: result.merged, ref: result.sha };
+  }
+
+  async setPrLabel(input: PrLabelInput): Promise<SendResult> {
+    await this.opts.api.setPullLabel(input.prNumber, input.label, input.present);
+    this.opts.store.recordConnectorEvent('pr_label_set', { ...input });
+    return { ok: true };
+  }
+}
+
+/** Fold GitHub's `mergeable_state` down to the values the harness reacts to. */
+export function normalizeMergeState(state: string | null): MergeableState {
+  switch (state) {
+    case 'dirty':
+    case 'behind':
+    case 'blocked':
+    case 'clean':
+      return state;
+    default:
+      // 'unstable' | 'has_hooks' | 'draft' | 'unknown' | null | anything new.
+      return 'unknown';
   }
 }
 

@@ -3,7 +3,16 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
-import type { Agent, Decision, Escalation, Task } from '../types.js';
+import type {
+  Agent,
+  Decision,
+  Escalation,
+  EscalationContext,
+  Task,
+  WorldEvent,
+  WorldEventInput,
+  WorldSnapshot,
+} from '../types.js';
 
 /** Injectable clock so tests are deterministic. */
 export type Clock = () => string;
@@ -35,15 +44,19 @@ export class Store {
   }
 
   /**
-   * Additive, idempotent migrations for databases created before a column
-   * existed. `CREATE TABLE IF NOT EXISTS` won't add columns to an existing
-   * table, so we backfill them here. Safe to run on every boot.
+   * Additive, idempotent migrations for columns introduced after a table's
+   * original `CREATE`. `CREATE TABLE IF NOT EXISTS` never alters an existing
+   * table, so a column added to the schema is invisible on databases created by
+   * an older build until we `ADD COLUMN` it here. Safe to run on every boot.
    */
   private migrate(): void {
     this.ensureColumns('tasks', {
       origin_title: 'TEXT',
       origin_summary: 'TEXT',
       dispatch_reason: 'TEXT',
+    });
+    this.ensureColumns('agents', {
+      session_id: 'TEXT',
     });
   }
 
@@ -65,7 +78,17 @@ export class Store {
   // -- Tasks ---------------------------------------------------------------
 
   createTask(
-    input: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'agentId'> & { status?: Task['status'] },
+    input: Omit<
+      Task,
+      'id' | 'createdAt' | 'updatedAt' | 'status' | 'agentId' | 'originTitle' | 'originSummary' | 'dispatchReason'
+    > & {
+      status?: Task['status'];
+      // Origin context is optional at creation (issue #17): the rule dispatcher
+      // supplies it, but callers that don't have it default to null.
+      originTitle?: string | null;
+      originSummary?: string | null;
+      dispatchReason?: string | null;
+    },
   ): Task {
     const ts = this.now();
     const task: Task = {
@@ -79,9 +102,9 @@ export class Store {
       prompt: input.prompt,
       branch: input.branch,
       originRef: input.originRef,
-      originTitle: input.originTitle,
-      originSummary: input.originSummary,
-      dispatchReason: input.dispatchReason,
+      originTitle: input.originTitle ?? null,
+      originSummary: input.originSummary ?? null,
+      dispatchReason: input.dispatchReason ?? null,
     };
     this.db
       .prepare(
@@ -121,7 +144,13 @@ export class Store {
 
   // -- Agents --------------------------------------------------------------
 
-  createAgent(input: { taskId: string; cwd: string; pid: number | null; status?: Agent['status'] }): Agent {
+  createAgent(input: {
+    taskId: string;
+    cwd: string;
+    pid: number | null;
+    status?: Agent['status'];
+    sessionId?: string | null;
+  }): Agent {
     const agent: Agent = {
       id: `agent_${nanoid(10)}`,
       taskId: input.taskId,
@@ -129,13 +158,14 @@ export class Store {
       cwd: input.cwd,
       pid: input.pid,
       waitingReason: null,
+      sessionId: input.sessionId ?? null,
       startedAt: this.now(),
       endedAt: null,
     };
     this.db
       .prepare(
-        `INSERT INTO agents (id, task_id, status, cwd, pid, waiting_reason, started_at, ended_at)
-         VALUES (@id, @taskId, @status, @cwd, @pid, @waitingReason, @startedAt, @endedAt)`,
+        `INSERT INTO agents (id, task_id, status, cwd, pid, waiting_reason, session_id, started_at, ended_at)
+         VALUES (@id, @taskId, @status, @cwd, @pid, @waitingReason, @sessionId, @startedAt, @endedAt)`,
       )
       .run(agent);
     return agent;
@@ -242,6 +272,18 @@ export class Store {
     return { ...existing, status: 'answered', response, answeredAt };
   }
 
+  /**
+   * Flip an escalation to `dismissed`, persisting the caller-built context (which
+   * carries the dismissal reason + timestamp). The store stays a dumb data layer:
+   * the decision of *what* to dismiss and *why* lives in the EscalationInbox.
+   */
+  dismissEscalation(id: string, context: Record<string, unknown>): Escalation {
+    const existing = this.getEscalation(id);
+    if (!existing) throw new Error(`Escalation ${id} not found`);
+    this.db.prepare(`UPDATE escalations SET status='dismissed', context=? WHERE id=?`).run(JSON.stringify(context), id);
+    return { ...existing, status: 'dismissed', context };
+  }
+
   getEscalation(id: string): Escalation | null {
     const row = this.db.prepare(`SELECT * FROM escalations WHERE id=?`).get(id) as EscalationRow | undefined;
     return row ? rowToEscalation(row) : null;
@@ -302,6 +344,43 @@ export class Store {
       .prepare(`INSERT INTO connector_events (id, kind, payload, created_at) VALUES (?,?,?,?)`)
       .run(`ev_${nanoid(10)}`, kind, JSON.stringify(payload), this.now());
   }
+
+  // -- World change history ------------------------------------------------
+
+  /** Stamp each diffed transition with an id + timestamp, persist, return rows. */
+  recordWorldEvents(inputs: WorldEventInput[]): WorldEvent[] {
+    const at = this.now();
+    const stmt = this.db.prepare(
+      `INSERT INTO world_events (id, kind, ref, summary, created_at) VALUES (@id, @kind, @ref, @summary, @createdAt)`,
+    );
+    const events = inputs.map((input) => ({ id: `we_${nanoid(10)}`, createdAt: at, ...input }));
+    const insertAll = this.db.transaction((rows: WorldEvent[]) => {
+      for (const row of rows) stmt.run(row);
+    });
+    insertAll(events);
+    return events;
+  }
+
+  listWorldEvents(limit = 200): WorldEvent[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM world_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(limit) as WorldEventRow[];
+    return rows.map(rowToWorldEvent);
+  }
+
+  /** The last snapshot the harness diffed against, or null on a fresh store. */
+  getWorldBaseline(): WorldSnapshot | null {
+    const row = this.db.prepare(`SELECT world FROM world_baseline WHERE id=1`).get() as { world: string } | undefined;
+    return row ? (JSON.parse(row.world) as WorldSnapshot) : null;
+  }
+
+  setWorldBaseline(world: WorldSnapshot): void {
+    this.db
+      .prepare(
+        `INSERT INTO world_baseline (id, world) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET world=excluded.world`,
+      )
+      .run(JSON.stringify(world));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -330,6 +409,7 @@ interface AgentRow {
   cwd: string;
   pid: number | null;
   waiting_reason: string | null;
+  session_id: string | null;
   started_at: string;
   ended_at: string | null;
 }
@@ -351,6 +431,13 @@ interface DecisionRow {
   action: string;
   outcome: string;
   detail: string;
+  created_at: string;
+}
+interface WorldEventRow {
+  id: string;
+  kind: string;
+  ref: string | null;
+  summary: string;
   created_at: string;
 }
 
@@ -379,6 +466,7 @@ function rowToAgent(r: AgentRow): Agent {
     cwd: r.cwd,
     pid: r.pid,
     waitingReason: r.waiting_reason,
+    sessionId: r.session_id,
     startedAt: r.started_at,
     endedAt: r.ended_at,
   };
@@ -389,7 +477,7 @@ function rowToEscalation(r: EscalationRow): Escalation {
     type: r.type as Escalation['type'],
     status: r.status as Escalation['status'],
     prompt: r.prompt,
-    context: JSON.parse(r.context) as Record<string, unknown>,
+    context: JSON.parse(r.context) as EscalationContext,
     agentId: r.agent_id,
     taskId: r.task_id,
     response: r.response,
@@ -404,6 +492,15 @@ function rowToDecision(r: DecisionRow): Decision {
     action: JSON.parse(r.action) as Decision['action'],
     outcome: r.outcome as Decision['outcome'],
     detail: r.detail,
+    createdAt: r.created_at,
+  };
+}
+function rowToWorldEvent(r: WorldEventRow): WorldEvent {
+  return {
+    id: r.id,
+    kind: r.kind as WorldEvent['kind'],
+    ref: r.ref,
+    summary: r.summary,
     createdAt: r.created_at,
   };
 }

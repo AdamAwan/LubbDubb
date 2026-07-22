@@ -6,6 +6,7 @@ import type { WorktreeManager } from '../worktree/worktreeManager.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { AutoSendConfig } from '../config.js';
+import type { RuntimeControl } from '../runtimeControl.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import type { Action, DecisionOutcome, Task } from '../types.js';
@@ -20,7 +21,8 @@ export interface ExecutorDeps {
   /** Confidence-gated auto-send policy. */
   autoSend: AutoSendConfig;
   deskRoot: string;
-  maxConcurrentAgents: number;
+  /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
+  runtime: RuntimeControl;
 }
 
 export interface ExecutionSummary {
@@ -73,11 +75,12 @@ export class ActionExecutor {
             record('skipped', `Skipped: work for ${origin} is already in flight.`);
             break;
           }
-          if (liveCount >= this.deps.maxConcurrentAgents) {
-            record(
-              'deferred',
-              `Deferred: concurrency cap ${this.deps.maxConcurrentAgents} reached; will retry next cycle.`,
-            );
+          if (this.deps.runtime.paused) {
+            record('deferred', `Deferred: dispatch is paused; will retry when resumed.`);
+            break;
+          }
+          if (liveCount >= this.deps.runtime.cap) {
+            record('deferred', `Deferred: concurrency cap ${this.deps.runtime.cap} reached; will retry next cycle.`);
             break;
           }
           try {

@@ -5,7 +5,10 @@ import type { Store } from './store/store.js';
 import type { Connector } from './connector/connector.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
-import type { Action } from './types.js';
+import type { RuntimeControl } from './runtimeControl.js';
+import { diffWorlds } from './world/worldDiff.js';
+import { isPrExcluded } from './prHealth.js';
+import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 
 export interface HarnessDeps {
   store: Store;
@@ -13,8 +16,11 @@ export interface HarnessDeps {
   dispatcher: Dispatcher;
   executor: ActionExecutor;
   heartbeatIntervalMs: number;
-  maxConcurrentAgents: number;
+  /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
+  runtime: RuntimeControl;
   steeringPriorities: string[];
+  /** PRs carrying this label are excluded from dispatch (the operator's "leave it alone" tag). */
+  prExclusionLabel: string;
 }
 
 export interface CycleReport {
@@ -31,9 +37,18 @@ export interface CycleReport {
  * executor. It records the dispatcher's free-form rationale to the audit log so
  * every cycle — even an idle one — is explainable after the fact.
  */
+interface HarnessEvents {
+  'cycle:start': [{ cycleId: string; source: string }];
+  'cycle:end': [CycleReport];
+  'world:events': [{ events: WorldEvent[] }];
+}
+
 export class Harness extends EventEmitter {
   private readonly heartbeat: Heartbeat;
   private cycleInFlight = false;
+  // Last snapshot we diffed against. Seeded from the persisted baseline on the
+  // first cycle so a restart doesn't re-emit the whole world as "new".
+  private prevWorld: WorldSnapshot | null = null;
 
   constructor(private readonly deps: HarnessDeps) {
     super();
@@ -71,16 +86,32 @@ export class Harness extends EventEmitter {
     try {
       const { store } = this.deps;
       const world = await this.deps.connector.getState();
+      this.recordWorldChanges(store, world);
       const tasks = store.listTasks();
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
-      const headroom = Math.max(0, this.deps.maxConcurrentAgents - store.countLiveAgents());
+      const recentDecisions = store.listDecisions(200);
+      // While paused, advertise zero headroom so the dispatcher plans no new
+      // dispatches; the executor also hard-defers them (belt and braces).
+      const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
+
+      // A PR carrying the exclusion tag is the operator's "leave this alone"
+      // signal. Hide tagged PRs from the dispatch view so *both* dispatchers
+      // ignore them uniformly — no CI fix, base update, comment note, or merge.
+      // The world used for diffing/baseline above is untouched, and the cockpit
+      // snapshot reads the connector directly, so an excluded PR stays fully
+      // visible (with its health and tag) — it's just not acted on.
+      const label = this.deps.prExclusionLabel;
+      const dispatchWorld: WorldSnapshot = world.pullRequests.some((pr) => isPrExcluded(pr, label))
+        ? { ...world, pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)) }
+        : world;
 
       const plan = await this.deps.dispatcher.decide({
-        world,
+        world: dispatchWorld,
         tasks,
         agents,
         openEscalations,
+        recentDecisions,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
       });
@@ -100,5 +131,32 @@ export class Harness extends EventEmitter {
     } finally {
       this.cycleInFlight = false;
     }
+  }
+
+  /**
+   * Diff this cycle's world against the previous snapshot, persist every observed
+   * transition, and stream them to the cockpit. The very first cycle over a fresh
+   * store has no baseline → it only records the baseline (no diff, no spurious
+   * "everything is new" flood).
+   */
+  private recordWorldChanges(store: HarnessDeps['store'], world: WorldSnapshot): void {
+    const prev = this.prevWorld ?? store.getWorldBaseline();
+    if (prev) {
+      const changes = diffWorlds(prev, world);
+      if (changes.length) {
+        const events = store.recordWorldEvents(changes);
+        this.emit('world:events', { events });
+      }
+    }
+    this.prevWorld = world;
+    store.setWorldBaseline(world);
+  }
+
+  // Typed emit/on overrides for a nicer call site (repo convention).
+  override emit<K extends keyof HarnessEvents>(event: K, ...args: HarnessEvents[K]): boolean {
+    return super.emit(event, ...args);
+  }
+  override on<K extends keyof HarnessEvents>(event: K, listener: (...args: HarnessEvents[K]) => void): this {
+    return super.on(event, listener as (...args: unknown[]) => void);
   }
 }

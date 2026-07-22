@@ -112,6 +112,58 @@ test('multi-turn: WAITING then answer then DONE', () => {
   assert.deepEqual(statuses, ['running', 'waiting', 'running', 'done']);
 });
 
+test('sentinels are stripped from displayed output', () => {
+  const { spawner, child } = fakeSpawner();
+  const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
+  const out: string[] = [];
+  s.on('output', (d: string) => out.push(d));
+  s.start();
+  child.emitLine(assistant('all set @@LUBBDUBB_DONE@@'));
+  const joined = out.join('');
+  assert.ok(joined.includes('all set'), 'keeps the prose');
+  assert.ok(!joined.includes('@@LUBBDUBB_DONE@@'), 'strips the sentinel');
+});
+
+test('renders tool calls with a label instead of dropping them', () => {
+  const { spawner, child } = fakeSpawner();
+  const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
+  const out: string[] = [];
+  s.on('output', (d: string) => out.push(d));
+  s.start();
+  child.emitLine({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls -la' } }] },
+  });
+  const joined = out.join('');
+  assert.ok(joined.includes('Bash'), 'shows the tool name');
+  assert.ok(joined.includes('ls -la'), 'shows the command');
+});
+
+test('renders tool results delivered as user events', () => {
+  const { spawner, child } = fakeSpawner();
+  const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
+  const out: string[] = [];
+  s.on('output', (d: string) => out.push(d));
+  s.start();
+  child.emitLine({
+    type: 'user',
+    message: { content: [{ type: 'tool_result', content: 'file-a\nfile-b' }] },
+  });
+  const joined = out.join('');
+  assert.ok(joined.includes('file-a'), 'shows tool output');
+});
+
+test('does not echo our own typed input back into the transcript', () => {
+  const { spawner, child } = fakeSpawner();
+  const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
+  const out: string[] = [];
+  s.on('output', (d: string) => out.push(d));
+  s.start();
+  // A user event carrying plain text (an echoed prompt, not a tool result) is ignored.
+  child.emitLine({ type: 'user', message: { content: 'go build the thing' } });
+  assert.equal(out.join(''), '');
+});
+
 test('non-zero exit without done is a failure', () => {
   const { spawner, child } = fakeSpawner();
   const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);

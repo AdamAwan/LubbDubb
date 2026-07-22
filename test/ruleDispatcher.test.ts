@@ -10,6 +10,7 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     tasks: [],
     agents: [],
     openEscalations: [],
+    recentDecisions: [],
     steeringPriorities: [],
     agentHeadroom: 3,
     ...over,
@@ -92,6 +93,131 @@ test('an open issue with no linked PR is dispatched to a code agent', async () =
   // the cockpit can show it without re-fetching from the provider (issue #17).
   assert.equal((actions[0] as { originTitle: string }).originTitle, 'Login broken');
   assert.equal((actions[0] as { originSummary: string }).originSummary, 'steps');
+});
+
+test('with a pickup label set, only issues carrying it are dispatched', async () => {
+  const d = new RuleDispatcher({ pickupLabel: 'agent-ready' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 101,
+          title: 'tagged',
+          body: '',
+          labels: ['agent-ready'],
+          state: 'open',
+          linkedPrNumber: null,
+        },
+        { id: 'i2', number: 102, title: 'untagged', body: '', labels: ['bug'], state: 'open', linkedPrNumber: null },
+      ],
+    }),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1, 'only the labelled issue is dispatched');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+});
+
+test('requireOwnLabel: a pickup tag added by someone else does not dispatch', async () => {
+  const d = new RuleDispatcher({ pickupLabel: 'agent-ready', requireOwnLabel: true });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 101,
+          title: 'mine',
+          body: '',
+          labels: ['agent-ready'],
+          labelsAddedByViewer: ['agent-ready'],
+          state: 'open',
+          linkedPrNumber: null,
+        },
+        {
+          id: 'i2',
+          number: 102,
+          title: 'theirs',
+          body: '',
+          labels: ['agent-ready'],
+          labelsAddedByViewer: [],
+          state: 'open',
+          linkedPrNumber: null,
+        },
+      ],
+    }),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1, 'only the issue the viewer tagged is dispatched');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+});
+
+test('with no pickup label configured, all open issues stay eligible (no regression)', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        { id: 'i1', number: 101, title: 'A', body: '', labels: [], state: 'open', linkedPrNumber: null },
+        { id: 'i2', number: 102, title: 'B', body: '', labels: ['bug'], state: 'open', linkedPrNumber: null },
+      ],
+    }),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 2, 'both issues eligible when no gate is set');
+});
+
+test('higher-priority issues win limited headroom; equal priority breaks by issue number', async () => {
+  const d = new RuleDispatcher({
+    priorityLabels: { 'priority:high': 3, 'priority:low': 1 },
+    defaultPriority: 2,
+  });
+  const { actions } = await d.decide(
+    ctx(
+      {
+        issues: [
+          {
+            id: 'i1',
+            number: 101,
+            title: 'low',
+            body: '',
+            labels: ['priority:low'],
+            state: 'open',
+            linkedPrNumber: null,
+          },
+          {
+            id: 'i2',
+            number: 102,
+            title: 'high',
+            body: '',
+            labels: ['priority:high'],
+            state: 'open',
+            linkedPrNumber: null,
+          },
+          { id: 'i3', number: 103, title: 'default', body: '', labels: [], state: 'open', linkedPrNumber: null },
+        ],
+      },
+      { agentHeadroom: 1 },
+    ),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1, 'headroom of 1 dispatches one issue');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:102', 'the priority:high issue goes first');
+});
+
+test('among equal-priority issues the lowest issue number is dispatched first', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      {
+        issues: [
+          { id: 'i1', number: 205, title: 'later', body: '', labels: [], state: 'open', linkedPrNumber: null },
+          { id: 'i2', number: 101, title: 'earlier', body: '', labels: [], state: 'open', linkedPrNumber: null },
+        ],
+      },
+      { agentHeadroom: 1 },
+    ),
+  );
+  const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
 });
 
 test('an issue already linked to a PR is not re-dispatched', async () => {
@@ -180,6 +306,362 @@ test('a merge-ready PR with an unhandled comment is addressed before merging', a
   );
   assert.ok(!actions.some((a) => a.type === 'merge_pr'), 'should not merge with an open comment');
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
+});
+
+// --------------------------------------------------------------------------
+// Conflict / behind (base-update) rule
+// --------------------------------------------------------------------------
+
+test('a dirty PR is dispatched to a code agent to resolve conflicts', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          baseBranch: 'main',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          mergeable: false,
+          mergeableState: 'dirty',
+        },
+      ],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  assert.equal((actions[0] as { originRef: string }).originRef, 'pr:42:mergeable');
+  assert.match((actions[0] as { prompt: string }).prompt, /resolve the conflicts/i);
+});
+
+test('a behind PR gets a clean base-update dispatch, not conflict framing', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          baseBranch: 'main',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          mergeable: true,
+          mergeableState: 'behind',
+        },
+      ],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  assert.equal((actions[0] as { originRef: string }).originRef, 'pr:42:mergeable');
+  assert.match((actions[0] as { prompt: string }).prompt, /up to date/i);
+  assert.doesNotMatch((actions[0] as { prompt: string }).prompt, /resolve the conflicts/i);
+});
+
+test('a blocked PR is not auto-acted (surfaced only)', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          baseBranch: 'main',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: true,
+          mergeable: true,
+          mergeableState: 'blocked',
+        },
+      ],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('a behind but otherwise-ready PR is updated, not merged', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          baseBranch: 'main',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: true,
+          mergeable: true,
+          mergeableState: 'behind',
+        },
+      ],
+    }),
+  );
+  assert.ok(!actions.some((a) => a.type === 'merge_pr'), 'behind PR must not merge yet');
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+});
+
+test('a conflicted PR is dispatched ahead of a new issue under headroom 1', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      {
+        pullRequests: [
+          {
+            id: 'p',
+            number: 42,
+            title: 'X',
+            branch: 'feat',
+            baseBranch: 'main',
+            ciStatus: 'passing',
+            unresolvedComments: [],
+            mergeable: false,
+            mergeableState: 'dirty',
+          },
+        ],
+        issues: [{ id: 'i', number: 9, title: 'Bug', body: 'b', labels: [], state: 'open', linkedPrNumber: null }],
+      },
+      { agentHeadroom: 1 },
+    ),
+  );
+  const dispatches = actions.filter((a) => a.type.startsWith('dispatch_'));
+  assert.equal(dispatches.length, 1);
+  assert.equal((dispatches[0] as { originRef: string }).originRef, 'pr:42:mergeable');
+});
+
+// --------------------------------------------------------------------------
+// Re-dispatch cooldown / attempt cap on a persistent concern (#36)
+// --------------------------------------------------------------------------
+
+const dirtyPr42 = {
+  id: 'p',
+  number: 42,
+  title: 'X',
+  branch: 'feat',
+  baseBranch: 'main',
+  ciStatus: 'passing' as const,
+  unresolvedComments: [],
+  mergeable: false,
+  mergeableState: 'dirty' as const,
+};
+
+/** An executed dispatch decision for `origin` at `createdAt`. */
+const dispatchDecision = (origin: string, createdAt: string) => ({
+  id: `d_${createdAt}`,
+  cycleId: 'c',
+  outcome: 'executed' as const,
+  detail: '',
+  createdAt,
+  action: { type: 'dispatch_code_agent' as const, reason: 'r', originRef: origin },
+});
+
+test('a persistent conflict is not re-dispatched during its cooldown window', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T00:00:30Z', pullRequests: [dirtyPr42] },
+      { recentDecisions: [dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z')] },
+    ),
+  );
+  assert.ok(!actions.some((a) => a.type.startsWith('dispatch_')), 'no re-dispatch 30s after the last attempt');
+  assert.ok(!actions.some((a) => a.type === 'escalate_to_human'), 'not yet at the attempt cap');
+  assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('once the cooldown lapses the conflict is dispatched again', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T01:00:00Z', pullRequests: [dirtyPr42] },
+      { recentDecisions: [dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z')] },
+    ),
+  );
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  assert.equal((actions[0] as { originRef: string }).originRef, 'pr:42:mergeable');
+});
+
+test('after the attempt cap a persistent conflict escalates instead of looping', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T02:00:00Z', pullRequests: [dirtyPr42] },
+      {
+        recentDecisions: [
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:40:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T01:20:00Z'),
+        ],
+      },
+    ),
+  );
+  assert.ok(!actions.some((a) => a.type.startsWith('dispatch_')), 'stops dispatching after three attempts');
+  const esc = actions.find((a) => a.type === 'escalate_to_human');
+  assert.ok(esc, 'escalates to a human');
+  assert.equal((esc as unknown as { context: { originRef: string } }).context.originRef, 'pr:42:mergeable');
+  assert.match((esc as { prompt: string }).prompt, /manually/i);
+});
+
+test('an already-escalated persistent conflict holds silently (no second escalation)', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { takenAt: '2026-07-21T02:00:00Z', pullRequests: [dirtyPr42] },
+      {
+        recentDecisions: [
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:00:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T00:40:00Z'),
+          dispatchDecision('pr:42:mergeable', '2026-07-21T01:20:00Z'),
+          {
+            id: 'e1',
+            cycleId: 'c',
+            outcome: 'executed',
+            detail: '',
+            createdAt: '2026-07-21T01:21:00Z',
+            action: { type: 'escalate_to_human', reason: 'r', context: { originRef: 'pr:42:mergeable' } },
+          },
+        ],
+      },
+    ),
+  );
+  assert.equal(actions[0]?.type, 'no_op', 'no re-dispatch and no duplicate escalation');
+});
+
+// --------------------------------------------------------------------------
+// One code agent per PR branch: notify running, hold waiting, debounce
+// --------------------------------------------------------------------------
+
+const runningAgent = (id: string) => ({
+  id,
+  taskId: 't',
+  status: 'running' as const,
+  cwd: '/tmp',
+  pid: 1,
+  sessionId: null,
+  waitingReason: null,
+  startedAt: 'n',
+  endedAt: null,
+});
+const branchTask = (branch: string, originRef: string, agentId: string) => ({
+  id: 't1',
+  kind: 'code' as const,
+  title: 'x',
+  prompt: 'x',
+  branch,
+  originRef,
+  originTitle: null,
+  originSummary: null,
+  dispatchReason: null,
+  status: 'running' as const,
+  agentId,
+  createdAt: 'n',
+  updatedAt: 'n',
+});
+
+test('a fresh concern on a running branch notifies the agent, not a second dispatch', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      {
+        pullRequests: [
+          {
+            id: 'p',
+            number: 42,
+            title: 'X',
+            branch: 'feat',
+            baseBranch: 'main',
+            ciStatus: 'failing',
+            unresolvedComments: [],
+            mergeable: false,
+            mergeableState: 'dirty',
+          },
+        ],
+      },
+      {
+        // agent is on the branch working the CI concern; the conflict is new.
+        tasks: [branchTask('feat', 'pr:42:ci', 'ag1')],
+        agents: [runningAgent('ag1')],
+      },
+    ),
+  );
+  assert.ok(!actions.some((a) => a.type.startsWith('dispatch_')), 'must not dispatch a second agent');
+  const note = actions.find((a) => a.type === 'respond_to_agent');
+  assert.ok(note, 'expected a respond_to_agent note');
+  assert.equal((note as { agentId: string }).agentId, 'ag1');
+  assert.deepEqual((note as { originRefs: string[] }).originRefs, ['pr:42:mergeable']);
+  assert.match((note as { response: string }).response, /conflict/i);
+});
+
+test('a concern on a waiting branch is held (no note, no dispatch)', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      {
+        pullRequests: [
+          {
+            id: 'p',
+            number: 42,
+            title: 'X',
+            branch: 'feat',
+            baseBranch: 'main',
+            ciStatus: 'passing',
+            unresolvedComments: [],
+            mergeable: false,
+            mergeableState: 'dirty',
+          },
+        ],
+      },
+      {
+        tasks: [branchTask('feat', 'pr:42:ci', 'ag1')],
+        agents: [{ ...runningAgent('ag1'), status: 'waiting', waitingReason: 'need input' }],
+      },
+    ),
+  );
+  assert.equal(actions[0]?.type, 'no_op', 'held: nothing injected while the agent is parked');
+});
+
+test('an already-notified concern is not re-notified', async () => {
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      {
+        pullRequests: [
+          {
+            id: 'p',
+            number: 42,
+            title: 'X',
+            branch: 'feat',
+            baseBranch: 'main',
+            ciStatus: 'passing',
+            unresolvedComments: [],
+            mergeable: false,
+            mergeableState: 'dirty',
+          },
+        ],
+      },
+      {
+        tasks: [branchTask('feat', 'pr:42:ci', 'ag1')],
+        agents: [runningAgent('ag1')],
+        recentDecisions: [
+          {
+            id: 'd1',
+            cycleId: 'c',
+            outcome: 'executed',
+            detail: '',
+            createdAt: 'n',
+            action: { type: 'respond_to_agent', reason: 'r', agentId: 'ag1', originRefs: ['pr:42:mergeable'] },
+          },
+        ],
+      },
+    ),
+  );
+  assert.equal(actions[0]?.type, 'no_op', 'already told this agent about pr:42:mergeable');
 });
 
 test('story missing description is groomed by a desk agent', async () => {

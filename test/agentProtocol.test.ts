@@ -30,6 +30,29 @@ test('buildClaudeArgs omits permission mode when unset', () => {
   assert.equal(args.includes('--permission-mode'), false);
 });
 
+test('buildClaudeArgs pins a chosen session id on a fresh launch', () => {
+  const id = '550e8400-e29b-41d4-a716-446655440000';
+  const args = buildClaudeArgs({ sessionId: id });
+  assert.equal(args[args.indexOf('--session-id') + 1], id);
+  assert.equal(args.includes('--resume'), false);
+});
+
+test('buildClaudeArgs resumes an existing session and re-appends the protocol', () => {
+  const id = '550e8400-e29b-41d4-a716-446655440000';
+  const args = buildClaudeArgs({ sessionId: id, resume: true });
+  assert.equal(args[args.indexOf('--resume') + 1], id);
+  // --session-id and --resume are mutually exclusive: don't set a new id on resume.
+  assert.equal(args.includes('--session-id'), false);
+  // The appended system prompt must be re-sent so waiting/done detection survives resume.
+  assert.equal(args[args.indexOf('--append-system-prompt') + 1], PROTOCOL_SYSTEM_PROMPT);
+});
+
+test('buildClaudeArgs ignores resume when no session id is given', () => {
+  const args = buildClaudeArgs({ resume: true });
+  assert.equal(args.includes('--resume'), false);
+  assert.equal(args.includes('--session-id'), false);
+});
+
 test('buildInitialMessage is the task prompt', () => {
   const task = { prompt: 'do the thing' } as Task;
   assert.equal(buildInitialMessage(task), 'do the thing');

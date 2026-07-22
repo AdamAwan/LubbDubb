@@ -15,7 +15,13 @@ export interface PullRequest {
   unresolvedComments: PrComment[];
   approved?: boolean;
   mergeable?: boolean;
+  baseBranch?: string;
+  mergeableState?: string;
   merged?: boolean;
+  /** Labels/tags on the PR; carries the exclusion tag when the operator ignores it. */
+  labels?: string[];
+  /** Server-computed health: why the PR is stuck (empty reasons = healthy). */
+  health?: { blocked: boolean; reasons: string[] };
 }
 export interface Issue {
   id: string;
@@ -75,12 +81,27 @@ export interface Agent {
   startedAt: string;
   endedAt: string | null;
 }
+// Extra context the server attaches so an escalation can be answered in-place.
+// Mirrors the server's EscalationContext; every key is optional.
+export interface EscalationContext {
+  taskTitle?: string;
+  originRef?: string | null;
+  recentOutput?: string;
+  prNumber?: number;
+  commentId?: string | null;
+  draft?: string;
+  confidence?: number;
+  method?: string;
+  autoSendFailed?: boolean;
+  autoMergeFailed?: boolean;
+  [key: string]: unknown;
+}
 export interface Escalation {
   id: string;
   type: string;
   status: string;
   prompt: string;
-  context: Record<string, unknown>;
+  context: EscalationContext;
   agentId: string | null;
   taskId: string | null;
   response: string | null;
@@ -96,18 +117,49 @@ export interface Decision {
   createdAt: string;
 }
 
+export type WorldEventKind =
+  | 'pr_opened'
+  | 'pr_ci'
+  | 'pr_approved'
+  | 'pr_mergeable'
+  | 'pr_merged'
+  | 'pr_comment'
+  | 'issue_opened'
+  | 'issue_closed'
+  | 'issue_linked'
+  | 'story_added'
+  | 'story_state'
+  | 'meeting_added'
+  | 'meeting_prep';
+
+export interface WorldEvent {
+  id: string;
+  kind: WorldEventKind;
+  ref: string | null;
+  summary: string;
+  createdAt: string;
+}
+
 export interface AppState {
   config: {
     heartbeatIntervalMs: number;
     maxConcurrentAgents: number;
     dispatcher: string;
     steeringPriorities: string[];
+    /** The PR exclusion tag: the label the ignore/watch toggle sets, and marks ignored PRs. */
+    prExclusionLabel: string;
+  };
+  /** Live, mutable dispatch controls — the current cap and pause state. */
+  control: {
+    cap: number;
+    paused: boolean;
   };
   world: WorldSnapshot;
   tasks: Task[];
   agents: Agent[];
   escalations: Escalation[];
   decisions: Decision[];
+  worldEvents: WorldEvent[];
 }
 
 export type ServerEvent =
@@ -115,4 +167,5 @@ export type ServerEvent =
   | { type: 'agent:output'; agentId: string; delta: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string }
+  | { type: 'control:changed'; cap: number; paused: boolean }
   | { type: string; [k: string]: unknown };

@@ -5,6 +5,8 @@ import '@xterm/xterm/css/xterm.css';
 import type { Agent, Task } from '../types.js';
 import { api } from '../api.js';
 import { statusDot } from './util.js';
+import { ConfirmButton } from './ConfirmButton.js';
+import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
 /**
  * The drill-down: live terminal output for one agent (rendered with xterm.js)
@@ -25,11 +27,12 @@ export function AgentDrawer({
   live: string | undefined;
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
-  onKill: () => void;
-  onInterrupt: () => void;
+  onKill: () => Promise<unknown> | unknown;
+  onInterrupt: () => Promise<unknown> | unknown;
 }) {
   const [seed, setSeed] = useState('');
   const [text, setText] = useState('');
+  const send = useAsyncAction();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -111,14 +114,16 @@ export function AgentDrawer({
           </div>
           <div>
             {isLive && (
-              <button className="btn" onClick={onInterrupt} title="Send Ctrl-C">
+              <AsyncButton
+                onClick={onInterrupt}
+                title="Send Ctrl-C"
+                pendingLabel={<span className="spinner" aria-hidden />}
+              >
                 Interrupt ⌃C
-              </button>
+              </AsyncButton>
             )}
             {agent.status !== 'done' && (
-              <button className="btn danger" onClick={onKill}>
-                Kill
-              </button>
+              <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />
             )}
             <button className="btn" onClick={onClose}>
               Close
@@ -147,16 +152,18 @@ export function AgentDrawer({
             className="reply"
             onSubmit={(e) => {
               e.preventDefault();
-              if (text.trim()) {
-                void onRespond(text.trim());
+              const value = text.trim();
+              if (!value) return;
+              void send.run(async () => {
+                await onRespond(value);
                 setText('');
-              }
+              });
             }}
           >
             <input placeholder="Type into this agent…" value={text} onChange={(e) => setText(e.target.value)} />
-            <button className="btn primary" type="submit">
+            <SubmitButton phase={send.phase} className="primary">
               Send
-            </button>
+            </SubmitButton>
           </form>
         )}
       </div>

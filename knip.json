@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": ["src/server/main.ts", "test/**/*.test.ts", "scripts/*.ts", "web/src/main.tsx"],
   "project": ["src/**/*.ts", "web/src/**/*.{ts,tsx}", "scripts/*.ts"],
-  "ignore": ["web/vite.config.ts"],
+  "ignore": ["web/vite.config.ts", "web/src/vite-env.d.ts"],
   "ignoreDependencies": [],
   "ignoreBinaries": [],
   "vite": {

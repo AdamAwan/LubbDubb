@@ -4,7 +4,7 @@ A self-hosted, always-running **orchestration harness** for one software enginee
 
 The name is the heartbeat: the server's core is a periodic pulse that drives everything.
 
-> **v1 status — walking skeleton.** The harness _core_ is built and tested end-to-end, now with **confidence-gated auto-send** (opt-in) for side-effectful actions. Integrations are now **modular** — one interchangeable provider per capability (source control, issues, backlog, calendar), swappable via config — and the **real GitHub provider** is now built for `sourceControl` and `issues` (reading PRs/issues from the GitHub API, posting replies and merges), selectable with `"integrations": { "sourceControl": "github", "issues": "github" }` plus a `github` config block and a `GITHUB_TOKEN`. The remaining real adapters (Azure DevOps, calendar, Gmail) and metric-driven prioritization are designed _around_ and deliberately **not** built yet; every other capability still ships a `fake` provider. See [`docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md`](docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md).
+> **v1 status — walking skeleton.** The harness _core_ is built and tested end-to-end, now with **confidence-gated auto-send** (opt-in) for side-effectful actions. Integrations are now **modular** — one interchangeable provider per capability (source control, issues, backlog, calendar), swappable via config — and two **real source-control/issues providers** are now built: **GitHub** (`"github"`, reading PRs/issues from the GitHub API, posting replies and merges) and **Azure DevOps** (`"azure"`, reading Repos pull requests + Boards work items, posting PR comments and completing PRs), each selectable per capability with an `integrations` entry plus its config block (`github` / `azureDevOps`) and a token. The remaining real adapters (calendar, Gmail) and metric-driven prioritization are designed _around_ and deliberately **not** built yet; every other capability still ships a `fake` provider. See [`docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md`](docs/superpowers/specs/2026-07-21-lubbdubb-harness-design.md).
 
 ---
 
@@ -23,6 +23,7 @@ The default priorities (encoded in the `RuleDispatcher`) come straight from the 
 | Signal                                                  | Action                                             |
 | ------------------------------------------------------- | -------------------------------------------------- |
 | A PR's CI is failing                                    | Spin up a code agent to fix it                     |
+| A PR's base branch is out of date (conflicts / behind)  | Code agent merges the base in and resolves         |
 | A PR has an unhandled review comment                    | Spin up a code agent to address/defend             |
 | A PR is green, approved and mergeable                   | Merge it in (gated by auto-send)                   |
 | An open GitHub issue has no linked PR                   | Spin up a code agent to resolve it into a PR       |
@@ -34,7 +35,29 @@ The default priorities (encoded in the `RuleDispatcher`) come straight from the 
 
 Together the issue and PR rules close the loop the harness is built around: **pick up
 a GitHub issue → resolve it into a PR → drive that PR (CI green, comments handled,
-approved, mergeable) the last mile to merged.**
+base up to date, approved, mergeable) the last mile to merged.** The PR rules run
+_before_ new-issue pickup, so a PR with problems is always worked ahead of starting
+new tickets under limited headroom.
+
+**Conflict vs behind.** GitHub's `mergeable_state` is mapped through the stack
+(`dirty` / `behind` / `blocked` / `clean` / `unknown`) alongside the PR's `baseBranch`,
+so the harness reacts precisely: a `dirty` PR gets a _resolve-the-conflicts_ agent, a
+`behind` PR gets a clean _bring-it-up-to-date_ update (no conflict framing), and a
+`blocked` PR (required checks/reviews unmet) is surfaced but never auto-acted. When the
+state is `unknown`, a firm `mergeable === false` is treated as a conflict.
+
+**One code agent per PR branch.** A PR can raise several concerns at once (failing CI,
+a conflict, review comments). To avoid two agents racing the same worktree, when a
+signal lands on a branch that already has a **running** agent the harness _tells that
+agent_ (via `respond_to_agent`) instead of spawning a second one — deduped so the same
+signal isn't repeated every cycle. While that branch's agent is parked **waiting** on a
+human, the note is **held** (injecting would un-park the escalation) and delivered on a
+later cycle once the agent is running again.
+
+**PR health.** Every PR in `/api/state` carries a computed `health` (`{ blocked,
+reasons }`) folding conflicts, behind-base, failing CI and unhandled comments, so the
+cockpit shows _why_ a PR is stuck rather than leaving it implied by the absence of
+activity.
 
 ## Architecture
 
@@ -57,9 +80,9 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 | `StreamJsonSession` | The production agent runtime: real `claude` over headless stream-JSON. No TUI, unattended, supports the waiting/answer loop.                                                                                                                                                                                                                          |
 | `PtySession`        | Terminal runtime (mock agent / interactive claude); all PTY waiting/done heuristics isolated behind one testable abstraction.                                                                                                                                                                                                                         |
 | `WorktreeManager`   | Lazily creates/reuses git worktrees keyed by branch — code tasks only.                                                                                                                                                                                                                                                                                |
-| `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle.                                                                                                                                                                                                                                                                     |
+| `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle, and auto-dismisses an agent's open escalations when it dies (restart/kill/crash) so "Needs you" never lingers un-actionable.                                                                                                                                        |
 | `Store`             | SQLite persistence + reconcile-on-restart.                                                                                                                                                                                                                                                                                                            |
-| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, inject + kill.                                                                                                                                                                                                                                                             |
+| `Cockpit SPA`       | The single web page: fleet, inbox, world, live agent output, decision log, activity feed, inject + kill.                                                                                                                                                                                                                                              |
 
 ## Getting started
 
@@ -69,7 +92,7 @@ npm run web:build    # build the cockpit SPA into web/dist
 npm start            # start the server (serves the cockpit at http://localhost:4300)
 ```
 
-Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Answer items in **Needs you** to unblock parked agents.
+Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Answer items in **Needs you** to unblock parked agents. The **Decision log** shows what the harness decided each cycle; the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved, meeting prep done), so it works for the real GitHub provider too, not just injected events.
 
 ### Configuration
 
@@ -79,6 +102,7 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
 {
   "heartbeatIntervalMs": 300000,
   "maxConcurrentAgents": 3,
+  "startPaused": false,
   "dispatcher": "rule",
   "claudeCommand": "claude",
   "claudeArgs": [],
@@ -86,29 +110,118 @@ Create `lubbdubb.config.json` at the repo root (all keys optional):
   "steeringPriorities": [],
   "autoSend": { "enabled": false, "confidenceThreshold": 0.85, "allowedActions": ["reply_on_pr"] },
   "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake", "calendar": "fake" },
-  "github": { "owner": "acme", "repo": "app", "filters": { "prAuthor": "lubbdubb-bot", "issueLabel": "agent" } }
+  "github": { "owner": "acme", "repo": "app", "filters": { "prAuthor": "lubbdubb-bot", "issueLabel": "agent" } },
+  "azureDevOps": {
+    "organization": "acme",
+    "project": "app",
+    "repository": "app",
+    "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent" }
+  },
+  "issuePickupLabel": "agent-ready",
+  "issuePickupRequireOwnLabel": false,
+  "issuePriorityLabels": { "priority:high": 3, "priority:medium": 2, "priority:low": 1 },
+  "issueDefaultPriority": 2,
+  "prExclusionLabel": "lubbdubb-ignore"
 }
 ```
 
+- **`maxConcurrentAgents`** — the concurrency cap seeding runtime control (see **Runtime control** below). Adjustable live without a restart; a restart reverts to this value.
+- **`startPaused`** — boot with dispatch paused (default `false`). The only config-level pause knob; live pause/resume is runtime-only and ephemeral, so a restart reverts to this value.
 - **`dispatcher`** — `"rule"` (deterministic, no model calls) or `"claude"` (an LLM decides each cycle, output still schema-validated).
 - **`agentMode`** — how agents run:
   - `"stream"` _(default)_ — real Claude Code over headless stream-JSON (`claude -p --output-format stream-json`). No interactive TUI, runs unattended, and stays alive across turns so the waiting/answer loop works. The harness injects its status protocol via an appended system prompt.
-  - `"pty"` — real Claude Code as an interactive terminal. Requires a `claude` that has completed first-run onboarding (theme, trust, login).
+  - `"pty"` — real Claude Code as an interactive terminal. Requires a `claude` that has completed first-run onboarding (theme, trust, login). This is the runtime that **resumes across restarts** (see below).
   - `"raw"` — run `claudeCommand`/`claudeArgs` verbatim (the mock-agent demo and tests).
 - **`agentPermissionMode`** — passed to `claude --permission-mode` so unattended tool calls don't hang (default `acceptEdits`). Note: `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root — run the harness as a non-root user if you need it.
 - **`claudeCommand` / `claudeArgs`** — the agent binary and any extra args. Defaults to `claude`.
 - **`whitelistedApprovals`** — waiting prompts the harness may auto-answer instead of escalating.
 - **`steeringPriorities`** — optional hints injected into the LLM dispatcher's prompt.
-- **`integrations`** — which provider fulfils each capability. The world behind the `Connector` is built from one integration per capability — `sourceControl` (pull requests, including their merge-readiness for PR monitoring), `issues` (GitHub-style issues the harness resolves into PRs), `backlog` (stories), `calendar` (meetings) — and each capability has interchangeable providers registered in `src/integrations/registry.ts`. This is the **swap switch**: change a value to point a capability at another provider without touching the harness, executor, or the other integrations. Two providers ship: the built-in `fake` (an editable, persisted world you inject events into) and the real **`github`** provider for `sourceControl` and `issues` (see **`github`** below). Unlisted capabilities keep the `fake` default; other real adapters (Azure DevOps, calendar, Gmail) are drop-ins — add them to the registry and select them here.
+- **`integrations`** — which provider fulfils each capability. The world behind the `Connector` is built from one integration per capability — `sourceControl` (pull requests, including their merge-readiness for PR monitoring), `issues` (GitHub-style issues the harness resolves into PRs), `backlog` (stories), `calendar` (meetings) — and each capability has interchangeable providers registered in `src/integrations/registry.ts`. This is the **swap switch**: change a value to point a capability at another provider without touching the harness, executor, or the other integrations. Three providers ship: the built-in `fake` (an editable, persisted world you inject events into) and two real ones for `sourceControl` and `issues` — **`github`** (see **`github`** below) and **`azure`** (Azure DevOps, see **`azureDevOps`** below). Unlisted capabilities keep the `fake` default; other real adapters (calendar, Gmail) are drop-ins — add them to the registry and select them here.
 - **`github`** — the target for the real `github` provider (required when `integrations.sourceControl` or `integrations.issues` is `"github"`). `owner`/`repo` name the repository; optional `filters.prAuthor` narrows the PR slice to one author and `filters.issueLabel` narrows issues to one label. The **auth token is not configured here** — it comes from the `GITHUB_TOKEN` environment variable so a secret never lands in a committed config file. Selecting `github` without a `GITHUB_TOKEN` or without `owner`/`repo` is a clear startup error. `github` reads from the GitHub REST API each cycle (PRs with CI/checks status, review approvals, mergeability and unresolved review threads; issues with state and their linked PR) and, for auto-send, posts PR replies and merges through it; a transient GitHub error serves the last-good snapshot rather than dropping items from the world.
+- **`azureDevOps`** — the target for the real `azure` provider (required when `integrations.sourceControl` or `integrations.issues` is `"azure"`). `organization`/`project`/`repository` name the Azure DevOps Repo; optional `filters.prAuthor` narrows the PR slice to one author (by uniqueName/UPN) and `filters.workItemTag` narrows work items to one tag. As with `github`, the **auth is not configured here**: set `AZURE_DEVOPS_PAT` to a Personal Access Token, or — if that's unset — the provider falls back to an access token from the logged-in **`az` CLI** (`az login`). Selecting `azure` without `organization`/`project`/`repository` is a clear startup error; an auth/login problem surfaces at snapshot time (logged, last-good snapshot served) rather than blocking boot. `azure` maps Azure DevOps Repos **pull requests** onto `sourceControl` — reading branch, CI/build **PR statuses**, reviewer **votes** (approval), `mergeStatus` (conflict/clean/blocked) and comment **threads**, and posting PR comment replies + completing (merging) PRs — and Azure Boards **work items** onto `issues` (open work items with their tags→labels and any linked PR, via the WIQL + batch API). Work-item **tags** map onto issue labels, so `issuePickupLabel` / `issuePriorityLabels` gate Azure exactly as they gate GitHub.
+- **`issuePickupLabel`** — a **dispatcher-level, provider-agnostic gate on issue pickup**. Unset (the default) = the harness resolves _every_ open issue with no linked PR, as before. Set it (e.g. `"agent-ready"`) and the harness only starts an agent for issues whose labels include it — untagged open issues **stay visible** in the cockpit and `/api/state`, they're just left alone. This is distinct from `github.filters.issueLabel`: that filter narrows what's _ingested_ into the world at all (GitHub-only, hides non-matching issues); the pickup label gates what's _acted on_ (works identically for the `fake` and `github` providers). Keep both if you want to both narrow the source and gate within it, or use just one.
+- **`issuePickupRequireOwnLabel`** — tighten the `issuePickupLabel` gate so the tag only counts when **you** applied it. Off by default (any tagger counts). Turn it on and the harness ignores the pickup tag unless the account it authenticates as (the same identity used to decide whether a PR comment is "handled") is the one that added it — so another user can't tag a work item / issue to get an agent onto it. Only meaningful with `issuePickupLabel` set and a real provider (`github` or `azure`) that can resolve tag authorship: the provider reads authorship from the GitHub issue timeline (`labeled` events) or Azure work-item revisions, and only for items already carrying the tag, so the extra lookups stay cheap. The `fake` provider doesn't track authorship, so with this on nothing passes the gate.
+- **`prExclusionLabel`** — the **PR exclusion tag** (default `"lubbdubb-ignore"`). A PR carrying this label is **left alone**: the dispatcher never acts on it — no CI fix, base update, review-comment handling, or merge — for PRs blocked on something the harness can't fix (a design decision, an upstream dependency, a deliberate hold). An excluded PR stays fully visible in the cockpit and `/api/state` (with its health verdict, so you still see _why_ it's stuck); it's just not acted on. Provider-agnostic — it reads `PullRequest.labels`, so it gates the `fake`, `github` and `azure` providers identically. Tag a PR from the cockpit's per-PR **ignore / watch** toggle (which adds/removes the label on the PR through the provider) or apply the label directly in GitHub/Azure. Distinct from `issuePickupLabel` (which gates _issue_ pickup): this gates _PR_ action.
+- **`issuePriorityLabels` / `issueDefaultPriority`** — a label-encoded priority scheme so that, when agent headroom is limited, the important issues are picked up first. `issuePriorityLabels` maps a label to a weight (default `priority:high`→3, `priority:medium`→2, `priority:low`→1); an issue with no matching label gets `issueDefaultPriority` (default 2). The highest weight among an issue's labels wins; equal weights break by issue number (oldest first). Providing your own `issuePriorityLabels` **replaces** the default map wholesale rather than merging, so you can define an entirely different convention (e.g. `p0`/`p1`/`p2`). The `"rule"` dispatcher enforces this deterministically; the `"claude"` dispatcher receives it as prompt guidance.
 - **`autoSend`** — confidence-gated autonomy for side-effectful actions. **Off by default**: with `enabled: false` the harness always drafts a PR reply and escalates it for sign-off (the v1 safety guarantee — nothing leaves without you). Turn it on and the harness sends a `reply_on_pr` itself _only_ when the dispatcher's `confidence` is `≥ confidenceThreshold` **and** the action type is in `allowedActions`; anything below the bar still drafts and escalates, and a failed send always falls back to an escalation so a reply is never dropped. Every send or escalation is written to the audit log with the reason. Auto-send goes through the outbound `ActionSink` seam (v1: the `FakeConnector` "sends" into its own fake world), so a real GitHub adapter drops in without touching the gate.
-- Env overrides: `PORT`, `LUBBDUBB_DB`. Secrets: `GITHUB_TOKEN` (required by the `github` provider).
+- **`repoRoot`** — the git repository the harness operates on; per-branch worktrees are cut from it. **Defaults to the directory you launch the app from (`process.cwd()`)**, so the common case needs no configuration. Set it (in the config file or via the `LUBBDUBB_REPO_ROOT` env override) to point the harness at a repo elsewhere; a relative path is resolved against the launch directory. (`worktreeRoot`/`deskRoot` — where worktrees and no-code scratch dirs live — default to `.lubbdubb/worktrees` and `.lubbdubb/desk`. A relative value resolves **against `repoRoot`**, not the launch directory, so pointing the harness at a repo elsewhere keeps that repo's worktrees with it instead of scattering them into the app folder; set an absolute path to put them anywhere.)
+- Env overrides: `PORT`, `LUBBDUBB_DB`, `LUBBDUBB_REPO_ROOT`. Secrets: `GITHUB_TOKEN` (required by the `github` provider); `AZURE_DEVOPS_PAT` (used by the `azure` provider when set, otherwise it uses the logged-in `az` CLI).
+
+### Resume across restarts (PTY runtime)
+
+Agents are child processes of the server, so restarting it — a crash _or_ a graceful `SIGINT`/`SIGTERM` — used to kill every agent and lose the work in flight. In `agentMode: "pty"` the harness now **resumes** them instead.
+
+- Each PTY agent is launched with a session id we choose up front (`claude --session-id <uuid>`), persisted on its `agents` row. The worktree and transcript already persist, so a restart is missing only the live process.
+- On boot, _before_ the harness reacts to any new findings, reconciliation re-attaches each orphaned in-flight agent to the **same** Claude session in its original worktree (`claude --resume <id>`, protocol system prompt re-applied). Resumed agents count against `maxConcurrentAgents` before new work is dispatched. An agent that was mid-work is nudged to continue; one that was parked on a question keeps its escalation, and your answer routes straight into it.
+- It's best-effort: an agent with no usable session id (e.g. it died before one existed) or a missing worktree falls back to the previous `interrupted` behaviour, and boot never blocks on a resume. A deliberate **kill from the cockpit stays dead** — only a restart-induced stop is resumable. The stream-JSON runtime does not resume (out of scope).
+
+### Runtime control (cap + pause, no restart)
+
+The concurrency cap and a pause flag are **live, in-memory controls** — change them
+while the harness is running and they take effect on the next cycle, no restart. They
+are **ephemeral**: a restart reverts to `maxConcurrentAgents` / `startPaused`.
+
+- **Cap** — raise it and more agents spawn immediately (subject to available work);
+  lower it and new dispatch is deferred until the live count drops below the new cap.
+  Scaling down **never kills** a running agent.
+- **Pause** — stops new dispatch only. Live agents keep running to completion, and the
+  harness keeps cycling, so escalations, human answers, world snapshots and the audit
+  log all continue. Unpausing resumes dispatch at the cap you had chosen. Every
+  pause/cap deferral is written to the audit log with its reason.
+
+Drive it from the cockpit topbar (the `−`/`+` cap stepper and the Pause/Resume toggle)
+or the endpoint directly:
+
+```bash
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"cap":5}'
+curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"paused":true}'
+```
+
+`POST /api/control` accepts `{ cap?, paused? }` (`cap` must be a non-negative integer),
+broadcasts the change over the WebSocket so every open cockpit updates live, and the
+current values appear in `/api/state` under a `control` block.
+
+### Ignore a PR (the exclusion tag, no restart)
+
+Some PRs are blocked on things the harness can't fix — a design decision, an upstream
+dependency, a deliberate hold. Tag such a PR with the **exclusion label**
+(`prExclusionLabel`, default `lubbdubb-ignore`) and the harness leaves it alone: it's
+filtered out of the dispatch view — no CI fix, base update, review-comment note, or
+merge — but stays fully visible in the cockpit and `/api/state` with its health verdict,
+so you still see why it's stuck. Tagging a PR that already has a live agent never kills
+it; it just stops _new_ signals for that PR from being acted on.
+
+Because it's a real label on the PR, it's **provider-driven and durable** (it survives a
+restart) and works identically for the `fake`, `github` and `azure` providers. Toggle it
+from the cockpit's per-PR **ignore / watch** button in the World panel — which adds or
+removes the label on the PR through the provider — apply the label directly in
+GitHub/Azure, or call the endpoint:
+
+```bash
+curl -XPOST localhost:4300/api/prs/42/exclude -H 'content-type: application/json' -d '{"excluded":true}'
+curl -XPOST localhost:4300/api/prs/42/exclude -H 'content-type: application/json' -d '{"excluded":false}'
+```
+
+`POST /api/prs/:number/exclude` accepts `{ excluded: boolean }`, adds/removes
+`prExclusionLabel` on the PR through the source-control provider, and triggers a cycle so
+the change takes effect immediately. (For the real `github` provider the label must exist
+in the repo; create it once in the repo's Labels settings.)
 
 ### Try the demo without a real model
 
 `scripts/mock-agent.sh` is a stand-in that speaks the same protocol as a real `claude` agent. The committed `lubbdubb.config.json` uses `agentMode: "raw"` pointed at it, so `npm start` works with no model auth. For real agents, set `agentMode` to `"stream"` (recommended) and `claudeCommand` to `claude`.
 
 How real agents speak the protocol: the harness appends a system prompt telling the agent to print `@@LUBBDUBB_WAITING:<reason>@@` when it needs a human and `@@LUBBDUBB_DONE@@` when finished. In `stream` mode each turn ends in a `result` event; the harness reads those sentinels to decide _waiting_ (→ escalate, then deliver your answer as the next message) vs _done_. This has been verified end-to-end against a live `claude`.
+
+The sentinels are detected for status _and_ stripped from the displayed transcript, so they never leak into the cockpit. In `stream` mode the transcript is also normalised for legibility: assistant reasoning is shown as plain text, tool calls appear on their own labelled line with a concise input summary, and tool results are sanitised (ANSI/control noise removed) and truncated to keep the view scannable. The fleet-card one-line preview is ANSI-stripped so coloured labels never show as raw escapes.
+
+### Hosted demo (GitHub Pages)
+
+The cockpit is a static Vite SPA, so it can be published to GitHub Pages on its own — with the server, SQLite, and every integration replaced by an **in-browser fake backend**. There is no Node process, no network, and no real repositories behind it; the connections are simulated.
+
+- **Build it:** `npm run web:build:demo` — sets `VITE_DEMO=1` (see `web/.env.demo`) and a Pages base path, then bundles to `web/dist`. `npm run web:dev:demo` runs the same mode with HMR at `localhost:5173`.
+- **How it works:** `web/src/demo/` provides `demoApi` and `connectDemoWs`, drop-in replacements for the `/api/*` REST surface and the `/ws` socket. `web/src/api.ts` swaps them in when `VITE_DEMO=1`; the flag is dead-code-eliminated from the production build, so nothing demo-related ships in the real server bundle. `App.tsx` is unchanged — it can't tell the fake backend from the real one. The demo is fully interactive: inject events, pulse, answer escalations, pause/scale the fleet, and open an agent's live transcript.
+- **Deploy:** `.github/workflows/pages.yml` builds the demo and publishes it on every push to `main`. Enable it once under **Settings → Pages → Source → GitHub Actions**; the site lands at `https://<user>.github.io/LubbDubb/`. If your repo name or owner differs, adjust the `--base` in the `web:build:demo` script to match (`/<repo>/`).
 
 ## Development
 
