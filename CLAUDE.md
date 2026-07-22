@@ -121,6 +121,25 @@ with a "+N more lines" marker. Labels carry SGR colour, which xterm renders in t
 `Hub` strips ANSI from the compact fleet-card tail so it never shows as literal escapes. Detection
 still scans the _raw_ turn text, so keep the raw-vs-display split intact if you extend rendering.
 
+**Transcript legibility (PTY mode, issue #63).** The interactive claude TUI paints the
+screen with cursor-addressed redraws, so the raw PTY byte stream is illegible once escapes
+are stripped — stripping deletes the escapes but can't interpret them. `PtySession` with
+`legibleTranscript: true` (wired for `agentMode: 'pty'` only; `raw`/mock sessions stay raw)
+therefore routes the sentinel-stripped bytes through `TerminalTranscript`
+(`src/pty/terminalTranscript.ts`): a headless xterm (`@xterm/headless`) sized to the real
+PTY (`PTY_COLS`/`PTY_ROWS` in `backend.ts` — keep them in sync or cursor addressing
+garbles), read back as settled screen text with wrapped rows re-joined and TUI chrome
+(spinner/input box/hints — the heuristic `isTuiChromeLine`) dropped. Updates are debounced
+and diffed: an extension flows out the normal `output` delta path, while an in-place
+rewrite of already-emitted text becomes a `transcript` (full-replacement) event —
+`AgentManager` maps it to `Store.setTranscript`, the `Hub` ships it to subscribers as
+`agent:transcript` and rebuilds the rolling tail from it, and the cockpit replaces its
+accumulated live buffer. Two sharp edges: xterm parses writes _asynchronously_, so
+transcript content lands a beat after detection events (detection still scans the raw
+bytes synchronously and is unaffected), and `PtySession.handleExit` settles the emulator
+_before_ reporting `exit`/`done`/`failed` so the final text never races the terminal
+transition. Tests: `test/terminalTranscript.test.ts`, `test/ptyLegibleTranscript.test.ts`.
+
 **Usage capture (issue #60) — two mode-specific sources, don't conflate them.** Stream
 mode: each `result` event's _cumulative_ `total_cost_usd`/`usage`/`num_turns` becomes a
 `usage` session event (cache tokens folded into input), which `AgentManager` persists via

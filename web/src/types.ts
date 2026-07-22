@@ -279,6 +279,7 @@ export interface AppState {
 export type ServerEvent =
   | { type: 'dirty' }
   | { type: 'agent:output'; agentId: string; delta: string }
+  | { type: 'agent:transcript'; agentId: string; text: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string }
   | { type: 'control:changed'; cap: number; paused: boolean }

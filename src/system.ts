@@ -90,15 +90,20 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const worktrees = new WorktreeManager(config.repoRoot, config.worktreeRoot);
 
   // Pick the agent runtime and how it's launched from the configured mode.
-  const ptyFactory: SessionFactory = (spec) =>
-    new PtySession(backend, {
-      command: spec.command,
-      args: spec.args,
-      cwd: spec.cwd,
-      env: spec.env,
-      waitingPatterns: spec.waitingPatterns,
-      submitDelayMs: config.agentSubmitDelayMs,
-    });
+  // `legible` turns on the terminal-emulation transcript (settled text instead of
+  // raw TUI bytes) — wanted for the real claude TUI, not for raw/mock sessions.
+  const ptyFactory = (legible: boolean): SessionFactory => {
+    return (spec) =>
+      new PtySession(backend, {
+        command: spec.command,
+        args: spec.args,
+        cwd: spec.cwd,
+        env: spec.env,
+        waitingPatterns: spec.waitingPatterns,
+        submitDelayMs: config.agentSubmitDelayMs,
+        legibleTranscript: legible,
+      });
+  };
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
 
   const perm = config.agentPermissionMode;
@@ -118,7 +123,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       // The one resumable runtime: pin the session id up front, `--resume` it later.
       buildArgs: (({ sessionId, resume }) =>
         buildClaudeArgs({ permissionMode: perm, extraArgs, sessionId, resume, statusLine: true })) as ArgsBuilder,
-      factory: ptyFactory,
+      factory: ptyFactory(true),
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
       resumeInput: buildResumeMessage,
       promptDelayMs: config.agentPromptDelayMs,
@@ -126,7 +131,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
     raw: {
       buildArgs: (() => config.claudeArgs) as ArgsBuilder,
-      factory: ptyFactory,
+      factory: ptyFactory(false),
       initialInput: undefined,
       resumeInput: undefined,
       promptDelayMs: config.agentPromptDelayMs,

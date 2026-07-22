@@ -234,6 +234,8 @@ How real agents speak the protocol: the harness appends a system prompt telling 
 
 The sentinels are detected for status _and_ stripped from the displayed transcript, so they never leak into the cockpit. In `stream` mode the transcript is also normalised for legibility: assistant reasoning is shown as plain text, tool calls appear on their own labelled line with a concise input summary, and tool results are sanitised (ANSI/control noise removed) and truncated to keep the view scannable. The fleet-card one-line preview is ANSI-stripped so coloured labels never show as raw escapes.
 
+In `pty` mode the raw byte stream is the interactive claude TUI — cursor-addressed redraws, an animated spinner, a status line — which no amount of escape-stripping can make readable. So each PTY agent's output is run through a headless terminal emulator (`@xterm/headless`) server-side, and the cockpit gets the _settled screen text_ instead: transcript content with the TUI chrome (spinner, input box, shortcut hints) filtered out. The drawer, the persisted transcript, and the fleet-card preview all read this settled text, so a PTY agent is as legible as a stream one.
+
 ### Hosted demo (GitHub Pages)
 
 The cockpit is a static Vite SPA, so it can be published to GitHub Pages on its own — with the server, SQLite, and every integration replaced by an **in-browser fake backend**. There is no Node process, no network, and no real repositories behind it; the connections are simulated.

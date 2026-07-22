@@ -33,6 +33,7 @@
     "@fastify/websocket": "^10.0.1",
     "@octokit/rest": "^22.0.1",
     "@xterm/addon-fit": "^0.10.0",
+    "@xterm/headless": "^6.0.0",
     "@xterm/xterm": "^5.5.0",
     "better-sqlite3": "^11.3.0",
     "fastify": "^4.28.1",
