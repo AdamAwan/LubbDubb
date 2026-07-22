@@ -1143,3 +1143,50 @@ body {
   border-color: var(--amber);
   background: #241d0c;
 }
+
+/* "Up next" queue — the dispatcher's ranked pickup plan with the headroom cut. */
+.upnext {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px 10px;
+  font-size: 13px;
+}
+.upnext-asof {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.upnext-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  flex-wrap: wrap;
+}
+.upnext-item.waiting,
+.upnext-item.cooldown {
+  opacity: 0.65;
+}
+.upnext-title {
+  min-width: 0;
+}
+/* The cut-line: everything below waits for a free agent slot. */
+.upnext-cut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+  color: var(--amber);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.upnext-cut::before,
+.upnext-cut::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--amber);
+  opacity: 0.6;
+}
