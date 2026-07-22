@@ -215,6 +215,8 @@ export interface AppState {
     steeringPriorities: string[];
     /** The PR exclusion tag: the label the ignore/watch toggle sets, and marks ignored PRs. */
     prExclusionLabel: string;
+    /** Whether the world accepts injected events (a `fake` provider is configured) — gates the inject panel. */
+    injectable: boolean;
   };
   /** Live, mutable dispatch controls — the current cap and pause state. */
   control: {

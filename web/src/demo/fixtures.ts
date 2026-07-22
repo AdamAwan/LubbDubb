@@ -31,6 +31,8 @@ export function buildDemoState(): DemoSeed {
       dispatcher: 'rule',
       steeringPriorities: ['unblock humans', 'keep CI green', 'ship reviewed work'],
       prExclusionLabel: 'lubbdubb-ignore',
+      // The demo world is all-fake, so the inject panel stays available.
+      injectable: true,
     },
     control: { cap: 3, paused: false },
     world: {
