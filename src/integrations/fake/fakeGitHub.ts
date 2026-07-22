@@ -1,12 +1,13 @@
 import { nanoid } from 'nanoid';
 import type { Store } from '../../store/store.js';
 import type { InjectableEvent } from '../../connector/connector.js';
-import type { PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
+import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
 import type { PullRequest } from '../../types.js';
 import type {
   Capability,
   Injectable,
   Integration,
+  PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
   WorldSlice,
@@ -30,7 +31,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
  * {@link PrReplyCapable} + {@link PrMergeCapable} seams and gets registered under
  * `sourceControl` instead of this one.
  */
-export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMergeCapable, Injectable {
+export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable, Injectable {
   readonly id = 'sourceControl:fake';
   readonly capability: Capability = 'sourceControl';
 
@@ -90,6 +91,7 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
               // firm false would wrongly trip the conflict rule on a fresh PR.
               mergeableState: 'unknown',
               merged: false,
+              labels: event.labels ?? [],
             });
           }
           break;
@@ -119,6 +121,25 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
     this.world.mutate((world) => mutatePr(world, input.prNumber, (pr) => (pr.merged = true)));
     const ref = `fake-merge_${nanoid(6)}`;
     this.store.recordConnectorEvent('pr_merge_sent', { ...input, ref });
+    return { ok: true, ref };
+  }
+
+  /**
+   * The outbound side of the exclusion-tag toggle: add/remove a label on the fake
+   * PR and log a connector event. Idempotent — adding a present label or removing
+   * an absent one is a no-op. A real GitHub sink would call the labels API here.
+   */
+  async setPrLabel(input: PrLabelInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      mutatePr(world, input.prNumber, (pr) => {
+        const labels = new Set(pr.labels ?? []);
+        if (input.present) labels.add(input.label);
+        else labels.delete(input.label);
+        pr.labels = [...labels];
+      });
+    });
+    const ref = `fake-label_${nanoid(6)}`;
+    this.store.recordConnectorEvent('pr_label_set', { ...input, ref });
     return { ok: true, ref };
   }
 

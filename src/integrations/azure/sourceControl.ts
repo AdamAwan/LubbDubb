@@ -1,7 +1,14 @@
 import type { Store } from '../../store/store.js';
-import type { MergeMethod, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
+import type { MergeMethod, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
 import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
-import type { Capability, Integration, PrMergeCapable, PrReplyCapable, WorldSlice } from '../integration.js';
+import type {
+  Capability,
+  Integration,
+  PrLabelCapable,
+  PrMergeCapable,
+  PrReplyCapable,
+  WorldSlice,
+} from '../integration.js';
 import type { AzStatus, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
 
 export interface AzureSourceControlOpts {
@@ -20,7 +27,9 @@ export interface AzureSourceControlOpts {
  * {@link PrReplyCapable} + {@link PrMergeCapable} seams, reading from the network
  * instead of an injected fake world, so it is *not* `Injectable`.
  */
-export class AzureDevOpsSourceControlIntegration implements Integration, PrReplyCapable, PrMergeCapable {
+export class AzureDevOpsSourceControlIntegration
+  implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable
+{
   readonly id = 'sourceControl:azure';
   readonly capability: Capability = 'sourceControl';
 
@@ -40,9 +49,10 @@ export class AzureDevOpsSourceControlIntegration implements Integration, PrReply
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [threads, statuses] = await Promise.all([
+          const [threads, statuses, labels] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
             api.listPullStatuses(p.pullRequestId),
+            api.listPullLabels(p.pullRequestId),
           ]);
           this.mergeCommits.set(p.pullRequestId, p.lastMergeSourceCommit);
           const pr: PullRequest = {
@@ -56,6 +66,7 @@ export class AzureDevOpsSourceControlIntegration implements Integration, PrReply
             approved: computeApproved(p.reviewerVotes),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
             merged: false, // active PRs only; a completed PR drops out of the list
+            labels,
             url: p.url,
           };
           // Only assert (not-)mergeable when Azure reports a concrete state; leave
@@ -101,6 +112,12 @@ export class AzureDevOpsSourceControlIntegration implements Integration, PrReply
     const ok = result.status === 'completed' || result.status === 'queued';
     this.opts.store.recordConnectorEvent('pr_merge_sent', { ...input, ref: result.status });
     return { ok, ref: result.status };
+  }
+
+  async setPrLabel(input: PrLabelInput): Promise<SendResult> {
+    await this.opts.api.setPullLabel(input.prNumber, input.label, input.present);
+    this.opts.store.recordConnectorEvent('pr_label_set', { ...input });
+    return { ok: true };
   }
 }
 

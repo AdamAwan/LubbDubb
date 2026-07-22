@@ -63,15 +63,17 @@ export interface Config {
   /** Weight for an issue carrying no matching priority label. */
   issueDefaultPriority: number;
   /**
-   * PRs the harness should leave alone — e.g. blocked on something it can't fix
-   * (a design decision, an upstream dependency, a deliberate hold). Listed by PR
-   * number, this seeds the live, runtime-adjustable exclusion set: an excluded PR
-   * stays visible in the cockpit (with its health) but the dispatcher never acts
-   * on it (no CI fix, base update, comment handling, or merge). Toggled per-PR
-   * from the cockpit via the control endpoint; ephemeral like the cap/pause knobs,
-   * so a restart reverts to this list.
+   * The PR **exclusion tag**: a PR carrying this label is left alone — the
+   * dispatcher never acts on it (no CI fix, base update, comment handling, or
+   * merge), for PRs blocked on something the harness can't fix (a design
+   * decision, an upstream dependency, a deliberate hold). An excluded PR stays
+   * fully visible in the cockpit and `/api/state` (with its health verdict) — it's
+   * just not acted on. Provider-agnostic: it reads `PullRequest.labels`, so it
+   * gates the `fake`, `github` and `azure` providers identically. The cockpit's
+   * per-PR ignore/watch toggle adds/removes this label on the PR through the
+   * provider. Defaults to `lubbdubb-ignore`.
    */
-  excludedPrs: number[];
+  prExclusionLabel: string;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -174,7 +176,7 @@ const DEFAULTS: Config = {
   integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
-  excludedPrs: [],
+  prExclusionLabel: 'lubbdubb-ignore',
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',

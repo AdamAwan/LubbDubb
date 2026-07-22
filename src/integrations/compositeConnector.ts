@@ -1,8 +1,8 @@
 import type { Connector, InjectableEvent } from '../connector/connector.js';
-import type { ActionSink, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { ActionSink, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
-import { isInjectable, isPrMergeCapable, isPrReplyCapable, type Integration } from './integration.js';
+import { isInjectable, isPrLabelCapable, isPrMergeCapable, isPrReplyCapable, type Integration } from './integration.js';
 
 /**
  * Assembles the world from many {@link Integration}s and presents it behind the
@@ -42,6 +42,12 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrMergeCapable);
     if (!handler) throw new Error('no integration can merge PRs (no sourceControl provider is PrMergeCapable)');
     return handler.mergePr(input);
+  }
+
+  async setPrLabel(input: PrLabelInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrLabelCapable);
+    if (!handler) throw new Error('no integration can label PRs (no sourceControl provider is PrLabelCapable)');
+    return handler.setPrLabel(input);
   }
 
   /**

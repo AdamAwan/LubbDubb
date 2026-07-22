@@ -176,7 +176,17 @@ from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle
 - **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr)` (the `{ blocked, reasons }`
   verdict rendered in the cockpit and included per-PR in `buildStateSnapshot`), plus
   `needsBaseUpdate(pr)` and `isConflicted(pr)`, which the dispatcher's conflict/behind rule
-  consumes. Keep these pure and unit-tested (`test/prHealth.test.ts`); don't inline the logic.
+  consumes, and `isPrExcluded(pr, label)`. Keep these pure and unit-tested (`test/prHealth.test.ts` /
+  `test/prExclusion.test.ts`); don't inline the logic.
+- **PR exclusion tag.** A PR whose `labels` include `config.prExclusionLabel` is the operator's
+  "leave it alone" signal: `harness.ts` filters excluded PRs out of the world it hands the
+  dispatcher (read via `isPrExcluded`), so **both** dispatchers ignore them uniformly, while the
+  cockpit snapshot (which reads the connector directly) still shows them with their health. The
+  cockpit's ignore/watch toggle writes the tag back through a **new outbound capability** —
+  `PrLabelCapable.setPrLabel` on the `ActionSink` seam, routed by `CompositeConnector`, implemented
+  by the fake + `github` + `azure` sourceControl providers (`setPullLabel` on each `*Api` seam). Add
+  to the seam + its scripted fake together, same as the other outbound actions. `POST
+/api/prs/:number/exclude` is the endpoint; it's a label write, **not** a dispatcher action.
 - **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
   already has an active task. When the branch's agent is **running**, a fresh signal is delivered
   via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's
@@ -205,3 +215,6 @@ from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle
   label-encoded (`issuePriorityLabels`/`issueDefaultPriority`) and parsed by the pure exported
   `issuePriority` — keep that parsing pure so it stays unit-testable without a world. The gate
   is off by default (unset label = act on all open issues), so existing setups don't regress.
+  A **third** label mechanism, `prExclusionLabel`, is the mirror on the PR side: it reads
+  `PullRequest.labels` to _exclude_ a tagged PR from action (see "PR health" above). Don't
+  conflate the three.

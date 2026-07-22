@@ -43,10 +43,17 @@ interface Recorded {
   issueComments: Array<{ number: number; body: string }>;
   merges: Array<{ number: number; method: MergeMethod }>;
   issueLabelQueries: Array<string | undefined>;
+  labelSets: Array<{ number: number; label: string; present: boolean }>;
 }
 
 function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
-  const recorded: Recorded = { reviewReplies: [], issueComments: [], merges: [], issueLabelQueries: [] };
+  const recorded: Recorded = {
+    reviewReplies: [],
+    issueComments: [],
+    merges: [],
+    issueLabelQueries: [],
+    labelSets: [],
+  };
   const api: GitHubApi = {
     async viewerLogin() {
       return script.viewer ?? 'lubbdubb-bot';
@@ -90,6 +97,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
       recorded.merges.push({ number, method });
       return { sha: 'mergedsha', merged: true };
     },
+    async setPullLabel(number, label, present) {
+      recorded.labelSets.push({ number, label, present });
+    },
   };
   return { api, recorded };
 }
@@ -103,6 +113,7 @@ function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
     headSha: 'sha7',
     authorLogin: 'alice',
     url: 'u',
+    labels: [],
     ...over,
   };
 }
@@ -395,6 +406,30 @@ test('mergePr merges with the requested method and returns the merge sha', async
   assert.equal(res.ok, true);
   assert.equal(res.ref, 'mergedsha');
   assert.deepEqual(recorded.merges, [{ number: 7, method: 'squash' }]);
+  store.close();
+});
+
+test('snapshot maps the PR labels through (the exclusion-tag signal)', async () => {
+  const { api } = fakeApi({ pulls: [pull({ number: 7, labels: ['lubbdubb-ignore', 'bug'] })] });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+  const prSlice = (await sc.snapshot()).pullRequests![0]!;
+  assert.deepEqual(prSlice.labels, ['lubbdubb-ignore', 'bug']);
+  store.close();
+});
+
+test('setPrLabel adds or removes a label through the API', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api, store });
+
+  const added = await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: true });
+  assert.equal(added.ok, true);
+  await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: false });
+  assert.deepEqual(recorded.labelSets, [
+    { number: 7, label: 'lubbdubb-ignore', present: true },
+    { number: 7, label: 'lubbdubb-ignore', present: false },
+  ]);
   store.close();
 });
 

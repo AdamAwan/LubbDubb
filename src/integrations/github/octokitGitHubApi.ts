@@ -94,6 +94,7 @@ export class OctokitGitHubApi implements GitHubApi {
       headSha: p.head.sha,
       authorLogin: p.user?.login ?? '',
       url: p.html_url,
+      labels: p.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
     }));
   }
 
@@ -203,5 +204,19 @@ export class OctokitGitHubApi implements GitHubApi {
   async mergePull(number: number, method: MergeMethod): Promise<GhMergeResult> {
     const { data } = await this.octokit.pulls.merge({ ...this.base, pull_number: number, merge_method: method });
     return { sha: data.sha, merged: data.merged };
+  }
+
+  async setPullLabel(number: number, label: string, present: boolean): Promise<void> {
+    // PRs are issues for the labels API. addLabels is additive and idempotent;
+    // removeLabel 404s when the label isn't set, which is a no-op for our purposes.
+    if (present) {
+      await this.octokit.issues.addLabels({ ...this.base, issue_number: number, labels: [label] });
+    } else {
+      try {
+        await this.octokit.issues.removeLabel({ ...this.base, issue_number: number, name: label });
+      } catch (err) {
+        if ((err as { status?: number }).status !== 404) throw err;
+      }
+    }
   }
 }

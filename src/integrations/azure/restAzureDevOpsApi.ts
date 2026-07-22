@@ -244,6 +244,13 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return data.value.map((s) => ({ state: s.state ?? null }));
   }
 
+  async listPullLabels(pullRequestId: number): Promise<string[]> {
+    const data = await this.request<{ value: Array<{ name?: string }> }>(
+      this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/labels`),
+    );
+    return data.value.map((l) => l.name ?? '').filter((name) => name !== '');
+  }
+
   async listOpenWorkItems(tag?: string): Promise<AzWorkItem[]> {
     // Two-step: WIQL returns the matching ids, then a batch read hydrates fields
     // and relations. WIQL can't return fields directly, so the batch is required.
@@ -324,6 +331,21 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       },
     );
     return { status: data.status ?? 'unknown' };
+  }
+
+  async setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void> {
+    const labelsUrl = `${this.repoUrl}/pullRequests/${pullRequestId}/labels`;
+    if (present) {
+      // POST is idempotent-ish: re-adding an existing label just returns it.
+      await this.request(this.withApiVersion(labelsUrl), { method: 'POST', body: JSON.stringify({ name: label }) });
+    } else {
+      // DELETE by label name; a 404 (label not present) is a no-op for our purposes.
+      try {
+        await this.request(this.withApiVersion(`${labelsUrl}/${encodeURIComponent(label)}`), { method: 'DELETE' });
+      } catch (err) {
+        if (!/-> 404\b/.test((err as Error).message)) throw err;
+      }
+    }
   }
 }
 

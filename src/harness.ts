@@ -7,6 +7,7 @@ import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
+import { isPrExcluded } from './prHealth.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 
 export interface HarnessDeps {
@@ -18,6 +19,8 @@ export interface HarnessDeps {
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
   steeringPriorities: string[];
+  /** PRs carrying this label are excluded from dispatch (the operator's "leave it alone" tag). */
+  prExclusionLabel: string;
 }
 
 export interface CycleReport {
@@ -92,15 +95,15 @@ export class Harness extends EventEmitter {
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
 
-      // Excluded PRs are the operator's "leave this alone" list. Hide them from
-      // the dispatch view (read by reference each cycle) so *both* dispatchers
+      // A PR carrying the exclusion tag is the operator's "leave this alone"
+      // signal. Hide tagged PRs from the dispatch view so *both* dispatchers
       // ignore them uniformly — no CI fix, base update, comment note, or merge.
       // The world used for diffing/baseline above is untouched, and the cockpit
       // snapshot reads the connector directly, so an excluded PR stays fully
-      // visible (with its health) — it's just not acted on.
-      const excluded = this.deps.runtime.excludedPrs;
-      const dispatchWorld: WorldSnapshot = excluded.size
-        ? { ...world, pullRequests: world.pullRequests.filter((pr) => !excluded.has(pr.number)) }
+      // visible (with its health and tag) — it's just not acted on.
+      const label = this.deps.prExclusionLabel;
+      const dispatchWorld: WorldSnapshot = world.pullRequests.some((pr) => isPrExcluded(pr, label))
+        ? { ...world, pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)) }
         : world;
 
       const plan = await this.deps.dispatcher.decide({

@@ -1,5 +1,5 @@
 import type { Connector, InjectableEvent } from './connector.js';
-import type { ActionSink, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
+import type { ActionSink, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { Story, WorldSnapshot } from '../types.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
@@ -46,6 +46,10 @@ export class FakeConnector implements Connector, ActionSink {
 
   mergePr(input: PrMergeInput): Promise<SendResult> {
     return this.composite.mergePr(input);
+  }
+
+  setPrLabel(input: PrLabelInput): Promise<SendResult> {
+    return this.composite.setPrLabel(input);
   }
 
   /** Apply an event to the fake world (routes to the owning module) and log it. */

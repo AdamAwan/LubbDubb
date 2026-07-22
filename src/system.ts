@@ -125,7 +125,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // Live, in-memory dispatch controls both the harness and executor read by
   // reference each cycle. Ephemeral by design: a restart reverts to config.
-  const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused, config.excludedPrs);
+  const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused);
 
   const executor = new ActionExecutor({
     store,
@@ -163,6 +163,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     runtime: runtimeControl,
     steeringPriorities: config.steeringPriorities,
+    prExclusionLabel: config.prExclusionLabel,
   });
 
   // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.

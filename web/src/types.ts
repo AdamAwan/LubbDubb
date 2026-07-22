@@ -18,6 +18,8 @@ export interface PullRequest {
   baseBranch?: string;
   mergeableState?: string;
   merged?: boolean;
+  /** Labels/tags on the PR; carries the exclusion tag when the operator ignores it. */
+  labels?: string[];
   /** Server-computed health: why the PR is stuck (empty reasons = healthy). */
   health?: { blocked: boolean; reasons: string[] };
 }
@@ -141,13 +143,13 @@ export interface AppState {
     maxConcurrentAgents: number;
     dispatcher: string;
     steeringPriorities: string[];
+    /** The PR exclusion tag: the label the ignore/watch toggle sets, and marks ignored PRs. */
+    prExclusionLabel: string;
   };
-  /** Live, mutable dispatch controls — the current cap, pause state, and excluded PRs. */
+  /** Live, mutable dispatch controls — the current cap and pause state. */
   control: {
     cap: number;
     paused: boolean;
-    /** PR numbers the harness is told to leave alone. */
-    excludedPrs: number[];
   };
   world: WorldSnapshot;
   tasks: Task[];
@@ -162,5 +164,5 @@ export type ServerEvent =
   | { type: 'agent:output'; agentId: string; delta: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string }
-  | { type: 'control:changed'; cap: number; paused: boolean; excludedPrs: number[] }
+  | { type: 'control:changed'; cap: number; paused: boolean }
   | { type: string; [k: string]: unknown };

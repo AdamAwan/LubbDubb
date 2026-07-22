@@ -34,6 +34,7 @@ interface Script {
   pulls?: AzPull[];
   threads?: Record<number, AzThread[]>;
   statuses?: Record<number, AzStatus[]>;
+  labels?: Record<number, string[]>;
   workItems?: AzWorkItem[];
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems';
 }
@@ -43,10 +44,11 @@ interface Recorded {
   newThreads: Array<{ prId: number; content: string }>;
   completions: Array<{ prId: number; commit: string; method: MergeMethod }>;
   tagQueries: Array<string | undefined>;
+  labelSets: Array<{ prId: number; label: string; present: boolean }>;
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
-  const recorded: Recorded = { threadReplies: [], newThreads: [], completions: [], tagQueries: [] };
+  const recorded: Recorded = { threadReplies: [], newThreads: [], completions: [], tagQueries: [], labelSets: [] };
   const api: AzureDevOpsApi = {
     async viewerUniqueName() {
       return script.viewer ?? 'bot@acme.com';
@@ -60,6 +62,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async listPullStatuses(prId) {
       return script.statuses?.[prId] ?? [];
+    },
+    async listPullLabels(prId) {
+      return script.labels?.[prId] ?? [];
     },
     async listOpenWorkItems(tag) {
       recorded.tagQueries.push(tag);
@@ -77,6 +82,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async completePullRequest(prId, commit, method): Promise<AzMergeResult> {
       recorded.completions.push({ prId, commit, method });
       return { status: 'completed' };
+    },
+    async setPullLabel(prId, label, present) {
+      recorded.labelSets.push({ prId, label, present });
     },
   };
   return { api, recorded };
@@ -388,6 +396,28 @@ test('mergePr throws when the PR was never snapshotted (no known head commit)', 
   const store = new Store(':memory:');
   const sc = new AzureDevOpsSourceControlIntegration({ api, store });
   await assert.rejects(() => sc.mergePr({ prNumber: 99, method: 'merge' }), /no known merge commit/);
+  store.close();
+});
+
+test('snapshot maps a PR label through (the exclusion-tag signal)', async () => {
+  const { api } = fakeApi({ pulls: [pull({ pullRequestId: 7 })], labels: { 7: ['lubbdubb-ignore'] } });
+  const store = new Store(':memory:');
+  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const prSlice = (await sc.snapshot()).pullRequests![0]!;
+  assert.deepEqual(prSlice.labels, ['lubbdubb-ignore']);
+  store.close();
+});
+
+test('setPrLabel adds or removes a label through the API', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: true });
+  await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: false });
+  assert.deepEqual(recorded.labelSets, [
+    { prId: 7, label: 'lubbdubb-ignore', present: true },
+    { prId: 7, label: 'lubbdubb-ignore', present: false },
+  ]);
   store.close();
 });
 

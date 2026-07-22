@@ -29,12 +29,18 @@ const realApi = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),
     }).then((r) => json(r)),
-  setControl: (patch: { cap?: number; paused?: boolean; excludedPrs?: number[] }) =>
+  setControl: (patch: { cap?: number; paused?: boolean }) =>
     fetch('/api/control', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch),
-    }).then((r) => json<{ ok: true; cap: number; paused: boolean; excludedPrs: number[] }>(r)),
+    }).then((r) => json<{ ok: true; cap: number; paused: boolean }>(r)),
+  setPrExcluded: (prNumber: number, excluded: boolean) =>
+    fetch(`/api/prs/${prNumber}/exclude`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ excluded }),
+    }).then((r) => json<{ ok: true; excluded: boolean }>(r)),
   killAgent: (id: string) => fetch(`/api/agents/${id}/kill`, { method: 'POST' }).then((r) => json(r)),
   interruptAgent: (id: string) => fetch(`/api/agents/${id}/interrupt`, { method: 'POST' }).then((r) => json(r)),
 };
