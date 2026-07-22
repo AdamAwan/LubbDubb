@@ -372,17 +372,32 @@ class DemoServer {
         break;
       }
       case 'meeting': {
-        world.calendar = [
-          ...world.calendar,
-          {
-            id: this.id('evt'),
-            title: String(ev.title ?? 'Meeting'),
-            startsAt: String(ev.startsAt ?? new Date().toISOString()),
-            prepDocs: Array.isArray(ev.prepDocs) ? (ev.prepDocs as string[]) : [],
-            prepDone: false,
-          },
-        ];
-        this.addWorldEvent('meeting_added', null, `meeting added: ${String(ev.title ?? 'Meeting')}`);
+        // The Desk redesign moved the agenda onto the briefing and dropped the
+        // World calendar, so an injected meeting lands in `briefing.meetings`
+        // (the live surface) — otherwise the "+ Meeting" button would do nothing
+        // visible. A default 30-minute online event, relevant to the operator.
+        const start = String(ev.startsAt ?? new Date().toISOString());
+        const end = new Date(new Date(start).getTime() + 30 * 60_000).toISOString();
+        const subject = String(ev.title ?? 'Meeting');
+        if (this.state.briefing) {
+          this.state.briefing.meetings = [
+            ...this.state.briefing.meetings,
+            {
+              id: this.id('evt'),
+              subject,
+              start,
+              end,
+              isOnline: true,
+              joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo-injected',
+              organizer: 'You',
+              attendeeCount: 5,
+              responseRequested: true,
+              showAs: 'busy',
+              relevance: 'mine',
+            },
+          ];
+        }
+        this.addWorldEvent('meeting_added', null, `meeting added: ${subject}`);
         break;
       }
       default:
