@@ -103,6 +103,24 @@ test('an explicit repoRoot override beats the env var', () => {
   }
 });
 
+test('worktreeRoot and deskRoot default under repoRoot, not the launch dir', () => {
+  const cfg = loadConfig({ repoRoot: '/srv/target-repo' });
+  assert.equal(cfg.worktreeRoot, resolve('/srv/target-repo', '.lubbdubb/worktrees'));
+  assert.equal(cfg.deskRoot, resolve('/srv/target-repo', '.lubbdubb/desk'));
+});
+
+test('a relative worktreeRoot/deskRoot override resolves against repoRoot', () => {
+  const cfg = loadConfig({ repoRoot: '/srv/target-repo', worktreeRoot: 'wt', deskRoot: 'desk' });
+  assert.equal(cfg.worktreeRoot, '/srv/target-repo/wt');
+  assert.equal(cfg.deskRoot, '/srv/target-repo/desk');
+});
+
+test('an absolute worktreeRoot/deskRoot override is honoured as-is', () => {
+  const cfg = loadConfig({ repoRoot: '/srv/target-repo', worktreeRoot: '/var/wt', deskRoot: '/var/desk' });
+  assert.equal(cfg.worktreeRoot, '/var/wt');
+  assert.equal(cfg.deskRoot, '/var/desk');
+});
+
 test('a relative claudeArg that points at a real file is resolved to an absolute path', () => {
   const cfg = loadConfig({ claudeArgs: ['scripts/mock-agent.sh', '--flag'] });
   assert.ok(cfg.claudeArgs[0]!.startsWith('/'), 'existing script path is made absolute');
