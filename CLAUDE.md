@@ -76,6 +76,15 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   taking effect. Mutated via `POST /api/control`; **not persisted**, so a restart reverts
   to config. Pausing defers only `dispatch_*` actions (escalate/answer/etc. still run) and
   scaling the cap down never kills a live agent — both deferrals are audited with a reason.
+- **`src/errorLog.ts`** is the one error-recording path. Anything that catches a failure —
+  the harness's cycle `catch`, provider snapshot `catch`es (via the optional `errors` in
+  `IntegrationContext`/provider opts), `AgentManager` terminal failures (with the exit code
+  captured from the session's `exit` event), the Fastify `setErrorHandler`, boot resume —
+  calls `errors.record(...)`, which persists to the `error_events` table, mirrors to stderr,
+  and emits `logged` (fanned out over WS for the cockpit's Errors panel). Don't add new
+  swallowed `catch`es; route them here. The event is named `logged`, not `error` — an
+  unlistened `error` event throws, and recording a failure must never throw. Tests silence
+  the stderr mirror with `buildSystem(config, { errorMirror: () => {} })`.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.

@@ -22,7 +22,19 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   const hub = new Hub(system);
   await app.register(websocket);
 
-  const { store, connector, harness, agents, escalations, config } = system;
+  const { store, connector, harness, agents, escalations, config, errors } = system;
+
+  // An unanticipated throw in a route must not vanish into a silent 500: record
+  // it to the error log (which also mirrors it to stderr and streams it to the
+  // cockpit), then return a plain 500.
+  app.setErrorHandler((err, req, reply) => {
+    errors.record({
+      source: 'server',
+      message: `${req.method} ${req.url} failed: ${err.message}`,
+      detail: err.stack ?? null,
+    });
+    return reply.code(500).send({ error: err.message });
+  });
 
   // -- Live stream ---------------------------------------------------------
   app.register(async (scoped) => {
@@ -214,6 +226,9 @@ export function buildStateSnapshot(system: System) {
       escalations: store.listEscalations(),
       decisions: store.listDecisions(100),
       worldEvents: store.listWorldEvents(100),
+      // Recorded failures (cycle exceptions, provider outages, agent crashes,
+      // route 500s) for the cockpit's Errors panel.
+      errors: store.listErrors(100),
       refUrls,
       // The rule book, as data: decision rows carry a rule id; the cockpit looks
       // the id up here to expand a decision into "which rule fired, and why".

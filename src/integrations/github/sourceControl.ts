@@ -1,4 +1,5 @@
 import type { Store } from '../../store/store.js';
+import type { ErrorRecorder } from '../../errorLog.js';
 import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
 import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
@@ -17,6 +18,8 @@ export interface GitHubSourceControlOpts {
   /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
   store: Store;
+  /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
+  errors?: ErrorRecorder;
   /** Only surface PRs opened by this login. Unset = all open PRs. */
   prAuthor?: string;
   /** Repo identity for building web URLs. When unset, ref resolution returns null. */
@@ -83,9 +86,9 @@ export class GitHubSourceControlIntegration
       this.lastGood = pullRequests;
       return { pullRequests };
     } catch (err) {
-      this.opts.store.recordConnectorEvent('github_snapshot_error', {
-        capability: this.capability,
-        message: (err as Error).message,
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
       return { pullRequests: this.lastGood };
     }

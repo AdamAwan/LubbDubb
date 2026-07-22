@@ -232,6 +232,29 @@ export interface WorldEvent {
 export type WorldEventInput = Omit<WorldEvent, 'id' | 'createdAt'>;
 
 // ---------------------------------------------------------------------------
+// Error log (failures surfaced to the cockpit)
+// ---------------------------------------------------------------------------
+
+/**
+ * One recorded failure — a harness cycle exception, a provider snapshot error, an
+ * agent crash, a route 500, … Durable (persisted to the store) and streamed to the
+ * cockpit's Errors panel so an operator can see things going wrong as they happen.
+ */
+export interface ErrorLogEntry {
+  id: string;
+  /** Which part of the system the failure came from. */
+  source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
+  /** Human-readable one-line summary of what failed. */
+  message: string;
+  /** Optional longer context (stack trace, output tail). Null if none. */
+  detail: string | null;
+  createdAt: string; // ISO
+}
+
+/** An error before the store assigns it an id and timestamp. */
+export type ErrorLogInput = Omit<ErrorLogEntry, 'id' | 'createdAt' | 'detail'> & { detail?: string | null };
+
+// ---------------------------------------------------------------------------
 // Harness-internal state
 // ---------------------------------------------------------------------------
 

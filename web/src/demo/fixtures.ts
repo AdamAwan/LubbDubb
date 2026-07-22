@@ -294,6 +294,22 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(12),
       },
     ],
+    errors: [
+      {
+        id: 'err-2',
+        source: 'agent',
+        message: 'Agent agent-a0 failed (task task-a0), exit code 1',
+        detail: 'npm test\n✗ rate-limit window resets on rollover\nProcess exited with code 1',
+        createdAt: ago(11),
+      },
+      {
+        id: 'err-1',
+        source: 'provider',
+        message: 'sourceControl:github snapshot failed: request to api.github.com timed out',
+        detail: null,
+        createdAt: ago(25),
+      },
+    ],
     worldEvents: [
       { id: 'we-5', kind: 'pr_ci', ref: 'pr:142', summary: 'CI failing on PR #142', createdAt: ago(8) },
       { id: 'we-4', kind: 'pr_comment', ref: 'pr:142', summary: 'reviewer commented on PR #142', createdAt: ago(7) },

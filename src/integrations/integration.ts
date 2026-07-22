@@ -1,4 +1,5 @@
 import type { Config } from '../config.js';
+import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult, WorkItemStateInput } from '../sink/actionSink.js';
@@ -33,6 +34,8 @@ export interface IntegrationContext {
   config: Config;
   /** Injectable clock so tests stay deterministic. */
   now: () => string;
+  /** Central error sink: snapshot/outage failures are recorded here, not swallowed. */
+  errors?: ErrorRecorder;
 }
 
 /** The base seam: every integration reads some slice of the world. */

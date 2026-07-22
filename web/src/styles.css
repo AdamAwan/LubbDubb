@@ -715,6 +715,26 @@ body {
   color: var(--muted);
   margin-top: 2px;
 }
+.audit.error-entry {
+  border-color: var(--red);
+}
+.error-detail summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.error-detail pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+}
 
 .drawer-backdrop {
   position: fixed;
