@@ -142,6 +142,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // by whichever dispatcher is selected — provider-agnostic.
   const issuePickup: IssuePickupPolicy = {
     pickupLabel: config.issuePickupLabel,
+    requireOwnLabel: config.issuePickupRequireOwnLabel,
     priorityLabels: config.issuePriorityLabels,
     defaultPriority: config.issueDefaultPriority,
   };

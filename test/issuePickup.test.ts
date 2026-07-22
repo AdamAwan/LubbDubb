@@ -39,3 +39,26 @@ test('isIssuePickupEligible: with a pickup label only labelled issues are eligib
   assert.equal(isIssuePickupEligible(issue({ labels: ['bug'] }), policy), false);
   assert.equal(isIssuePickupEligible(issue({ labels: [] }), policy), false);
 });
+
+test('isIssuePickupEligible: requireOwnLabel counts only the viewer-added tag', () => {
+  const policy: IssuePickupPolicy = {
+    pickupLabel: 'agent-ready',
+    requireOwnLabel: true,
+    priorityLabels: {},
+    defaultPriority: 0,
+  };
+  // The viewer added the tag → eligible.
+  assert.equal(
+    isIssuePickupEligible(issue({ labels: ['agent-ready'], labelsAddedByViewer: ['agent-ready'] }), policy),
+    true,
+  );
+  // The tag is present but someone else added it → not eligible (the abuse case).
+  assert.equal(isIssuePickupEligible(issue({ labels: ['agent-ready'], labelsAddedByViewer: [] }), policy), false);
+  // Authorship unknown (provider didn't populate it) → not eligible, fail closed.
+  assert.equal(isIssuePickupEligible(issue({ labels: ['agent-ready'] }), policy), false);
+});
+
+test('isIssuePickupEligible: requireOwnLabel is ignored when no pickup label is set', () => {
+  const policy: IssuePickupPolicy = { requireOwnLabel: true, priorityLabels: {}, defaultPriority: 0 };
+  assert.equal(isIssuePickupEligible(issue({ labels: ['bug'] }), policy), true);
+});

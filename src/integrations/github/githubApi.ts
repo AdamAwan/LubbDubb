@@ -111,10 +111,14 @@ export interface GhIssue {
 }
 
 export interface GhTimelineEvent {
-  /** cross-referenced | connected | disconnected | closed | ... */
+  /** cross-referenced | connected | disconnected | closed | labeled | unlabeled | ... */
   event: string;
   /** For a PR cross-reference/connection: the referencing PR's number; else null. */
   sourcePrNumber: number | null;
+  /** For a `labeled`/`unlabeled` event: the label name; else null. The tag-authorship signal. */
+  label: string | null;
+  /** For a `labeled`/`unlabeled` event: the actor's login (who set/cleared it); else null. */
+  actorLogin: string | null;
 }
 
 export interface GhCommentRef {

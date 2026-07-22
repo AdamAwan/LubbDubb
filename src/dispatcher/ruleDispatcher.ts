@@ -45,6 +45,7 @@ export class RuleDispatcher implements Dispatcher {
   constructor(pickup: Partial<IssuePickupPolicy> = {}, cooldown: Partial<CooldownPolicy> = {}) {
     this.pickup = {
       pickupLabel: pickup.pickupLabel,
+      requireOwnLabel: pickup.requireOwnLabel,
       priorityLabels: pickup.priorityLabels ?? {},
       defaultPriority: pickup.defaultPriority ?? 0,
     };

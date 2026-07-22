@@ -182,7 +182,16 @@ export class OctokitGitHubApi implements GitHubApi {
         const issue = ev.source.issue;
         if (issue && issue.pull_request) sourcePrNumber = issue.number;
       }
-      return { event: ev.event ?? '', sourcePrNumber };
+      // A `labeled`/`unlabeled` event carries the label and the actor who set it —
+      // the "who tagged this" signal. Cast past octokit's broad timeline union.
+      let label: string | null = null;
+      let actorLogin: string | null = null;
+      if (ev.event === 'labeled' || ev.event === 'unlabeled') {
+        const le = ev as { label?: { name?: string }; actor?: { login?: string } | null };
+        label = le.label?.name ?? null;
+        actorLogin = le.actor?.login ?? null;
+      }
+      return { event: ev.event ?? '', sourcePrNumber, label, actorLogin };
     });
   }
 

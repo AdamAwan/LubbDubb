@@ -7,7 +7,7 @@ import {
   computeApproved,
   buildUnresolvedComments,
 } from '../src/integrations/github/sourceControl.js';
-import { GitHubIssuesIntegration, linkedPrFromTimeline } from '../src/integrations/github/issues.js';
+import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from '../src/integrations/github/issues.js';
 import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
 import type {
   GhCheckRun,
@@ -203,15 +203,18 @@ test('buildUnresolvedComments: not handled while the human commented last', () =
 
 test('linkedPrFromTimeline: takes the most recent PR cross-reference', () => {
   const events: GhTimelineEvent[] = [
-    { event: 'cross-referenced', sourcePrNumber: 40 },
-    { event: 'labeled', sourcePrNumber: null },
-    { event: 'connected', sourcePrNumber: 43 },
+    { event: 'cross-referenced', sourcePrNumber: 40, label: null, actorLogin: null },
+    { event: 'labeled', sourcePrNumber: null, label: 'bug', actorLogin: 'someone' },
+    { event: 'connected', sourcePrNumber: 43, label: null, actorLogin: null },
   ];
   assert.equal(linkedPrFromTimeline(events), 43);
 });
 
 test('linkedPrFromTimeline: null when nothing links a PR', () => {
-  assert.equal(linkedPrFromTimeline([{ event: 'labeled', sourcePrNumber: null }]), null);
+  assert.equal(
+    linkedPrFromTimeline([{ event: 'labeled', sourcePrNumber: null, label: 'bug', actorLogin: 'me' }]),
+    null,
+  );
 });
 
 // --------------------------------------------------------------------------
@@ -451,7 +454,7 @@ test('issues snapshot drops PRs and maps state / labels / linked PR', async () =
       },
       { number: 200, title: 'A PR', body: '', labels: [], state: 'open', url: 'https://i/200', isPullRequest: true },
     ],
-    timeline: { 101: [{ event: 'cross-referenced', sourcePrNumber: 55 }] },
+    timeline: { 101: [{ event: 'cross-referenced', sourcePrNumber: 55, label: null, actorLogin: null }] },
   });
   const store = new Store(':memory:');
   const issues = new GitHubIssuesIntegration({ api, store });
@@ -463,6 +466,78 @@ test('issues snapshot drops PRs and maps state / labels / linked PR', async () =
   assert.deepEqual(issue.labels, ['bug']);
   assert.equal(issue.linkedPrNumber, 55);
   assert.equal(issue.url, 'https://i/101');
+  store.close();
+});
+
+test('viewerAddedLabels: keeps only current labels the viewer most recently added', () => {
+  const events: GhTimelineEvent[] = [
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' },
+    { event: 'labeled', sourcePrNumber: null, label: 'bug', actorLogin: 'someone-else' },
+  ];
+  assert.deepEqual(viewerAddedLabels(events, 'me', ['agent-ready', 'bug']), ['agent-ready']);
+});
+
+test('viewerAddedLabels: a re-add by someone else transfers ownership away', () => {
+  const events: GhTimelineEvent[] = [
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' },
+    { event: 'unlabeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'someone-else' },
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'someone-else' },
+  ];
+  assert.deepEqual(viewerAddedLabels(events, 'me', ['agent-ready']), []);
+});
+
+test('viewerAddedLabels: ignores a since-removed label even if the viewer once added it', () => {
+  const events: GhTimelineEvent[] = [
+    { event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' },
+  ];
+  // The label is no longer on the issue, so it must not count.
+  assert.deepEqual(viewerAddedLabels(events, 'me', ['bug']), []);
+});
+
+test('issues snapshot resolves tag ownership when the ownership gate is on', async () => {
+  const { api } = fakeApi({
+    viewer: 'me',
+    issues: [
+      { number: 1, title: 'mine', body: '', labels: ['agent-ready'], state: 'open', url: 'u1', isPullRequest: false },
+      {
+        number: 2,
+        title: 'theirs',
+        body: '',
+        labels: ['agent-ready'],
+        state: 'open',
+        url: 'u2',
+        isPullRequest: false,
+      },
+      { number: 3, title: 'untagged', body: '', labels: ['bug'], state: 'open', url: 'u3', isPullRequest: false },
+    ],
+    timeline: {
+      1: [{ event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'me' }],
+      2: [{ event: 'labeled', sourcePrNumber: null, label: 'agent-ready', actorLogin: 'attacker' }],
+      3: [],
+    },
+  });
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api, store, ownershipLabel: 'agent-ready' });
+  const slice = await issues.snapshot();
+  const byNumber = new Map(slice.issues!.map((i) => [i.number, i]));
+  // Both tagged issues carry the label, but only #1's was added by the viewer.
+  assert.deepEqual(byNumber.get(1)!.labelsAddedByViewer, ['agent-ready']);
+  assert.deepEqual(byNumber.get(2)!.labelsAddedByViewer, []);
+  // #3 doesn't carry the gate label, so authorship is left untracked.
+  assert.equal(byNumber.get(3)!.labelsAddedByViewer, undefined);
+  store.close();
+});
+
+test('issues snapshot leaves ownership untracked when the gate is off', async () => {
+  const { api } = fakeApi({
+    issues: [
+      { number: 1, title: 'x', body: '', labels: ['agent-ready'], state: 'open', url: 'u1', isPullRequest: false },
+    ],
+  });
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api, store });
+  const slice = await issues.snapshot();
+  assert.equal(slice.issues![0]!.labelsAddedByViewer, undefined);
   store.close();
 });
 

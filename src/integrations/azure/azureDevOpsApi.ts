@@ -37,6 +37,12 @@ export interface AzureDevOpsApi {
 
   /** Open work items, optionally narrowed to a tag. Includes ArtifactLink relations. */
   listOpenWorkItems(tag?: string): Promise<AzWorkItem[]>;
+  /**
+   * Revision history for a work item, narrowed to the System.Tags value before/after
+   * each revision and who made it — the "who added this tag" signal for the ownership
+   * gate. Fetched only when that gate is on, and only for items carrying the gate tag.
+   */
+  listWorkItemUpdates(id: number): Promise<AzWorkItemUpdate[]>;
 
   /** Reply threaded under an existing PR comment thread. */
   createThreadReply(
@@ -123,6 +129,15 @@ export interface AzWorkItem {
   relationUrls: string[];
   /** Web URL to the work item. */
   url: string;
+}
+
+export interface AzWorkItemUpdate {
+  /** revisedBy.uniqueName — the identity that made this revision. */
+  revisedByUniqueName: string;
+  /** System.Tags value before this revision (semicolon-delimited); absent when tags didn't change. */
+  tagsOld?: string;
+  /** System.Tags value after this revision; absent when tags didn't change. */
+  tagsNew?: string;
 }
 
 export interface AzCommentRef {

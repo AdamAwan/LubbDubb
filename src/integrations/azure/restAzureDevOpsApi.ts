@@ -8,6 +8,7 @@ import type {
   AzPull,
   AzThread,
   AzWorkItem,
+  AzWorkItemUpdate,
   AzureDevOpsApi,
 } from './azureDevOpsApi.js';
 import { mergeStrategyFor, stripRef } from './sourceControl.js';
@@ -130,6 +131,12 @@ interface RawWorkItem {
   id: number;
   fields?: Record<string, unknown>;
   relations?: Array<{ rel?: string; url?: string }>;
+}
+
+interface RawWorkItemUpdate {
+  revisedBy?: { uniqueName?: string };
+  /** Per-revision field diffs; only System.Tags is read (its old/new are strings). */
+  fields?: Record<string, { oldValue?: string; newValue?: string }>;
 }
 
 interface RawPolicyEvaluation {
@@ -307,6 +314,20 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       for (const w of batch.value) items.push(this.mapWorkItem(w));
     }
     return items;
+  }
+
+  async listWorkItemUpdates(id: number): Promise<AzWorkItemUpdate[]> {
+    const data = await this.request<{ value: RawWorkItemUpdate[] }>(
+      this.withApiVersion(`${this.orgUrl}/_apis/wit/workItems/${id}/updates`),
+    );
+    return data.value.map((u) => {
+      const tags = u.fields?.['System.Tags'];
+      return {
+        revisedByUniqueName: u.revisedBy?.uniqueName ?? '',
+        tagsOld: tags?.oldValue,
+        tagsNew: tags?.newValue,
+      };
+    });
   }
 
   private mapWorkItem(w: RawWorkItem): AzWorkItem {

@@ -36,11 +36,21 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
     fake: (_ctx, world) => new FakeIssuesIntegration(world),
     github: (ctx) => {
       const { api, gh } = githubApi(ctx);
-      return new GitHubIssuesIntegration({ api, store: ctx.store, issueLabel: gh.filters?.issueLabel });
+      return new GitHubIssuesIntegration({
+        api,
+        store: ctx.store,
+        issueLabel: gh.filters?.issueLabel,
+        ownershipLabel: ownershipLabel(ctx),
+      });
     },
     azure: (ctx) => {
       const { api, az } = azureApi(ctx);
-      return new AzureDevOpsWorkItemsIntegration({ api, store: ctx.store, workItemTag: az.filters?.workItemTag });
+      return new AzureDevOpsWorkItemsIntegration({
+        api,
+        store: ctx.store,
+        workItemTag: az.filters?.workItemTag,
+        ownershipTag: ownershipLabel(ctx),
+      });
     },
   },
   backlog: {
@@ -52,6 +62,16 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
 };
 
 const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
+
+/**
+ * The label whose *authorship* the issues provider must resolve, or `undefined` when
+ * it needn't bother. Only set when the operator has both turned the ownership gate on
+ * (`issuePickupRequireOwnLabel`) and named a pickup label — otherwise there's nothing
+ * to attribute, so the provider skips the extra history lookups.
+ */
+function ownershipLabel(ctx: IntegrationContext): string | undefined {
+  return ctx.config.issuePickupRequireOwnLabel ? ctx.config.issuePickupLabel : undefined;
+}
 
 /**
  * Build the real GitHub client for a `github`-selected capability. The token comes
