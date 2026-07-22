@@ -19,6 +19,9 @@ const AZURE_DEVOPS_RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798';
 
 const API_VERSION = '7.1';
 
+/** connectionData is a preview-only resource: 7.1 is rejected without the -preview suffix. */
+const CONNECTION_DATA_API_VERSION = '7.1-preview.1';
+
 /**
  * How the harness authenticates to Azure DevOps. Two implementations ship, chosen
  * by {@link resolveAzureAuth}: a Personal Access Token (Basic auth) or, when no PAT
@@ -63,16 +66,13 @@ export class AzCliAuth implements AzureAuth {
 /** Spawn the `az` CLI for an Azure DevOps access token. Throws a clear error if `az` isn't logged in. */
 async function defaultAzToken(): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('az', [
-      'account',
-      'get-access-token',
-      '--resource',
-      AZURE_DEVOPS_RESOURCE,
-      '--query',
-      'accessToken',
-      '--output',
-      'tsv',
-    ]);
+    const { stdout } = await execFileAsync(
+      'az',
+      ['account', 'get-access-token', '--resource', AZURE_DEVOPS_RESOURCE, '--query', 'accessToken', '--output', 'tsv'],
+      // On Windows `az` is `az.cmd`; execFile won't resolve the extension without a
+      // shell, so it ENOENTs. All args here are hardcoded constants — no injection risk.
+      { shell: true },
+    );
     const token = stdout.trim();
     if (!token) throw new Error('empty token');
     return token;
@@ -183,10 +183,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return (await res.json()) as T;
   }
 
-  private withApiVersion(url: string, params: Record<string, string> = {}): string {
+  private withApiVersion(url: string, params: Record<string, string> = {}, apiVersion: string = API_VERSION): string {
     const u = new URL(url);
     for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-    u.searchParams.set('api-version', API_VERSION);
+    u.searchParams.set('api-version', apiVersion);
     return u.toString();
   }
 
@@ -195,7 +195,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     if (this.viewer === null) {
       const data = await this.request<{
         authenticatedUser?: { properties?: { Account?: { $value?: string } }; providerDisplayName?: string };
-      }>(this.withApiVersion(`${this.orgUrl}/_apis/connectionData`));
+      }>(this.withApiVersion(`${this.orgUrl}/_apis/connectionData`, {}, CONNECTION_DATA_API_VERSION));
       const user = data.authenticatedUser;
       this.viewer = user?.properties?.Account?.$value ?? user?.providerDisplayName ?? '';
     }
