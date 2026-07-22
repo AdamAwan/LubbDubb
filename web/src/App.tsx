@@ -10,6 +10,7 @@ import { Vitals } from './components/Vitals.js';
 import { FleetControl } from './components/FleetControl.js';
 import { UsageChip } from './components/UsageChip.js';
 import { DecisionLog } from './components/DecisionLog.js';
+import { UpNext } from './components/UpNext.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { Briefing } from './components/Briefing.js';
@@ -221,7 +222,12 @@ export function App() {
         </section>
 
         <section className="col">
-          <h2>Decision log</h2>
+          <h2>
+            Up next
+            {(state.upcoming?.items.length ?? 0) > 0 && <span className="count">{state.upcoming!.items.length}</span>}
+          </h2>
+          <UpNext plan={state.upcoming ?? null} now={now} refUrls={state.refUrls} rules={state.dispatchRules} />
+          <h2 className="feed-heading">Decision log</h2>
           <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} rules={state.dispatchRules} />
           <h2 className="feed-heading">Activity</h2>
           <ActivityFeed events={state.worldEvents} now={now} />

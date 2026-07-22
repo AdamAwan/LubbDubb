@@ -73,9 +73,7 @@ test('upcoming items carry rule, title, kind and branch for the cockpit', async 
 
 test('label-encoded priority orders the queue', async () => {
   const d = new RuleDispatcher({ priorityLabels: { hot: 5 }, defaultPriority: 1 });
-  const result = await d.decide(
-    ctx({ issues: [issue(101), issue(102, ['hot'])] }, { agentHeadroom: 1 }),
-  );
+  const result = await d.decide(ctx({ issues: [issue(101), issue(102, ['hot'])] }, { agentHeadroom: 1 }));
   assert.deepEqual(
     result.upcoming?.map((q) => q.origin),
     ['issue:102', 'issue:101'],

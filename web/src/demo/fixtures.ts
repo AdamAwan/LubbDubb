@@ -320,6 +320,33 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(12),
       },
     ],
+    // The dispatcher's ranked pickup plan from the "last pulse": cap 3 with two
+    // live agents leaves headroom 1, so the top candidate dispatches and the
+    // story pickup sits below the cut waiting for a slot.
+    upcoming: {
+      cycleId: 'cycle-103',
+      at: ago(0),
+      items: [
+        {
+          origin: 'issue:208',
+          rule: 'issue-pickup',
+          title: 'Resolve issue #208',
+          kind: 'code',
+          branch: 'issue/208',
+          status: 'dispatching',
+          reason: 'Open issue #208 has no linked PR and no agent is on it.',
+        },
+        {
+          origin: 'story:st-9:work',
+          rule: 'story-pickup',
+          title: 'Implement "Per-agent cost accounting in the cockpit"',
+          kind: 'code',
+          branch: 'story/st-9',
+          status: 'waiting',
+          reason: 'Idle capacity; "Per-agent cost accounting in the cockpit" is the highest-priority ready story.',
+        },
+      ],
+    },
     errors: [
       {
         id: 'err-2',
@@ -379,6 +406,18 @@ export function buildDemoState(): DemoSeed {
         name: 'Merge-ready PR',
         description:
           'A green, approved, mergeable PR with no open comments is driven the last mile — merged in, gated by the auto-send policy (below the confidence bar it escalates for approval instead).',
+      },
+      'issue-pickup': {
+        number: '4',
+        name: 'Open issue without a PR',
+        description:
+          'An open, pickup-eligible issue with no linked PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority.',
+      },
+      'story-pickup': {
+        number: '8',
+        name: 'Idle capacity pickup',
+        description:
+          'With headroom left and nothing urgent, the highest-priority ready story (already groomed) is picked up by a code agent — idle capacity should always pull work.',
       },
       idle: {
         number: '9',

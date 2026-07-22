@@ -62,6 +62,16 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   registry so the cockpit's Decision log can expand a row into the rule that fired. If you add
   a dispatcher branch, add its registry entry and tag the emitted actions. LLM-dispatcher
   actions carry no rule (null) by design.
+- **The "Up next" queue (issue #69)** is a rank-then-slice inside `RuleDispatcher.decide`:
+  agent-dispatch rules collect ordered `Candidate`s (PR concerns get a cross-PR urgency
+  sort — CI > base-update > comment, then PR number), and only the final walk applies the
+  headroom cut, dispatching the above-cut prefix while the whole ranked list is returned
+  as `DispatchResult.upcoming` (`QueueItem[]`: `dispatching`/`waiting`/`cooldown`). If you
+  add a dispatch rule, route it through the candidate list — an inline `raw.push` of a
+  `dispatch_*` action would bypass both the cut and the queue. The `Harness` caches the
+  last plan (`harness.upcoming`, null for the LLM dispatcher which returns none) and
+  `buildStateSnapshot` ships it as `upcoming`; the cockpit's `UpNext` panel draws the
+  cut-line. It's a per-pulse projection — never treat it as a persisted FIFO.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are

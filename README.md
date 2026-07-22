@@ -67,6 +67,14 @@ fleet) — so the cockpit says what the harness is doing with each item (`agent
 running`, `eligible`, `has open PR #N`) or exactly why it's leaving it alone
 (`no pickup label "agent-ready"`, `dispatch paused`, `on cooldown after 2 attempts`).
 
+**"Up next" queue.** The rule dispatcher ranks every agent-dispatch candidate before
+applying the concurrency headroom cut, and the full ordered plan ships in `/api/state`
+as `upcoming` — the cockpit renders it as an **Up next** panel with a cut-line between
+what is dispatching this cycle and what waits for a free slot (cooling-down candidates
+show greyed). It's a projection, not a committed queue: the dispatcher is stateless per
+cycle, so the plan is "what's next as of the last pulse" and reorders as the world
+changes. The LLM dispatcher materialises no plan (the panel says so).
+
 **Claude usage.** Each agent's cumulative cost, tokens and turns (from the stream
 runtime's per-turn `result` events) are persisted and shown on its fleet card and
 drawer, and a topbar chip tracks account-level usage: the real subscriber 5h/weekly
@@ -109,7 +117,7 @@ npm run web:build                                  # build the cockpit SPA into 
 npm start                                          # start the server (serves the cockpit at http://localhost:4300)
 ```
 
-Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. The inject bar (and its `/api/inject` route) only exists while a `fake` provider is configured — synthetic events can't land on real integrations, so a real deployment hides it. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Answer items in **Needs you** to unblock parked agents. The **Decision log** shows what the harness decided each cycle — click a row to expand the dispatcher rule that produced it (its number, name and standing rationale); the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved, meeting prep done), so it works for the real GitHub provider too, not just injected events.
+Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story, a meeting), and watch the harness react. The inject bar (and its `/api/inject` route) only exists while a `fake` provider is configured — synthetic events can't land on real integrations, so a real deployment hides it. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Answer items in **Needs you** to unblock parked agents. **Up next** shows the dispatcher's ordered pickup plan from the last pulse, with the cut-line at the current concurrency headroom — above it dispatches now, below it waits for a free slot. The **Decision log** shows what the harness decided each cycle — click a row to expand the dispatcher rule that produced it (its number, name and standing rationale); the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved, meeting prep done), so it works for the real GitHub provider too, not just injected events.
 
 ### Configuration
 

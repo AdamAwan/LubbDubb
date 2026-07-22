@@ -206,9 +206,7 @@ export class RuleDispatcher implements Dispatcher {
 
     // Cross-PR ranking: the most urgent concern class first (CI > base-update >
     // review comment), tie-break by PR number for determinism.
-    prCandidates.sort(
-      (a, b) => concernUrgency(a.top.rule) - concernUrgency(b.top.rule) || a.pr.number - b.pr.number,
-    );
+    prCandidates.sort((a, b) => concernUrgency(a.top.rule) - concernUrgency(b.top.rule) || a.pr.number - b.pr.number);
     for (const { pr, top } of prCandidates) {
       consider(
         {
