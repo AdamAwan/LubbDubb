@@ -112,6 +112,7 @@ export class Harness extends EventEmitter {
       const tasks = store.listTasks();
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
+      const queuedJobs = store.listQueuedJobs();
       const recentDecisions = store.listDecisions(200);
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
@@ -133,6 +134,7 @@ export class Harness extends EventEmitter {
         tasks,
         agents,
         openEscalations,
+        queuedJobs,
         recentDecisions,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,

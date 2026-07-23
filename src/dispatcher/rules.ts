@@ -14,6 +14,12 @@ export interface DispatchRule {
 }
 
 export const DISPATCH_RULES = {
+  'manual-job': {
+    number: '0',
+    name: 'Operator-launched job',
+    description:
+      'A job the operator queued from the cockpit is drained before any world-driven rule, claiming the next free slot first — so a manual request takes priority, and simply waits in the queue when the fleet is at capacity.',
+  },
   'pr-ci-failing': {
     number: '1',
     name: 'Failing CI',

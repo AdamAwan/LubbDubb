@@ -16,6 +16,21 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at  TEXT NOT NULL
 );
 
+-- Operator-launched jobs: prompts queued from the cockpit that the dispatcher
+-- drains (ahead of world-driven rules) into agents. A durable queue that lets a
+-- manual request wait for a free slot when the fleet is at capacity.
+CREATE TABLE IF NOT EXISTS jobs (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL,
+  prompt     TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  branch     TEXT,
+  status     TEXT NOT NULL,
+  task_id    TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS agents (
   id             TEXT PRIMARY KEY,
   task_id        TEXT NOT NULL,
@@ -119,6 +134,7 @@ CREATE TABLE IF NOT EXISTS error_events (
 
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_events_at ON usage_events(at);

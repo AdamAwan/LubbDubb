@@ -125,6 +125,18 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
 }
+export interface Job {
+  id: string;
+  title: string;
+  prompt: string;
+  kind: string;
+  branch: string | null;
+  /** 'queued' | 'dispatched' | 'cancelled'. */
+  status: string;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Agent {
   id: string;
   taskId: string;
@@ -276,6 +288,8 @@ export interface AppState {
   };
   world: WorldSnapshot;
   tasks: Task[];
+  /** Operator-launched jobs, newest first — the queue (and its recent history). */
+  jobs: Job[];
   agents: Agent[];
   escalations: Escalation[];
   decisions: Decision[];

@@ -41,6 +41,13 @@ const realApi = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ excluded }),
     }).then((r) => json<{ ok: true; excluded: boolean }>(r)),
+  launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
+    fetch('/api/jobs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(job),
+    }).then((r) => json<{ ok: true }>(r)),
+  cancelJob: (id: string) => fetch(`/api/jobs/${id}/cancel`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
   killAgent: (id: string) => fetch(`/api/agents/${id}/kill`, { method: 'POST' }).then((r) => json(r)),
   interruptAgent: (id: string) => fetch(`/api/agents/${id}/interrupt`, { method: 'POST' }).then((r) => json(r)),
 };

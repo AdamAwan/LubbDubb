@@ -208,7 +208,13 @@ class DemoServer {
 
   // Spawn an agent for a piece of work — honouring pause + the concurrency cap,
   // so the FleetControl and pause button visibly matter in the demo.
-  private trySpawn(kind: string, title: string, branch: string | null, originRef: string | null): void {
+  private trySpawn(
+    kind: string,
+    title: string,
+    branch: string | null,
+    originRef: string | null,
+    prompt?: string,
+  ): string | null {
     // A PR tagged with the exclusion label is left alone — mirrors the server
     // harness filtering tagged PRs out of the dispatch view, so the ignore toggle
     // visibly matters in the demo.
@@ -216,15 +222,15 @@ class DemoServer {
     const taggedPr = this.state.world.pullRequests.find((p) => p.number === prNumber);
     if (taggedPr && (taggedPr.labels ?? []).includes(this.state.config.prExclusionLabel)) {
       this.addDecision(`dispatch_${kind}`, 'skipped', `PR #${prNumber} is ignored — held ${title}`, 'pr excluded');
-      return;
+      return null;
     }
     if (this.state.control.paused) {
       this.addDecision(`dispatch_${kind}`, 'deferred', `paused — held ${title}`, 'dispatch paused');
-      return;
+      return null;
     }
     if (this.liveCount() >= this.state.control.cap) {
       this.addDecision(`dispatch_${kind}`, 'deferred', `at cap (${this.state.control.cap}) — held ${title}`);
-      return;
+      return null;
     }
     const taskId = this.id('task');
     const agentId = this.id('agent');
@@ -234,7 +240,7 @@ class DemoServer {
         id: taskId,
         kind,
         title,
-        prompt: title,
+        prompt: prompt ?? title,
         branch,
         originRef,
         originTitle: title,
@@ -266,6 +272,55 @@ class DemoServer {
     ];
     this.transcripts.set(agentId, `$ claude ${kind}\nPicking up: ${title}`);
     this.addDecision(`dispatch_${kind}`, 'ok', `dispatched agent for ${title}`);
+    return taskId;
+  }
+
+  /**
+   * Queue an operator-launched job, then try to dispatch it immediately —
+   * mirroring the real server: it spawns an agent when there's headroom, else
+   * the job waits in the queue (and the FleetControl/pause state visibly gates it).
+   */
+  async launchJob(input: { prompt: string; title?: string; kind?: string; branch?: string | null }): Promise<{
+    ok: true;
+  }> {
+    const kind = input.kind === 'desk' ? 'desk' : 'code';
+    const prompt = input.prompt.trim();
+    const title = (input.title && input.title.trim()) || prompt.split('\n')[0]!.slice(0, 80) || 'Operator job';
+    const nowIso = new Date().toISOString();
+    const id = this.id('job');
+    const branch = input.branch ?? (kind === 'code' ? `job/${id}` : null);
+    const job = {
+      id,
+      title,
+      prompt,
+      kind,
+      branch,
+      status: 'queued',
+      taskId: null as string | null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    this.state.jobs = [job, ...this.state.jobs];
+    const taskId = this.trySpawn(kind, title, branch, `job:${id}`, prompt);
+    if (taskId) {
+      job.status = 'dispatched';
+      job.taskId = taskId;
+      job.updatedAt = new Date().toISOString();
+    }
+    this.dirty();
+    return { ok: true };
+  }
+
+  /** Drop a still-queued job (demo mirror of POST /api/jobs/:id/cancel). */
+  async cancelJob(id: string): Promise<{ ok: true }> {
+    const job = this.state.jobs.find((j) => j.id === id);
+    if (job && job.status === 'queued') {
+      job.status = 'cancelled';
+      job.updatedAt = new Date().toISOString();
+      this.addDecision('job_cancel', 'ok', `cancelled queued job ${job.title}`);
+      this.dirty();
+    }
+    return { ok: true };
   }
 
   private applyInjection(ev: Record<string, unknown>): void {
@@ -462,6 +517,9 @@ export const demoApi = {
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
+  launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
+    getServer().launchJob(job),
+  cancelJob: (id: string) => getServer().cancelJob(id),
   killAgent: (id: string) => getServer().killAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
 };
