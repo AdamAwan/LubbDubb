@@ -21,11 +21,12 @@ export function refLink(token: string, refUrls: Record<string, string>): ReactNo
 
 /**
  * The URL to open a flagged artifact: an http(s) ref opens directly, a
- * worktree-relative path routes through the confined, sandboxed artifact route.
+ * worktree-relative path routes through the confined, sandboxed artifact route
+ * (addressed by flag id — the server derives the path from the stored flag).
  */
-export function artifactHref(agentId: string, ref: string): string {
-  if (/^https?:\/\//i.test(ref)) return ref;
-  return `/api/agents/${encodeURIComponent(agentId)}/artifact?ref=${encodeURIComponent(ref)}`;
+export function artifactHref(flag: { id: string; ref: string }): string {
+  if (/^https?:\/\//i.test(flag.ref)) return flag.ref;
+  return `/api/artifacts/${encodeURIComponent(flag.id)}`;
 }
 
 // Issue/PR mentions in free text — the universal `#<number>` GitHub syntax.

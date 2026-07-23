@@ -133,10 +133,13 @@ status, so a sliding window would otherwise re-emit it). `AgentManager.recordFla
 (`agent_flags`, deduped by `(agent, ref)` so an evolving doc refreshes in place), re-emits it as the
 `flag` event, and the `Hub` ships it as `agent:flag` + a `dirty`. `buildStateSnapshot` includes
 `flags` per snapshot; the cockpit groups them by agent onto the card/drawer as chips. Local-path
-refs are served by `GET /api/agents/:id/artifact?ref=…`, **confined to the agent's worktree**
-(`realpathSync` + prefix check defeats `..`/symlink escape) and sandboxed (`Content-Security-Policy:
-sandbox`) so agent-authored HTML can't script the cockpit origin; URL refs are linked directly. It's
-purely additive detection — on in every agent mode, gated behind nothing.
+refs are served by `GET /api/artifacts/:id` (addressed by **flag id**, so the served path comes from
+the stored flag row, not the request — the taint never reaches a path expression), **confined to the
+flag's agent worktree** (a lexical prefix check runs before any fs access; `realpathSync` then defeats
+symlink escape), **rate-limited** (`@fastify/rate-limit`, `global:false` + per-route opt-in so the
+cockpit's state polling is never throttled), and sandboxed (`Content-Security-Policy: sandbox`) so
+agent-authored HTML can't script the cockpit origin; URL refs are linked directly. It's purely
+additive detection — on in every agent mode, gated behind nothing.
 
 **Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
 each message's content blocks through the pure `renderBlocks` in

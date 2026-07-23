@@ -189,7 +189,7 @@ function testConfig() {
   });
 }
 
-test('GET /api/agents/:id/artifact serves a confined file and refuses traversal', async () => {
+test('GET /api/artifacts/:id serves a confined file by flag id and refuses traversal', async () => {
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
@@ -197,24 +197,26 @@ test('GET /api/agents/:id/artifact serves a confined file and refuses traversal'
 
   const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
   const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
-  system.store.recordFlag(agent.id, { kind: 'design', label: 'design.html', ref: 'design.html' });
+  const good = system.store.recordFlag(agent.id, { kind: 'design', label: 'design.html', ref: 'design.html' });
+  const escaped = system.store.recordFlag(agent.id, { kind: 'x', label: 'p', ref: '../../../etc/passwd' });
+  const urlFlag = system.store.recordFlag(agent.id, { kind: 'link', label: 'a', ref: 'https://x.test/a' });
 
-  const ok = await app.inject({ method: 'GET', url: `/api/agents/${agent.id}/artifact?ref=design.html` });
+  const ok = await app.inject({ method: 'GET', url: `/api/artifacts/${good.id}` });
   assert.equal(ok.statusCode, 200);
   assert.equal(ok.headers['content-type'], 'text/html; charset=utf-8');
   assert.match(ok.headers['content-security-policy'] as string, /sandbox/);
   assert.equal(ok.body, '<h1>Design</h1>');
 
-  const escaped = await app.inject({ method: 'GET', url: `/api/agents/${agent.id}/artifact?ref=../../etc/passwd` });
-  assert.equal(escaped.statusCode, 404);
+  // A ref that escapes the worktree is refused even though the flag exists.
+  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${escaped.id}` })).statusCode, 404);
+  // A URL ref isn't served (the cockpit links it directly).
+  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${urlFlag.id}` })).statusCode, 400);
+  // An unknown flag id is a 404.
+  assert.equal((await app.inject({ method: 'GET', url: '/api/artifacts/flag_nope' })).statusCode, 404);
 
-  const url = await app.inject({ method: 'GET', url: `/api/agents/${agent.id}/artifact?ref=https://x.test/a` });
-  assert.equal(url.statusCode, 400);
-
-  // The snapshot carries the flag so the cockpit can render it.
+  // The snapshot carries the flags so the cockpit can render them.
   const snap = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
-  assert.equal(snap.flags.length, 1);
-  assert.equal(snap.flags[0].ref, 'design.html');
+  assert.ok(snap.flags.some((f: { ref: string }) => f.ref === 'design.html'));
 
   await app.close();
   system.store.close();

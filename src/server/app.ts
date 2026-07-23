@@ -1,8 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
+import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { extname, resolve, sep } from 'node:path';
+import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
 import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
@@ -35,6 +36,10 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   const app = Fastify({ logger: false });
   const hub = new Hub(system);
   await app.register(websocket);
+  // Opt-in rate limiting (`global: false`): only routes that set `config.rateLimit`
+  // are limited, so the cockpit's frequent state polling is never throttled. The
+  // artifact route opts in because it reads files off disk.
+  await app.register(rateLimit, { global: false });
 
   const { store, connector, harness, agents, escalations, config, errors } = system;
 
@@ -69,19 +74,22 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     return { agentId: id, transcript: store.getTranscript(id) };
   });
 
-  // Serve a local artifact an agent flagged (a design doc, a report). The `ref`
-  // is a path *relative to the agent's worktree*, confined to it — a symlink or
-  // `..` that escapes the worktree is refused. The response is sandboxed (CSP
-  // `sandbox`) so an agent-authored HTML file can't script the cockpit's origin.
-  // URL flags aren't served here; the cockpit links those directly.
-  app.get('/api/agents/:id/artifact', async (req, reply) => {
+  // Serve a local artifact an agent flagged (a design doc, a report), addressed by
+  // its flag id. The path is taken from the *stored* flag row, not the request, so
+  // a client can only fetch a ref an agent actually surfaced — and the served path
+  // is confined to that agent's worktree (a symlink or `..` that escapes is
+  // refused). The response is sandboxed (CSP `sandbox`) so agent-authored HTML
+  // can't script the cockpit's origin. Rate-limited since it reads off disk. URL
+  // flags aren't served here; the cockpit links those directly.
+  app.get('/api/artifacts/:id', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { ref } = req.query as { ref?: string };
-    const agent = store.getAgent(id);
+    const flag = store.getFlag(id);
+    if (!flag) return reply.code(404).send({ error: 'artifact not found' });
+    if (/^https?:\/\//i.test(flag.ref))
+      return reply.code(400).send({ error: 'url refs are linked directly, not served' });
+    const agent = store.getAgent(flag.agentId);
     if (!agent) return reply.code(404).send({ error: 'agent not found' });
-    if (!ref) return reply.code(400).send({ error: 'ref required' });
-    if (/^https?:\/\//i.test(ref)) return reply.code(400).send({ error: 'url refs are linked directly, not served' });
-    const file = resolveConfinedArtifact(agent.cwd, ref);
+    const file = resolveConfinedArtifact(agent.cwd, flag.ref);
     if (!file) return reply.code(404).send({ error: 'artifact not found' });
     reply
       .header('content-type', artifactMime(file))
@@ -230,16 +238,22 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
 /**
  * Resolve a flagged artifact `ref` to an absolute path *within* `cwd`, or null if
  * it doesn't exist, isn't a regular file, or escapes the worktree (via `..` or a
- * symlink). `realpathSync` on both sides defeats symlink traversal; the prefix
- * check defeats `..`.
+ * symlink). Two guards: a *lexical* containment check runs before any filesystem
+ * access (rejecting absolute paths and `..` escapes up front), then `realpathSync`
+ * on both sides defeats symlink traversal.
  */
 function resolveConfinedArtifact(cwd: string, ref: string): string | null {
+  if (isAbsolute(ref)) return null;
+  const target = resolve(cwd, ref);
+  // Lexical containment, before touching the filesystem.
+  if (target !== cwd && !target.startsWith(cwd + sep)) return null;
   try {
     const root = realpathSync(cwd);
-    const target = realpathSync(resolve(root, ref));
-    if (target !== root && !target.startsWith(root + sep)) return null;
-    if (!statSync(target).isFile()) return null;
-    return target;
+    const real = realpathSync(target);
+    // Real-path containment: a symlink inside the worktree can't point outside it.
+    if (real !== root && !real.startsWith(root + sep)) return null;
+    if (!statSync(real).isFile()) return null;
+    return real;
   } catch {
     return null; // missing path, broken symlink, permission error — treat as not found
   }

@@ -283,6 +283,11 @@ export class Store {
     return flag;
   }
 
+  getFlag(id: string): AgentFlag | null {
+    const row = this.db.prepare(`SELECT * FROM agent_flags WHERE id=?`).get(id) as AgentFlagRow | undefined;
+    return row ? rowToFlag(row) : null;
+  }
+
   listFlags(agentId: string): AgentFlag[] {
     const rows = this.db
       .prepare(`SELECT * FROM agent_flags WHERE agent_id=? ORDER BY created_at ASC`)

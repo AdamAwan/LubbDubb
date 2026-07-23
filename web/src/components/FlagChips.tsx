@@ -15,7 +15,7 @@ export function FlagChips({ flags }: { flags: AgentFlag[] | undefined }): JSX.El
         <a
           key={f.id}
           className="chip small flag-chip"
-          href={artifactHref(f.agentId, f.ref)}
+          href={artifactHref(f)}
           target="_blank"
           rel="noopener noreferrer"
           title={`${f.kind}: ${f.ref}`}
