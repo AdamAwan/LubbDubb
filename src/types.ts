@@ -295,6 +295,36 @@ export interface Task {
   updatedAt: string;
 }
 
+/**
+ * An operator-launched job: a prompt queued from the cockpit that the harness
+ * turns into an agent. Unlike a {@link Task} (materialised the instant an agent
+ * spawns), a job is a durable request that persists *ahead of* dispatch — so it
+ * can sit in a queue when the fleet is at capacity and be dispatched in a later
+ * cycle. The dispatcher drains queued jobs before any world-driven rule, so a
+ * manual request takes priority for the next free slot.
+ */
+export type JobStatus =
+  | 'queued' // awaiting a free slot
+  | 'dispatched' // an agent was spawned for it (see taskId)
+  | 'cancelled'; // the operator dropped it before it ran
+
+export interface Job {
+  id: string;
+  /** Human-readable title (derived from the prompt when the operator omits one). */
+  title: string;
+  /** The prompt handed to the agent when this job is dispatched. */
+  prompt: string;
+  /** Whether it runs as a code agent (in a worktree) or a desk agent (scratch dir). */
+  kind: TaskKind;
+  /** For code jobs: the branch to work on. Null => derived (`job/<id>`) at dispatch. */
+  branch: string | null;
+  status: JobStatus;
+  /** The task this job was dispatched as, once it has been. Null while queued. */
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed';
 
 export interface Agent {

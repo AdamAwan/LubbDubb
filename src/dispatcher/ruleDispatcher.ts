@@ -90,6 +90,47 @@ export class RuleDispatcher implements Dispatcher {
       // 'hold' — already escalated; leave the origin alone this cycle.
     };
 
+    // 0: Operator-launched jobs outrank every world-driven rule. Queue them
+    // first (oldest-first) so the headroom cut below dispatches them ahead of
+    // every world-driven candidate — a manual request wins the next free slot;
+    // one that doesn't fit stays in the queue as `waiting` and is retried next
+    // cycle. No cooldown throttle applies (a job is a one-shot request, not a
+    // persistent signal): once dispatched it's marked so and leaves the queue.
+    // The `jobId` rides on the action so the executor marks the job dispatched
+    // only once its agent actually spawns.
+    for (const job of ctx.queuedJobs) {
+      const origin = `job:${job.id}`;
+      if (activeOrigins.has(origin)) continue;
+      const branch = job.kind === 'code' ? (job.branch ?? `job/${job.id}`) : null;
+      const reason = `Operator-launched job "${job.title}" takes priority for the next free slot.`;
+      const action: RawAction =
+        job.kind === 'code'
+          ? {
+              type: 'dispatch_code_agent',
+              branch: branch!,
+              title: job.title,
+              prompt: job.prompt,
+              originRef: origin,
+              originTitle: job.title,
+              originSummary: 'Operator-launched job.',
+              jobId: job.id,
+              rule: 'manual-job',
+              reason,
+            }
+          : {
+              type: 'dispatch_desk_agent',
+              title: job.title,
+              prompt: job.prompt,
+              originRef: origin,
+              originTitle: job.title,
+              originSummary: 'Operator-launched job.',
+              jobId: job.id,
+              rule: 'manual-job',
+              reason,
+            };
+      candidates.push({ origin, rule: 'manual-job', title: job.title, kind: job.kind, branch, reason, action });
+    }
+
     // 1–3: React to PR signals first — they're time-sensitive. At most one code
     // agent works a given branch, so a fresh signal for a branch that already
     // has a running agent is delivered to it, never a second dispatch. Dispatch

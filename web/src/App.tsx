@@ -8,6 +8,7 @@ import { EscalationCard } from './components/EscalationCard.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
 import { Vitals } from './components/Vitals.js';
 import { FleetControl } from './components/FleetControl.js';
+import { LaunchPanel } from './components/LaunchPanel.js';
 import { UsageChip } from './components/UsageChip.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { UpNext } from './components/UpNext.js';
@@ -156,6 +157,7 @@ export function App() {
       </header>
 
       {state.config.injectable && <InjectPanel onInjected={refresh} world={state.world} />}
+      <LaunchPanel jobs={state.jobs} onChanged={refresh} />
       <Vitals state={state} liveAgents={liveAgents.length} cap={state.control.cap} />
 
       <main className="grid">

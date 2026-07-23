@@ -135,6 +135,18 @@ export interface AgentFlag {
   ref: string;
   createdAt: string;
 }
+export interface Job {
+  id: string;
+  title: string;
+  prompt: string;
+  kind: string;
+  branch: string | null;
+  /** 'queued' | 'dispatched' | 'cancelled'. */
+  status: string;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Agent {
   id: string;
   taskId: string;
@@ -286,6 +298,8 @@ export interface AppState {
   };
   world: WorldSnapshot;
   tasks: Task[];
+  /** Operator-launched jobs, newest first — the queue (and its recent history). */
+  jobs: Job[];
   agents: Agent[];
   /** Artifacts/links agents surfaced mid-run, grouped by agentId in the UI. Optional so an older server degrades gracefully. */
   flags?: AgentFlag[];
