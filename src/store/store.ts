@@ -5,6 +5,8 @@ import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
 import type {
   Agent,
+  AgentFlag,
+  AgentFlagInput,
   AgentUsage,
   Decision,
   DeskBriefing,
@@ -311,6 +313,56 @@ export class Store {
     return this.listAgentsByStatus('starting', 'running', 'waiting').length;
   }
 
+  // -- Flags (surfaced artifacts) ------------------------------------------
+
+  /**
+   * Record (or refresh) an artifact an agent flagged. Deduped by (agent, ref):
+   * an agent re-flagging the same doc as it evolves updates the kind/label and
+   * bumps the timestamp on the existing row rather than inserting a duplicate.
+   * Returns the persisted flag (its stable id preserved across refreshes).
+   */
+  recordFlag(agentId: string, input: AgentFlagInput): AgentFlag {
+    const existing = this.db
+      .prepare(`SELECT id FROM agent_flags WHERE agent_id=? AND ref=?`)
+      .get(agentId, input.ref) as { id: string } | undefined;
+    const flag: AgentFlag = {
+      id: existing?.id ?? `flag_${nanoid(10)}`,
+      agentId,
+      kind: input.kind,
+      label: input.label,
+      ref: input.ref,
+      createdAt: this.now(),
+    };
+    this.db
+      .prepare(
+        `INSERT INTO agent_flags (id, agent_id, kind, label, ref, created_at)
+         VALUES (@id, @agentId, @kind, @label, @ref, @createdAt)
+         ON CONFLICT(agent_id, ref) DO UPDATE SET kind=excluded.kind, label=excluded.label, created_at=excluded.created_at`,
+      )
+      .run(flag);
+    return flag;
+  }
+
+  getFlag(id: string): AgentFlag | null {
+    const row = this.db.prepare(`SELECT * FROM agent_flags WHERE id=?`).get(id) as AgentFlagRow | undefined;
+    return row ? rowToFlag(row) : null;
+  }
+
+  listFlags(agentId: string): AgentFlag[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM agent_flags WHERE agent_id=? ORDER BY created_at ASC`)
+      .all(agentId) as AgentFlagRow[];
+    return rows.map(rowToFlag);
+  }
+
+  /** Every flag across all agents, newest first — the snapshot feed. */
+  listAllFlags(): AgentFlag[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM agent_flags ORDER BY created_at DESC, rowid DESC`)
+      .all() as AgentFlagRow[];
+    return rows.map(rowToFlag);
+  }
+
   // -- Transcripts ---------------------------------------------------------
 
   appendTranscript(agentId: string, chunk: string): void {
@@ -597,6 +649,14 @@ interface AgentRow {
   output_tokens: number | null;
   num_turns: number | null;
 }
+interface AgentFlagRow {
+  id: string;
+  agent_id: string;
+  kind: string;
+  label: string;
+  ref: string;
+  created_at: string;
+}
 interface EscalationRow {
   id: string;
   type: string;
@@ -678,6 +738,16 @@ function rowToAgent(r: AgentRow): Agent {
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
     numTurns: r.num_turns,
+  };
+}
+function rowToFlag(r: AgentFlagRow): AgentFlag {
+  return {
+    id: r.id,
+    agentId: r.agent_id,
+    kind: r.kind,
+    label: r.label,
+    ref: r.ref,
+    createdAt: r.created_at,
   };
 }
 function rowToEscalation(r: EscalationRow): Escalation {

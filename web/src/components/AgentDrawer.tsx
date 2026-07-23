@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import type { Agent, Task } from '../types.js';
+import type { Agent, AgentFlag, Task } from '../types.js';
 import { api } from '../api.js';
 import { statusDot, linkify, agentUsageLine } from './util.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
+import { FlagChips } from './FlagChips.js';
 
 /**
  * The drill-down: live terminal output for one agent (rendered with xterm.js)
@@ -18,6 +19,7 @@ export function AgentDrawer({
   task,
   refUrls,
   live,
+  flags,
   onClose,
   onRespond,
   onKill,
@@ -27,6 +29,7 @@ export function AgentDrawer({
   task: Task | null;
   refUrls: Record<string, string>;
   live: string | undefined;
+  flags?: AgentFlag[];
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
   onKill: () => Promise<unknown> | unknown;
@@ -151,6 +154,12 @@ export function AgentDrawer({
                 <span className="dispatch-reason-label">Dispatched because</span> {task.dispatchReason}
               </div>
             )}
+          </div>
+        )}
+        {flags && flags.length > 0 && (
+          <div className="drawer-flags">
+            <span className="drawer-flags-label">Artifacts</span>
+            <FlagChips flags={flags} />
           </div>
         )}
         <div className="terminal" ref={containerRef} style={{ padding: 8, overflow: 'hidden', minHeight: 240 }} />

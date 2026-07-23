@@ -125,6 +125,16 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
 }
+/** An artifact/link an agent surfaced mid-run via the flag sentinel (mirrors the server's AgentFlag). */
+export interface AgentFlag {
+  id: string;
+  agentId: string;
+  kind: string;
+  label: string;
+  /** A worktree-relative path (served via the artifact route) or an absolute http(s) URL. */
+  ref: string;
+  createdAt: string;
+}
 export interface Job {
   id: string;
   title: string;
@@ -291,6 +301,8 @@ export interface AppState {
   /** Operator-launched jobs, newest first — the queue (and its recent history). */
   jobs: Job[];
   agents: Agent[];
+  /** Artifacts/links agents surfaced mid-run, grouped by agentId in the UI. Optional so an older server degrades gracefully. */
+  flags?: AgentFlag[];
   escalations: Escalation[];
   decisions: Decision[];
   /**
@@ -324,6 +336,7 @@ export type ServerEvent =
   | { type: 'dirty' }
   | { type: 'agent:output'; agentId: string; delta: string }
   | { type: 'agent:transcript'; agentId: string; text: string }
+  | { type: 'agent:flag'; flag: AgentFlag }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'cycle:end'; cycleId: string; rationale: string }
   | { type: 'control:changed'; cap: number; paused: boolean }

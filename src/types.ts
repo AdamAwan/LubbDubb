@@ -356,6 +356,26 @@ export interface Agent {
   numTurns: number | null;
 }
 
+/**
+ * An artifact an agent surfaced to the cockpit mid-run via the flag sentinel
+ * (`@@LUBBDUBB_FLAG:…@@`) — a design doc, a report, a link. Generic on purpose:
+ * `kind`/`label` are cosmetic and `ref` is either a worktree-relative path (served
+ * through the confined artifact route) or an absolute http(s) URL. Deduped per
+ * agent by `ref`, so an agent re-flagging the same doc as it evolves just refreshes
+ * the timestamp rather than piling up duplicates.
+ */
+export interface AgentFlag {
+  id: string;
+  agentId: string;
+  kind: string;
+  label: string;
+  ref: string;
+  createdAt: string;
+}
+
+/** A flag as parsed from the sentinel, before the store assigns identity. */
+export type AgentFlagInput = Pick<AgentFlag, 'kind' | 'label' | 'ref'>;
+
 /** One cumulative usage report from a session's turn-end `result` event. */
 export interface AgentUsage {
   costUsd: number | null;

@@ -59,6 +59,19 @@ CREATE TABLE IF NOT EXISTS usage_events (
   at       TEXT NOT NULL
 );
 
+-- Artifacts an agent surfaced to the cockpit mid-run via the flag sentinel
+-- (a design doc, a report, a link). Deduped per agent by ref so an evolving doc
+-- refreshes in place; created_at tracks the most recent flag of that ref.
+CREATE TABLE IF NOT EXISTS agent_flags (
+  id         TEXT PRIMARY KEY,
+  agent_id   TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  ref        TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (agent_id, ref)
+);
+
 CREATE TABLE IF NOT EXISTS agent_transcripts (
   agent_id   TEXT NOT NULL,
   seq        INTEGER NOT NULL,
@@ -132,6 +145,7 @@ CREATE TABLE IF NOT EXISTS error_events (
   created_at TEXT NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);

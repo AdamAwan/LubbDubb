@@ -135,6 +135,25 @@ behaviors in sync. `PtySession` additionally handles the cross-chunk case (a sen
 across two PTY data chunks); on the line-delimited stream-JSON transport a sentinel always
 arrives whole inside one text block, so that machinery isn't needed there.
 
+**Flag sentinel (surfacing artifacts).** A third sentinel, `@@LUBBDUBB_FLAG:<payload>@@`, lets an
+agent push an artifact/link to the cockpit mid-run (a design doc, a report) without changing its
+status. Payload is a bare ref or a JSON `{kind?,label?,ref}` (`parseFlag`/`extractFlags` in
+`sentinels.ts`, pure + tested), where `ref` is a **worktree-relative path or an http(s) URL**. Both
+runtimes detect it on the _raw_ stream and emit `flag`; it strips from display through the same
+`stripSentinels`/hold machinery as the waiting sentinel (PtySession additionally strips complete
+flags from its detection tail via `stripFlags`, since — unlike done/waiting — a flag doesn't latch a
+status, so a sliding window would otherwise re-emit it). `AgentManager.recordFlag` persists it
+(`agent_flags`, deduped by `(agent, ref)` so an evolving doc refreshes in place), re-emits it as the
+`flag` event, and the `Hub` ships it as `agent:flag` + a `dirty`. `buildStateSnapshot` includes
+`flags` per snapshot; the cockpit groups them by agent onto the card/drawer as chips. Local-path
+refs are served by `GET /api/artifacts/:id` (addressed by **flag id**, so the served path comes from
+the stored flag row, not the request — the taint never reaches a path expression), **confined to the
+flag's agent worktree** (a lexical prefix check runs before any fs access; `realpathSync` then defeats
+symlink escape), **rate-limited** (`@fastify/rate-limit`, `global:false` + per-route opt-in so the
+cockpit's state polling is never throttled), and sandboxed (`Content-Security-Policy: sandbox`) so
+agent-authored HTML can't script the cockpit origin; URL refs are linked directly. It's purely
+additive detection — on in every agent mode, gated behind nothing.
+
 **Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
 each message's content blocks through the pure `renderBlocks` in
 `src/agents/streamTranscript.ts`: assistant text is passed through (sentinels stripped), a

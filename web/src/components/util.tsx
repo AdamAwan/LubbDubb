@@ -19,6 +19,16 @@ export function refLink(token: string, refUrls: Record<string, string>): ReactNo
   return url ? <ExtLink href={url}>{token}</ExtLink> : token;
 }
 
+/**
+ * The URL to open a flagged artifact: an http(s) ref opens directly, a
+ * worktree-relative path routes through the confined, sandboxed artifact route
+ * (addressed by flag id — the server derives the path from the stored flag).
+ */
+export function artifactHref(flag: { id: string; ref: string }): string {
+  if (/^https?:\/\//i.test(flag.ref)) return flag.ref;
+  return `/api/artifacts/${encodeURIComponent(flag.id)}`;
+}
+
 // Issue/PR mentions in free text — the universal `#<number>` GitHub syntax.
 const REF_TOKEN = /#\d+/g;
 

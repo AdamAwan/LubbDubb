@@ -459,6 +459,46 @@ body {
   font-size: 13px;
 }
 
+/* Flagged artifacts (design docs, reports, links) an agent surfaced mid-run. */
+.flag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  color: var(--blue);
+  border-color: #234a6e;
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flag-chip:hover {
+  border-color: var(--blue);
+}
+.flag-chip-kind {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.drawer-flags {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0 2px;
+}
+.drawer-flags-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .badge {
   font-size: 11px;
   text-transform: uppercase;
