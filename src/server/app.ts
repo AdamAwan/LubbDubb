@@ -1,8 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { extname, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
 import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
@@ -67,6 +67,27 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     const agent = store.getAgent(id);
     if (!agent) return reply.code(404).send({ error: 'agent not found' });
     return { agentId: id, transcript: store.getTranscript(id) };
+  });
+
+  // Serve a local artifact an agent flagged (a design doc, a report). The `ref`
+  // is a path *relative to the agent's worktree*, confined to it — a symlink or
+  // `..` that escapes the worktree is refused. The response is sandboxed (CSP
+  // `sandbox`) so an agent-authored HTML file can't script the cockpit's origin.
+  // URL flags aren't served here; the cockpit links those directly.
+  app.get('/api/agents/:id/artifact', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { ref } = req.query as { ref?: string };
+    const agent = store.getAgent(id);
+    if (!agent) return reply.code(404).send({ error: 'agent not found' });
+    if (!ref) return reply.code(400).send({ error: 'ref required' });
+    if (/^https?:\/\//i.test(ref)) return reply.code(400).send({ error: 'url refs are linked directly, not served' });
+    const file = resolveConfinedArtifact(agent.cwd, ref);
+    if (!file) return reply.code(404).send({ error: 'artifact not found' });
+    reply
+      .header('content-type', artifactMime(file))
+      .header('content-security-policy', 'sandbox allow-scripts allow-downloads')
+      .header('x-content-type-options', 'nosniff');
+    return reply.send(readFileSync(file));
   });
 
   // -- Actions -------------------------------------------------------------
@@ -206,6 +227,44 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   return { app, hub };
 }
 
+/**
+ * Resolve a flagged artifact `ref` to an absolute path *within* `cwd`, or null if
+ * it doesn't exist, isn't a regular file, or escapes the worktree (via `..` or a
+ * symlink). `realpathSync` on both sides defeats symlink traversal; the prefix
+ * check defeats `..`.
+ */
+function resolveConfinedArtifact(cwd: string, ref: string): string | null {
+  try {
+    const root = realpathSync(cwd);
+    const target = realpathSync(resolve(root, ref));
+    if (target !== root && !target.startsWith(root + sep)) return null;
+    if (!statSync(target).isFile()) return null;
+    return target;
+  } catch {
+    return null; // missing path, broken symlink, permission error — treat as not found
+  }
+}
+
+const ARTIFACT_MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.csv': 'text/csv; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.pdf': 'application/pdf',
+};
+
+/** Content type for a served artifact, by extension; opaque octet-stream otherwise. */
+function artifactMime(file: string): string {
+  return ARTIFACT_MIME[extname(file).toLowerCase()] ?? 'application/octet-stream';
+}
+
 export function buildStateSnapshot(system: System) {
   const { store, connector, config, runtimeControl, harness } = system;
   // getState is async on the interface, but FakeConnector is synchronous under
@@ -259,6 +318,9 @@ export function buildStateSnapshot(system: System) {
       },
       tasks,
       agents: store.listAgents(),
+      // Artifacts agents surfaced mid-run (design docs, reports, links). The
+      // cockpit groups these by agentId onto the fleet card / drawer.
+      flags: store.listAllFlags(),
       escalations: store.listEscalations(),
       decisions: store.listDecisions(100),
       // The "Up next" queue: the last cycle's ordered pickup plan with the

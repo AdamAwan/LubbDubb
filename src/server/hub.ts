@@ -1,7 +1,7 @@
 import type { WebSocket } from 'ws';
 import type { System } from '../system.js';
 import { stripAnsi } from '../agents/streamTranscript.js';
-import type { WorldEvent } from '../types.js';
+import type { AgentFlag, WorldEvent } from '../types.js';
 
 export type ServerEvent =
   | { type: 'cycle:start'; cycleId: string; source: string }
@@ -9,6 +9,7 @@ export type ServerEvent =
   | { type: 'agent:output'; agentId: string; delta: string }
   | { type: 'agent:transcript'; agentId: string; text: string }
   | { type: 'agent:tail'; agentId: string; line: string }
+  | { type: 'agent:flag'; flag: AgentFlag }
   | { type: 'agent:status'; agentId: string; taskId: string; status: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'agent:done'; agentId: string; taskId: string; status: string }
@@ -60,6 +61,12 @@ export class Hub {
 
     agents.on('output', (e) => this.handleOutput(e.agentId, e.delta));
     agents.on('transcript', (e) => this.handleTranscript(e.agentId, e.text));
+    // Flags are low-volume and shown fleet-wide (a chip on the card), so unlike
+    // output they're broadcast to every socket, not just an agent's subscribers.
+    agents.on('flag', (e) => {
+      this.broadcast({ type: 'agent:flag', flag: e.flag });
+      this.broadcast({ type: 'dirty' });
+    });
     // Usage lands on the agent row at turn end; a coarse dirty repaints the
     // fleet cards' cost/tokens without a dedicated frame type.
     agents.on('usage', () => this.broadcast({ type: 'dirty' }));

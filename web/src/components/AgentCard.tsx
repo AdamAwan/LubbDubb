@@ -1,6 +1,7 @@
-import type { Agent, Task } from '../types.js';
+import type { Agent, AgentFlag, Task } from '../types.js';
 import { statusDot, elapsed, linkify, refLink, agentUsageLine } from './util.js';
 import { ConfirmButton } from './ConfirmButton.js';
+import { FlagChips } from './FlagChips.js';
 
 export function AgentCard({
   agent,
@@ -8,6 +9,7 @@ export function AgentCard({
   now,
   refUrls,
   lastLine,
+  flags,
   onOpen,
   onKill,
   past,
@@ -17,6 +19,7 @@ export function AgentCard({
   now: number;
   refUrls: Record<string, string>;
   lastLine?: string;
+  flags?: AgentFlag[];
   onOpen: () => void;
   onKill?: () => Promise<unknown> | unknown;
   past?: boolean;
@@ -44,6 +47,7 @@ export function AgentCard({
         )}
       </div>
       {agent.waitingReason && <div className="waiting-reason">⏳ {agent.waitingReason}</div>}
+      <FlagChips flags={flags} />
       {active && lastLine && <div className="last-line mono">{lastLine}</div>}
       <div className="card-actions">
         <button className="btn" onClick={onOpen}>

@@ -114,6 +114,15 @@ export function App() {
   // is no longer streamed to non-subscribed fleet cards.
   const lastLineFor = (id: string): string | undefined => tails.current.get(id);
 
+  // Artifacts agents flagged mid-run, grouped by agent for the card/drawer. The
+  // `dirty` that rides with each `agent:flag` refetches state, so this stays live.
+  const flagsByAgent = new Map<string, typeof state.flags>();
+  for (const f of state.flags ?? []) {
+    const list = flagsByAgent.get(f.agentId) ?? [];
+    list.push(f);
+    flagsByAgent.set(f.agentId, list);
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -171,6 +180,7 @@ export function App() {
               now={now}
               refUrls={state.refUrls}
               lastLine={lastLineFor(a.id)}
+              flags={flagsByAgent.get(a.id)}
               onOpen={() => setSelected(a.id)}
               onKill={() => api.killAgent(a.id).then(refresh)}
             />
@@ -184,6 +194,7 @@ export function App() {
               task={taskFor(state, a)}
               now={now}
               refUrls={state.refUrls}
+              flags={flagsByAgent.get(a.id)}
               onOpen={() => setSelected(a.id)}
               past
             />
@@ -244,6 +255,7 @@ export function App() {
           task={taskFor(state, selectedAgent)}
           refUrls={state.refUrls}
           live={liveOutput.current.get(selectedAgent.id)}
+          flags={flagsByAgent.get(selectedAgent.id)}
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}
           onKill={() => api.killAgent(selectedAgent.id).then(refresh)}

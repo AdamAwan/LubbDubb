@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from './session.js';
-import { DONE_SENTINEL, extractWaitingReason } from './sentinels.js';
+import { DONE_SENTINEL, extractFlags, extractWaitingReason } from './sentinels.js';
 import { resolveExecutable } from './resolveCommand.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
 import type { AgentUsage } from '../types.js';
@@ -130,7 +130,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     if (ev.type === 'assistant') {
       const blocks = contentBlocks(ev);
       // Detection scans the raw assistant text (sentinels intact); display strips them.
-      this.turnText += assistantText(blocks);
+      const raw = assistantText(blocks);
+      this.turnText += raw;
+      // Flags carry no status meaning, so surface them as they land rather than at
+      // turn end. A flag always arrives whole in one text block on this transport.
+      for (const flag of extractFlags(raw)) this.emit('flag', flag);
       const display = renderBlocks(blocks);
       if (display) this.emit('output', display);
       return;

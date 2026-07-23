@@ -4,7 +4,8 @@ import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
-import type { Agent, AgentStatus, AgentUsage, Task } from '../types.js';
+import type { Agent, AgentFlag, AgentStatus, AgentUsage, Task } from '../types.js';
+import type { ParsedFlag } from './sentinels.js';
 import type { AgentSession, SessionFactory } from './session.js';
 
 export interface AgentManagerOptions {
@@ -67,6 +68,8 @@ interface AgentManagerEvents {
   reaped: [{ agentId: string; taskId: string; status: 'done' | 'failed' }];
   status: [{ agentId: string; taskId: string; status: AgentStatus }];
   usage: [{ agentId: string; taskId: string; usage: AgentUsage }];
+  /** The agent surfaced an artifact/link mid-run (already persisted, deduped by ref). */
+  flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
 }
 
 /**
@@ -274,6 +277,13 @@ export class AgentManager extends EventEmitter {
     session.on('usage', (usage: AgentUsage) => {
       this.store.recordAgentUsage(agentId, usage);
       this.emit('usage', { agentId, taskId: task.id, usage });
+    });
+
+    // An artifact/link the agent surfaced: persist (deduped by ref) and re-emit
+    // the stored flag so the server can stream it to the cockpit.
+    session.on('flag', (flag: ParsedFlag) => {
+      const saved = this.store.recordFlag(agentId, flag);
+      this.emit('flag', { agentId, taskId: task.id, flag: saved });
     });
 
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));

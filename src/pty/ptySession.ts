@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { PtyBackend, PtyProcess } from './backend.js';
 import { TerminalTranscript } from './terminalTranscript.js';
+import { FLAG_PREFIX, FLAG_SUFFIX, extractFlags, stripFlags } from '../agents/sentinels.js';
 
 export type PtySessionStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'failed';
 
@@ -18,6 +19,9 @@ export interface PtySessionOptions {
   /** Sentinel of the form `PREFIX<reason>SUFFIX` an agent prints when it needs input. */
   waitingSentinelPrefix?: string;
   waitingSentinelSuffix?: string;
+  /** Sentinel of the form `PREFIX<payload>SUFFIX` an agent prints to surface an artifact/link to the cockpit. */
+  flagSentinelPrefix?: string;
+  flagSentinelSuffix?: string;
   /** Additional literal substrings that mean "waiting for input" (e.g. tool-permission prompts). */
   waitingPatterns?: string[];
   /**
@@ -50,6 +54,9 @@ const DEFAULTS = {
   doneSentinel: '@@LUBBDUBB_DONE@@',
   waitingSentinelPrefix: '@@LUBBDUBB_WAITING:',
   waitingSentinelSuffix: '@@',
+  // Single source of truth for the flag protocol lives in agents/sentinels.ts.
+  flagSentinelPrefix: FLAG_PREFIX,
+  flagSentinelSuffix: FLAG_SUFFIX,
   waitingPatterns: [] as string[],
   submitDelayMs: 60,
   legibleTranscript: false,
@@ -72,6 +79,7 @@ const TAIL_WINDOW = 4096;
  *                               with `legibleTranscript` — settled-text appends)
  *   'transcript' (text: string) — legible mode only: the settled text was
  *                               rewritten in place; replaces all prior output
+ *   'flag'   (flag: ParsedFlag)— an artifact/link the agent surfaced mid-run
  *   'waiting' (reason: string)— session is parked awaiting input
  *   'done'   ()               — clean completion (sentinel or exit code 0)
  *   'exit'   (code: number)   — process ended (any code)
@@ -100,6 +108,8 @@ export class PtySession extends EventEmitter {
       doneSentinel: DEFAULTS.doneSentinel,
       waitingSentinelPrefix: DEFAULTS.waitingSentinelPrefix,
       waitingSentinelSuffix: DEFAULTS.waitingSentinelSuffix,
+      flagSentinelPrefix: DEFAULTS.flagSentinelPrefix,
+      flagSentinelSuffix: DEFAULTS.flagSentinelSuffix,
       submitDelayMs: DEFAULTS.submitDelayMs,
       legibleTranscript: DEFAULTS.legibleTranscript,
       transcriptDebounceMs: DEFAULTS.transcriptDebounceMs,
@@ -192,6 +202,12 @@ export class PtySession extends EventEmitter {
 
     const hay = this.tail + data;
 
+    // Flags surface an artifact/link to the cockpit and carry no status meaning,
+    // so emit each complete one (whichever status follows) and strip it from the
+    // retained tail — a sliding window would otherwise re-emit it every chunk
+    // until it scrolled out. A partial flag is left for the next chunk to complete.
+    for (const flag of extractFlags(hay)) this.emit('flag', flag);
+
     // Completion sentinel wins over everything. Require it on a token boundary
     // so an agent echoing the literal string mid-line can't fake a finish.
     if (findDelimited(hay, this.opts.doneSentinel) !== -1) {
@@ -210,7 +226,7 @@ export class PtySession extends EventEmitter {
     if (reason !== null) {
       this.tail = '';
       this.setWaiting(reason);
-      this.tail = keepTail(hay);
+      this.tail = keepTail(stripFlags(hay));
       return;
     }
 
@@ -226,7 +242,7 @@ export class PtySession extends EventEmitter {
 
     // Any output while parked means the agent kept going on its own.
     if (this._status === 'waiting') this.setStatus('running');
-    this.tail = keepTail(hay);
+    this.tail = keepTail(stripFlags(hay));
   }
 
   /** Emit `data` with complete sentinels removed, buffering an ambiguous trailing fragment that a following chunk might complete into a sentinel. */
@@ -242,44 +258,30 @@ export class PtySession extends EventEmitter {
     else this.emit('output', out);
   }
 
-  /** Remove fully-formed done and waiting (`PREFIX…SUFFIX`) sentinels; incomplete ones are left for {@link ambiguousTailStart} to hold. */
+  /** Remove fully-formed done, waiting and flag (`PREFIX…SUFFIX`) sentinels; incomplete ones are left for {@link ambiguousTailStart} to hold. */
   private stripCompleteSentinels(s: string): string {
-    const { doneSentinel: done, waitingSentinelPrefix: pre, waitingSentinelSuffix: suf } = this.opts;
+    const { doneSentinel: done } = this.opts;
     if (done) s = s.split(done).join('');
-    if (pre && suf) {
-      let out = '';
-      let i = 0;
-      for (;;) {
-        const start = s.indexOf(pre, i);
-        if (start === -1) {
-          out += s.slice(i);
-          break;
-        }
-        const end = s.indexOf(suf, start + pre.length);
-        if (end === -1) {
-          out += s.slice(i); // no closing suffix yet: keep, held back below
-          break;
-        }
-        out += s.slice(i, start);
-        i = end + suf.length;
-      }
-      s = out;
-    }
+    s = stripSpans(s, this.opts.waitingSentinelPrefix, this.opts.waitingSentinelSuffix);
+    s = stripSpans(s, this.opts.flagSentinelPrefix, this.opts.flagSentinelSuffix);
     return s;
   }
 
   /** Index from which the tail is an incomplete sentinel we must withhold (`s.length` = emit everything). */
   private ambiguousTailStart(s: string): number {
-    const { doneSentinel: done, waitingSentinelPrefix: pre } = this.opts;
-    // An un-terminated waiting prefix: its reason and closing suffix may still
-    // be arriving, so hold from the prefix onward.
-    if (pre) {
+    const { doneSentinel: done, waitingSentinelPrefix: waitPre, flagSentinelPrefix: flagPre } = this.opts;
+    // An un-terminated waiting/flag prefix: its payload and closing suffix may
+    // still be arriving, so hold from the earliest such prefix onward.
+    let hold = s.length;
+    for (const pre of [waitPre, flagPre]) {
+      if (!pre) continue;
       const p = s.indexOf(pre);
-      if (p !== -1) return p;
+      if (p !== -1 && p < hold) hold = p;
     }
+    if (hold < s.length) return hold;
     // Otherwise hold the longest trailing run that is a proper prefix of a
     // sentinel token, so a boundary-split sentinel is never half-emitted.
-    const tokens = [done, pre].filter((t) => t);
+    const tokens = [done, waitPre, flagPre].filter((t) => t);
     const maxLen = Math.max(0, ...tokens.map((t) => t.length - 1));
     for (let k = Math.min(maxLen, s.length); k >= 1; k--) {
       const suffix = s.slice(s.length - k);
@@ -387,6 +389,28 @@ export class PtySession extends EventEmitter {
 
 function keepTail(s: string): string {
   return s.length > TAIL_WINDOW ? s.slice(-TAIL_WINDOW) : s;
+}
+
+/** Remove every complete `prefix…suffix` span, leaving an unterminated trailing fragment for {@link PtySession.ambiguousTailStart} to hold. */
+function stripSpans(s: string, prefix: string, suffix: string): string {
+  if (!prefix || !suffix) return s;
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const start = s.indexOf(prefix, i);
+    if (start === -1) {
+      out += s.slice(i);
+      break;
+    }
+    const end = s.indexOf(suffix, start + prefix.length);
+    if (end === -1) {
+      out += s.slice(i); // no closing suffix yet: keep, held back by ambiguousTailStart
+      break;
+    }
+    out += s.slice(i, start);
+    i = end + suffix.length;
+  }
+  return out;
 }
 
 /** A sentinel boundary: start/end of the buffer, or a whitespace char. */
