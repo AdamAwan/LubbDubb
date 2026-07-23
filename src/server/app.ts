@@ -240,7 +240,7 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
 }
 
 export function buildStateSnapshot(system: System) {
-  const { store, connector, config, runtimeControl } = system;
+  const { store, connector, config, runtimeControl, harness } = system;
   // getState is async on the interface, but FakeConnector is synchronous under
   // the hood; read the same persisted world directly for a snapshot.
   return connector.getState().then((world) => {
@@ -297,6 +297,10 @@ export function buildStateSnapshot(system: System) {
       agents: store.listAgents(),
       escalations: store.listEscalations(),
       decisions: store.listDecisions(100),
+      // The "Up next" queue: the last cycle's ordered pickup plan with the
+      // headroom cut (issue #69). A per-pulse projection — null until a cycle
+      // has run, or when the active dispatcher doesn't materialise a plan.
+      upcoming: harness.upcoming,
       worldEvents: store.listWorldEvents(100),
       // Recorded failures (cycle exceptions, provider outages, agent crashes,
       // route 500s) for the cockpit's Errors panel.

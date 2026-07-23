@@ -214,6 +214,30 @@ export interface DispatchRule {
   description: string;
 }
 
+/** One ranked candidate in the dispatcher's pickup plan (mirrors the server's QueueItem). */
+export interface QueueItem {
+  origin: string;
+  /** The dispatcher rule that raised the candidate (a `dispatchRules` key). */
+  rule: string;
+  title: string;
+  kind: 'code' | 'desk';
+  branch: string | null;
+  /** Above the headroom cut, waiting on a free slot, or throttled by the cooldown. */
+  status: 'dispatching' | 'waiting' | 'cooldown';
+  reason: string;
+}
+
+/**
+ * The last cycle's ordered pickup plan — the "Up next" queue. A per-pulse
+ * projection the dispatcher recomputes from the world, not a persisted FIFO.
+ */
+export interface UpcomingPlan {
+  cycleId: string;
+  /** When the world this plan ranks was observed. */
+  at: string;
+  items: QueueItem[];
+}
+
 export type WorldEventKind =
   | 'pr_opened'
   | 'pr_ci'
@@ -269,6 +293,12 @@ export interface AppState {
   agents: Agent[];
   escalations: Escalation[];
   decisions: Decision[];
+  /**
+   * The dispatcher's "Up next" queue from the last pulse, or null when no cycle
+   * has run yet / the active dispatcher doesn't materialise a plan (LLM).
+   * Optional so a cockpit against an older server degrades to no panel.
+   */
+  upcoming?: UpcomingPlan | null;
   worldEvents: WorldEvent[];
   /** Recorded failures, newest first — the Errors panel. */
   errors: ErrorLogEntry[];

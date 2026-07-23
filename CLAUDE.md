@@ -62,19 +62,29 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   registry so the cockpit's Decision log can expand a row into the rule that fired. If you add
   a dispatcher branch, add its registry entry and tag the emitted actions. LLM-dispatcher
   actions carry no rule (null) by design.
+- **The "Up next" queue (issue #69)** is a rank-then-slice inside `RuleDispatcher.decide`:
+  agent-dispatch rules collect ordered `Candidate`s (PR concerns get a cross-PR urgency
+  sort — CI > base-update > comment, then PR number), and only the final walk applies the
+  headroom cut, dispatching the above-cut prefix while the whole ranked list is returned
+  as `DispatchResult.upcoming` (`QueueItem[]`: `dispatching`/`waiting`/`cooldown`). If you
+  add a dispatch rule, route it through the candidate list — an inline `raw.push` of a
+  `dispatch_*` action would bypass both the cut and the queue. The `Harness` caches the
+  last plan (`harness.upcoming`, null for the LLM dispatcher which returns none) and
+  `buildStateSnapshot` ships it as `upcoming`; the cockpit's `UpNext` panel draws the
+  cut-line. It's a per-pulse projection — never treat it as a persisted FIFO.
 - **Operator-launched jobs (the `jobs` table + rule 0).** A job is an ad-hoc prompt queued from
   the cockpit (`POST /api/jobs` → `Store.createJob`, status `queued`). Unlike a `Task` (created
   the instant an agent spawns), a job persists _ahead of_ dispatch so it can sit in a queue when
-  the fleet is at capacity. The dispatcher drains queued jobs (`DispatchContext.queuedJobs`, wired
-  from `store.listQueuedJobs()`) **before any world-driven rule** — rule `manual-job` (number `0`)
-  in `ruleDispatcher.ts` — claiming headroom first so a manual request takes the next free slot;
-  the ClaudeDispatcher gets the same queue in its prompt. The emitted `dispatch_*` action carries a
-  `jobId`, and the executor calls `Store.markJobDispatched(jobId, task.id)` **only after** the agent
-  actually spawns — so a job the cap/pause gate holds stays `queued` and is retried next cycle (the
-  queue behaviour is the soft headroom gate: at capacity the dispatcher advertises zero headroom, so
-  the job isn't planned, not that the executor defers it). `Store.cancelJob` drops a still-queued job;
-  a dispatched one is a live agent (kill it instead). The `jobs` table is a fresh `CREATE TABLE`, so no
-  `migrate()` entry is needed. Tests: `test/jobQueue.test.ts`.
+  the fleet is at capacity. The dispatcher pushes queued jobs (`DispatchContext.queuedJobs`, wired
+  from `store.listQueuedJobs()`) onto the front of the `Candidate` list **before any world-driven
+  rule** — rule `manual-job` (number `0`) — so the headroom cut dispatches them first (a manual
+  request takes the next free slot); a job below the cut shows as `waiting` in the Up next queue and
+  is retried next cycle. No cooldown throttle applies (a job is a one-shot request). The ClaudeDispatcher
+  gets the same queue in its prompt. The emitted `dispatch_*` action carries a `jobId`, and the executor
+  calls `Store.markJobDispatched(jobId, task.id)` **only after** the agent actually spawns — so a job the
+  cap/pause gate holds stays `queued`. `Store.cancelJob` drops a still-queued job; a dispatched one is a
+  live agent (kill it instead). The `jobs` table is a fresh `CREATE TABLE`, so no `migrate()` entry is
+  needed. Tests: `test/jobQueue.test.ts`.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are
