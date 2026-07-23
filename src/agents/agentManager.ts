@@ -57,6 +57,8 @@ export interface AgentManagerOptions {
    * files list / artifact chips. Unset (mock runtime) → no capture.
    */
   fileEvents?: FileEventsSpool;
+  /** Worktree-relative folder whose files are promoted to artifacts (any extension). See {@link classifyArtifact}. */
+  docsFolderPrefix?: string;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
 }
@@ -311,7 +313,7 @@ export class AgentManager extends EventEmitter {
   /** Record one captured write; promote report-like paths to an artifact chip. */
   private ingestFileEvent(agent: Agent, rec: FileEventRecord): void {
     const path = toWorktreeRelative(agent.cwd, rec.path);
-    const { promoted, kind } = classifyArtifact(path);
+    const { promoted, kind } = classifyArtifact(path, this.opts.docsFolderPrefix);
     this.store.recordFile(agent.id, { path, tool: rec.tool, promoted });
     this.emit('files', { agentId: agent.id, taskId: agent.taskId });
     if (promoted) {

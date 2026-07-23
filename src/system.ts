@@ -179,6 +179,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     resumable: agentSetup.resumable,
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
     fileEvents,
+    docsFolderPrefix: config.docsFolderPrefix,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);

@@ -89,17 +89,30 @@ const REPORT_KINDS: Record<string, string> = {
 /**
  * Decide whether a written path is a *report* (promote it to an artifact chip,
  * as the flag sentinel does today) or just a *code change* (track it in the
- * files list only). A `reports/` path segment promotes regardless of extension.
- * Pure and stable per path, so re-recording the same file is idempotent.
+ * files list only). Promotes when the path is under `docsPrefix` (the configured
+ * artifacts folder — any extension) or under a `reports/` segment, else falls
+ * back to the report/doc extension allowlist. Pure and stable per path, so
+ * re-recording the same file is idempotent.
  */
-export function classifyArtifact(path: string): { promoted: boolean; kind: string } {
+export function classifyArtifact(path: string, docsPrefix?: string): { promoted: boolean; kind: string } {
   const segs = path.split(/[\\/]/);
   const base = segs[segs.length - 1] ?? path;
   const dot = base.lastIndexOf('.');
   const ext = dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+  if (isUnderPrefix(segs, docsPrefix)) return { promoted: true, kind: REPORT_KINDS[ext] ?? 'report' };
   if (segs.some((s) => /^reports?$/i.test(s))) return { promoted: true, kind: REPORT_KINDS[ext] ?? 'report' };
   const kind = REPORT_KINDS[ext];
   return kind ? { promoted: true, kind } : { promoted: false, kind: 'file' };
+}
+
+/** True when the path's leading segments match every segment of `prefix` (separator-agnostic). */
+function isUnderPrefix(pathSegs: string[], prefix: string | undefined): boolean {
+  if (!prefix) return false;
+  const p = prefix.split(/[\\/]/).filter(Boolean);
+  const s = pathSegs.filter(Boolean);
+  // A file *under* the prefix has strictly more segments than the prefix itself.
+  if (p.length === 0 || s.length <= p.length) return false;
+  return p.every((seg, i) => seg === s[i]);
 }
 
 /**

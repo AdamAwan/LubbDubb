@@ -169,16 +169,27 @@ Because status-line and file-events must share one `--settings` (the flag has no
 `AgentManager.drainFileEvents` (piggybacked on the `output` stream + a final drain at
 terminal/kill, so no polling timer) folds each captured write in through the pure `classifyArtifact`:
 **every** path is recorded in the `agent_files` table (the drawer's "files changed" list, snapshot
-key `files`), while **report-like** ones (a positive extension allowlist + any `reports/` segment)
-additionally go through the _same_ `Store.recordFlag` + `flag` event as a sentinel flag — so a report
-becomes a chip via the identical dedup / `agent:flag` / confined `GET /api/artifacts/:id` machinery.
-Absolute paths inside the worktree are stored worktree-relative so the artifact route can serve them.
-The `FileEventsSpool` (`dirFor`/`drain`/`dispose`) is the read side; the spool dir is minted per
-spawn (independent of the resume session id, so stream agents get one) and disposed on reap. The
-flag sentinel stays supported as an optional intent override (URLs, custom `kind`/`label`) but is no
-longer _required_. The done/waiting sentinels are unaffected — they're already injected centrally by
-`PROTOCOL_SYSTEM_PROMPT` and carry intent a hook can't infer. `agent_files` is a fresh `CREATE
-TABLE`, so no `migrate()` entry. Tests: `test/fileEvents.test.ts`.
+key `files`), while **report-like** ones additionally go through the _same_ `Store.recordFlag` +
+`flag` event as a sentinel flag — so a report becomes a chip via the identical dedup / `agent:flag` /
+confined `GET /api/artifacts/:id` machinery. Promotion is: under the configured `docsFolderPrefix`
+(an artifacts folder — _any_ extension), or under a `reports/` segment, else the report/doc extension
+allowlist. Absolute paths inside the worktree are stored worktree-relative so the artifact route can
+serve them. The `FileEventsSpool` (`dirFor`/`drain`/`dispose`) is the read side; the spool dir is
+minted per spawn (independent of the resume session id, so stream agents get one) and disposed on
+reap. The flag sentinel stays supported as an optional intent override (URLs, custom `kind`/`label`)
+but is no longer _required_. The done/waiting sentinels are unaffected — they're already injected
+centrally by `PROTOCOL_SYSTEM_PROMPT` and carry intent a hook can't infer. `agent_files` is a fresh
+`CREATE TABLE`, so no `migrate()` entry. Tests: `test/fileEvents.test.ts`.
+
+_Coexists with the target repo's own config (verified)._ LubbDubb agents run in a **git worktree of
+the repo they're working on**, so that repo's committed `.claude/settings.json`, `.claude/skills/`,
+and `CLAUDE.md` are all present in the cwd and load normally. The hook rides on `--settings`, which
+is an _additional_ settings source: hooks **merge** across sources (like permission rules, not
+last-one-wins), so our `PostToolUse` entry and the target repo's own hooks **both** fire — confirmed
+empirically with a nested `claude` run where a project hook and a `--settings` hook both fired on one
+`Write`. Skills/CLAUDE.md are filesystem-discovered and unaffected by `--settings`. Our hook is
+additionally env-gated on `$LUBBDUBB_EVENTS_DIR` (set only in the spawn env), so it's a silent no-op
+for a human running `claude` in that repo by hand.
 
 **Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
 each message's content blocks through the pure `renderBlocks` in

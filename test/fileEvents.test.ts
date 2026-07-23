@@ -45,6 +45,20 @@ test('classifyArtifact promotes anything under a reports/ segment and picks a ki
   assert.equal(classifyArtifact('flow.svg').kind, 'diagram');
 });
 
+test('classifyArtifact promotes any extension under the configured docsFolderPrefix', () => {
+  // A file the heuristic would ignore is promoted once it lands under the prefix.
+  assert.equal(classifyArtifact('src/index.ts').promoted, false);
+  assert.equal(classifyArtifact('src/index.ts', 'docs').promoted, false); // outside the prefix
+  assert.equal(classifyArtifact('docs/index.ts', 'docs').promoted, true); // under it → promoted
+  assert.equal(classifyArtifact('docs/plan', 'docs').promoted, true); // even with no extension
+  // Multi-segment prefix, separator-agnostic; a trailing slash is tolerated.
+  assert.equal(classifyArtifact('out/reports/x.bin', 'out/reports/').promoted, true);
+  // A sibling folder that merely shares a name prefix is not "under" it.
+  assert.equal(classifyArtifact('docsy/x.ts', 'docs').promoted, false);
+  // The prefix folder file still gets a sensible kind from its extension.
+  assert.equal(classifyArtifact('docs/report.md', 'docs').kind, 'report');
+});
+
 // -- settings wiring ---------------------------------------------------------
 
 test('the file-events hook targets the file-writing tools and reads $LUBBDUBB_EVENTS_DIR', () => {
@@ -70,6 +84,14 @@ test('buildClaudeArgs merges file-events + status-line into one --settings; stre
 
   assert.ok(!buildClaudeArgs({}).includes('--settings'), 'off by default');
   assert.ok(!buildClaudeStreamArgs({}).includes('--settings'), 'off by default');
+});
+
+test('docsFolderPrefix is carried through loadConfig', () => {
+  assert.equal(
+    loadConfig({ dispatcher: 'rule', agentMode: 'raw', docsFolderPrefix: 'artifacts' }).docsFolderPrefix,
+    'artifacts',
+  );
+  assert.equal(loadConfig({ dispatcher: 'rule', agentMode: 'raw' }).docsFolderPrefix, undefined);
 });
 
 // -- spool round-trip --------------------------------------------------------
