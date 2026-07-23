@@ -376,6 +376,28 @@ export interface AgentFlag {
 /** A flag as parsed from the sentinel, before the store assigns identity. */
 export type AgentFlagInput = Pick<AgentFlag, 'kind' | 'label' | 'ref'>;
 
+/**
+ * A file an agent wrote, captured by the file-events `PostToolUse` hook (not the
+ * flag sentinel — so it needs no cooperation from the agent's prompt). Every
+ * write is tracked as the "files changed" list; `promoted` ones are additionally
+ * surfaced as an {@link AgentFlag} chip (a report/doc, per `classifyArtifact`).
+ * Deduped per agent by `path`.
+ */
+export interface AgentFile {
+  id: string;
+  agentId: string;
+  /** Worktree-relative when the write landed inside the agent's cwd, else as reported. */
+  path: string;
+  /** The tool that wrote it (Write/Edit/…), or null if the hook didn't report one. */
+  tool: string | null;
+  /** True when this was surfaced as an artifact chip (a report, not a code change). */
+  promoted: boolean;
+  createdAt: string;
+}
+
+/** A file event as captured, before the store assigns identity. */
+export type AgentFileInput = Pick<AgentFile, 'path' | 'tool' | 'promoted'>;
+
 /** One cumulative usage report from a session's turn-end `result` event. */
 export interface AgentUsage {
   costUsd: number | null;

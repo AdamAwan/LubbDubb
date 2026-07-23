@@ -67,6 +67,10 @@ export class Hub {
       this.broadcast({ type: 'agent:flag', flag: e.flag });
       this.broadcast({ type: 'dirty' });
     });
+    // The file-events hook recorded a written file; a coarse dirty repaints the
+    // drawer's "files changed" list via the /api/state refetch (report-like ones
+    // also arrive as an agent:flag above).
+    agents.on('files', () => this.broadcast({ type: 'dirty' }));
     // Usage lands on the agent row at turn end; a coarse dirty repaints the
     // fleet cards' cost/tokens without a dedicated frame type.
     agents.on('usage', () => this.broadcast({ type: 'dirty' }));

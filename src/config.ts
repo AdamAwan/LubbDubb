@@ -142,6 +142,14 @@ export interface Config {
   claudeCommand: string;
   /** Extra args passed to the agent command. */
   claudeArgs: string[];
+  /**
+   * Worktree-relative folder the file-events hook treats as the artifacts area:
+   * any file an agent writes *under* this prefix is promoted to an artifact chip
+   * regardless of extension (on top of the built-in report/doc heuristic). E.g.
+   * `"docs"` promotes everything the agent drops in `docs/`. Unset = fall back to
+   * the extension allowlist + `reports/` convention only.
+   */
+  docsFolderPrefix?: string;
   /** Root under which per-branch worktrees are created. */
   worktreeRoot: string;
   /** Root under which desk (no-code) scratch dirs are created. */

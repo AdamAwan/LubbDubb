@@ -154,6 +154,43 @@ cockpit's state polling is never throttled), and sandboxed (`Content-Security-Po
 agent-authored HTML can't script the cockpit origin; URL refs are linked directly. It's purely
 additive detection — on in every agent mode, gated behind nothing.
 
+**File-events hook (skill-agnostic artifacts).** The flag sentinel only surfaces an artifact if
+the agent's _prompt_ tells it to print the sentinel — so every skill that emits a report has to
+know the protocol. A Claude Code `PostToolUse` hook removes that coupling: it fires for _any_
+file-writing tool (`Write`/`Edit`/…) regardless of what the agent was told, so a report shows up
+with zero skill-side knowledge. It's wired once into the launch `--settings` for **both** runtimes
+(hooks fire in headless stream mode too — they just don't appear in the stream output), mirroring
+the status-line capture: `buildClaudeArgs`/`buildClaudeStreamArgs` take a `fileEvents` opt, and the
+`--settings` fragment (`FILE_EVENTS_SETTINGS`, `src/agents/fileEvents.ts`) runs a small `node`
+command that dumps each written **path only** (never the file content) into a per-agent spool dir
+named by `$LUBBDUBB_EVENTS_DIR` (set in the spawn env by `AgentManager`, like the status file).
+Because status-line and file-events must share one `--settings` (the flag has no array form),
+`STATUS_LINE_SETTINGS` is now an object and `buildClaudeArgs` merges the enabled fragments.
+`AgentManager.drainFileEvents` (piggybacked on the `output` stream + a final drain at
+terminal/kill, so no polling timer) folds each captured write in through the pure `classifyArtifact`:
+**every** path is recorded in the `agent_files` table (the drawer's "files changed" list, snapshot
+key `files`), while **report-like** ones additionally go through the _same_ `Store.recordFlag` +
+`flag` event as a sentinel flag — so a report becomes a chip via the identical dedup / `agent:flag` /
+confined `GET /api/artifacts/:id` machinery. Promotion is: under the configured `docsFolderPrefix`
+(an artifacts folder — _any_ extension), or under a `reports/` segment, else the report/doc extension
+allowlist. Absolute paths inside the worktree are stored worktree-relative so the artifact route can
+serve them. The `FileEventsSpool` (`dirFor`/`drain`/`dispose`) is the read side; the spool dir is
+minted per spawn (independent of the resume session id, so stream agents get one) and disposed on
+reap. The flag sentinel stays supported as an optional intent override (URLs, custom `kind`/`label`)
+but is no longer _required_. The done/waiting sentinels are unaffected — they're already injected
+centrally by `PROTOCOL_SYSTEM_PROMPT` and carry intent a hook can't infer. `agent_files` is a fresh
+`CREATE TABLE`, so no `migrate()` entry. Tests: `test/fileEvents.test.ts`.
+
+_Coexists with the target repo's own config (verified)._ LubbDubb agents run in a **git worktree of
+the repo they're working on**, so that repo's committed `.claude/settings.json`, `.claude/skills/`,
+and `CLAUDE.md` are all present in the cwd and load normally. The hook rides on `--settings`, which
+is an _additional_ settings source: hooks **merge** across sources (like permission rules, not
+last-one-wins), so our `PostToolUse` entry and the target repo's own hooks **both** fire — confirmed
+empirically with a nested `claude` run where a project hook and a `--settings` hook both fired on one
+`Write`. Skills/CLAUDE.md are filesystem-discovered and unaffected by `--settings`. Our hook is
+additionally env-gated on `$LUBBDUBB_EVENTS_DIR` (set only in the spawn env), so it's a silent no-op
+for a human running `claude` in that repo by hand.
+
 **Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
 each message's content blocks through the pure `renderBlocks` in
 `src/agents/streamTranscript.ts`: assistant text is passed through (sentinels stripped), a

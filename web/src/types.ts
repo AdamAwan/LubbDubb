@@ -135,6 +135,16 @@ export interface AgentFlag {
   ref: string;
   createdAt: string;
 }
+/** A file an agent wrote, captured by the file-events hook (mirrors the server's AgentFile). */
+export interface AgentFile {
+  id: string;
+  agentId: string;
+  path: string;
+  tool: string | null;
+  /** True when this file was also surfaced as an artifact chip (a report, not a code change). */
+  promoted: boolean;
+  createdAt: string;
+}
 export interface Job {
   id: string;
   title: string;
@@ -303,6 +313,8 @@ export interface AppState {
   agents: Agent[];
   /** Artifacts/links agents surfaced mid-run, grouped by agentId in the UI. Optional so an older server degrades gracefully. */
   flags?: AgentFlag[];
+  /** Every file agents wrote (file-events hook), grouped by agentId for the drawer's "files changed" list. Optional for older servers. */
+  files?: AgentFile[];
   escalations: Escalation[];
   decisions: Decision[];
   /**

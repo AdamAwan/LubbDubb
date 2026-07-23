@@ -1,11 +1,13 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
+import { basename, isAbsolute, relative } from 'node:path';
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
 import type { Agent, AgentFlag, AgentStatus, AgentUsage, Task } from '../types.js';
 import type { ParsedFlag } from './sentinels.js';
+import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import type { AgentSession, SessionFactory } from './session.js';
 
 export interface AgentManagerOptions {
@@ -48,6 +50,15 @@ export interface AgentManagerOptions {
    * for runtimes with a session id (PTY); unset for stream/mock.
    */
   statusFile?: (sessionId: string) => string;
+  /**
+   * Spool for the file-events `PostToolUse` hook. When set, each launch gets a
+   * per-agent dir exported as `$LUBBDUBB_EVENTS_DIR`; the hook drops written
+   * paths there and {@link AgentManager.drainFileEvents} folds them into the
+   * files list / artifact chips. Unset (mock runtime) → no capture.
+   */
+  fileEvents?: FileEventsSpool;
+  /** Worktree-relative folder whose files are promoted to artifacts (any extension). See {@link classifyArtifact}. */
+  docsFolderPrefix?: string;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
 }
@@ -70,6 +81,8 @@ interface AgentManagerEvents {
   usage: [{ agentId: string; taskId: string; usage: AgentUsage }];
   /** The agent surfaced an artifact/link mid-run (already persisted, deduped by ref). */
   flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
+  /** The file-events hook recorded one or more written files (the "files changed" list grew). */
+  files: [{ agentId: string; taskId: string }];
 }
 
 /**
@@ -88,6 +101,9 @@ export class AgentManager extends EventEmitter {
   // exit observed. Their order differs per runtime, so track both.
   private readonly terminals = new Map<string, 'done' | 'failed'>();
   private readonly exited = new Set<string>();
+  // agentId → its file-events spool key, so we can drain (and later dispose) the
+  // dir the hook writes to. Present only when a spool is wired and the launch got one.
+  private readonly eventsKeys = new Map<string, string>();
 
   constructor(
     private readonly store: Store,
@@ -101,6 +117,10 @@ export class AgentManager extends EventEmitter {
     // Choose the session id up front so we own it and can `--resume` this exact
     // conversation after a restart. Only resumable runtimes get one.
     const sessionId = this.opts.resumable ? randomUUID() : null;
+    // The file-events spool key is independent of the resume session id, so stream
+    // agents (no session id) still get one. Minted before the session so the env
+    // carries it; mapped to the agent id below for draining.
+    const eventsKey = this.opts.fileEvents ? randomUUID() : null;
     const session = this.opts.createSession({
       command: this.opts.command,
       args: this.opts.buildArgs({ sessionId: sessionId ?? '', resume: false }),
@@ -109,11 +129,13 @@ export class AgentManager extends EventEmitter {
         LUBBDUBB_PROMPT: task.prompt,
         LUBBDUBB_TASK_ID: task.id,
         ...this.statusFileEnv(sessionId),
+        ...this.eventsDirEnv(eventsKey),
       },
       waitingPatterns: this.opts.waitingPatterns,
     });
 
     const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
+    if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
     this.store.updateTask(task.id, { status: 'running', agentId: agent.id });
     this.sessions.set(agent.id, session);
     this.wireSession(session, agent.id, task);
@@ -150,6 +172,8 @@ export class AgentManager extends EventEmitter {
     // `waitingReason` survives the restart and tells us whether the agent was
     // parked on a human question (keep it waiting) or mid-work (nudge it on).
     const wasWaiting = agent.status === 'waiting' || agent.waitingReason != null;
+    // A restart wiped the old spool, so mint a fresh key for the resumed session.
+    const eventsKey = this.opts.fileEvents ? randomUUID() : null;
     const session = this.opts.createSession({
       command: this.opts.command,
       args: this.opts.buildArgs({ sessionId: agent.sessionId, resume: true }),
@@ -158,9 +182,11 @@ export class AgentManager extends EventEmitter {
         LUBBDUBB_PROMPT: task.prompt,
         LUBBDUBB_TASK_ID: task.id,
         ...this.statusFileEnv(agent.sessionId),
+        ...this.eventsDirEnv(eventsKey),
       },
       waitingPatterns: this.opts.waitingPatterns,
     });
+    if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
 
     this.sessions.set(agent.id, session);
     // The row goes live again, shedding the death markers from the last run.
@@ -206,6 +232,7 @@ export class AgentManager extends EventEmitter {
     const session = this.sessions.get(agentId);
     if (!session) return false;
     session.kill();
+    this.disposeFileEvents(agentId); // fold any last writes in, then drop the spool
     this.store.flushTranscript(agentId); // make the killed agent's transcript durable
     const agent = this.store.getAgent(agentId);
     this.store.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
@@ -237,6 +264,7 @@ export class AgentManager extends EventEmitter {
       } catch {
         /* process already gone */
       }
+      this.disposeFileEvents(id); // fold any pending writes in; a resume mints a fresh spool
       this.store.flushTranscript(id); // make the transcript durable before we exit
       this.store.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
       this.sessions.delete(id);
@@ -253,11 +281,67 @@ export class AgentManager extends EventEmitter {
     return { LUBBDUBB_STATUS_FILE: this.opts.statusFile(sessionId) };
   }
 
+  /** The LUBBDUBB_EVENTS_DIR env entry for a launch, when the file-events hook is wired. */
+  private eventsDirEnv(key: string | null): Record<string, string> {
+    if (!key || !this.opts.fileEvents) return {};
+    return { LUBBDUBB_EVENTS_DIR: this.opts.fileEvents.dirFor(key) };
+  }
+
+  /** The spool dir an agent's writes land in (where LUBBDUBB_EVENTS_DIR points), or null. */
+  fileEventsDir(agentId: string): string | null {
+    const key = this.eventsKeys.get(agentId);
+    return key && this.opts.fileEvents ? this.opts.fileEvents.dirFor(key) : null;
+  }
+
+  /**
+   * Drain the file-events spool for an agent, folding each captured write into
+   * the files list (and, for report-like paths, an artifact chip). Public so the
+   * composition root / tests can force a drain; also called opportunistically as
+   * output flows and once more when the agent finishes. Idempotent — the spool
+   * hands each record out exactly once.
+   */
+  drainFileEvents(agentId: string): void {
+    const key = this.eventsKeys.get(agentId);
+    if (!key || !this.opts.fileEvents) return;
+    const records = this.opts.fileEvents.drain(key);
+    if (records.length === 0) return;
+    const agent = this.store.getAgent(agentId);
+    if (!agent) return;
+    for (const rec of records) this.ingestFileEvent(agent, rec);
+  }
+
+  /** Record one captured write; promote report-like paths to an artifact chip. */
+  private ingestFileEvent(agent: Agent, rec: FileEventRecord): void {
+    const path = toWorktreeRelative(agent.cwd, rec.path);
+    const { promoted, kind } = classifyArtifact(path, this.opts.docsFolderPrefix);
+    this.store.recordFile(agent.id, { path, tool: rec.tool, promoted });
+    this.emit('files', { agentId: agent.id, taskId: agent.taskId });
+    if (promoted) {
+      // Reuse the flag path so a report becomes a chip through the exact same
+      // dedup / artifact-serving machinery as an explicitly-flagged one.
+      const flag = this.store.recordFlag(agent.id, { kind, label: basename(path), ref: path });
+      this.emit('flag', { agentId: agent.id, taskId: agent.taskId, flag });
+    }
+  }
+
+  /** Final drain + spool teardown for an agent that's leaving the fleet. */
+  private disposeFileEvents(agentId: string): void {
+    const key = this.eventsKeys.get(agentId);
+    if (!key || !this.opts.fileEvents) return;
+    this.drainFileEvents(agentId); // catch writes from the last turn before dropping the dir
+    this.opts.fileEvents.dispose(key);
+    this.eventsKeys.delete(agentId);
+  }
+
   /** Attach the store-update + re-emit listeners shared by fresh spawns and resumes. */
   private wireSession(session: AgentSession, agentId: string, task: Task): void {
     session.on('output', (delta: string) => {
       this.store.appendTranscript(agentId, delta);
       this.emit('output', { agentId, delta });
+      // Piggyback the spool drain on the output stream: an agent that writes a
+      // file also produces output around it, so captured writes surface promptly
+      // without a polling timer. A no-op when no spool is wired / nothing pending.
+      this.drainFileEvents(agentId);
     });
 
     // Legible PTY sessions occasionally re-render the settled text wholesale
@@ -362,6 +446,7 @@ export class AgentManager extends EventEmitter {
   }
 
   private handleTerminal(agentId: string, taskId: string, status: 'done' | 'failed'): void {
+    this.drainFileEvents(agentId); // catch a report written just before finishing
     this.store.flushTranscript(agentId); // make the finished agent's transcript durable
     this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status });
@@ -390,6 +475,7 @@ export class AgentManager extends EventEmitter {
     if (!status || !this.exited.has(agentId)) return;
     this.terminals.delete(agentId);
     this.exited.delete(agentId);
+    this.disposeFileEvents(agentId); // process is gone; drop its spool dir
     this.emit('reaped', { agentId, taskId, status });
   }
 
@@ -404,4 +490,15 @@ export class AgentManager extends EventEmitter {
   override on<K extends keyof AgentManagerEvents>(event: K, listener: (...args: AgentManagerEvents[K]) => void): this {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
+}
+
+/**
+ * Reduce a hook-reported write path to worktree-relative when it landed inside the
+ * agent's cwd (so the artifact route — confined to the worktree — can serve it),
+ * else leave it as reported. `claude`'s file tools report absolute paths.
+ */
+function toWorktreeRelative(cwd: string, p: string): string {
+  if (!isAbsolute(p)) return p;
+  const rel = relative(cwd, p);
+  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : p;
 }

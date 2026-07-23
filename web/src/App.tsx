@@ -124,6 +124,15 @@ export function App() {
     flagsByAgent.set(f.agentId, list);
   }
 
+  // Every file agents wrote (file-events hook), grouped by agent for the drawer's
+  // "files changed" list. Kept live by the `dirty` that rides each files update.
+  const filesByAgent = new Map<string, typeof state.files>();
+  for (const f of state.files ?? []) {
+    const list = filesByAgent.get(f.agentId) ?? [];
+    list.push(f);
+    filesByAgent.set(f.agentId, list);
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -258,6 +267,7 @@ export function App() {
           refUrls={state.refUrls}
           live={liveOutput.current.get(selectedAgent.id)}
           flags={flagsByAgent.get(selectedAgent.id)}
+          files={filesByAgent.get(selectedAgent.id)}
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}
           onKill={() => api.killAgent(selectedAgent.id).then(refresh)}

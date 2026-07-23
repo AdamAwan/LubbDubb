@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS agent_flags (
   UNIQUE (agent_id, ref)
 );
 
+-- Every file an agent wrote, captured by the file-events PostToolUse hook (not
+-- the flag sentinel). Deduped per agent by path; the promoted flag marks the ones
+-- also surfaced as an artifact chip (a report/doc, per classifyArtifact).
+CREATE TABLE IF NOT EXISTS agent_files (
+  id         TEXT PRIMARY KEY,
+  agent_id   TEXT NOT NULL,
+  path       TEXT NOT NULL,
+  tool       TEXT,
+  promoted   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  UNIQUE (agent_id, path)
+);
+
 CREATE TABLE IF NOT EXISTS agent_transcripts (
   agent_id   TEXT NOT NULL,
   seq        INTEGER NOT NULL,
@@ -146,6 +159,7 @@ CREATE TABLE IF NOT EXISTS error_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
