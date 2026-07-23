@@ -21,10 +21,14 @@ import type { AccountRateLimits, RateLimitWindow } from '../types.js';
 const STATUS_LINE_COMMAND =
   'if [ -n "$LUBBDUBB_STATUS_FILE" ]; then cat > "$LUBBDUBB_STATUS_FILE.tmp" && mv "$LUBBDUBB_STATUS_FILE.tmp" "$LUBBDUBB_STATUS_FILE"; else cat > /dev/null; fi';
 
-/** The `--settings` JSON wiring the capture command into a PTY `claude` launch. */
-export const STATUS_LINE_SETTINGS = JSON.stringify({
+/**
+ * The `--settings` fragment wiring the capture command into a PTY `claude` launch.
+ * An object (not a string) so {@link buildClaudeArgs} can merge it with other
+ * settings fragments (e.g. the file-events hook) into a single `--settings`.
+ */
+export const STATUS_LINE_SETTINGS = {
   statusLine: { type: 'command', command: STATUS_LINE_COMMAND, padding: 0 },
-});
+};
 
 interface RawWindow {
   used_percentage?: unknown;

@@ -498,6 +498,29 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
+.drawer-files {
+  padding: 4px 0 2px;
+}
+.drawer-files-summary {
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.file-list {
+  margin: 6px 0 2px;
+  padding-left: 16px;
+  list-style: none;
+}
+.file-row {
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  color: var(--muted);
+  padding: 1px 0;
+  word-break: break-all;
+}
+.file-row.promoted {
+  color: var(--text);
+}
 
 .badge {
   font-size: 11px;

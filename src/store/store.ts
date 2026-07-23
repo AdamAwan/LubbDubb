@@ -5,6 +5,8 @@ import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
 import type {
   Agent,
+  AgentFile,
+  AgentFileInput,
   AgentFlag,
   AgentFlagInput,
   AgentUsage,
@@ -363,6 +365,50 @@ export class Store {
     return rows.map(rowToFlag);
   }
 
+  // -- Files (captured by the file-events hook) ----------------------------
+
+  /**
+   * Record (or refresh) a file an agent wrote. Deduped by (agent, path): the same
+   * path written again updates the tool/promotion and bumps the timestamp rather
+   * than piling up rows. Returns the persisted file (stable id across refreshes).
+   */
+  recordFile(agentId: string, input: AgentFileInput): AgentFile {
+    const existing = this.db
+      .prepare(`SELECT id FROM agent_files WHERE agent_id=? AND path=?`)
+      .get(agentId, input.path) as { id: string } | undefined;
+    const file: AgentFile = {
+      id: existing?.id ?? `file_${nanoid(10)}`,
+      agentId,
+      path: input.path,
+      tool: input.tool,
+      promoted: input.promoted,
+      createdAt: this.now(),
+    };
+    this.db
+      .prepare(
+        `INSERT INTO agent_files (id, agent_id, path, tool, promoted, created_at)
+         VALUES (@id, @agentId, @path, @tool, @promoted, @createdAt)
+         ON CONFLICT(agent_id, path) DO UPDATE SET tool=excluded.tool, promoted=excluded.promoted, created_at=excluded.created_at`,
+      )
+      .run({ ...file, promoted: file.promoted ? 1 : 0 });
+    return file;
+  }
+
+  listFiles(agentId: string): AgentFile[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM agent_files WHERE agent_id=? ORDER BY created_at ASC`)
+      .all(agentId) as AgentFileRow[];
+    return rows.map(rowToFile);
+  }
+
+  /** Every recorded file across all agents, newest first — the snapshot feed. */
+  listAllFiles(): AgentFile[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM agent_files ORDER BY created_at DESC, rowid DESC`)
+      .all() as AgentFileRow[];
+    return rows.map(rowToFile);
+  }
+
   // -- Transcripts ---------------------------------------------------------
 
   appendTranscript(agentId: string, chunk: string): void {
@@ -657,6 +703,14 @@ interface AgentFlagRow {
   ref: string;
   created_at: string;
 }
+interface AgentFileRow {
+  id: string;
+  agent_id: string;
+  path: string;
+  tool: string | null;
+  promoted: number;
+  created_at: string;
+}
 interface EscalationRow {
   id: string;
   type: string;
@@ -747,6 +801,16 @@ function rowToFlag(r: AgentFlagRow): AgentFlag {
     kind: r.kind,
     label: r.label,
     ref: r.ref,
+    createdAt: r.created_at,
+  };
+}
+function rowToFile(r: AgentFileRow): AgentFile {
+  return {
+    id: r.id,
+    agentId: r.agent_id,
+    path: r.path,
+    tool: r.tool,
+    promoted: !!r.promoted,
     createdAt: r.created_at,
   };
 }

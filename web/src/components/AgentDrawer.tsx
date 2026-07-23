@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import type { Agent, AgentFlag, Task } from '../types.js';
+import type { Agent, AgentFile, AgentFlag, Task } from '../types.js';
 import { api } from '../api.js';
 import { statusDot, linkify, agentUsageLine } from './util.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { FlagChips } from './FlagChips.js';
+import { FilesList } from './FilesList.js';
 
 /**
  * The drill-down: live terminal output for one agent (rendered with xterm.js)
@@ -20,6 +21,7 @@ export function AgentDrawer({
   refUrls,
   live,
   flags,
+  files,
   onClose,
   onRespond,
   onKill,
@@ -30,6 +32,7 @@ export function AgentDrawer({
   refUrls: Record<string, string>;
   live: string | undefined;
   flags?: AgentFlag[];
+  files?: AgentFile[];
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
   onKill: () => Promise<unknown> | unknown;
@@ -162,6 +165,7 @@ export function AgentDrawer({
             <FlagChips flags={flags} />
           </div>
         )}
+        <FilesList files={files} />
         <div className="terminal" ref={containerRef} style={{ padding: 8, overflow: 'hidden', minHeight: 240 }} />
         {canRespond && (
           <form

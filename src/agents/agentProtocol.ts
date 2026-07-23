@@ -1,5 +1,6 @@
 import type { Task } from '../types.js';
 import { STATUS_LINE_SETTINGS } from './statusLine.js';
+import { FILE_EVENTS_SETTINGS } from './fileEvents.js';
 
 /**
  * How a real Claude Code session is made to speak the harness's PTY protocol.
@@ -51,6 +52,12 @@ export interface ClaudeArgsOptions {
    * line never renders headless, so it would be dead weight on stream args.
    */
   statusLine?: boolean;
+  /**
+   * Wire the file-events `PostToolUse` hook in (`--settings`), so files an agent
+   * writes surface as artifacts without the agent's prompt knowing the flag
+   * protocol. Both runtimes — hooks fire in headless stream mode too.
+   */
+  fileEvents?: boolean;
 }
 
 /** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */
@@ -65,10 +72,21 @@ export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
     if (opts.resume) args.push('--resume', opts.sessionId);
     else args.push('--session-id', opts.sessionId);
   }
-  if (opts.statusLine) args.push('--settings', STATUS_LINE_SETTINGS);
+  // Merge every requested settings fragment into a single `--settings` — the flag
+  // has no array form, so status-line + file-events must share one JSON object.
+  const settings = collectSettings(opts);
+  if (settings) args.push('--settings', settings);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;
+}
+
+/** Combine the enabled `--settings` fragments into one JSON string, or null if none. */
+function collectSettings(opts: ClaudeArgsOptions): string | null {
+  const settings: Record<string, unknown> = {};
+  if (opts.statusLine) Object.assign(settings, STATUS_LINE_SETTINGS);
+  if (opts.fileEvents) Object.assign(settings, FILE_EVENTS_SETTINGS);
+  return Object.keys(settings).length > 0 ? JSON.stringify(settings) : null;
 }
 
 /**
@@ -97,6 +115,9 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
     '--append-system-prompt',
     PROTOCOL_SYSTEM_PROMPT,
   ];
+  // The status line never renders headless, but PostToolUse hooks do fire — so
+  // file-events capture is wired here too (unlike the PTY-only status line).
+  if (opts.fileEvents) args.push('--settings', JSON.stringify(FILE_EVENTS_SETTINGS));
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;

@@ -18,6 +18,7 @@ import {
 import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import { StatusFileRateLimits } from './agents/statusLine.js';
+import { FileEventsSpool } from './agents/fileEvents.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
 import { recentOutputExcerpt } from './escalation/context.js';
@@ -53,6 +54,13 @@ export interface System {
    * snapshot then falls back to the rolling cost windows from `usage_events`.
    */
   rateLimits: StatusFileRateLimits | null;
+  /**
+   * Per-agent spool for the file-events `PostToolUse` hook — where written paths
+   * land before {@link AgentManager.drainFileEvents} folds them into the files
+   * list / artifact chips. Always present; the hook feeding it is only wired for
+   * the real runtimes (stream/pty).
+   */
+  fileEvents: FileEventsSpool;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
 }
@@ -115,7 +123,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const agentSetup = {
     stream: {
       // Stream-JSON resume is out of scope; ignore the session id.
-      buildArgs: (() => buildClaudeStreamArgs({ permissionMode: perm, extraArgs })) as ArgsBuilder,
+      buildArgs: (() => buildClaudeStreamArgs({ permissionMode: perm, extraArgs, fileEvents: true })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
       resumeInput: undefined,
@@ -125,7 +133,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pty: {
       // The one resumable runtime: pin the session id up front, `--resume` it later.
       buildArgs: (({ sessionId, resume }) =>
-        buildClaudeArgs({ permissionMode: perm, extraArgs, sessionId, resume, statusLine: true })) as ArgsBuilder,
+        buildClaudeArgs({
+          permissionMode: perm,
+          extraArgs,
+          sessionId,
+          resume,
+          statusLine: true,
+          fileEvents: true,
+        })) as ArgsBuilder,
       factory: ptyFactory(true),
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
       resumeInput: buildResumeMessage,
@@ -147,6 +162,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // stable spot so the last known limits survive a restart.
   const rateLimits = config.agentMode === 'pty' ? new StatusFileRateLimits(join(tmpdir(), 'lubbdubb', 'status')) : null;
 
+  // File-events capture (the PostToolUse hook's spool): one dir per agent under
+  // the OS tmpdir. Wired for every mode — the hook itself is only injected for
+  // the real runtimes (stream/pty), so mock/raw agents just leave it empty.
+  const fileEvents = new FileEventsSpool(join(tmpdir(), 'lubbdubb', 'events'));
+
   const agents = new AgentManager(store, {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
@@ -158,6 +178,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     waitingPatterns: config.agentWaitingPatterns,
     resumable: agentSetup.resumable,
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
+    fileEvents,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
@@ -270,6 +291,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     runtimeControl,
     issuePickup,
     rateLimits,
+    fileEvents,
     errors,
   };
 }

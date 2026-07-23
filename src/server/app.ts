@@ -371,6 +371,10 @@ export function buildStateSnapshot(system: System) {
       // Artifacts agents surfaced mid-run (design docs, reports, links). The
       // cockpit groups these by agentId onto the fleet card / drawer.
       flags: store.listAllFlags(),
+      // Every file agents wrote (captured by the file-events hook), grouped by
+      // agentId in the drawer's "files changed" list; the report-like ones also
+      // appear above as artifact chips.
+      files: store.listAllFiles(),
       escalations: store.listEscalations(),
       decisions: store.listDecisions(100),
       // The "Up next" queue: the last cycle's ordered pickup plan with the
