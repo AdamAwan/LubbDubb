@@ -171,10 +171,15 @@ terminal/kill, so no polling timer) folds each captured write in through the pur
 **every** path is recorded in the `agent_files` table (the drawer's "files changed" list, snapshot
 key `files`), while **report-like** ones additionally go through the _same_ `Store.recordFlag` +
 `flag` event as a sentinel flag — so a report becomes a chip via the identical dedup / `agent:flag` /
-confined `GET /api/artifacts/:id` machinery. Promotion is: under the configured `docsFolderPrefix`
-(an artifacts folder — _any_ extension), or under a `reports/` segment, else the report/doc extension
-allowlist. Absolute paths inside the worktree are stored worktree-relative so the artifact route can
-serve them. The `FileEventsSpool` (`dirFor`/`drain`/`dispose`) is the read side; the spool dir is
+confined `GET /api/artifacts/:id` machinery. Promotion is: under one of the configured `docsFolderPrefix`
+entries (`string | string[]` — an artifacts folder, _any_ extension), or under a `reports/` segment, else
+the report/doc extension allowlist. A prefix entry is matched **prefix-aware**: a _relative_ entry matches
+the worktree-relative path, an _absolute_ entry (e.g. `D:/docs`) matches an _out-of-worktree_ write left
+absolute (subfolders included). Absolute paths inside the worktree are stored worktree-relative so the
+artifact route can serve them; a write under an **absolute** prefix stays absolute, and the artifact route
+widens its confinement to also serve files under each operator-configured absolute prefix
+(`absolutePrefixes(config.docsFolderPrefix)` → extra trusted roots in `resolveConfinedArtifact`, still
+lexical- + `realpath`-confined per root, so `..`/symlink escape is refused). The `FileEventsSpool` (`dirFor`/`drain`/`dispose`) is the read side; the spool dir is
 minted per spawn (independent of the resume session id, so stream agents get one) and disposed on
 reap. The flag sentinel stays supported as an optional intent override (URLs, custom `kind`/`label`)
 but is no longer _required_. The done/waiting sentinels are unaffected — they're already injected

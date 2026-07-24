@@ -59,6 +59,29 @@ test('classifyArtifact promotes any extension under the configured docsFolderPre
   assert.equal(classifyArtifact('docs/report.md', 'docs').kind, 'report');
 });
 
+test('classifyArtifact accepts an array of prefixes; a file promotes under any entry', () => {
+  const prefixes = ['docs', 'artifacts'];
+  assert.equal(classifyArtifact('docs/x.ts', prefixes).promoted, true);
+  assert.equal(classifyArtifact('artifacts/y.bin', prefixes).promoted, true);
+  assert.equal(classifyArtifact('src/z.ts', prefixes).promoted, false);
+  // An empty list is inert, like an unset prefix.
+  assert.equal(classifyArtifact('docs/x.ts', []).promoted, false);
+});
+
+test('classifyArtifact matches an absolute prefix, subfolders included', () => {
+  // An out-of-worktree write is left absolute by toWorktreeRelative; an absolute
+  // prefix matches it (and its subfolders), case-insensitively.
+  assert.equal(classifyArtifact('D:/docs/plans/cat.md', 'D:/docs').promoted, true);
+  assert.equal(classifyArtifact('D:\\Docs\\plans\\cat.md', 'D:/docs').kind, 'report');
+  assert.equal(classifyArtifact('/srv/shared/reports/out.bin', '/srv/shared/reports').promoted, true);
+  // A relative prefix never matches an absolute path and vice versa — separate
+  // spaces. Use a non-report extension so only the prefix decides promotion.
+  assert.equal(classifyArtifact('D:/docs/x.ts', 'docs').promoted, false); // absolute path, relative prefix
+  assert.equal(classifyArtifact('docs/x.ts', 'D:/docs').promoted, false); // relative path, absolute prefix
+  // Mixed array: relative for in-worktree, absolute for the shared area.
+  assert.equal(classifyArtifact('D:/docs/plan', ['docs', 'D:/docs']).promoted, true);
+});
+
 // -- settings wiring ---------------------------------------------------------
 
 test('the file-events hook targets the file-writing tools and reads $LUBBDUBB_EVENTS_DIR', () => {
@@ -86,10 +109,16 @@ test('buildClaudeArgs merges file-events + status-line into one --settings; stre
   assert.ok(!buildClaudeStreamArgs({}).includes('--settings'), 'off by default');
 });
 
-test('docsFolderPrefix is carried through loadConfig', () => {
+test('docsFolderPrefix is carried through loadConfig (string or array, unresolved)', () => {
   assert.equal(
     loadConfig({ dispatcher: 'rule', agentMode: 'raw', docsFolderPrefix: 'artifacts' }).docsFolderPrefix,
     'artifacts',
+  );
+  // An array carries through verbatim — relative entries are NOT resolved (they're
+  // worktree-relative), and absolute entries are left absolute.
+  assert.deepEqual(
+    loadConfig({ dispatcher: 'rule', agentMode: 'raw', docsFolderPrefix: ['docs', 'D:/shared'] }).docsFolderPrefix,
+    ['docs', 'D:/shared'],
   );
   assert.equal(loadConfig({ dispatcher: 'rule', agentMode: 'raw' }).docsFolderPrefix, undefined);
 });

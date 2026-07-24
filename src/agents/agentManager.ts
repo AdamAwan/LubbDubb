@@ -57,8 +57,8 @@ export interface AgentManagerOptions {
    * files list / artifact chips. Unset (mock runtime) → no capture.
    */
   fileEvents?: FileEventsSpool;
-  /** Worktree-relative folder whose files are promoted to artifacts (any extension). See {@link classifyArtifact}. */
-  docsFolderPrefix?: string;
+  /** Folder(s) whose files are promoted to artifacts (any extension); relative or absolute. See {@link classifyArtifact}. */
+  docsFolderPrefix?: string | string[];
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
 }
