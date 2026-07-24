@@ -317,6 +317,20 @@ glued-on CR leaves the message sitting in the input unsubmitted. Trailing newlin
 are stripped so the lone CR does the submitting. This is why `send`-related test assertions look
 for the payload as its own write (not `payload\r`) and await the delayed CR — don't re-glue them.
 
+Sharp edge in `PtySession.deliverInitial()` (the first-message boot race): a freshly-booted
+claude REPL paints its input box a second or two before its input loop honours a submitting
+Enter, so the first Enter is silently dropped and the pasted prompt sits unsent — the "agent
+pauses after the first message" bug. The prompt is pasted **once** (a re-paste accumulates it
+in the box) and only the bare CR is re-sent until the message lands. "Landed" is **observed, not
+timed**: in legible mode the session reads its headless emulator's input box via
+`TerminalTranscript.inputBoxText()` (a chrome-preserving read path — `snapshot()` deliberately
+_drops_ the box as chrome, so don't reuse it here) and stops the instant the box empties. The
+read awaits xterm's async parse, so `tryResubmit` re-checks liveness/status after the await.
+Without a mirror (`raw`/mock sessions, `this.mirror` null) there's nothing to read, so it
+degrades to the original blind open-loop nudge, bounded by `initialSubmitAttempts`. Tests
+(`test/ptyInitialSubmit.test.ts`) render an input box by hand — box-drawing rows through the
+mirror — since `FakePtyBackend` doesn't emulate a TUI.
+
 ## Testing patterns
 
 Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
