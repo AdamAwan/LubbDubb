@@ -1,11 +1,114 @@
 {
+  "//": "LubbDubb example config. Copy to lubbdubb.config.json (gitignored). Every key is OPTIONAL — omit any to take its default. The '//'-prefixed keys are inline docs; they are ignored at load, so this file stays copy-and-run. As shipped it drives the mock agent (agentMode 'raw' + fake integrations), so `npm start` works with no model or provider auth. Precedence: explicit overrides > this file > defaults, plus env overrides (PORT, LUBBDUBB_DB, LUBBDUBB_REPO_ROOT).",
+
+  "// heartbeatIntervalMs": "How often (ms) the heartbeat fires a dispatch cycle. Default 300000 (5 min).",
   "heartbeatIntervalMs": 300000,
+
+  "// maxConcurrentAgents": "Hard cap on concurrently-running agents; seeds the live runtime control. Adjustable without restart via POST /api/control; a restart reverts to this value. Default 3.",
   "maxConcurrentAgents": 3,
+
+  "// startPaused": "Boot with dispatch paused (no new agents until resumed). The only config-level pause knob — live pause/resume is runtime-only and ephemeral. Default false.",
+  "startPaused": false,
+
+  "// dispatcher": "Which dispatcher decides each cycle. 'rule' = deterministic, no model calls. 'claude' = an LLM decides (output still schema-validated), driven over a PTY. Default 'rule'.",
   "dispatcher": "rule",
+
+  "// agentMode": "How agents are launched. 'stream' = real Claude Code over headless stream-JSON (production default, runs unattended, supports the waiting/answer loop). 'pty' = real Claude Code as an interactive terminal (needs first-run onboarding done; this is the runtime that resumes across restarts). 'raw' = run claudeCommand/claudeArgs verbatim, prompt passed via LUBBDUBB_PROMPT (mock-agent demo + tests). Default 'stream'.",
   "agentMode": "raw",
+
+  "// claudeCommand": "The agent binary to launch. Default 'claude'. Here it's 'bash' so the example can run the mock agent.",
   "claudeCommand": "bash",
+
+  "// claudeArgs": "Extra args appended to the agent command. A relative script path is resolved to absolute at load (agents run in a worktree cwd). Default [].",
   "claudeArgs": ["scripts/mock-agent.sh"],
-  "whitelistedApprovals": [],
+
+  "// agentPermissionMode": "Passed to `claude --permission-mode` so unattended tool calls don't hang. Default 'acceptEdits'. Note: 'bypassPermissions' maps to --dangerously-skip-permissions, which claude refuses under root.",
+  "agentPermissionMode": "acceptEdits",
+
+  "// agentPromptDelayMs": "PTY only. Wait this long (ms) after spawn before typing the task in, giving the interactive TUI time to boot. Ignored by stream/raw. Default 1200.",
+  "agentPromptDelayMs": 1200,
+
+  "// agentSubmitDelayMs": "PTY only. Gap (ms) between typing a message and sending its submitting carriage return — the claude TUI folds a burst into a paste and treats a glued-on CR as a literal newline, leaving the text unsubmitted. Set 0 to write both at once. Default 60.",
+  "agentSubmitDelayMs": 60,
+
+  "// agentWaitingPatterns": "Extra literal substrings that mean 'the CLI is waiting for input' (backup escalation heuristic). Default [].",
+  "agentWaitingPatterns": [],
+
+  "// whitelistedApprovals": "PTY waiting prompts the harness may auto-answer instead of escalating. Each rule: { match: <substring of the waiting prompt>, response: <text typed back> }. Default [].",
+  "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
+
+  "// steeringPriorities": "Optional ordered hints injected into the LLM dispatcher's prompt (only meaningful with dispatcher 'claude'). Default [].",
   "steeringPriorities": [],
-  "autoSend": { "enabled": false, "confidenceThreshold": 0.85, "allowedActions": ["reply_on_pr"] }
+
+  "// docsFolderPrefix": "Worktree-relative folder the file-events hook treats as the artifacts area: any file an agent writes UNDER this prefix is promoted to an artifact chip regardless of extension, on top of the built-in report/doc heuristic (report extensions + any reports/ folder). Unset = heuristic only.",
+  "docsFolderPrefix": "docs",
+
+  "// autoSend": "Confidence-gated autonomy for side-effectful actions. Off by default: with enabled=false the harness always drafts + escalates for sign-off. Enabled, it sends an action itself only when the dispatcher's confidence >= confidenceThreshold AND the action type is in allowedActions; anything below still escalates, and a failed send falls back to an escalation. Deep-merged, so you can set just one field.",
+  "autoSend": {
+    "// enabled": "Master switch. Default false.",
+    "enabled": false,
+    "// confidenceThreshold": "Minimum dispatcher confidence (0..1) required to send instead of escalate. Default 0.85.",
+    "confidenceThreshold": 0.85,
+    "// allowedActions": "Action types eligible for auto-send. Default ['reply_on_pr'].",
+    "allowedActions": ["reply_on_pr"]
+  },
+
+  "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' + 'azure' (real, for sourceControl/issues), 'microsoft365' (calendar). Capabilities: sourceControl (pull requests), issues (issues/work items), backlog (stories), calendar (meetings).",
+  "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake", "calendar": "fake" },
+
+  "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author, filters.issueLabel narrows INGESTED issues to one label. Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
+  "github": {
+    "owner": "acme",
+    "repo": "app",
+    "filters": { "prAuthor": "lubbdubb-bot", "issueLabel": "agent" }
+  },
+
+  "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag. Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
+  "azureDevOps": {
+    "organization": "acme",
+    "project": "app",
+    "repository": "app",
+    "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent" }
+  },
+
+  "// microsoft365": "Target for the real 'microsoft365' provider (currently the calendar slice, via Microsoft Graph) — required only when integrations.calendar is 'microsoft365' (ignored otherwise). userId = target mailbox (UPN or object id), required for app-only tokens, omit for a delegated 'me' token. windowDays = how many days ahead to surface events (default 7). Auth is NOT here — set MICROSOFT_GRAPH_TOKEN, or leave unset to use the logged-in `az` CLI.",
+  "microsoft365": {
+    "userId": "agent@acme.com",
+    "windowDays": 7
+  },
+
+  "// issuePickupLabel": "Dispatcher-level, provider-agnostic gate on issue pickup (rule 4). Set it (e.g. 'agent-ready') and the harness only starts an agent for issues whose labels include it; untagged issues stay visible but are left alone. Distinct from github.filters.issueLabel (which hides non-matching issues from the world entirely). Left UNSET here so the fake-provider demo picks up every injected issue; unset = act on all open issues.",
+
+  "// issuePickupRequireOwnLabel": "Tighten issuePickupLabel so the tag only counts when the account the harness authenticates as added it (anti-abuse). Only meaningful with issuePickupLabel set and a real provider (github/azure) that can resolve tag authorship; the fake provider fails the gate closed. Default false (any tagger counts).",
+  "issuePickupRequireOwnLabel": false,
+
+  "// issuePriorityLabels": "Label -> priority weight for ordering issue pickup when headroom is limited (higher = first). REPLACED wholesale by an override, not merged, so you can define your own scheme (e.g. p0/p1/p2). Default { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }.",
+  "issuePriorityLabels": { "priority:high": 3, "priority:medium": 2, "priority:low": 1 },
+
+  "// issueDefaultPriority": "Weight for an issue carrying no matching priority label. Default 2.",
+  "issueDefaultPriority": 2,
+
+  "// issuePickupStates": "Dispatcher-level, state-based pickup gate. When non-empty, only issues whose provider-native workflow state is listed are picked up (e.g. ['Ready','Doing'] for Azure). Meaningful only for providers with a richer state model than open/closed (Azure work items); GitHub issues are unaffected. Unset/empty = no state gate.",
+  "issuePickupStates": ["Ready", "Doing"],
+
+  "// issueInReviewState": "The state a work item is moved to once a PR is open for it, so agents stop re-picking work already awaiting review/CI (e.g. 'In Review'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Unset = no automatic transition.",
+  "issueInReviewState": "In Review",
+
+  "// prExclusionLabel": "The PR exclusion tag: a PR carrying this label is left alone — no CI fix, base update, comment handling, or merge — for PRs blocked on something the harness can't fix. Stays fully visible (with its health verdict), just not acted on. Provider-agnostic (reads PullRequest.labels). Toggle from the cockpit's per-PR ignore/watch button. Default 'lubbdubb-ignore'.",
+  "prExclusionLabel": "lubbdubb-ignore",
+
+  "// repoRoot": "The git repo the harness operates on; per-branch worktrees are cut from it. Defaults to the launch directory (process.cwd()), so the common case needs nothing. Set it (or the LUBBDUBB_REPO_ROOT env override) to point at a repo elsewhere; a relative path resolves against the launch dir.",
+  "repoRoot": ".",
+
+  "// worktreeRoot": "Root under which per-branch worktrees are created. A relative value resolves against repoRoot (not the launch dir). Default '.lubbdubb/worktrees'.",
+  "worktreeRoot": ".lubbdubb/worktrees",
+
+  "// deskRoot": "Root under which desk (no-code) scratch dirs are created. Relative resolves against repoRoot. Default '.lubbdubb/desk'.",
+  "deskRoot": ".lubbdubb/desk",
+
+  "// dbPath": "SQLite file. Overridable via the LUBBDUBB_DB env var. Default '.lubbdubb/lubbdubb.sqlite'.",
+  "dbPath": ".lubbdubb/lubbdubb.sqlite",
+
+  "// port": "HTTP/WS port for the server + cockpit. Overridable via the PORT env var. Default 4300.",
+  "port": 4300
 }
