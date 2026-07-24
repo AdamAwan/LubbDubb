@@ -451,6 +451,21 @@ structured field, feed it into `buildRefUrls`.
 - The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`
   or a config file (so a secret can't be committed). Selecting `github` without the token or
   without `github.owner`/`github.repo` throws a clear error at `buildIntegrations` time.
+- **Model auth is inherited, and `-p` never prompts.** Nothing in the harness supplies agent
+  credentials: `StreamJsonSession` spawns with `{ ...process.env, ...spec.env }` and
+  `AgentManager` only adds `LUBBDUBB_EVENTS_DIR` / the status file, so agents authenticate as
+  whatever the parent shell is. That matters because of an asymmetry in `claude`'s
+  [credential precedence](https://code.claude.com/docs/en/authentication#authentication-precedence):
+  `ANTHROPIC_API_KEY` outranks subscription OAuth, and while _interactive_ `claude` prompts once
+  to approve the key, **in non-interactive mode (`-p`) "the key is always used when present"** —
+  the approval gate the default `stream` runtime would rely on does not exist. So a stray
+  exported key silently moves every agent in the fleet onto API billing. Headless usage
+  otherwise draws on the Pro/Max subscription: the announced move of `claude -p`/Agent-SDK usage
+  to a separate credit pool at API rates was
+  [paused](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)
+  on 2026-06-15, so treat "subscription-billed" as current-but-provisional rather than settled.
+  Don't add an `ANTHROPIC_API_KEY` to spawn env or config to "fix" an auth problem — it changes
+  who pays; fix the login instead.
 - **One label model — watch/ignore, derived from `labelPrefix`.** `src/watchLabels.ts` is the
   single source: `watchLabelsFor(prefix)` derives `${prefix}-watch` / `${prefix}-ignore`, and
   the pure `resolveWatchState(labels, {watchLabel, ignoreLabel, defaultWatched})` folds the
