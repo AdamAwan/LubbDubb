@@ -9,6 +9,12 @@ import type { System } from '../src/system.js';
 import type { WebSocket } from 'ws';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+/**
+ * How long to wait for a 5ms-debounce transcript update. Generous on purpose: the
+ * emulator parses writes asynchronously and these files run in parallel with the
+ * rest of the suite, so a margin sized to the debounce alone goes red under load.
+ */
+const SETTLE_MS = 150;
 
 // -- PtySession in legible mode --------------------------------------------
 
@@ -28,7 +34,7 @@ test('legible PtySession emits settled text, not raw TUI bytes', async () => {
   backend.last().emit('✻ Unravelling… (esc to interrupt)');
   backend.last().emit('\r\x1b[2K✶ Pondering… (esc to interrupt)');
   backend.last().emit('\r\x1b[2Kline two\r\n');
-  await tick(30);
+  await tick(SETTLE_MS);
   const out = chunks.join('');
   assert.equal(out, 'line one\nline two');
   assert.doesNotMatch(out, /esc to interrupt/);
@@ -53,11 +59,11 @@ test('legible PtySession still detects sentinels and strips them from the transc
   session.on('done', () => (done = true));
   session.start();
   backend.last().emit('working\r\n@@LUBBDUBB_WAITING:Which db?@@\r\n');
-  await tick(30);
+  await tick(SETTLE_MS);
   assert.equal(reason, 'Which db?');
   backend.last().emit('finished\r\n@@LUBBDUBB_DONE@@\r\n');
   assert.equal(done, true);
-  await tick(30);
+  await tick(SETTLE_MS);
   const out = chunks.join('');
   assert.doesNotMatch(out, /LUBBDUBB/);
   assert.match(out, /working/);
@@ -83,7 +89,7 @@ test('legible PtySession flushes the final settled text before reporting exit', 
   session.start();
   backend.last().emit('tail content\r\n');
   backend.last().emitExit(0);
-  await tick(30);
+  await tick(SETTLE_MS);
   assert.equal(chunks.join(''), 'tail content');
   assert.deepEqual(order, ['output', 'exit']);
   assert.equal(session.status, 'done');
@@ -102,9 +108,9 @@ test('a non-append redraw surfaces as a transcript replace event', async () => {
   session.on('transcript', (text: string) => replaces.push(text));
   session.start();
   backend.last().emit('one\r\ntwo\r\n');
-  await tick(30);
+  await tick(SETTLE_MS);
   backend.last().emit('\x1b[2A\x1b[2KONE\r\n\r\n');
-  await tick(30);
+  await tick(SETTLE_MS);
   assert.deepEqual(replaces, ['ONE\ntwo']);
 });
 
