@@ -35,8 +35,11 @@ export interface AzureDevOpsApi {
   /** Label names on a PR — the exclusion-tag signal. */
   listPullLabels(pullRequestId: number): Promise<string[]>;
 
-  /** Open work items, optionally narrowed to a tag. Includes ArtifactLink relations. */
-  listOpenWorkItems(tag?: string): Promise<AzWorkItem[]>;
+  /**
+   * Open work items, optionally narrowed to a tag and/or an assignee (uniqueName/UPN).
+   * Includes ArtifactLink relations.
+   */
+  listOpenWorkItems(tag?: string, assignedTo?: string): Promise<AzWorkItem[]>;
   /**
    * Revision history for a work item, narrowed to the System.Tags value before/after
    * each revision and who made it — the "who added this tag" signal for the ownership

@@ -392,10 +392,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return data.value.map((l) => l.name ?? '').filter((name) => name !== '');
   }
 
-  async listOpenWorkItems(tag?: string): Promise<AzWorkItem[]> {
+  async listOpenWorkItems(tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
     // Two-step: WIQL returns the matching ids, then a batch read hydrates fields
     // and relations. WIQL can't return fields directly, so the batch is required.
-    const wiql = buildOpenWorkItemQuery(tag);
+    const wiql = buildOpenWorkItemQuery(tag, assignedTo);
     const query = await this.request<{ workItems?: Array<{ id: number }> }>(
       this.withApiVersion(`${this.projectUrl}/_apis/wit/wiql`),
       { method: 'POST', body: JSON.stringify({ query: wiql }) },
@@ -535,8 +535,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 }
 
-/** WIQL selecting open work items in the bound project, optionally narrowed to a tag. */
-export function buildOpenWorkItemQuery(tag?: string): string {
+/**
+ * WIQL selecting open work items in the bound project, optionally narrowed to a tag
+ * and/or an assignee (uniqueName/UPN). Both narrowings are independent AND clauses, so
+ * any combination — neither, either, both — composes.
+ */
+export function buildOpenWorkItemQuery(tag?: string, assignedTo?: string): string {
   const clauses = [
     '[System.TeamProject] = @project',
     "[System.State] NOT IN ('Closed', 'Done', 'Removed', 'Resolved')",
@@ -544,6 +548,8 @@ export function buildOpenWorkItemQuery(tag?: string): string {
   // Tags are matched with CONTAINS; a single-quote in a tag would break the query,
   // so escape it the SQL way (double the quote).
   if (tag) clauses.push(`[System.Tags] CONTAINS '${tag.replace(/'/g, "''")}'`);
+  // AssignedTo matches the identity's uniqueName/UPN exactly; same single-quote escape.
+  if (assignedTo) clauses.push(`[System.AssignedTo] = '${assignedTo.replace(/'/g, "''")}'`);
   return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(' AND ')} ORDER BY [System.Id] ASC`;
 }
 

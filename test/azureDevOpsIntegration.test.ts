@@ -53,6 +53,7 @@ interface Recorded {
   newThreads: Array<{ prId: number; content: string }>;
   completions: Array<{ prId: number; commit: string; method: MergeMethod }>;
   tagQueries: Array<string | undefined>;
+  assignedToQueries: Array<string | undefined>;
   updateQueries: number[];
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
   stateSets: Array<{ id: number; state: string }>;
@@ -65,6 +66,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     newThreads: [],
     completions: [],
     tagQueries: [],
+    assignedToQueries: [],
     updateQueries: [],
     labelSets: [],
     stateSets: [],
@@ -87,8 +89,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async listPullLabels(prId) {
       return script.labels?.[prId] ?? [];
     },
-    async listOpenWorkItems(tag) {
+    async listOpenWorkItems(tag, assignedTo) {
       recorded.tagQueries.push(tag);
+      recorded.assignedToQueries.push(assignedTo);
       if (script.throwOn === 'listOpenWorkItems') throw new Error('boom');
       return script.workItems ?? [];
     },
@@ -322,6 +325,20 @@ test('buildOpenWorkItemQuery: filters to open states and, when set, a tag (singl
   assert.doesNotMatch(base, /System\.Tags/);
   const tagged = buildOpenWorkItemQuery("agent's");
   assert.match(tagged, /System\.Tags] CONTAINS 'agent''s'/);
+});
+
+test('buildOpenWorkItemQuery: narrows to an assignee (single-quote escaped)', () => {
+  const base = buildOpenWorkItemQuery();
+  assert.doesNotMatch(base, /System\.AssignedTo/);
+  const assigned = buildOpenWorkItemQuery(undefined, "o'brien@acme.com");
+  assert.match(assigned, /System\.AssignedTo] = 'o''brien@acme\.com'/);
+});
+
+test('buildOpenWorkItemQuery: combines tag and assignee as independent AND clauses', () => {
+  const both = buildOpenWorkItemQuery('team', 'me@acme.com');
+  assert.match(both, /System\.Tags] CONTAINS 'team'/);
+  assert.match(both, /System\.AssignedTo] = 'me@acme\.com'/);
+  assert.match(both, / AND \[System\.AssignedTo]/);
 });
 
 // --------------------------------------------------------------------------
@@ -634,6 +651,15 @@ test('work items snapshot passes the tag filter through to the API', async () =>
   const issues = new AzureDevOpsWorkItemsIntegration({ api, store, workItemTag: 'agent-ready' });
   await issues.snapshot();
   assert.deepEqual(recorded.tagQueries, ['agent-ready']);
+  store.close();
+});
+
+test('work items snapshot passes the assignee filter through to the API', async () => {
+  const { api, recorded } = fakeApi({ workItems: [] });
+  const store = new Store(':memory:');
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, store, assignedTo: 'me@acme.com' });
+  await issues.snapshot();
+  assert.deepEqual(recorded.assignedToQueries, ['me@acme.com']);
   store.close();
 });
 

@@ -13,6 +13,8 @@ export interface AzureWorkItemsOpts {
   errors?: ErrorRecorder;
   /** Only surface work items carrying this tag. Unset = all open work items. */
   workItemTag?: string;
+  /** Only surface work items assigned to this uniqueName (UPN). Unset = all assignees. */
+  assignedTo?: string;
   /**
    * When set, resolve tag authorship for work items carrying this tag and expose the
    * viewer-added subset as `labelsAddedByViewer`, so the dispatcher's ownership gate
@@ -40,8 +42,8 @@ export class AzureDevOpsWorkItemsIntegration implements Integration, WorkItemSta
 
   async snapshot(): Promise<WorldSlice> {
     try {
-      const { api, workItemTag, ownershipTag } = this.opts;
-      const raw = await api.listOpenWorkItems(workItemTag);
+      const { api, workItemTag, assignedTo, ownershipTag } = this.opts;
+      const raw = await api.listOpenWorkItems(workItemTag, assignedTo);
       const viewer = ownershipTag ? await api.viewerUniqueName() : null;
       const issues = await Promise.all(
         raw.map(async (w): Promise<Issue> => {
