@@ -92,6 +92,34 @@ export class TerminalTranscript {
     await this.emitPending();
   }
 
+  /**
+   * The text currently sitting in the REPL's input box (after the `>` prompt),
+   * or null if no input box is on screen. Unlike {@link snapshot}, which drops
+   * the input box as chrome, this *reads* it — the boot-race closed loop
+   * ({@link PtySession.deliverInitial}) polls it to tell whether a pasted first
+   * message is still unsent (box holds our text) or was accepted (box cleared).
+   * Awaits pending writes first, since xterm parses them asynchronously.
+   */
+  async inputBoxText(): Promise<string | null> {
+    await this.pending;
+    if (this.disposed) return null;
+    const buf = this.term.buffer.active;
+    // Scan bottom-up: the input box is at the foot of the screen, and on the
+    // scroll-append path the freshest box is the lowest one.
+    for (let i = buf.length - 1; i >= 0; i--) {
+      const line = buf.getLine(i);
+      if (!line) continue;
+      let t = line.translateToString(true).trim();
+      if (!t || t[0] !== '│') continue; // interior box row only (skip ╭ ╰ borders and content)
+      t = t.slice(1); // drop the left border
+      if (t.endsWith('│')) t = t.slice(0, -1); // drop the right border, when the frame draws one
+      t = t.trim();
+      if (t[0] !== '>') continue; // the prompt row; multi-line continuation rows have no '>'
+      return t.slice(1).trim(); // text after the prompt — '' once the box clears
+    }
+    return null;
+  }
+
   /** The settled transcript as of the writes processed so far. */
   snapshot(): string {
     const buf = this.term.buffer.active;

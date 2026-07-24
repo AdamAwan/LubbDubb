@@ -230,11 +230,13 @@ export class PtySession extends EventEmitter {
    * message" bug.
    *
    * The message is pasted *once* (so it can never be duplicated in the box) and the
-   * submitting Enter is then re-sent on an interval until the agent's turn starts —
-   * i.e. until the status leaves `running` (it parked on a question, finished, or
-   * died) or the attempts run out. A realistic multi-line prompt persists in the box
-   * as a "[Pasted text]" placeholder, so a later bare Enter submits it; a stray
-   * Enter that lands after the turn already began is a harmless empty submit.
+   * submitting Enter is then re-sent on an interval until the message actually lands.
+   * "Landed" is *observed*, not guessed: in legible mode the headless emulator mirrors
+   * the real screen, so we read its input box and stop the moment it clears (the REPL
+   * accepted the paste) — closing the loop the earlier timing-only heuristics couldn't.
+   * Without a mirror (raw/mock sessions) there is nothing to read, so it degrades to the
+   * blind open-loop retry: nudge until the status leaves `running` or the attempts run
+   * out. A stray Enter that lands after the turn already began is a harmless empty submit.
    * Follow-up messages ({@link send}) don't need this — by then the REPL is live.
    */
   deliverInitial(text: string): void {
@@ -243,24 +245,36 @@ export class PtySession extends EventEmitter {
     this.scheduleResubmit(1);
   }
 
-  /** Re-send the bare submitting Enter for {@link deliverInitial}, until the turn starts or attempts run out. */
+  /** Re-send the bare submitting Enter for {@link deliverInitial}, until the message lands or attempts run out. */
   private scheduleResubmit(attempt: number): void {
     if (attempt > this.opts.initialSubmitAttempts) return;
     const t = setTimeout(() => {
       this.initialSubmitTimer = null;
-      // Any status other than `running` means the agent took the message and moved
-      // on (parked / finished / gone); a still-`running` session may just be booting,
-      // so keep nudging the Enter through. Re-send only the CR — never a re-paste.
-      if (!this.proc || this._status !== 'running') return;
-      try {
-        this.proc.write('\r');
-      } catch {
-        return; /* session already gone */
-      }
-      this.scheduleResubmit(attempt + 1);
+      void this.tryResubmit(attempt);
     }, this.opts.initialSubmitIntervalMs);
     t.unref?.();
     this.initialSubmitTimer = t;
+  }
+
+  private async tryResubmit(attempt: number): Promise<void> {
+    // A status other than `running` means the agent took the message and moved on
+    // (parked / finished / gone) — nothing left to submit.
+    if (!this.proc || this._status !== 'running') return;
+    // Closed loop: if the emulator shows the input box has emptied, the REPL accepted
+    // the paste — stop. A box still holding text (or not yet painted → null) may just be
+    // a booting REPL, so keep nudging. Reading the box awaits xterm's async parse, so
+    // re-check liveness/status afterwards.
+    if (this.mirror) {
+      const box = await this.mirror.inputBoxText();
+      if (!this.proc || this._status !== 'running') return;
+      if (box === '') return; // box rendered and empty → the message submitted
+    }
+    try {
+      this.proc.write('\r'); // re-send only the CR — never a re-paste (it would accumulate)
+    } catch {
+      return; /* session already gone */
+    }
+    this.scheduleResubmit(attempt + 1);
   }
 
   /** Write the submitting carriage return, after {@link PtySessionOptions.submitDelayMs}. */
