@@ -203,7 +203,10 @@ test('deliverInitial pastes once, then re-sends only the Enter while the REPL bo
   assert.deepEqual(backend.last().writes, [pasted('do the task'), '\r']);
   // While the REPL stays silently 'running', the Enter is re-sent — as bare CRs,
   // never another paste (a re-paste would accumulate the prompt in the box).
-  await new Promise((r) => setTimeout(r, 40));
+  // Wait out every scheduled attempt plus slack, so the cap below is asserted
+  // against a settled write log rather than whatever the timer got through in
+  // time (that race made this assertion pass only on a slow enough machine).
+  await new Promise((r) => setTimeout(r, 5 * 4 + 60));
   const writes = backend.last().writes;
   assert.equal(writes.filter((w) => w.startsWith(PASTE_START)).length, 1, 'the prompt is pasted exactly once');
   assert.ok(writes.length > 2, 'the Enter is re-sent while the REPL is not yet accepting it');
@@ -211,8 +214,8 @@ test('deliverInitial pastes once, then re-sends only the Enter while the REPL bo
     writes.slice(1).every((w) => w === '\r'),
     'every retry is a bare CR',
   );
-  // Bounded: one initial CR + at most `initialSubmitAttempts` re-sends.
-  assert.ok(writes.length <= 1 + 4, 'retries are capped');
+  // Bounded: the paste, its submitting CR, then at most `initialSubmitAttempts` re-sends.
+  assert.ok(writes.length <= 2 + 4, `retries are capped, got ${writes.length}`);
 });
 
 test('deliverInitial stops re-sending the Enter once the agent progresses', async () => {

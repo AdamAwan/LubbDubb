@@ -135,13 +135,28 @@ behaviors in sync. `PtySession` additionally handles the cross-chunk case (a sen
 across two PTY data chunks); on the line-delimited stream-JSON transport a sentinel always
 arrives whole inside one text block, so that machinery isn't needed there.
 
+**PTY sentinel matching goes through `src/pty/sentinelScanner.ts` — never `indexOf`.** The
+interactive TUI styles the line it prints a sentinel on, so SGR escapes land _inside_ the token
+(`@@LUBB\x1b[0mDUBB_DONE@@`), not merely around it. The scanner matches through the escapes and
+reports **raw byte spans** (so the exact range, interleaved escapes included, can be excised from
+what's forwarded to the terminal emulator) plus an escape-free payload. `scanSentinels` is the one
+matcher for _both_ detection and display-stripping: they used to be two matchers over two views —
+detection on an ANSI-stripped copy, stripping on the raw bytes — which disagreed exactly when it
+mattered (detection fired, the strip missed, the sentinel leaked into the transcript). Keep them on
+the one matcher. Two consequences worth knowing: every hit is **excised from the retained detection
+tail**, which is what stops the sliding window re-firing a sentinel on later chunks (the `waiting`
+latch is still needed, but it now only guards the "output while parked → running" reset, not
+re-detection); and `holdFrom` **bounds** how much output is withheld waiting for a missing suffix
+(`MAX_SENTINEL_HOLD`) — unbounded, an agent that merely _mentions_ `@@LUBBDUBB_WAITING:` without
+closing it blacked out the transcript for the rest of the run. Tests: `test/ptySentinelScanner.test.ts`.
+
 **Flag sentinel (surfacing artifacts).** A third sentinel, `@@LUBBDUBB_FLAG:<payload>@@`, lets an
 agent push an artifact/link to the cockpit mid-run (a design doc, a report) without changing its
 status. Payload is a bare ref or a JSON `{kind?,label?,ref}` (`parseFlag`/`extractFlags` in
 `sentinels.ts`, pure + tested), where `ref` is a **worktree-relative path or an http(s) URL**. Both
 runtimes detect it on the _raw_ stream and emit `flag`; it strips from display through the same
-`stripSentinels`/hold machinery as the waiting sentinel (PtySession additionally strips complete
-flags from its detection tail via `stripFlags`, since — unlike done/waiting — a flag doesn't latch a
+`stripSentinels`/hold machinery as the waiting sentinel (in PtySession that's the shared
+`sentinelScanner` above, which excises every hit from the detection tail — a flag doesn't latch a
 status, so a sliding window would otherwise re-emit it). `AgentManager.recordFlag` persists it
 (`agent_flags`, deduped by `(agent, ref)` so an evolving doc refreshes in place), re-emits it as the
 `flag` event, and the `Hub` ships it as `agent:flag` + a `dirty`. `buildStateSnapshot` includes
