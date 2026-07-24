@@ -56,7 +56,11 @@ export function renderBlocks(blocks: ContentBlock[]): string {
   let out = '';
   for (const b of blocks) {
     if (b.type === 'text') {
-      out += stripSentinels(b.text ?? '');
+      const text = stripSentinels(b.text ?? '');
+      // Tool blocks close with a single newline, so prose following one would sit
+      // flush against the last line of a result. Give it its own paragraph.
+      if (text && out && !out.endsWith('\n\n')) out += '\n';
+      out += text;
     } else if (b.type === 'tool_use') {
       out += renderToolUse(b);
     } else if (b.type === 'tool_result') {

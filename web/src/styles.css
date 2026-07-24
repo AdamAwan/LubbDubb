@@ -943,6 +943,9 @@ body {
 .terminal .ansi-red {
   color: #ff8a8a;
 }
+.terminal .ansi-green {
+  color: #8fce9b;
+}
 .terminal .ansi-dim {
   opacity: 0.65;
 }
