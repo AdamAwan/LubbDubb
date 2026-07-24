@@ -27,6 +27,15 @@ export default tseslint.config(
     },
   },
 
+  // Shipped standalone Node helper scripts (e.g. the status-line capture helper
+  // invoked as `node <path>`) — plain `.mjs`, so they need Node globals too.
+  {
+    files: ['src/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+
   // React web SPA.
   {
     files: ['web/**/*.{ts,tsx}'],

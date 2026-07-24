@@ -1,5 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { AccountRateLimits, RateLimitWindow } from '../types.js';
 
 /**
@@ -16,10 +17,23 @@ import type { AccountRateLimits, RateLimitWindow } from '../types.js';
  * self-computed rolling cost window summed from `usage_events`.
  */
 
-// Write-then-rename so a reader never sees a half-written payload; no-op when
-// the env var isn't set (e.g. an operator running the settings by hand).
-const STATUS_LINE_COMMAND =
-  'if [ -n "$LUBBDUBB_STATUS_FILE" ]; then cat > "$LUBBDUBB_STATUS_FILE.tmp" && mv "$LUBBDUBB_STATUS_FILE.tmp" "$LUBBDUBB_STATUS_FILE"; else cat > /dev/null; fi';
+/**
+ * Absolute path to the shipped {@link file://./statusCapture.mjs} helper, with
+ * `\` normalised to `/` so it embeds in the command string without escaping.
+ *
+ * The `statusLine` setting is a shell-string only (no exec/args form), and on
+ * Windows Claude Code runs it through Git Bash if installed, else PowerShell. A
+ * POSIX `if [ -n "$X" ]` body is a PowerShell parse error, so the previous
+ * inline command was a silent no-op on Windows. `node <helper>` carries no shell
+ * syntax and runs identically under both shells; the helper does the atomic
+ * write-then-rename (and the unset no-op) that used to live in the command.
+ */
+export const STATUS_CAPTURE_HELPER = fileURLToPath(new URL('./statusCapture.mjs', import.meta.url)).replace(/\\/g, '/');
+
+// Quoted so a path containing spaces (e.g. `C:/Users/My Name/...`) stays one
+// argument; a plain forward-slashed path in double quotes is portable across
+// both Git Bash and PowerShell.
+const STATUS_LINE_COMMAND = `node "${STATUS_CAPTURE_HELPER}"`;
 
 /**
  * The `--settings` fragment wiring the capture command into a PTY `claude` launch.
