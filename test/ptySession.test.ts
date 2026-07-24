@@ -89,6 +89,13 @@ test('done sentinel finishes the session', () => {
   assert.equal(session.status, 'done');
 });
 
+// A payload is framed as an explicit bracketed paste (ESC[200~ … ESC[201~) so the
+// claude TUI closes the paste at the end marker and the submitting CR that follows
+// can never be folded into it as a literal newline (the "text sits unsubmitted" bug).
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+const pasted = (text: string): string => `${PASTE_START}${text}${PASTE_END}`;
+
 test('send un-parks a waiting session and submits with a separate carriage return', async () => {
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 5 });
@@ -97,11 +104,11 @@ test('send un-parks a waiting session and submits with a separate carriage retur
   assert.equal(session.status, 'waiting');
   session.send('yes');
   assert.equal(session.status, 'running');
-  // The payload is written on its own; the submitting CR follows separately so the
-  // claude TUI doesn't fold it into the paste and leave the text unsubmitted.
-  assert.equal(backend.last().writes.at(-1), 'yes');
+  // The bracketed-paste payload is written on its own; the submitting CR follows
+  // separately once the paste is closed, so the TUI never folds it into the paste.
+  assert.equal(backend.last().writes.at(-1), pasted('yes'));
   await new Promise((r) => setTimeout(r, 15));
-  assert.deepEqual(backend.last().writes, ['yes', '\r']);
+  assert.deepEqual(backend.last().writes, [pasted('yes'), '\r']);
 });
 
 test('send strips a trailing newline from the payload so the CR alone submits', async () => {
@@ -109,7 +116,8 @@ test('send strips a trailing newline from the payload so the CR alone submits', 
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   session.start();
   session.send('line1\nline2\n');
-  assert.deepEqual(backend.last().writes, ['line1\nline2', '\r']);
+  // Internal newlines are preserved inside the paste; only the trailing one is dropped.
+  assert.deepEqual(backend.last().writes, [pasted('line1\nline2'), '\r']);
 });
 
 test('submitDelayMs 0 writes the payload and CR synchronously', () => {
@@ -117,7 +125,7 @@ test('submitDelayMs 0 writes the payload and CR synchronously', () => {
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   session.start();
   session.send('go');
-  assert.deepEqual(backend.last().writes, ['go', '\r']);
+  assert.deepEqual(backend.last().writes, [pasted('go'), '\r']);
 });
 
 test('clean exit with no sentinel still counts as done', () => {

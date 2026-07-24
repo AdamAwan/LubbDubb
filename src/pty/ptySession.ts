@@ -69,6 +69,15 @@ const DEFAULTS = {
 const TAIL_WINDOW = 4096;
 
 /**
+ * Bracketed-paste markers (DECSET 2004). Framing a payload between these tells the
+ * claude TUI "this is a paste, and it ends *here*", so the submitting CR that
+ * follows is always an Enter keypress and can never be swallowed into the paste as
+ * a literal newline. See {@link PtySession.send}.
+ */
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+
+/**
  * One agent's terminal, with all the "is it waiting / is it done" heuristics
  * living here and nowhere else. This is the abstraction the design calls out as
  * the top technical risk; isolating it means the heuristics can be tuned and
@@ -145,16 +154,20 @@ export class PtySession extends EventEmitter {
   }
 
   /**
-   * Type text into the session and submit it. The payload and the submitting
-   * carriage return are written *separately*, with a `submitDelayMs` gap: the
-   * claude TUI folds a single input burst into a paste and treats a trailing CR
-   * as a literal newline, so a glued-on CR leaves the message sitting in the
-   * input unsubmitted. The gap lets the CR land as a distinct Enter keypress.
-   * Trailing newlines in `text` are dropped so our lone CR does the submitting.
+   * Type text into the session and submit it. The payload is framed as an explicit
+   * bracketed paste (`PASTE_START…PASTE_END`) and the submitting carriage return is
+   * written *separately*, a `submitDelayMs` gap later. The claude TUI folds a single
+   * input burst into a paste and treats a trailing CR as a literal newline; a long,
+   * multi-line initial prompt takes longer to settle than the old timing heuristic
+   * allowed, so the CR was being swallowed into the paste and the message sat in the
+   * input unsubmitted. The paste-end marker closes the paste deterministically, so
+   * the CR that follows is always an Enter keypress regardless of payload size —
+   * removing the race the fixed gap alone could not win. Trailing newlines in `text`
+   * are dropped so our lone CR does the submitting; internal ones stay in the paste.
    */
   send(text: string): void {
     if (!this.proc) throw new Error('PtySession not started');
-    this.proc.write(text.replace(/[\r\n]+$/, ''));
+    this.proc.write(`${PASTE_START}${text.replace(/[\r\n]+$/, '')}${PASTE_END}`);
     this.submit();
     // Sending input un-parks the session.
     if (this._status === 'waiting') this.setStatus('running');
