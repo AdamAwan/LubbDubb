@@ -131,11 +131,17 @@ Both sources call one idempotent `noteSentinel(kind, payload, source)`.
 The announcing property is the point. Two detectors that silently disagree is the bug already
 fixed once in `fd560e6`; a backstop that reports when it fires makes drift visible in the Errors
 panel instead of rotting. With the screen no longer feeding the UI, the two paths cannot diverge
-*visibly* — they are both detectors, and status transitions are already idempotent.
+_visibly_ — they are both detectors, and status transitions are already idempotent.
 
-`sentinelScanner.ts` shrinks rather than deletes: `scanSentinels` and the detection-tail excision
-stay (excision still prevents the sliding window re-firing). `holdFrom` and the display-excise
-path go, since nothing forwards raw bytes to a display any more.
+`sentinelScanner.ts` is unchanged, and its role narrows rather than shrinking. An earlier draft
+had `holdFrom` and the display-excise path deleted "since nothing forwards raw bytes to a display
+any more" — that is wrong: `raw`/mock sessions write no session file and *do* still render the
+byte stream, so cross-chunk display stripping is still load-bearing for them.
+
+The deferral is also **skipped when the tail has not located a file**
+(`SessionTranscriptTail.located()`). Without that, a missing session file would delay every
+status transition by the full backstop window waiting on a source that will never speak —
+which is exactly what the `agentProtocol` and `resume` suites caught.
 
 ### 4. Boot race gets a better signal
 
@@ -152,13 +158,13 @@ is what the boot-race signal needs.
 
 ## Deletions
 
-| Item                                                                                                            | Lines |
-| --------------------------------------------------------------------------------------------------------------- | ----- |
-| `src/pty/terminalTranscript.ts` (incl. `isTuiChromeLine`, `inputBoxText`)                                       | 165   |
-| `@xterm/headless` dependency                                                                                     | —     |
-| `test/terminalTranscript.test.ts`, `test/ptyLegibleTranscript.test.ts`                                           | 294   |
+| Item                                                                                                                                                             | Lines |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `src/pty/terminalTranscript.ts` (incl. `isTuiChromeLine`, `inputBoxText`)                                                                                        | 165   |
+| `@xterm/headless` dependency                                                                                                                                     | —     |
+| `test/terminalTranscript.test.ts`, `test/ptyLegibleTranscript.test.ts`                                                                                           | 294   |
 | `transcript` event path end-to-end: `Store.setTranscript`, `agent:transcript`, `Hub.handleTranscript` + its duplicated tail rebuild, the drawer's replace branch | ~60   |
-| `PtySession` mirror / hold / chunk-straddle machinery                                                            | ~150  |
+| `PtySession` mirror / hold / chunk-straddle machinery                                                                                                            | ~150  |
 
 ## Rendering decisions
 
