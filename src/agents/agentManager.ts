@@ -496,9 +496,17 @@ export class AgentManager extends EventEmitter {
  * Reduce a hook-reported write path to worktree-relative when it landed inside the
  * agent's cwd (so the artifact route — confined to the worktree — can serve it),
  * else leave it as reported. `claude`'s file tools report absolute paths.
+ *
+ * The result is normalised to forward slashes: on Windows `relative()` yields
+ * `out\summary.md`, but the stored path is used as an artifact *ref* — served by
+ * the URL-oriented `/api/artifacts/:id` route and displayed/linked in the cockpit
+ * — so it must match the forward-slash form every other platform produces. `\` is
+ * always a separator on the Windows paths these tools report, never a filename
+ * char, and POSIX `relative()`/claude already emit `/`, so this is a no-op there.
  */
 function toWorktreeRelative(cwd: string, p: string): string {
-  if (!isAbsolute(p)) return p;
+  const toPosix = (s: string): string => s.replace(/\\/g, '/');
+  if (!isAbsolute(p)) return toPosix(p);
   const rel = relative(cwd, p);
-  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : p;
+  return toPosix(rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : p);
 }
