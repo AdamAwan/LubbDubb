@@ -427,10 +427,10 @@ structured field, feed it into `buildRefUrls`.
   - Story side: the pure `watchGateReason(labels, policy)` gates the story rules the same way
     (fake-backlog-only; `Story.labels` is optional).
   - Priority stays label-encoded (`issuePriorityLabels`/`issueDefaultPriority`, pure `issuePriority`).
-  `issuePickupRequireOwnLabel` refines the **watch** gate: when on, the watch check reads
-  `issue.labelsAddedByViewer` instead of `labels`, so a `-watch` tag someone else added is ignored
-  (anti-abuse). Authorship is resolved only in the real providers — GitHub reads the timeline's
-  `labeled`/`unlabeled` events (`viewerAddedLabels`), Azure diffs work-item revisions
-  (`viewerAddedTags`) — and only for items carrying the tag (the registry passes the derived
-  `watchLabel` as `ownershipLabel`/`ownershipTag` only when the flag is set). The `fake` provider
-  leaves `labelsAddedByViewer` unset, so the gate fails closed there.
+    `issuePickupRequireOwnLabel` refines the **watch** gate: when on, the watch check reads
+    `issue.labelsAddedByViewer` instead of `labels`, so a `-watch` tag someone else added is ignored
+    (anti-abuse). Authorship is resolved only in the real providers — GitHub reads the timeline's
+    `labeled`/`unlabeled` events (`viewerAddedLabels`), Azure diffs work-item revisions
+    (`viewerAddedTags`) — and only for items carrying the tag (the registry passes the derived
+    `watchLabel` as `ownershipLabel`/`ownershipTag` only when the flag is set). The `fake` provider
+    leaves `labelsAddedByViewer` unset, so the gate fails closed there.
