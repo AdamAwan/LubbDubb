@@ -25,6 +25,14 @@ export interface AgentSession extends EventEmitter {
   /** Deliver text to the agent (initial task, or a human's answer to continue). */
   send(text: string): void;
   /**
+   * Deliver the *first* message to a freshly-booted session, robust to any startup
+   * race in accepting input. Optional: runtimes whose transport is ready the moment
+   * it's spawned (e.g. stream-JSON over stdin) omit it and the caller falls back to
+   * {@link send}. The interactive PTY runtime implements it because the claude REPL
+   * drops the submitting Enter for a beat while it initialises.
+   */
+  deliverInitial?(text: string): void;
+  /**
    * Write raw bytes to the agent with no added newline/framing (e.g. control chars like \x03).
    * Best-effort: transports without a TTY may no-op.
    */

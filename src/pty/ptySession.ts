@@ -30,6 +30,14 @@ export interface PtySessionOptions {
    */
   submitDelayMs?: number;
   /**
+   * Initial-message delivery only ({@link PtySession.deliverInitial}): how long to
+   * wait before re-sending the submitting Enter, and how many times. A freshly-
+   * booted claude REPL drops the first Enter for ~1-2s while it initialises, so the
+   * Enter is re-sent (never a re-paste) until the turn starts.
+   */
+  initialSubmitIntervalMs?: number;
+  initialSubmitAttempts?: number;
+  /**
    * Render output through a headless terminal emulator into settled, legible
    * text instead of raw TUI bytes (see {@link TerminalTranscript}). On for the
    * real `claude` TUI (`agentMode: 'pty'`); off for `raw`/mock sessions, whose
@@ -59,6 +67,8 @@ const DEFAULTS = {
   flagSentinelSuffix: FLAG_SUFFIX,
   waitingPatterns: [] as string[],
   submitDelayMs: 60,
+  initialSubmitIntervalMs: 700,
+  initialSubmitAttempts: 8,
   legibleTranscript: false,
   transcriptDebounceMs: 200,
   exitOnDone: false,
@@ -114,6 +124,8 @@ export class PtySession extends EventEmitter {
   private readonly mirror: TerminalTranscript | null;
   /** Pending exit-on-done timers (the delayed Enter + the SIGTERM backstop), cleared once the process exits. */
   private teardownTimers: ReturnType<typeof setTimeout>[] = [];
+  /** Pending initial-message re-submit timer (see {@link deliverInitial}), cleared on exit. */
+  private initialSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly opts: Required<PtySessionOptions>;
 
   constructor(
@@ -130,6 +142,8 @@ export class PtySession extends EventEmitter {
       flagSentinelPrefix: DEFAULTS.flagSentinelPrefix,
       flagSentinelSuffix: DEFAULTS.flagSentinelSuffix,
       submitDelayMs: DEFAULTS.submitDelayMs,
+      initialSubmitIntervalMs: DEFAULTS.initialSubmitIntervalMs,
+      initialSubmitAttempts: DEFAULTS.initialSubmitAttempts,
       legibleTranscript: DEFAULTS.legibleTranscript,
       transcriptDebounceMs: DEFAULTS.transcriptDebounceMs,
       exitOnDone: DEFAULTS.exitOnDone,
@@ -183,6 +197,48 @@ export class PtySession extends EventEmitter {
     // the human has now answered the thing the agent stopped for.
     this.sentinelWaiting = false;
     if (this._status === 'waiting') this.setStatus('running');
+  }
+
+  /**
+   * Deliver the *first* message to a freshly-spawned REPL, robust to the boot race.
+   * The claude TUI paints its input box (and enables bracketed-paste mode) a second
+   * or two before its input loop actually honours a submitting Enter; an Enter sent
+   * in that window is silently dropped, so a fixed-delay single {@link send} leaves
+   * the prompt sitting unsent in the input box — the "pauses after the first
+   * message" bug.
+   *
+   * The message is pasted *once* (so it can never be duplicated in the box) and the
+   * submitting Enter is then re-sent on an interval until the agent's turn starts —
+   * i.e. until the status leaves `running` (it parked on a question, finished, or
+   * died) or the attempts run out. A realistic multi-line prompt persists in the box
+   * as a "[Pasted text]" placeholder, so a later bare Enter submits it; a stray
+   * Enter that lands after the turn already began is a harmless empty submit.
+   * Follow-up messages ({@link send}) don't need this — by then the REPL is live.
+   */
+  deliverInitial(text: string): void {
+    if (!this.proc) throw new Error('PtySession not started');
+    this.send(text); // bracketed paste + first submitting CR
+    this.scheduleResubmit(1);
+  }
+
+  /** Re-send the bare submitting Enter for {@link deliverInitial}, until the turn starts or attempts run out. */
+  private scheduleResubmit(attempt: number): void {
+    if (attempt > this.opts.initialSubmitAttempts) return;
+    const t = setTimeout(() => {
+      this.initialSubmitTimer = null;
+      // Any status other than `running` means the agent took the message and moved
+      // on (parked / finished / gone); a still-`running` session may just be booting,
+      // so keep nudging the Enter through. Re-send only the CR — never a re-paste.
+      if (!this.proc || this._status !== 'running') return;
+      try {
+        this.proc.write('\r');
+      } catch {
+        return; /* session already gone */
+      }
+      this.scheduleResubmit(attempt + 1);
+    }, this.opts.initialSubmitIntervalMs);
+    t.unref?.();
+    this.initialSubmitTimer = t;
   }
 
   /** Write the submitting carriage return, after {@link PtySessionOptions.submitDelayMs}. */
@@ -384,6 +440,10 @@ export class PtySession extends EventEmitter {
   private handleExit(code: number): void {
     for (const t of this.teardownTimers) clearTimeout(t);
     this.teardownTimers = [];
+    if (this.initialSubmitTimer) {
+      clearTimeout(this.initialSubmitTimer);
+      this.initialSubmitTimer = null;
+    }
     // Legible mode: flush the emulator's final settled text *before* the exit is
     // reported, so a terminal transition never races the tail of the transcript.
     const mirror = this.mirror;

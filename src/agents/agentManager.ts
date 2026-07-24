@@ -393,7 +393,11 @@ export class AgentManager extends EventEmitter {
     const deliver = (): void => {
       if (!this.sessions.has(agentId)) return; // killed/finished before we could send
       try {
-        session.send(text);
+        // Prefer the runtime's boot-race-robust initial delivery (the PTY REPL drops
+        // the first submitting Enter while it initialises); fall back to a plain send
+        // for transports (stream-JSON) that are ready the instant they spawn.
+        if (session.deliverInitial) session.deliverInitial(text);
+        else session.send(text);
       } catch {
         /* session already gone */
       }
