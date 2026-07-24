@@ -183,8 +183,8 @@ test('deliverInitial pastes once, then re-sends only the Enter while the REPL bo
     writes.slice(1).every((w) => w === '\r'),
     'every retry is a bare CR',
   );
-  // Bounded: one initial CR + at most `initialSubmitAttempts` re-sends.
-  assert.ok(writes.length <= 1 + 4, 'retries are capped');
+  // Bounded: the paste, its submitting CR, and at most `initialSubmitAttempts` re-sends.
+  assert.ok(writes.length <= 1 + 1 + 4, 'retries are capped');
 });
 
 test('deliverInitial stops re-sending the Enter once the agent progresses', async () => {
