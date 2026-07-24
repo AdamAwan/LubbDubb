@@ -1,11 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
-import { parseStatusLinePayload, StatusFileRateLimits } from '../src/agents/statusLine.js';
+import {
+  parseStatusLinePayload,
+  StatusFileRateLimits,
+  STATUS_CAPTURE_HELPER,
+  STATUS_LINE_SETTINGS,
+} from '../src/agents/statusLine.js';
 import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
@@ -115,9 +121,60 @@ test('buildClaudeArgs wires the status-line capture only when asked; stream args
   const at = pty.indexOf('--settings');
   assert.ok(at >= 0, 'expected --settings');
   assert.match(pty[at + 1]!, /statusLine/);
-  assert.match(pty[at + 1]!, /LUBBDUBB_STATUS_FILE/);
+  // The env reference now lives inside the shipped helper, not the command; the
+  // command just invokes it (see the Windows-safe capture tests below).
+  assert.match(pty[at + 1]!, /statusCapture\.mjs/);
   assert.ok(!buildClaudeArgs({}).includes('--settings'), 'off by default');
   assert.ok(!buildClaudeStreamArgs({}).includes('--settings'), 'never headless');
+});
+
+// ---------------------------------------------------------------------------
+// The capture command is shell-free (Windows-safe): a shipped `node <helper>`
+// that runs identically under Git Bash and PowerShell — not a POSIX shell body
+// (which is a PowerShell parse error, silently no-opping capture on Windows).
+// ---------------------------------------------------------------------------
+
+test('the status-line command invokes the shipped helper, not a POSIX shell body', () => {
+  const cmd = STATUS_LINE_SETTINGS.statusLine.command;
+  // `node "<forward-slashed path>"` — no shell control flow to misparse.
+  assert.match(cmd, /^node "/, 'runs node directly');
+  assert.match(cmd, /statusCapture\.mjs"$/, 'points at the shipped helper');
+  assert.ok(!cmd.includes('if ['), 'no POSIX conditional');
+  assert.ok(!cmd.includes('/dev/null'), 'no POSIX device path');
+  assert.ok(!STATUS_CAPTURE_HELPER.includes('\\'), 'helper path is forward-slashed');
+  assert.ok(existsSync(STATUS_CAPTURE_HELPER), 'the helper resolves to a real file');
+});
+
+/** Run the helper shell-free (no `shell: true`), feed it `payload` on stdin. */
+function runCaptureHelper(payload: string, env: NodeJS.ProcessEnv): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [STATUS_CAPTURE_HELPER], {
+      env: { ...process.env, ...env },
+      stdio: ['pipe', 'ignore', 'inherit'],
+    });
+    child.on('error', reject);
+    child.on('exit', (code) => resolve(code));
+    child.stdin.end(payload);
+  });
+}
+
+test('the helper atomically writes stdin to $LUBBDUBB_STATUS_FILE, shell-free', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-capture-'));
+  const target = join(dir, 'session-1.json');
+  const payload = JSON.stringify({ rate_limits: { five_hour: { used_percentage: 62 } } });
+
+  const code = await runCaptureHelper(payload, { LUBBDUBB_STATUS_FILE: target });
+  assert.equal(code, 0);
+  assert.equal(readFileSync(target, 'utf8'), payload, 'payload written verbatim');
+  assert.ok(!existsSync(`${target}.tmp`), 'the temp file was renamed away, not left behind');
+});
+
+test('the helper is a clean no-op when LUBBDUBB_STATUS_FILE is unset', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-capture-noop-'));
+  const stray = join(dir, 'session-1.json');
+  const code = await runCaptureHelper('{"rate_limits":{}}', { LUBBDUBB_STATUS_FILE: '' });
+  assert.equal(code, 0, 'exits cleanly with nothing to write');
+  assert.ok(!existsSync(stray), 'writes nothing');
 });
 
 test('pty mode exports LUBBDUBB_STATUS_FILE keyed by the chosen session id', async () => {
