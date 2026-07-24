@@ -9,6 +9,7 @@ import {
   classifyArtifact,
   FileEventsSpool,
   FILE_EVENTS_SETTINGS,
+  HOOK_DEBUG_FILE,
 } from '../src/agents/fileEvents.js';
 import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -128,6 +129,45 @@ test('the file-events hook actually captures a write when spawned shell-free (Wi
   });
   assert.equal(res2.status, 0);
   assert.equal(readdirSync(dir2).length, 0, 'no env var → no-op');
+});
+
+test('LUBBDUBB_EVENTS_DEBUG makes the hook drop a breadcrumb (and readDebug reads it); off by default', () => {
+  const hook = FILE_EVENTS_SETTINGS.hooks.PostToolUse[0]!.hooks[0]!;
+  // A key'd spool dir, exactly as the harness lays it out (base/<key>).
+  const base = mkdtempSync(join(tmpdir(), 'lubbdubb-dbg-'));
+  const spool = new FileEventsSpool(base);
+  const key = 'agentX';
+  const dir = spool.dirFor(key);
+
+  // Debug on: the hook both spools the record AND leaves a breadcrumb naming the
+  // tool, the input key names, and the path.
+  const res = spawnSync(process.execPath, hook.args!, {
+    input: '{"tool_name":"Write","tool_input":{"file_path":"docs/plan.md","content":"x"}}',
+    env: { ...process.env, LUBBDUBB_EVENTS_DIR: dir, LUBBDUBB_EVENTS_DEBUG: '1' },
+    encoding: 'utf8',
+  });
+  assert.equal(res.status, 0, res.stderr);
+  // The record still spools, and drain ignores the `.log` breadcrumb file.
+  assert.deepEqual(spool.drain(key), [{ path: 'docs/plan.md', tool: 'Write' }]);
+  const crumbs = spool.readDebug(key);
+  assert.equal(crumbs.length, 1);
+  assert.match(crumbs[0]!, /fired tool=Write/);
+  assert.match(crumbs[0]!, /path=docs\/plan\.md/);
+  // Key *names* are logged (diagnostic), never their values — no content leak.
+  assert.match(crumbs[0]!, /keys=file_path,content/);
+  assert.doesNotMatch(crumbs[0]!, /"x"/);
+  // readDebug is non-destructive — the breadcrumb survives a re-read.
+  assert.equal(spool.readDebug(key).length, 1);
+
+  // Debug off: no breadcrumb file at all, so readDebug is empty.
+  const dir2 = spool.dirFor('agentY');
+  spawnSync(process.execPath, hook.args!, {
+    input: '{"tool_name":"Write","tool_input":{"file_path":"a.md"}}',
+    env: { ...process.env, LUBBDUBB_EVENTS_DIR: dir2, LUBBDUBB_EVENTS_DEBUG: '' },
+    encoding: 'utf8',
+  });
+  assert.equal(spool.readDebug('agentY').length, 0);
+  assert.ok(!readdirSync(dir2).includes(HOOK_DEBUG_FILE), 'no breadcrumb file when debug off');
 });
 
 test('buildClaudeArgs merges file-events + status-line into one --settings; stream args get the hook headless', () => {

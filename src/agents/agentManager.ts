@@ -9,6 +9,7 @@ import type { Agent, AgentFlag, AgentStatus, AgentUsage, Task } from '../types.j
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import type { AgentSession, SessionFactory } from './session.js';
+import { debugEnabled, debugLog } from '../debug.js';
 
 export interface AgentManagerOptions {
   command: string;
@@ -136,6 +137,10 @@ export class AgentManager extends EventEmitter {
 
     const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
     if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
+    debugLog(
+      'agent',
+      `spawn agent=${agent.id} cwd=${cwd} eventsDir=${this.fileEventsDir(agent.id) ?? '<file-events off>'}`,
+    );
     this.store.updateTask(task.id, { status: 'running', agentId: agent.id });
     this.sessions.set(agent.id, session);
     this.wireSession(session, agent.id, task);
@@ -187,6 +192,10 @@ export class AgentManager extends EventEmitter {
       waitingPatterns: this.opts.waitingPatterns,
     });
     if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
+    debugLog(
+      'agent',
+      `resume agent=${agent.id} cwd=${agent.cwd} eventsDir=${this.fileEventsDir(agent.id) ?? '<file-events off>'}`,
+    );
 
     this.sessions.set(agent.id, session);
     // The row goes live again, shedding the death markers from the last run.
@@ -284,7 +293,11 @@ export class AgentManager extends EventEmitter {
   /** The LUBBDUBB_EVENTS_DIR env entry for a launch, when the file-events hook is wired. */
   private eventsDirEnv(key: string | null): Record<string, string> {
     if (!key || !this.opts.fileEvents) return {};
-    return { LUBBDUBB_EVENTS_DIR: this.opts.fileEvents.dirFor(key) };
+    const env: Record<string, string> = { LUBBDUBB_EVENTS_DIR: this.opts.fileEvents.dirFor(key) };
+    // Turn the hook's own breadcrumb logging on so a "did it even fire?" answer
+    // survives on the agent's side too, not just ours.
+    if (debugEnabled()) env.LUBBDUBB_EVENTS_DEBUG = '1';
+    return env;
   }
 
   /** The spool dir an agent's writes land in (where LUBBDUBB_EVENTS_DIR points), or null. */
@@ -307,6 +320,7 @@ export class AgentManager extends EventEmitter {
     if (records.length === 0) return;
     const agent = this.store.getAgent(agentId);
     if (!agent) return;
+    debugLog('fileEvents', `agent=${agentId} drained ${records.length} record(s)`);
     for (const rec of records) this.ingestFileEvent(agent, rec);
   }
 
@@ -314,6 +328,10 @@ export class AgentManager extends EventEmitter {
   private ingestFileEvent(agent: Agent, rec: FileEventRecord): void {
     const path = toWorktreeRelative(agent.cwd, rec.path);
     const { promoted, kind } = classifyArtifact(path, this.opts.docsFolderPrefix);
+    debugLog(
+      'fileEvents',
+      `agent=${agent.id} write path=${path} tool=${rec.tool ?? '?'} promoted=${promoted} kind=${kind}`,
+    );
     this.store.recordFile(agent.id, { path, tool: rec.tool, promoted });
     this.emit('files', { agentId: agent.id, taskId: agent.taskId });
     if (promoted) {
@@ -329,6 +347,14 @@ export class AgentManager extends EventEmitter {
     const key = this.eventsKeys.get(agentId);
     if (!key || !this.opts.fileEvents) return;
     this.drainFileEvents(agentId); // catch writes from the last turn before dropping the dir
+    // One-shot dump of the hook's own breadcrumbs before the dir goes away. Empty
+    // lines here (with debug on) mean the hook never ran — the fault is upstream of
+    // the spool (`--settings`/matcher/PATH), not in draining or classification.
+    if (debugEnabled()) {
+      const crumbs = this.opts.fileEvents.readDebug(key);
+      debugLog('fileEvents', `agent=${agentId} hook fired ${crumbs.length} time(s)`);
+      for (const c of crumbs) debugLog('fileEvents', `agent=${agentId} hook: ${c}`);
+    }
     this.opts.fileEvents.dispose(key);
     this.eventsKeys.delete(agentId);
   }

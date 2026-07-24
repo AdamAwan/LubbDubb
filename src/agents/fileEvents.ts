@@ -18,6 +18,9 @@ import { join } from 'node:path';
  * code change) is a separate pure step, {@link classifyArtifact}.
  */
 
+/** The hook's per-agent debug log (breadcrumbs), a sibling of the `.json` records. */
+export const HOOK_DEBUG_FILE = '_hook-debug.log';
+
 /**
  * The hook body: read the tool payload on stdin, pull just the written path (never
  * the file *content*), and drop a tiny `{path,tool}` record into the spool dir as
@@ -25,16 +28,32 @@ import { join } from 'node:path';
  * and parallel tool batches never interleave). The env-var guard lives *inside*
  * the script (`process.env.LUBBDUBB_EVENTS_DIR`) rather than in a shell `if` — see
  * why this must be shell-free below.
+ *
+ * **Debug breadcrumb.** When `LUBBDUBB_EVENTS_DEBUG` is set (the harness sets it
+ * alongside `LUBBDUBB_EVENTS_DIR` whenever `LUBBDUBB_DEBUG` is on), every fire
+ * appends a line to {@link HOOK_DEBUG_FILE} in the spool dir recording the tool
+ * name, the `tool_input` *key names* (never their values, so no file content
+ * leaks), and the extracted path or `<none>`. This is the one signal that proves
+ * the hook actually *ran*: its absence when a write clearly happened localises the
+ * fault to `--settings` not taking effect (matcher, node-on-PATH, a shell that
+ * mangled the command) rather than anything downstream. `.log`, so the
+ * `.json`-only {@link FileEventsSpool.drain} never mistakes it for a record.
  */
 const FILE_EVENTS_HOOK_SCRIPT =
-  'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{' +
-  'const dir=process.env.LUBBDUBB_EVENTS_DIR;if(!dir)return;' +
+  'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{' +
+  'const dir=process.env.LUBBDUBB_EVENTS_DIR;if(!dir)return;const fs=require("fs");' +
+  'const dbg=process.env.LUBBDUBB_EVENTS_DEBUG;' +
+  'const log=(m)=>{try{if(dbg)fs.appendFileSync(dir+"/' +
+  HOOK_DEBUG_FILE +
+  '",Date.now()+" "+m+"\\n")}catch(e){}};' +
+  'try{' +
   'const j=JSON.parse(d);const ti=j.tool_input||{};const p=ti.file_path||ti.notebook_path;' +
-  'if(!p)return;const fs=require("fs");' +
+  'log("fired tool="+j.tool_name+" keys="+Object.keys(ti).join(",")+" path="+(p||"<none>"));' +
+  'if(!p)return;' +
   'const n=Date.now()+"-"+Math.random().toString(36).slice(2);' +
   'const rec=JSON.stringify({path:p,tool:j.tool_name});' +
   'fs.writeFileSync(dir+"/"+n+".tmp",rec);fs.renameSync(dir+"/"+n+".tmp",dir+"/"+n+".json");' +
-  '}catch(e){}})';
+  '}catch(e){log("error "+(e&&e.message))}})';
 
 /**
  * The `--settings` fragment wiring the capture hook onto the file-writing tools.
@@ -184,6 +203,22 @@ export class FileEventsSpool {
       if (rec) out.push(rec);
     }
     return out;
+  }
+
+  /**
+   * The hook's debug breadcrumbs for a key (only present when `LUBBDUBB_EVENTS_DEBUG`
+   * was set at spawn), oldest first. Read-only and non-destructive — unlike
+   * {@link drain} it doesn't remove anything, so the harness can dump it once at
+   * teardown. `[]` when the hook never fired (or debug was off).
+   */
+  readDebug(key: string): string[] {
+    try {
+      return readFileSync(join(this.base, key, HOOK_DEBUG_FILE), 'utf8')
+        .split('\n')
+        .filter((l) => l.trim());
+    } catch {
+      return []; // no breadcrumbs: hook never ran, or debug off
+    }
   }
 
   /** Drop a finished agent's spool dir entirely. Best-effort. */
