@@ -150,6 +150,17 @@ export interface Config {
    * the extension allowlist + `reports/` convention only.
    */
   docsFolderPrefix?: string;
+  /**
+   * Directory of operator overrides for the rule dispatcher's agent/escalation
+   * prompts. Each `<prompt-id>.md` file replaces that prompt's built-in default
+   * (see `src/dispatcher/promptTemplates.ts`); ids without a file keep the
+   * default. A file may start with an `<!-- ... -->` doc header describing what
+   * it's for — that header is stripped before the prompt reaches the agent.
+   * Defaults to `.lubbdubb/prompts`; absent directory => all built-in defaults.
+   * Only the `rule` dispatcher uses these; the `claude` dispatcher composes its
+   * own prompts.
+   */
+  promptTemplatesDir: string;
   /** Root under which per-branch worktrees are created. */
   worktreeRoot: string;
   /** Root under which desk (no-code) scratch dirs are created. */
@@ -247,6 +258,7 @@ const DEFAULTS: Config = {
   agentWaitingPatterns: [],
   claudeCommand: 'claude',
   claudeArgs: [],
+  promptTemplatesDir: '.lubbdubb/prompts',
   worktreeRoot: '.lubbdubb/worktrees',
   deskRoot: '.lubbdubb/desk',
   repoRoot: process.cwd(),
@@ -286,6 +298,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // launch dir (the single-repo default) this is a no-op.
   merged.worktreeRoot = resolve(merged.repoRoot, merged.worktreeRoot);
   merged.deskRoot = resolve(merged.repoRoot, merged.deskRoot);
+
+  // Prompt overrides belong to the repo being operated on, like the worktree
+  // roots above — resolve relative to repoRoot, honour an absolute override.
+  merged.promptTemplatesDir = resolve(merged.repoRoot, merged.promptTemplatesDir);
 
   // autoSend is a nested object: deep-merge it so a config file (or override)
   // can set just one field (e.g. only `enabled`) without dropping the defaults
