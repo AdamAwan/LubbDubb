@@ -195,6 +195,8 @@ export interface AzureDevOpsConfig {
     prAuthor?: string;
     /** Only surface work items carrying this tag. Unset = all open work items. */
     workItemTag?: string;
+    /** Only surface work items assigned to this uniqueName (UPN). Unset = all assignees. */
+    workItemAssignedTo?: string;
   };
 }
 

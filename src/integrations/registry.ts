@@ -68,6 +68,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         store: ctx.store,
         errors: ctx.errors,
         workItemTag: az.filters?.workItemTag,
+        assignedTo: az.filters?.workItemAssignedTo,
         ownershipTag: ownershipLabel(ctx),
       });
     },
