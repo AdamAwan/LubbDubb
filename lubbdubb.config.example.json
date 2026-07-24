@@ -53,8 +53,8 @@
     "allowedActions": ["reply_on_pr"]
   },
 
-  "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' + 'azure' (real, for sourceControl/issues), 'microsoft365' (calendar). Capabilities: sourceControl (pull requests), issues (issues/work items), backlog (stories), calendar (meetings).",
-  "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake", "calendar": "fake" },
+  "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' + 'azure' (real, for sourceControl/issues), 'microsoft365' (calendar). Capabilities: sourceControl (pull requests), issues (issues/work items), calendar (meetings).",
+  "integrations": { "sourceControl": "fake", "issues": "fake", "calendar": "fake" },
 
   "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
   "github": {
@@ -77,7 +77,7 @@
     "windowDays": 7
   },
 
-  "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs, issues and stories. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues/stories are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues/stories acted on).",
+  "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs and issues. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues acted on).",
   "labelPrefix": "lubbdubb",
 
   "// issuePickupRequireOwnLabel": "Tighten the issue WATCH gate so '<labelPrefix>-watch' only counts when the account the harness authenticates as added it (anti-abuse). Only meaningful with a real provider (github/azure) that can resolve tag authorship; the fake provider fails the gate closed. Default false (any tagger counts).",

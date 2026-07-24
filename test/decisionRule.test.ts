@@ -12,7 +12,7 @@ import type { WorldSnapshot } from '../src/types.js';
 
 function ctx(world: Partial<WorldSnapshot>): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], calendar: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], calendar: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],

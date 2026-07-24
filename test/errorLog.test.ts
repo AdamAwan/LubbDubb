@@ -69,7 +69,7 @@ test('a harness cycle exception is recorded, not thrown away', async () => {
   assert.equal(errors[0]!.source, 'cycle');
   assert.match(errors[0]!.message, /provider exploded/);
   // The next cycle isn't wedged by the failed one.
-  system.connector.getState = async () => ({ takenAt: '', pullRequests: [], issues: [], stories: [], calendar: [] });
+  system.connector.getState = async () => ({ takenAt: '', pullRequests: [], issues: [], calendar: [] });
   const ok = await system.harness.runCycle('manual');
   assert.doesNotMatch(ok.rationale, /cycle failed/);
   system.store.close();
@@ -78,7 +78,7 @@ test('a harness cycle exception is recorded, not thrown away', async () => {
 test('an agent crash is recorded with its exit code and an output tail', async () => {
   const backend = new FakePtyBackend();
   const system = quietSystem(backend);
-  system.connector.inject({ kind: 'new_story', title: 'Doomed work', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Doomed work' });
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
 
@@ -97,7 +97,7 @@ test('an agent crash is recorded with its exit code and an output tail', async (
 test('a clean agent finish records no error', async () => {
   const backend = new FakePtyBackend();
   const system = quietSystem(backend);
-  system.connector.inject({ kind: 'new_story', title: 'Fine work', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Fine work' });
   await system.harness.runCycle('manual');
   backend.last().emit('all good @@LUBBDUBB_DONE@@');
   assert.equal(system.store.listErrors().length, 0);

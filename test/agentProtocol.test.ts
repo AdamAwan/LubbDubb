@@ -85,7 +85,7 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
   const backend = new FakePtyBackend();
   const system = buildSystem(claudeModeConfig(), { backend });
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add login' });
   await system.harness.runCycle('manual');
 
   // Spawned with our injected system prompt.
@@ -96,7 +96,7 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
   // The task prompt is typed into the session (delay 0 -> next tick).
   await new Promise((r) => setTimeout(r, 5));
   assert.ok(
-    backend.last().writes.some((w) => w.includes('missing')),
+    backend.last().writes.some((w) => w.includes('Add login')),
     'expected the task prompt to be typed in',
   );
   system.store.close();
@@ -105,7 +105,7 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
 test('claude-mode still detects the protocol sentinels from real output', async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(claudeModeConfig(), { backend });
-  system.connector.inject({ kind: 'new_story', title: 'X', wafPillars: ['Cost'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'X' });
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

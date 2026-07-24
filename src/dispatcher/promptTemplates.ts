@@ -26,10 +26,7 @@ export type PromptId =
   | 'pr-base-update-conflict'
   | 'pr-review-comment'
   | 'pr-concern-escalation'
-  | 'meeting-prep'
-  | 'story-groom'
-  | 'story-waf'
-  | 'story-pickup';
+  | 'meeting-prep';
 
 interface TemplateDef {
   /** The placeholder names this template may reference (validated on override). */
@@ -90,22 +87,6 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     placeholders: ['title', 'startsAt', 'docs'],
     template: 'You have a meeting "{title}" at {startsAt}. Read and summarise these docs so I\'m ready: {docs}.',
     doc: 'Sent to a desk agent to prepare for a meeting with unread prep docs. Placeholders: {title} {startsAt} {docs}.',
-  },
-  'story-groom': {
-    placeholders: ['title', 'missing'],
-    template: 'Story "{title}" is missing {missing}. Draft them.',
-    doc: 'Sent to a desk agent to groom a ready story lacking a description and/or acceptance criteria. {missing} is the computed phrase (e.g. "a description and acceptance criteria"). Placeholders: {title} {missing}.',
-  },
-  'story-waf': {
-    placeholders: ['title'],
-    template:
-      'Story "{title}" has no Well-Architected Framework pillars set. Determine which pillars apply and document them.',
-    doc: 'Sent to a desk agent to fill in WAF pillars on a ready story. Placeholders: {title}.',
-  },
-  'story-pickup': {
-    placeholders: ['title', 'description', 'acceptanceCriteria'],
-    template: 'Implement story "{title}".\n\nDescription: {description}\n\nAcceptance criteria: {acceptanceCriteria}',
-    doc: 'Sent to a code agent to implement the highest-priority groomed story when there is idle capacity. Placeholders: {title} {description} {acceptanceCriteria}.',
   },
 };
 

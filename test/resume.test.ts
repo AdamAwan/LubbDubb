@@ -31,7 +31,7 @@ function tmp(): string {
 async function spawnAgent(dir: string) {
   const backend = new FakePtyBackend();
   const system = buildSystem(ptyConfig(dir), { backend });
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add login' });
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
   return { backend, system, agent };

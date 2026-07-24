@@ -3,7 +3,7 @@ import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import { needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, PullRequest, Task } from '../types.js';
-import { isIssuePickupEligible, issuePriority, watchGateReason, type IssuePickupPolicy } from './issuePickup.js';
+import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import type { DispatchRuleId } from './rules.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
@@ -25,10 +25,7 @@ import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
  * second one; while the branch's agent is `waiting`, the note is held so a
  * pending human escalation is never disturbed.
  *   5. A meeting today lacks prep    -> desk agent to prepare
- *   6. A ready story lacks a description / acceptance criteria -> desk agent to groom
- *   7. A ready story lacks WAF pillars -> desk agent to fill them
- *   8. Nothing else in flight        -> pick up the highest-priority ready story
- *   9. Otherwise                     -> no_op (recorded, so idleness is auditable)
+ *   6. Otherwise                     -> no_op (recorded, so idleness is auditable)
  *
  * It is the safe default and the reference the LLM dispatcher is measured
  * against. Every branch produces actions with an explicit `reason` and tags
@@ -408,98 +405,6 @@ export class RuleDispatcher implements Dispatcher {
           originSummary: `Starts ${ev.startsAt}. Prep docs: ${ev.prepDocs.join(', ')}.`,
           rule: 'meeting-prep',
           reason: `Meeting "${ev.title}" has unread prep docs.`,
-        } satisfies RawAction,
-      });
-    }
-
-    // 6 & 7: Backlog hygiene on ready stories. Stories are opt-in like issues —
-    // an unwatched or ignored story is left alone (no-op when no watch label is
-    // configured, so the default behaviour of acting on every ready story holds).
-    for (const story of ctx.world.stories) {
-      if (story.state !== 'ready') continue;
-      if (watchGateReason(story.labels ?? [], this.pickup) !== null) continue;
-
-      if (!story.description || !story.acceptanceCriteria) {
-        candidates.push({
-          origin: `story:${story.id}:groom`,
-          rule: 'story-groom',
-          title: `Groom story "${story.title}"`,
-          kind: 'desk',
-          branch: null,
-          reason: `Ready story "${story.title}" lacks description/acceptance criteria.`,
-          action: {
-            type: 'dispatch_desk_agent',
-            title: `Groom story "${story.title}"`,
-            prompt: this.templates.render('story-groom', {
-              title: story.title,
-              missing: `${!story.description ? 'a description' : ''}${!story.description && !story.acceptanceCriteria ? ' and ' : ''}${!story.acceptanceCriteria ? 'acceptance criteria' : ''}`,
-            }),
-            originRef: `story:${story.id}:groom`,
-            originTitle: story.title,
-            originSummary: story.description,
-            rule: 'story-groom',
-            reason: `Ready story "${story.title}" lacks description/acceptance criteria.`,
-          } satisfies RawAction,
-        });
-      }
-
-      if (story.wafPillars.length === 0) {
-        candidates.push({
-          origin: `story:${story.id}:waf`,
-          rule: 'story-waf',
-          title: `Fill WAF pillars for "${story.title}"`,
-          kind: 'desk',
-          branch: null,
-          reason: `Ready story "${story.title}" has no WAF pillars.`,
-          action: {
-            type: 'dispatch_desk_agent',
-            title: `Fill WAF pillars for "${story.title}"`,
-            prompt: this.templates.render('story-waf', { title: story.title }),
-            originRef: `story:${story.id}:waf`,
-            originTitle: story.title,
-            originSummary: story.description,
-            rule: 'story-waf',
-            reason: `Ready story "${story.title}" has no WAF pillars.`,
-          } satisfies RawAction,
-        });
-      }
-    }
-
-    // 8: With capacity left after everything above, pick up the highest-priority
-    // groomed story. Ranked last, so at zero headroom it queues as "waiting"
-    // instead of silently vanishing.
-    const candidateStory = ctx.world.stories
-      .filter(
-        (s) =>
-          s.state === 'ready' &&
-          s.description &&
-          s.acceptanceCriteria &&
-          watchGateReason(s.labels ?? [], this.pickup) === null,
-      )
-      .sort((a, b) => b.priority - a.priority)[0];
-    if (candidateStory) {
-      candidates.push({
-        origin: `story:${candidateStory.id}:work`,
-        rule: 'story-pickup',
-        title: `Implement "${candidateStory.title}"`,
-        kind: 'code',
-        branch: `story/${candidateStory.id}`,
-        reason: `Idle capacity; "${candidateStory.title}" is the highest-priority ready story.`,
-        action: {
-          type: 'dispatch_code_agent',
-          branch: `story/${candidateStory.id}`,
-          title: `Implement "${candidateStory.title}"`,
-          prompt: this.templates.render('story-pickup', {
-            title: candidateStory.title,
-            // Guaranteed present by the filter above; coerce for the string-typed template var.
-            description: candidateStory.description ?? '',
-            acceptanceCriteria: candidateStory.acceptanceCriteria ?? '',
-          }),
-          originRef: `story:${candidateStory.id}:work`,
-          originTitle: candidateStory.title,
-          originSummary: candidateStory.description,
-          rule: 'story-pickup',
-          reason: `Idle capacity; "${candidateStory.title}" is the highest-priority ready story.`,
         } satisfies RawAction,
       });
     }

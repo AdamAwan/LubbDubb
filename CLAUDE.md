@@ -364,16 +364,15 @@ so the executor runs it directly.
   "leave it alone"/"work this" signal, resolved by `src/watchLabels.ts` (see the Gotchas note). PR
   side: `harness.ts` filters `-ignore`-tagged PRs out of the world it hands the dispatcher (via
   `isPrExcluded`), so **both** dispatchers ignore them uniformly, while the cockpit snapshot (reads
-  the connector directly) still shows them with their health. Issue/story side: the opt-in watch
-  gate leaves un-watched items visible but unacted-on. The cockpit's per-row toggle writes the tags
-  back through outbound capabilities on the `ActionSink` seam, routed by `CompositeConnector`:
-  `PrLabelCapable.setPrLabel` (fake + `github` + `azure` sourceControl, `setPullLabel` on each `*Api`),
-  `IssueLabelCapable.setIssueLabel` (fake + `github` + `azure` issues; GitHub reuses the labels API,
-  Azure read-modify-writes `System.Tags` via `setWorkItemTag`), and `StoryLabelCapable.setStoryLabel`
-  (fake backlog only). Add to the seam + its scripted fake together, same as the other outbound
-  actions. Endpoints: `POST /api/prs/:n/exclude` (`{excluded}`), `POST /api/issues/:n/watch` and
-  `POST /api/stories/:id/watch` (`{watched}` — writes the `-watch`/`-ignore` pair, mutually
-  exclusive). They're label writes, **not** dispatcher actions.
+  the connector directly) still shows them with their health. Issue side: the opt-in watch gate
+  leaves un-watched items visible but unacted-on. The cockpit's per-row toggle writes the tags back
+  through outbound capabilities on the `ActionSink` seam, routed by `CompositeConnector`:
+  `PrLabelCapable.setPrLabel` (fake + `github` + `azure` sourceControl, `setPullLabel` on each `*Api`)
+  and `IssueLabelCapable.setIssueLabel` (fake + `github` + `azure` issues; GitHub reuses the labels
+  API, Azure read-modify-writes `System.Tags` via `setWorkItemTag`). Add to the seam + its scripted
+  fake together, same as the other outbound actions. Endpoints: `POST /api/prs/:n/exclude`
+  (`{excluded}`) and `POST /api/issues/:n/watch` (`{watched}` — writes the `-watch`/`-ignore` pair,
+  mutually exclusive). They're label writes, **not** dispatcher actions.
 - **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
   already has an active task. When the branch's agent is **running**, a fresh signal is delivered
   via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's
@@ -408,7 +407,7 @@ structured field, feed it into `buildRefUrls`.
   single source: `watchLabelsFor(prefix)` derives `${prefix}-watch` / `${prefix}-ignore`, and
   the pure `resolveWatchState(labels, {watchLabel, ignoreLabel, defaultWatched})` folds the
   precedence — **ignore wins, then watch, else the type default**. The default differs by kind:
-  PRs are opt-out (`defaultWatched: true` → worked unless `-ignore`), issues/stories are opt-in
+  PRs are opt-out (`defaultWatched: true` → worked unless `-ignore`), issues are opt-in
   (`defaultWatched: false` → left alone unless `-watch`). An **empty prefix** yields empty labels =
   both gates off (the escape hatch tests use via `labelPrefix: ''`). There is **no ingest filter**
   anymore — every open issue is fetched and displayed; the gate only decides what's _acted on_.
@@ -419,8 +418,6 @@ structured field, feed it into `buildRefUrls`.
     (explicit `-ignore`) vs `unwatched` (no `-watch` / state-gated) so the cockpit marks them apart.
     An **empty `watchLabel` leaves the watch gate off** (act on all) — that's how the no-arg
     `RuleDispatcher` and `labelPrefix: ''` keep the old act-on-all behaviour.
-  - Story side: the pure `watchGateReason(labels, policy)` gates the story rules the same way
-    (fake-backlog-only; `Story.labels` is optional).
   - Priority stays label-encoded (`issuePriorityLabels`/`issueDefaultPriority`, pure `issuePriority`).
   `issuePickupRequireOwnLabel` refines the **watch** gate: when on, the watch check reads
   `issue.labelsAddedByViewer` instead of `labels`, so a `-watch` tag someone else added is ignored

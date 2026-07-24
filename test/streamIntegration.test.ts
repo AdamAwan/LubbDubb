@@ -49,7 +49,7 @@ test('stream-mode: persisted transcript is clean and structured (no leaked senti
   };
   const system = buildSystem(streamConfig(), { streamSpawner: spawner });
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
@@ -87,7 +87,7 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   };
   const system = buildSystem(streamConfig(), { streamSpawner: spawner });
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add login' });
   await system.harness.runCycle('manual');
 
   // One agent launched; the task was sent to it as a JSON user message.
@@ -95,7 +95,7 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   const child = children[0]!;
   const firstMsg = JSON.parse(child.writes[0]!.trim());
   assert.equal(firstMsg.type, 'user');
-  assert.match(firstMsg.message.content, /missing/);
+  assert.match(firstMsg.message.content, /Add login/);
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
 

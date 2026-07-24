@@ -212,23 +212,6 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     }
   });
 
-  // Toggle a story's watch/ignore state — same opt-in model as issues. Stories are
-  // fake-backlog-only today, so this routes to the `StoryLabelCapable` fake provider.
-  app.post('/api/stories/:id/watch', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { watched } = (req.body ?? {}) as { watched?: unknown };
-    if (typeof watched !== 'boolean') return reply.code(400).send({ error: 'watched must be a boolean' });
-    try {
-      await connector.setStoryLabel({ id, label: watchLabel, present: watched });
-      await connector.setStoryLabel({ id, label: ignoreLabel, present: !watched });
-      hub.broadcast({ type: 'world:changed' });
-      await harness.runCycle('manual');
-      return { ok: true, watched };
-    } catch (err) {
-      return reply.code(400).send({ error: (err as Error).message });
-    }
-  });
-
   // Queue an operator-launched job. It persists as `queued` and is drained by
   // the dispatcher ahead of world-driven work — taking the next free slot, or
   // waiting in the queue when the fleet is at capacity. A cycle is kicked so a

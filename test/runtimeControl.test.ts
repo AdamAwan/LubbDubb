@@ -176,7 +176,7 @@ test('while paused the harness keeps cycling: audit, escalations and answers sti
   const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { backend });
 
   // Spawn a live agent before pausing.
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add login' });
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
 

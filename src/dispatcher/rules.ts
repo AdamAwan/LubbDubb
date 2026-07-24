@@ -73,26 +73,8 @@ export const DISPATCH_RULES = {
     name: 'Meeting prep',
     description: 'A meeting today with unread prep docs gets a desk agent to read and summarise them before it starts.',
   },
-  'story-groom': {
-    number: '6',
-    name: 'Story grooming',
-    description:
-      'A ready story missing a description or acceptance criteria gets a desk agent to draft them — it cannot be safely implemented until it is specified.',
-  },
-  'story-waf': {
-    number: '7',
-    name: 'Missing WAF pillars',
-    description:
-      'A ready story with no Well-Architected Framework pillars gets a desk agent to determine and document which apply.',
-  },
-  'story-pickup': {
-    number: '8',
-    name: 'Idle capacity pickup',
-    description:
-      'With headroom left and nothing urgent, the highest-priority ready story (already groomed) is picked up by a code agent — idle capacity should always pull work.',
-  },
   idle: {
-    number: '9',
+    number: '6',
     name: 'Nothing actionable',
     description:
       'No rule matched this cycle, so a no-op is recorded — idleness is a decision too, and stays auditable.',

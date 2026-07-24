@@ -6,7 +6,6 @@ import type {
   PrMergeInput,
   PrReplyInput,
   SendResult,
-  StoryLabelInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
@@ -18,7 +17,6 @@ import {
   isPrMergeCapable,
   isPrReplyCapable,
   isRefResolvable,
-  isStoryLabelCapable,
   isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
@@ -46,7 +44,6 @@ export class CompositeConnector implements Connector, ActionSink {
       takenAt: this.now(),
       pullRequests: slices.flatMap((s) => s.pullRequests ?? []),
       issues: slices.flatMap((s) => s.issues ?? []),
-      stories: slices.flatMap((s) => s.stories ?? []),
       calendar: slices.flatMap((s) => s.calendar ?? []),
     };
   }
@@ -73,12 +70,6 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isIssueLabelCapable);
     if (!handler) throw new Error('no integration can label issues (no issues provider is IssueLabelCapable)');
     return handler.setIssueLabel(input);
-  }
-
-  async setStoryLabel(input: StoryLabelInput): Promise<SendResult> {
-    const handler = this.integrations.find(isStoryLabelCapable);
-    if (!handler) throw new Error('no integration can label stories (no backlog provider is StoryLabelCapable)');
-    return handler.setStoryLabel(input);
   }
 
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {

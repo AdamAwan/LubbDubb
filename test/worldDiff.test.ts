@@ -1,14 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { diffWorlds } from '../src/world/worldDiff.js';
-import type { CalendarEvent, Issue, PullRequest, Story, WorldEventKind, WorldSnapshot } from '../src/types.js';
+import type { CalendarEvent, Issue, PullRequest, WorldEventKind, WorldSnapshot } from '../src/types.js';
 
 function world(patch: Partial<Omit<WorldSnapshot, 'takenAt'>> = {}): WorldSnapshot {
   return {
     takenAt: '2026-07-21T00:00:00.000Z',
     pullRequests: [],
     issues: [],
-    stories: [],
     calendar: [],
     ...patch,
   };
@@ -39,19 +38,6 @@ function issue(patch: Partial<Issue> = {}): Issue {
   };
 }
 
-function story(patch: Partial<Story> = {}): Story {
-  return {
-    id: 's1',
-    title: 'Login',
-    description: null,
-    acceptanceCriteria: null,
-    wafPillars: [],
-    state: 'ready',
-    priority: 1,
-    ...patch,
-  };
-}
-
 function meeting(patch: Partial<CalendarEvent> = {}): CalendarEvent {
   return {
     id: 'm1',
@@ -66,7 +52,7 @@ function meeting(patch: Partial<CalendarEvent> = {}): CalendarEvent {
 const kinds = (prev: WorldSnapshot, next: WorldSnapshot): WorldEventKind[] => diffWorlds(prev, next).map((e) => e.kind);
 
 test('identical snapshots produce no events', () => {
-  const w = world({ pullRequests: [pr()], stories: [story()] });
+  const w = world({ pullRequests: [pr()], issues: [issue()] });
   assert.deepEqual(diffWorlds(w, w), []);
 });
 
@@ -135,19 +121,6 @@ test('issue open->closed emits issue_closed; linking emits issue_linked', () => 
 
 test('a newly appeared issue emits issue_opened only', () => {
   assert.deepEqual(kinds(world(), world({ issues: [issue()] })), ['issue_opened']);
-});
-
-test('story appearance and state change emit story_added / story_state', () => {
-  assert.deepEqual(kinds(world(), world({ stories: [story()] })), ['story_added']);
-  const events = diffWorlds(
-    world({ stories: [story({ state: 'ready' })] }),
-    world({ stories: [story({ state: 'in_progress' })] }),
-  );
-  assert.deepEqual(
-    events.map((e) => e.kind),
-    ['story_state'],
-  );
-  assert.match(events[0]!.summary, /in_progress/);
 });
 
 test('meeting appearance and prep completion emit meeting_added / meeting_prep', () => {

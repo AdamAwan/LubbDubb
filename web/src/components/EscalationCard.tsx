@@ -87,7 +87,7 @@ export function EscalationCard({
 
 /**
  * Turn a task's `originRef` (or a bare PR number) into a friendly label for the
- * signal chip, so the human sees which PR/issue/story/meeting triggered the work.
+ * signal chip, so the human sees which PR/issue/meeting triggered the work.
  */
 function describeSignal(originRef?: string | null, prNumber?: number): string | null {
   if (typeof prNumber === 'number') return `PR #${prNumber}`;
@@ -100,8 +100,6 @@ function describeSignal(originRef?: string | null, prNumber?: number): string | 
       return `Issue #${id}`;
     case 'meeting':
       return 'Meeting prep';
-    case 'story':
-      return sub === 'waf' ? 'Story · WAF pillars' : sub === 'groom' ? 'Story · grooming' : 'Story';
     default:
       return originRef;
   }

@@ -66,7 +66,6 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
       >
         Conflict #{firstPr}
       </AsyncButton>
-      <AsyncButton onClick={() => inject({ kind: 'new_story', title: 'Add password reset flow' })}>+ Story</AsyncButton>
       <AsyncButton
         onClick={() =>
           inject({

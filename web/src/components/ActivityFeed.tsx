@@ -20,7 +20,7 @@ export function ActivityFeed({ events, now }: { events: WorldEvent[]; now: numbe
     return c;
   }, [events]);
 
-  const categories = ['all', 'prs', 'issues', 'stories', 'meetings'].filter((c) => c === 'all' || counts[c]);
+  const categories = ['all', 'prs', 'issues', 'meetings'].filter((c) => c === 'all' || counts[c]);
   const shown = filter === 'all' ? events : events.filter((e) => categoryOf(e.kind) === filter);
 
   return (
@@ -48,10 +48,9 @@ export function ActivityFeed({ events, now }: { events: WorldEvent[]; now: numbe
   );
 }
 
-function categoryOf(kind: WorldEventKind): 'prs' | 'issues' | 'stories' | 'meetings' {
+function categoryOf(kind: WorldEventKind): 'prs' | 'issues' | 'meetings' {
   if (kind.startsWith('pr_')) return 'prs';
   if (kind.startsWith('issue_')) return 'issues';
-  if (kind.startsWith('story_')) return 'stories';
   return 'meetings';
 }
 
@@ -67,8 +66,6 @@ function labelOf(kind: WorldEventKind): string {
     issue_opened: 'issue opened',
     issue_closed: 'issue closed',
     issue_linked: 'linked',
-    story_added: 'story added',
-    story_state: 'story',
     meeting_added: 'meeting',
     meeting_prep: 'prep done',
   };

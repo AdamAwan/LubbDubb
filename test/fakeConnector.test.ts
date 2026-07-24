@@ -15,7 +15,6 @@ test('a fresh connector reports an empty, timestamped world', async () => {
   assert.equal(world.takenAt, '2026-01-01T00:00:00.000Z');
   assert.deepEqual(world.pullRequests, []);
   assert.deepEqual(world.issues, []);
-  assert.deepEqual(world.stories, []);
   assert.deepEqual(world.calendar, []);
   store.close();
 });
@@ -42,13 +41,13 @@ test('injecting the same new_pr twice does not duplicate it', async () => {
 test('world state persists across a fresh connector over the same store', async () => {
   const store = new Store(':memory:');
   const first = new FakeConnector(store, () => 'now');
-  first.inject({ kind: 'new_story', title: 'Login', priority: 5 });
+  first.inject({ kind: 'new_issue', number: 5, title: 'Login' });
 
   const second = new FakeConnector(store, () => 'now');
   const world = await second.getState();
-  assert.equal(world.stories.length, 1);
-  assert.equal(world.stories[0]!.title, 'Login');
-  assert.equal(world.stories[0]!.priority, 5);
+  assert.equal(world.issues.length, 1);
+  assert.equal(world.issues[0]!.title, 'Login');
+  assert.equal(world.issues[0]!.number, 5);
   store.close();
 });
 
@@ -88,17 +87,5 @@ test('mergePr on the fake connector marks the PR merged', async () => {
   assert.equal(result.ok, true);
   assert.match(result.ref!, /^fake-merge_/);
   assert.equal((await connector.getState()).pullRequests[0]!.merged, true);
-  store.close();
-});
-
-test('markStoryState transitions a story', async () => {
-  const { store, connector } = newConnector();
-  connector.inject({ kind: 'new_story', title: 'Ship it' });
-  const story = (await connector.getState()).stories[0]!;
-  assert.equal(story.state, 'ready');
-
-  connector.markStoryState(story.id, 'in_progress');
-  const after = (await connector.getState()).stories[0]!;
-  assert.equal(after.state, 'in_progress');
   store.close();
 });

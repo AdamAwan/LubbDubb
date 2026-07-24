@@ -3,7 +3,6 @@ import type { Capability, Integration, IntegrationContext, IntegrationSelection 
 import { FakeWorldStore } from './fake/fakeWorld.js';
 import { FakeGitHubIntegration } from './fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from './fake/fakeIssues.js';
-import { FakeBacklogIntegration } from './fake/fakeBacklog.js';
 import { FakeCalendarIntegration } from './fake/fakeCalendar.js';
 import { OctokitGitHubApi } from './github/octokitGitHubApi.js';
 import { GitHubSourceControlIntegration } from './github/sourceControl.js';
@@ -71,9 +70,6 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         ownershipTag: ownershipLabel(ctx),
       });
     },
-  },
-  backlog: {
-    fake: (_ctx, world) => new FakeBacklogIntegration(world),
   },
   calendar: {
     fake: (_ctx, world) => new FakeCalendarIntegration(world),

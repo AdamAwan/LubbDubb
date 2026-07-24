@@ -133,7 +133,7 @@ test('a captured write records a file for every path and an artifact chip only f
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
 
   // Drive a real spawn so the agent gets a spool key (a store.createAgent would not).
-  system.connector.inject({ kind: 'new_story', title: 'Write a report', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Write a report' });
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0];
   assert.ok(agent, 'an agent was dispatched');
