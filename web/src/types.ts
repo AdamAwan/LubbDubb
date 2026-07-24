@@ -45,6 +45,8 @@ export interface Story {
   wafPillars: string[];
   state: string;
   priority: number;
+  /** Labels/tags on the story, carrying the watch/ignore tag when the operator toggles it. */
+  labels?: string[];
 }
 export interface CalendarEvent {
   id: string;
@@ -296,8 +298,10 @@ export interface AppState {
     maxConcurrentAgents: number;
     dispatcher: string;
     steeringPriorities: string[];
-    /** The PR exclusion tag: the label the ignore/watch toggle sets, and marks ignored PRs. */
-    prExclusionLabel: string;
+    /** `${labelPrefix}-watch` — the tag the watch toggle sets and that marks an item watched. */
+    watchLabel: string;
+    /** `${labelPrefix}-ignore` — the tag the ignore toggle sets and that marks an item ignored. */
+    ignoreLabel: string;
     /** Whether the world accepts injected events (a `fake` provider is configured) — gates the inject panel. */
     injectable: boolean;
   };

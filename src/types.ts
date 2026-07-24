@@ -108,6 +108,13 @@ export interface Story {
   state: StoryState;
   /** Higher = more important. */
   priority: number;
+  /**
+   * Labels/tags on the story, driving the same opt-in watch/ignore gate as issues
+   * (`${labelPrefix}-watch` / `-ignore`). Optional — a story with no labels (older
+   * row / provider that predates this) is treated as untagged. Stories are
+   * fake-backlog-only today, so this is exercised via the fake provider.
+   */
+  labels?: string[];
 }
 
 export interface CalendarEvent {

@@ -1,20 +1,24 @@
 import type { Connector, InjectableEvent } from '../connector/connector.js';
 import type {
   ActionSink,
+  IssueLabelInput,
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
   SendResult,
+  StoryLabelInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
 import {
   isInjectable,
+  isIssueLabelCapable,
   isPrLabelCapable,
   isPrMergeCapable,
   isPrReplyCapable,
   isRefResolvable,
+  isStoryLabelCapable,
   isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
@@ -63,6 +67,18 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrLabelCapable);
     if (!handler) throw new Error('no integration can label PRs (no sourceControl provider is PrLabelCapable)');
     return handler.setPrLabel(input);
+  }
+
+  async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
+    const handler = this.integrations.find(isIssueLabelCapable);
+    if (!handler) throw new Error('no integration can label issues (no issues provider is IssueLabelCapable)');
+    return handler.setIssueLabel(input);
+  }
+
+  async setStoryLabel(input: StoryLabelInput): Promise<SendResult> {
+    const handler = this.integrations.find(isStoryLabelCapable);
+    if (!handler) throw new Error('no integration can label stories (no backlog provider is StoryLabelCapable)');
+    return handler.setStoryLabel(input);
   }
 
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {

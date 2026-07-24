@@ -1,8 +1,8 @@
 import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
+import type { IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
 import type { Issue, IssueState } from '../../types.js';
-import type { Capability, Integration, WorkItemStateCapable, WorldSlice } from '../integration.js';
+import type { Capability, Integration, IssueLabelCapable, WorkItemStateCapable, WorldSlice } from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItemUpdate } from './azureDevOpsApi.js';
 
 export interface AzureWorkItemsOpts {
@@ -30,7 +30,7 @@ export interface AzureWorkItemsOpts {
  * fake world (so it is *not* `Injectable`). Work-item tags map onto issue
  * `labels`, so the provider-agnostic pickup/priority gates work unchanged.
  */
-export class AzureDevOpsWorkItemsIntegration implements Integration, WorkItemStateCapable {
+export class AzureDevOpsWorkItemsIntegration implements Integration, WorkItemStateCapable, IssueLabelCapable {
   readonly id = 'issues:azure';
   readonly capability: Capability = 'issues';
 
@@ -81,6 +81,13 @@ export class AzureDevOpsWorkItemsIntegration implements Integration, WorkItemSta
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     await this.opts.api.setWorkItemState(input.number, input.state);
     this.opts.store.recordConnectorEvent('work_item_state_set', { ...input });
+    return { ok: true };
+  }
+
+  /** The outbound side of the watch/ignore toggle: add/remove a `System.Tags` entry. */
+  async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
+    await this.opts.api.setWorkItemTag(input.number, input.label, input.present);
+    this.opts.store.recordConnectorEvent('issue_label_set', { ...input });
     return { ok: true };
   }
 }

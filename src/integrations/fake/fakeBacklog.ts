@@ -1,7 +1,8 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
+import type { SendResult, StoryLabelInput } from '../../sink/actionSink.js';
 import type { Story } from '../../types.js';
-import type { Capability, Injectable, Integration, WorldSlice } from '../integration.js';
+import type { Capability, Injectable, Integration, StoryLabelCapable, WorldSlice } from '../integration.js';
 import type { FakeWorldStore } from './fakeWorld.js';
 
 const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_story', 'story_state']);
@@ -10,7 +11,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_story', 'story
  * The fake `backlog` provider: it owns the stories slice of the world. A real
  * Azure Boards / Jira adapter drops in under `backlog` in its place.
  */
-export class FakeBacklogIntegration implements Integration, Injectable {
+export class FakeBacklogIntegration implements Integration, Injectable, StoryLabelCapable {
   readonly id = 'backlog:fake';
   readonly capability: Capability = 'backlog';
 
@@ -36,6 +37,7 @@ export class FakeBacklogIntegration implements Integration, Injectable {
             wafPillars: event.wafPillars ?? [],
             state: 'ready',
             priority: event.priority ?? 1,
+            labels: event.labels ?? [],
           });
           break;
         case 'story_state': {
@@ -45,6 +47,19 @@ export class FakeBacklogIntegration implements Integration, Injectable {
         }
       }
     });
+  }
+
+  /** The outbound side of the watch/ignore toggle: add/remove a label on the fake story. Idempotent. */
+  async setStoryLabel(input: StoryLabelInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      const story = world.stories.find((s) => s.id === input.id);
+      if (!story) return;
+      const labels = new Set(story.labels ?? []);
+      if (input.present) labels.add(input.label);
+      else labels.delete(input.label);
+      story.labels = [...labels];
+    });
+    return { ok: true };
   }
 
   /** Reflect harness progress back (e.g. a picked-up story moves to in_progress). */

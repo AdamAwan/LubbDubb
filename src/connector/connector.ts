@@ -35,6 +35,7 @@ export type InjectableEvent =
       description?: string;
       acceptanceCriteria?: string;
       wafPillars?: string[];
+      labels?: string[];
     }
   | { kind: 'story_state'; storyId: string; state: 'ready' | 'in_progress' | 'blocked' | 'done' }
   | { kind: 'meeting'; title: string; startsAt: string; prepDocs?: string[] };

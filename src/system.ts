@@ -28,6 +28,7 @@ import { loadPromptTemplates } from './dispatcher/promptTemplates.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
+import { watchLabelsFor } from './watchLabels.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { ErrorLog } from './errorLog.js';
@@ -202,8 +203,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
   // by whichever dispatcher is selected — provider-agnostic.
+  const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
   const issuePickup: IssuePickupPolicy = {
-    pickupLabel: config.issuePickupLabel,
+    watchLabel,
+    ignoreLabel,
     requireOwnLabel: config.issuePickupRequireOwnLabel,
     priorityLabels: config.issuePriorityLabels,
     defaultPriority: config.issueDefaultPriority,
@@ -229,7 +232,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
     runtime: runtimeControl,
     steeringPriorities: config.steeringPriorities,
-    prExclusionLabel: config.prExclusionLabel,
+    prIgnoreLabel: ignoreLabel,
   });
 
   // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.

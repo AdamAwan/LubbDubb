@@ -237,6 +237,8 @@ export function App() {
           <WorldSummary
             state={state}
             onToggleExclude={(prNumber, excluded) => api.setPrExcluded(prNumber, excluded).then(refresh)}
+            onToggleIssueWatch={(issueNumber, watched) => api.setIssueWatched(issueNumber, watched).then(refresh)}
+            onToggleStoryWatch={(storyId, watched) => api.setStoryWatched(storyId, watched).then(refresh)}
           />
 
           <h3 className="muted">Desk</h3>
@@ -306,16 +308,28 @@ function pickupChip(pickup: Issue['pickup']) {
   );
 }
 
+/** Opt-in effective state for issues/stories: watched only with the watch tag and no ignore tag. */
+function isItemWatched(labels: string[] | undefined, watchLabel: string, ignoreLabel: string): boolean {
+  const set = labels ?? [];
+  if (set.includes(ignoreLabel)) return false;
+  return set.includes(watchLabel);
+}
+
 function WorldSummary({
   state,
   onToggleExclude,
+  onToggleIssueWatch,
+  onToggleStoryWatch,
 }: {
   state: AppState;
   onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
+  onToggleIssueWatch: (issueNumber: number, watched: boolean) => Promise<unknown> | unknown;
+  onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
 }) {
   const { pullRequests, issues, stories } = state.world;
   const { refUrls } = state;
-  const tag = state.config.prExclusionLabel;
+  const tag = state.config.ignoreLabel;
+  const { watchLabel, ignoreLabel } = state.config;
   return (
     <div className="world">
       <div className="world-row">
@@ -366,26 +380,74 @@ function WorldSummary({
         <span>Issues</span>
         <b>{issues.length}</b>
       </div>
-      {issues.map((i) => (
-        <div key={i.id} className="world-item">
-          {refLink(`#${i.number}`, refUrls)} {i.title} <span className="chip small">{i.state}</span>
-          {pickupChip(i.pickup)}
-          {i.linkedPrNumber !== null && (
-            <span className="chip small">→ PR {refLink(`#${i.linkedPrNumber}`, refUrls)}</span>
-          )}
-        </div>
-      ))}
+      {issues.map((i) => {
+        const isIgnored = (i.labels ?? []).includes(ignoreLabel);
+        const watched = isItemWatched(i.labels, watchLabel, ignoreLabel);
+        const resolved = i.state !== 'open' || i.linkedPrNumber !== null;
+        return (
+          <div key={i.id} className={`world-item${isIgnored ? ' excluded' : ''}`}>
+            {refLink(`#${i.number}`, refUrls)} {i.title} <span className="chip small">{i.state}</span>
+            {isIgnored && (
+              <span className="chip small" title={`Tagged "${ignoreLabel}" — the harness is leaving this issue alone`}>
+                ignored
+              </span>
+            )}
+            {pickupChip(i.pickup)}
+            {i.linkedPrNumber !== null && (
+              <span className="chip small">→ PR {refLink(`#${i.linkedPrNumber}`, refUrls)}</span>
+            )}
+            {!resolved && (
+              <AsyncButton
+                className="ghost world-toggle"
+                onClick={() => onToggleIssueWatch(i.number, !watched)}
+                title={
+                  watched
+                    ? `Remove "${watchLabel}" so the harness leaves this issue alone`
+                    : `Tag this issue "${watchLabel}" so the harness picks it up`
+                }
+              >
+                {watched ? 'ignore' : 'watch'}
+              </AsyncButton>
+            )}
+          </div>
+        );
+      })}
       <div className="world-row">
         <span>Stories</span>
         <b>{stories.length}</b>
       </div>
-      {stories.map((s) => (
-        <div key={s.id} className="world-item">
-          {s.title} <span className="chip small">{s.state}</span>
-          {(!s.description || !s.acceptanceCriteria) && <span className="chip small warn">needs grooming</span>}
-          {s.wafPillars.length === 0 && <span className="chip small warn">no WAF</span>}
-        </div>
-      ))}
+      {stories.map((s) => {
+        const isIgnored = (s.labels ?? []).includes(ignoreLabel);
+        const watched = isItemWatched(s.labels, watchLabel, ignoreLabel);
+        return (
+          <div key={s.id} className={`world-item${isIgnored ? ' excluded' : ''}`}>
+            {s.title} <span className="chip small">{s.state}</span>
+            {isIgnored && (
+              <span className="chip small" title={`Tagged "${ignoreLabel}" — the harness is leaving this story alone`}>
+                ignored
+              </span>
+            )}
+            {!isIgnored && !watched && (
+              <span className="chip small" title={`No "${watchLabel}" tag — the harness isn't picking this story up`}>
+                unwatched
+              </span>
+            )}
+            {(!s.description || !s.acceptanceCriteria) && <span className="chip small warn">needs grooming</span>}
+            {s.wafPillars.length === 0 && <span className="chip small warn">no WAF</span>}
+            <AsyncButton
+              className="ghost world-toggle"
+              onClick={() => onToggleStoryWatch(s.id, !watched)}
+              title={
+                watched
+                  ? `Remove "${watchLabel}" so the harness leaves this story alone`
+                  : `Tag this story "${watchLabel}" so the harness picks it up`
+              }
+            >
+              {watched ? 'ignore' : 'watch'}
+            </AsyncButton>
+          </div>
+        );
+      })}
     </div>
   );
 }

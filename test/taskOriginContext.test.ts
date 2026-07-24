@@ -59,6 +59,7 @@ test('origin context defaults to null when not supplied', () => {
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

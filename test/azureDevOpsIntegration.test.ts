@@ -56,6 +56,7 @@ interface Recorded {
   updateQueries: number[];
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
   stateSets: Array<{ id: number; state: string }>;
+  tagSets: Array<{ id: number; tag: string; present: boolean }>;
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -67,6 +68,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     updateQueries: [],
     labelSets: [],
     stateSets: [],
+    tagSets: [],
   };
   const api: AzureDevOpsApi = {
     async viewerUniqueName() {
@@ -111,6 +113,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setWorkItemState(id, state) {
       recorded.stateSets.push({ id, state });
+    },
+    async setWorkItemTag(id, tag, present) {
+      recorded.tagSets.push({ id, tag, present });
     },
   };
   return { api, recorded };

@@ -34,18 +34,18 @@ test('isIssuePickupEligible: without a pickup label every issue is eligible, wit
 });
 
 test('isIssuePickupEligible: with a pickup label only labelled issues are eligible', () => {
-  const policy: IssuePickupPolicy = { pickupLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 };
+  const policy: IssuePickupPolicy = { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 };
   assert.equal(isIssuePickupEligible(issue({ labels: ['agent-ready'] }), policy).eligible, true);
   assert.deepEqual(isIssuePickupEligible(issue({ labels: ['bug'] }), policy), {
     eligible: false,
-    reasons: ['no pickup label "agent-ready"'],
+    reasons: ['no watch label "agent-ready"'],
   });
   assert.equal(isIssuePickupEligible(issue({ labels: [] }), policy).eligible, false);
 });
 
 test('isIssuePickupEligible: requireOwnLabel counts only the viewer-added tag', () => {
   const policy: IssuePickupPolicy = {
-    pickupLabel: 'agent-ready',
+    watchLabel: 'agent-ready',
     requireOwnLabel: true,
     priorityLabels: {},
     defaultPriority: 0,
@@ -58,12 +58,12 @@ test('isIssuePickupEligible: requireOwnLabel counts only the viewer-added tag', 
   // The tag is present but someone else added it → not eligible (the abuse case).
   assert.deepEqual(isIssuePickupEligible(issue({ labels: ['agent-ready'], labelsAddedByViewer: [] }), policy), {
     eligible: false,
-    reasons: ['pickup label "agent-ready" not added by you'],
+    reasons: ['watch label "agent-ready" not added by you'],
   });
   // Authorship unknown (provider didn't populate it) → not eligible, fail closed.
   assert.deepEqual(isIssuePickupEligible(issue({ labels: ['agent-ready'] }), policy), {
     eligible: false,
-    reasons: ['pickup label "agent-ready" not added by you'],
+    reasons: ['watch label "agent-ready" not added by you'],
   });
 });
 
@@ -108,7 +108,7 @@ test('isIssuePickupEligible: an empty pickupStates list leaves the state gate of
 
 test('isIssuePickupEligible: the state and label gates both report their reasons together', () => {
   const policy: IssuePickupPolicy = {
-    pickupLabel: 'agent-ready',
+    watchLabel: 'agent-ready',
     priorityLabels: {},
     defaultPriority: 0,
     pickupStates: ['Ready'],
@@ -123,7 +123,7 @@ test('isIssuePickupEligible: the state and label gates both report their reasons
   // Wrong state *and* missing label → both reasons, state first.
   assert.deepEqual(isIssuePickupEligible(issue({ workItemState: 'New', labels: [] }), policy), {
     eligible: false,
-    reasons: ['state "New" not in pickup states', 'no pickup label "agent-ready"'],
+    reasons: ['state "New" not in pickup states', 'no watch label "agent-ready"'],
   });
 });
 
@@ -203,12 +203,18 @@ test('issuePickupStatus: a finished task on the origin does not count as active'
   assert.equal(v.status, 'eligible');
 });
 
-test('issuePickupStatus: policy gates surface as skipped with the intrinsic reasons', () => {
+test('issuePickupStatus: an un-watched issue surfaces as unwatched with the intrinsic reasons', () => {
   const v = issuePickupStatus(
     issue({ labels: ['bug'] }),
-    ctx({ policy: { pickupLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 } }),
+    ctx({ policy: { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 } }),
   );
-  assert.deepEqual(v, { eligible: false, status: 'skipped', reasons: ['no pickup label "agent-ready"'] });
+  assert.deepEqual(v, { eligible: false, status: 'unwatched', reasons: ['no watch label "agent-ready"'] });
+});
+
+test('issuePickupStatus: an ignore-tagged issue surfaces as ignored (ignore wins over the watch tag)', () => {
+  const policy = { watchLabel: 'agent-ready', ignoreLabel: 'agent-ignore', priorityLabels: {}, defaultPriority: 0 };
+  const v = issuePickupStatus(issue({ labels: ['agent-ready', 'agent-ignore'] }), ctx({ policy }));
+  assert.deepEqual(v, { eligible: false, status: 'ignored', reasons: ['ignored ("agent-ignore")'] });
 });
 
 test('issuePickupStatus: a recent attempt puts the issue on cooldown', () => {

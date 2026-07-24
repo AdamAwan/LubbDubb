@@ -14,6 +14,7 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DeskBriefingSchema } from '../integrations/ingested/briefingSchema.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
+import { watchLabelsFor } from '../watchLabels.js';
 
 /**
  * Whether the configured world accepts synthetic events: only the `fake`
@@ -42,6 +43,8 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   await app.register(rateLimit, { global: false });
 
   const { store, connector, harness, agents, escalations, config, errors } = system;
+  // The watch/ignore label pair the cockpit's toggles write and the gates read.
+  const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
 
   // Operator-configured absolute docsFolderPrefix entries are trusted roots the
   // artifact route may serve from, on top of each agent's worktree. Relative
@@ -183,12 +186,50 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     const { excluded } = (req.body ?? {}) as { excluded?: unknown };
     if (typeof excluded !== 'boolean') return reply.code(400).send({ error: 'excluded must be a boolean' });
     try {
-      const result = await connector.setPrLabel({ prNumber, label: config.prExclusionLabel, present: excluded });
+      const result = await connector.setPrLabel({ prNumber, label: ignoreLabel, present: excluded });
       // Reflect the change immediately: refetch on the next state read, and run a
       // cycle so a now-included PR is picked up (or a now-excluded one dropped).
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, ref: result.ref, excluded };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  // Toggle an issue's watch/ignore state from the cockpit. Issues are opt-in, so
+  // "watch" adds the watch tag (and clears any ignore tag) and "ignore" adds the
+  // ignore tag (and clears the watch tag) — the write pair keeps the two labels
+  // mutually exclusive. Provider-agnostic through the same outbound seam.
+  app.post('/api/issues/:number/watch', async (req, reply) => {
+    const { number } = req.params as { number: string };
+    const issueNumber = Number(number);
+    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
+    const { watched } = (req.body ?? {}) as { watched?: unknown };
+    if (typeof watched !== 'boolean') return reply.code(400).send({ error: 'watched must be a boolean' });
+    try {
+      await connector.setIssueLabel({ number: issueNumber, label: watchLabel, present: watched });
+      await connector.setIssueLabel({ number: issueNumber, label: ignoreLabel, present: !watched });
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return { ok: true, watched };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  // Toggle a story's watch/ignore state — same opt-in model as issues. Stories are
+  // fake-backlog-only today, so this routes to the `StoryLabelCapable` fake provider.
+  app.post('/api/stories/:id/watch', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { watched } = (req.body ?? {}) as { watched?: unknown };
+    if (typeof watched !== 'boolean') return reply.code(400).send({ error: 'watched must be a boolean' });
+    try {
+      await connector.setStoryLabel({ id, label: watchLabel, present: watched });
+      await connector.setStoryLabel({ id, label: ignoreLabel, present: !watched });
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return { ok: true, watched };
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
     }
@@ -337,6 +378,7 @@ function artifactMime(file: string): string {
 
 export function buildStateSnapshot(system: System) {
   const { store, connector, config, runtimeControl, harness } = system;
+  const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
   // getState is async on the interface, but FakeConnector is synchronous under
   // the hood; read the same persisted world directly for a snapshot.
   return connector.getState().then((world) => {
@@ -368,9 +410,10 @@ export function buildStateSnapshot(system: System) {
         maxConcurrentAgents: config.maxConcurrentAgents,
         dispatcher: config.dispatcher,
         steeringPriorities: config.steeringPriorities,
-        // The exclusion tag name, so the cockpit knows which label its ignore/watch
-        // toggle sets and which PRs to render as ignored.
-        prExclusionLabel: config.prExclusionLabel,
+        // The watch/ignore tag pair, so the cockpit knows which labels its toggles
+        // set and how to render an item's effective watched/ignored state.
+        watchLabel,
+        ignoreLabel,
         // Whether the inject panel should render: synthetic events only land on
         // the `fake` provider, so real-integration deployments hide it.
         injectable: isWorldInjectable(config.integrations),

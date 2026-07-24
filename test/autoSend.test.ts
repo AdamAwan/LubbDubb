@@ -107,6 +107,12 @@ test('a send failure never drops the reply — it falls back to escalation', asy
     async setPrLabel() {
       throw new Error('network down');
     },
+    async setIssueLabel() {
+      throw new Error('network down');
+    },
+    async setStoryLabel() {
+      throw new Error('network down');
+    },
     async setWorkItemState() {
       throw new Error('network down');
     },
@@ -176,6 +182,12 @@ test('a merge failure never merges silently — it escalates for approval', asyn
       throw new Error('merge conflict');
     },
     async setPrLabel() {
+      throw new Error('unused');
+    },
+    async setIssueLabel() {
+      throw new Error('unused');
+    },
+    async setStoryLabel() {
       throw new Error('unused');
     },
     async setWorkItemState() {

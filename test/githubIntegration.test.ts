@@ -100,6 +100,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async setPullLabel(number, label, present) {
       recorded.labelSets.push({ number, label, present });
     },
+    async setIssueLabel(number, label, present) {
+      recorded.labelSets.push({ number, label, present });
+    },
   };
   return { api, recorded };
 }
@@ -563,12 +566,25 @@ test('issues snapshot leaves ownership untracked when the gate is off', async ()
   store.close();
 });
 
-test('issues snapshot passes the issueLabel filter through to the API', async () => {
+test('issues snapshot fetches every open issue (no ingest label filter)', async () => {
   const { api, recorded } = fakeApi({ issues: [] });
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store, issueLabel: 'bug' });
+  const issues = new GitHubIssuesIntegration({ api, store });
   await issues.snapshot();
-  assert.deepEqual(recorded.issueLabelQueries, ['bug']);
+  assert.deepEqual(recorded.issueLabelQueries, [undefined], 'no label is passed — all open issues are ingested');
+  store.close();
+});
+
+test('setIssueLabel adds/removes a label through the labels API', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api, store });
+  await issues.setIssueLabel({ number: 7, label: 'lubbdubb-watch', present: true });
+  await issues.setIssueLabel({ number: 7, label: 'lubbdubb-ignore', present: false });
+  assert.deepEqual(recorded.labelSets, [
+    { number: 7, label: 'lubbdubb-watch', present: true },
+    { number: 7, label: 'lubbdubb-ignore', present: false },
+  ]);
   store.close();
 });
 

@@ -123,6 +123,7 @@ test('buildClaudeArgs wires the status-line capture only when asked; stream args
 test('pty mode exports LUBBDUBB_STATUS_FILE keyed by the chosen session id', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-usage-pty-'));
   const config = loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'pty',
@@ -170,6 +171,7 @@ class FakeChild extends EventEmitter implements StreamChild {
 test('stream mode: result usage lands on the agent row and in the snapshot windows', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-usage-stream-'));
   const config = loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'stream',

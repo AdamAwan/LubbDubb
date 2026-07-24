@@ -23,6 +23,7 @@ function gitRepo(): string {
 function build() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

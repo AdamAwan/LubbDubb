@@ -11,6 +11,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 function testConfig(maxConcurrentAgents = 1) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-jobs-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

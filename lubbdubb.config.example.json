@@ -56,11 +56,11 @@
   "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' + 'azure' (real, for sourceControl/issues), 'microsoft365' (calendar). Capabilities: sourceControl (pull requests), issues (issues/work items), backlog (stories), calendar (meetings).",
   "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake", "calendar": "fake" },
 
-  "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author, filters.issueLabel narrows INGESTED issues to one label. Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
+  "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
   "github": {
     "owner": "acme",
     "repo": "app",
-    "filters": { "prAuthor": "lubbdubb-bot", "issueLabel": "agent" }
+    "filters": { "prAuthor": "lubbdubb-bot" }
   },
 
   "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag. Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
@@ -77,9 +77,10 @@
     "windowDays": 7
   },
 
-  "// issuePickupLabel": "Dispatcher-level, provider-agnostic gate on issue pickup (rule 4). Set it (e.g. 'agent-ready') and the harness only starts an agent for issues whose labels include it; untagged issues stay visible but are left alone. Distinct from github.filters.issueLabel (which hides non-matching issues from the world entirely). Left UNSET here so the fake-provider demo picks up every injected issue; unset = act on all open issues.",
+  "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs, issues and stories. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues/stories are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues/stories acted on).",
+  "labelPrefix": "lubbdubb",
 
-  "// issuePickupRequireOwnLabel": "Tighten issuePickupLabel so the tag only counts when the account the harness authenticates as added it (anti-abuse). Only meaningful with issuePickupLabel set and a real provider (github/azure) that can resolve tag authorship; the fake provider fails the gate closed. Default false (any tagger counts).",
+  "// issuePickupRequireOwnLabel": "Tighten the issue WATCH gate so '<labelPrefix>-watch' only counts when the account the harness authenticates as added it (anti-abuse). Only meaningful with a real provider (github/azure) that can resolve tag authorship; the fake provider fails the gate closed. Default false (any tagger counts).",
   "issuePickupRequireOwnLabel": false,
 
   "// issuePriorityLabels": "Label -> priority weight for ordering issue pickup when headroom is limited (higher = first). REPLACED wholesale by an override, not merged, so you can define your own scheme (e.g. p0/p1/p2). Default { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }.",
@@ -93,9 +94,6 @@
 
   "// issueInReviewState": "The state a work item is moved to once a PR is open for it, so agents stop re-picking work already awaiting review/CI (e.g. 'In Review'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Unset = no automatic transition.",
   "issueInReviewState": "In Review",
-
-  "// prExclusionLabel": "The PR exclusion tag: a PR carrying this label is left alone — no CI fix, base update, comment handling, or merge — for PRs blocked on something the harness can't fix. Stays fully visible (with its health verdict), just not acted on. Provider-agnostic (reads PullRequest.labels). Toggle from the cockpit's per-PR ignore/watch button. Default 'lubbdubb-ignore'.",
-  "prExclusionLabel": "lubbdubb-ignore",
 
   "// repoRoot": "The git repo the harness operates on; per-branch worktrees are cut from it. Defaults to the launch directory (process.cwd()), so the common case needs nothing. Set it (or the LUBBDUBB_REPO_ROOT env override) to point at a repo elsewhere; a relative path resolves against the launch dir.",
   "repoRoot": ".",

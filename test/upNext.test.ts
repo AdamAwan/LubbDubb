@@ -225,6 +225,7 @@ test('an origin with an active task never enters the queue', async () => {
 function testConfig(over: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

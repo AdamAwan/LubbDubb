@@ -3,7 +3,7 @@ import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import { needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, PullRequest, Task } from '../types.js';
-import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './issuePickup.js';
+import { isIssuePickupEligible, issuePriority, watchGateReason, type IssuePickupPolicy } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import type { DispatchRuleId } from './rules.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
@@ -56,7 +56,8 @@ export class RuleDispatcher implements Dispatcher {
   ) {
     this.templates = templates;
     this.pickup = {
-      pickupLabel: pickup.pickupLabel,
+      watchLabel: pickup.watchLabel,
+      ignoreLabel: pickup.ignoreLabel,
       requireOwnLabel: pickup.requireOwnLabel,
       priorityLabels: pickup.priorityLabels ?? {},
       defaultPriority: pickup.defaultPriority ?? 0,
@@ -411,9 +412,12 @@ export class RuleDispatcher implements Dispatcher {
       });
     }
 
-    // 6 & 7: Backlog hygiene on ready stories.
+    // 6 & 7: Backlog hygiene on ready stories. Stories are opt-in like issues —
+    // an unwatched or ignored story is left alone (no-op when no watch label is
+    // configured, so the default behaviour of acting on every ready story holds).
     for (const story of ctx.world.stories) {
       if (story.state !== 'ready') continue;
+      if (watchGateReason(story.labels ?? [], this.pickup) !== null) continue;
 
       if (!story.description || !story.acceptanceCriteria) {
         candidates.push({
@@ -465,7 +469,13 @@ export class RuleDispatcher implements Dispatcher {
     // groomed story. Ranked last, so at zero headroom it queues as "waiting"
     // instead of silently vanishing.
     const candidateStory = ctx.world.stories
-      .filter((s) => s.state === 'ready' && s.description && s.acceptanceCriteria)
+      .filter(
+        (s) =>
+          s.state === 'ready' &&
+          s.description &&
+          s.acceptanceCriteria &&
+          watchGateReason(s.labels ?? [], this.pickup) === null,
+      )
       .sort((a, b) => b.priority - a.priority)[0];
     if (candidateStory) {
       candidates.push({

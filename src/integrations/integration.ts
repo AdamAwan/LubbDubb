@@ -2,7 +2,15 @@ import type { Config } from '../config.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
-import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult, WorkItemStateInput } from '../sink/actionSink.js';
+import type {
+  IssueLabelInput,
+  PrLabelInput,
+  PrMergeInput,
+  PrReplyInput,
+  SendResult,
+  StoryLabelInput,
+  WorkItemStateInput,
+} from '../sink/actionSink.js';
 import type { WorldSnapshot } from '../types.js';
 
 /**
@@ -95,6 +103,24 @@ export interface PrLabelCapable {
 
 export function isPrLabelCapable(x: Integration): x is Integration & PrLabelCapable {
   return typeof (x as Partial<PrLabelCapable>).setPrLabel === 'function';
+}
+
+/** An integration that can add/remove a label on an issue / work item — the watch/ignore toggle. */
+export interface IssueLabelCapable {
+  setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
+}
+
+export function isIssueLabelCapable(x: Integration): x is Integration & IssueLabelCapable {
+  return typeof (x as Partial<IssueLabelCapable>).setIssueLabel === 'function';
+}
+
+/** An integration that can add/remove a label on a story — the watch/ignore toggle (fake backlog). */
+export interface StoryLabelCapable {
+  setStoryLabel(input: StoryLabelInput): Promise<SendResult>;
+}
+
+export function isStoryLabelCapable(x: Integration): x is Integration & StoryLabelCapable {
+  return typeof (x as Partial<StoryLabelCapable>).setStoryLabel === 'function';
 }
 
 /** An integration that can move a work item to a provider-native state — the "in review" back-off. */

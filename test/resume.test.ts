@@ -11,6 +11,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 // state — i.e. a real server restart, not a fresh in-memory store.
 function ptyConfig(dir: string): Config {
   return loadConfig({
+    labelPrefix: '',
     dbPath: join(dir, 'db.sqlite'),
     dispatcher: 'rule',
     agentMode: 'pty',

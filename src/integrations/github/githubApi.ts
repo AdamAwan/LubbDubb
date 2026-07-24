@@ -41,6 +41,8 @@ export interface GitHubApi {
   mergePull(number: number, method: MergeMethod): Promise<GhMergeResult>;
   /** Add (`present`) or remove a label on a PR. PRs are issues for the labels API. Idempotent. */
   setPullLabel(number: number, label: string, present: boolean): Promise<void>;
+  /** Add (`present`) or remove a label on an issue — the watch/ignore toggle. Idempotent. */
+  setIssueLabel(number: number, label: string, present: boolean): Promise<void>;
 }
 
 export interface GhPullSummary {

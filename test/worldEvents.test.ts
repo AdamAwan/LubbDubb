@@ -11,6 +11,7 @@ import type { WorldEvent } from '../src/types.js';
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-we-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

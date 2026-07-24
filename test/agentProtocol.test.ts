@@ -70,6 +70,7 @@ test('buildClaudeStreamArgs requests headless bidirectional stream-json', () => 
 function claudeModeConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-claude-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'pty',
