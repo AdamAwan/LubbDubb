@@ -40,8 +40,8 @@
   "// steeringPriorities": "Optional ordered hints injected into the LLM dispatcher's prompt (only meaningful with dispatcher 'claude'). Default [].",
   "steeringPriorities": [],
 
-  "// docsFolderPrefix": "Worktree-relative folder the file-events hook treats as the artifacts area: any file an agent writes UNDER this prefix is promoted to an artifact chip regardless of extension, on top of the built-in report/doc heuristic (report extensions + any reports/ folder). Unset = heuristic only.",
-  "docsFolderPrefix": "docs",
+  "// docsFolderPrefix": "Folder(s) the file-events hook treats as the artifacts area: any file an agent writes UNDER a prefix is promoted to an artifact chip regardless of extension, on top of the built-in report/doc heuristic (report extensions + any reports/ folder). Accepts a string or an array; a file promotes under ANY entry. A relative entry is worktree-relative; an ABSOLUTE entry (e.g. D:/docs) also matches files written under that real directory OUTSIDE the worktree and lets the cockpit serve them. Unset = heuristic only.",
+  "docsFolderPrefix": ["docs", "D:/shared/reports"],
 
   "// autoSend": "Confidence-gated autonomy for side-effectful actions. Off by default: with enabled=false the harness always drafts + escalates for sign-off. Enabled, it sends an action itself only when the dispatcher's confidence >= confidenceThreshold AND the action type is in allowedActions; anything below still escalates, and a failed send falls back to an escalation. Deep-merged, so you can set just one field.",
   "autoSend": {

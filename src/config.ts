@@ -143,13 +143,21 @@ export interface Config {
   /** Extra args passed to the agent command. */
   claudeArgs: string[];
   /**
-   * Worktree-relative folder the file-events hook treats as the artifacts area:
-   * any file an agent writes *under* this prefix is promoted to an artifact chip
-   * regardless of extension (on top of the built-in report/doc heuristic). E.g.
-   * `"docs"` promotes everything the agent drops in `docs/`. Unset = fall back to
-   * the extension allowlist + `reports/` convention only.
+   * Folder(s) the file-events hook treats as the artifacts area: any file an
+   * agent writes *under* a prefix is promoted to an artifact chip regardless of
+   * extension (on top of the built-in report/doc heuristic). Accepts one prefix
+   * or a list; a file promotes if it's under *any* entry. E.g. `"docs"` promotes
+   * everything the agent drops in `docs/`. Unset = fall back to the extension
+   * allowlist + `reports/` convention only.
+   *
+   * A **relative** entry is worktree-relative (matched per agent worktree). An
+   * **absolute** entry (e.g. `"D:/docs"`) matches files written under that real
+   * directory even when it lives *outside* the worktree, and — being operator
+   * configured — widens the artifact-serving boundary to include that root (see
+   * `resolveConfinedArtifact`). Not resolved at load: relative stays relative
+   * (each agent's worktree differs), absolute stays absolute.
    */
-  docsFolderPrefix?: string;
+  docsFolderPrefix?: string | string[];
   /**
    * Directory of operator overrides for the rule dispatcher's agent/escalation
    * prompts. Each `<prompt-id>.md` file replaces that prompt's built-in default

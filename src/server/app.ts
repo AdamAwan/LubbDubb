@@ -43,6 +43,11 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
 
   const { store, connector, harness, agents, escalations, config, errors } = system;
 
+  // Operator-configured absolute docsFolderPrefix entries are trusted roots the
+  // artifact route may serve from, on top of each agent's worktree. Relative
+  // entries add nothing here — they're already covered by the worktree root.
+  const artifactRoots = absolutePrefixes(config.docsFolderPrefix);
+
   // An unanticipated throw in a route must not vanish into a silent 500: record
   // it to the error log (which also mirrors it to stderr and streams it to the
   // cockpit), then return a plain 500.
@@ -77,10 +82,11 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   // Serve a local artifact an agent flagged (a design doc, a report), addressed by
   // its flag id. The path is taken from the *stored* flag row, not the request, so
   // a client can only fetch a ref an agent actually surfaced — and the served path
-  // is confined to that agent's worktree (a symlink or `..` that escapes is
-  // refused). The response is sandboxed (CSP `sandbox`) so agent-authored HTML
-  // can't script the cockpit's origin. Rate-limited since it reads off disk. URL
-  // flags aren't served here; the cockpit links those directly.
+  // is confined to that agent's worktree or an operator-configured absolute
+  // `docsFolderPrefix` root (a symlink or `..` that escapes every root is refused).
+  // The response is sandboxed (CSP `sandbox`) so agent-authored HTML can't script
+  // the cockpit's origin. Rate-limited since it reads off disk. URL flags aren't
+  // served here; the cockpit links those directly.
   app.get('/api/artifacts/:id', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const flag = store.getFlag(id);
@@ -89,7 +95,7 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
       return reply.code(400).send({ error: 'url refs are linked directly, not served' });
     const agent = store.getAgent(flag.agentId);
     if (!agent) return reply.code(404).send({ error: 'agent not found' });
-    const file = resolveConfinedArtifact(agent.cwd, flag.ref);
+    const file = resolveConfinedArtifact(agent.cwd, flag.ref, artifactRoots);
     if (!file) return reply.code(404).send({ error: 'artifact not found' });
     reply
       .header('content-type', artifactMime(file))
@@ -269,27 +275,44 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
 }
 
 /**
- * Resolve a flagged artifact `ref` to an absolute path *within* `cwd`, or null if
- * it doesn't exist, isn't a regular file, or escapes the worktree (via `..` or a
- * symlink). Two guards: a *lexical* containment check runs before any filesystem
- * access (rejecting absolute paths and `..` escapes up front), then `realpathSync`
- * on both sides defeats symlink traversal.
+ * Resolve a flagged artifact `ref` to an absolute path within one of the allowed
+ * roots — the agent's worktree `cwd` plus any operator-configured `trustedRoots`
+ * (the absolute `docsFolderPrefix` entries) — or null if it doesn't exist, isn't a
+ * regular file, or escapes every root (via `..` or a symlink). A relative ref is
+ * resolved against `cwd`; an absolute ref is honoured only if it lands inside a
+ * trusted root. Two guards: a *lexical* containment check against some root runs
+ * before any filesystem access, then `realpathSync` on both sides defeats symlink
+ * traversal.
  */
-function resolveConfinedArtifact(cwd: string, ref: string): string | null {
-  if (isAbsolute(ref)) return null;
-  const target = resolve(cwd, ref);
-  // Lexical containment, before touching the filesystem.
-  if (target !== cwd && !target.startsWith(cwd + sep)) return null;
+function resolveConfinedArtifact(cwd: string, ref: string, trustedRoots: string[]): string | null {
+  // A relative ref is worktree-relative; an absolute ref must land inside one of
+  // the operator-configured absolute prefixes (its own trusted root). The
+  // worktree cwd is always a trusted root. Serving re-validates containment here
+  // independently of the flag, so an odd stored ref can't read outside a root.
+  const target = isAbsolute(ref) ? resolve(ref) : resolve(cwd, ref);
+  const roots = [cwd, ...trustedRoots];
+  // Lexical containment against *some* root, before touching the filesystem.
+  if (!roots.some((root) => target === root || target.startsWith(root + sep))) return null;
   try {
-    const root = realpathSync(cwd);
     const real = realpathSync(target);
-    // Real-path containment: a symlink inside the worktree can't point outside it.
-    if (real !== root && !real.startsWith(root + sep)) return null;
+    // Real-path containment: a symlink inside a root can't point outside it.
+    const contained = roots.some((root) => {
+      const realRoot = realpathSync(root);
+      return real === realRoot || real.startsWith(realRoot + sep);
+    });
+    if (!contained) return null;
     if (!statSync(real).isFile()) return null;
     return real;
   } catch {
     return null; // missing path, broken symlink, permission error — treat as not found
   }
+}
+
+/** The absolute entries of `docsFolderPrefix` — the extra trusted roots the artifact route may serve from. */
+export function absolutePrefixes(docsFolderPrefix?: string | string[]): string[] {
+  if (docsFolderPrefix === undefined) return [];
+  const list = Array.isArray(docsFolderPrefix) ? docsFolderPrefix : [docsFolderPrefix];
+  return list.filter((p) => isAbsolute(p)).map((p) => resolve(p));
 }
 
 const ARTIFACT_MIME: Record<string, string> = {

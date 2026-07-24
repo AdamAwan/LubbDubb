@@ -9,7 +9,7 @@ import { PtySession } from '../src/pty/ptySession.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { StreamJsonSession, type Spawner, type StreamChild } from '../src/agents/streamJsonSession.js';
 import { Store } from '../src/store/store.js';
-import { buildApp } from '../src/server/app.js';
+import { buildApp, absolutePrefixes } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 
@@ -217,6 +217,48 @@ test('GET /api/artifacts/:id serves a confined file by flag id and refuses trave
   // The snapshot carries the flags so the cockpit can render them.
   const snap = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
   assert.ok(snap.flags.some((f: { ref: string }) => f.ref === 'design.html'));
+
+  await app.close();
+  system.store.close();
+});
+
+test('absolutePrefixes keeps only the absolute docsFolderPrefix entries, resolved', () => {
+  assert.deepEqual(absolutePrefixes(undefined), []);
+  assert.deepEqual(absolutePrefixes('docs'), []); // relative → not a serving root
+  assert.deepEqual(absolutePrefixes(['docs', 'artifacts']), []);
+  // Absolute entries survive; the resolve() is what canonicalises them.
+  const abs = absolutePrefixes(['docs', join(tmpdir(), 'shared')]);
+  assert.deepEqual(abs, [join(tmpdir(), 'shared')]);
+});
+
+test('GET /api/artifacts/:id serves an out-of-worktree file under a configured absolute prefix', async () => {
+  // The operator points docsFolderPrefix at a shared dir outside any worktree.
+  const shared = mkdtempSync(join(tmpdir(), 'lubbdubb-shared-'));
+  writeFileSync(join(shared, 'plan.md'), '# Plan');
+  const config = loadConfig({ ...testConfig(), docsFolderPrefix: shared });
+  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const { app } = await buildApp(system);
+
+  // The agent's worktree is a *different* dir; the flag ref is the absolute path
+  // under the configured shared prefix (as toWorktreeRelative would leave it).
+  const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
+  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
+  const under = system.store.recordFlag(agent.id, { kind: 'report', label: 'plan.md', ref: join(shared, 'plan.md') });
+
+  const ok = await app.inject({ method: 'GET', url: `/api/artifacts/${under.id}` });
+  assert.equal(ok.statusCode, 200);
+  assert.equal(ok.body, '# Plan');
+
+  // An absolute ref outside every configured prefix (and outside the worktree) is refused.
+  const outside = mkdtempSync(join(tmpdir(), 'lubbdubb-outside-'));
+  writeFileSync(join(outside, 'secret.md'), 'nope');
+  const bad = system.store.recordFlag(agent.id, { kind: 'x', label: 's', ref: join(outside, 'secret.md') });
+  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${bad.id}` })).statusCode, 404);
+
+  // A `..` escape out of the configured prefix is still refused.
+  const escaped = system.store.recordFlag(agent.id, { kind: 'x', label: 'e', ref: join(shared, '..', 'etc') });
+  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${escaped.id}` })).statusCode, 404);
 
   await app.close();
   system.store.close();
