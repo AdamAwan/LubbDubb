@@ -34,6 +34,17 @@ export interface PtySessionOptions {
   /** Additional literal substrings that mean "waiting for input" (e.g. tool-permission prompts). */
   waitingPatterns?: string[];
   /**
+   * Last-resort wait detection: park the session after this long with no output
+   * at all. The sentinels are the protocol, but an agent that ends its turn
+   * asking a question in prose emits none — and then nothing anywhere in the
+   * harness knows a human is needed. The claude TUI repaints at least once a
+   * second while it is working (spinner, elapsed counter), so total silence
+   * means it is sitting at the prompt. 0 disables. See {@link idleWaitReason}.
+   */
+  idleWaitMs?: number;
+  /** Reason attached to an {@link idleWaitMs} park — it is inferred, so it says so. */
+  idleWaitReason?: string;
+  /**
    * Gap (ms) between writing a message's text and the submitting carriage return.
    * See {@link PtySession.send} for why the two are split. 0 writes both at once.
    */
@@ -85,6 +96,8 @@ const DEFAULTS = {
   flagSentinelPrefix: FLAG_PREFIX,
   flagSentinelSuffix: FLAG_SUFFIX,
   waitingPatterns: [] as string[],
+  idleWaitMs: 0, // off unless the operator wires it (pty mode does)
+  idleWaitReason: 'Agent went quiet without signalling — it may be waiting on you.',
   submitDelayMs: 60,
   initialSubmitIntervalMs: 700,
   initialSubmitAttempts: 8,
@@ -182,6 +195,8 @@ export class PtySession extends EventEmitter {
   private teardownTimers: ReturnType<typeof setTimeout>[] = [];
   /** Pending initial-message re-submit timer (see {@link deliverInitial}), cleared on exit. */
   private initialSubmitTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Pending idle-park timer (see {@link PtySessionOptions.idleWaitMs}), re-armed by every chunk. */
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly opts: Required<Omit<PtySessionOptions, 'sessionTranscript'>> &
     Pick<PtySessionOptions, 'sessionTranscript'>;
   /** The protocol tokens, in the shape the shared scanner takes. */
@@ -195,6 +210,8 @@ export class PtySession extends EventEmitter {
     this.opts = {
       env: {},
       waitingPatterns: DEFAULTS.waitingPatterns,
+      idleWaitMs: DEFAULTS.idleWaitMs,
+      idleWaitReason: DEFAULTS.idleWaitReason,
       doneSentinel: DEFAULTS.doneSentinel,
       waitingSentinelPrefix: DEFAULTS.waitingSentinelPrefix,
       waitingSentinelSuffix: DEFAULTS.waitingSentinelSuffix,
@@ -282,6 +299,10 @@ export class PtySession extends EventEmitter {
     // the human has now answered the thing the agent stopped for.
     this.sentinelWaiting = false;
     if (this._status === 'waiting') this.setStatus('running');
+    // Arm the idle countdown from the send, not just from output: if the submitting
+    // Enter is dropped the answer sits unsent in the input box and the terminal
+    // stays silent forever, which is precisely the case worth re-surfacing.
+    this.armIdleTimer();
   }
 
   /**
@@ -424,6 +445,28 @@ export class PtySession extends EventEmitter {
     // a non-sentinel (pattern) wait. A sentinel wait is latched: the TUI's idle
     // repainting is not the agent "continuing", so it must not un-park a real wait.
     if (this._status === 'waiting' && !this.sentinelWaiting) this.setStatus('running');
+    this.armIdleTimer();
+  }
+
+  /**
+   * (Re)start the idle countdown — every chunk pushes it back, so it only fires
+   * once the terminal has gone completely quiet. The park it produces is
+   * deliberately *not* latched (unlike a sentinel wait): it's an inference, so if
+   * the agent was merely thinking and output resumes, the reset above un-parks it.
+   */
+  private armIdleTimer(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+    if (this.opts.idleWaitMs <= 0) return;
+    const t = setTimeout(() => {
+      this.idleTimer = null;
+      // Only a *running* session can go idle-quiet: parked/finished ones either
+      // already reached the inbox or have nothing left to say.
+      if (this._status !== 'running') return;
+      this.setWaiting(this.opts.idleWaitReason);
+    }, this.opts.idleWaitMs);
+    t.unref?.();
+    this.idleTimer = t;
   }
 
   /**
@@ -594,6 +637,10 @@ export class PtySession extends EventEmitter {
     if (this.sessionFileTimer) {
       clearTimeout(this.sessionFileTimer);
       this.sessionFileTimer = null;
+    }
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
     }
     // Read the session file's final records *before* the exit is reported, so a
     // terminal transition never races the tail of the transcript.

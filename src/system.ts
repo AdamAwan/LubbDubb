@@ -124,6 +124,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
             : undefined,
         onWarning: (message) => errors.record({ source: 'agent', message }),
         exitOnDone: claudeTui,
+        // Real-TUI only: raw/mock sessions are line-oriented and legitimately
+        // silent between steps, so idle means nothing there.
+        idleWaitMs: claudeTui ? config.agentIdleWaitMs : 0,
       });
   };
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);

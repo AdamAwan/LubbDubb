@@ -131,6 +131,15 @@ export interface Config {
    * the input unsubmitted; the gap lands the CR as a distinct Enter keypress.
    */
   agentSubmitDelayMs: number;
+  /**
+   * Safety net for a turn that ends without a sentinel (PTY only). An agent that
+   * asks for review in prose and stops leaves the harness with no signal at all —
+   * status stays `running` and nothing reaches the inbox. After this long with no
+   * terminal output at all (the TUI repaints at least once a second while it's
+   * working, so silence means it's parked at the prompt), the session is parked as
+   * waiting. Unlatched: output resuming un-parks it. 0 disables.
+   */
+  agentIdleWaitMs: number;
   /** Extra literal substrings that mean "the CLI is waiting for input" (backup escalation). */
   agentWaitingPatterns: string[];
   /** Command used to launch an agent session (overridable for tests). */
@@ -258,6 +267,7 @@ const DEFAULTS: Config = {
   agentPermissionMode: 'acceptEdits',
   agentPromptDelayMs: 1200,
   agentSubmitDelayMs: 60,
+  agentIdleWaitMs: 90_000,
   agentWaitingPatterns: [],
   claudeCommand: 'claude',
   claudeArgs: [],

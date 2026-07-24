@@ -443,6 +443,10 @@ export class AgentManager extends EventEmitter {
   }
 
   private handleWaiting(agentId: string, task: Task, reason: string): void {
+    // Parking on a human is the other point where pending writes must surface: the
+    // escalation often *is* "review the file I just wrote", and a waiting agent
+    // reaches no terminal drain.
+    this.drainFileEvents(agentId);
     const rule = this.opts.whitelistedApprovals.find((r) => reason.includes(r.match));
     if (rule) {
       // Auto-answer whitelisted prompts without bothering the human.
