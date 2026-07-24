@@ -63,12 +63,12 @@
     "filters": { "prAuthor": "lubbdubb-bot" }
   },
 
-  "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag. Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
+  "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag, filters.workItemAssignedTo narrows work items to one assignee by uniqueName/UPN. When both workItemTag and workItemAssignedTo are set they AND (an item must match both). Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
   "azureDevOps": {
     "organization": "acme",
     "project": "app",
     "repository": "app",
-    "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent" }
+    "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent", "workItemAssignedTo": "bot@acme.com" }
   },
 
   "// microsoft365": "Target for the real 'microsoft365' provider (currently the calendar slice, via Microsoft Graph) — required only when integrations.calendar is 'microsoft365' (ignored otherwise). userId = target mailbox (UPN or object id), required for app-only tokens, omit for a delegated 'me' token. windowDays = how many days ahead to surface events (default 7). Auth is NOT here — set MICROSOFT_GRAPH_TOKEN, or leave unset to use the logged-in `az` CLI.",
