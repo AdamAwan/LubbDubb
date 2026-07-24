@@ -74,13 +74,13 @@ test('a dispatched task carries the source item title, summary and dispatch reas
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
 
-  // A ready story with a description but no acceptance criteria is groomed by a
-  // desk agent — a dispatch path that needs no git worktree.
+  // An open issue with no linked PR is resolved by a code agent, carrying the
+  // issue's title/body and the pickup reason onto the task.
   system.connector.inject({
-    kind: 'new_story',
+    kind: 'new_issue',
+    number: 1,
     title: 'Add login',
-    description: 'Let users sign in with email and password.',
-    wafPillars: ['Security'],
+    body: 'Let users sign in with email and password.',
   });
   await system.harness.runCycle('manual');
 
@@ -88,6 +88,6 @@ test('a dispatched task carries the source item title, summary and dispatch reas
   const task = system.store.getTask(agent.taskId)!;
   assert.equal(task.originTitle, 'Add login', 'source item title should be captured');
   assert.equal(task.originSummary, 'Let users sign in with email and password.');
-  assert.match(task.dispatchReason!, /acceptance criteria/, 'the dispatch reason should be persisted');
+  assert.match(task.dispatchReason!, /no linked PR/, 'the dispatch reason should be persisted');
   system.store.close();
 });

@@ -6,7 +6,7 @@ import type { WorldSnapshot } from '../src/types.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], calendar: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], calendar: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],
@@ -670,58 +670,6 @@ test('an already-notified concern is not re-notified', async () => {
     ),
   );
   assert.equal(actions[0]?.type, 'no_op', 'already told this agent about pr:42:mergeable');
-});
-
-test('story missing description is groomed by a desk agent', async () => {
-  const d = new RuleDispatcher();
-  const { actions } = await d.decide(
-    ctx({
-      stories: [
-        {
-          id: 's1',
-          title: 'Login',
-          description: null,
-          acceptanceCriteria: null,
-          wafPillars: ['x'],
-          state: 'ready',
-          priority: 1,
-        },
-      ],
-    }),
-  );
-  assert.equal(actions[0]?.type, 'dispatch_desk_agent');
-  assert.equal((actions[0] as { originRef: string }).originRef, 'story:s1:groom');
-});
-
-test('idle capacity picks up the highest-priority ready story', async () => {
-  const d = new RuleDispatcher();
-  const { actions } = await d.decide(
-    ctx({
-      stories: [
-        {
-          id: 'lo',
-          title: 'Low',
-          description: 'd',
-          acceptanceCriteria: 'ac',
-          wafPillars: ['x'],
-          state: 'ready',
-          priority: 1,
-        },
-        {
-          id: 'hi',
-          title: 'High',
-          description: 'd',
-          acceptanceCriteria: 'ac',
-          wafPillars: ['x'],
-          state: 'ready',
-          priority: 9,
-        },
-      ],
-    }),
-  );
-  const work = actions.find((a) => (a as { originRef?: string }).originRef?.endsWith(':work'));
-  assert.ok(work, 'expected a work dispatch');
-  assert.equal((work as { branch: string }).branch, 'story/hi');
 });
 
 test('respects concurrency headroom', async () => {

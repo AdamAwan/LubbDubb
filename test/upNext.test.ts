@@ -17,7 +17,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], calendar: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], calendar: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],
@@ -157,34 +157,16 @@ test('a cooling-down origin shows in the queue as cooldown and is not dispatched
   );
 });
 
-test('the rule-8 story pickup appears below the cut instead of vanishing', async () => {
+test('a second eligible pickup appears below the cut instead of vanishing', async () => {
   const d = new RuleDispatcher();
-  const result = await d.decide(
-    ctx(
-      {
-        issues: [issue(9)],
-        stories: [
-          {
-            id: 'hi',
-            title: 'High',
-            description: 'd',
-            acceptanceCriteria: 'ac',
-            wafPillars: ['x'],
-            state: 'ready',
-            priority: 9,
-          },
-        ],
-      },
-      { agentHeadroom: 1 },
-    ),
-  );
-  // Headroom 1: the issue takes the slot; the story pickup queues behind it
-  // (today it is silently dropped once headroom hits zero).
+  const result = await d.decide(ctx({ issues: [issue(9), issue(10)] }, { agentHeadroom: 1 }));
+  // Headroom 1: the lower-numbered issue takes the slot; the next queues behind it
+  // (rather than being silently dropped once headroom hits zero).
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status]),
     [
       ['issue:9', 'dispatching'],
-      ['story:hi:work', 'waiting'],
+      ['issue:10', 'waiting'],
     ],
   );
 });

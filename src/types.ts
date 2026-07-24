@@ -61,9 +61,8 @@ export interface PrComment {
 export type IssueState = 'open' | 'closed';
 
 /**
- * A tracker issue (GitHub Issues in v1) the harness may pick up and resolve into
- * a pull request. Distinct from a {@link Story}: an issue is a bug/feature report
- * that becomes a PR, not a backlog item to groom.
+ * A tracker issue (GitHub Issues / Azure DevOps work items) the harness may pick
+ * up and resolve into a pull request.
  */
 export interface Issue {
   id: string;
@@ -96,27 +95,6 @@ export interface Issue {
   url?: string;
 }
 
-export type StoryState = 'ready' | 'in_progress' | 'blocked' | 'done';
-
-export interface Story {
-  id: string;
-  title: string;
-  description: string | null;
-  acceptanceCriteria: string | null;
-  /** WAF pillars documented on the work item (Azure DevOps convention). */
-  wafPillars: string[];
-  state: StoryState;
-  /** Higher = more important. */
-  priority: number;
-  /**
-   * Labels/tags on the story, driving the same opt-in watch/ignore gate as issues
-   * (`${labelPrefix}-watch` / `-ignore`). Optional — a story with no labels (older
-   * row / provider that predates this) is treated as untagged. Stories are
-   * fake-backlog-only today, so this is exercised via the fake provider.
-   */
-  labels?: string[];
-}
-
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -131,7 +109,6 @@ export interface WorldSnapshot {
   takenAt: string; // ISO
   pullRequests: PullRequest[];
   issues: Issue[];
-  stories: Story[];
   calendar: CalendarEvent[];
 }
 
@@ -215,8 +192,6 @@ export type WorldEventKind =
   | 'issue_opened'
   | 'issue_closed'
   | 'issue_linked'
-  | 'story_added'
-  | 'story_state'
   | 'meeting_added'
   | 'meeting_prep';
 
@@ -228,7 +203,7 @@ export type WorldEventKind =
 export interface WorldEvent {
   id: string;
   kind: WorldEventKind;
-  /** The world object this concerns, e.g. "pr:42", "story:abc", "issue:12". Null if global. */
+  /** The world object this concerns, e.g. "pr:42", "issue:12". Null if global. */
   ref: string | null;
   /** Human-readable one-line summary, e.g. "PR #42 CI passing". */
   summary: string;

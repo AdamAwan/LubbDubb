@@ -45,9 +45,6 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
     async setIssueLabel(): Promise<SendResult> {
       return { ok: true };
     },
-    async setStoryLabel(): Promise<SendResult> {
-      return { ok: true };
-    },
     async setWorkItemState(input): Promise<SendResult> {
       states.push(input);
       return { ok: true, ref: 'ok' };
@@ -83,9 +80,6 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
       return { ok: true };
     },
     async setIssueLabel(): Promise<SendResult> {
-      return { ok: true };
-    },
-    async setStoryLabel(): Promise<SendResult> {
       return { ok: true };
     },
     async setWorkItemState(): Promise<SendResult> {

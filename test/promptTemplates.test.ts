@@ -46,7 +46,7 @@ test('sampleTemplateFile carries a doc header that strips back to the default', 
 
 test('loadPromptTemplates: absent dir yields defaults', () => {
   const t = loadPromptTemplates(join(tmpDir(), 'does-not-exist'));
-  assert.match(t.render('story-waf', { title: 'S' }), /Well-Architected/);
+  assert.match(t.render('meeting-prep', { title: 'S', startsAt: 'now', docs: 'x' }), /meeting/);
 });
 
 test('loadPromptTemplates: an override file (with doc header) replaces the default', () => {
@@ -79,7 +79,7 @@ test('loadPromptTemplates: unknown filename throws', () => {
 test('loadPromptTemplates: unknown placeholder throws', () => {
   const dir = tmpDir();
   try {
-    writeFileSync(join(dir, 'story-waf.md'), 'Do {title} for {sprint}');
+    writeFileSync(join(dir, 'meeting-prep.md'), 'Do {title} for {sprint}');
     assert.throws(() => loadPromptTemplates(dir), /unknown placeholder\(s\) \{sprint\}/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -89,7 +89,7 @@ test('loadPromptTemplates: unknown placeholder throws', () => {
 test('loadPromptTemplates: empty-after-header throws', () => {
   const dir = tmpDir();
   try {
-    writeFileSync(join(dir, 'story-waf.md'), '<!-- just docs, no body -->\n');
+    writeFileSync(join(dir, 'meeting-prep.md'), '<!-- just docs, no body -->\n');
     assert.throws(() => loadPromptTemplates(dir), /empty after its doc header/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -98,7 +98,7 @@ test('loadPromptTemplates: empty-after-header throws', () => {
 
 function ctx(world: Partial<WorldSnapshot>): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], calendar: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], calendar: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],

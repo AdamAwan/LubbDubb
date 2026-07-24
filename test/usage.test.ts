@@ -135,7 +135,7 @@ test('pty mode exports LUBBDUBB_STATUS_FILE keyed by the chosen session id', asy
   const system = buildSystem(config, { backend });
   assert.ok(system.rateLimits, 'pty mode wires the rate-limit capture');
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add login' });
   await system.harness.runCycle('manual');
 
   const spawn = backend.spawned[0]!;
@@ -188,7 +188,7 @@ test('stream mode: result usage lands on the agent row and in the snapshot windo
   const system = buildSystem(config, { streamSpawner: spawner });
   assert.equal(system.rateLimits, null, 'no status-line capture headless');
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

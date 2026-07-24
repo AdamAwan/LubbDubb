@@ -37,17 +37,6 @@ export interface Issue {
    */
   pickup?: { eligible: boolean; status: string; reasons: string[] };
 }
-export interface Story {
-  id: string;
-  title: string;
-  description: string | null;
-  acceptanceCriteria: string | null;
-  wafPillars: string[];
-  state: string;
-  priority: number;
-  /** Labels/tags on the story, carrying the watch/ignore tag when the operator toggles it. */
-  labels?: string[];
-}
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -59,7 +48,6 @@ export interface WorldSnapshot {
   takenAt: string;
   pullRequests: PullRequest[];
   issues: Issue[];
-  stories: Story[];
   calendar: CalendarEvent[];
 }
 
@@ -270,8 +258,6 @@ export type WorldEventKind =
   | 'issue_opened'
   | 'issue_closed'
   | 'issue_linked'
-  | 'story_added'
-  | 'story_state'
   | 'meeting_added'
   | 'meeting_prep';
 

@@ -8,7 +8,7 @@ import type { IntegrationSelection } from '../src/integrations/integration.js';
 const FIXED = () => '2026-01-01T00:00:00.000Z';
 
 function selection(over: Partial<IntegrationSelection>): IntegrationSelection {
-  return { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake', ...over };
+  return { sourceControl: 'fake', issues: 'fake', calendar: 'fake', ...over };
 }
 
 const TARGET = { organization: 'org', project: 'proj', repository: 'repo' };

@@ -1,6 +1,6 @@
 # Customising dispatch prompts
 
-When LubbDubb picks up a work item (or reacts to a PR, meeting, or story), the **rule
+When LubbDubb picks up a work item (or reacts to a PR or meeting), the **rule
 dispatcher** sends the agent a prompt built from a template. Every template has a built-in
 default, and any of them can be overridden per deployment — so a team can phrase the work in
 terms of its own flow ("open a PR into `develop`", "link the Jira key", house conventions,
@@ -57,6 +57,3 @@ placeholder is fine.
 | `pr-review-comment`       | a PR has an unhandled review comment                        |
 | `pr-concern-escalation`   | a PR concern keeps failing to clear (→ human)               |
 | `meeting-prep`            | a meeting has unread prep docs                              |
-| `story-groom`             | a ready story lacks a description / acceptance criteria     |
-| `story-waf`               | a ready story has no Well-Architected pillars               |
-| `story-pickup`            | idle capacity; implement the highest-priority ready story   |

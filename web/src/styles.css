@@ -1255,9 +1255,6 @@ body {
 .audit.activity.issues {
   border-color: var(--accent);
 }
-.audit.activity.stories {
-  border-color: var(--green);
-}
 .audit.activity.meetings {
   border-color: var(--amber);
 }
@@ -1266,9 +1263,6 @@ body {
 }
 .badge.issues {
   color: var(--accent);
-}
-.badge.stories {
-  color: var(--green);
 }
 .badge.meetings {
   color: var(--amber);
@@ -1280,10 +1274,6 @@ body {
 .filter-chip.issues.active {
   border-color: var(--accent);
   background: #3a1420;
-}
-.filter-chip.stories.active {
-  border-color: var(--green);
-  background: #10241a;
 }
 .filter-chip.meetings.active {
   border-color: var(--amber);

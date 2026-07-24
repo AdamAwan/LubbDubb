@@ -136,7 +136,7 @@ function ingestedConfig() {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'ingested' },
+    integrations: { sourceControl: 'fake', issues: 'fake', calendar: 'ingested' },
   });
 }
 

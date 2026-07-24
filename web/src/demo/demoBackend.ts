@@ -156,17 +156,6 @@ class DemoServer {
     return { ok: true, watched };
   }
 
-  /** Toggle a story's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
-  async setStoryWatched(storyId: string, watched: boolean): Promise<{ ok: true; watched: boolean }> {
-    const story = this.state.world.stories.find((s) => s.id === storyId);
-    if (story) {
-      story.labels = applyWatch(story.labels, this.state.config, watched);
-      this.addDecision('story_label_set', 'ok', `${watched ? 'watching' : 'ignoring'} story ${story.title}`);
-      this.dirty();
-    }
-    return { ok: true, watched };
-  }
-
   async killAgent(id: string): Promise<{ ok: true }> {
     const agent = this.state.agents.find((a) => a.id === id);
     if (agent && agent.status !== 'done') {
@@ -473,27 +462,6 @@ class DemoServer {
         }
         break;
       }
-      case 'new_story': {
-        const storyLabels = Array.isArray(ev.labels) ? (ev.labels as string[]) : [];
-        world.stories = [
-          ...world.stories,
-          {
-            id: this.id('st'),
-            title: String(ev.title ?? 'New story'),
-            description: null,
-            acceptanceCriteria: null,
-            wafPillars: [],
-            state: 'new',
-            priority: 2,
-            labels: storyLabels,
-          },
-        ];
-        this.addWorldEvent('story_added', null, `story added: ${String(ev.title ?? 'New story')}`);
-        if (isWatched(storyLabels, this.state.config)) {
-          this.trySpawn('groom_story', `Groom story: ${String(ev.title ?? 'New story')}`, null, null);
-        }
-        break;
-      }
       case 'meeting': {
         // The Desk redesign moved the agenda onto the briefing and dropped the
         // World calendar, so an injected meeting lands in `briefing.meetings`
@@ -575,7 +543,6 @@ export const demoApi = {
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
-  setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),

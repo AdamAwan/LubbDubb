@@ -6,16 +6,14 @@ import type {
   PrMergeInput,
   PrReplyInput,
   SendResult,
-  StoryLabelInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Story, WorldSnapshot } from '../types.js';
+import type { WorldSnapshot } from '../types.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { FakeWorldStore } from '../integrations/fake/fakeWorld.js';
 import { FakeGitHubIntegration } from '../integrations/fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from '../integrations/fake/fakeIssues.js';
-import { FakeBacklogIntegration } from '../integrations/fake/fakeBacklog.js';
 import { FakeCalendarIntegration } from '../integrations/fake/fakeCalendar.js';
 
 /**
@@ -33,16 +31,14 @@ export class FakeConnector implements Connector, ActionSink {
   private readonly composite: CompositeConnector;
   private readonly github: FakeGitHubIntegration;
   private readonly issues: FakeIssuesIntegration;
-  private readonly backlog: FakeBacklogIntegration;
   private readonly calendar: FakeCalendarIntegration;
 
   constructor(store: Store, now: () => string = () => new Date().toISOString()) {
     const world = new FakeWorldStore(store);
     this.github = new FakeGitHubIntegration(world, store);
     this.issues = new FakeIssuesIntegration(world);
-    this.backlog = new FakeBacklogIntegration(world);
     this.calendar = new FakeCalendarIntegration(world);
-    this.composite = new CompositeConnector([this.github, this.issues, this.backlog, this.calendar], store, now);
+    this.composite = new CompositeConnector([this.github, this.issues, this.calendar], store, now);
   }
 
   getState(): Promise<WorldSnapshot> {
@@ -65,10 +61,6 @@ export class FakeConnector implements Connector, ActionSink {
     return this.composite.setIssueLabel(input);
   }
 
-  setStoryLabel(input: StoryLabelInput): Promise<SendResult> {
-    return this.composite.setStoryLabel(input);
-  }
-
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     return this.composite.setWorkItemState(input);
   }
@@ -80,10 +72,6 @@ export class FakeConnector implements Connector, ActionSink {
 
   markCommentHandled(prNumber: number, commentId: string): void {
     this.github.markCommentHandled(prNumber, commentId);
-  }
-
-  markStoryState(storyId: string, state: Story['state']): void {
-    this.backlog.markStoryState(storyId, state);
   }
 
   markIssueLinked(issueNumber: number, prNumber: number): void {

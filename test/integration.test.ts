@@ -27,7 +27,12 @@ async function agentWithOpenEscalation(
   system: System,
   backend: FakePtyBackend,
 ): Promise<{ agentId: string; escalationId: string }> {
-  system.connector.inject({ kind: 'new_story', title: 'Needs a call', wafPillars: ['Reliability'] });
+  system.connector.inject({
+    kind: 'meeting',
+    title: 'Needs a call',
+    startsAt: '2099-01-01T10:00:00.000Z',
+    prepDocs: ['design.md'],
+  });
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
   backend.last().emit('@@LUBBDUBB_WAITING:Which provider should I use?@@');
@@ -39,9 +44,13 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
 
-  // A story missing its description (but with WAF pillars set) yields exactly one
-  // desk grooming task — no WAF task, and not a pickup candidate (needs desc+AC).
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  // A meeting with unread prep docs yields exactly one desk prep task.
+  system.connector.inject({
+    kind: 'meeting',
+    title: 'Add login',
+    startsAt: '2099-01-01T10:00:00.000Z',
+    prepDocs: ['design.md'],
+  });
   await system.harness.runCycle('manual');
 
   // An agent should now be live.
@@ -52,7 +61,7 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
 
   // The agent narrates, then asks for a decision -> a waiting escalation that
   // carries enough context to answer in-place.
-  backend.last().emit('Reading the login story…\nUnsure which identity provider to target.\n');
+  backend.last().emit('Reading the prep docs…\nUnsure which identity provider to target.\n');
   backend.last().emit('@@LUBBDUBB_WAITING:Which auth provider should I assume?@@');
   const open = system.store.listOpenEscalations();
   assert.equal(open.length, 1, 'a waiting agent should raise one escalation');
@@ -60,9 +69,9 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
   // Enriched context: the originating signal and a tail of the agent's output.
   const ctx = open[0]!.context;
-  // The escalation carries the task's originating signal (a story-grooming ref).
+  // The escalation carries the task's originating signal (a meeting-prep ref).
   assert.equal(ctx.originRef, system.store.getTask(live[0]!.taskId)!.originRef);
-  assert.match(String(ctx.originRef), /^story:.+:groom$/);
+  assert.match(String(ctx.originRef), /^meeting:.+:prep$/);
   assert.match(String(ctx.recentOutput), /identity provider/);
   assert.doesNotMatch(String(ctx.recentOutput), /LUBBDUBB/, 'sentinels are stripped from the excerpt');
 
@@ -113,7 +122,7 @@ test('whitelisted waiting prompts are auto-answered without escalating', async (
   config.whitelistedApprovals = [{ match: 'Allow running tests', response: 'yes' }];
   const system = buildSystem(config, { backend });
 
-  system.connector.inject({ kind: 'new_story', title: 'Trivial', wafPillars: ['Cost'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Trivial' });
   await system.harness.runCycle('manual');
 
   backend.last().emit('@@LUBBDUBB_WAITING:Allow running tests?@@');
@@ -152,7 +161,7 @@ test('executor concurrency cap defers dispatches beyond the limit', async () => 
 test('reconcile on boot marks orphaned agents interrupted', async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
-  system.connector.inject({ kind: 'new_story', title: 'Work', wafPillars: ['Security'] });
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Work' });
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

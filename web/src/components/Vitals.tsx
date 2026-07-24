@@ -16,9 +16,6 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
     (n, p) => n + p.unresolvedComments.filter((c) => !c.handled).length,
     0,
   );
-  const grooming = state.world.stories.filter(
-    (s) => !s.description || !s.acceptanceCriteria || s.wafPillars.length === 0,
-  ).length;
   const meetingsToPrep = state.world.calendar.filter((c) => !c.prepDone && c.prepDocs.length > 0).length;
   // Desk items awaiting a look: unread/flagged mail plus every Teams ping. Zero
   // when no briefing has been ingested.
@@ -43,7 +40,6 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
       tone: openComments ? 'warn' : undefined,
       hint: 'unhandled review comments',
     },
-    { label: 'Grooming', value: grooming, tone: grooming ? 'warn' : undefined, hint: 'stories missing detail' },
     { label: 'Prep', value: meetingsToPrep, tone: meetingsToPrep ? 'warn' : undefined, hint: 'meetings needing prep' },
     {
       label: 'Needs reply',
