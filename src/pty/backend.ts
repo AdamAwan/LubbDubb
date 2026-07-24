@@ -57,7 +57,10 @@ export class NodePtyBackend implements PtyBackend {
       onData: (cb) => proc.onData(cb),
       onExit: (cb) => proc.onExit((e) => cb({ exitCode: e.exitCode, signal: e.signal })),
       write: (data) => proc.write(data),
-      kill: (signal) => proc.kill(signal),
+      // node-pty's Windows backend terminates via a job object and *throws* on any
+      // signal argument ("Signals not supported on windows"); drop the signal there.
+      // POSIX honours it, so keep passing SIGTERM etc. off Windows.
+      kill: (signal) => proc.kill(process.platform === 'win32' ? undefined : signal),
     };
   }
 }
