@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -88,7 +89,45 @@ test('the file-events hook targets the file-writing tools and reads $LUBBDUBB_EV
   const post = FILE_EVENTS_SETTINGS.hooks.PostToolUse[0]!;
   assert.match(post.matcher, /Write/);
   assert.match(post.matcher, /Edit/);
-  assert.match(post.hooks[0]!.command, /LUBBDUBB_EVENTS_DIR/);
+  // Exec form: `node` is the executable, the script (carrying the env guard) rides
+  // in args — never a shell string, so it can't be mangled by PowerShell/cmd.
+  const hook = post.hooks[0]!;
+  assert.equal(hook.command, 'node');
+  assert.deepEqual(hook.args?.slice(0, 1), ['-e']);
+  assert.match(hook.args![1]!, /LUBBDUBB_EVENTS_DIR/);
+});
+
+test('the file-events hook actually captures a write when spawned shell-free (Windows-safe)', () => {
+  // Replicate exactly what Claude Code does with exec form: spawn the executable
+  // with the argv, no shell tokenization. This is the regression guard for the
+  // Windows failure — a POSIX `if [ -n … ]` string here would write nothing under
+  // PowerShell/cmd; the exec form must work regardless of the ambient shell.
+  const hook = FILE_EVENTS_SETTINGS.hooks.PostToolUse[0]!.hooks[0]!;
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-hook-'));
+  const res = spawnSync(process.execPath, hook.args!, {
+    input: '{"tool_name":"Write","tool_input":{"file_path":"docs/plan.md"}}',
+    env: { ...process.env, LUBBDUBB_EVENTS_DIR: dir },
+    encoding: 'utf8',
+  });
+  assert.equal(res.status, 0, res.stderr);
+  const records = readdirSync(dir).filter((f) => f.endsWith('.json'));
+  assert.equal(records.length, 1, 'exactly one record spooled');
+  assert.deepEqual(parseFileEventRecord(readFileSync(join(dir, records[0]!), 'utf8')), {
+    path: 'docs/plan.md',
+    tool: 'Write',
+  });
+
+  // No env var → the guard short-circuits inside the script; nothing is written.
+  const dir2 = mkdtempSync(join(tmpdir(), 'lubbdubb-hook-'));
+  const bare = { ...process.env };
+  delete bare.LUBBDUBB_EVENTS_DIR;
+  const res2 = spawnSync(process.execPath, hook.args!, {
+    input: '{"tool_name":"Write","tool_input":{"file_path":"docs/plan.md"}}',
+    env: bare,
+    encoding: 'utf8',
+  });
+  assert.equal(res2.status, 0);
+  assert.equal(readdirSync(dir2).length, 0, 'no env var → no-op');
 });
 
 test('buildClaudeArgs merges file-events + status-line into one --settings; stream args get the hook headless', () => {

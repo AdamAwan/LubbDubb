@@ -22,30 +22,40 @@ import { join } from 'node:path';
  * The hook body: read the tool payload on stdin, pull just the written path (never
  * the file *content*), and drop a tiny `{path,tool}` record into the spool dir as
  * its own file (write-tmp-then-rename, so a concurrent drain never reads a partial
- * and parallel tool batches never interleave). No env var → no-op, like the
- * status-line command. `node` is always present — `claude` is a node CLI.
+ * and parallel tool batches never interleave). The env-var guard lives *inside*
+ * the script (`process.env.LUBBDUBB_EVENTS_DIR`) rather than in a shell `if` — see
+ * why this must be shell-free below.
  */
-const FILE_EVENTS_HOOK_COMMAND =
-  'if [ -n "$LUBBDUBB_EVENTS_DIR" ]; then node -e \'' +
+const FILE_EVENTS_HOOK_SCRIPT =
   'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{' +
+  'const dir=process.env.LUBBDUBB_EVENTS_DIR;if(!dir)return;' +
   'const j=JSON.parse(d);const ti=j.tool_input||{};const p=ti.file_path||ti.notebook_path;' +
-  'if(!p)return;const fs=require("fs");const dir=process.env.LUBBDUBB_EVENTS_DIR;' +
+  'if(!p)return;const fs=require("fs");' +
   'const n=Date.now()+"-"+Math.random().toString(36).slice(2);' +
   'const rec=JSON.stringify({path:p,tool:j.tool_name});' +
   'fs.writeFileSync(dir+"/"+n+".tmp",rec);fs.renameSync(dir+"/"+n+".tmp",dir+"/"+n+".json");' +
-  "}catch(e){}})'; fi";
+  '}catch(e){}})';
 
 /**
  * The `--settings` fragment wiring the capture hook onto the file-writing tools.
  * The matcher is a tool-name regex; `Write`/`Edit`/`MultiEdit`/`NotebookEdit` are
  * the tools whose `tool_input` carries a `file_path`/`notebook_path`.
+ *
+ * **Exec form, not shell form.** The hook is `{command:"node", args:["-e",…]}`,
+ * which Claude Code spawns as a bare executable with that argv — *no shell*. A
+ * shell-string form breaks on Windows: Claude Code runs hook strings through Git
+ * Bash only when it's installed, else PowerShell, and a POSIX body like
+ * `if [ -n "$VAR" ]; then node -e '…'; fi` is a PowerShell parse error, so the
+ * hook silently no-ops and no files/artifacts ever surface. Exec form sidesteps
+ * every shell's quoting/builtins entirely, so the guard must be in the script and
+ * `node` is invoked directly (it's always on PATH — `claude` is a node CLI).
  */
 export const FILE_EVENTS_SETTINGS = {
   hooks: {
     PostToolUse: [
       {
         matcher: 'Write|Edit|MultiEdit|NotebookEdit',
-        hooks: [{ type: 'command', command: FILE_EVENTS_HOOK_COMMAND }],
+        hooks: [{ type: 'command', command: 'node', args: ['-e', FILE_EVENTS_HOOK_SCRIPT] }],
       },
     ],
   },

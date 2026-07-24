@@ -98,6 +98,16 @@ export class PtySession extends EventEmitter {
   private proc: PtyProcess | null = null;
   private _status: PtySessionStatus = 'starting';
   private tail = '';
+  /**
+   * True once an explicit *waiting sentinel* parked the session. It latches the
+   * wait: the interactive TUI keeps repainting after a turn, and that post-sentinel
+   * output eventually scrolls the sentinel out of the {@link TAIL_WINDOW} tail, so
+   * without this latch the "any output while parked → running" reset below would
+   * silently un-park an agent that is genuinely waiting on a human. Only a human
+   * answer ({@link send}), a done sentinel, or exit clears it. The generic
+   * `waitingPatterns` wait is *not* latched — it may legitimately auto-recover.
+   */
+  private sentinelWaiting = false;
   /** Trailing bytes withheld from 'output' because they might be the leading half of a sentinel. */
   private outPending = '';
   /** Legible mode: the emulator standing between raw bytes and the 'output' event. */
@@ -169,7 +179,9 @@ export class PtySession extends EventEmitter {
     if (!this.proc) throw new Error('PtySession not started');
     this.proc.write(`${PASTE_START}${text.replace(/[\r\n]+$/, '')}${PASTE_END}`);
     this.submit();
-    // Sending input un-parks the session.
+    // Sending input un-parks the session — and releases the sentinel latch, since
+    // the human has now answered the thing the agent stopped for.
+    this.sentinelWaiting = false;
     if (this._status === 'waiting') this.setStatus('running');
   }
 
@@ -238,6 +250,9 @@ export class PtySession extends EventEmitter {
     const reason = this.extractWaitingReason(hay);
     if (reason !== null) {
       this.tail = '';
+      // Latch the wait: it must survive the sentinel scrolling out of the tail as
+      // the TUI repaints (otherwise the reset below un-parks a real human wait).
+      this.sentinelWaiting = true;
       this.setWaiting(reason);
       this.tail = keepTail(stripFlags(hay));
       return;
@@ -253,8 +268,10 @@ export class PtySession extends EventEmitter {
       }
     }
 
-    // Any output while parked means the agent kept going on its own.
-    if (this._status === 'waiting') this.setStatus('running');
+    // Any output while parked means the agent kept going on its own — but only for
+    // a non-sentinel (pattern) wait. A sentinel wait is latched: the TUI's idle
+    // repainting is not the agent "continuing", so it must not un-park a real wait.
+    if (this._status === 'waiting' && !this.sentinelWaiting) this.setStatus('running');
     this.tail = keepTail(stripFlags(hay));
   }
 

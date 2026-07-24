@@ -48,6 +48,33 @@ test('waiting sentinel is stripped from output while waiting fires with the reas
   assert.equal(out, 'working...\n\n');
 });
 
+test('a sentinel wait is latched: TUI repaint after the sentinel must not un-park it', () => {
+  // Regression: the interactive claude TUI keeps repainting after a turn. That
+  // post-sentinel output eventually scrolls the waiting sentinel out of the 4096-
+  // byte detection tail; the next chunk then finds no sentinel and the "any output
+  // while parked → running" reset used to silently un-park a real human wait, so
+  // the agent reverted to 'running' and no escalation stuck. It must stay waiting.
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
+  const statuses: string[] = [];
+  session.on('status', (s: string) => statuses.push(s));
+  session.start();
+
+  backend.last().emit('  @@LUBBDUBB_WAITING:need a decision@@  \r\n');
+  assert.equal(session.status, 'waiting');
+
+  // A full repaint larger than TAIL_WINDOW (4096) evicts the sentinel from the tail…
+  backend.last().emit('\x1b[2J\x1b[H' + 'x'.repeat(5000) + '\r\n');
+  // …and a following idle frame carries no sentinel — this is where it used to flip.
+  backend.last().emit('\x1b[38;5;8m* idle spinner *\x1b[0m\r\n');
+  assert.equal(session.status, 'waiting', 'must remain parked despite TUI repaint noise');
+
+  // The human answering is what releases the latch and resumes the agent.
+  session.send('go with A');
+  assert.equal(session.status, 'running');
+  assert.deepEqual(statuses, ['running', 'waiting', 'running']);
+});
+
 test('sendRaw writes bytes verbatim with no carriage return appended', () => {
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
