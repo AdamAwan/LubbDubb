@@ -131,7 +131,10 @@ function azureApi(ctx: IntegrationContext): { api: RestAzureDevOpsApi; az: Azure
       'The azure provider needs a target: set `azureDevOps.organization`, `azureDevOps.project` and `azureDevOps.repository` in your config.',
     );
   }
-  return { api: RestAzureDevOpsApi.create(az, resolveAzureAuth()), az };
+  // Surface transient-retry notices (sign-in-HTML blips, throttling) in the Errors panel
+  // so an occasional failure is visible even when the retry silently recovers.
+  const log = ctx.errors ? (message: string) => void ctx.errors!.record({ source: 'provider', message }) : undefined;
+  return { api: RestAzureDevOpsApi.create(az, resolveAzureAuth(), log), az };
 }
 
 /**

@@ -18,7 +18,12 @@ import {
   parseTags,
   viewerAddedTags,
 } from '../src/integrations/azure/workItems.js';
-import { buildOpenWorkItemQuery } from '../src/integrations/azure/restAzureDevOpsApi.js';
+import {
+  buildOpenWorkItemQuery,
+  isSignInHtml,
+  RestAzureDevOpsApi,
+  type AzureAuth,
+} from '../src/integrations/azure/restAzureDevOpsApi.js';
 import type {
   AzCommentRef,
   AzMergeResult,
@@ -312,6 +317,109 @@ test('buildOpenWorkItemQuery: filters to open states and, when set, a tag (singl
   assert.doesNotMatch(base, /System\.Tags/);
   const tagged = buildOpenWorkItemQuery("agent's");
   assert.match(tagged, /System\.Tags] CONTAINS 'agent''s'/);
+});
+
+// --------------------------------------------------------------------------
+// RestAzureDevOpsApi.request — transient-failure retry & legible errors
+// --------------------------------------------------------------------------
+
+test('isSignInHtml: detects the sign-in page by content-type or a leading doctype/html tag', () => {
+  assert.equal(isSignInHtml('text/html; charset=utf-8', 'whatever'), true);
+  assert.equal(isSignInHtml(null, '\n\n<!DOCTYPE html><html>...'), true);
+  assert.equal(isSignInHtml(null, '  <html lang="en">'), true);
+  assert.equal(isSignInHtml('application/json', '{"value":[]}'), false);
+  assert.equal(isSignInHtml(null, '{"value":[]}'), false);
+});
+
+/** A fake AzureAuth that counts forceRefresh calls. */
+function fakeAuth(): { auth: AzureAuth; state: { refreshes: number } } {
+  const state = { refreshes: 0 };
+  const auth: AzureAuth = {
+    async header() {
+      return 'Bearer fake';
+    },
+    forceRefresh() {
+      state.refreshes++;
+    },
+  };
+  return { auth, state };
+}
+
+/** A fetch that returns each scripted response in turn (sticking on the last). */
+function scriptedFetch(responses: Array<() => Response>): { fetch: typeof fetch; state: { calls: number } } {
+  const state = { calls: 0 };
+  const fetchFn = (async () => {
+    const make = responses[Math.min(state.calls, responses.length - 1)]!;
+    state.calls++;
+    return make();
+  }) as unknown as typeof fetch;
+  return { fetch: fetchFn, state };
+}
+
+const json = (value: unknown, status = 200) =>
+  new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
+const signInHtml = (status = 203) =>
+  new Response('\n\n<!DOCTYPE html><html><body>sign in</body></html>', {
+    status,
+    headers: { 'content-type': 'text/html' },
+  });
+
+/** Build a client whose request() path is exercised via a real public method. */
+function restApi(responses: Array<() => Response>) {
+  const { auth, state: authState } = fakeAuth();
+  const { fetch: fetchFn, state: fetchState } = scriptedFetch(responses);
+  const logs: string[] = [];
+  const api = new RestAzureDevOpsApi(
+    'org',
+    'proj',
+    'repo',
+    auth,
+    fetchFn,
+    (m) => logs.push(m),
+    () => Promise.resolve(), // no real backoff
+  );
+  return { api, authState, fetchState, logs };
+}
+
+test('request: a transient sign-in-HTML 2xx is retried with a fresh token, then succeeds', async () => {
+  const { api, authState, fetchState, logs } = restApi([() => signInHtml(), () => json({ value: [] })]);
+  const pulls = await api.listActivePullRequests();
+  assert.deepEqual(pulls, []);
+  assert.equal(fetchState.calls, 2, 'retried once');
+  assert.equal(authState.refreshes, 1, 'forced a token refresh before the retry');
+  assert.match(logs[0]!, /retry 1\/2/);
+});
+
+test('request: a persistent sign-in page fails with an auth-naming error, not a JSON crash', async () => {
+  const { api, authState, fetchState } = restApi([() => signInHtml()]);
+  const err = await api.listActivePullRequests().then(
+    () => assert.fail('expected the call to reject'),
+    (e: Error) => e,
+  );
+  assert.match(err.message, /HTML sign-in page instead of JSON/);
+  assert.match(err.message, /az login/); // the message names the actual cause
+  // 1 initial + MAX_RETRIES(2) attempts, and a refresh before each retry.
+  assert.equal(fetchState.calls, 3);
+  assert.equal(authState.refreshes, 2);
+});
+
+test('request: malformed (non-HTML) JSON on a 2xx fails fast without retrying', async () => {
+  const { api, fetchState, authState } = restApi([
+    () => new Response('not json{', { status: 200, headers: { 'content-type': 'application/json' } }),
+  ]);
+  await assert.rejects(() => api.listActivePullRequests(), /invalid JSON/);
+  assert.equal(fetchState.calls, 1, 'a genuine parse error is not retried');
+  assert.equal(authState.refreshes, 0);
+});
+
+test('request: a 5xx is retried, a 4xx is not', async () => {
+  const server = restApi([() => new Response('boom', { status: 503 }), () => json({ value: [] })]);
+  await server.api.listActivePullRequests();
+  assert.equal(server.fetchState.calls, 2, '5xx retried');
+
+  const client = restApi([() => new Response('nope', { status: 403 })]);
+  await assert.rejects(() => client.api.listActivePullRequests(), /-> 403/);
+  assert.equal(client.fetchState.calls, 1, '4xx not retried');
 });
 
 // --------------------------------------------------------------------------
