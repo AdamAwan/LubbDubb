@@ -1,7 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Agent, AgentFile, AgentFlag, Task } from '../types.js';
 import { api } from '../api.js';
 import { statusDot, linkify, agentUsageLine } from './util.js';
@@ -9,11 +6,43 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { FlagChips } from './FlagChips.js';
 import { FilesList } from './FilesList.js';
+import { parseAnsi, ansiClass, type AnsiStyle } from './ansi.js';
+
+/** How close to the bottom (px) still counts as "following the stream". */
+const STICK_THRESHOLD = 24;
+
+function atBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD;
+}
+
+/** Append a transcript chunk as styled DOM, resuming ANSI state across deltas. */
+function appendChunk(el: HTMLElement, chunk: string, styleRef: { current: AnsiStyle }): void {
+  const { segments, end } = parseAnsi(chunk, styleRef.current);
+  const frag = document.createDocumentFragment();
+  for (const seg of segments) {
+    const cls = ansiClass(seg.style);
+    if (!cls) {
+      frag.appendChild(document.createTextNode(seg.text));
+    } else {
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = seg.text;
+      frag.appendChild(span);
+    }
+  }
+  el.appendChild(frag);
+  styleRef.current = end;
+}
 
 /**
- * The drill-down: live terminal output for one agent (rendered with xterm.js)
- * plus a box to type a response straight into its session. Seeds from the
- * persisted transcript, then appends live deltas streamed over the socket.
+ * The drill-down: the transcript for one agent, rendered as an HTML pane, plus a
+ * box to type a response straight into its session. Seeds from the persisted
+ * transcript, then appends live deltas streamed over the socket.
+ *
+ * The transcript is already legible text in every mode (`renderBlocks` / settled
+ * PTY text), never raw TUI bytes, so it renders as real DOM: words wrap on their
+ * boundaries, the browser scrolls it natively, and the text is selectable. The
+ * only terminal feature we reproduce is SGR colour on tool labels (see `ansi.ts`).
  */
 export function AgentDrawer({
   agent,
@@ -40,12 +69,14 @@ export function AgentDrawer({
 }) {
   const [seed, setSeed] = useState('');
   const [text, setText] = useState('');
+  // The stream ran ahead while the user was scrolled up — offer a jump-to-latest.
+  const [behind, setBehind] = useState(false);
   const send = useAsyncAction();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-  // The output already written to the terminal — lets us write only the new tail.
+  const paneRef = useRef<HTMLDivElement>(null);
+  // What's already rendered into the pane, so we append only the new tail.
   const writtenRef = useRef('');
+  // ANSI style carried across appends (a colour run can split across deltas).
+  const ansiRef = useRef<AnsiStyle>({});
   const agentIdRef = useRef(agent.id);
 
   useEffect(() => {
@@ -59,55 +90,47 @@ export function AgentDrawer({
     };
   }, [agent.id]);
 
-  // Mount the terminal once; fit it to the container and keep it fitted on resize.
-  useEffect(() => {
-    const term = new Terminal({
-      convertEol: true, // output is legible text in every mode (renderBlocks / settled PTY text), never raw TUI bytes
-      scrollback: 100000,
-      fontSize: 12.5,
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      theme: { background: '#05070c', foreground: '#b9c6e0' },
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    if (containerRef.current) {
-      term.open(containerRef.current);
-      fit.fit();
-    }
-    termRef.current = term;
-    fitRef.current = fit;
-    // Fit again after layout settles (container may be zero-sized on first paint).
-    const raf = requestAnimationFrame(() => fitRef.current?.fit());
-    const onResize = () => fitRef.current?.fit();
-    window.addEventListener('resize', onResize);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', onResize);
-      term.dispose();
-      termRef.current = null;
-      fitRef.current = null;
-    };
-  }, []);
-
   // Same output value as before: prefer the live stream once it overtakes the seed.
   const output = live !== undefined && live.length > seed.length ? live : seed;
 
-  // Write-diff into the terminal: append only what's new; on an agent switch or a
-  // non-append change (shrink/reseed), reset and rewrite the whole buffer.
+  // Render-diff into the pane: append only what's new; on an agent switch or a
+  // non-append change (shrink/reseed), clear and rewrite the whole buffer.
   useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
+    const el = paneRef.current;
+    if (!el) return;
     const prev = writtenRef.current;
     const switched = agentIdRef.current !== agent.id;
+    const following = atBottom(el);
     if (switched || !output.startsWith(prev)) {
-      term.reset();
-      if (output) term.write(output);
+      el.replaceChildren();
+      ansiRef.current = {};
+      appendChunk(el, output, ansiRef);
+      el.scrollTop = el.scrollHeight;
+      setBehind(false);
     } else if (output.length > prev.length) {
-      term.write(output.slice(prev.length));
+      appendChunk(el, output.slice(prev.length), ansiRef);
+      if (following) {
+        el.scrollTop = el.scrollHeight;
+        setBehind(false);
+      } else {
+        setBehind(true);
+      }
     }
     writtenRef.current = output;
     agentIdRef.current = agent.id;
   }, [output, agent.id]);
+
+  const onScroll = useCallback(() => {
+    const el = paneRef.current;
+    if (el && atBottom(el)) setBehind(false);
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    const el = paneRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setBehind(false);
+  }, []);
 
   const canRespond = agent.status === 'waiting' || agent.status === 'running';
   const isLive = agent.status === 'running' || agent.status === 'waiting' || agent.status === 'starting';
@@ -166,7 +189,14 @@ export function AgentDrawer({
           </div>
         )}
         <FilesList files={files} />
-        <div className="terminal" ref={containerRef} style={{ padding: 8, overflow: 'hidden', minHeight: 240 }} />
+        <div className="terminal-wrap">
+          <div className="terminal" ref={paneRef} onScroll={onScroll} aria-label="Agent transcript" />
+          {behind && (
+            <button type="button" className="term-jump" onClick={jumpToLatest}>
+              ↓ New output
+            </button>
+          )}
+        </div>
         {canRespond && (
           <form
             className="reply"

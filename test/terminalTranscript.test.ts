@@ -88,10 +88,18 @@ test('isTuiChromeLine recognises chrome and leaves content alone', () => {
   assert.equal(isTuiChromeLine('╰──────────────────╯'), true);
   assert.equal(isTuiChromeLine('? for shortcuts'), true);
   assert.equal(isTuiChromeLine('⏵⏵ accept edits on (shift+tab to cycle)'), true);
+  // Working-status frame without the interrupt hint or an ellipsis (elapsed time).
+  assert.equal(isTuiChromeLine('✳ Crunched for 20m 59s · 2 shells still running'), true);
+  // A lone slash command typed in the input area.
+  assert.equal(isTuiChromeLine('/rc'), true);
+  assert.equal(isTuiChromeLine('/clear'), true);
 
   assert.equal(isTuiChromeLine('Show dispatcher rule identity in decision log'), false);
   assert.equal(isTuiChromeLine('● I ran the tests and they pass.'), false);
   assert.equal(isTuiChromeLine('  ⎿ 12 lines of tool output'), false);
   assert.equal(isTuiChromeLine('const x = a | b;'), false);
+  // Not chrome: a file path or slash-led prose must survive (the risky false positive).
+  assert.equal(isTuiChromeLine('/api/state ships the registry'), false);
+  assert.equal(isTuiChromeLine('> quoted reply from a reviewer'), false);
   assert.equal(isTuiChromeLine(''), false);
 });

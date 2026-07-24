@@ -52,11 +52,13 @@ export function isTuiChromeLine(line: string): boolean {
   const first = t[0];
   if (!t || first === undefined) return false;
   if (t.includes('esc to interrupt')) return true; // spinner suffix, any frame
-  if (BOX_STARTS.has(first)) return true; // input box border/row
+  if (BOX_STARTS.has(first)) return true; // input box border/row (incl. its "│ > …" content)
   if (t.startsWith('? for shortcuts')) return true;
   if (t.startsWith('⏵') || t.startsWith('⏸') || t.includes('shift+tab to cycle')) return true;
-  // A spinner frame without the interrupt hint: glyph-led and trailing ellipsis.
-  return SPINNER_GLYPHS.has(first) && (t.includes('…') || t.includes('...'));
+  if (/^\/[a-z][\w-]*$/i.test(t)) return true; // a lone slash command (e.g. "/rc") in the input area
+  // A spinner/status frame: glyph-led, and either a trailing ellipsis or an elapsed
+  // time token (e.g. "✳ Crunched for 20m 59s · 2 shells still running" — no ellipsis).
+  return SPINNER_GLYPHS.has(first) && (t.includes('…') || t.includes('...') || /\b\d+s\b/.test(t));
 }
 
 export class TerminalTranscript {

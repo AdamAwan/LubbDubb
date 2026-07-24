@@ -909,18 +909,61 @@ body {
 .drawer-head .btn {
   margin-left: 6px;
 }
+/* Transcript pane: already-legible text rendered as real DOM (not xterm), so it
+   wraps on word boundaries and scrolls natively. See AgentDrawer. */
+.terminal-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  display: flex;
+}
 .terminal {
   flex: 1;
+  min-height: 0;
   background: #05070c;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px;
+  padding: 12px 14px;
   overflow: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 1.6;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
   color: #b9c6e0;
+}
+/* SGR colours renderBlocks emits for tool labels (see components/ansi.ts). */
+.terminal .ansi-cyan {
+  color: #56b6c2;
+}
+.terminal .ansi-gray {
+  color: #7b88a1;
+}
+.terminal .ansi-red {
+  color: #ff8a8a;
+}
+.terminal .ansi-dim {
+  opacity: 0.65;
+}
+/* Jump-to-latest: shown only when the stream ran ahead while scrolled up. */
+.term-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  background: var(--blue);
+  color: #04121f;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.term-jump:hover {
+  filter: brightness(1.08);
 }
 
 /* ── Origin context: what item this agent is working on (issue #17) ──────── */

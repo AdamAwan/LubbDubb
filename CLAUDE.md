@@ -201,9 +201,22 @@ each message's content blocks through the pure `renderBlocks` in
 `src/agents/streamTranscript.ts`: assistant text is passed through (sentinels stripped), a
 `tool_use` becomes a labelled line with a one-line input summary, and a `tool_result` (arriving
 as a `user` event) is sanitised — ANSI/control chars removed — and truncated to `MAX_RESULT_LINES`
-with a "+N more lines" marker. Labels carry SGR colour, which xterm renders in the drawer; the
-`Hub` strips ANSI from the compact fleet-card tail so it never shows as literal escapes. Detection
-still scans the _raw_ turn text, so keep the raw-vs-display split intact if you extend rendering.
+with a "+N more lines" marker. Labels carry SGR colour, which the drawer's HTML transcript pane
+renders via the pure SGR parser in `web/src/components/ansi.ts` (the drawer builds coloured DOM
+segments, not an xterm terminal — see below); the `Hub` strips ANSI from the compact fleet-card tail
+so it never shows as literal escapes. Detection still scans the _raw_ turn text, so keep the
+raw-vs-display split intact if you extend rendering.
+
+**Drawer transcript is an HTML pane, not a terminal.** The transcript reaching the cockpit is
+already legible text in every mode (`renderBlocks` / settled PTY text), never raw TUI bytes, so
+`AgentDrawer` renders it into a scrollable `<div>` (`white-space: pre-wrap; overflow-wrap: anywhere`)
+rather than an xterm.js instance: words wrap on their boundaries, the browser scrolls natively (a
+full-rewrite `replace` frame no longer snaps you to the bottom — the pane sticks to the bottom only
+when you're already there, and offers a "New output" jump pill otherwise), and the text is
+selectable. The one terminal feature it reproduces is SGR colour, via `ansi.ts` (pure + tested,
+`test/ansi.test.ts`), which parses the five codes `renderBlocks` emits and threads the active style
+across streamed deltas. The headless xterm on the _server_ (`@xterm/headless`) is unrelated and
+stays; only the browser-side `@xterm/xterm` + `@xterm/addon-fit` were dropped.
 
 **Transcript legibility (PTY mode, issue #63).** The interactive claude TUI paints the
 screen with cursor-addressed redraws, so the raw PTY byte stream is illegible once escapes
