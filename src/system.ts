@@ -115,6 +115,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         submitDelayMs: config.agentSubmitDelayMs,
         legibleTranscript: claudeTui,
         exitOnDone: claudeTui,
+        // Real-TUI only: raw/mock sessions are line-oriented and legitimately
+        // silent between steps, so idle means nothing there.
+        idleWaitMs: claudeTui ? config.agentIdleWaitMs : 0,
       });
   };
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);

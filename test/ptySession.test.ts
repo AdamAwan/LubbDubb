@@ -75,6 +75,35 @@ test('a sentinel wait is latched: TUI repaint after the sentinel must not un-par
   assert.deepEqual(statuses, ['running', 'waiting', 'running']);
 });
 
+test('answering a waiting session does not re-park off the stale sentinel left in the tail', () => {
+  // Regression: the consumed waiting sentinel stayed in the retained detection tail
+  // (stripFlags removes only flags). The `sentinelWaiting` latch suppresses re-emit
+  // only *while parked*; once the human answered (send un-parks → running) the next
+  // output chunk re-scanned the tail, re-found the still-present sentinel, and fired a
+  // SECOND 'waiting' — which spawned a duplicate, never-cleared escalation and left the
+  // ⏳ banner stuck on the finished card. Answering must clear the stale sentinel.
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
+  const waits: string[] = [];
+  session.on('waiting', (r: string) => waits.push(r));
+  session.start();
+
+  backend.last().emit('working...\n@@LUBBDUBB_WAITING:need a decision@@\n');
+  assert.equal(session.status, 'waiting');
+  assert.deepEqual(waits, ['need a decision']);
+
+  // The human answers — the session un-parks.
+  session.send('go with A');
+  assert.equal(session.status, 'running');
+
+  // The agent continues; a normal echo/repaint chunk arrives carrying NO new sentinel,
+  // but the just-answered one is still sitting in the small tail.
+  backend.last().emit('Great, proceeding with A.\r\n');
+
+  assert.equal(session.status, 'running', 'stale waiting sentinel must not re-park after an answer');
+  assert.deepEqual(waits, ['need a decision'], 'waiting must fire exactly once, not re-fire off the tail');
+});
+
 test('sendRaw writes bytes verbatim with no carriage return appended', () => {
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
@@ -236,6 +265,92 @@ test('deliverInitial stops re-sending the Enter once the agent progresses', asyn
   const countAtWait = backend.last().writes.length;
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(backend.last().writes.length, countAtWait, 'no more Enters are sent once it left running');
+});
+
+// -- idle safety net ---------------------------------------------------------
+
+const idleOpts = { command: 'x', args: [], cwd: '/tmp', idleWaitMs: 30, submitDelayMs: 0 };
+const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+test('a turn that ends without a sentinel parks the session once the terminal goes quiet', async () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, idleOpts);
+  let reason: string | null = null;
+  session.on('waiting', (r: string) => (reason = r));
+  session.start();
+  // The real failure: the agent asks for review in prose and stops.
+  backend.last().emit('Please review reports/x.md and confirm it is accurate.\r\n');
+  assert.equal(session.status, 'running', 'still running while output is fresh');
+  await tick(60);
+  assert.equal(session.status, 'waiting');
+  assert.match(reason ?? '', /without signalling/);
+});
+
+test('ongoing output keeps pushing the idle countdown back', async () => {
+  const backend = new FakePtyBackend();
+  // A roomier window than the other cases: this one asserts the timer has *not*
+  // fired yet, so the gap between chunks must stay clear of it even when the
+  // whole suite is competing for the event loop.
+  const session = new PtySession(backend, { ...idleOpts, idleWaitMs: 500 });
+  session.start();
+  for (let i = 0; i < 4; i++) {
+    backend.last().emit(`✳ Thinking… (${i}s · esc to interrupt)`);
+    await tick(50); // each chunk re-arms well before the window elapses
+    assert.equal(session.status, 'running', 'a working agent is never parked');
+  }
+  await tick(700);
+  assert.equal(session.status, 'waiting');
+});
+
+test('an idle park is not latched — the agent resuming on its own un-parks it', async () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, idleOpts);
+  session.start();
+  backend.last().emit('thinking hard');
+  await tick(60);
+  assert.equal(session.status, 'waiting');
+  // Unlike a sentinel wait, this is an inference: fresh output means it was busy.
+  backend.last().emit('...and here is the answer');
+  assert.equal(session.status, 'running');
+});
+
+test('a sentinel wait outranks the idle net (no duplicate park, latch intact)', async () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, idleOpts);
+  const reasons: string[] = [];
+  session.on('waiting', (r: string) => reasons.push(r));
+  session.start();
+  backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
+  await tick(60);
+  assert.deepEqual(reasons, ['need a decision'], 'the idle timer must not re-park an already-parked session');
+  // The TUI repaints while parked; the latch (not the idle net) holds the wait.
+  backend.last().emit('idle repaint');
+  assert.equal(session.status, 'waiting');
+});
+
+test('a dropped submitting Enter is re-surfaced: an answer that never lands parks again', async () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, idleOpts);
+  const reasons: string[] = [];
+  session.on('waiting', (r: string) => reasons.push(r));
+  session.start();
+  backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
+  session.send('go ahead');
+  assert.equal(session.status, 'running', 'the answer un-parks it');
+  // The TUI never echoes anything back — the Enter was swallowed, the text is
+  // sitting unsent in the input box. Silence must not be mistaken for progress.
+  await tick(60);
+  assert.equal(session.status, 'waiting');
+  assert.equal(reasons.length, 2);
+});
+
+test('idleWaitMs 0 disables the net entirely (raw/mock sessions)', async () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  session.start();
+  backend.last().emit('quiet output');
+  await tick(60);
+  assert.equal(session.status, 'running');
 });
 
 test('clean exit with no sentinel still counts as done', () => {
