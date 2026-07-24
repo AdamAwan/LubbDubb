@@ -6,6 +6,7 @@ import type { Agent, Decision, PullRequest, Task } from '../types.js';
 import { isIssuePickupEligible, issuePriority, type IssuePickupPolicy } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import type { DispatchRuleId } from './rules.js';
+import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 
 /**
  * A deterministic, dependency-free dispatcher that encodes the harness's default
@@ -37,6 +38,7 @@ import type { DispatchRuleId } from './rules.js';
 export class RuleDispatcher implements Dispatcher {
   private readonly pickup: IssuePickupPolicy;
   private readonly cooldown: CooldownPolicy;
+  private readonly templates: PromptTemplates;
 
   /**
    * `pickup` gates and orders issue pickup (rule 4). Omitted/partial => no gate
@@ -44,8 +46,15 @@ export class RuleDispatcher implements Dispatcher {
    * acting on every open issue (used by unit tests; the composition root passes
    * the operator's config). `cooldown` throttles re-dispatch of a persistent
    * concern (see {@link dispatchVerdict}); defaults keep the loop bounded.
+   * `templates` supplies the agent/escalation prompt bodies; omitted => the
+   * built-in defaults (the composition root loads operator overrides).
    */
-  constructor(pickup: Partial<IssuePickupPolicy> = {}, cooldown: Partial<CooldownPolicy> = {}) {
+  constructor(
+    pickup: Partial<IssuePickupPolicy> = {},
+    cooldown: Partial<CooldownPolicy> = {},
+    templates: PromptTemplates = defaultPromptTemplates(),
+  ) {
+    this.templates = templates;
     this.pickup = {
       pickupLabel: pickup.pickupLabel,
       requireOwnLabel: pickup.requireOwnLabel,
@@ -148,7 +157,7 @@ export class RuleDispatcher implements Dispatcher {
           rule: 'pr-ci-failing',
           origin: `pr:${pr.number}:ci`,
           title: `Fix failing CI on PR #${pr.number}`,
-          prompt: `CI is failing on PR #${pr.number} ("${pr.title}", branch ${pr.branch}). Investigate the failure and push a fix.`,
+          prompt: this.templates.render('pr-ci-fix', { number: pr.number, title: pr.title, branch: pr.branch }),
           dispatchReason: `PR #${pr.number} has failing CI and no agent is on it.`,
           note: `CI is now failing on PR #${pr.number} — investigate and push a fix.`,
           originTitle: pr.title,
@@ -162,9 +171,12 @@ export class RuleDispatcher implements Dispatcher {
           rule: 'pr-base-update',
           origin: `pr:${pr.number}:mergeable`,
           title: behind ? `Update PR #${pr.number} with ${base}` : `Resolve merge conflicts on PR #${pr.number}`,
-          prompt: behind
-            ? `PR #${pr.number} ("${pr.title}") is behind its base branch ${base}. Merge ${base} into ${pr.branch} to bring it up to date, then push. No conflicts are expected — this is a routine update.`
-            : `PR #${pr.number} ("${pr.title}") has merge conflicts with its base branch ${base}. Merge ${base} into ${pr.branch}, resolve the conflicts, and push. If you cannot resolve them cleanly, escalate for a human.`,
+          prompt: this.templates.render(behind ? 'pr-base-update-behind' : 'pr-base-update-conflict', {
+            number: pr.number,
+            title: pr.title,
+            branch: pr.branch,
+            base,
+          }),
           dispatchReason: behind
             ? `PR #${pr.number} is behind ${base} and no agent is on it.`
             : `PR #${pr.number} has merge conflicts with ${base} and no agent is on it.`,
@@ -181,7 +193,12 @@ export class RuleDispatcher implements Dispatcher {
           rule: 'pr-review-comment',
           origin: `pr:${pr.number}:comment:${comment.id}`,
           title: `Address review comment on PR #${pr.number}`,
-          prompt: `A reviewer commented on PR #${pr.number} (branch ${pr.branch}):\n\n"${comment.body}"\n\nDecide whether to fix the code or defend the current approach. If defending, prepare a concise reply.`,
+          prompt: this.templates.render('pr-review-comment', {
+            number: pr.number,
+            branch: pr.branch,
+            author: comment.author,
+            comment: comment.body,
+          }),
           dispatchReason: `Unhandled review comment from ${comment.author} on PR #${pr.number}.`,
           note: `New review comment from ${comment.author} on PR #${pr.number}: "${comment.body}" — address it or prepare a reply.`,
           originTitle: pr.title,
@@ -272,7 +289,11 @@ export class RuleDispatcher implements Dispatcher {
         (attempts) => ({
           type: 'escalate_to_human',
           escalationType: 'resolve_ambiguity',
-          prompt: `Auto-resolution of "${top.title}" keeps failing: ${attempts} agent attempt(s) on PR #${pr.number} left the concern unresolved. Please handle it manually.`,
+          prompt: this.templates.render('pr-concern-escalation', {
+            title: top.title,
+            number: pr.number,
+            attempts,
+          }),
           context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
           rule: 'cooldown-escalate',
           reason: `Origin ${top.origin} hit the ${this.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
@@ -335,7 +356,12 @@ export class RuleDispatcher implements Dispatcher {
             type: 'dispatch_code_agent',
             branch: `issue/${issue.number}`,
             title: `Resolve issue #${issue.number}`,
-            prompt: `GitHub issue #${issue.number} ("${issue.title}") needs resolving.\n\n${issue.body}\n\nImplement the fix on branch issue/${issue.number} and open a pull request that closes this issue.`,
+            prompt: this.templates.render('issue-pickup', {
+              number: issue.number,
+              title: issue.title,
+              body: issue.body,
+              branch: `issue/${issue.number}`,
+            }),
             originRef: origin,
             originTitle: issue.title,
             originSummary: issue.body,
@@ -346,7 +372,11 @@ export class RuleDispatcher implements Dispatcher {
         (attempts) => ({
           type: 'escalate_to_human',
           escalationType: 'resolve_ambiguity',
-          prompt: `Auto-resolution of issue #${issue.number} ("${issue.title}") keeps failing: ${attempts} agent attempt(s) produced no linked PR. Please take a look.`,
+          prompt: this.templates.render('issue-pickup-escalation', {
+            number: issue.number,
+            title: issue.title,
+            attempts,
+          }),
           context: { originRef: origin, taskTitle: `Resolve issue #${issue.number}` },
           rule: 'cooldown-escalate',
           reason: `Origin ${origin} hit the ${this.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
@@ -367,7 +397,11 @@ export class RuleDispatcher implements Dispatcher {
         action: {
           type: 'dispatch_desk_agent',
           title: `Prep for "${ev.title}"`,
-          prompt: `You have a meeting "${ev.title}" at ${ev.startsAt}. Read and summarise these docs so I'm ready: ${ev.prepDocs.join(', ')}.`,
+          prompt: this.templates.render('meeting-prep', {
+            title: ev.title,
+            startsAt: ev.startsAt,
+            docs: ev.prepDocs.join(', '),
+          }),
           originRef: `meeting:${ev.id}:prep`,
           originTitle: ev.title,
           originSummary: `Starts ${ev.startsAt}. Prep docs: ${ev.prepDocs.join(', ')}.`,
@@ -392,7 +426,10 @@ export class RuleDispatcher implements Dispatcher {
           action: {
             type: 'dispatch_desk_agent',
             title: `Groom story "${story.title}"`,
-            prompt: `Story "${story.title}" is missing ${!story.description ? 'a description' : ''}${!story.description && !story.acceptanceCriteria ? ' and ' : ''}${!story.acceptanceCriteria ? 'acceptance criteria' : ''}. Draft them.`,
+            prompt: this.templates.render('story-groom', {
+              title: story.title,
+              missing: `${!story.description ? 'a description' : ''}${!story.description && !story.acceptanceCriteria ? ' and ' : ''}${!story.acceptanceCriteria ? 'acceptance criteria' : ''}`,
+            }),
             originRef: `story:${story.id}:groom`,
             originTitle: story.title,
             originSummary: story.description,
@@ -413,7 +450,7 @@ export class RuleDispatcher implements Dispatcher {
           action: {
             type: 'dispatch_desk_agent',
             title: `Fill WAF pillars for "${story.title}"`,
-            prompt: `Story "${story.title}" has no Well-Architected Framework pillars set. Determine which pillars apply and document them.`,
+            prompt: this.templates.render('story-waf', { title: story.title }),
             originRef: `story:${story.id}:waf`,
             originTitle: story.title,
             originSummary: story.description,
@@ -442,7 +479,12 @@ export class RuleDispatcher implements Dispatcher {
           type: 'dispatch_code_agent',
           branch: `story/${candidateStory.id}`,
           title: `Implement "${candidateStory.title}"`,
-          prompt: `Implement story "${candidateStory.title}".\n\nDescription: ${candidateStory.description}\n\nAcceptance criteria: ${candidateStory.acceptanceCriteria}`,
+          prompt: this.templates.render('story-pickup', {
+            title: candidateStory.title,
+            // Guaranteed present by the filter above; coerce for the string-typed template var.
+            description: candidateStory.description ?? '',
+            acceptanceCriteria: candidateStory.acceptanceCriteria ?? '',
+          }),
           originRef: `story:${candidateStory.id}:work`,
           originTitle: candidateStory.title,
           originSummary: candidateStory.description,

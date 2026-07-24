@@ -24,6 +24,7 @@ import { EscalationInbox } from './escalation/escalationInbox.js';
 import { recentOutputExcerpt } from './escalation/context.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
+import { loadPromptTemplates } from './dispatcher/promptTemplates.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
@@ -217,7 +218,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           cwd: config.repoRoot,
           issuePickup,
         })
-      : new RuleDispatcher(issuePickup);
+      : new RuleDispatcher(issuePickup, {}, loadPromptTemplates(config.promptTemplatesDir));
 
   const harness = new Harness({
     store,
