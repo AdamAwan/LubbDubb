@@ -15,6 +15,9 @@ import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProto
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
+import type { Store } from '../src/store/store.js';
+
+const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 // -- pure record parsing -----------------------------------------------------
 
@@ -223,13 +226,13 @@ test('FileEventsSpool drains each record once, then dispose removes the dir', ()
 
 // -- end-to-end through AgentManager -----------------------------------------
 
-function testConfig() {
+function testConfig(agentMode: 'raw' | 'pty' = 'raw') {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-fe-'));
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
-    agentMode: 'raw',
+    agentMode,
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
@@ -269,5 +272,67 @@ test('a captured write records a file for every path and an artifact chip only f
   assert.equal(allFlags[0]?.ref, 'out/summary.md');
   assert.equal(flags.length, 1, 'flag event emitted for the report only');
 
+  system.store.close();
+});
+
+/** Spawn one agent in a fake-PTY system and hand back it plus the driving backend. */
+async function spawnedPtyAgent(): Promise<{
+  system: ReturnType<typeof buildSystem>;
+  backend: FakePtyBackend;
+  agent: NonNullable<ReturnType<Store['getAgent']>>;
+}> {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig('pty'), { backend, errorMirror: () => {} });
+  system.connector.inject({ kind: 'new_story', title: 'Write a report', wafPillars: ['Reliability'] });
+  await system.harness.runCycle('manual');
+  const agent = system.store.listAgentsByStatus('starting', 'running')[0];
+  assert.ok(agent, 'an agent was dispatched');
+  return { system, backend, agent };
+}
+
+test('a captured write surfaces on an in-place transcript rewrite, not just on appends', async () => {
+  // The legible PTY runtime routes an in-place TUI redraw to `transcript`, not
+  // `output` — and once the frame is full that's nearly every update. An
+  // output-only drain therefore left a mid-run report spooled indefinitely.
+  const { system, backend, agent } = await spawnedPtyAgent();
+
+  // Settle an initial append first, so the update under test is purely a replace.
+  backend.last().emit('one\r\ntwo\r\n');
+  await tick(300);
+
+  const dir = system.agents.fileEventsDir(agent.id);
+  writeFileSync(join(dir!, '1-a.json'), JSON.stringify({ path: join(agent.cwd, 'reports/x.md'), tool: 'Write' }));
+
+  const replaces: string[] = [];
+  system.agents.on('transcript', (e) => replaces.push(e.text));
+  backend.last().emit('\x1b[2A\x1b[2KONE\r\n\r\n');
+  await tick(300);
+
+  assert.equal(replaces.length, 1, 'the redraw arrived as a transcript replace (no output delta)');
+  assert.deepEqual(
+    system.store.listFlags(agent.id).map((f) => f.ref),
+    ['reports/x.md'],
+  );
+  system.store.close();
+});
+
+test('a captured write surfaces when the agent parks on a human', async () => {
+  // The escalation is often "review the file I just wrote", and a waiting agent
+  // reaches no terminal drain — so parking must flush the spool.
+  const { system, backend, agent } = await spawnedPtyAgent();
+
+  const dir = system.agents.fileEventsDir(agent.id);
+  writeFileSync(join(dir!, '1-a.json'), JSON.stringify({ path: join(agent.cwd, 'reports/x.md'), tool: 'Write' }));
+
+  // The sentinel is stripped, so the settled text never changes: no output and no
+  // transcript update fire, leaving `waiting` as the only drain trigger.
+  backend.last().emit('@@LUBBDUBB_WAITING:Review reports/x.md@@\r\n');
+  await tick(300);
+
+  assert.equal(system.store.getAgent(agent.id)?.status, 'waiting');
+  assert.deepEqual(
+    system.store.listFlags(agent.id).map((f) => f.ref),
+    ['reports/x.md'],
+  );
   system.store.close();
 });
