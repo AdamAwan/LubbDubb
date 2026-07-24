@@ -11,6 +11,7 @@ import type { Escalation } from '../src/types.js';
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',
@@ -80,13 +81,13 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   system.store.close();
 });
 
-test('issuePickupLabel gates dispatch at the buildSystem seam; untagged issues stay visible', async () => {
+test('the watch gate gates dispatch at the buildSystem seam; untagged issues stay visible', async () => {
   const backend = new FakePtyBackend();
   const config = testConfig();
-  config.issuePickupLabel = 'agent-ready';
+  config.labelPrefix = 'agent'; // → watch tag "agent-watch"
   const system = buildSystem(config, { backend });
 
-  system.connector.inject({ kind: 'new_issue', number: 101, title: 'tagged', labels: ['agent-ready'] });
+  system.connector.inject({ kind: 'new_issue', number: 101, title: 'tagged', labels: ['agent-watch'] });
   system.connector.inject({ kind: 'new_issue', number: 102, title: 'untagged', labels: ['bug'] });
   await system.harness.runCycle('manual');
 

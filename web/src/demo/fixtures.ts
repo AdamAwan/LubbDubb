@@ -30,7 +30,8 @@ export function buildDemoState(): DemoSeed {
       maxConcurrentAgents: 3,
       dispatcher: 'rule',
       steeringPriorities: ['unblock humans', 'keep CI green', 'ship reviewed work'],
-      prExclusionLabel: 'lubbdubb-ignore',
+      watchLabel: 'lubbdubb-watch',
+      ignoreLabel: 'lubbdubb-ignore',
       // The demo world is all-fake, so the inject panel stays available.
       injectable: true,
     },
@@ -91,7 +92,7 @@ export function buildDemoState(): DemoSeed {
           number: 208,
           title: 'Retry transient GitHub 502s in the snapshotter',
           body: 'Snapshot cycles occasionally fail on a 502 from the REST API. Wrap the calls in a bounded retry.',
-          labels: ['bug', 'priority:high'],
+          labels: ['bug', 'priority:high', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: true, status: 'eligible', reasons: [] },
@@ -114,7 +115,7 @@ export function buildDemoState(): DemoSeed {
           labels: ['idea'],
           state: 'open',
           linkedPrNumber: null,
-          pickup: { eligible: false, status: 'skipped', reasons: ['no pickup label "agent-ready"'] },
+          pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
         },
       ],
       stories: [
@@ -126,6 +127,7 @@ export function buildDemoState(): DemoSeed {
           wafPillars: [],
           state: 'new',
           priority: 2,
+          labels: [],
         },
         {
           id: 'st-9',
@@ -135,6 +137,7 @@ export function buildDemoState(): DemoSeed {
           wafPillars: ['operational-excellence', 'cost-optimization'],
           state: 'ready',
           priority: 1,
+          labels: ['lubbdubb-watch'],
         },
       ],
       calendar: [

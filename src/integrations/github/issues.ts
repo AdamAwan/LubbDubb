@@ -1,7 +1,8 @@
 import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
+import type { IssueLabelInput, SendResult } from '../../sink/actionSink.js';
 import type { Issue, IssueState } from '../../types.js';
-import type { Capability, Integration, RefResolvable, WorldSlice } from '../integration.js';
+import type { Capability, Integration, IssueLabelCapable, RefResolvable, WorldSlice } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
 import { githubRefUrl } from './refUrl.js';
 
@@ -11,8 +12,6 @@ export interface GitHubIssuesOpts {
   store: Store;
   /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
   errors?: ErrorRecorder;
-  /** Only surface issues carrying this label. Unset = all open issues. */
-  issueLabel?: string;
   /** Repo identity for building web URLs. When unset, ref resolution returns null. */
   owner?: string;
   repo?: string;
@@ -31,7 +30,7 @@ export interface GitHubIssuesOpts {
  * reading from the network instead of an injected fake world (so it is *not*
  * `Injectable`).
  */
-export class GitHubIssuesIntegration implements Integration, RefResolvable {
+export class GitHubIssuesIntegration implements Integration, RefResolvable, IssueLabelCapable {
   readonly id = 'issues:github';
   readonly capability: Capability = 'issues';
 
@@ -44,11 +43,20 @@ export class GitHubIssuesIntegration implements Integration, RefResolvable {
     return owner && repo ? githubRefUrl(owner, repo, ref) : null;
   }
 
+  /** The outbound side of the cockpit's watch/ignore toggle. PRs and issues share the labels API. */
+  async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
+    await this.opts.api.setIssueLabel(input.number, input.label, input.present);
+    this.opts.store.recordConnectorEvent('issue_label_set', { ...input });
+    return { ok: true };
+  }
+
   async snapshot(): Promise<WorldSlice> {
     try {
-      const { api, issueLabel, ownershipLabel } = this.opts;
+      const { api, ownershipLabel } = this.opts;
+      // Fetch every open issue so all of them display in the cockpit; the dispatcher's
+      // opt-in watch gate (not an ingest filter) decides which are worked.
       // The Issues API returns PRs as issues too — drop them; we only want real issues.
-      const raw = (await api.listOpenIssues(issueLabel)).filter((i) => !i.isPullRequest);
+      const raw = (await api.listOpenIssues()).filter((i) => !i.isPullRequest);
       // The timeline is already fetched per issue for linked-PR detection, so tag
       // authorship costs only one cached viewer lookup — do it only when the
       // ownership gate is on, and only for issues actually carrying the gate label.

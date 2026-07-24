@@ -12,22 +12,22 @@ test('loadConfig returns sane defaults with no overrides', () => {
   assert.deepEqual(cfg.autoSend.allowedActions, ['reply_on_pr']);
 });
 
-test('issue pickup defaults: no gate, label-encoded priority scheme, medium fallback', () => {
+test('issue pickup defaults: lubbdubb label prefix, label-encoded priority scheme, medium fallback', () => {
   const cfg = loadConfig();
-  assert.equal(cfg.issuePickupLabel, undefined, 'no pickup gate by default (opt-in)');
+  assert.equal(cfg.labelPrefix, 'lubbdubb', 'watch/ignore tags derive from the lubbdubb prefix by default');
   assert.equal(cfg.issuePickupRequireOwnLabel, false, 'ownership gate off by default (any tagger counts)');
   assert.deepEqual(cfg.issuePriorityLabels, { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 });
   assert.equal(cfg.issueDefaultPriority, 2);
 });
 
-test('issuePickupLabel and priority scheme are overridable', () => {
+test('labelPrefix and priority scheme are overridable', () => {
   const cfg = loadConfig({
-    issuePickupLabel: 'lubbdubb',
+    labelPrefix: 'team',
     issuePickupRequireOwnLabel: true,
     issuePriorityLabels: { p0: 5 },
     issueDefaultPriority: 1,
   });
-  assert.equal(cfg.issuePickupLabel, 'lubbdubb');
+  assert.equal(cfg.labelPrefix, 'team');
   assert.equal(cfg.issuePickupRequireOwnLabel, true);
   assert.deepEqual(cfg.issuePriorityLabels, { p0: 5 }, 'the scheme is replaced wholesale, not merged');
   assert.equal(cfg.issueDefaultPriority, 1);

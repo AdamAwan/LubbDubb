@@ -64,6 +64,9 @@ export interface AzureDevOpsApi {
 
   /** Set a work item's `System.State` (e.g. "In Review"). Idempotent — a no-op when already there. */
   setWorkItemState(id: number, state: string): Promise<void>;
+
+  /** Add (`present`) or remove a `System.Tags` entry on a work item — the watch/ignore toggle. Idempotent. */
+  setWorkItemTag(id: number, tag: string, present: boolean): Promise<void>;
 }
 
 export interface AzPull {

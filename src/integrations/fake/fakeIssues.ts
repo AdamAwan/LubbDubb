@@ -1,7 +1,14 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
-import type { SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
-import type { Capability, Injectable, Integration, WorkItemStateCapable, WorldSlice } from '../integration.js';
+import type { IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
+import type {
+  Capability,
+  Injectable,
+  Integration,
+  IssueLabelCapable,
+  WorkItemStateCapable,
+  WorldSlice,
+} from '../integration.js';
 import type { FakeWorldStore } from './fakeWorld.js';
 
 const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue_state', 'issue_linked_pr']);
@@ -12,7 +19,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue
  * adapter drops in under `issues` in its place, reading from the Issues API instead
  * of an injected fake world.
  */
-export class FakeIssuesIntegration implements Integration, Injectable, WorkItemStateCapable {
+export class FakeIssuesIntegration implements Integration, Injectable, WorkItemStateCapable, IssueLabelCapable {
   readonly id = 'issues:fake';
   readonly capability: Capability = 'issues';
 
@@ -54,6 +61,19 @@ export class FakeIssuesIntegration implements Integration, Injectable, WorkItemS
         }
       }
     });
+  }
+
+  /** The outbound side of the watch/ignore toggle: add/remove a label on the fake issue. Idempotent. */
+  async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      const issue = world.issues.find((i) => i.number === input.number);
+      if (!issue) return;
+      const labels = new Set(issue.labels);
+      if (input.present) labels.add(input.label);
+      else labels.delete(input.label);
+      issue.labels = [...labels];
+    });
+    return { ok: true };
   }
 
   /** Reflect an "in review" back-off into the fake world, so the state gate sees it next cycle. */

@@ -499,6 +499,26 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     });
   }
 
+  async setWorkItemTag(id: number, tag: string, present: boolean): Promise<void> {
+    // System.Tags is a single semicolon-delimited string, so a tag add/remove is a
+    // read-modify-write: fetch current tags, adjust the set, PATCH the whole field.
+    const wi = await this.request<{ fields?: Record<string, unknown> }>(
+      this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}?fields=System.Tags`),
+    );
+    const current = String(wi.fields?.['System.Tags'] ?? '')
+      .split(';')
+      .map((t) => t.trim())
+      .filter((t) => t !== '');
+    const tags = new Set(current);
+    if (present) tags.add(tag);
+    else tags.delete(tag);
+    await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json-patch+json' },
+      body: JSON.stringify([{ op: 'add', path: '/fields/System.Tags', value: [...tags].join('; ') }]),
+    });
+  }
+
   async setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void> {
     const labelsUrl = `${this.repoUrl}/pullRequests/${pullRequestId}/labels`;
     if (present) {

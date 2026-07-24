@@ -12,6 +12,7 @@ import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

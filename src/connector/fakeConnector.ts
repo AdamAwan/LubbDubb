@@ -1,10 +1,12 @@
 import type { Connector, InjectableEvent } from './connector.js';
 import type {
   ActionSink,
+  IssueLabelInput,
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
   SendResult,
+  StoryLabelInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
@@ -57,6 +59,14 @@ export class FakeConnector implements Connector, ActionSink {
 
   setPrLabel(input: PrLabelInput): Promise<SendResult> {
     return this.composite.setPrLabel(input);
+  }
+
+  setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
+    return this.composite.setIssueLabel(input);
+  }
+
+  setStoryLabel(input: StoryLabelInput): Promise<SendResult> {
+    return this.composite.setStoryLabel(input);
   }
 
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {

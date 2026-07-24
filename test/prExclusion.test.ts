@@ -89,7 +89,7 @@ test('an excluded PR stays visible (with its health and tag) in the state snapsh
   assert.ok(found, 'the excluded PR is still surfaced in the cockpit');
   assert.equal(found!.health.blocked, true, "its health is still computed so the operator sees why it's stuck");
   assert.deepEqual(found!.labels, ['lubbdubb-ignore']);
-  assert.equal(snapshot.config.prExclusionLabel, 'lubbdubb-ignore');
+  assert.equal(snapshot.config.ignoreLabel, 'lubbdubb-ignore');
   system.store.close();
 });
 

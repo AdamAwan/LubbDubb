@@ -216,8 +216,17 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   async setPullLabel(number: number, label: string, present: boolean): Promise<void> {
-    // PRs are issues for the labels API. addLabels is additive and idempotent;
-    // removeLabel 404s when the label isn't set, which is a no-op for our purposes.
+    await this.setLabel(number, label, present);
+  }
+
+  async setIssueLabel(number: number, label: string, present: boolean): Promise<void> {
+    await this.setLabel(number, label, present);
+  }
+
+  /** Shared labels-API write — PRs and issues are the same endpoint on GitHub. */
+  private async setLabel(number: number, label: string, present: boolean): Promise<void> {
+    // addLabels is additive and idempotent; removeLabel 404s when the label isn't
+    // set, which is a no-op for our purposes.
     if (present) {
       await this.octokit.issues.addLabels({ ...this.base, issue_number: number, labels: [label] });
     } else {

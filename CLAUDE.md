@@ -330,7 +330,7 @@ from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle
 
 The work item's raw **`System.State`** (unlike `Issue.state`, which collapses to open/closed) is
 preserved on `Issue.workItemState`, which drives two _state-based_ (not label-based) dispatcher
-knobs — orthogonal to the three label mechanisms below, don't conflate them. Both are off unless
+knobs — orthogonal to the watch/ignore label gate below, don't conflate them. Both are off unless
 configured, so standard setups don't regress: **(1)** `issuePickupStates` gates rule-4 pickup to
 items in an allowed workflow state (e.g. `["Ready","Doing"]`) via the pure `isIssuePickupEligible`
 — items with no `workItemState` (github/fake) bypass it. **(2)** `issueInReviewState` (e.g.
@@ -360,15 +360,20 @@ so the executor runs it directly.
   verdict predicts the next cycle), and the cockpit renders it as the per-issue chip
   (`pickupChip` in `web/src/App.tsx`). If you add a pickup gate, extend both the pure
   verdict and its tests (`test/issuePickup.test.ts`) in the same change.
-- **PR exclusion tag.** A PR whose `labels` include `config.prExclusionLabel` is the operator's
-  "leave it alone" signal: `harness.ts` filters excluded PRs out of the world it hands the
-  dispatcher (read via `isPrExcluded`), so **both** dispatchers ignore them uniformly, while the
-  cockpit snapshot (which reads the connector directly) still shows them with their health. The
-  cockpit's ignore/watch toggle writes the tag back through a **new outbound capability** —
-  `PrLabelCapable.setPrLabel` on the `ActionSink` seam, routed by `CompositeConnector`, implemented
-  by the fake + `github` + `azure` sourceControl providers (`setPullLabel` on each `*Api` seam). Add
-  to the seam + its scripted fake together, same as the other outbound actions. `POST
-/api/prs/:number/exclude` is the endpoint; it's a label write, **not** a dispatcher action.
+- **Watch/ignore tags (derived from `labelPrefix`).** The `-ignore`/`-watch` pair is the operator's
+  "leave it alone"/"work this" signal, resolved by `src/watchLabels.ts` (see the Gotchas note). PR
+  side: `harness.ts` filters `-ignore`-tagged PRs out of the world it hands the dispatcher (via
+  `isPrExcluded`), so **both** dispatchers ignore them uniformly, while the cockpit snapshot (reads
+  the connector directly) still shows them with their health. Issue/story side: the opt-in watch
+  gate leaves un-watched items visible but unacted-on. The cockpit's per-row toggle writes the tags
+  back through outbound capabilities on the `ActionSink` seam, routed by `CompositeConnector`:
+  `PrLabelCapable.setPrLabel` (fake + `github` + `azure` sourceControl, `setPullLabel` on each `*Api`),
+  `IssueLabelCapable.setIssueLabel` (fake + `github` + `azure` issues; GitHub reuses the labels API,
+  Azure read-modify-writes `System.Tags` via `setWorkItemTag`), and `StoryLabelCapable.setStoryLabel`
+  (fake backlog only). Add to the seam + its scripted fake together, same as the other outbound
+  actions. Endpoints: `POST /api/prs/:n/exclude` (`{excluded}`), `POST /api/issues/:n/watch` and
+  `POST /api/stories/:id/watch` (`{watched}` — writes the `-watch`/`-ignore` pair, mutually
+  exclusive). They're label writes, **not** dispatcher actions.
 - **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
   already has an active task. When the branch's agent is **running**, a fresh signal is delivered
   via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's
@@ -399,23 +404,28 @@ structured field, feed it into `buildRefUrls`.
 - The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`
   or a config file (so a secret can't be committed). Selecting `github` without the token or
   without `github.owner`/`github.repo` throws a clear error at `buildIntegrations` time.
-- **Two orthogonal label mechanisms — don't conflate them.** `github.filters.issueLabel` is a
-  provider-level _ingest_ filter: GitHub-only, config-time, and it **hides** non-matching issues
-  from the world. `issuePickupLabel` is a dispatcher-level _pickup gate_ (rule 4 in
-  `ruleDispatcher.ts`, via `src/dispatcher/issuePickup.ts`): provider-agnostic, reads
-  `issue.labels`, and leaves untagged issues **visible** but unacted-on. Priority is
-  label-encoded (`issuePriorityLabels`/`issueDefaultPriority`) and parsed by the pure exported
-  `issuePriority` — keep that parsing pure so it stays unit-testable without a world. The gate
-  is off by default (unset label = act on all open issues), so existing setups don't regress.
-  `issuePickupRequireOwnLabel` is a _refinement_ of the pickup gate, not a fourth mechanism:
-  when on, `isIssuePickupEligible` consumes `issue.labelsAddedByViewer` (the viewer-added subset
-  of `labels`) instead of `labels`, so a pickup tag someone else added is ignored (anti-abuse).
-  Authorship is resolved only in the real providers — GitHub reads the issue timeline's
-  `labeled`/`unlabeled` events (`viewerAddedLabels`), Azure diffs work-item revision updates
-  (`viewerAddedTags`, via the new `listWorkItemUpdates` seam method) — and only for items already
-  carrying the gate tag (the registry passes `issuePickupLabel` as the `ownershipLabel`/`ownershipTag`
-  opt only when the flag is set), so the extra history lookups stay bounded. Keep the folds pure;
-  the `fake` provider leaves `labelsAddedByViewer` unset, so the gate fails closed there.
-  A **third** label mechanism, `prExclusionLabel`, is the mirror on the PR side: it reads
-  `PullRequest.labels` to _exclude_ a tagged PR from action (see "PR health" above). Don't
-  conflate the three.
+- **One label model — watch/ignore, derived from `labelPrefix`.** `src/watchLabels.ts` is the
+  single source: `watchLabelsFor(prefix)` derives `${prefix}-watch` / `${prefix}-ignore`, and
+  the pure `resolveWatchState(labels, {watchLabel, ignoreLabel, defaultWatched})` folds the
+  precedence — **ignore wins, then watch, else the type default**. The default differs by kind:
+  PRs are opt-out (`defaultWatched: true` → worked unless `-ignore`), issues/stories are opt-in
+  (`defaultWatched: false` → left alone unless `-watch`). An **empty prefix** yields empty labels =
+  both gates off (the escape hatch tests use via `labelPrefix: ''`). There is **no ingest filter**
+  anymore — every open issue is fetched and displayed; the gate only decides what's _acted on_.
+  - PR side: `isPrExcluded(pr, ignoreLabel)` in `prHealth.ts` (still a plain `-ignore` includes,
+    since PR default is watched) — `harness.ts` filters excluded PRs out of the dispatch world.
+  - Issue side: `isIssuePickupEligible` / `issuePickupStatus` (`src/dispatcher/issuePickup.ts`)
+    require `watchLabel` present and `ignoreLabel` absent; the status splits into `ignored`
+    (explicit `-ignore`) vs `unwatched` (no `-watch` / state-gated) so the cockpit marks them apart.
+    An **empty `watchLabel` leaves the watch gate off** (act on all) — that's how the no-arg
+    `RuleDispatcher` and `labelPrefix: ''` keep the old act-on-all behaviour.
+  - Story side: the pure `watchGateReason(labels, policy)` gates the story rules the same way
+    (fake-backlog-only; `Story.labels` is optional).
+  - Priority stays label-encoded (`issuePriorityLabels`/`issueDefaultPriority`, pure `issuePriority`).
+  `issuePickupRequireOwnLabel` refines the **watch** gate: when on, the watch check reads
+  `issue.labelsAddedByViewer` instead of `labels`, so a `-watch` tag someone else added is ignored
+  (anti-abuse). Authorship is resolved only in the real providers — GitHub reads the timeline's
+  `labeled`/`unlabeled` events (`viewerAddedLabels`), Azure diffs work-item revisions
+  (`viewerAddedTags`) — and only for items carrying the tag (the registry passes the derived
+  `watchLabel` as `ownershipLabel`/`ownershipTag` only when the flag is set). The `fake` provider
+  leaves `labelsAddedByViewer` unset, so the gate fails closed there.

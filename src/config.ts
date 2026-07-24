@@ -54,21 +54,22 @@ export interface Config {
    */
   microsoft365?: Microsoft365Config;
   /**
-   * Dispatcher-level, provider-agnostic gate on issue pickup (rule 4). When set,
-   * the dispatcher only starts an agent for an open issue whose `labels` include
-   * this; untagged issues stay visible in the world/cockpit but are left alone.
-   * Unset (the default) = act on all open issues, as before. Distinct from the
-   * GitHub provider's `github.filters.issueLabel`, which narrows what's *ingested*
-   * into the world in the first place.
+   * The prefix behind the cockpit's watch/ignore toggle, shared by PRs, issues and
+   * stories. It derives two labels — `${labelPrefix}-watch` ("work this") and
+   * `${labelPrefix}-ignore` ("leave this alone") — read by the dispatcher gates and
+   * written by the toggle (see {@link watchLabelsFor}/{@link resolveWatchState}).
+   * The no-tag default differs by type: PRs are opt-out (watched unless ignored),
+   * issues/stories are opt-in (ignored unless watched). Defaults to `"lubbdubb"`,
+   * so `lubbdubb-ignore` keeps its historical meaning as the PR exclusion tag.
    */
-  issuePickupLabel?: string;
+  labelPrefix: string;
   /**
-   * Tighten the `issuePickupLabel` gate so the tag only counts if *you* (the
-   * authenticated account the provider runs as) added it — a tag someone else adds
-   * is ignored. Stops another user from tagging a work item / issue to get an agent
-   * onto it. Off by default (any tagger counts, as before). Only meaningful with
-   * `issuePickupLabel` set and a real provider (`github`/`azure`) that can resolve
-   * tag authorship; the `fake` provider doesn't track it, so nothing passes the gate.
+   * Tighten the issue *watch* gate so `${labelPrefix}-watch` only counts if *you*
+   * (the authenticated account the provider runs as) added it — a tag someone else
+   * adds is ignored. Stops another user from tagging a work item / issue to get an
+   * agent onto it. Off by default (any tagger counts). Only meaningful with a real
+   * provider (`github`/`azure`) that can resolve tag authorship; the `fake` provider
+   * doesn't track it, so nothing passes the gate when this is on.
    */
   issuePickupRequireOwnLabel: boolean;
   /**
@@ -97,18 +98,6 @@ export interface Config {
    * transition.
    */
   issueInReviewState?: string;
-  /**
-   * The PR **exclusion tag**: a PR carrying this label is left alone — the
-   * dispatcher never acts on it (no CI fix, base update, comment handling, or
-   * merge), for PRs blocked on something the harness can't fix (a design
-   * decision, an upstream dependency, a deliberate hold). An excluded PR stays
-   * fully visible in the cockpit and `/api/state` (with its health verdict) — it's
-   * just not acted on. Provider-agnostic: it reads `PullRequest.labels`, so it
-   * gates the `fake`, `github` and `azure` providers identically. The cockpit's
-   * per-PR ignore/watch toggle adds/removes this label on the PR through the
-   * provider. Defaults to `lubbdubb-ignore`.
-   */
-  prExclusionLabel: string;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -182,8 +171,6 @@ export interface GitHubConfig {
   filters?: {
     /** Only surface PRs opened by this login. Unset = all open PRs. */
     prAuthor?: string;
-    /** Only surface issues carrying this label. Unset = all open issues. */
-    issueLabel?: string;
   };
 }
 
@@ -246,10 +233,10 @@ const DEFAULTS: Config = {
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
   integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
+  labelPrefix: 'lubbdubb',
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
-  prExclusionLabel: 'lubbdubb-ignore',
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',

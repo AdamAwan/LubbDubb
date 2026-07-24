@@ -42,6 +42,24 @@ export interface WorkItemStateInput {
   state: string;
 }
 
+export interface IssueLabelInput {
+  /** The issue / work item number to label. */
+  number: number;
+  /** The label (tag) to add or remove — the watch/ignore tag. */
+  label: string;
+  /** True to add the label, false to remove it. Idempotent either way. */
+  present: boolean;
+}
+
+export interface StoryLabelInput {
+  /** The story id to label (stories are keyed by string id, not a number). */
+  id: string;
+  /** The label to add or remove — the watch/ignore tag. */
+  label: string;
+  /** True to add the label, false to remove it. Idempotent either way. */
+  present: boolean;
+}
+
 export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
@@ -55,6 +73,10 @@ export interface ActionSink {
   mergePr(input: PrMergeInput): Promise<SendResult>;
   /** Add/remove a label on a PR — the operator's exclusion tag toggle. Throws if it fails. */
   setPrLabel(input: PrLabelInput): Promise<SendResult>;
+  /** Add/remove a label on an issue / work item — the cockpit's watch/ignore toggle. Throws if it fails. */
+  setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
+  /** Add/remove a label on a story — the cockpit's watch/ignore toggle (fake backlog only). Throws if it fails. */
+  setStoryLabel(input: StoryLabelInput): Promise<SendResult>;
   /**
    * Move a work item to a provider-native state (e.g. Azure "In Review" once a PR
    * is open), so it stops being re-picked while under review. Idempotent. Throws if

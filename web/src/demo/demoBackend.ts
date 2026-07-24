@@ -28,6 +28,24 @@ const CHATTER = [
   'thinking about the next step …',
 ];
 
+type WatchConfig = { watchLabel: string; ignoreLabel: string };
+
+/** Opt-in effective state: watched only with the watch tag and no ignore tag. */
+function isWatched(labels: string[] | undefined, config: WatchConfig): boolean {
+  const set = labels ?? [];
+  if (set.includes(config.ignoreLabel)) return false;
+  return set.includes(config.watchLabel);
+}
+
+/** Set the watch/ignore tags to reflect a toggle, keeping the two mutually exclusive. */
+function applyWatch(labels: string[] | undefined, config: WatchConfig, watched: boolean): string[] {
+  const set = new Set(labels ?? []);
+  set.delete(config.watchLabel);
+  set.delete(config.ignoreLabel);
+  set.add(watched ? config.watchLabel : config.ignoreLabel);
+  return [...set];
+}
+
 class DemoServer {
   private seed = buildDemoState();
   private state: AppState = this.seed.state;
@@ -107,7 +125,7 @@ class DemoServer {
 
   /** Toggle the exclusion tag on a PR — the demo mirror of the real label write-back. */
   async setPrExcluded(prNumber: number, excluded: boolean): Promise<{ ok: true; excluded: boolean }> {
-    const tag = this.state.config.prExclusionLabel;
+    const tag = this.state.config.ignoreLabel;
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
     if (pr) {
       const labels = new Set(pr.labels ?? []);
@@ -118,6 +136,35 @@ class DemoServer {
       this.dirty();
     }
     return { ok: true, excluded };
+  }
+
+  /** Toggle an issue's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
+  async setIssueWatched(issueNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      issue.labels = applyWatch(issue.labels, this.state.config, watched);
+      this.addDecision('issue_label_set', 'ok', `${watched ? 'watching' : 'ignoring'} issue #${issueNumber}`);
+      if (watched)
+        this.trySpawn(
+          'implement_issue',
+          `Implement issue #${issueNumber}`,
+          `issue/${issueNumber}`,
+          `issue:${issueNumber}`,
+        );
+      this.dirty();
+    }
+    return { ok: true, watched };
+  }
+
+  /** Toggle a story's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
+  async setStoryWatched(storyId: string, watched: boolean): Promise<{ ok: true; watched: boolean }> {
+    const story = this.state.world.stories.find((s) => s.id === storyId);
+    if (story) {
+      story.labels = applyWatch(story.labels, this.state.config, watched);
+      this.addDecision('story_label_set', 'ok', `${watched ? 'watching' : 'ignoring'} story ${story.title}`);
+      this.dirty();
+    }
+    return { ok: true, watched };
   }
 
   async killAgent(id: string): Promise<{ ok: true }> {
@@ -220,7 +267,7 @@ class DemoServer {
     // visibly matters in the demo.
     const prNumber = originRef?.startsWith('pr:') ? Number(originRef.slice(3)) : NaN;
     const taggedPr = this.state.world.pullRequests.find((p) => p.number === prNumber);
-    if (taggedPr && (taggedPr.labels ?? []).includes(this.state.config.prExclusionLabel)) {
+    if (taggedPr && (taggedPr.labels ?? []).includes(this.state.config.ignoreLabel)) {
       this.addDecision(`dispatch_${kind}`, 'skipped', `PR #${prNumber} is ignored — held ${title}`, 'pr excluded');
       return null;
     }
@@ -395,7 +442,13 @@ class DemoServer {
           },
         ];
         this.addWorldEvent('issue_opened', `issue:${number}`, `Issue #${number} opened`);
-        this.trySpawn('implement_issue', `Implement issue #${number}`, `feature/issue-${number}`, `issue:${number}`);
+        // Opt-in: only a watched issue is worked. An untagged injected issue shows
+        // up unwatched with a "watch" toggle, mirroring the real dispatcher gate.
+        if (isWatched(labels, this.state.config)) {
+          this.trySpawn('implement_issue', `Implement issue #${number}`, `issue/${number}`, `issue:${number}`);
+        } else {
+          this.addDecision('dispatch_code', 'skipped', `issue #${number} is not watched — left alone`, 'unwatched');
+        }
         break;
       }
       case 'pr_approved': {
@@ -421,6 +474,7 @@ class DemoServer {
         break;
       }
       case 'new_story': {
+        const storyLabels = Array.isArray(ev.labels) ? (ev.labels as string[]) : [];
         world.stories = [
           ...world.stories,
           {
@@ -431,10 +485,13 @@ class DemoServer {
             wafPillars: [],
             state: 'new',
             priority: 2,
+            labels: storyLabels,
           },
         ];
         this.addWorldEvent('story_added', null, `story added: ${String(ev.title ?? 'New story')}`);
-        this.trySpawn('groom_story', `Groom story: ${String(ev.title ?? 'New story')}`, null, null);
+        if (isWatched(storyLabels, this.state.config)) {
+          this.trySpawn('groom_story', `Groom story: ${String(ev.title ?? 'New story')}`, null, null);
+        }
         break;
       }
       case 'meeting': {
@@ -517,6 +574,8 @@ export const demoApi = {
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
+  setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
+  setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),

@@ -4,20 +4,26 @@ import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 /**
  * How the dispatcher gates and orders issue pickup, derived from operator config.
  *
- * This is *dispatcher-level* and provider-agnostic (fake or github): it decides
- * which visible issues an agent is started for. It is deliberately distinct from
- * the GitHub provider's `issueLabel` *ingest* filter, which narrows what's even
- * fetched into the world — untagged issues stay visible here, they're just left
- * alone.
+ * This is *dispatcher-level* and provider-agnostic (fake, github or azure): it
+ * decides which visible issues an agent is started for. Issues are **opt-in**: an
+ * issue is only picked up when it carries the `watchLabel` (and no `ignoreLabel`);
+ * an untagged issue stays visible in the world/cockpit but is left alone. Mirrors
+ * the PR side's opt-out exclusion — see `src/watchLabels.ts` for the shared model.
  */
 export interface IssuePickupPolicy {
   /**
-   * When set, only issues whose `labels` include this are eligible for pickup.
-   * Unset = act on all open issues (the backward-compatible default).
+   * The `${labelPrefix}-watch` tag. When set, only issues whose `labels` include it
+   * are eligible for pickup (opt-in). Empty/unset = no watch gate, act on every
+   * open issue — the backward-compatible default the no-arg `RuleDispatcher` uses.
    */
-  pickupLabel?: string;
+  watchLabel?: string;
   /**
-   * When set, the pickup label only counts if the authenticated viewer added it
+   * The `${labelPrefix}-ignore` tag. An issue carrying it is never picked up, even
+   * if it also carries the watch label (ignore wins). Empty/unset = no ignore gate.
+   */
+  ignoreLabel?: string;
+  /**
+   * When set, the watch label only counts if the authenticated viewer added it
    * themselves — the gate reads `labelsAddedByViewer` instead of `labels`. Stops a
    * third party from tagging an item to get an agent onto it. Off by default; needs
    * a provider that resolves tag authorship (github/azure). If the provider didn't
@@ -60,6 +66,11 @@ export interface IssuePickupEligibility {
  */
 export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): IssuePickupEligibility {
   const reasons: string[] = [];
+  // Ignore wins over everything else: an explicitly-ignored item is left alone
+  // regardless of state or watch tag (mirrors the PR exclusion tag).
+  if (policy.ignoreLabel && issue.labels.includes(policy.ignoreLabel)) {
+    reasons.push(`ignored ("${policy.ignoreLabel}")`);
+  }
   // State gate (Azure work items): only pick up items in an allowed workflow state
   // — e.g. "Ready"/"Doing", not "In Review". Items with no tracked state (GitHub,
   // fake) bypass this entirely, so it's a no-op unless the provider populates it.
@@ -70,19 +81,37 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
       else reasons.push(`state "${issue.workItemState}" not in pickup states`);
     }
   }
-  if (policy.pickupLabel) {
+  // Watch gate (opt-in): an issue must carry the watch tag to be worked. Empty
+  // watch label = gate off (the no-arg dispatcher / test default), so every open
+  // issue is eligible as before.
+  if (policy.watchLabel) {
     const labels = policy.requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
-    if (!labels.includes(policy.pickupLabel)) {
+    if (!labels.includes(policy.watchLabel)) {
       // Distinguish "not tagged at all" from "tagged, but not by you" (the
       // ownership gate failing closed) so the operator knows which knob to turn.
-      if (policy.requireOwnLabel && issue.labels.includes(policy.pickupLabel)) {
-        reasons.push(`pickup label "${policy.pickupLabel}" not added by you`);
+      if (policy.requireOwnLabel && issue.labels.includes(policy.watchLabel)) {
+        reasons.push(`watch label "${policy.watchLabel}" not added by you`);
       } else {
-        reasons.push(`no pickup label "${policy.pickupLabel}"`);
+        reasons.push(`no watch label "${policy.watchLabel}"`);
       }
     }
   }
   return { eligible: reasons.length === 0, reasons };
+}
+
+/**
+ * The label half of the opt-in gate, shared by stories (which have no state gate
+ * or ownership refinement). Returns the blocking reason, or `null` when the item
+ * may be worked. Ignore wins; then an unset/empty watch label leaves the gate off
+ * (act on all), matching the issue gate above.
+ */
+export function watchGateReason(
+  labels: string[],
+  policy: Pick<IssuePickupPolicy, 'watchLabel' | 'ignoreLabel'>,
+): string | null {
+  if (policy.ignoreLabel && labels.includes(policy.ignoreLabel)) return `ignored ("${policy.ignoreLabel}")`;
+  if (policy.watchLabel && !labels.includes(policy.watchLabel)) return `no watch label "${policy.watchLabel}"`;
+  return null;
 }
 
 /** What LubbDubb is doing (or not) with one issue, and why. */
@@ -90,7 +119,8 @@ export type IssuePickupStatusKind =
   | 'done' // closed — nothing to do
   | 'has_pr' // resolved into a PR; the PR rules own it now
   | 'active' // an agent/task is on it right now
-  | 'skipped' // ineligible under the pickup policy (label/state gates)
+  | 'ignored' // carries the ignore tag — the operator said leave it alone
+  | 'unwatched' // not opted in (no watch tag) or parked by a state gate
   | 'cooldown' // attempted recently; waiting out the re-dispatch gap
   | 'escalated' // attempt cap spent; parked on a human
   | 'blocked' // eligible, but no capacity (paused or cap reached)
@@ -146,7 +176,12 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   }
 
   const intrinsic = isIssuePickupEligible(issue, ctx.policy);
-  if (!intrinsic.eligible) return { eligible: false, status: 'skipped', reasons: intrinsic.reasons };
+  if (!intrinsic.eligible) {
+    // Explicit ignore vs "just not opted in" — so the cockpit can mark the two
+    // apart the way it marks an ignored PR (the ignore tag always wins above).
+    const ignored = ctx.policy.ignoreLabel !== undefined && issue.labels.includes(ctx.policy.ignoreLabel);
+    return { eligible: false, status: ignored ? 'ignored' : 'unwatched', reasons: intrinsic.reasons };
+  }
 
   const verdict = dispatchVerdict(origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
   if (verdict.kind === 'cooldown') {

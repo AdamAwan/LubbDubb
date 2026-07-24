@@ -26,12 +26,11 @@ function selection(over: Partial<IntegrationSelection>): IntegrationSelection {
 
 test('loadConfig carries a github block (owner/repo/filters) from overrides', () => {
   const config = loadConfig({
-    github: { owner: 'acme', repo: 'app', filters: { prAuthor: 'bot', issueLabel: 'bug' } },
+    github: { owner: 'acme', repo: 'app', filters: { prAuthor: 'bot' } },
   });
   assert.equal(config.github?.owner, 'acme');
   assert.equal(config.github?.repo, 'app');
   assert.equal(config.github?.filters?.prAuthor, 'bot');
-  assert.equal(config.github?.filters?.issueLabel, 'bug');
 });
 
 test('registry builds real github providers when selected with a token + owner/repo', () => {

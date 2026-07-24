@@ -179,6 +179,7 @@ test('Store.recordFlag dedupes by (agent, ref) and lists newest-first across age
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

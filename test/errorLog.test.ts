@@ -15,6 +15,7 @@ import type { ErrorLogEntry, WorldSnapshot } from '../src/types.js';
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

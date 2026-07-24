@@ -22,8 +22,8 @@ export interface HarnessDeps {
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
   steeringPriorities: string[];
-  /** PRs carrying this label are excluded from dispatch (the operator's "leave it alone" tag). */
-  prExclusionLabel: string;
+  /** PRs carrying this label (`${labelPrefix}-ignore`) are excluded from dispatch (the operator's "leave it alone" tag). */
+  prIgnoreLabel: string;
 }
 
 /**
@@ -124,7 +124,7 @@ export class Harness extends EventEmitter {
       // The world used for diffing/baseline above is untouched, and the cockpit
       // snapshot reads the connector directly, so an excluded PR stays fully
       // visible (with its health and tag) — it's just not acted on.
-      const label = this.deps.prExclusionLabel;
+      const label = this.deps.prIgnoreLabel;
       const dispatchWorld: WorldSnapshot = world.pullRequests.some((pr) => isPrExcluded(pr, label))
         ? { ...world, pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)) }
         : world;

@@ -11,6 +11,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

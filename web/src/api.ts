@@ -41,6 +41,18 @@ const realApi = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ excluded }),
     }).then((r) => json<{ ok: true; excluded: boolean }>(r)),
+  setIssueWatched: (issueNumber: number, watched: boolean) =>
+    fetch(`/api/issues/${issueNumber}/watch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ watched }),
+    }).then((r) => json<{ ok: true; watched: boolean }>(r)),
+  setStoryWatched: (storyId: string, watched: boolean) =>
+    fetch(`/api/stories/${storyId}/watch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ watched }),
+    }).then((r) => json<{ ok: true; watched: boolean }>(r)),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     fetch('/api/jobs', {
       method: 'POST',

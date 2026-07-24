@@ -107,10 +107,13 @@ export class ClaudeDispatcher implements Dispatcher {
 function issuePickupGuidance(pickup?: IssuePickupPolicy): string {
   if (!pickup) return '';
   const rules: string[] = [];
-  if (pickup.pickupLabel) {
+  if (pickup.watchLabel) {
     rules.push(
-      `Only start a code agent for an open issue whose labels include "${pickup.pickupLabel}". Leave other open issues visible but untouched.`,
+      `Only start a code agent for an open issue whose labels include "${pickup.watchLabel}". Leave other open issues visible but untouched.`,
     );
+  }
+  if (pickup.ignoreLabel) {
+    rules.push(`Never start an agent for an issue labelled "${pickup.ignoreLabel}" — the operator has ignored it.`);
   }
   const scheme = Object.entries(pickup.priorityLabels);
   if (scheme.length) {

@@ -128,6 +128,7 @@ test('DeskBriefingSchema rejects a malformed payload', () => {
 function ingestedConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

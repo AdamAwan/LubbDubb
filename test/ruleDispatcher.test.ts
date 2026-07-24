@@ -97,7 +97,7 @@ test('an open issue with no linked PR is dispatched to a code agent', async () =
 });
 
 test('with a pickup label set, only issues carrying it are dispatched', async () => {
-  const d = new RuleDispatcher({ pickupLabel: 'agent-ready' });
+  const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
   const { actions } = await d.decide(
     ctx({
       issues: [
@@ -120,7 +120,7 @@ test('with a pickup label set, only issues carrying it are dispatched', async ()
 });
 
 test('requireOwnLabel: a pickup tag added by someone else does not dispatch', async () => {
-  const d = new RuleDispatcher({ pickupLabel: 'agent-ready', requireOwnLabel: true });
+  const d = new RuleDispatcher({ watchLabel: 'agent-ready', requireOwnLabel: true });
   const { actions } = await d.decide(
     ctx({
       issues: [

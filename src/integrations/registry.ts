@@ -14,6 +14,7 @@ import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
 import { RestMicrosoftGraphApi, resolveMicrosoftGraphAuth } from './microsoft/restMicrosoftGraphApi.js';
 import { MicrosoftCalendarIntegration } from './microsoft/calendar.js';
 import { IngestedCalendarIntegration } from './ingested/calendar.js';
+import { watchLabelsFor } from '../watchLabels.js';
 
 type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
 
@@ -55,7 +56,6 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         api,
         store: ctx.store,
         errors: ctx.errors,
-        issueLabel: gh.filters?.issueLabel,
         owner: gh.owner,
         repo: gh.repo,
         ownershipLabel: ownershipLabel(ctx),
@@ -92,12 +92,12 @@ const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
 
 /**
  * The label whose *authorship* the issues provider must resolve, or `undefined` when
- * it needn't bother. Only set when the operator has both turned the ownership gate on
- * (`issuePickupRequireOwnLabel`) and named a pickup label — otherwise there's nothing
- * to attribute, so the provider skips the extra history lookups.
+ * it needn't bother. Only set when the operator has turned the ownership gate on
+ * (`issuePickupRequireOwnLabel`); the gate label is the derived `${labelPrefix}-watch`
+ * tag. Otherwise there's nothing to attribute, so the provider skips the history lookups.
  */
 function ownershipLabel(ctx: IntegrationContext): string | undefined {
-  return ctx.config.issuePickupRequireOwnLabel ? ctx.config.issuePickupLabel : undefined;
+  return ctx.config.issuePickupRequireOwnLabel ? watchLabelsFor(ctx.config.labelPrefix).watchLabel : undefined;
 }
 
 /**
