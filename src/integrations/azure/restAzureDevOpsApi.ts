@@ -35,6 +35,13 @@ const POLICY_API_VERSION = '7.1-preview.1';
 export interface AzureAuth {
   /** The `Authorization` header value to send with each request. */
   header(): Promise<string>;
+  /**
+   * Drop any cached credential so the next {@link header} re-mints one. Called by the
+   * request retry when Azure serves a sign-in page — an `az`-CLI token can need a beat
+   * to propagate after a refresh, so a fresh token often clears a transient rejection.
+   * A no-op for stateless auth (a PAT is fixed), hence optional.
+   */
+  forceRefresh?(): void;
 }
 
 /** Basic auth with a Personal Access Token — the empty username is the ADO convention. */
@@ -64,6 +71,11 @@ export class AzCliAuth implements AzureAuth {
       this.cached = { token: await this.fetchToken(), fetchedAtMs: now };
     }
     return `Bearer ${this.cached.token}`;
+  }
+
+  /** Discard the cached token so the next {@link header} re-fetches from the `az` CLI. */
+  forceRefresh(): void {
+    this.cached = null;
   }
 }
 
@@ -148,6 +160,31 @@ interface RawPolicyEvaluation {
   };
 }
 
+/** Extra attempts after the first for a *transient* failure (sign-in HTML, 429, 5xx, network). */
+const MAX_RETRIES = 2;
+/** Base backoff between retries, multiplied by the attempt number. */
+const RETRY_BACKOFF_MS = 300;
+
+/** Real delay; injectable in the client so tests don't actually wait. */
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Does this look like Azure's sign-in HTML page rather than the JSON we asked for?
+ *
+ * Azure DevOps answers a *rejected* credential not with a JSON 401 but — maddeningly —
+ * with a 2xx (often `203 Non-Authoritative`) serving the interactive sign-in page. It
+ * passes a naive `res.ok` check, so `JSON.parse` then crashes on the leading `<` with an
+ * opaque `Unexpected token '<'`. Detecting it lets the client retry (usually a transient
+ * token blip) and, failing that, throw an error that actually names the cause. Pure so it
+ * stays unit-testable.
+ */
+export function isSignInHtml(contentType: string | null, body: string): boolean {
+  if (contentType && /text\/html/i.test(contentType)) return true;
+  return /^\s*<(?:!doctype|html)\b/i.test(body);
+}
+
 /**
  * The real {@link AzureDevOpsApi}: one bound `organization`/`project`/`repository`,
  * all HTTP behind `fetch`, mapping Azure's responses down to the minimal `Az*`
@@ -166,13 +203,18 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     private readonly repository: string,
     private readonly auth: AzureAuth,
     private readonly fetchImpl: typeof fetch = fetch,
+    /** Diagnostic sink for transient-retry notices — wired to the error log in prod, silent by default. */
+    private readonly log: (message: string) => void = () => {},
+    /** Injectable backoff so tests don't wait real milliseconds. */
+    private readonly sleep: (ms: number) => Promise<void> = defaultSleep,
   ) {}
 
   static create(
     cfg: { organization: string; project: string; repository: string },
     auth: AzureAuth,
+    log?: (message: string) => void,
   ): RestAzureDevOpsApi {
-    return new RestAzureDevOpsApi(cfg.organization, cfg.project, cfg.repository, auth);
+    return new RestAzureDevOpsApi(cfg.organization, cfg.project, cfg.repository, auth, fetch, log);
   }
 
   private get orgUrl(): string {
@@ -186,22 +228,79 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
-    const res = await this.fetchImpl(url, {
-      ...init,
-      headers: {
-        Authorization: await this.auth.header(),
-        Accept: 'application/json',
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...init.headers,
-      },
-    });
-    if (!res.ok) {
+    const method = init.method ?? 'GET';
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        // The previous attempt hit a *transient* failure. Force a fresh token in case a
+        // stale/lagging one caused it (the `az`-CLI token can need a beat to propagate
+        // after a refresh), back off, and log so a self-healing blip is still visible.
+        this.auth.forceRefresh?.();
+        await this.sleep(RETRY_BACKOFF_MS * attempt);
+        this.log(
+          `Azure DevOps ${method} ${url}: retry ${attempt}/${MAX_RETRIES} after ${lastError?.message ?? 'transient failure'}`,
+        );
+      }
+
+      let res: Response;
+      try {
+        res = await this.fetchImpl(url, {
+          ...init,
+          headers: {
+            Authorization: await this.auth.header(),
+            Accept: 'application/json',
+            ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+            ...init.headers,
+          },
+        });
+      } catch (err) {
+        // Network-level failure (DNS, reset, timeout) — transient, worth another try.
+        lastError = new Error(`Azure DevOps ${method} ${url}: network error: ${(err as Error).message}`);
+        continue;
+      }
+
       const body = await res.text().catch(() => '');
-      throw new Error(
-        `Azure DevOps ${init.method ?? 'GET'} ${url} -> ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
-      );
+      const contentType = res.headers.get('content-type');
+
+      if (!res.ok) {
+        lastError = new Error(
+          `Azure DevOps ${method} ${url} -> ${res.status} ${res.statusText} ` +
+            `(${contentType ?? 'no content-type'}): ${body.slice(0, 300)}`,
+        );
+        // Throttling (429) and server errors (5xx) can clear on a retry; a 4xx is a
+        // definitive auth/permission/not-found answer — fail fast with the legible message.
+        if (res.status === 429 || res.status >= 500) continue;
+        throw lastError;
+      }
+
+      // A no-content success (e.g. a 204 from a label DELETE) has nothing to parse.
+      if (body.trim() === '') return undefined as T;
+
+      // A 2xx can still be Azure's sign-in HTML page when the credential was transiently
+      // rejected — the notorious `Unexpected token '<'`. Retry it (a fresh token usually
+      // clears it) rather than letting JSON.parse crash on the leading `<`.
+      if (isSignInHtml(contentType, body)) {
+        lastError = new Error(
+          `Azure DevOps ${method} ${url} -> ${res.status} returned an HTML sign-in page instead of JSON — ` +
+            `the credential was rejected. Check \`az login\` (or AZURE_DEVOPS_PAT) and the organization name. ` +
+            `Body: ${body.slice(0, 200)}`,
+        );
+        continue;
+      }
+
+      try {
+        return JSON.parse(body) as T;
+      } catch {
+        // 2xx, not HTML, but unparseable — genuinely malformed; a retry won't help.
+        throw new Error(
+          `Azure DevOps ${method} ${url} -> ${res.status} returned invalid JSON ` +
+            `(${contentType ?? 'no content-type'}): ${body.slice(0, 200)}`,
+        );
+      }
     }
-    return (await res.json()) as T;
+
+    throw lastError ?? new Error(`Azure DevOps ${method} ${url}: failed after ${MAX_RETRIES} retries`);
   }
 
   private withApiVersion(url: string, params: Record<string, string> = {}, apiVersion: string = API_VERSION): string {
