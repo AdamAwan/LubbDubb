@@ -94,6 +94,34 @@ test('detects a waiting sentinel and extracts the reason', () => {
   assert.equal(reason, 'need a decision');
 });
 
+test('done sentinel hugged by SGR styling (no whitespace either side) still finishes', () => {
+  // The interactive claude TUI styles the assistant line, so the sentinel arrives
+  // flanked by SGR escapes — `…m` right before, ESC right after — not whitespace.
+  // The two-sided boundary guard used to reject it (`m`/`\x1b` aren't boundaries),
+  // so a real finish was silently never detected even though display-stripping
+  // (which has no such guard) still removed the tag. Detection must ignore the
+  // escape noise the same way the strip path does.
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  let done = false;
+  session.on('done', () => (done = true));
+  session.start();
+  backend.last().emit('\x1b[1m@@LUBBDUBB_DONE@@\x1b[0m\r\n');
+  assert.equal(done, true);
+  assert.equal(session.status, 'done');
+});
+
+test('waiting sentinel hugged by SGR styling still parks with a clean reason', () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
+  let reason: string | null = null;
+  session.on('waiting', (r: string) => (reason = r));
+  session.start();
+  backend.last().emit('\x1b[38;5;8m@@LUBBDUBB_WAITING:plan review@@\x1b[0m\r\n');
+  assert.equal(session.status, 'waiting');
+  assert.equal(reason, 'plan review');
+});
+
 test('waiting sentinel split across two chunks still detected', () => {
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });

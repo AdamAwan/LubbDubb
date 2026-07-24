@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { PtyBackend, PtyProcess } from './backend.js';
 import { TerminalTranscript } from './terminalTranscript.js';
 import { FLAG_PREFIX, FLAG_SUFFIX, extractFlags, stripFlags } from '../agents/sentinels.js';
+import { stripAnsi } from '../agents/streamTranscript.js';
 
 export type PtySessionStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'failed';
 
@@ -282,16 +283,26 @@ export class PtySession extends EventEmitter {
     this.emitFiltered(data);
 
     const hay = this.tail + data;
+    // Detection runs over an ANSI-stripped view of the tail, not the raw bytes.
+    // The interactive claude TUI styles the assistant line, so a sentinel arrives
+    // hugged by SGR escapes (`…\x1b[1m@@…@@\x1b[0m…`) — the char right before/after
+    // the token is then an escape terminator (`m`) or ESC, neither a whitespace
+    // boundary, so the boundary-guarded scans below rejected it while the unguarded
+    // display strip still removed it (the "we don't see the tag but never pick it
+    // up" bug). Stripping the escapes first restores clean boundaries and yields a
+    // clean waiting reason. The retained `tail` stays raw and is re-stripped each
+    // chunk, so a sentinel split across the escape/boundary still resolves.
+    const det = stripAnsi(hay);
 
     // Flags surface an artifact/link to the cockpit and carry no status meaning,
     // so emit each complete one (whichever status follows) and strip it from the
     // retained tail — a sliding window would otherwise re-emit it every chunk
     // until it scrolled out. A partial flag is left for the next chunk to complete.
-    for (const flag of extractFlags(hay)) this.emit('flag', flag);
+    for (const flag of extractFlags(det)) this.emit('flag', flag);
 
     // Completion sentinel wins over everything. Require it on a token boundary
     // so an agent echoing the literal string mid-line can't fake a finish.
-    if (findDelimited(hay, this.opts.doneSentinel) !== -1) {
+    if (findDelimited(det, this.opts.doneSentinel) !== -1) {
       this.tail = '';
       if (this._status !== 'done') {
         this.finish('done');
@@ -303,7 +314,7 @@ export class PtySession extends EventEmitter {
     }
 
     // Structured waiting sentinel with an embedded reason (also boundary-guarded).
-    const reason = this.extractWaitingReason(hay);
+    const reason = this.extractWaitingReason(det);
     if (reason !== null) {
       this.tail = '';
       // Latch the wait: it must survive the sentinel scrolling out of the tail as
@@ -318,7 +329,7 @@ export class PtySession extends EventEmitter {
     // matched anywhere in the tail with no boundary guard, so keep each pattern
     // specific — a short or common substring risks false positives on echoes.
     for (const pat of this.opts.waitingPatterns) {
-      if (pat && hay.includes(pat)) {
+      if (pat && det.includes(pat)) {
         this.setWaiting(pat);
         break;
       }
