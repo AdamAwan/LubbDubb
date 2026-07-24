@@ -454,6 +454,13 @@ structured field, feed it into `buildRefUrls`.
 
 ## Gotchas
 
+- **Don't launch the server from inside a Claude Code session** when using `agentMode: 'pty'`.
+  `NodePtyBackend` merges `process.env` into the agent's env, so the parent session's
+  `CLAUDE_CODE_SESSION_ID` / `CLAUDECODE` / `CLAUDE_CODE_CHILD_SESSION` leak into the spawned
+  `claude`, which then treats itself as a child of _that_ session and **writes no session
+  transcript of its own**. The agent still runs and its sentinels still fire (the terminal
+  backstop), but the transcript falls back to raw screen output with a recorded warning. Run
+  `npm start` from an ordinary terminal, or unset the `CLAUDE_*` vars first.
 - The default `agentMode` is `stream`, **not** a PTY — don't assume terminal semantics when
   reasoning about the default path.
 - Relative paths in `claudeArgs` are resolved to absolute at config load, because agents run

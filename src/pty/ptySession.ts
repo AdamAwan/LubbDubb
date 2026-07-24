@@ -101,6 +101,17 @@ const DEFAULTS = {
  */
 const SENTINEL_BACKSTOP_MS = 5_000;
 
+/**
+ * How long the session file gets to appear before the terminal is used as a
+ * *visible* fallback. Claude Code creates the transcript when it accepts the
+ * first message, not when the REPL boots — so a prompt that never lands (a trust
+ * dialog, an onboarding step, a boot race lost) means no file, ever. Without this
+ * the drawer would just stay blank, hiding the very screen that explains why.
+ * Degrading to raw output is uglier than a rendered transcript and far better
+ * than nothing.
+ */
+const SESSION_FILE_GRACE_MS = 20_000;
+
 /** How many trailing characters we keep to match sentinels that straddle two data chunks. */
 const TAIL_WINDOW = 4096;
 
@@ -163,6 +174,10 @@ export class PtySession extends EventEmitter {
   private readonly backstopTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** When each sentinel identity was last applied, so the backstop doesn't re-fire it. */
   private readonly appliedAt = new Map<string, number>();
+  /** The session file never showed up: fall back to forwarding the screen so the drawer isn't blank. */
+  private degraded = false;
+  /** Fires {@link degraded} if the session file hasn't appeared in time. */
+  private sessionFileTimer: ReturnType<typeof setTimeout> | null = null;
   /** Pending exit-on-done timers (the delayed Enter + the SIGTERM backstop), cleared once the process exits. */
   private teardownTimers: ReturnType<typeof setTimeout>[] = [];
   /** Pending initial-message re-submit timer (see {@link deliverInitial}), cleared on exit. */
@@ -229,7 +244,20 @@ export class PtySession extends EventEmitter {
       env: this.opts.env,
     });
     this.setStatus('running');
-    this.transcript?.start();
+    if (this.transcript) {
+      this.transcript.start();
+      const t = setTimeout(() => {
+        this.sessionFileTimer = null;
+        if (!this.proc || this.transcript?.located()) return;
+        this.degraded = true;
+        this.opts.onWarning(
+          'no session transcript file appeared; falling back to raw terminal output so the agent is not invisible. ' +
+            'The REPL most likely never accepted its first message (trust dialog, onboarding, or a lost boot race).',
+        );
+      }, SESSION_FILE_GRACE_MS);
+      t.unref?.();
+      this.sessionFileTimer = t;
+    }
     this.proc.onData((data) => this.handleData(data));
     this.proc.onExit(({ exitCode }) => this.handleExit(exitCode));
   }
@@ -405,7 +433,8 @@ export class PtySession extends EventEmitter {
    * which is the whole point: it carries slash menus, hints and wrapped prose.
    */
   private emitFiltered(data: string): void {
-    if (this.transcript) return;
+    // The screen is not a display source while the session file is doing its job.
+    if (this.transcript && !this.degraded) return;
     const buf = this.outPending + data;
     const cleaned = excise(buf, scanSentinels(buf, this.spec));
     const hold = holdFrom(cleaned, this.spec, MAX_SENTINEL_HOLD);
@@ -416,6 +445,12 @@ export class PtySession extends EventEmitter {
 
   /** A batch of session-file records: the transcript to show, and the text to detect on. */
   private handleTranscriptUpdate(u: { display: string; assistantText: string; userEntries: number }): void {
+    // The file spoke, so the screen goes back to being input-only.
+    this.degraded = false;
+    if (this.sessionFileTimer) {
+      clearTimeout(this.sessionFileTimer);
+      this.sessionFileTimer = null;
+    }
     this.acceptedMessages += u.userEntries;
     if (u.display) this.emit('output', u.display);
     if (!u.assistantText) return;
@@ -446,7 +481,13 @@ export class PtySession extends EventEmitter {
     source: 'session' | 'terminal',
     parsed?: import('../agents/sentinels.js').ParsedFlag,
   ): void {
-    const key = kind === 'done' ? 'done' : `${kind}:${payload}`;
+    // Keyed by *kind alone*, deliberately. The two detectors see different text for
+    // the same event: the terminal reads it as rendered on an 80/120-column screen,
+    // so a waiting reason or artifact path can arrive hard-wrapped, while the session
+    // file has it intact. Keying on the payload made those look like different
+    // sentinels, so the file's report never cancelled the terminal's pending timer and
+    // the backstop cried wolf on every wrapped reason.
+    const key = kind;
     const pending = this.backstopTimers.get(key);
     if (pending) {
       clearTimeout(pending);
@@ -550,6 +591,10 @@ export class PtySession extends EventEmitter {
     }
     for (const t of this.backstopTimers.values()) clearTimeout(t);
     this.backstopTimers.clear();
+    if (this.sessionFileTimer) {
+      clearTimeout(this.sessionFileTimer);
+      this.sessionFileTimer = null;
+    }
     // Read the session file's final records *before* the exit is reported, so a
     // terminal transition never races the tail of the transcript.
     if (this.transcript) {
