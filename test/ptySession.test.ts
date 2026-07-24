@@ -155,6 +155,58 @@ test('submitDelayMs 0 writes the payload and CR synchronously', () => {
   assert.deepEqual(backend.last().writes, [pasted('go'), '\r']);
 });
 
+test('deliverInitial pastes once, then re-sends only the Enter while the REPL boots', async () => {
+  // The initial-message boot race: a freshly-spawned claude REPL echoes the pasted
+  // prompt into its input box but drops the submitting Enter for ~1-2s while it
+  // finishes initialising. deliverInitial pastes ONCE (so the prompt can't be
+  // duplicated in the box) and re-sends the bare Enter until the turn starts.
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, {
+    command: 'x',
+    args: [],
+    cwd: '/tmp',
+    submitDelayMs: 0,
+    initialSubmitIntervalMs: 5,
+    initialSubmitAttempts: 4,
+  });
+  session.start();
+  session.deliverInitial('do the task');
+  // The message is delivered as one bracketed paste plus its submitting CR.
+  assert.deepEqual(backend.last().writes, [pasted('do the task'), '\r']);
+  // While the REPL stays silently 'running', the Enter is re-sent — as bare CRs,
+  // never another paste (a re-paste would accumulate the prompt in the box).
+  await new Promise((r) => setTimeout(r, 40));
+  const writes = backend.last().writes;
+  assert.equal(writes.filter((w) => w.startsWith(PASTE_START)).length, 1, 'the prompt is pasted exactly once');
+  assert.ok(writes.length > 2, 'the Enter is re-sent while the REPL is not yet accepting it');
+  assert.ok(
+    writes.slice(1).every((w) => w === '\r'),
+    'every retry is a bare CR',
+  );
+  // Bounded: one initial CR + at most `initialSubmitAttempts` re-sends.
+  assert.ok(writes.length <= 1 + 4, 'retries are capped');
+});
+
+test('deliverInitial stops re-sending the Enter once the agent progresses', async () => {
+  const backend = new FakePtyBackend();
+  const session = new PtySession(backend, {
+    command: 'x',
+    args: [],
+    cwd: '/tmp',
+    submitDelayMs: 0,
+    initialSubmitIntervalMs: 5,
+    initialSubmitAttempts: 50,
+  });
+  session.start();
+  session.deliverInitial('do the task');
+  // The turn starts and the agent parks on a question: status leaves 'running'.
+  backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
+  assert.equal(session.status, 'waiting');
+  const countAtWait = backend.last().writes.length;
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(backend.last().writes.length, countAtWait, 'no more Enters are sent once it left running');
+});
+
 test('clean exit with no sentinel still counts as done', () => {
   const backend = new FakePtyBackend();
   const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
