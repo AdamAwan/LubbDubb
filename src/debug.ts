@@ -15,22 +15,11 @@ export function debugEnabled(): boolean {
 /**
  * Emit one scoped debug line to stderr — a no-op unless {@link debugEnabled}.
  *
- * The message often carries agent-influenced values (a written file path, a hook
- * breadcrumb), so control characters are escaped before logging: a newline in a
- * path would otherwise let a crafted write forge a second, fake log line (log
- * injection). Escaping keeps every record to exactly one line.
+ * The message routinely carries agent-influenced values (a written file path, a
+ * hook breadcrumb), so it's `JSON.stringify`d before logging: control characters —
+ * a newline especially — are escaped, so a crafted value can't forge a second,
+ * fake log line (log injection). The quotes it adds also delimit the message.
  */
 export function debugLog(scope: string, message: string): void {
-  if (debugEnabled()) console.error(`[lubbdubb:debug:${scope}] ${sanitizeForLog(message)}`);
-}
-
-// Matches every ASCII control char (0x00–0x1F and 0x7F), newlines included. Built
-// from an escaped string rather than a regex literal so the source carries no
-// control bytes of its own.
-// eslint-disable-next-line no-control-regex -- matching control chars is the whole point (we neutralise them)
-const CONTROL_CHARS = new RegExp('[\\u0000-\\u001f\\u007f]', 'g');
-
-/** Replace control chars with a visible `\xNN` escape, so a log line stays one line. */
-function sanitizeForLog(value: string): string {
-  return value.replace(CONTROL_CHARS, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
+  if (debugEnabled()) console.error(`[lubbdubb:debug:${scope}] ${JSON.stringify(message)}`);
 }
