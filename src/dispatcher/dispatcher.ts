@@ -56,9 +56,12 @@ export interface QueueItem {
   branch: string | null;
   /**
    * Where the candidate sits relative to the headroom cut: dispatched this
-   * cycle, waiting on a free slot, or throttled by the re-dispatch cooldown.
+   * cycle, waiting on a free slot, throttled by the re-dispatch cooldown, or
+   * `capped` — held by a per-plan concurrency limit rather than by fleet
+   * headroom, so it would not dispatch even with every slot free. A capped part
+   * used to be skipped silently, which made the limit invisible.
    */
-  status: 'dispatching' | 'waiting' | 'cooldown';
+  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped';
   reason: string;
 }
 

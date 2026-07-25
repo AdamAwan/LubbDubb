@@ -20,6 +20,7 @@ import { basename, extname, join } from 'node:path';
  */
 export type PromptId =
   | 'issue-plan'
+  | 'issue-replan'
   | 'plan-part'
   | 'plan-part-escalation'
   | 'issue-pickup'
@@ -68,6 +69,31 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you ' +
       'are on branch {branch} only so you have the repository to read.',
     doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule 3c). The agent writes its verdict to the plan file; nothing else it does is read. Placeholders: {number} {title} {body} {branch} {planFile}.',
+  },
+  'issue-replan': {
+    placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
+    template:
+      'Issue #{number} ("{title}") already has a delivery plan, and an operator has asked for it to be replanned. ' +
+      'Amend the existing plan — do not start from scratch.\n\n{body}\n\n{current}\n\n' +
+      'Read the repository and the state above, then write the amended plan to {planFile} in this worktree, in the ' +
+      'same format as the original:\n\n' +
+      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>", "parts": [\n' +
+      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": []}\n' +
+      '  ]}\n\n' +
+      'Rules that make an amendment safe:\n\n' +
+      '- **Slugs are the merge key.** Re-use the exact slug of every part you are keeping, whatever else you change ' +
+      'about it. A part you re-declare under a new slug is not the same part: the old one is treated as dropped and ' +
+      'a fresh branch is cut for the new one.\n' +
+      '- **Re-declare parts that are already merged, dispatched or in review.** Their branches and pull requests ' +
+      'exist and are not yours to withdraw; leaving them out does not undo them.\n' +
+      '- **A part you leave out is retired**, and only if nothing was started for it. That is how you remove work ' +
+      'that is no longer needed.\n' +
+      '- New parts may be added, and dependencies rewired, subject to the same rule as before: "dependsOn" names ' +
+      '**at most one** sibling slug.\n' +
+      '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n\n' +
+      'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
+      'branch {branch} only so you have the repository to read.',
+    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule 3c, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key and that in-flight parts must be re-declared. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'plan-part': {
     placeholders: ['number', 'title', 'part', 'scope', 'branch', 'base', 'plan', 'done', 'remaining'],

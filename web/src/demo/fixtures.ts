@@ -99,6 +99,18 @@ export function buildDemoState(): DemoSeed {
           pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #141'] },
         },
         {
+          id: 'iss-212',
+          number: 212,
+          title: 'Move the store behind a repository interface',
+          body: 'Too big for one PR: the schema move has to land before anything reads through the new interface.',
+          labels: ['refactor', 'lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: 143,
+          // A plan, not a PR: the chip reports plan progress rather than whichever
+          // part happened to open a pull request last.
+          pickup: { eligible: false, status: 'planning', reasons: ['1/3 parts merged'] },
+        },
+        {
           id: 'iss-210',
           number: 210,
           title: 'Explore a Slack notification channel',
@@ -177,6 +189,67 @@ export function buildDemoState(): DemoSeed {
         agentId: 'agent-a0',
         createdAt: ago(40),
         updatedAt: ago(22),
+      },
+    ],
+    // One decomposed issue, so the plan panel has a stack to draw: part 1 merged,
+    // part 2 in review with its PR open, part 3 ready but held by the plan's own
+    // two-at-a-time concurrency cap.
+    plans: [
+      {
+        id: 'plan-212',
+        originRef: 'issue:212',
+        title: 'Move the store behind a repository interface',
+        status: 'active',
+        reason: 'The schema move has to merge before anything reads through the new interface.',
+        createdAt: ago(90),
+        updatedAt: ago(6),
+      },
+    ],
+    planParts: [
+      {
+        id: 'plan-212:schema',
+        planId: 'plan-212',
+        slug: 'schema',
+        seq: 1,
+        title: 'Add the repository tables and migration',
+        scope: 'src/store/',
+        dependsOn: [],
+        branch: 'issue/212/schema',
+        prNumber: 140,
+        status: 'merged',
+        taskId: null,
+        createdAt: ago(90),
+        updatedAt: ago(30),
+      },
+      {
+        id: 'plan-212:reads',
+        planId: 'plan-212',
+        slug: 'reads',
+        seq: 2,
+        title: 'Route reads through the interface',
+        scope: 'src/harness.ts, src/dispatcher/',
+        dependsOn: ['schema'],
+        branch: 'issue/212/reads',
+        prNumber: 143,
+        status: 'in_review',
+        taskId: null,
+        createdAt: ago(90),
+        updatedAt: ago(6),
+      },
+      {
+        id: 'plan-212:writes',
+        planId: 'plan-212',
+        slug: 'writes',
+        seq: 3,
+        title: 'Route writes through the interface',
+        scope: 'src/executor/, src/agents/',
+        dependsOn: ['reads'],
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(90),
+        updatedAt: ago(6),
       },
     ],
     jobs: [],
@@ -323,6 +396,19 @@ export function buildDemoState(): DemoSeed {
           reason: 'Open issue #208 has no linked PR and no agent is on it.',
         },
         {
+          // Held by the plan's own concurrency cap rather than by fleet headroom —
+          // a free slot wouldn't start it, which is why it says `capped` and not
+          // `waiting`, and why it is queued at all rather than skipped in silence.
+          origin: 'issue:212:part:writes',
+          rule: 'plan-part',
+          title: 'Issue #212 part: Route writes through the interface',
+          kind: 'code',
+          branch: 'issue/212/writes',
+          status: 'capped',
+          reason:
+            'Part "writes" of issue #212 is ready and stacks on issue/212/reads. Held: issue #212 is already at its 2-part concurrency cap.',
+        },
+        {
           origin: 'story:st-9:work',
           rule: 'story-pickup',
           title: 'Implement "Per-agent cost accounting in the cockpit"',
@@ -365,6 +451,9 @@ export function buildDemoState(): DemoSeed {
       '#208': 'https://github.com/example/lubbdubb/issues/208',
       '#205': 'https://github.com/example/lubbdubb/issues/205',
       '#210': 'https://github.com/example/lubbdubb/issues/210',
+      '#212': 'https://github.com/example/lubbdubb/issues/212',
+      '#143': 'https://github.com/example/lubbdubb/pull/143',
+      '#140': 'https://github.com/example/lubbdubb/pull/140',
     },
     // The rule book the server ships in /api/state (src/dispatcher/rules.ts) —
     // canned to just the rules the demo's decisions reference.
@@ -386,6 +475,12 @@ export function buildDemoState(): DemoSeed {
         name: 'One agent per branch',
         description:
           'At most one code agent works a PR branch: a fresh signal for a branch that already has a running agent is delivered to that agent as a note instead of spawning a second one.',
+      },
+      'plan-part': {
+        number: '4a',
+        name: 'Plan part ready',
+        description:
+          "One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/<n>/<slug>` — based on that dependency's branch while it is still open, on the default branch once it merged. A part held by the plan's concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.",
       },
       'pr-merge-ready': {
         number: '3',

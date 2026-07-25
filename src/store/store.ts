@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
+import { liveParts } from '../plans/parts.js';
 import type {
   Agent,
   AgentFile,
@@ -388,14 +389,16 @@ export class Store {
    * anything outstanding after that => back to `active` (a replan can add work to a
    * finished plan). Returns the plan **only when the roll-up moved it**, so a caller
    * can treat the return as the "the plan just completed" edge rather than re-deriving
-   * it. A partless plan (`single`, or one still `planning`) is never touched.
+   * it. A partless plan (`single`, or one still `planning`) is never touched, and a
+   * retired part is not outstanding work — an amended plan that dropped its last
+   * unstarted part is complete, not stuck.
    */
   rollUpPlanStatus(planId: string): Plan | null {
     const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(planId) as PlanRow | undefined;
     if (!row) return null;
     const plan = rowToPlan(row);
     if (plan.status !== 'active' && plan.status !== 'complete') return null;
-    const parts = this.listPlanParts(planId);
+    const parts = liveParts(this.listPlanParts(planId));
     if (parts.length === 0) return null;
     const next: PlanStatus = parts.every((p) => p.status === 'merged') ? 'complete' : 'active';
     if (next === plan.status) return null;

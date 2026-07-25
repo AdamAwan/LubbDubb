@@ -1,6 +1,14 @@
 import type { Decision, Issue, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
-import { DEFAULT_PLANNING, issueOrigin, planOrigin, resolvePlanRoute, type PlanningPolicy } from '../plans/planning.js';
+import {
+  DEFAULT_PLANNING,
+  issueOrigin,
+  planOrigin,
+  plannerVerdict,
+  resolvePlanRoute,
+  type PlanningPolicy,
+} from '../plans/planning.js';
+import { liveParts, planProgress } from '../plans/parts.js';
 
 /**
  * How the dispatcher gates and orders issue pickup, derived from operator config.
@@ -231,15 +239,25 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   // will point at one, so the PR gate below would report "has open PR #n" for every
   // mid-plan issue — hiding the plan behind whichever part happened to open last.
   const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
+  const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
   const planVerdict = resolvePlanRoute({
     planning: ctx.planning ?? DEFAULT_PLANNING,
     plan,
-    verdict: dispatchVerdict(planOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown),
+    verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
+    existingParts: liveParts(parts).length,
   });
   if (planVerdict.route === 'parts' && plan) {
-    const parts = (ctx.planParts ?? []).filter((p) => p.planId === plan.id);
-    const merged = parts.filter((p) => p.status === 'merged').length;
-    const reason = parts.length === 0 ? 'plan split this into parts' : `${merged}/${parts.length} parts merged`;
+    const { merged, total } = planProgress(parts);
+    // A `complete` plan is the one arm that never moves again on its own: rule 4a
+    // schedules nothing and pickup stays narrowed off, which is correct while a
+    // human decides whether the issue is done — but "3/3 parts merged" reads like
+    // a plan still in flight. Say what the two ways out are instead.
+    const reason =
+      total === 0
+        ? 'plan split this into parts'
+        : plan.status === 'complete'
+          ? `plan complete — all ${total} part${total === 1 ? '' : 's'} merged; close the issue or replan`
+          : `${merged}/${total} parts merged`;
     return { eligible: false, status: 'planning', reasons: [reason] };
   }
 

@@ -11,12 +11,21 @@ export interface PrHealth {
  * Fold a PR's signals into one health verdict for the cockpit: *why* is this PR
  * stuck? Pure and deterministic — the snapshot computes it per PR and the UI
  * renders `reasons`. A merged PR is done, so it is never blocked.
+ *
+ * `openPrs` is optional stack context: given it, a CI failure inherited from the
+ * PR underneath this one is named as such, so the cockpit says *whose* failure it
+ * is rather than leaving the operator to wonder why no agent was dispatched (see
+ * {@link inheritedCiFailure}). Omitted => the verdict reads the PR alone, exactly
+ * as it did before stacks existed.
  */
-export function prHealth(pr: PullRequest): PrHealth {
+export function prHealth(pr: PullRequest, openPrs: PullRequest[] = []): PrHealth {
   const reasons: string[] = [];
   if (pr.merged) return { blocked: false, reasons };
 
-  if (pr.ciStatus === 'failing') reasons.push('CI failing');
+  if (pr.ciStatus === 'failing') {
+    const from = inheritedCiFailure(pr, openPrs);
+    reasons.push(from ? `CI failing on base PR #${from.number}` : 'CI failing');
+  }
 
   if (isConflicted(pr)) reasons.push('merge conflicts');
   else if (pr.mergeableState === 'behind') reasons.push('behind base branch');
@@ -61,6 +70,50 @@ export function needsBaseUpdate(pr: PullRequest): boolean {
  */
 export function isStackedPr(pr: PullRequest, defaultBranch: string): boolean {
   return pr.baseBranch !== undefined && pr.baseBranch !== defaultBranch;
+}
+
+/**
+ * The open PR this one is stacked on: the one whose *head* branch is this PR's
+ * base. Resolved purely from the world rather than from the plan graph, and
+ * deliberately so — "whose commits is this CI run actually testing" is a PR-level
+ * fact, true of a stack a human made by hand as much as of one LubbDubb planned,
+ * and reading it here keeps the predicate provider-agnostic and plan-free.
+ *
+ * A merged PR is not a base worth attributing to: its commits are in the
+ * integration branch, and the provider retargets its children.
+ */
+export function basePrOf(pr: PullRequest, openPrs: PullRequest[]): PullRequest | null {
+  if (pr.baseBranch === undefined) return null;
+  return openPrs.find((c) => !c.merged && c.number !== pr.number && c.branch === pr.baseBranch) ?? null;
+}
+
+/**
+ * The PR *below* this one whose red CI this PR's red CI is inheriting, or null
+ * when the failure is genuinely its own.
+ *
+ * The hazard this exists for: part 2's CI runs part 1's commits, so part 1 going
+ * red turns part 2 red, and the CI rule would put an agent on part 2 to fix code
+ * that isn't part 2's — multiplying agents up the whole stack, each of them
+ * unable to fix anything. Suppressing the rule on the inheriting PR is enough on
+ * its own: the failing PR at the bottom is in the same world and rule 1 fires on
+ * it under its own steam, so there is nothing to push down. When the fix lands
+ * there, the children go green with it.
+ *
+ * Walks the whole chain, not just the immediate base, because a base whose own CI
+ * is still `pending` must not read as "this failure is yours". Cycle-guarded: a
+ * provider reporting a base loop can't spin this.
+ */
+export function inheritedCiFailure(pr: PullRequest, openPrs: PullRequest[]): PullRequest | null {
+  if (pr.ciStatus !== 'failing') return null;
+  const seen = new Set<number>([pr.number]);
+  let current = pr;
+  for (;;) {
+    const base = basePrOf(current, openPrs);
+    if (!base || seen.has(base.number)) return null;
+    seen.add(base.number);
+    if (base.ciStatus === 'failing') return base;
+    current = base;
+  }
 }
 
 /**

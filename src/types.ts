@@ -364,9 +364,11 @@ export interface Plan {
 /**
  * Where one part of a multi-PR plan sits: `pending` (dependencies outstanding),
  * `ready` (dispatchable), `dispatched` (an agent is on it), `in_review` (its PR
- * is open), `merged`, or `blocked`.
+ * is open), `merged`, `blocked`, or `retired` — a part an amended plan no longer
+ * declares. Retiring is a *status transition, not a disappearance*: the row stays
+ * so the graph remains readable after a replan, and nothing schedules it again.
  */
-export type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked';
+export type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked' | 'retired';
 
 /** One part of a multi-PR plan — a single reviewable PR's worth of work. */
 export interface PlanPart {

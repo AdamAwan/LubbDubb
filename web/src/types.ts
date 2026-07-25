@@ -90,6 +90,40 @@ export interface AgentFile {
   promoted: boolean;
   createdAt: string;
 }
+/**
+ * One issue's delivery plan (mirrors the server's Plan). `single` means the
+ * planner said one PR will do and the issue falls through to ordinary pickup;
+ * `active`/`complete` mean it was decomposed into the parts below.
+ */
+export interface Plan {
+  id: string;
+  /** `issue:12` — the issue this plan hangs off. */
+  originRef: string;
+  title: string;
+  /** 'planning' | 'single' | 'active' | 'complete' | 'abandoned'. */
+  status: string;
+  reason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+/** One part of a multi-PR plan — a single reviewable PR's worth of work (mirrors the server's PlanPart). */
+export interface PlanPart {
+  id: string;
+  planId: string;
+  slug: string;
+  seq: number;
+  title: string;
+  scope: string;
+  /** Sibling slugs this part stacks on (at most one). */
+  dependsOn: string[];
+  branch: string | null;
+  prNumber: number | null;
+  /** 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked' | 'retired'. */
+  status: string;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Job {
   id: string;
   title: string;
@@ -187,8 +221,11 @@ export interface QueueItem {
   title: string;
   kind: 'code' | 'desk';
   branch: string | null;
-  /** Above the headroom cut, waiting on a free slot, or throttled by the cooldown. */
-  status: 'dispatching' | 'waiting' | 'cooldown';
+  /**
+   * Above the headroom cut, waiting on a free slot, throttled by the cooldown, or
+   * `capped` — held by a per-plan concurrency limit, so a free slot wouldn't help.
+   */
+  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped';
   reason: string;
 }
 
@@ -253,6 +290,13 @@ export interface AppState {
   };
   world: WorldSnapshot;
   tasks: Task[];
+  /**
+   * The multi-PR plan graph: one plan per planned issue, and every plan's parts.
+   * Optional so a cockpit against an older server (or one with the funnel off)
+   * simply draws no plan panel.
+   */
+  plans?: Plan[];
+  planParts?: PlanPart[];
   /** Operator-launched jobs, newest first — the queue (and its recent history). */
   jobs: Job[];
   agents: Agent[];

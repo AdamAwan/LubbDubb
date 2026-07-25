@@ -32,6 +32,10 @@ function statusMark(part: PlanPart): string {
   switch (part.status) {
     case 'merged':
       return '[x]';
+    // Shown, not hidden: a reader of the thread should see that a part was dropped
+    // by a replan rather than find it silently missing from the list.
+    case 'retired':
+      return '[–]';
     case 'in_review':
       return '[~]';
     case 'dispatched':

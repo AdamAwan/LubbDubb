@@ -208,6 +208,28 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     }
   });
 
+  // Send a plan back for replanning. The mechanism already exists —
+  // `resolvePlanRoute` routes a plan row in `planning` status to rule 3c — so this
+  // is only the operator's way in: flip the status, and the next cycle dispatches a
+  // planner primed with the current plan and part states (`issue-replan`).
+  //
+  // **Nothing is torn down.** Every part row is left exactly as it is: agents keep
+  // running, branches stay, open PRs stay open. What an amended plan does to them is
+  // decided at ingestion, where the planner's new declaration is actually known — a
+  // part it no longer declares is retired only if nothing was started for it, and one
+  // with a branch or a PR is kept whatever the amendment says (see `partsToRetire`).
+  // Until that lands, the existing plan keeps scheduling: a replan that fails or is
+  // never picked up leaves the issue exactly where it was, not parked.
+  app.post('/api/plans/:id/replan', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = store.listPlans().find((p) => p.id === id);
+    if (!plan) return reply.code(404).send({ error: 'plan not found' });
+    const next = store.setPlanStatus(id, 'planning');
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, plan: next };
+  });
+
   // Queue an operator-launched job. It persists as `queued` and is drained by
   // the dispatcher ahead of world-driven work — taking the next free slot, or
   // waiting in the queue when the fleet is at capacity. A cycle is kicked so a
@@ -357,6 +379,10 @@ export function buildStateSnapshot(system: System) {
   return connector.getState().then((world) => {
     const tasks = store.listTasks();
     const control = runtimeControl.snapshot();
+    // The plan graph, read once and shared by the per-issue pickup verdict below
+    // and the snapshot itself, so the chip and the panel can't disagree.
+    const plans = store.listPlans();
+    const planParts = store.listAllPlanParts();
     // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
     // below predicts what actually happens next cycle. The decision window (200)
     // and the headroom arithmetic mirror `Harness.runCycle`.
@@ -371,8 +397,8 @@ export function buildStateSnapshot(system: System) {
       openPrs: world.pullRequests,
       // Same plan inputs rules 3c/4 read, so the chip explains an issue parked in
       // the funnel rather than claiming it's eligible for a pickup that won't fire.
-      plans: store.listPlans(),
-      planParts: store.listAllPlanParts(),
+      plans,
+      planParts,
       planning: config.planning,
       headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
       paused: control.paused,
@@ -407,9 +433,17 @@ export function buildStateSnapshot(system: System) {
       // untouched rather than leaving it implied by the absence of activity.
       world: {
         ...world,
-        pullRequests: world.pullRequests.map((pr) => ({ ...pr, health: prHealth(pr) })),
+        // The full open-PR list is passed as stack context so an inherited CI
+        // failure names the PR underneath — otherwise a stacked PR reads as
+        // "CI failing" with no agent on it and no visible reason why.
+        pullRequests: world.pullRequests.map((pr) => ({ ...pr, health: prHealth(pr, world.pullRequests) })),
         issues: world.issues.map((issue) => ({ ...issue, pickup: issuePickupStatus(issue, pickupCtx) })),
       },
+      // The plan graph, which until now existed only in the database: the per-issue
+      // chip could say "2/5 parts merged" and nothing could say *which* five. The
+      // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
+      plans,
+      planParts,
       tasks,
       // Operator-launched jobs (newest first) — the cockpit shows the queued
       // ones and their place in line, plus recently-dispatched/cancelled history.
