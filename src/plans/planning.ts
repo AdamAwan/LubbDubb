@@ -18,9 +18,25 @@ export interface PlanningPolicy {
    * agents do not. Threaded now; the part scheduler consumes it.
    */
   maxConcurrentPartsPerIssue: number;
+  /**
+   * Minimum gap between the `git fetch`es plan reconciliation runs before reading
+   * branch reality.
+   *
+   * The `GitObserver` is deliberately fetch-free, so without one it never sees a
+   * push made anywhere but this machine — and "has the dependency actually pushed"
+   * is the question a stacked part waits on. Fetching on the pulse is the simplest
+   * thing that works: one round trip against the remote the provider snapshot
+   * already hits, at a default 5-minute heartbeat. This floor exists only so a
+   * deliberately fast heartbeat can't turn into a fetch storm; 0 = every pulse.
+   */
+  gitFetchIntervalMs: number;
 }
 
-export const DEFAULT_PLANNING: PlanningPolicy = { enabled: false, maxConcurrentPartsPerIssue: 2 };
+export const DEFAULT_PLANNING: PlanningPolicy = {
+  enabled: false,
+  maxConcurrentPartsPerIssue: 2,
+  gitFetchIntervalMs: 60_000,
+};
 
 /** The origin the planning agent for an issue is dispatched against. */
 export function planOrigin(issueNumber: number): string {

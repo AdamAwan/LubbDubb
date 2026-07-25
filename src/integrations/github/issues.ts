@@ -1,8 +1,15 @@
 import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { IssueLabelInput, SendResult } from '../../sink/actionSink.js';
+import type { IssueCommentInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
 import type { Issue, IssueState } from '../../types.js';
-import type { Capability, Integration, IssueLabelCapable, RefResolvable, WorldSlice } from '../integration.js';
+import type {
+  Capability,
+  Integration,
+  IssueCommentCapable,
+  IssueLabelCapable,
+  RefResolvable,
+  WorldSlice,
+} from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
 import { githubRefUrl } from './refUrl.js';
 
@@ -30,7 +37,7 @@ export interface GitHubIssuesOpts {
  * reading from the network instead of an injected fake world (so it is *not*
  * `Injectable`).
  */
-export class GitHubIssuesIntegration implements Integration, RefResolvable, IssueLabelCapable {
+export class GitHubIssuesIntegration implements Integration, RefResolvable, IssueLabelCapable, IssueCommentCapable {
   readonly id = 'issues:github';
   readonly capability: Capability = 'issues';
 
@@ -48,6 +55,21 @@ export class GitHubIssuesIntegration implements Integration, RefResolvable, Issu
     await this.opts.api.setIssueLabel(input.number, input.label, input.present);
     this.opts.store.recordConnectorEvent('issue_label_set', { ...input });
     return { ok: true };
+  }
+
+  /**
+   * The plan's status comment: created once, then edited in place by the id the
+   * create returned — so an issue accumulates one living status comment, not a
+   * stream of them.
+   */
+  async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
+    const existing = input.commentRef === null ? null : Number(input.commentRef);
+    const ref =
+      existing !== null && Number.isInteger(existing)
+        ? await this.opts.api.updateIssueComment(existing, input.body)
+        : await this.opts.api.createIssueComment(input.number, input.body);
+    this.opts.store.recordConnectorEvent('issue_comment_sent', { number: input.number, ref: ref.url });
+    return { ok: true, ref: String(ref.id) };
   }
 
   async snapshot(): Promise<WorldSlice> {

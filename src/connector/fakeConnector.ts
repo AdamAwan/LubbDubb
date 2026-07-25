@@ -1,6 +1,7 @@
 import type { Connector, InjectableEvent } from './connector.js';
 import type {
   ActionSink,
+  IssueCommentInput,
   IssueLabelInput,
   PrLabelInput,
   PrMergeInput,
@@ -68,6 +69,10 @@ export class FakeConnector implements Connector, ActionSink {
 
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     return this.composite.setWorkItemState(input);
+  }
+
+  upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
+    return this.composite.upsertIssueComment(input);
   }
 
   /** Apply an event to the fake world (routes to the owning module) and log it. */

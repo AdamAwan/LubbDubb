@@ -262,7 +262,7 @@ const DEFAULTS: Config = {
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
-  planning: { enabled: false, maxConcurrentPartsPerIssue: 2 },
+  planning: { enabled: false, maxConcurrentPartsPerIssue: 2, gitFetchIntervalMs: 60_000 },
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',

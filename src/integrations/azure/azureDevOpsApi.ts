@@ -68,8 +68,18 @@ export interface AzureDevOpsApi {
   /** Set a work item's `System.State` (e.g. "In Review"). Idempotent — a no-op when already there. */
   setWorkItemState(id: number, state: string): Promise<void>;
 
+  /** Add a comment to a work item's discussion, returning its editable id. */
+  createWorkItemComment(id: number, text: string): Promise<AzWorkItemCommentRef>;
+  /** Edit an existing work-item comment in place. */
+  updateWorkItemComment(id: number, commentId: number, text: string): Promise<AzWorkItemCommentRef>;
+
   /** Add (`present`) or remove a `System.Tags` entry on a work item — the watch/ignore toggle. Idempotent. */
   setWorkItemTag(id: number, tag: string, present: boolean): Promise<void>;
+}
+
+/** A work-item comment's own id — what an in-place edit addresses. */
+export interface AzWorkItemCommentRef {
+  id: number;
 }
 
 export interface AzPull {

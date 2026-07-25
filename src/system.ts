@@ -9,6 +9,9 @@ import type { ActionSink } from './sink/actionSink.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultSessionRoot } from './agents/sessionTranscript.js';
 import { WorktreeManager } from './worktree/worktreeManager.js';
+import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
+import { fetchRemote } from './git/gitCli.js';
+import { PlanReconciler } from './plans/planReconciler.js';
 import { AgentManager } from './agents/agentManager.js';
 import {
   buildClaudeArgs,
@@ -75,6 +78,12 @@ export interface BuildOptions {
   sink?: ActionSink;
   /** Inject a fake process spawner (tests) for the stream-JSON runtime. */
   streamSpawner?: Spawner;
+  /**
+   * Override the git observer plan reconciliation reads branch reality through
+   * (tests inject `FakeGitObserver`). Injecting one also turns the reconciler's
+   * `git fetch` off — a scripted observer has no remote to refresh.
+   */
+  gitObserver?: GitObserver;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
 }
@@ -99,6 +108,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const backend = opts.backend ?? new NodePtyBackend();
 
   const worktrees = new WorktreeManager(config.repoRoot, config.worktreeRoot);
+  // Branch reality for plan reconciliation — read-only, and the seam a test swaps
+  // to script "has this part pushed" without a repo.
+  const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot);
 
   // Pick the agent runtime and how it's launched from the configured mode.
   // `claudeTui` marks the real interactive claude REPL, which needs two things
@@ -244,11 +256,26 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           config.planning,
         );
 
+  // The store holds scheduling intent; this folds git + provider reality back onto
+  // it every pulse. Its `git fetch` is wired only for the real observer: the seam
+  // is fetch-free by design, so refreshing the remote is the caller's call (floored
+  // by `planning.gitFetchIntervalMs` so a fast heartbeat can't storm the remote).
+  const plans = new PlanReconciler({
+    store,
+    git: gitObserver,
+    sink: opts.sink ?? connector,
+    planning: config.planning,
+    defaultBranch: config.defaultBranch,
+    fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
+    errors,
+  });
+
   const harness = new Harness({
     store,
     connector,
     dispatcher,
     executor,
+    plans,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,

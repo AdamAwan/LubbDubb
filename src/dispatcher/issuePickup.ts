@@ -1,4 +1,4 @@
-import type { Decision, Issue, Plan, PullRequest, Task } from '../types.js';
+import type { Decision, Issue, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { DEFAULT_PLANNING, issueOrigin, planOrigin, resolvePlanRoute, type PlanningPolicy } from '../plans/planning.js';
 
@@ -102,9 +102,8 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
   const reasons: string[] = [];
   // Ignore wins over everything else: an explicitly-ignored item is left alone
   // regardless of state or watch tag (mirrors the PR exclusion tag).
-  if (policy.ignoreLabel && issue.labels.includes(policy.ignoreLabel)) {
-    reasons.push(`ignored ("${policy.ignoreLabel}")`);
-  }
+  const ignored = issueIgnoreReason(issue, policy);
+  if (ignored) reasons.push(ignored);
   // State gate (Azure work items): only pick up items in an allowed workflow state
   // — e.g. "Ready"/"Doing", not "In Review". Items with no tracked state (GitHub,
   // fake) bypass this entirely, so it's a no-op unless the provider populates it.
@@ -115,22 +114,43 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
       else reasons.push(`state "${issue.workItemState}" not in pickup states`);
     }
   }
-  // Watch gate (opt-in): an issue must carry the watch tag to be worked. Empty
-  // watch label = gate off (the no-arg dispatcher / test default), so every open
-  // issue is eligible as before.
-  if (policy.watchLabel) {
-    const labels = policy.requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
-    if (!labels.includes(policy.watchLabel)) {
-      // Distinguish "not tagged at all" from "tagged, but not by you" (the
-      // ownership gate failing closed) so the operator knows which knob to turn.
-      if (policy.requireOwnLabel && issue.labels.includes(policy.watchLabel)) {
-        reasons.push(`watch label "${policy.watchLabel}" not added by you`);
-      } else {
-        reasons.push(`no watch label "${policy.watchLabel}"`);
-      }
-    }
-  }
+  const unwatched = issueWatchReason(issue, policy);
+  if (unwatched) reasons.push(unwatched);
   return { eligible: reasons.length === 0, reasons };
+}
+
+/** The explicit "leave it alone" tag, as a reason — or null when it isn't set. */
+function issueIgnoreReason(issue: Issue, policy: IssuePickupPolicy): string | null {
+  if (policy.ignoreLabel && issue.labels.includes(policy.ignoreLabel)) return `ignored ("${policy.ignoreLabel}")`;
+  return null;
+}
+
+/**
+ * The opt-in watch gate: an issue must carry the watch tag to be worked. Empty
+ * watch label = gate off (the no-arg dispatcher / test default), so every open
+ * issue passes as before.
+ */
+function issueWatchReason(issue: Issue, policy: IssuePickupPolicy): string | null {
+  if (!policy.watchLabel) return null;
+  const labels = policy.requireOwnLabel ? (issue.labelsAddedByViewer ?? []) : issue.labels;
+  if (labels.includes(policy.watchLabel)) return null;
+  // Distinguish "not tagged at all" from "tagged, but not by you" (the ownership
+  // gate failing closed) so the operator knows which knob to turn.
+  if (policy.requireOwnLabel && issue.labels.includes(policy.watchLabel)) {
+    return `watch label "${policy.watchLabel}" not added by you`;
+  }
+  return `no watch label "${policy.watchLabel}"`;
+}
+
+/**
+ * The label half of the gate on its own — the one parts inherit. There is no
+ * per-part watch check: the tag is evaluated once, on the parent issue, and parts
+ * follow it. Deliberately **without** the workflow-state gate: rule 3b parks a work
+ * item in the review state as soon as any part's PR opens, and re-applying the
+ * state gate there would stop the plan's remaining parts from ever being scheduled.
+ */
+export function issueWatchGateReason(issue: Issue, policy: IssuePickupPolicy): string | null {
+  return issueIgnoreReason(issue, policy) ?? issueWatchReason(issue, policy);
 }
 
 /**
@@ -188,6 +208,8 @@ export interface IssuePickupContext {
    * Omitted = funnel off, so every issue routes straight to pickup as before.
    */
   plans?: Plan[];
+  /** Every plan's parts, so a `parts` verdict can report progress rather than a flat string. */
+  planParts?: PlanPart[];
   planning?: PlanningPolicy;
   /** Remaining dispatch slots this cycle (0 while paused). */
   headroom: number;
@@ -203,6 +225,24 @@ export interface IssuePickupContext {
  */
 export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
   if (issue.state !== 'open') return { eligible: false, status: 'done', reasons: ['closed'] };
+
+  // The plan comes *before* the PR gate for an issue that split into parts, and it
+  // has to: a part's PR is on `issue/<n>/<slug>`, but `linkedPrNumber` is sticky and
+  // will point at one, so the PR gate below would report "has open PR #n" for every
+  // mid-plan issue — hiding the plan behind whichever part happened to open last.
+  const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
+  const planVerdict = resolvePlanRoute({
+    planning: ctx.planning ?? DEFAULT_PLANNING,
+    plan,
+    verdict: dispatchVerdict(planOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown),
+  });
+  if (planVerdict.route === 'parts' && plan) {
+    const parts = (ctx.planParts ?? []).filter((p) => p.planId === plan.id);
+    const merged = parts.filter((p) => p.status === 'merged').length;
+    const reason = parts.length === 0 ? 'plan split this into parts' : `${merged}/${parts.length} parts merged`;
+    return { eligible: false, status: 'planning', reasons: [reason] };
+  }
+
   // Resolved against the live PRs, not the sticky `linkedPrNumber` — the reason
   // says "open", so it has to be one, and a merged PR must not park the issue.
   const openPr = openPrForIssue(issue, ctx.openPrs);
@@ -229,14 +269,11 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     return { eligible: false, status: ignored ? 'ignored' : 'unwatched', reasons: intrinsic.reasons };
   }
 
-  // The plan funnel sits between eligibility and pickup: narrowing rule 4 without
-  // reporting it here would leave the chip saying "eligible" for an issue that is
-  // actually waiting on a planner, or has split into parts pickup will never run.
-  const route = resolvePlanRoute({
-    planning: ctx.planning ?? DEFAULT_PLANNING,
-    plan: ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null,
-    verdict: dispatchVerdict(planOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown),
-  });
+  // The rest of the funnel sits between eligibility and pickup: narrowing rule 4
+  // without reporting it here would leave the chip saying "eligible" for an issue
+  // that is actually waiting on a planner. (The `parts` arm is answered above,
+  // before the PR gate can mistake a part's PR for the issue's.)
+  const route = planVerdict;
   if (route.route === 'parts') {
     return { eligible: false, status: 'planning', reasons: ['plan split this into parts'] };
   }

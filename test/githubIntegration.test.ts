@@ -41,6 +41,7 @@ interface Script {
 interface Recorded {
   reviewReplies: Array<{ number: number; inReplyTo: number; body: string }>;
   issueComments: Array<{ number: number; body: string }>;
+  commentEdits: Array<{ commentId: number; body: string }>;
   merges: Array<{ number: number; method: MergeMethod }>;
   issueLabelQueries: Array<string | undefined>;
   labelSets: Array<{ number: number; label: string; present: boolean }>;
@@ -50,6 +51,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
   const recorded: Recorded = {
     reviewReplies: [],
     issueComments: [],
+    commentEdits: [],
     merges: [],
     issueLabelQueries: [],
     labelSets: [],
@@ -87,11 +89,15 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async createPullReviewReply(number, inReplyTo, body): Promise<GhCommentRef> {
       recorded.reviewReplies.push({ number, inReplyTo, body });
-      return { url: `https://github.com/o/r/pull/${number}#discussion_r${inReplyTo}` };
+      return { url: `https://github.com/o/r/pull/${number}#discussion_r${inReplyTo}`, id: inReplyTo };
     },
     async createIssueComment(number, body): Promise<GhCommentRef> {
       recorded.issueComments.push({ number, body });
-      return { url: `https://github.com/o/r/issues/${number}#issuecomment-1` };
+      return { url: `https://github.com/o/r/issues/${number}#issuecomment-1`, id: 900 + number };
+    },
+    async updateIssueComment(commentId, body): Promise<GhCommentRef> {
+      recorded.commentEdits.push({ commentId, body });
+      return { url: `https://github.com/o/r/issues/1#issuecomment-${commentId}`, id: commentId };
     },
     async mergePull(number, method): Promise<GhMergeResult> {
       recorded.merges.push({ number, method });
@@ -595,4 +601,23 @@ test('issues snapshot returns the last-good slice and records an error event on 
   const slice = await issues.snapshot();
   assert.deepEqual(slice.issues, []);
   store.close();
+});
+
+test('the plan status comment is created once, then edited in place', () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api, store });
+  return issues
+    .upsertIssueComment({ number: 12, body: 'first', commentRef: null })
+    .then((created) => {
+      assert.deepEqual(recorded.issueComments, [{ number: 12, body: 'first' }]);
+      assert.equal(created.ref, '912', 'the comment id comes back so the next write edits it');
+      return issues.upsertIssueComment({ number: 12, body: 'second', commentRef: created.ref ?? null });
+    })
+    .then((edited) => {
+      assert.deepEqual(recorded.commentEdits, [{ commentId: 912, body: 'second' }]);
+      assert.equal(recorded.issueComments.length, 1, 'one living comment, not a stream');
+      assert.equal(edited.ref, '912');
+      store.close();
+    });
 });

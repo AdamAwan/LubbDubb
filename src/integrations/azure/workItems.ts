@@ -1,8 +1,15 @@
 import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
+import type { IssueCommentInput, IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
 import type { Issue, IssueState } from '../../types.js';
-import type { Capability, Integration, IssueLabelCapable, WorkItemStateCapable, WorldSlice } from '../integration.js';
+import type {
+  Capability,
+  Integration,
+  IssueCommentCapable,
+  IssueLabelCapable,
+  WorkItemStateCapable,
+  WorldSlice,
+} from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItemUpdate } from './azureDevOpsApi.js';
 
 export interface AzureWorkItemsOpts {
@@ -32,7 +39,9 @@ export interface AzureWorkItemsOpts {
  * fake world (so it is *not* `Injectable`). Work-item tags map onto issue
  * `labels`, so the provider-agnostic pickup/priority gates work unchanged.
  */
-export class AzureDevOpsWorkItemsIntegration implements Integration, WorkItemStateCapable, IssueLabelCapable {
+export class AzureDevOpsWorkItemsIntegration
+  implements Integration, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable
+{
   readonly id = 'issues:azure';
   readonly capability: Capability = 'issues';
 
@@ -84,6 +93,22 @@ export class AzureDevOpsWorkItemsIntegration implements Integration, WorkItemSta
     await this.opts.api.setWorkItemState(input.number, input.state);
     this.opts.store.recordConnectorEvent('work_item_state_set', { ...input });
     return { ok: true };
+  }
+
+  /**
+   * The plan's status comment on the work item's discussion: created once, then
+   * edited in place by the id the create returned — one living comment per plan
+   * rather than a stream. Azure addresses an edit by (work item, comment), so both
+   * ride in.
+   */
+  async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
+    const existing = input.commentRef === null ? null : Number(input.commentRef);
+    const ref =
+      existing !== null && Number.isInteger(existing)
+        ? await this.opts.api.updateWorkItemComment(input.number, existing, input.body)
+        : await this.opts.api.createWorkItemComment(input.number, input.body);
+    this.opts.store.recordConnectorEvent('issue_comment_sent', { number: input.number, ref: ref.id });
+    return { ok: true, ref: String(ref.id) };
   }
 
   /** The outbound side of the watch/ignore toggle: add/remove a `System.Tags` entry. */

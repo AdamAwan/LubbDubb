@@ -38,6 +38,8 @@ export interface GitHubApi {
   createPullReviewReply(number: number, inReplyTo: number, body: string): Promise<GhCommentRef>;
   /** Top-level comment on a PR or issue (PRs are issues for the comments API). */
   createIssueComment(number: number, body: string): Promise<GhCommentRef>;
+  /** Edit an existing issue comment in place, by its comment id. */
+  updateIssueComment(commentId: number, body: string): Promise<GhCommentRef>;
   mergePull(number: number, method: MergeMethod): Promise<GhMergeResult>;
   /** Add (`present`) or remove a label on a PR. PRs are issues for the labels API. Idempotent. */
   setPullLabel(number: number, label: string, present: boolean): Promise<void>;
@@ -125,6 +127,8 @@ export interface GhTimelineEvent {
 
 export interface GhCommentRef {
   url: string;
+  /** The comment's own id — what an in-place edit addresses (the plan's status comment). */
+  id: number;
 }
 
 export interface GhMergeResult {

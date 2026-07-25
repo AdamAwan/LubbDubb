@@ -68,6 +68,12 @@ export const DISPATCH_RULES = {
     description:
       'With the planning funnel enabled, a watched open issue with no plan yet gets a planning agent first: it reads the repository and decides whether the work is one pull request or several, biasing hard toward one. Planners rank ahead of pickups because a planner unblocks work. Off by default; a planner that never produces a plan fails open to the single-PR path after the attempt cap, so a failure can never park an issue.',
   },
+  'plan-part': {
+    number: '4a',
+    name: 'Plan part ready',
+    description:
+      "One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/<n>/<slug>` — based on that dependency's branch while it is still open, on the default branch once it merged. Parts rank after planners and ahead of one-shot pickups, bottom of a stack first, and `maxConcurrentPartsPerIssue` caps how many parts of one plan may have agents at once: a human stacks safely because they hold the decomposition in their head, and N concurrent agents do not.",
+  },
   'issue-pickup': {
     number: '4',
     name: 'Open issue without a PR',

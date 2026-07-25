@@ -9,6 +9,7 @@ import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { isPrExcluded } from './prHealth.js';
+import type { PlanReconciler } from './plans/planReconciler.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 
 export interface HarnessDeps {
@@ -24,6 +25,11 @@ export interface HarnessDeps {
   steeringPriorities: string[];
   /** PRs carrying this label (`${labelPrefix}-ignore`) are excluded from dispatch (the operator's "leave it alone" tag). */
   prIgnoreLabel: string;
+  /**
+   * Folds git + provider reality onto the plan-part rows, next to the world diff.
+   * Absent = no plan tracking (and it no-ops anyway with the funnel off).
+   */
+  plans?: PlanReconciler;
 }
 
 /**
@@ -109,6 +115,10 @@ export class Harness extends EventEmitter {
       const { store } = this.deps;
       const world = await this.deps.connector.getState();
       this.recordWorldChanges(store, world);
+      // Fold observed reality onto the plan-part rows before anything reads them:
+      // the store holds intent, the outside world stays the source of truth, and a
+      // part this moves to `ready` is dispatchable in this same cycle.
+      await this.deps.plans?.reconcile(world);
       const tasks = store.listTasks();
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
@@ -116,6 +126,7 @@ export class Harness extends EventEmitter {
       // The plan funnel's memory: which issues already have a verdict, so a planner
       // never re-runs and pickup only fires for the ones that resolved to `single`.
       const plans = store.listPlans();
+      const planParts = store.listAllPlanParts();
       const recentDecisions = store.listDecisions(200);
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
@@ -144,6 +155,7 @@ export class Harness extends EventEmitter {
         openEscalations,
         queuedJobs,
         plans,
+        planParts,
         recentDecisions,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,

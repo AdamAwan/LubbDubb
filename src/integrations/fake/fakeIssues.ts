@@ -1,10 +1,11 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
-import type { IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
+import type { IssueCommentInput, IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
 import type {
   Capability,
   Injectable,
   Integration,
+  IssueCommentCapable,
   IssueLabelCapable,
   WorkItemStateCapable,
   WorldSlice,
@@ -19,9 +20,19 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue
  * adapter drops in under `issues` in its place, reading from the Issues API instead
  * of an injected fake world.
  */
-export class FakeIssuesIntegration implements Integration, Injectable, WorkItemStateCapable, IssueLabelCapable {
+export class FakeIssuesIntegration
+  implements Integration, Injectable, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable
+{
   readonly id = 'issues:fake';
   readonly capability: Capability = 'issues';
+
+  /**
+   * Comments the harness has written, keyed by the ref it handed back — the fake's
+   * stand-in for a provider comment store, so the "edit in place" contract (one
+   * living plan comment, not a stream) is exercised end to end without a network.
+   */
+  private readonly comments = new Map<string, { number: number; body: string }>();
+  private nextCommentId = 1;
 
   constructor(private readonly world: FakeWorldStore) {}
 
@@ -83,6 +94,18 @@ export class FakeIssuesIntegration implements Integration, Injectable, WorkItemS
       if (issue) issue.workItemState = input.state;
     });
     return { ok: true };
+  }
+
+  /** Create or edit a comment in the fake's own comment store, mirroring the real providers. */
+  async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
+    const ref = input.commentRef ?? `comment_${this.nextCommentId++}`;
+    this.comments.set(ref, { number: input.number, body: input.body });
+    return { ok: true, ref };
+  }
+
+  /** Every comment the harness has written, for assertions. */
+  readComments(): { ref: string; number: number; body: string }[] {
+    return [...this.comments].map(([ref, c]) => ({ ref, ...c }));
   }
 
   /** Reflect harness progress: an agent opened a PR that resolves this issue. */

@@ -318,6 +318,90 @@ export class Store {
     return rows.map(rowToPlanPart);
   }
 
+  /** Every part of every plan — what the dispatcher and the reconciler both walk. */
+  listAllPlanParts(): PlanPart[] {
+    const rows = this.db.prepare(`SELECT * FROM plan_parts ORDER BY plan_id ASC, seq ASC`).all() as PlanPartRow[];
+    return rows.map(rowToPlanPart);
+  }
+
+  /**
+   * Move a part's *progress* — status, branch, PR, task — leaving its declaration
+   * (seq/title/scope/dependsOn) to {@link upsertPlanParts}. The two halves of a part
+   * row have different authors: the planner declares, the scheduler and the
+   * reconciler record what happened. Returns null when the part is gone.
+   */
+  updatePlanPart(
+    id: string,
+    patch: { status?: PlanPart['status']; branch?: string | null; prNumber?: number | null; taskId?: string | null },
+  ): PlanPart | null {
+    const row = this.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    if (!row) return null;
+    const next: PlanPart = {
+      ...rowToPlanPart(row),
+      ...patch,
+      updatedAt: this.now(),
+    };
+    this.db
+      .prepare(
+        `UPDATE plan_parts SET status=@status, branch=@branch, pr_number=@prNumber, task_id=@taskId, updated_at=@updatedAt WHERE id=@id`,
+      )
+      .run({
+        id: next.id,
+        status: next.status,
+        branch: next.branch,
+        prNumber: next.prNumber,
+        taskId: next.taskId,
+        updatedAt: next.updatedAt,
+      });
+    return next;
+  }
+
+  /**
+   * A part's agent actually spawned. Called from the executor *after* the spawn, for
+   * the same reason {@link markJobDispatched} is: a dispatch the cap/pause gate holds
+   * must leave the part `ready` for a later cycle, not claim it started.
+   */
+  markPartDispatched(id: string, taskId: string, branch: string): PlanPart | null {
+    return this.updatePlanPart(id, { status: 'dispatched', taskId, branch });
+  }
+
+  /** Move a plan's own status (the parts roll-up, a replan, an abandon). */
+  setPlanStatus(id: string, status: PlanStatus): Plan | null {
+    const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
+    if (!row) return null;
+    const updatedAt = this.now();
+    this.db.prepare(`UPDATE plans SET status=?, updated_at=? WHERE id=?`).run(status, updatedAt, id);
+    return { ...rowToPlan(row), status, updatedAt };
+  }
+
+  /** Remember the provider comment id so the plan's status comment is edited, never re-posted. */
+  setPlanStatusComment(id: string, ref: string): Plan | null {
+    const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
+    if (!row) return null;
+    const updatedAt = this.now();
+    this.db.prepare(`UPDATE plans SET status_comment_ref=?, updated_at=? WHERE id=?`).run(ref, updatedAt, id);
+    return { ...rowToPlan(row), statusCommentRef: ref, updatedAt };
+  }
+
+  /**
+   * Fold a plan's part statuses back onto the plan: every part merged => `complete`,
+   * anything outstanding after that => back to `active` (a replan can add work to a
+   * finished plan). Returns the plan **only when the roll-up moved it**, so a caller
+   * can treat the return as the "the plan just completed" edge rather than re-deriving
+   * it. A partless plan (`single`, or one still `planning`) is never touched.
+   */
+  rollUpPlanStatus(planId: string): Plan | null {
+    const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(planId) as PlanRow | undefined;
+    if (!row) return null;
+    const plan = rowToPlan(row);
+    if (plan.status !== 'active' && plan.status !== 'complete') return null;
+    const parts = this.listPlanParts(planId);
+    if (parts.length === 0) return null;
+    const next: PlanStatus = parts.every((p) => p.status === 'merged') ? 'complete' : 'active';
+    if (next === plan.status) return null;
+    return this.setPlanStatus(planId, next);
+  }
+
   // -- Agents --------------------------------------------------------------
 
   createAgent(input: {

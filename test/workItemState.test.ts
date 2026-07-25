@@ -52,6 +52,9 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
       states.push(input);
       return { ok: true, ref: 'ok' };
     },
+    async upsertIssueComment(): Promise<SendResult> {
+      return { ok: true };
+    },
   };
   return { sink, states };
 }
@@ -90,6 +93,9 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
     },
     async setWorkItemState(): Promise<SendResult> {
       throw new Error('boom');
+    },
+    async upsertIssueComment(): Promise<SendResult> {
+      return { ok: true };
     },
   };
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink: failingSink });

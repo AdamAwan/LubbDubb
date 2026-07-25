@@ -8,6 +8,7 @@ import type {
   AzPull,
   AzThread,
   AzWorkItem,
+  AzWorkItemCommentRef,
   AzWorkItemUpdate,
   AzureDevOpsApi,
 } from './azureDevOpsApi.js';
@@ -25,6 +26,9 @@ const CONNECTION_DATA_API_VERSION = '7.1-preview.1';
 
 /** The policy evaluations resource is preview-only under 7.1. */
 const POLICY_API_VERSION = '7.1-preview.1';
+
+/** Work-item comments are preview-only under 7.1 (7.1 flat is rejected). */
+const WORK_ITEM_COMMENTS_API_VERSION = '7.1-preview.4';
 
 /**
  * How the harness authenticates to Azure DevOps. Two implementations ship, chosen
@@ -497,6 +501,26 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       headers: { 'Content-Type': 'application/json-patch+json' },
       body: JSON.stringify([{ op: 'add', path: '/fields/System.State', value: state }]),
     });
+  }
+
+  async createWorkItemComment(id: number, text: string): Promise<AzWorkItemCommentRef> {
+    const data = await this.request<{ id?: number }>(
+      this.withApiVersion(`${this.projectUrl}/_apis/wit/workItems/${id}/comments`, {}, WORK_ITEM_COMMENTS_API_VERSION),
+      { method: 'POST', body: JSON.stringify({ text }) },
+    );
+    return { id: data.id ?? 0 };
+  }
+
+  async updateWorkItemComment(id: number, commentId: number, text: string): Promise<AzWorkItemCommentRef> {
+    const data = await this.request<{ id?: number }>(
+      this.withApiVersion(
+        `${this.projectUrl}/_apis/wit/workItems/${id}/comments/${commentId}`,
+        {},
+        WORK_ITEM_COMMENTS_API_VERSION,
+      ),
+      { method: 'PATCH', body: JSON.stringify({ text }) },
+    );
+    return { id: data.id ?? commentId };
   }
 
   async setWorkItemTag(id: number, tag: string, present: boolean): Promise<void> {

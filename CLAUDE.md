@@ -106,10 +106,51 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   crash into a permanently parked issue. `plans`/`plan_parts` are fresh `CREATE TABLE`s, so no
   `migrate()` entry. `.lubbdubb/` is gitignored, so the graph genuinely lives only in the store.
   Tests: `test/issuePlan.test.ts`, `test/planIngestion.test.ts`.
+- **Plan parts (stage 3 of the multi-PR design).** What makes a `parts` verdict mean something.
+  Scheduling is pure in `src/plans/parts.ts` (origin `issue:<n>:part:<slug>`, branch
+  `issue/<n>/<slug>`, dependency depth, base selection, the sibling context the prompt carries),
+  and rule `plan-part` (4a) walks it. Things to preserve:
+  - **Parts are not driven off `eligibleIssues`.** That list gates on the issue having no open
+    PR, and a part's PR is exactly what makes the parent look taken (`linkedPrNumber` is sticky
+    and _will_ point at one). Rule 4a reads `ctx.plans`/`ctx.planParts` directly and applies only
+    `issueWatchGateReason` — the watch/ignore tag, evaluated once on the parent. Not the
+    workflow-state gate: rule 3b parks a decomposed work item in the review state for the life of
+    the plan (and suppresses its own inverse there), so re-applying the state gate would stop the
+    remaining parts ever being scheduled. `issuePickupStatus` answers the `parts` arm **before**
+    the open-PR gate for the same reason, reporting `2/5 parts merged`.
+  - **A part may declare at most one dependency**, enforced in the zod boundary alongside cycle
+    detection. It's the static form of "at most one _open_ dependency": with two, both could be in
+    review at once and there'd be no single branch to base on.
+  - **Base selection rides on the action.** `dispatch_code_agent` carries `base` + `partId`; the
+    executor passes `base` to `WorktreeManager.ensure` and calls `Store.markPartDispatched` only
+    _after_ the spawn (same rule as `jobId` — a held dispatch must leave the part `ready`).
+  - **The merge gate came forward from stage 4** with this, because this is the first point at
+    which stacked PRs exist: `isStackedPr` (beside `prHealth`) holds rule 3 off any PR whose base
+    isn't `defaultBranch`, or a green part 2 merges into part 1's branch mid-review.
+  - `maxConcurrentPartsPerIssue` counts **live tasks** on part origins, not the `dispatched`
+    status, and a `hold` verdict never eats a slot — one stuck part must not stall a plan.
+    Tests: `test/planPart.test.ts`.
+- **Plan reconciliation (`src/plans/planReconciler.ts`).** The store holds intent; the outside
+  world stays the source of truth. Runs each pulse in `harness.ts` next to `worldDiff` and
+  **before** `decide`, so a part it readies is dispatchable the same cycle. Two sources:
+  **git** (`GitObserver` — this is that seam's consumer) for branch reality, because it's the only
+  thing that sees a branch before a PR exists and `hasCommitsBeyond` _is_ "has the dependency
+  actually pushed"; **the provider**, from the world snapshot, for PR and merge state, because a
+  squash-merged branch has no ancestry to its base and git can never report a merge. Both
+  providers list only open PRs, so **a PR that has left the world reads as merged** (the same
+  reading `openPrForIssue` relies on) — mapping absence to `ready` instead would re-dispatch on
+  every real merge. Every fold is idempotent: each writes a status derived from the observation,
+  never toggled against the previous one. It also owns the plan's **single status comment**
+  (`IssueCommentCapable.upsertIssueComment`, `plans.status_comment_ref`, edited in place, written
+  only when there's news) and the `issue/<n>` **ref collision** guard — the flat branch blocks
+  every `issue/<n>/<slug>`, so the parts are parked `blocked` with one clear error rather than a
+  git failure per dispatch. `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
+  for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
+  get none). Tests: `test/planReconcile.test.ts`.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
-  cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are
-  coalesced (one in flight at a time).
+  cockpit's Activity feed) → plan reconciliation → `Dispatcher.decide` → `ActionExecutor` →
+  audit. Cycles are coalesced (one in flight at a time).
 - **`reconcileAndResumeOnBoot` in `src/system.ts`** runs once at boot, _before_
   `harness.runCycle('boot')`, so resumed agents occupy their concurrency slots before new work
   is dispatched. See "Resume on boot" below.
@@ -143,9 +184,10 @@ base)` cuts a **new** branch from `config.defaultBranch` (threaded through `Exec
   executor's existing `catch` audits it as a rejected dispatch) rather than falling back to
   HEAD — silently picking an incidental base is the bug the parameter exists to fix.
   `gitObserver.ts` is the read-only `GitObserver` seam (branch presence, ahead/behind,
-  `hasCommitsBeyond`) with `fakeGitObserver.ts` alongside; it is deliberately **fetch-free**
-  and, as of stage 1 of the multi-PR design, has no caller — its consumer is plan
-  reconciliation. Don't wire it into the pulse to give it one.
+  `hasCommitsBeyond`) with `fakeGitObserver.ts` alongside; it is deliberately **fetch-free**, and
+  its one consumer is plan reconciliation. Refreshing the remote is therefore the _caller's_ half
+  of the split: `fetchRemote(repoRoot)` here, run by `PlanReconciler` on the pulse and floored by
+  `planning.gitFetchIntervalMs`. Keep new observer methods read-only and fetch-free.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
@@ -473,6 +515,13 @@ so the executor runs it directly.
   actions. Endpoints: `POST /api/prs/:n/exclude` (`{excluded}`), `POST /api/issues/:n/watch` and
   `POST /api/stories/:id/watch` (`{watched}` — writes the `-watch`/`-ignore` pair, mutually
   exclusive). They're label writes, **not** dispatcher actions.
+- **`IssueCommentCapable.upsertIssueComment`** is the same pattern for the plan's status comment
+  (fake + `github` issues via the issue-comments API + `azure` work items via
+  `/_apis/wit/workItems/{id}/comments`). It takes a `commentRef` and hands one back, so a plan
+  keeps **one** living comment rather than a stream — GitHub's `GhCommentRef` grew an `id` for
+  exactly that, and Azure addresses an edit by (work item, comment). Called by the plan reconciler,
+  not by the executor: like `set_work_item_state` it's mechanical bookkeeping, so it isn't
+  auto-send gated, and the one-comment rule is what keeps it from being noise.
 - **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
   already has an active task. When the branch's agent is **running**, a fresh signal is delivered
   via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's

@@ -58,6 +58,7 @@ interface Recorded {
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
   stateSets: Array<{ id: number; state: string }>;
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
+  comments: Array<{ id: number; commentId: number | null; text: string }>;
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -71,6 +72,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     labelSets: [],
     stateSets: [],
     tagSets: [],
+    comments: [],
   };
   const api: AzureDevOpsApi = {
     async viewerUniqueName() {
@@ -119,6 +121,14 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setWorkItemTag(id, tag, present) {
       recorded.tagSets.push({ id, tag, present });
+    },
+    async createWorkItemComment(id, text) {
+      recorded.comments.push({ id, commentId: null, text });
+      return { id: 5000 + id };
+    },
+    async updateWorkItemComment(id, commentId, text) {
+      recorded.comments.push({ id, commentId, text });
+      return { id: commentId };
     },
   };
   return { api, recorded };
@@ -738,5 +748,21 @@ test('work items snapshot leaves ownership untracked when the gate is off', asyn
   const slice = await issues.snapshot();
   assert.equal(slice.issues![0]!.labelsAddedByViewer, undefined);
   assert.deepEqual(recorded.updateQueries, []);
+  store.close();
+});
+
+test('the plan status comment is created once on the work item, then edited in place', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, store });
+  const created = await issues.upsertIssueComment({ number: 101, body: 'first', commentRef: null });
+  assert.equal(created.ref, '5101');
+  // Azure addresses an edit by (work item, comment), so both have to ride in.
+  const edited = await issues.upsertIssueComment({ number: 101, body: 'second', commentRef: created.ref ?? null });
+  assert.deepEqual(recorded.comments, [
+    { id: 101, commentId: null, text: 'first' },
+    { id: 101, commentId: 5101, text: 'second' },
+  ]);
+  assert.equal(edited.ref, '5101');
   store.close();
 });
