@@ -89,6 +89,14 @@
   "// issueInReviewState": "The state a work item is moved to once a PR is open for it, so agents stop re-picking work already awaiting review/CI (e.g. 'In Review'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Unset = no automatic transition.",
   "issueInReviewState": "In Review",
 
+  "// planning": "The planning funnel for multi-PR issues. OFF by default, and off leaves it out entirely — no planner is ever dispatched and issue pickup behaves exactly as it does without plans. Turned on, every watched open issue first gets a PLANNING agent (rule 3c, on branch plan/issue/<n>) that reads the repo and writes a verdict to .lubbdubb/plan.json: 'single' (one PR — falls through to normal pickup, unchanged) or 'parts' (a decomposition, which the part scheduler owns). Planners rank AHEAD of pickups for scarce headroom, because a planner unblocks work. A planner that crashes or writes no plan fails OPEN after the usual attempt cap: the issue routes to 'single' and gets worked as it does today, so a planner failure can never park an issue. Only the 'rule' dispatcher implements the funnel. Deep-merged, so you can set just one field.",
+  "planning": {
+    "// enabled": "Master switch. Default false.",
+    "enabled": false,
+    "// maxConcurrentPartsPerIssue": "How many parts of one plan may have agents at once — a cap rather than fanning the whole graph out as soon as dependencies are satisfied. Default 2.",
+    "maxConcurrentPartsPerIssue": 2
+  },
+
   "// repoRoot": "The git repo the harness operates on; per-branch worktrees are cut from it. Defaults to the launch directory (process.cwd()), so the common case needs nothing. Set it (or the LUBBDUBB_REPO_ROOT env override) to point at a repo elsewhere; a relative path resolves against the launch dir.",
   "repoRoot": ".",
 

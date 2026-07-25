@@ -369,6 +369,10 @@ export function buildStateSnapshot(system: System) {
       // Unfiltered on purpose: an `-ignore` tagged PR is hidden from dispatch but
       // is still an open PR, so it still parks its issue (see `openPrForIssue`).
       openPrs: world.pullRequests,
+      // Same plan inputs rules 3c/4 read, so the chip explains an issue parked in
+      // the funnel rather than claiming it's eligible for a pickup that won't fire.
+      plans: store.listPlans(),
+      planning: config.planning,
       headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
       paused: control.paused,
     };

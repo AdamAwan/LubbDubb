@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
+import type { PlanningPolicy } from './plans/planning.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -90,6 +91,15 @@ export interface Config {
    * transition.
    */
   issueInReviewState?: string;
+  /**
+   * The planning funnel for multi-PR issues. **Off by default**, and off leaves it
+   * out entirely: rule 4 stays un-narrowed, no planner is ever dispatched, and
+   * behaviour is exactly what it is without plans. On, every watched open issue
+   * gets a planning agent before any implementation work — a real change in what
+   * the fleet spends its slots on. Deep-merged, so one field can be set alone.
+   * Only the `rule` dispatcher implements the funnel.
+   */
+  planning: PlanningPolicy;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -252,6 +262,7 @@ const DEFAULTS: Config = {
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
+  planning: { enabled: false, maxConcurrentPartsPerIssue: 2 },
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
@@ -316,6 +327,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // file (or override) can swap just one capability's provider without having to
   // re-list the defaults for the others.
   merged.integrations = { ...DEFAULTS.integrations, ...fromFile.integrations, ...overrides.integrations };
+
+  // planning is nested too — deep-merge so `{"enabled": true}` alone keeps the
+  // default part-concurrency cap instead of leaving it undefined.
+  merged.planning = { ...DEFAULTS.planning, ...fromFile.planning, ...overrides.planning };
 
   // Agents run in a worktree/scratch cwd, so any relative script path in
   // claudeArgs (e.g. the demo mock-agent) must be made absolute up front or the

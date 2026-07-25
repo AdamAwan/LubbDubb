@@ -62,11 +62,17 @@ export const DISPATCH_RULES = {
     description:
       'The inverse of the back-off: a still-open work item parked in the review state whose PR is no longer open is moved back to the first configured pickup state, so work left over after that PR merged can be picked up instead of the item staying parked forever.',
   },
+  'issue-plan': {
+    number: '3c',
+    name: 'Issue needs a plan',
+    description:
+      'With the planning funnel enabled, a watched open issue with no plan yet gets a planning agent first: it reads the repository and decides whether the work is one pull request or several, biasing hard toward one. Planners rank ahead of pickups because a planner unblocks work. Off by default; a planner that never produces a plan fails open to the single-PR path after the attempt cap, so a failure can never park an issue.',
+  },
   'issue-pickup': {
     number: '4',
     name: 'Open issue without a PR',
     description:
-      'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR.',
+      'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR. With the planning funnel on, this fires only for an issue whose plan says `single`; its behaviour for such an issue is otherwise unchanged.',
   },
   'cooldown-escalate': {
     number: '1–4',

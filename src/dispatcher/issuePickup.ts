@@ -1,5 +1,6 @@
-import type { Decision, Issue, PullRequest, Task } from '../types.js';
+import type { Decision, Issue, Plan, PullRequest, Task } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
+import { DEFAULT_PLANNING, issueOrigin, planOrigin, resolvePlanRoute, type PlanningPolicy } from '../plans/planning.js';
 
 /**
  * How the dispatcher gates and orders issue pickup, derived from operator config.
@@ -154,6 +155,7 @@ export type IssuePickupStatusKind =
   | 'active' // an agent/task is on it right now
   | 'ignored' // carries the ignore tag — the operator said leave it alone
   | 'unwatched' // not opted in (no watch tag) or parked by a state gate
+  | 'planning' // in the plan funnel — a verdict is owed, or it split into parts
   | 'cooldown' // attempted recently; waiting out the re-dispatch gap
   | 'escalated' // attempt cap spent; parked on a human
   | 'blocked' // eligible, but no capacity (paused or cap reached)
@@ -181,6 +183,12 @@ export interface IssuePickupContext {
    * tagged PR is hidden from dispatch but is still an open PR for this gate.
    */
   openPrs: PullRequest[];
+  /**
+   * The plan funnel's state and policy — the same inputs rules 3c and 4 consult.
+   * Omitted = funnel off, so every issue routes straight to pickup as before.
+   */
+  plans?: Plan[];
+  planning?: PlanningPolicy;
   /** Remaining dispatch slots this cycle (0 while paused). */
   headroom: number;
   paused: boolean;
@@ -202,9 +210,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
   // An active task on this origin owns the issue — report the agent's state.
   const origin = `issue:${issue.number}`;
-  const active = ctx.tasks.find(
-    (t) => t.originRef === origin && (t.status === 'queued' || t.status === 'running' || t.status === 'waiting'),
-  );
+  const active = ctx.tasks.find((t) => t.originRef === origin && isActiveTask(t));
   if (active) {
     const reason =
       active.status === 'running'
@@ -221,6 +227,27 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     // apart the way it marks an ignored PR (the ignore tag always wins above).
     const ignored = ctx.policy.ignoreLabel !== undefined && issue.labels.includes(ctx.policy.ignoreLabel);
     return { eligible: false, status: ignored ? 'ignored' : 'unwatched', reasons: intrinsic.reasons };
+  }
+
+  // The plan funnel sits between eligibility and pickup: narrowing rule 4 without
+  // reporting it here would leave the chip saying "eligible" for an issue that is
+  // actually waiting on a planner, or has split into parts pickup will never run.
+  const route = resolvePlanRoute({
+    planning: ctx.planning ?? DEFAULT_PLANNING,
+    plan: ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null,
+    verdict: dispatchVerdict(planOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown),
+  });
+  if (route.route === 'parts') {
+    return { eligible: false, status: 'planning', reasons: ['plan split this into parts'] };
+  }
+  if (route.route === 'planning') {
+    const planner = ctx.tasks.find((t) => t.originRef === planOrigin(issue.number) && isActiveTask(t));
+    const reason = planner
+      ? `planning agent ${planner.status === 'waiting' ? 'waiting on you' : planner.status}`
+      : route.planner === 'cooldown'
+        ? 'planning on cooldown'
+        : 'awaiting a planning agent';
+    return { eligible: false, status: 'planning', reasons: [reason] };
   }
 
   const verdict = dispatchVerdict(origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
@@ -245,6 +272,10 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   if (ctx.headroom <= 0) return { eligible: false, status: 'blocked', reasons: ['no agent capacity'] };
 
   return { eligible: true, status: 'eligible', reasons: [] };
+}
+
+function isActiveTask(t: Task): boolean {
+  return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
 }
 
 /** Executed dispatches for one origin in the recent audit window. */

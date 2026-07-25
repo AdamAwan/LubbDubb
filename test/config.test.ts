@@ -46,6 +46,15 @@ test('autoSend is deep-merged: a partial override keeps the other defaults', () 
   assert.deepEqual(cfg.autoSend.allowedActions, ['reply_on_pr']);
 });
 
+test('the planning funnel is off by default and deep-merged when overridden', () => {
+  // Off must be the default: on, every watched issue gains a planner ahead of any
+  // implementation work, which is a real change in what the fleet spends slots on.
+  assert.deepEqual(loadConfig().planning, { enabled: false, maxConcurrentPartsPerIssue: 2 });
+  const cfg = loadConfig({ planning: { enabled: true } as never });
+  assert.equal(cfg.planning.enabled, true);
+  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 2, 'untouched fields keep their defaults');
+});
+
 test('PORT and LUBBDUBB_DB env vars are honored', () => {
   const prevPort = process.env.PORT;
   const prevDb = process.env.LUBBDUBB_DB;

@@ -14,6 +14,16 @@ import {
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import type { DispatchRuleId } from './rules.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
+import { PLAN_FILE } from '../plans/planDocument.js';
+import {
+  DEFAULT_PLANNING,
+  issueOrigin,
+  planBranch,
+  planOrigin,
+  resolvePlanRoute,
+  type PlanningPolicy,
+  type PlanRouteVerdict,
+} from '../plans/planning.js';
 
 /**
  * A deterministic, dependency-free dispatcher that encodes the harness's default
@@ -25,6 +35,7 @@ import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
  *   2b. A PR has an unhandled comment -> spin up a code agent to address it
  *   3. A PR is green/approved/mergeable -> merge it in (gated by auto-send)
  *   3b. A work item's state lags its PR -> move it to/from the review state
+ *   3c. A watched open issue has no plan -> planning agent (funnel, off by default)
  *   4. An open issue has no open PR   -> code agent to resolve it into a PR
  *
  * At most one code agent works a given PR branch: when a fresh signal lands on a
@@ -47,6 +58,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly cooldown: CooldownPolicy;
   private readonly templates: PromptTemplates;
   private readonly defaultBranch: string;
+  private readonly planning: PlanningPolicy;
 
   /**
    * `pickup` gates and orders issue pickup (rule 4). Omitted/partial => no gate
@@ -57,15 +69,22 @@ export class RuleDispatcher implements Dispatcher {
    * `templates` supplies the agent/escalation prompt bodies; omitted => the
    * built-in defaults (the composition root loads operator overrides).
    * `defaultBranch` names the base a PR is assumed to target when the provider
-   * doesn't report one, and only phrases the base-update prompt.
+   * doesn't report one, and only phrases the base-update prompt. `planning` turns
+   * the plan funnel (rule 3c) on; omitted/disabled leaves rule 4 un-narrowed and
+   * behaviour exactly as it is without plans.
    */
   constructor(
     pickup: Partial<IssuePickupPolicy> = {},
     cooldown: Partial<CooldownPolicy> = {},
     templates: PromptTemplates = defaultPromptTemplates(),
     defaultBranch = 'main',
+    planning: Partial<PlanningPolicy> = {},
   ) {
     this.defaultBranch = defaultBranch;
+    this.planning = {
+      enabled: planning.enabled ?? DEFAULT_PLANNING.enabled,
+      maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
+    };
     this.templates = templates;
     this.pickup = {
       watchLabel: pickup.watchLabel,
@@ -378,7 +397,72 @@ export class RuleDispatcher implements Dispatcher {
       )
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
+
+    // Which arm of the plan funnel each eligible issue is on. Resolved once, from
+    // the persisted plan plus the plan origin's own cooldown verdict, and shared by
+    // rules 3c and 4 so the two can never disagree about an issue. With planning
+    // disabled every issue routes to `single`, so rule 4 below is un-narrowed.
+    const plansByOrigin = new Map((ctx.plans ?? []).map((p) => [p.originRef, p]));
+    const routes = new Map<number, PlanRouteVerdict>();
     for (const { issue } of eligibleIssues) {
+      routes.set(
+        issue.number,
+        resolvePlanRoute({
+          planning: this.planning,
+          plan: plansByOrigin.get(issueOrigin(issue.number)) ?? null,
+          verdict: dispatchVerdict(planOrigin(issue.number), now, ctx.recentDecisions, this.cooldown),
+        }),
+      );
+    }
+
+    // 3c: Put a planning agent in front of pickup. It reads the repo and writes a
+    // verdict — one PR or several — which is what makes today's one-agent/one-PR
+    // path an explicit outcome of the funnel rather than a bypass. Queued ahead of
+    // rule 4's pickups because a planner *unblocks* work, so it should win a scarce
+    // slot before the work it unblocks. There is no escalation arm: a planner that
+    // spends its attempt cap without producing a plan fails the issue open to
+    // `single` (see `resolvePlanRoute`), so a failure never parks an issue.
+    for (const { issue } of eligibleIssues) {
+      const route = routes.get(issue.number);
+      if (route?.route !== 'planning') continue;
+      const origin = planOrigin(issue.number);
+      if (activeOrigins.has(origin)) continue; // a planner is already on it
+      const branch = planBranch(issue.number);
+      const title = `Plan issue #${issue.number}`;
+      const reason = `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
+      candidates.push({
+        origin,
+        rule: 'issue-plan',
+        title,
+        kind: 'code',
+        branch,
+        reason,
+        // Throttled like any other origin — kept visible in the queue, not dispatched.
+        cooldown: route.planner === 'cooldown',
+        action: {
+          type: 'dispatch_code_agent',
+          branch,
+          title,
+          prompt: this.templates.render('issue-plan', {
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            branch,
+            planFile: PLAN_FILE,
+          }),
+          originRef: origin,
+          originTitle: issue.title,
+          originSummary: issue.body,
+          rule: 'issue-plan',
+          reason,
+        } satisfies RawAction,
+      });
+    }
+
+    for (const { issue } of eligibleIssues) {
+      // Narrowed by the funnel: an issue is picked up only once its plan says one
+      // PR will do. Everything below is byte-for-byte what it was before the gate.
+      if (routes.get(issue.number)?.route !== 'single') continue;
       const origin = `issue:${issue.number}`;
       // An agent already on this issue owns it — don't throttle/escalate over a
       // live attempt; the active-task de-dup handles it.

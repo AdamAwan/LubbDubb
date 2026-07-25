@@ -327,6 +327,71 @@ export interface AgentFile {
 /** A file event as captured, before the store assigns identity. */
 export type AgentFileInput = Pick<AgentFile, 'path' | 'tool' | 'promoted'>;
 
+// ---------------------------------------------------------------------------
+// Plans (the multi-PR issue funnel)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a plan sits in its life:
+ * - `planning` — a verdict is still being worked out (a replan in flight).
+ * - `single`   — the planner said one PR; the issue falls through to normal pickup.
+ * - `active`   — decomposed into parts, at least one still outstanding.
+ * - `complete` — every part merged.
+ * - `abandoned`— the operator gave up on the decomposition.
+ */
+export type PlanStatus = 'planning' | 'single' | 'active' | 'complete' | 'abandoned';
+
+/**
+ * One issue's delivery plan — the planning agent's verdict, persisted so the
+ * planner never re-runs on the same issue. Written for *both* outcomes: a
+ * `single` plan is a first-class row, which is what turns today's one-agent /
+ * one-PR path into an explicit outcome of the funnel rather than a bypass.
+ */
+export interface Plan {
+  id: string;
+  /** The issue this plan belongs to, in the world's ref shape: `issue:12`. */
+  originRef: string;
+  title: string;
+  status: PlanStatus;
+  /** The planner's own justification for its verdict. Null when it gave none. */
+  reason: string | null;
+  /** Provider comment id for the plan's status comment, edited in place (stage 3). */
+  statusCommentRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Where one part of a multi-PR plan sits: `pending` (dependencies outstanding),
+ * `ready` (dispatchable), `dispatched` (an agent is on it), `in_review` (its PR
+ * is open), `merged`, or `blocked`.
+ */
+export type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked';
+
+/** One part of a multi-PR plan — a single reviewable PR's worth of work. */
+export interface PlanPart {
+  /** `<plan id>:<slug>`. */
+  id: string;
+  planId: string;
+  /** Stable, author-chosen, unique within the plan; survives a replan. */
+  slug: string;
+  seq: number;
+  title: string;
+  /** Files/areas this part owns, so concurrent parts don't collide. */
+  scope: string;
+  /** Sibling slugs this part stacks on. */
+  dependsOn: string[];
+  branch: string | null;
+  prNumber: number | null;
+  status: PlanPartStatus;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A part as the planner declared it, before the store assigns identity or progress. */
+export type PlanPartInput = Pick<PlanPart, 'slug' | 'seq' | 'title' | 'scope' | 'dependsOn'>;
+
 /** One cumulative usage report from a session's turn-end `result` event. */
 export interface AgentUsage {
   costUsd: number | null;

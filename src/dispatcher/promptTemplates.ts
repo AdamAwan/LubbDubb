@@ -19,6 +19,7 @@ import { basename, extname, join } from 'node:path';
  * this is the rule dispatcher's template book.
  */
 export type PromptId =
+  | 'issue-plan'
   | 'issue-pickup'
   | 'issue-pickup-escalation'
   | 'pr-ci-fix'
@@ -44,6 +45,27 @@ interface TemplateDef {
 }
 
 const REGISTRY: Record<PromptId, TemplateDef> = {
+  'issue-plan': {
+    placeholders: ['number', 'title', 'body', 'branch', 'planFile'],
+    template:
+      'Issue #{number} ("{title}") needs a delivery plan before any code is written.\n\n{body}\n\n' +
+      'Read the repository and decide whether this work is ONE pull request or several. ' +
+      'Bias hard toward one: splitting is the exception, and turning a twenty-minute fix into three PRs ' +
+      'costs far more than it saves. Split only when the work genuinely cannot land as a single reviewable ' +
+      'PR — for example when a schema or interface change must merge before the code that consumes it.\n\n' +
+      'Write your verdict to {planFile} in this worktree, creating the directory if needed. For one PR:\n\n' +
+      '  {"version": 1, "verdict": "single", "reason": "<one sentence>"}\n\n' +
+      'For several, each part being one reviewable PR:\n\n' +
+      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>", "parts": [\n' +
+      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": []},\n' +
+      '    {"slug": "dispatcher", "title": "...", "scope": "src/dispatcher/...", "dependsOn": ["schema"]}\n' +
+      '  ]}\n\n' +
+      'Slugs are short, lowercase, kebab-case and unique; "scope" names the files or areas that part owns, ' +
+      'so parts running at the same time do not collide; "dependsOn" lists sibling slugs only.\n\n' +
+      'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you ' +
+      'are on branch {branch} only so you have the repository to read.',
+    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule 3c). The agent writes its verdict to the plan file; nothing else it does is read. Placeholders: {number} {title} {body} {branch} {planFile}.',
+  },
   'issue-pickup': {
     placeholders: ['number', 'title', 'body', 'branch'],
     template:
