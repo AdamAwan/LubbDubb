@@ -4,8 +4,8 @@
  *
  * Handles the ref shapes the harness actually produces: PR/issue origin refs
  * (`pr:42:ci`, `issue:13`), the universal `#42`/bare-number syntax, explicit
- * commit refs, and branch names. Non-source-control refs (`story:…`, `meeting:…`)
- * and anything unrecognised return `null` — they have no GitHub page.
+ * commit refs, and branch names. Non-source-control refs (`story:…`) and anything
+ * unrecognised return `null` — they have no GitHub page.
  */
 export function githubRefUrl(owner: string, repo: string, ref: string): string | null {
   const base = `https://github.com/${owner}/${repo}`;

@@ -17,7 +17,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], calendar: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],

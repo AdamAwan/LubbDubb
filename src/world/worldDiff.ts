@@ -1,4 +1,4 @@
-import type { CalendarEvent, Issue, PullRequest, Story, WorldEventInput, WorldSnapshot } from '../types.js';
+import type { Issue, PullRequest, Story, WorldEventInput, WorldSnapshot } from '../types.js';
 
 /**
  * Derive the observed state transitions between two consecutive world
@@ -75,18 +75,6 @@ export function diffWorlds(prev: WorldSnapshot, next: WorldSnapshot): WorldEvent
     }
   }
 
-  const prevMeetings = byId(prev.calendar);
-  for (const meeting of next.calendar) {
-    const before = prevMeetings.get(meeting.id);
-    if (!before) {
-      events.push({ kind: 'meeting_added', ref: meetingRef(meeting), summary: `Meeting added: ${meeting.title}` });
-      continue;
-    }
-    if (!before.prepDone && meeting.prepDone) {
-      events.push({ kind: 'meeting_prep', ref: meetingRef(meeting), summary: `Prep done for "${meeting.title}"` });
-    }
-  }
-
   return events;
 }
 
@@ -97,4 +85,3 @@ function byId<T extends { id: string }>(items: T[]): Map<string, T> {
 const prRef = (pr: PullRequest): string => `pr:${pr.number}`;
 const issueRef = (issue: Issue): string => `issue:${issue.number}`;
 const storyRef = (story: Story): string => `story:${story.id}`;
-const meetingRef = (meeting: CalendarEvent): string => `meeting:${meeting.id}`;

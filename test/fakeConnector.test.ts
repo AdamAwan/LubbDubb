@@ -16,7 +16,6 @@ test('a fresh connector reports an empty, timestamped world', async () => {
   assert.deepEqual(world.pullRequests, []);
   assert.deepEqual(world.issues, []);
   assert.deepEqual(world.stories, []);
-  assert.deepEqual(world.calendar, []);
   store.close();
 });
 

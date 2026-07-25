@@ -46,14 +46,6 @@ export interface Config {
    */
   azureDevOps?: AzureDevOpsConfig;
   /**
-   * Microsoft 365 target, used when a capability uses the `microsoft365` provider
-   * (currently the `calendar` slice, read from Outlook/Teams via Microsoft Graph).
-   * Auth is deliberately NOT here: a bearer token comes from the
-   * `MICROSOFT_GRAPH_TOKEN` env var, and if that is unset the logged-in `az` CLI is
-   * used — so a secret never lands in a committed config file.
-   */
-  microsoft365?: Microsoft365Config;
-  /**
    * The prefix behind the cockpit's watch/ignore toggle, shared by PRs, issues and
    * stories. It derives two labels — `${labelPrefix}-watch` ("work this") and
    * `${labelPrefix}-ignore` ("leave this alone") — read by the dispatcher gates and
@@ -215,17 +207,6 @@ export interface AzureDevOpsConfig {
   };
 }
 
-export interface Microsoft365Config {
-  /**
-   * Target mailbox for the calendar (UPN or object id). Required for app-only
-   * (client-credential) tokens, which have no `me`; omit when using a delegated
-   * token to read the signed-in user's own calendar.
-   */
-  userId?: string;
-  /** How many days ahead to surface events. Defaults to 7. */
-  windowDays?: number;
-}
-
 export interface WhitelistRule {
   /** Substring matched against the agent's waiting prompt. */
   match: string;
@@ -257,7 +238,7 @@ const DEFAULTS: Config = {
   whitelistedApprovals: [],
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
-  integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' },
+  integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake' },
   labelPrefix: 'lubbdubb',
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },

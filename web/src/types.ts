@@ -48,68 +48,11 @@ export interface Story {
   /** Labels/tags on the story, carrying the watch/ignore tag when the operator toggles it. */
   labels?: string[];
 }
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  startsAt: string;
-  prepDocs: string[];
-  prepDone: boolean;
-}
 export interface WorldSnapshot {
   takenAt: string;
   pullRequests: PullRequest[];
   issues: Issue[];
   stories: Story[];
-  calendar: CalendarEvent[];
-}
-
-// The Claude-bridged desk briefing (mirrors the server's DeskBriefing — the web
-// bundle keeps its own copy and never imports server code). Read-only in the UI.
-export interface BriefingMeeting {
-  id: string;
-  subject: string;
-  start: string;
-  end: string;
-  isOnline: boolean;
-  joinUrl?: string;
-  webLink?: string;
-  organizer?: string;
-  attendeeCount?: number;
-  responseRequested?: boolean;
-  showAs?: 'free' | 'tentative' | 'busy' | 'oof' | 'workingElsewhere' | 'unknown';
-  relevance: 'mine' | 'area';
-}
-export interface BriefingMail {
-  id: string;
-  subject: string;
-  from: string;
-  receivedAt: string;
-  isUnread: boolean;
-  isFlagged: boolean;
-  webLink?: string;
-  preview?: string;
-  relevance: 'mine' | 'area';
-  area?: string;
-}
-export interface BriefingPing {
-  id: string;
-  source: 'teams';
-  chatOrChannel: string;
-  from: string;
-  sentAt: string;
-  preview?: string;
-  webLink?: string;
-  relevance: 'mine' | 'area';
-}
-export interface DeskBriefing {
-  generatedAt: string;
-  windowStart: string;
-  windowEnd: string;
-  owner: { email: string; name?: string };
-  areas: string[];
-  meetings: BriefingMeeting[];
-  mail: BriefingMail[];
-  pings: BriefingPing[];
 }
 
 export interface Task {
@@ -271,9 +214,7 @@ export type WorldEventKind =
   | 'issue_closed'
   | 'issue_linked'
   | 'story_added'
-  | 'story_state'
-  | 'meeting_added'
-  | 'meeting_prep';
+  | 'story_state';
 
 export interface WorldEvent {
   id: string;
@@ -330,8 +271,6 @@ export interface AppState {
   worldEvents: WorldEvent[];
   /** Recorded failures, newest first — the Errors panel. */
   errors: ErrorLogEntry[];
-  /** The Claude-bridged desk briefing, or null until a bridge has posted one. */
-  briefing: DeskBriefing | null;
   /** Claude usage: rolling cost windows + account rate limits when captured. */
   usage: UsageSnapshot;
   /**

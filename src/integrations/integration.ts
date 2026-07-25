@@ -19,22 +19,22 @@ import type { WorldSnapshot } from '../types.js';
  * The harness reads the world through a single {@link Connector} and writes
  * through a single {@link ActionSink}, but behind those seams the world is
  * assembled from many small integrations — one per **capability** (source
- * control, backlog, calendar, …). Each capability has interchangeable
- * **provider** implementations (a fake one here; a real GitHub / Azure DevOps /
- * Google / Outlook one later) selected in config, so swapping the provider for a
+ * control, backlog, …). Each capability has interchangeable
+ * **provider** implementations (a fake one here; a real GitHub / Azure DevOps one
+ * later) selected in config, so swapping the provider for a
  * capability is a config change, not a code change. See {@link CompositeConnector}
  * for how the slices are merged and {@link buildIntegrations} for how config
  * chooses the providers.
  */
 
 /** The kinds of integration the harness understands. Mirrors {@link WorldSnapshot}. */
-export type Capability = 'sourceControl' | 'issues' | 'backlog' | 'calendar';
+export type Capability = 'sourceControl' | 'issues' | 'backlog';
 
 /** One provider chosen per capability. This is the swap switch (set in config). */
 export type IntegrationSelection = Record<Capability, string>;
 
 /** One integration's contribution to the world — only the domains it owns. */
-export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'issues' | 'stories' | 'calendar'>>;
+export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'issues' | 'stories'>>;
 
 /** Everything a provider factory needs to build an integration. */
 export interface IntegrationContext {

@@ -6,7 +6,7 @@ import { relTime } from './util.js';
  * The world's change history — the counterpart to the decision log, but for the
  * outside world rather than the harness. Each entry is one observed state
  * transition (a PR going green, a story moving to in_progress, …), newest first.
- * Category chips narrow to PRs / Issues / Stories / Meetings.
+ * Category chips narrow to PRs / Issues / Stories.
  */
 export function ActivityFeed({ events, now }: { events: WorldEvent[]; now: number }) {
   const [filter, setFilter] = useState<string>('all');
@@ -20,7 +20,7 @@ export function ActivityFeed({ events, now }: { events: WorldEvent[]; now: numbe
     return c;
   }, [events]);
 
-  const categories = ['all', 'prs', 'issues', 'stories', 'meetings'].filter((c) => c === 'all' || counts[c]);
+  const categories = ['all', 'prs', 'issues', 'stories'].filter((c) => c === 'all' || counts[c]);
   const shown = filter === 'all' ? events : events.filter((e) => categoryOf(e.kind) === filter);
 
   return (
@@ -48,11 +48,10 @@ export function ActivityFeed({ events, now }: { events: WorldEvent[]; now: numbe
   );
 }
 
-function categoryOf(kind: WorldEventKind): 'prs' | 'issues' | 'stories' | 'meetings' {
+function categoryOf(kind: WorldEventKind): 'prs' | 'issues' | 'stories' {
   if (kind.startsWith('pr_')) return 'prs';
   if (kind.startsWith('issue_')) return 'issues';
-  if (kind.startsWith('story_')) return 'stories';
-  return 'meetings';
+  return 'stories';
 }
 
 /** Short human label for a transition kind (the badge text). */
@@ -69,8 +68,6 @@ function labelOf(kind: WorldEventKind): string {
     issue_linked: 'linked',
     story_added: 'story added',
     story_state: 'story',
-    meeting_added: 'meeting',
-    meeting_prep: 'prep done',
   };
   return labels[kind];
 }

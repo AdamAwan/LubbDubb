@@ -1,5 +1,5 @@
 import type { Store } from '../../store/store.js';
-import type { CalendarEvent, Issue, PullRequest, Story } from '../../types.js';
+import type { Issue, PullRequest, Story } from '../../types.js';
 
 const STATE_KEY = 'fake_world';
 
@@ -8,10 +8,9 @@ export interface FakeWorld {
   pullRequests: PullRequest[];
   issues: Issue[];
   stories: Story[];
-  calendar: CalendarEvent[];
 }
 
-export const EMPTY_WORLD: FakeWorld = { pullRequests: [], issues: [], stories: [], calendar: [] };
+export const EMPTY_WORLD: FakeWorld = { pullRequests: [], issues: [], stories: [] };
 
 /**
  * A thin read/write wrapper over the single persisted `fake_world` document in

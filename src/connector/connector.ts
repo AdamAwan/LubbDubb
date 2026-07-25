@@ -6,7 +6,7 @@ import type { MergeableState, WorldSnapshot } from '../types.js';
  * The harness depends on nothing more than this interface. Behind it the world is
  * assembled from many small, per-capability integrations (see `src/integrations/`),
  * each with an interchangeable provider chosen in config — so a real Azure DevOps
- * / GitHub / calendar / Gmail adapter drops in for one capability without any
+ * / GitHub adapter drops in for one capability without any
  * other module changing. `CompositeConnector` merges those slices into this seam,
  * and the outbound mirror lives in `src/sink/actionSink.ts`.
  */
@@ -37,5 +37,4 @@ export type InjectableEvent =
       wafPillars?: string[];
       labels?: string[];
     }
-  | { kind: 'story_state'; storyId: string; state: 'ready' | 'in_progress' | 'blocked' | 'done' }
-  | { kind: 'meeting'; title: string; startsAt: string; prepDocs?: string[] };
+  | { kind: 'story_state'; storyId: string; state: 'ready' | 'in_progress' | 'blocked' | 'done' };

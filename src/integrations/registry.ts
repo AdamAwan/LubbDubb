@@ -4,24 +4,20 @@ import { FakeWorldStore } from './fake/fakeWorld.js';
 import { FakeGitHubIntegration } from './fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from './fake/fakeIssues.js';
 import { FakeBacklogIntegration } from './fake/fakeBacklog.js';
-import { FakeCalendarIntegration } from './fake/fakeCalendar.js';
 import { OctokitGitHubApi } from './github/octokitGitHubApi.js';
 import { GitHubSourceControlIntegration } from './github/sourceControl.js';
 import { GitHubIssuesIntegration } from './github/issues.js';
 import { RestAzureDevOpsApi, resolveAzureAuth } from './azure/restAzureDevOpsApi.js';
 import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
 import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
-import { RestMicrosoftGraphApi, resolveMicrosoftGraphAuth } from './microsoft/restMicrosoftGraphApi.js';
-import { MicrosoftCalendarIntegration } from './microsoft/calendar.js';
-import { IngestedCalendarIntegration } from './ingested/calendar.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
 type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
 
 /**
  * The provider registry: capability → provider id → factory. Adding a real
- * provider is one line here (e.g. `github` under `sourceControl`, `outlook` under
- * `calendar`); nothing else in the harness changes. Selecting it is a config
+ * provider is one line here (e.g. `github` under `sourceControl`); nothing else in
+ * the harness changes. Selecting it is a config
  * change (`integrations.sourceControl: 'github'`).
  */
 const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
@@ -76,18 +72,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   backlog: {
     fake: (_ctx, world) => new FakeBacklogIntegration(world),
   },
-  calendar: {
-    fake: (_ctx, world) => new FakeCalendarIntegration(world),
-    microsoft365: (ctx) => {
-      const { api, windowDays } = microsoftApi(ctx);
-      return new MicrosoftCalendarIntegration({ api, store: ctx.store, errors: ctx.errors, windowDays });
-    },
-    ingested: (ctx) => new IngestedCalendarIntegration({ store: ctx.store }),
-  },
 };
-
-/** Default look-ahead window for the Microsoft 365 calendar when config doesn't set one. */
-const DEFAULT_CALENDAR_WINDOW_DAYS = 7;
 
 const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
 
@@ -136,22 +121,6 @@ function azureApi(ctx: IntegrationContext): { api: RestAzureDevOpsApi; az: Azure
   // so an occasional failure is visible even when the retry silently recovers.
   const log = ctx.errors ? (message: string) => void ctx.errors!.record({ source: 'provider', message }) : undefined;
   return { api: RestAzureDevOpsApi.create(az, resolveAzureAuth(), log), az };
-}
-
-/**
- * Build the real Microsoft Graph client for a `microsoft365`-selected capability.
- * Config is optional: with no `microsoft365` block it reads the delegated signed-in
- * user's calendar over the default window. Auth is resolved lazily
- * ({@link resolveMicrosoftGraphAuth} — a bearer from `MICROSOFT_GRAPH_TOKEN`, else the
- * logged-in `az` CLI), so a missing login surfaces as a clear connector error at
- * snapshot time rather than blocking boot.
- */
-function microsoftApi(ctx: IntegrationContext): { api: RestMicrosoftGraphApi; windowDays: number } {
-  const cfg = ctx.config.microsoft365 ?? {};
-  return {
-    api: RestMicrosoftGraphApi.create(cfg, resolveMicrosoftGraphAuth()),
-    windowDays: cfg.windowDays ?? DEFAULT_CALENDAR_WINDOW_DAYS,
-  };
 }
 
 /**

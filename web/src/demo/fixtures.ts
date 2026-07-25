@@ -14,15 +14,6 @@ export function buildDemoState(): DemoSeed {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
   const ahead = (mins: number) => new Date(now + mins * 60_000).toISOString();
-  // A fixed local wall-clock time, `offsetDays` from today — so the demo agenda
-  // reliably spans Today and Tomorrow regardless of when it's opened.
-  const dayAt = (offsetDays: number, h: number, m: number) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() + offsetDays);
-    d.setHours(h, m, 0, 0);
-    return d.toISOString();
-  };
-
   const state: AppState = {
     config: {
       // Short heartbeat so the countdown bar visibly moves in the demo.
@@ -138,15 +129,6 @@ export function buildDemoState(): DemoSeed {
           state: 'ready',
           priority: 1,
           labels: ['lubbdubb-watch'],
-        },
-      ],
-      calendar: [
-        {
-          id: 'evt-1',
-          title: 'Architecture review',
-          startsAt: ahead(95),
-          prepDocs: ['design.md', 'ADR-014'],
-          prepDone: false,
         },
       ],
     },
@@ -418,106 +400,17 @@ export function buildDemoState(): DemoSeed {
           'An open, pickup-eligible issue with no linked PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority.',
       },
       'story-pickup': {
-        number: '8',
+        number: '7',
         name: 'Idle capacity pickup',
         description:
           'With headroom left and nothing urgent, the highest-priority ready story (already groomed) is picked up by a code agent — idle capacity should always pull work.',
       },
       idle: {
-        number: '9',
+        number: '8',
         name: 'Nothing actionable',
         description:
           'No rule matched this cycle, so a no-op is recorded — idleness is a decision too, and stays auditable.',
       },
-    },
-    // The Claude-bridged desk briefing — mail + Teams pings + meetings, all canned.
-    briefing: {
-      generatedAt: ago(20),
-      windowStart: ago(20),
-      windowEnd: ahead(600),
-      owner: { email: 'you@example.com', name: 'You' },
-      areas: ['me', 'statements'],
-      meetings: [
-        {
-          id: 'evt-0',
-          subject: 'Standup — Platform',
-          start: ago(180),
-          end: ago(150),
-          isOnline: true,
-          joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo0',
-          webLink: 'https://outlook.office365.com/owa/?itemid=evt-0',
-          organizer: 'You',
-          attendeeCount: 8,
-          showAs: 'busy',
-          relevance: 'mine',
-        },
-        {
-          id: 'evt-1',
-          subject: 'Architecture review',
-          start: ahead(25),
-          end: ahead(85),
-          isOnline: true,
-          joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo',
-          webLink: 'https://outlook.office365.com/owa/?itemid=evt-1',
-          organizer: 'Priya',
-          attendeeCount: 6,
-          responseRequested: true,
-          showAs: 'busy',
-          relevance: 'mine',
-        },
-        {
-          id: 'evt-2',
-          subject: 'Sprint planning',
-          start: dayAt(1, 10, 0),
-          end: dayAt(1, 10, 45),
-          isOnline: true,
-          joinUrl: 'https://teams.microsoft.com/l/meetup-join/demo2',
-          webLink: 'https://outlook.office365.com/owa/?itemid=evt-2',
-          organizer: 'Priya',
-          attendeeCount: 9,
-          responseRequested: true,
-          showAs: 'busy',
-          relevance: 'mine',
-        },
-        {
-          id: 'evt-3',
-          subject: 'Vendor sync — payments',
-          start: dayAt(1, 16, 0),
-          end: dayAt(1, 16, 30),
-          isOnline: false,
-          webLink: 'https://outlook.office365.com/owa/?itemid=evt-3',
-          organizer: 'Dana',
-          attendeeCount: 4,
-          showAs: 'busy',
-          relevance: 'area',
-        },
-      ],
-      mail: [
-        {
-          id: 'mail-1',
-          subject: 'Q3 statements ready for review',
-          from: 'finance@example.com',
-          receivedAt: ago(45),
-          isUnread: true,
-          isFlagged: true,
-          webLink: 'https://outlook.office365.com/mail/inbox/id/mail-1',
-          preview: 'The consolidated statements are attached — please confirm the revenue split by EOD.',
-          relevance: 'area',
-          area: 'statements',
-        },
-      ],
-      pings: [
-        {
-          id: 'ping-1',
-          source: 'teams',
-          chatOrChannel: 'Platform',
-          from: 'Jo',
-          sentAt: ago(12),
-          preview: 'Did the rate-limit fix land? CI still looks red on my end.',
-          webLink: 'https://teams.microsoft.com/l/message/demo/ping-1',
-          relevance: 'mine',
-        },
-      ],
     },
     // Claude usage: canned subscriber limits (as the PTY status-line capture
     // would report) plus rolling cost windows summed from agent turn reports.
