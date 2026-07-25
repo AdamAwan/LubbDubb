@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +8,19 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem, reconcileAndResumeOnBoot, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Escalation } from '../src/types.js';
+
+/** A throwaway git repo with one commit, so real `git worktree add` works in isolation. */
+function gitRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
+  // Named explicitly: agent branches are cut from `config.defaultBranch` ("main"),
+  // while bare `git init` takes whatever the host's init.defaultBranch says.
+  git(['init', '-q', '-b', 'main']);
+  git(['config', 'user.email', 'test@example.com']);
+  git(['config', 'user.name', 'Test']);
+  git(['commit', '-q', '--allow-empty', '-m', 'root']);
+  return dir;
+}
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -17,6 +31,9 @@ function testConfig() {
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
+    // Own repo, not the ambient checkout: a code dispatch cuts a real worktree, and
+    // the CI checkout is a detached shallow clone with no `main` to cut it from.
+    repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
