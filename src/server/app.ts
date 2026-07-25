@@ -366,6 +366,9 @@ export function buildStateSnapshot(system: System) {
       now: world.takenAt,
       tasks,
       recentDecisions: store.listDecisions(200),
+      // Unfiltered on purpose: an `-ignore` tagged PR is hidden from dispatch but
+      // is still an open PR, so it still parks its issue (see `openPrForIssue`).
+      openPrs: world.pullRequests,
       headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
       paused: control.paused,
     };

@@ -1,10 +1,17 @@
-import type { Agent, Decision, Escalation, Job, Task, WorldSnapshot } from '../types.js';
+import type { Agent, Decision, Escalation, Job, PullRequest, Task, WorldSnapshot } from '../types.js';
 import type { ParseResult } from './actions.js';
 import type { DispatchRuleId } from './rules.js';
 
 /** Everything the dispatcher gets to look at when deciding what to do this cycle. */
 export interface DispatchContext {
   world: WorldSnapshot;
+  /**
+   * Open PRs the operator's `-ignore` tag hid from `world.pullRequests`. No rule
+   * *acts* on them — that's the point of the tag — but they're still open, so gates
+   * that must not read "absent from the world" as "merged" (issue pickup, the
+   * work-item state back-off) resolve against these too. Absent/empty = nothing hidden.
+   */
+  excludedPrs?: PullRequest[];
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: Task[];
   agents: Agent[];

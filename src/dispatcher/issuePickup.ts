@@ -1,4 +1,4 @@
-import type { Decision, Issue, Task } from '../types.js';
+import type { Decision, Issue, PullRequest, Task } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 
 /**
@@ -50,6 +50,39 @@ export interface IssuePickupPolicy {
    * transition (the default). Needs a provider that can write the state back.
    */
   inReviewState?: string;
+}
+
+/** The branch rule 4 puts an issue's agent on — and how a PR is matched back to its issue. */
+export function issueBranch(number: number): string {
+  return `issue/${number}`;
+}
+
+/**
+ * The open pull request resolving this issue, or `null` when none is open.
+ *
+ * `linkedPrNumber` is the *last* PR that ever cross-referenced the issue, with no
+ * open/merged filter (see `linkedPrFromTimeline`) — so it stays set after that PR
+ * merges. Gating pickup on it alone retires an issue the moment any PR touches it,
+ * which kills an issue that needs a second PR; resolving it against the live PRs
+ * instead is what keeps the loop moving. The branch convention is checked too, so a
+ * PR the provider hasn't linked yet still counts.
+ *
+ * `openPrs` must be **every** open PR — including ones the operator's `-ignore` tag
+ * hides from the dispatch world (`Harness.runCycle` filters them out, so the
+ * dispatcher passes them back in via `DispatchContext.excludedPrs`). Both providers
+ * list only open/active PRs, so absence otherwise reads as "merged" — and an ignored
+ * PR would get its issue re-picked and a second agent onto the very same branch.
+ *
+ * Not covered: a `prAuthor` filter narrows the provider's PR list, so a linked PR
+ * opened by someone else is invisible here and reads as gone.
+ */
+export function openPrForIssue(issue: Issue, openPrs: PullRequest[]): PullRequest | null {
+  const branch = issueBranch(issue.number);
+  for (const pr of openPrs) {
+    if (pr.merged) continue;
+    if (pr.number === issue.linkedPrNumber || pr.branch === branch) return pr;
+  }
+  return null;
 }
 
 /** The intrinsic pickup verdict, same shape as `prHealth`: eligible, or why not. */
@@ -142,6 +175,12 @@ export interface IssuePickupContext {
   now: string;
   tasks: Task[];
   recentDecisions: Decision[];
+  /**
+   * Every open PR the world knows about, for {@link openPrForIssue}. The cockpit
+   * reads the connector directly, so it passes the unfiltered list — an `-ignore`
+   * tagged PR is hidden from dispatch but is still an open PR for this gate.
+   */
+  openPrs: PullRequest[];
   /** Remaining dispatch slots this cycle (0 while paused). */
   headroom: number;
   paused: boolean;
@@ -156,9 +195,10 @@ export interface IssuePickupContext {
  */
 export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
   if (issue.state !== 'open') return { eligible: false, status: 'done', reasons: ['closed'] };
-  if (issue.linkedPrNumber !== null) {
-    return { eligible: false, status: 'has_pr', reasons: [`has open PR #${issue.linkedPrNumber}`] };
-  }
+  // Resolved against the live PRs, not the sticky `linkedPrNumber` — the reason
+  // says "open", so it has to be one, and a merged PR must not park the issue.
+  const openPr = openPrForIssue(issue, ctx.openPrs);
+  if (openPr) return { eligible: false, status: 'has_pr', reasons: [`has open PR #${openPr.number}`] };
 
   // An active task on this origin owns the issue — report the agent's state.
   const origin = `issue:${issue.number}`;

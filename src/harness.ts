@@ -125,12 +125,17 @@ export class Harness extends EventEmitter {
       // snapshot reads the connector directly, so an excluded PR stays fully
       // visible (with its health and tag) — it's just not acted on.
       const label = this.deps.prIgnoreLabel;
-      const dispatchWorld: WorldSnapshot = world.pullRequests.some((pr) => isPrExcluded(pr, label))
-        ? { ...world, pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)) }
-        : world;
+      const excludedPrs = world.pullRequests.filter((pr) => isPrExcluded(pr, label));
+      const dispatchWorld: WorldSnapshot =
+        excludedPrs.length > 0
+          ? { ...world, pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)) }
+          : world;
 
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
+        // Hidden from dispatch, but still open — the issue-pickup gate has to see
+        // them or an ignored PR reads as merged and its issue gets a second agent.
+        excludedPrs,
         tasks,
         agents,
         openEscalations,
