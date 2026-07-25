@@ -1,4 +1,4 @@
-import { closeSync, existsSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { HUMAN_BLOCK, renderBlocks, type ContentBlock } from './streamTranscript.js';
@@ -215,22 +215,29 @@ export class SessionTranscriptTail {
       if (!this.file) return;
       if (this.opts.startAtEof) this.offset = statSync(this.file).size;
     }
-    const size = statSync(this.file).size;
-    // Shrunk means the file was replaced under us; re-read from the top.
-    if (size < this.offset) {
-      this.offset = 0;
-      this.remainder = Buffer.alloc(0);
-    }
-    if (size === this.offset) return;
 
-    const chunk = Buffer.alloc(size - this.offset);
+    // Size the read off the *open descriptor*, not the path: a live agent is
+    // appending to this file, so a stat-then-open pair races (the file can grow,
+    // be truncated, or be replaced in between) and a buffer sized from the stale
+    // stat would be part-filled with zeros. Advancing by the bytes actually read
+    // closes the rest of the gap.
+    let chunk: Buffer;
     const fd = openSync(this.file, 'r');
     try {
-      readSync(fd, chunk, 0, chunk.length, this.offset);
+      const size = fstatSync(fd).size;
+      // Shrunk means the file was replaced under us; re-read from the top.
+      if (size < this.offset) {
+        this.offset = 0;
+        this.remainder = Buffer.alloc(0);
+      }
+      if (size === this.offset) return;
+      const pending = Buffer.alloc(size - this.offset);
+      const bytes = readSync(fd, pending, 0, pending.length, this.offset);
+      this.offset += bytes;
+      chunk = pending.subarray(0, bytes);
     } finally {
       closeSync(fd);
     }
-    this.offset = size;
 
     let buf = Buffer.concat([this.remainder, chunk]);
     const lines: string[] = [];
