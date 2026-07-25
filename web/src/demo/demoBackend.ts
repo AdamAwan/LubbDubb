@@ -167,6 +167,23 @@ class DemoServer {
     return { ok: true, watched };
   }
 
+  /**
+   * Send a plan back for replanning — the demo mirror of `POST /api/plans/:id/replan`.
+   * Like the real endpoint it only flips the plan's status; the part rows are left
+   * alone, because what an amendment does to them is decided when a planner's new
+   * declaration actually lands.
+   */
+  async replan(planId: string): Promise<{ ok: true }> {
+    const plan = (this.state.plans ?? []).find((p) => p.id === planId);
+    if (plan) {
+      plan.status = 'planning';
+      plan.updatedAt = new Date().toISOString();
+      this.addDecision('dispatch_code', 'ok', `replanning ${plan.title}`, 'issue-plan');
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async killAgent(id: string): Promise<{ ok: true }> {
     const agent = this.state.agents.find((a) => a.id === id);
     if (agent && agent.status !== 'done') {
@@ -547,6 +564,7 @@ export const demoApi = {
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
   setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
+  replan: (planId: string) => getServer().replan(planId),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),

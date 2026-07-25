@@ -53,6 +53,8 @@ const realApi = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ watched }),
     }).then((r) => json<{ ok: true; watched: boolean }>(r)),
+  replan: (planId: string) =>
+    fetch(`/api/plans/${planId}/replan`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     fetch('/api/jobs', {
       method: 'POST',

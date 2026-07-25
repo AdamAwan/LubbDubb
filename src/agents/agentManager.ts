@@ -11,6 +11,7 @@ import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument, planPartInputs } from '../plans/planDocument.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
+import { amendedPlanStatus, partHasWork, partsToRetire } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
 import { debugEnabled, debugLog } from '../debug.js';
 
@@ -356,8 +357,8 @@ export class AgentManager extends EventEmitter {
    *
    * The verdict is stored for *both* outcomes — a `single` plan is a first-class
    * row — because without one the planner re-runs on the same issue every cycle.
-   * Parts are persisted alongside it even though nothing reads them yet: the data
-   * only ever arrives here, so dropping it would mean re-planning later.
+   * This is also where a **replan** lands: same file, same hook, and the merge on
+   * slug is what lets an in-flight part keep its branch and PR across an amendment.
    */
   private ingestPlan(agent: Agent, relPath: string): void {
     const task = this.store.getTask(agent.taskId);
@@ -387,14 +388,44 @@ export class AgentManager extends EventEmitter {
       return;
     }
     const doc = parsed.document;
+    const origin = issueOrigin(number);
+    // An *amended* plan is the interesting case: `upsertPlanParts` merges on slug
+    // and never deletes, so a part the planner dropped would otherwise linger,
+    // indistinguishable from one still to come. Retire the dropped ones that never
+    // started; the plan status then follows what survived, because a `single`
+    // verdict cannot un-split an issue whose parts already have branches and PRs.
+    const existingPlan = this.store.getPlanByOrigin(origin);
+    const existing = existingPlan ? this.store.listPlanParts(existingPlan.id) : [];
+    const declared = doc.verdict === 'parts' ? planPartInputs(doc) : [];
+    const retire = partsToRetire(
+      existing,
+      declared.map((p) => p.slug),
+    );
+    const retiring = new Set(retire.map((p) => p.id));
+    const surviving = existing.filter((p) => !retiring.has(p.id));
+    const status = amendedPlanStatus(doc.verdict, surviving);
     const plan = this.store.upsertPlan({
-      originRef: issueOrigin(number),
+      originRef: origin,
       title: task.originTitle ?? task.title,
-      status: doc.verdict === 'single' ? 'single' : 'active',
+      status,
       reason: doc.reason,
     });
-    if (doc.verdict === 'parts') this.store.upsertPlanParts(plan.id, planPartInputs(doc));
-    debugLog('fileEvents', `agent=${agent.id} plan ingested issue=#${number} verdict=${doc.verdict}`);
+    for (const part of retire) this.store.updatePlanPart(part.id, { status: 'retired' });
+    if (declared.length > 0) this.store.upsertPlanParts(plan.id, declared);
+    if (doc.verdict === 'single' && status !== 'single') {
+      // Not silently overridden: the planner asked for something the world no
+      // longer allows, and the operator has open PRs that explain why.
+      this.opts.errors?.record({
+        source: 'agent',
+        message:
+          `Agent ${agent.id} replanned issue #${number} as a single PR, but ${surviving.filter(partHasWork).length} ` +
+          `part(s) already have a branch or an open PR. The plan stays split — close or merge those parts first.`,
+      });
+    }
+    debugLog(
+      'fileEvents',
+      `agent=${agent.id} plan ingested issue=#${number} verdict=${doc.verdict} status=${status} retired=${retire.length}`,
+    );
   }
 
   /** Final drain + spool teardown for an agent that's leaving the fleet. */

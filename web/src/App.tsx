@@ -12,6 +12,7 @@ import { LaunchPanel } from './components/LaunchPanel.js';
 import { UsageChip } from './components/UsageChip.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { UpNext } from './components/UpNext.js';
+import { PlanPanel } from './components/PlanPanel.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { AsyncButton } from './components/AsyncButton.js';
@@ -226,6 +227,20 @@ export function App() {
               onOpenAgent={(id) => setSelected(id)}
             />
           ))}
+
+          {(state.plans?.length ?? 0) > 0 && (
+            <>
+              <h3 className="muted">Plans</h3>
+              <PlanPanel
+                plans={state.plans ?? []}
+                parts={state.planParts ?? []}
+                upcoming={state.upcoming?.items ?? []}
+                now={now}
+                refUrls={state.refUrls}
+                onReplan={(planId) => api.replan(planId).then(refresh)}
+              />
+            </>
+          )}
 
           <h3 className="muted">World</h3>
           <WorldSummary

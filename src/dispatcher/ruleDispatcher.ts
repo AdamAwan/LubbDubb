@@ -1,7 +1,7 @@
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
-import { isStackedPr, needsBaseUpdate } from '../prHealth.js';
+import { inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import {
   isIssuePickupEligible,
@@ -21,12 +21,15 @@ import {
   issueOrigin,
   planBranch,
   planOrigin,
+  plannerVerdict,
   resolvePlanRoute,
   type PlanningPolicy,
   type PlanRouteVerdict,
 } from '../plans/planning.js';
 import {
   bySlug,
+  currentPlanSummary,
+  liveParts,
   partBase,
   partBranch,
   partDepth,
@@ -138,7 +141,7 @@ export class RuleDispatcher implements Dispatcher {
     const consider = (candidate: Candidate, onEscalate: (attempts: number) => RawAction): void => {
       const verdict = dispatchVerdict(candidate.origin, now, ctx.recentDecisions, this.cooldown);
       if (verdict.kind === 'escalate') raw.push(onEscalate(verdict.attempts));
-      else if (verdict.kind === 'cooldown') candidates.push({ ...candidate, cooldown: true });
+      else if (verdict.kind === 'cooldown') candidates.push({ ...candidate, held: 'cooldown' });
       else if (verdict.kind === 'dispatch') candidates.push(candidate);
       // 'hold' — already escalated; leave the origin alone this cycle.
     };
@@ -194,6 +197,13 @@ export class RuleDispatcher implements Dispatcher {
       return plan && (plan.status === 'active' || plan.status === 'complete') ? plan : null;
     };
 
+    // Every open PR the world knows about: the dispatch view plus the ones the
+    // operator's ignore tag hid from it. Nothing below *acts* on an excluded PR —
+    // they're here only so "no PR in the world" can't be mistaken for "the PR
+    // merged", which would put a second agent on an ignored PR's own branch, and
+    // so a stack's base PR is still found when the operator has ignored it.
+    const openPrs = ctx.excludedPrs?.length ? [...ctx.world.pullRequests, ...ctx.excludedPrs] : ctx.world.pullRequests;
+
     // 1–3: React to PR signals first — they're time-sensitive. At most one code
     // agent works a given branch, so a fresh signal for a branch that already
     // has a running agent is delivered to it, never a second dispatch. Dispatch
@@ -206,7 +216,16 @@ export class RuleDispatcher implements Dispatcher {
       // Every concern that would, on its own, warrant a code agent on this
       // branch, ordered by urgency: CI > base-update > review comments.
       const concerns: PrConcern[] = [];
-      if (pr.ciStatus === 'failing') {
+      // A stacked PR's CI runs the commits of the PR underneath it, so a red base
+      // turns every PR above it red. Dispatching on that would put an agent on each
+      // of them to fix code that is not theirs — the failure multiplies up the
+      // stack and none of those agents can do anything about it. Suppress the rule
+      // here and leave it at that: the failing PR at the bottom is in this same
+      // world and rule 1 fires on it under its own steam, so there is no concern to
+      // push down. Only the CI rule is suppressed — the base-update rule below still
+      // fires, which is what keeps a stack restacking when its parent pushes.
+      const inheritedFailure = inheritedCiFailure(pr, openPrs);
+      if (pr.ciStatus === 'failing' && inheritedFailure === null) {
         concerns.push({
           rule: 'pr-ci-failing',
           origin: `pr:${pr.number}:ci`,
@@ -361,12 +380,6 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
-    // Every open PR the world knows about: the dispatch view plus the ones the
-    // operator's ignore tag hid from it. Nothing below *acts* on an excluded PR —
-    // they're here only so "no PR in the world" can't be mistaken for "the PR
-    // merged", which would put a second agent on an ignored PR's own branch.
-    const openPrs = ctx.excludedPrs?.length ? [...ctx.world.pullRequests, ...ctx.excludedPrs] : ctx.world.pullRequests;
-
     // 3b: Keep a work item's state in step with whether a PR is open for it. An
     // item in a pickup state ("Ready"/"Doing") with an open PR moves to the review
     // state, so it isn't re-picked while it waits on CI/review; the inverse moves
@@ -441,12 +454,16 @@ export class RuleDispatcher implements Dispatcher {
     // disabled every issue routes to `single`, so rule 4 below is un-narrowed.
     const routes = new Map<number, PlanRouteVerdict>();
     for (const { issue } of eligibleIssues) {
+      const plan = plansByOrigin.get(issueOrigin(issue.number)) ?? null;
       routes.set(
         issue.number,
         resolvePlanRoute({
           planning: this.planning,
-          plan: plansByOrigin.get(issueOrigin(issue.number)) ?? null,
-          verdict: dispatchVerdict(planOrigin(issue.number), now, ctx.recentDecisions, this.cooldown),
+          plan,
+          verdict: plannerVerdict(issue.number, plan, now, ctx.recentDecisions, this.cooldown),
+          // A replan that spends its attempts falls back to the decomposition the
+          // issue already has, not open to `single` — see `resolvePlanRoute`.
+          existingParts: plan ? liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id)).length : 0,
         }),
       );
     }
@@ -464,8 +481,18 @@ export class RuleDispatcher implements Dispatcher {
       const origin = planOrigin(issue.number);
       if (activeOrigins.has(origin)) continue; // a planner is already on it
       const branch = planBranch(issue.number);
-      const title = `Plan issue #${issue.number}`;
-      const reason = `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
+      // Ingestion only ever writes `single`/`active`, so a plan row sitting in
+      // `planning` is an operator's replan request: same rule, same origin, same
+      // ingestion path — but the planner is primed with what already exists rather
+      // than being asked to plan the issue cold. Without that it would re-derive a
+      // decomposition from scratch and give the parts new slugs, which is precisely
+      // what would strand the in-flight ones.
+      const existing = plansByOrigin.get(issueOrigin(issue.number)) ?? null;
+      const replan = existing !== null && existing.status === 'planning';
+      const title = replan ? `Replan issue #${issue.number}` : `Plan issue #${issue.number}`;
+      const reason = replan
+        ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
+        : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
       candidates.push({
         origin,
         rule: 'issue-plan',
@@ -474,18 +501,30 @@ export class RuleDispatcher implements Dispatcher {
         branch,
         reason,
         // Throttled like any other origin — kept visible in the queue, not dispatched.
-        cooldown: route.planner === 'cooldown',
+        held: route.planner === 'cooldown' ? 'cooldown' : undefined,
         action: {
           type: 'dispatch_code_agent',
           branch,
           title,
-          prompt: this.templates.render('issue-plan', {
-            number: issue.number,
-            title: issue.title,
-            body: issue.body,
-            branch,
-            planFile: PLAN_FILE,
-          }),
+          prompt: replan
+            ? this.templates.render('issue-replan', {
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                branch,
+                planFile: PLAN_FILE,
+                current: currentPlanSummary(
+                  existing,
+                  (ctx.planParts ?? []).filter((p) => p.planId === existing.id),
+                ),
+              })
+            : this.templates.render('issue-plan', {
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                branch,
+                planFile: PLAN_FILE,
+              }),
           originRef: origin,
           originTitle: issue.title,
           originSummary: issue.body,
@@ -514,7 +553,7 @@ export class RuleDispatcher implements Dispatcher {
       if (!issue || issue.state !== 'open') continue;
       if (issueWatchGateReason(issue, this.pickup) !== null) continue;
 
-      const parts = (ctx.planParts ?? []).filter((p) => p.planId === plan.id);
+      const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));
       const index = bySlug(parts);
       // The concurrency cap is on *agents*, so it counts live tasks rather than the
       // `dispatched` status — a part whose agent died is not occupying a slot.
@@ -525,7 +564,6 @@ export class RuleDispatcher implements Dispatcher {
         .map((part) => ({ part, depth: partDepth(part, index) }))
         .sort((a, b) => a.depth - b.depth || a.part.seq - b.part.seq);
       for (const { part, depth } of ready) {
-        if (room <= 0) break;
         const origin = partOrigin(issueNumber, part.slug);
         const verdict = dispatchVerdict(origin, now, ctx.recentDecisions, this.cooldown);
         // 'hold' (already escalated) must not eat a slot the plan could give to a
@@ -546,12 +584,19 @@ export class RuleDispatcher implements Dispatcher {
           } satisfies RawAction);
           continue;
         }
-        room -= 1;
+        // Beyond the plan's own concurrency cap the part is *queued as capped*, not
+        // skipped. Skipping made the cap invisible: a part with every dependency
+        // satisfied and the whole fleet idle simply never appeared anywhere, and the
+        // only way to find out why was to read `maxConcurrentPartsPerIssue`. It is
+        // still never dispatched — the cut below treats a held candidate as held.
+        const capped = room <= 0;
+        if (!capped) room -= 1;
+        const held = capped ? 'capped' : verdict.kind === 'cooldown' ? 'cooldown' : undefined;
         partCandidates.push({
           depth,
           issueNumber,
           seq: part.seq,
-          candidate: this.partCandidate(plan, issue, part, parts, index, issueNumber, verdict.kind === 'cooldown'),
+          candidate: this.partCandidate(plan, issue, part, parts, index, issueNumber, held),
         });
       }
     }
@@ -708,8 +753,8 @@ export class RuleDispatcher implements Dispatcher {
     for (const c of candidates) {
       if (activeOrigins.has(c.origin)) continue; // staffed — not "up next"
       const { origin, rule, title, kind, branch, reason } = c;
-      if (c.cooldown) {
-        upcoming.push({ origin, rule, title, kind, branch, status: 'cooldown', reason });
+      if (c.held) {
+        upcoming.push({ origin, rule, title, kind, branch, status: c.held, reason });
       } else if (headroom > 0) {
         raw.push(c.action);
         activeOrigins.add(origin);
@@ -751,17 +796,21 @@ export class RuleDispatcher implements Dispatcher {
     parts: PlanPart[],
     index: Map<string, PlanPart>,
     issueNumber: number,
-    cooldown: boolean,
+    held: 'cooldown' | 'capped' | undefined,
   ): Candidate {
     const origin = partOrigin(issueNumber, part.slug);
     const branch = part.branch ?? partBranch(issueNumber, part.slug);
     const base = partBase(part, index, issueNumber, this.defaultBranch);
     const { done, remaining } = siblingContext(parts, part);
     const title = `Issue #${issueNumber} part: ${part.title}`;
-    const reason =
+    const stacks =
       base === this.defaultBranch
         ? `Part "${part.slug}" of issue #${issueNumber} is ready and has no agent.`
         : `Part "${part.slug}" of issue #${issueNumber} is ready and stacks on ${base}.`;
+    const reason =
+      held === 'capped'
+        ? `${stacks} Held: issue #${issueNumber} is already at its ${this.planning.maxConcurrentPartsPerIssue}-part concurrency cap.`
+        : stacks;
     return {
       origin,
       rule: 'plan-part',
@@ -769,7 +818,7 @@ export class RuleDispatcher implements Dispatcher {
       kind: 'code',
       branch,
       reason,
-      cooldown,
+      held,
       action: {
         type: 'dispatch_code_agent',
         branch,
@@ -831,8 +880,12 @@ interface Candidate {
   branch: string | null;
   reason: string;
   action: RawAction;
-  /** Throttled this cycle — kept visible in the queue, never dispatched. */
-  cooldown?: boolean;
+  /**
+   * Held this cycle for a reason that isn't fleet headroom — kept visible in the
+   * queue, never dispatched. `cooldown` is the per-origin re-dispatch throttle;
+   * `capped` is a per-plan concurrency limit (`maxConcurrentPartsPerIssue`).
+   */
+  held?: 'cooldown' | 'capped';
 }
 
 /** Cross-PR rank of a concern class: CI beats base-update beats review comment. */

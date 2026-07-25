@@ -100,6 +100,10 @@ export class PlanReconciler {
 
     const next = new Map<string, Partial<PlanPart>>();
     for (const part of parts) {
+      // A retired part is out of the plan: an amendment dropped it before anything
+      // was started for it, so there is no reality to fold on and nothing that
+      // should quietly bring it back.
+      if (part.status === 'retired') continue;
       const patch = this.foldPr(part, issueNumber, prs) ?? this.foldStalled(part, tasks);
       if (patch) next.set(part.slug, patch);
     }

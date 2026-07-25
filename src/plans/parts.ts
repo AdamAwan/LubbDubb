@@ -1,4 +1,4 @@
-import type { PlanPart } from '../types.js';
+import type { Plan, PlanPart, PlanStatus } from '../types.js';
 
 /**
  * Scheduling a multi-PR plan's parts, as pure functions over the part rows.
@@ -93,9 +93,83 @@ export function partBase(
   return dep.branch ?? partBranch(issueNumber, dep.slug);
 }
 
+/**
+ * The parts a plan is still delivering — everything an amended plan hasn't
+ * retired. Every count, roll-up and prompt reads this rather than the raw rows,
+ * so a retired part stays visible in the graph without being counted as work.
+ */
+export function liveParts(parts: PlanPart[]): PlanPart[] {
+  return parts.filter((p) => p.status !== 'retired');
+}
+
 /** How far a plan has got, for the cockpit's per-issue chip. */
 export function planProgress(parts: PlanPart[]): { merged: number; total: number } {
-  return { merged: parts.filter((p) => p.status === 'merged').length, total: parts.length };
+  const live = liveParts(parts);
+  return { merged: live.filter((p) => p.status === 'merged').length, total: live.length };
+}
+
+/**
+ * Has anything real been started for this part? An agent ran, a branch exists, a
+ * PR is open, or it merged. The dividing line an amended plan respects: intent
+ * can be rewritten freely, work that reached the outside world cannot.
+ */
+export function partHasWork(part: PlanPart): boolean {
+  return part.status === 'dispatched' || part.status === 'in_review' || part.status === 'merged';
+}
+
+/**
+ * Amending a plan: which existing parts the new declaration retires.
+ * `upsertPlanParts` merges on slug and never deletes, so without this a part
+ * dropped from an amended plan simply lingers, indistinguishable from one still
+ * to come.
+ *
+ * A part the planner no longer declares is retired **only when nothing was
+ * started for it**. One with an agent on it, a branch, or an open/merged PR is
+ * left exactly as it is: retiring it would strand a PR that the reconciler still
+ * folds reality onto, and a human reviewing that PR would have no idea the
+ * harness had written it off. Un-declaring in-flight work is a request to *stop*,
+ * which is a kill, not a plan edit.
+ */
+export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPart[] {
+  const keep = new Set(declared);
+  return existing.filter((p) => !keep.has(p.slug) && p.status !== 'retired' && !partHasWork(p));
+}
+
+/**
+ * The status an amended plan resolves to, given the parts that survive the
+ * amendment. A `parts` verdict is always `active` (the roll-up moves it to
+ * `complete` when the last part merges).
+ *
+ * A `single` verdict can only stand while nothing is in flight. Once a part has a
+ * branch or a PR, the issue *is* already split: collapsing it back would hand rule
+ * 4 the flat `issue/<n>` branch, which git cannot create beside the existing
+ * `issue/<n>/<slug>` refs, and would orphan the open PRs besides. So the plan stays
+ * `active` and the caller says so out loud rather than the collapse failing later
+ * as an unattributable git error.
+ */
+export function amendedPlanStatus(verdict: 'single' | 'parts', surviving: PlanPart[]): PlanStatus {
+  if (verdict === 'parts') return 'active';
+  return surviving.some(partHasWork) ? 'active' : 'single';
+}
+
+/**
+ * The current plan, rendered for a *replanning* agent — the state the `issue-plan`
+ * template has no placeholder for, and the whole reason a replan is more than a
+ * re-run. It has to carry each part's slug (the merge key an amendment turns on)
+ * and each part's real-world position, because what the planner may still change
+ * depends entirely on whether work has left the harness.
+ */
+export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
+  const live = liveParts(parts);
+  if (live.length === 0) return `The current plan is "${plan.status}" and declares no parts.`;
+  const lines = live.map((p) => {
+    const where = p.prNumber !== null ? `PR #${p.prNumber}` : (p.branch ?? 'no branch yet');
+    const dep = p.dependsOn[0];
+    const stacks = dep === undefined ? '' : `, stacks on "${dep}"`;
+    return `- "${p.slug}": ${p.title} [${p.status}, ${where}${stacks}] — ${p.scope}`;
+  });
+  const why = plan.reason ? `\nIt was split because: ${plan.reason}` : '';
+  return `The current plan is "${plan.status}" with ${live.length} part(s).${why}\n${lines.join('\n')}`;
 }
 
 /**
@@ -106,7 +180,7 @@ export function planProgress(parts: PlanPart[]): { merged: number; total: number
  * explicitly *not* its to do.
  */
 export function siblingContext(parts: PlanPart[], current: PlanPart): { done: string; remaining: string } {
-  const others = parts.filter((p) => p.slug !== current.slug);
+  const others = liveParts(parts).filter((p) => p.slug !== current.slug);
   const exists = (p: PlanPart): boolean => p.status === 'merged' || p.status === 'in_review';
   return {
     done: describe(others.filter(exists), 'Nothing has landed yet — this is the first part.'),

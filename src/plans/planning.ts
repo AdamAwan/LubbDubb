@@ -1,5 +1,5 @@
-import type { Plan } from '../types.js';
-import type { DispatchVerdict } from '../dispatcher/dispatchCooldown.js';
+import type { Decision, Plan } from '../types.js';
+import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../dispatcher/dispatchCooldown.js';
 
 /**
  * The planning funnel: every watched, open issue passes a planning agent that
@@ -87,8 +87,39 @@ export interface PlanRouteInput {
   planning: PlanningPolicy;
   /** The persisted plan for this issue, or null when the planner hasn't spoken. */
   plan: Plan | null;
-  /** The plan origin's cooldown verdict — `dispatchVerdict(planOrigin(n), …)`. */
+  /** The plan origin's cooldown verdict — {@link plannerVerdict}. */
   verdict: DispatchVerdict;
+  /**
+   * How many parts the plan already declares (retired ones excluded). Only read
+   * while a replan is in flight, and only to decide what a *failed* replan falls
+   * back to. Absent = none.
+   */
+  existingParts?: number;
+}
+
+/**
+ * The plan origin's cooldown verdict, with one adjustment a replan needs: while a
+ * plan row sits in `planning`, attempts made **before** the operator asked for the
+ * replan are not this replan's attempts.
+ *
+ * Without it, "replan" on an issue the funnel already planned would be met with a
+ * fifteen-minute cooldown from the original planner (or, worse, an already-spent
+ * attempt cap), and the button would appear to do nothing. `planning` is only ever
+ * reached by an explicit replan — ingestion writes `single`/`active` — so the
+ * narrowed window can't loosen the throttle on a first-time planner.
+ */
+export function plannerVerdict(
+  issueNumber: number,
+  plan: Plan | null,
+  now: string,
+  recentDecisions: Decision[],
+  cooldown: CooldownPolicy,
+): DispatchVerdict {
+  const since = plan?.status === 'planning' ? Date.parse(plan.updatedAt) : NaN;
+  const decisions = Number.isNaN(since)
+    ? recentDecisions
+    : recentDecisions.filter((d) => Date.parse(d.createdAt) >= since);
+  return dispatchVerdict(planOrigin(issueNumber), now, decisions, cooldown);
 }
 
 /**
@@ -101,6 +132,12 @@ export interface PlanRouteInput {
  * so once the existing attempt cap is spent the issue falls open to `single` and
  * gets worked the way it does today. Nothing escalates: the cap is the signal, and
  * an issue that quietly keeps moving beats one that quietly stops.
+ *
+ * A **replan** fails back differently, and must: an issue that already has parts
+ * has an existing decomposition to fall back on, and `single` would point rule 4
+ * at the flat `issue/<n>` branch that git cannot create beside the part refs. The
+ * point of failing open is that the issue keeps moving — for a replan, that means
+ * carrying on with the plan it already had.
  */
 export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   if (!input.planning.enabled) return { route: 'single', failedOpen: false };
@@ -111,6 +148,8 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
     if (plan.status !== 'planning') return { route: 'parts' };
   }
   const kind = input.verdict.kind;
-  if (kind === 'escalate' || kind === 'hold') return { route: 'single', failedOpen: true };
+  if (kind === 'escalate' || kind === 'hold') {
+    return (input.existingParts ?? 0) > 0 ? { route: 'parts' } : { route: 'single', failedOpen: true };
+  }
   return { route: 'planning', planner: kind === 'cooldown' ? 'cooldown' : 'dispatch' };
 }

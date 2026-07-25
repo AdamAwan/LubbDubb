@@ -130,6 +130,45 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   - `maxConcurrentPartsPerIssue` counts **live tasks** on part origins, not the `dispatched`
     status, and a `hold` verdict never eats a slot — one stuck part must not stall a plan.
     Tests: `test/planPart.test.ts`.
+- **Stack safety (stage 4 — the last one).** Three things, all in `test/stackedPrs.test.ts`.
+  - **CI attribution.** A stacked PR's CI runs the commits of the PR beneath it, so one red base
+    turns the whole stack red and rule 1 would put an agent on each of them to fix code that isn't
+    theirs. `inheritedCiFailure(pr, openPrs)` (beside `prHealth`, pure) walks down the base chain
+    and names the failing ancestor; the CI concern is skipped when it returns one. **Suppress-only —
+    the concern is not pushed down**: the bottom PR is in the same world and rule 1 fires on it
+    unaided, so pushing would only duplicate it (and land on the `respond_to_agent` path if that
+    branch is staffed). The base PR is found from the **world** (`pr.baseBranch` matching another
+    open PR's `branch`), never from the plan graph — CI attribution is a PR-level fact and this way
+    it covers hand-made stacks too. Two properties to keep: **only the CI concern is suppressed**
+    (rule 2 must still fire or a stack stops restacking the moment its parent goes red), and the
+    predicate reads `openPrs` — the dispatch world **plus `ctx.excludedPrs`** — so an `-ignore`d
+    base still attributes. `prHealth(pr, openPrs?)` takes the same list and renders
+    `CI failing on base PR #n`, which is the only place an operator sees why no agent came.
+  - **The cockpit plan panel.** `/api/state` ships `plans` + `planParts` (the same rows
+    `issuePickupStatus` reads, hoisted to locals so the chip and the panel can't disagree);
+    `web/src/components/PlanPanel.tsx` draws each plan's parts as a stack and joins them to
+    `upcoming` **by origin** (`issue:<n>:part:<slug>`) for the dispatch cut. `QueueItem.status`
+    gained **`capped`**: rule 4a used to `break` out of the loop at `maxConcurrentPartsPerIssue`,
+    which made the limit invisible, and now queues the rest as held instead. `Candidate.cooldown`
+    became `Candidate.held: 'cooldown' | 'capped'` — a held candidate is never dispatched whatever
+    the headroom.
+  - **Replan** (`POST /api/plans/:id/replan`). Only flips the plan row to `planning`; rule 3c
+    already routes that back to a planner, now with the `issue-replan` prompt carrying
+    `currentPlanSummary`. Three things make it work rather than merely fire: `plannerVerdict`
+    (`planning.ts`) narrows the cooldown window to decisions **since `plan.updatedAt`**, so the
+    original planner's attempt doesn't throttle the replan for 15 minutes (`planning` is only ever
+    reached by a replan, so a first-time planner keeps the full throttle); `resolvePlanRoute` takes
+    `existingParts` and fails a spent replan back to **`parts`**, not open to `single`, which would
+    point rule 4 at the flat `issue/<n>` branch git can't create beside the part refs; and
+    ingestion (`AgentManager.ingestPlan`) does the amendment — `partsToRetire` retires parts the
+    new document drops **only when nothing was started for them** (`partHasWork`), and
+    `amendedPlanStatus` refuses to collapse to `single` while any part has a branch or PR, recording
+    an error rather than overriding the planner silently. `retired` is a new `PlanPartStatus`;
+    everything that counts parts goes through `liveParts` (progress, roll-up, sibling context,
+    rule 4a), and the reconciler skips retired rows so nothing quietly resurrects them.
+  - **Deferred, deliberately:** the closed-unmerged hole. Both providers list only open PRs, so a
+    PR leaving the world still reads as `merged`; telling merged from closed-unmerged needs a
+    closed-PR state in `PullRequest` and both provider seams, which is its own change.
 - **Plan reconciliation (`src/plans/planReconciler.ts`).** The store holds intent; the outside
   world stays the source of truth. Runs each pulse in `harness.ts` next to `worldDiff` and
   **before** `decide`, so a part it readies is dispatchable the same cycle. Two sources:
@@ -486,11 +525,13 @@ so the executor runs it directly.
 
 ## PR health & one-agent-per-branch
 
-- **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr)` (the `{ blocked, reasons }`
-  verdict rendered in the cockpit and included per-PR in `buildStateSnapshot`), plus
-  `needsBaseUpdate(pr)` and `isConflicted(pr)`, which the dispatcher's conflict/behind rule
-  consumes, and `isPrExcluded(pr, label)`. Keep these pure and unit-tested (`test/prHealth.test.ts` /
-  `test/prExclusion.test.ts`); don't inline the logic.
+- **`src/prHealth.ts`** holds the pure PR predicates — `prHealth(pr, openPrs?)` (the
+  `{ blocked, reasons }` verdict rendered in the cockpit and included per-PR in
+  `buildStateSnapshot`), plus `needsBaseUpdate(pr)` and `isConflicted(pr)`, which the dispatcher's
+  conflict/behind rule consumes, `isPrExcluded(pr, label)`, and the stack pair `isStackedPr` /
+  `basePrOf` / `inheritedCiFailure` (see "Stack safety" above). Keep these pure and unit-tested
+  (`test/prHealth.test.ts` / `test/prExclusion.test.ts` / `test/stackedPrs.test.ts`); don't inline
+  the logic.
 - **Issue pickup state is the mirror on the issue side.** `isIssuePickupEligible` returns
   `{ eligible, reasons }` (not a bare bool) for the intrinsic policy gates, and the pure
   `issuePickupStatus(issue, ctx)` (both in `src/dispatcher/issuePickup.ts`) folds in the
