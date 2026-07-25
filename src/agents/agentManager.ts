@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { basename, isAbsolute, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { basename, isAbsolute, join, relative } from 'node:path';
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
@@ -8,6 +9,8 @@ import type { WhitelistRule } from '../config.js';
 import type { Agent, AgentFlag, AgentStatus, AgentUsage, Task } from '../types.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
+import { PLAN_FILE, isPlanFile, parsePlanDocument, planPartInputs } from '../plans/planDocument.js';
+import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import type { AgentSession, SessionFactory } from './session.js';
 import { debugEnabled, debugLog } from '../debug.js';
 
@@ -336,12 +339,62 @@ export class AgentManager extends EventEmitter {
     );
     this.store.recordFile(agent.id, { path, tool: rec.tool, promoted });
     this.emit('files', { agentId: agent.id, taskId: agent.taskId });
+    // The planner's side channel rides the same hook. It has to be read *here*,
+    // inside the drain, while `agent.cwd` still exists: the composition root
+    // removes a done agent's worktree on the reap, so any later read finds nothing.
+    if (isPlanFile(path)) this.ingestPlan(agent, path);
     if (promoted) {
       // Reuse the flag path so a report becomes a chip through the exact same
       // dedup / artifact-serving machinery as an explicitly-flagged one.
       const flag = this.store.recordFlag(agent.id, { kind, label: basename(path), ref: path });
       this.emit('flag', { agentId: agent.id, taskId: agent.taskId, flag });
     }
+  }
+
+  /**
+   * Persist a planning agent's verdict from the `plan.json` it just wrote.
+   *
+   * The verdict is stored for *both* outcomes — a `single` plan is a first-class
+   * row — because without one the planner re-runs on the same issue every cycle.
+   * Parts are persisted alongside it even though nothing reads them yet: the data
+   * only ever arrives here, so dropping it would mean re-planning later.
+   */
+  private ingestPlan(agent: Agent, relPath: string): void {
+    const task = this.store.getTask(agent.taskId);
+    const number = planOriginIssue(task?.originRef ?? null);
+    if (!task || number === null) {
+      debugLog('fileEvents', `agent=${agent.id} wrote ${PLAN_FILE} but is not a planning agent — ignored`);
+      return;
+    }
+    let raw: string;
+    try {
+      raw = readFileSync(join(agent.cwd, relPath), 'utf8');
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'agent',
+        message: `Agent ${agent.id} flagged ${PLAN_FILE} for issue #${number} but it could not be read: ${(err as Error).message}`,
+      });
+      return;
+    }
+    const parsed = parsePlanDocument(raw);
+    if (!parsed.ok) {
+      // No plan row is written, so the issue stays in the funnel: the planner is
+      // retried, and the attempt cap eventually fails it open to `single`.
+      this.opts.errors?.record({
+        source: 'agent',
+        message: `Agent ${agent.id} wrote an invalid ${PLAN_FILE} for issue #${number}: ${parsed.error}`,
+      });
+      return;
+    }
+    const doc = parsed.document;
+    const plan = this.store.upsertPlan({
+      originRef: issueOrigin(number),
+      title: task.originTitle ?? task.title,
+      status: doc.verdict === 'single' ? 'single' : 'active',
+      reason: doc.reason,
+    });
+    if (doc.verdict === 'parts') this.store.upsertPlanParts(plan.id, planPartInputs(doc));
+    debugLog('fileEvents', `agent=${agent.id} plan ingested issue=#${number} verdict=${doc.verdict}`);
   }
 
   /** Final drain + spool teardown for an agent that's leaving the fleet. */

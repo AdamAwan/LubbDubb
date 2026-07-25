@@ -85,6 +85,27 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   cap/pause gate holds stays `queued`. `Store.cancelJob` drops a still-queued job; a dispatched one is a
   live agent (kill it instead). The `jobs` table is a fresh `CREATE TABLE`, so no `migrate()` entry is
   needed. Tests: `test/jobQueue.test.ts`.
+- **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
+  (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
+  (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
+  on branch **`plan/issue/<n>`**, origin `issue:<n>:plan`. That branch namespace is not
+  cosmetic: git stores refs as files, so `refs/heads/issue/12` and `refs/heads/issue/12/plan`
+  cannot coexist, and `issue/<n>` is exactly what a `single` verdict's pickup agent will want.
+  The planner writes `.lubbdubb/plan.json`; `AgentManager.ingestFileEvent` recognises the
+  reserved path off the **file-events hook**, zod-validates it (`src/plans/planDocument.ts`) and
+  persists it via `Store.upsertPlan`/`upsertPlanParts`. The read must happen **inside the drain**
+  — `src/system.ts` removes a done agent's worktree on the reap, so a later read finds nothing.
+  Ingestion is confined to planner origins (`planOriginIssue`): an ordinary pickup agent's
+  `plan.json` is ignored, since flipping its own issue to `parts` would strand it while nothing
+  schedules parts. `resolvePlanRoute` (`src/plans/planning.ts`, pure) is the one place the arm of
+  the funnel is decided — `single` / `parts` / `planning` — and both the dispatcher (rules 3c + 4)
+  and `issuePickupStatus` read it, so the cockpit chip can never disagree with what fires. Two
+  properties to preserve: the verdict is persisted for **both** outcomes (without a `single` row
+  the planner re-runs every cycle), and a planner that spends its `dispatchVerdict` attempt cap
+  **fails open** to `single` with no escalation — narrowing rule 4 without that turns any planner
+  crash into a permanently parked issue. `plans`/`plan_parts` are fresh `CREATE TABLE`s, so no
+  `migrate()` entry. `.lubbdubb/` is gitignored, so the graph genuinely lives only in the store.
+  Tests: `test/issuePlan.test.ts`, `test/planIngestion.test.ts`.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → `Dispatcher.decide` → `ActionExecutor` → audit. Cycles are

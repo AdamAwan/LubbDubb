@@ -16,6 +16,10 @@ import type {
   Escalation,
   EscalationContext,
   Job,
+  Plan,
+  PlanPart,
+  PlanPartInput,
+  PlanStatus,
   Task,
   WorldEvent,
   WorldEventInput,
@@ -214,6 +218,104 @@ export class Store {
     const updatedAt = this.now();
     this.db.prepare(`UPDATE jobs SET status='cancelled', updated_at=? WHERE id=?`).run(updatedAt, id);
     return { ...existing, status: 'cancelled', updatedAt };
+  }
+
+  // -- Plans (the multi-PR issue funnel) -----------------------------------
+
+  /**
+   * Write (or refresh) an issue's plan, keyed by its `issue:<n>` origin. Upsert
+   * rather than insert: a replan amends the verdict in place, keeping the plan id
+   * its parts hang off. `createdAt` survives a refresh; `updatedAt` moves.
+   */
+  upsertPlan(input: {
+    originRef: string;
+    title: string;
+    status: PlanStatus;
+    reason?: string | null;
+    statusCommentRef?: string | null;
+  }): Plan {
+    const existing = this.getPlanByOrigin(input.originRef);
+    const ts = this.now();
+    const plan: Plan = {
+      id: existing?.id ?? `plan_${nanoid(10)}`,
+      originRef: input.originRef,
+      title: input.title,
+      status: input.status,
+      reason: input.reason ?? null,
+      // Preserve a comment ref an earlier write established unless one is given —
+      // the plan's status comment is edited in place, so losing the id orphans it.
+      statusCommentRef: input.statusCommentRef ?? existing?.statusCommentRef ?? null,
+      createdAt: existing?.createdAt ?? ts,
+      updatedAt: ts,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO plans (id, origin_ref, title, status, reason, status_comment_ref, created_at, updated_at)
+         VALUES (@id, @originRef, @title, @status, @reason, @statusCommentRef, @createdAt, @updatedAt)
+         ON CONFLICT(origin_ref) DO UPDATE SET title=excluded.title, status=excluded.status,
+           reason=excluded.reason, status_comment_ref=excluded.status_comment_ref, updated_at=excluded.updated_at`,
+      )
+      .run(plan);
+    return plan;
+  }
+
+  getPlanByOrigin(originRef: string): Plan | null {
+    const row = this.db.prepare(`SELECT * FROM plans WHERE origin_ref=?`).get(originRef) as PlanRow | undefined;
+    return row ? rowToPlan(row) : null;
+  }
+
+  listPlans(): Plan[] {
+    const rows = this.db.prepare(`SELECT * FROM plans ORDER BY created_at ASC`).all() as PlanRow[];
+    return rows.map(rowToPlan);
+  }
+
+  /**
+   * Fold a plan's declared parts onto its rows, **merging on slug**: an existing
+   * part keeps its branch, PR, status and task (it may already be in flight) and
+   * only its declaration — seq/title/scope/dependsOn — is refreshed. Parts absent
+   * from the amended plan are left alone rather than deleted; retiring one is a
+   * status transition, not a disappearance.
+   */
+  upsertPlanParts(planId: string, parts: PlanPartInput[]): PlanPart[] {
+    const ts = this.now();
+    const existing = new Map(this.listPlanParts(planId).map((p) => [p.slug, p]));
+    const rows = parts.map((input) => {
+      const prev = existing.get(input.slug);
+      const part: PlanPart = {
+        id: `${planId}:${input.slug}`,
+        planId,
+        slug: input.slug,
+        seq: input.seq,
+        title: input.title,
+        scope: input.scope,
+        dependsOn: input.dependsOn,
+        branch: prev?.branch ?? null,
+        prNumber: prev?.prNumber ?? null,
+        status: prev?.status ?? 'pending',
+        taskId: prev?.taskId ?? null,
+        createdAt: prev?.createdAt ?? ts,
+        updatedAt: ts,
+      };
+      return part;
+    });
+    const stmt = this.db.prepare(
+      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, depends_on, branch, pr_number, status, task_id, created_at, updated_at)
+       VALUES (@id, @planId, @slug, @seq, @title, @scope, @dependsOn, @branch, @prNumber, @status, @taskId, @createdAt, @updatedAt)
+       ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
+         depends_on=excluded.depends_on, updated_at=excluded.updated_at`,
+    );
+    const insertAll = this.db.transaction((all: PlanPart[]) => {
+      for (const p of all) stmt.run({ ...p, dependsOn: JSON.stringify(p.dependsOn) });
+    });
+    insertAll(rows);
+    return rows;
+  }
+
+  listPlanParts(planId: string): PlanPart[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM plan_parts WHERE plan_id=? ORDER BY seq ASC, slug ASC`)
+      .all(planId) as PlanPartRow[];
+    return rows.map(rowToPlanPart);
   }
 
   // -- Agents --------------------------------------------------------------
@@ -652,6 +754,31 @@ interface JobRow {
   created_at: string;
   updated_at: string;
 }
+interface PlanRow {
+  id: string;
+  origin_ref: string;
+  title: string;
+  status: string;
+  reason: string | null;
+  status_comment_ref: string | null;
+  created_at: string;
+  updated_at: string;
+}
+interface PlanPartRow {
+  id: string;
+  plan_id: string;
+  slug: string;
+  seq: number;
+  title: string;
+  scope: string;
+  depends_on: string;
+  branch: string | null;
+  pr_number: number | null;
+  status: string;
+  task_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
 interface AgentRow {
   id: string;
   task_id: string;
@@ -748,6 +875,45 @@ function rowToJob(r: JobRow): Job {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+function rowToPlan(r: PlanRow): Plan {
+  return {
+    id: r.id,
+    originRef: r.origin_ref,
+    title: r.title,
+    status: r.status as PlanStatus,
+    reason: r.reason,
+    statusCommentRef: r.status_comment_ref,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+function rowToPlanPart(r: PlanPartRow): PlanPart {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    slug: r.slug,
+    seq: r.seq,
+    title: r.title,
+    scope: r.scope,
+    // Written as JSON by upsertPlanParts; a corrupt value degrades to "no deps"
+    // rather than throwing the whole snapshot away.
+    dependsOn: parseDependsOn(r.depends_on),
+    branch: r.branch,
+    prNumber: r.pr_number,
+    status: r.status as PlanPart['status'],
+    taskId: r.task_id,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+function parseDependsOn(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 function rowToAgent(r: AgentRow): Agent {
   return {

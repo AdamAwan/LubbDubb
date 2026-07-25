@@ -234,7 +234,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           cwd: config.repoRoot,
           issuePickup,
         })
-      : new RuleDispatcher(issuePickup, {}, loadPromptTemplates(config.promptTemplatesDir), config.defaultBranch);
+      : new RuleDispatcher(
+          issuePickup,
+          {},
+          loadPromptTemplates(config.promptTemplatesDir),
+          config.defaultBranch,
+          // The plan funnel is a rule-dispatcher feature; the LLM dispatcher
+          // composes its own prompts and has no equivalent (see the README).
+          config.planning,
+        );
 
   const harness = new Harness({
     store,

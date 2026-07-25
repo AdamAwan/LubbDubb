@@ -1,4 +1,4 @@
-import type { Agent, Decision, Escalation, Job, PullRequest, Task, WorldSnapshot } from '../types.js';
+import type { Agent, Decision, Escalation, Job, Plan, PullRequest, Task, WorldSnapshot } from '../types.js';
 import type { ParseResult } from './actions.js';
 import type { DispatchRuleId } from './rules.js';
 
@@ -22,6 +22,12 @@ export interface DispatchContext {
    * slot; the rest stay queued when the fleet is at capacity.
    */
   queuedJobs: Job[];
+  /**
+   * Every persisted plan, keyed by its `issue:<n>` origin — the planning funnel's
+   * memory. Absent/empty means no issue has a verdict yet; with the funnel off it
+   * stays empty for good and every issue routes straight to pickup.
+   */
+  plans?: Plan[];
   /** Optional operator hints, injected only as a corrective. */
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */

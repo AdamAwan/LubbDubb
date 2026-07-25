@@ -85,6 +85,41 @@ CREATE TABLE IF NOT EXISTS agent_files (
   UNIQUE (agent_id, path)
 );
 
+-- One delivery plan per issue — the planning agent's verdict. Written for *both*
+-- outcomes ('single' as much as a decomposition), so the planner never re-runs on
+-- the same issue. The graph lives here and nowhere else: it is scheduling intent,
+-- which has no home in the target repository.
+CREATE TABLE IF NOT EXISTS plans (
+  id          TEXT PRIMARY KEY,
+  origin_ref  TEXT NOT NULL UNIQUE,   -- "issue:12"
+  title       TEXT NOT NULL,
+  status      TEXT NOT NULL,          -- planning | single | active | complete | abandoned
+  reason      TEXT,                   -- the planner's justification for its verdict
+  status_comment_ref TEXT,            -- provider comment id, edited in place
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+-- Parts of a multi-PR plan. Empty for a 'single' plan. The slug is author-chosen
+-- and stable, so an amended plan merges onto these rows rather than wiping them —
+-- in-flight parts keep their branch and PR across a replan.
+CREATE TABLE IF NOT EXISTS plan_parts (
+  id          TEXT PRIMARY KEY,       -- "<plan_id>:<part slug>"
+  plan_id     TEXT NOT NULL,
+  slug        TEXT NOT NULL,
+  seq         INTEGER NOT NULL,
+  title       TEXT NOT NULL,
+  scope       TEXT NOT NULL,          -- files/areas this part owns, for the prompt
+  depends_on  TEXT NOT NULL,          -- JSON array of sibling slugs
+  branch      TEXT,
+  pr_number   INTEGER,
+  status      TEXT NOT NULL,          -- pending | ready | dispatched | in_review | merged | blocked
+  task_id     TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  UNIQUE (plan_id, slug)
+);
+
 CREATE TABLE IF NOT EXISTS agent_transcripts (
   agent_id   TEXT NOT NULL,
   seq        INTEGER NOT NULL,
@@ -163,6 +198,8 @@ CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
+CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_events_at ON usage_events(at);

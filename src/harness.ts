@@ -113,6 +113,9 @@ export class Harness extends EventEmitter {
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
       const queuedJobs = store.listQueuedJobs();
+      // The plan funnel's memory: which issues already have a verdict, so a planner
+      // never re-runs and pickup only fires for the ones that resolved to `single`.
+      const plans = store.listPlans();
       const recentDecisions = store.listDecisions(200);
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
@@ -140,6 +143,7 @@ export class Harness extends EventEmitter {
         agents,
         openEscalations,
         queuedJobs,
+        plans,
         recentDecisions,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
