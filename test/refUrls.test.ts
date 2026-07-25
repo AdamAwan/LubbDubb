@@ -37,7 +37,7 @@ test('githubRefUrl: a branch name resolves to the branch tree', () => {
 
 test('githubRefUrl: non-source-control origin refs are not links', () => {
   assert.equal(githubRefUrl(O, R, 'story:s1:groom'), null);
-  assert.equal(githubRefUrl(O, R, 'meeting:m1:prep'), null);
+  assert.equal(githubRefUrl(O, R, 'story:s1:waf'), null);
   assert.equal(githubRefUrl(O, R, ''), null);
   assert.equal(githubRefUrl(O, R, '   '), null);
 });

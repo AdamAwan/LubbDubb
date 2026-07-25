@@ -23,16 +23,10 @@ function testConfig() {
 }
 
 test('isWorldInjectable: true only when a fake provider is configured', () => {
-  assert.equal(isWorldInjectable({ sourceControl: 'fake', issues: 'fake', backlog: 'fake', calendar: 'fake' }), true);
+  assert.equal(isWorldInjectable({ sourceControl: 'fake', issues: 'fake', backlog: 'fake' }), true);
   // One fake capability keeps injection available (its domain can still receive events).
-  assert.equal(
-    isWorldInjectable({ sourceControl: 'github', issues: 'github', backlog: 'fake', calendar: 'fake' }),
-    true,
-  );
-  assert.equal(
-    isWorldInjectable({ sourceControl: 'github', issues: 'github', backlog: 'azure', calendar: 'azure' }),
-    false,
-  );
+  assert.equal(isWorldInjectable({ sourceControl: 'github', issues: 'github', backlog: 'fake' }), true);
+  assert.equal(isWorldInjectable({ sourceControl: 'github', issues: 'github', backlog: 'azure' }), false);
 });
 
 test('/api/inject works and the snapshot advertises injectable with fake integrations', async () => {

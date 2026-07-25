@@ -47,7 +47,6 @@ export class CompositeConnector implements Connector, ActionSink {
       pullRequests: slices.flatMap((s) => s.pullRequests ?? []),
       issues: slices.flatMap((s) => s.issues ?? []),
       stories: slices.flatMap((s) => s.stories ?? []),
-      calendar: slices.flatMap((s) => s.calendar ?? []),
     };
   }
 

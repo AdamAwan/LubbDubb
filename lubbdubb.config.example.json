@@ -53,8 +53,8 @@
     "allowedActions": ["reply_on_pr"]
   },
 
-  "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' + 'azure' (real, for sourceControl/issues), 'microsoft365' (calendar). Capabilities: sourceControl (pull requests), issues (issues/work items), backlog (stories), calendar (meetings).",
-  "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake", "calendar": "fake" },
+  "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' + 'azure' (real, for sourceControl/issues). Capabilities: sourceControl (pull requests), issues (issues/work items), backlog (stories).",
+  "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake" },
 
   "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
   "github": {
@@ -69,12 +69,6 @@
     "project": "app",
     "repository": "app",
     "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent", "workItemAssignedTo": "bot@acme.com" }
-  },
-
-  "// microsoft365": "Target for the real 'microsoft365' provider (currently the calendar slice, via Microsoft Graph) — required only when integrations.calendar is 'microsoft365' (ignored otherwise). userId = target mailbox (UPN or object id), required for app-only tokens, omit for a delegated 'me' token. windowDays = how many days ahead to surface events (default 7). Auth is NOT here — set MICROSOFT_GRAPH_TOKEN, or leave unset to use the logged-in `az` CLI.",
-  "microsoft365": {
-    "userId": "agent@acme.com",
-    "windowDays": 7
   },
 
   "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs, issues and stories. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues/stories are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues/stories acted on).",

@@ -24,11 +24,10 @@ import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
  * `respond_to_agent` (deduped through `recentDecisions`) rather than spawning a
  * second one; while the branch's agent is `waiting`, the note is held so a
  * pending human escalation is never disturbed.
- *   5. A meeting today lacks prep    -> desk agent to prepare
- *   6. A ready story lacks a description / acceptance criteria -> desk agent to groom
- *   7. A ready story lacks WAF pillars -> desk agent to fill them
- *   8. Nothing else in flight        -> pick up the highest-priority ready story
- *   9. Otherwise                     -> no_op (recorded, so idleness is auditable)
+ *   5. A ready story lacks a description / acceptance criteria -> desk agent to groom
+ *   6. A ready story lacks WAF pillars -> desk agent to fill them
+ *   7. Nothing else in flight        -> pick up the highest-priority ready story
+ *   8. Otherwise                     -> no_op (recorded, so idleness is auditable)
  *
  * It is the safe default and the reference the LLM dispatcher is measured
  * against. Every branch produces actions with an explicit `reason` and tags
@@ -385,34 +384,7 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
-    // 5: Meeting prep.
-    for (const ev of ctx.world.calendar) {
-      if (ev.prepDone || ev.prepDocs.length === 0) continue;
-      candidates.push({
-        origin: `meeting:${ev.id}:prep`,
-        rule: 'meeting-prep',
-        title: `Prep for "${ev.title}"`,
-        kind: 'desk',
-        branch: null,
-        reason: `Meeting "${ev.title}" has unread prep docs.`,
-        action: {
-          type: 'dispatch_desk_agent',
-          title: `Prep for "${ev.title}"`,
-          prompt: this.templates.render('meeting-prep', {
-            title: ev.title,
-            startsAt: ev.startsAt,
-            docs: ev.prepDocs.join(', '),
-          }),
-          originRef: `meeting:${ev.id}:prep`,
-          originTitle: ev.title,
-          originSummary: `Starts ${ev.startsAt}. Prep docs: ${ev.prepDocs.join(', ')}.`,
-          rule: 'meeting-prep',
-          reason: `Meeting "${ev.title}" has unread prep docs.`,
-        } satisfies RawAction,
-      });
-    }
-
-    // 6 & 7: Backlog hygiene on ready stories. Stories are opt-in like issues —
+    // 5 & 6: Backlog hygiene on ready stories. Stories are opt-in like issues —
     // an unwatched or ignored story is left alone (no-op when no watch label is
     // configured, so the default behaviour of acting on every ready story holds).
     for (const story of ctx.world.stories) {
@@ -465,7 +437,7 @@ export class RuleDispatcher implements Dispatcher {
       }
     }
 
-    // 8: With capacity left after everything above, pick up the highest-priority
+    // 7: With capacity left after everything above, pick up the highest-priority
     // groomed story. Ranked last, so at zero headroom it queues as "waiting"
     // instead of silently vanishing.
     const candidateStory = ctx.world.stories

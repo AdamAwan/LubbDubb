@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { diffWorlds } from '../src/world/worldDiff.js';
-import type { CalendarEvent, Issue, PullRequest, Story, WorldEventKind, WorldSnapshot } from '../src/types.js';
+import type { Issue, PullRequest, Story, WorldEventKind, WorldSnapshot } from '../src/types.js';
 
 function world(patch: Partial<Omit<WorldSnapshot, 'takenAt'>> = {}): WorldSnapshot {
   return {
@@ -9,7 +9,6 @@ function world(patch: Partial<Omit<WorldSnapshot, 'takenAt'>> = {}): WorldSnapsh
     pullRequests: [],
     issues: [],
     stories: [],
-    calendar: [],
     ...patch,
   };
 }
@@ -48,17 +47,6 @@ function story(patch: Partial<Story> = {}): Story {
     wafPillars: [],
     state: 'ready',
     priority: 1,
-    ...patch,
-  };
-}
-
-function meeting(patch: Partial<CalendarEvent> = {}): CalendarEvent {
-  return {
-    id: 'm1',
-    title: 'Standup',
-    startsAt: '2026-07-21T09:00:00.000Z',
-    prepDocs: [],
-    prepDone: false,
     ...patch,
   };
 }
@@ -148,14 +136,6 @@ test('story appearance and state change emit story_added / story_state', () => {
     ['story_state'],
   );
   assert.match(events[0]!.summary, /in_progress/);
-});
-
-test('meeting appearance and prep completion emit meeting_added / meeting_prep', () => {
-  assert.deepEqual(kinds(world(), world({ calendar: [meeting()] })), ['meeting_added']);
-  assert.deepEqual(
-    kinds(world({ calendar: [meeting({ prepDone: false })] }), world({ calendar: [meeting({ prepDone: true })] })),
-    ['meeting_prep'],
-  );
 });
 
 test('multiple simultaneous transitions on one PR all surface', () => {

@@ -671,167 +671,6 @@ body {
   font-size: 11px;
 }
 
-/* Desk briefing panel — same visual language as .world, read-only. */
-.briefing {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-.briefing-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.briefing-asof {
-  color: var(--muted);
-  font-size: 11px;
-}
-.briefing-section {
-  margin-top: 10px;
-}
-.briefing .chip.count {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.chip.small.ok {
-  color: var(--green);
-  border-color: #1e4d33;
-}
-
-/* Sub-section header: a titled row with a trailing count chip. */
-.subsec-h {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-.subsec-h .count {
-  margin-left: auto;
-}
-
-/* Day grouping in the agenda. */
-.day-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 12px 0 3px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--border);
-}
-.agenda-day:first-of-type .day-head {
-  margin-top: 4px;
-}
-.day-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.day-label.today {
-  color: var(--accent);
-}
-.day-date {
-  font-size: 11px;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.day-more {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* One meeting: time-range column + body. */
-.meet {
-  display: grid;
-  grid-template-columns: 46px 1fr;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  align-items: start;
-}
-.meet .mtime {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.3;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.meet .mtime-end {
-  display: block;
-  color: var(--muted);
-}
-.meet .mbody {
-  min-width: 0;
-}
-.meet .msubj {
-  font-size: 13px;
-}
-.meet .mchips {
-  display: flex;
-  gap: 5px;
-  margin-top: 5px;
-  flex-wrap: wrap;
-}
-.meet.next {
-  background: linear-gradient(90deg, rgba(255, 92, 124, 0.12), rgba(255, 92, 124, 0.02));
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.meet.past {
-  opacity: 0.45;
-}
-
-/* The live "now" divider, dropped in above the next meeting. */
-.nowline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0;
-}
-.nowline .lbl {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.nowline .rule {
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--accent), transparent);
-}
-
-/* Mail & ping rows: compact, with an unread marker. */
-.mailrow {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  padding: 4px 0;
-  font-size: 12.5px;
-  flex-wrap: wrap;
-}
-.mailrow .from {
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.mailrow .unread-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--blue);
-  flex: none;
-  align-self: center;
-}
-.mailrow .ping-preview {
-  flex-basis: 100%;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .auditlog {
   max-height: 75vh;
   overflow-y: auto;
@@ -1304,9 +1143,6 @@ body {
 .audit.activity.stories {
   border-color: var(--green);
 }
-.audit.activity.meetings {
-  border-color: var(--amber);
-}
 .badge.prs {
   color: var(--blue);
 }
@@ -1315,9 +1151,6 @@ body {
 }
 .badge.stories {
   color: var(--green);
-}
-.badge.meetings {
-  color: var(--amber);
 }
 .filter-chip.prs.active {
   border-color: var(--blue);
@@ -1330,10 +1163,6 @@ body {
 .filter-chip.stories.active {
   border-color: var(--green);
   background: #10241a;
-}
-.filter-chip.meetings.active {
-  border-color: var(--amber);
-  background: #241d0c;
 }
 
 /* "Up next" queue — the dispatcher's ranked pickup plan with the headroom cut. */

@@ -6,7 +6,7 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 /**
  * The "make the world move" panel. Since v1 runs on a FakeConnector, this is how
  * you simulate the outside world: a CI failure, a review comment, a new story, a
- * meeting. Each injection provokes an immediate dispatch cycle server-side. Every
+ * story. Each injection provokes an immediate dispatch cycle server-side. Every
  * button spins while its injection is in flight so the click reads as "saving".
  */
 export function InjectPanel({ onInjected, world }: { onInjected: () => void; world: WorldSnapshot }) {
@@ -22,8 +22,6 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
   const nextPr = (world.pullRequests.at(-1)?.number ?? 40) + 1;
   const firstPr = world.pullRequests[0]?.number ?? nextPr;
   const nextIssue = (world.issues.at(-1)?.number ?? 100) + 1;
-  const today = new Date();
-  const inTwoHours = new Date(today.getTime() + 2 * 3600_000).toISOString();
 
   return (
     <div className="inject">
@@ -67,18 +65,6 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
         Conflict #{firstPr}
       </AsyncButton>
       <AsyncButton onClick={() => inject({ kind: 'new_story', title: 'Add password reset flow' })}>+ Story</AsyncButton>
-      <AsyncButton
-        onClick={() =>
-          inject({
-            kind: 'meeting',
-            title: 'Architecture review',
-            startsAt: inTwoHours,
-            prepDocs: ['design.md', 'ADR-014'],
-          })
-        }
-      >
-        + Meeting
-      </AsyncButton>
       <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
         {open ? 'Hide raw' : 'Raw JSON'}
       </button>

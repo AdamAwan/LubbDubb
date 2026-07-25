@@ -16,11 +16,10 @@ import { FakeWorldStore } from '../integrations/fake/fakeWorld.js';
 import { FakeGitHubIntegration } from '../integrations/fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from '../integrations/fake/fakeIssues.js';
 import { FakeBacklogIntegration } from '../integrations/fake/fakeBacklog.js';
-import { FakeCalendarIntegration } from '../integrations/fake/fakeCalendar.js';
 
 /**
- * A convenience bundle: the fake integrations (source control, issues, backlog,
- * calendar) sharing one persisted world, composed behind {@link Connector} +
+ * A convenience bundle: the fake integrations (source control, issues, backlog)
+ * sharing one persisted world, composed behind {@link Connector} +
  * {@link ActionSink}. Equivalent to selecting the `fake` provider for every
  * capability — this is what makes the harness behave identically to before the
  * integrations were modularised, and gives tests a one-call fake with the
@@ -34,15 +33,13 @@ export class FakeConnector implements Connector, ActionSink {
   private readonly github: FakeGitHubIntegration;
   private readonly issues: FakeIssuesIntegration;
   private readonly backlog: FakeBacklogIntegration;
-  private readonly calendar: FakeCalendarIntegration;
 
   constructor(store: Store, now: () => string = () => new Date().toISOString()) {
     const world = new FakeWorldStore(store);
     this.github = new FakeGitHubIntegration(world, store);
     this.issues = new FakeIssuesIntegration(world);
     this.backlog = new FakeBacklogIntegration(world);
-    this.calendar = new FakeCalendarIntegration(world);
-    this.composite = new CompositeConnector([this.github, this.issues, this.backlog, this.calendar], store, now);
+    this.composite = new CompositeConnector([this.github, this.issues, this.backlog], store, now);
   }
 
   getState(): Promise<WorldSnapshot> {
@@ -88,9 +85,5 @@ export class FakeConnector implements Connector, ActionSink {
 
   markIssueLinked(issueNumber: number, prNumber: number): void {
     this.issues.markIssueLinked(issueNumber, prNumber);
-  }
-
-  markPrepDone(eventId: string): void {
-    this.calendar.markPrepDone(eventId);
   }
 }

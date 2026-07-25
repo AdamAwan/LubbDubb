@@ -26,7 +26,6 @@ export type PromptId =
   | 'pr-base-update-conflict'
   | 'pr-review-comment'
   | 'pr-concern-escalation'
-  | 'meeting-prep'
   | 'story-groom'
   | 'story-waf'
   | 'story-pickup';
@@ -85,11 +84,6 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'Auto-resolution of "{title}" keeps failing: {attempts} agent attempt(s) on PR #{number} left the concern unresolved. Please handle it manually.',
     doc: 'Escalated to a human when a PR concern (CI / base / comment) keeps failing to clear. Placeholders: {number} {title} {attempts}.',
-  },
-  'meeting-prep': {
-    placeholders: ['title', 'startsAt', 'docs'],
-    template: 'You have a meeting "{title}" at {startsAt}. Read and summarise these docs so I\'m ready: {docs}.',
-    doc: 'Sent to a desk agent to prepare for a meeting with unread prep docs. Placeholders: {title} {startsAt} {docs}.',
   },
   'story-groom': {
     placeholders: ['title', 'missing'],

@@ -9,7 +9,8 @@ import { buildApp, buildStateSnapshot } from '../src/server/app.js';
 import { Store } from '../src/store/store.js';
 import { ErrorLog } from '../src/errorLog.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { MicrosoftCalendarIntegration } from '../src/integrations/microsoft/calendar.js';
+import { GitHubSourceControlIntegration } from '../src/integrations/github/sourceControl.js';
+import type { GitHubApi } from '../src/integrations/github/githubApi.js';
 import type { ErrorLogEntry, WorldSnapshot } from '../src/types.js';
 
 function testConfig() {
@@ -69,7 +70,7 @@ test('a harness cycle exception is recorded, not thrown away', async () => {
   assert.equal(errors[0]!.source, 'cycle');
   assert.match(errors[0]!.message, /provider exploded/);
   // The next cycle isn't wedged by the failed one.
-  system.connector.getState = async () => ({ takenAt: '', pullRequests: [], issues: [], stories: [], calendar: [] });
+  system.connector.getState = async () => ({ takenAt: '', pullRequests: [], issues: [], stories: [] });
   const ok = await system.harness.runCycle('manual');
   assert.doesNotMatch(ok.rationale, /cycle failed/);
   system.store.close();
@@ -132,21 +133,17 @@ test('the /api/state snapshot carries the error log', async () => {
 test('a provider snapshot failure is recorded and the last-good slice served', async () => {
   const store = new Store(':memory:');
   const errors = new ErrorLog(store, () => {});
-  const cal = new MicrosoftCalendarIntegration({
-    api: {
-      listUpcomingEvents: async () => {
-        throw new Error('AADSTS700003: token expired');
-      },
+  const api = {
+    viewerLogin: async () => {
+      throw new Error('Bad credentials');
     },
-    store,
-    errors,
-    windowDays: 7,
-  });
-  const slice = await cal.snapshot();
-  assert.deepEqual(slice.calendar, []);
+  } as unknown as GitHubApi;
+  const sc = new GitHubSourceControlIntegration({ api, store, errors });
+  const slice = await sc.snapshot();
+  assert.deepEqual(slice.pullRequests, []);
   const recorded = store.listErrors();
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0]!.source, 'provider');
-  assert.match(recorded[0]!.message, /calendar:microsoft365 snapshot failed: AADSTS700003/);
+  assert.match(recorded[0]!.message, /sourceControl:github snapshot failed: Bad credentials/);
   store.close();
 });
