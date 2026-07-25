@@ -3,7 +3,14 @@ import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import { needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, PullRequest, Task } from '../types.js';
-import { isIssuePickupEligible, issuePriority, watchGateReason, type IssuePickupPolicy } from './issuePickup.js';
+import {
+  isIssuePickupEligible,
+  issueBranch,
+  issuePriority,
+  openPrForIssue,
+  watchGateReason,
+  type IssuePickupPolicy,
+} from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import type { DispatchRuleId } from './rules.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
@@ -17,7 +24,8 @@ import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
  *                                     conflicts if 'dirty', clean update if 'behind')
  *   2b. A PR has an unhandled comment -> spin up a code agent to address it
  *   3. A PR is green/approved/mergeable -> merge it in (gated by auto-send)
- *   4. An open issue has no linked PR -> code agent to resolve it into a PR
+ *   3b. A work item's state lags its PR -> move it to/from the review state
+ *   4. An open issue has no open PR   -> code agent to resolve it into a PR
  *
  * At most one code agent works a given PR branch: when a fresh signal lands on a
  * branch that already has a *running* agent, it's delivered to that agent via
@@ -301,42 +309,68 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
-    // 3b: Back off a work item once a PR is open for it. When an item still in a
-    // pickup state ("Ready"/"Doing") has an open PR, move it to the review state so
-    // it isn't re-picked while it waits on CI/review. Idempotent: once it's in the
-    // review state it no longer matches, so nothing is emitted next cycle. Opt-in —
-    // off unless the operator set both a review state and pickup states, and only
-    // fires for items that carry a native state (Azure work items; GitHub issues
-    // have none, so this is a no-op for them).
-    const { inReviewState } = this.pickup;
-    if (inReviewState && this.pickup.pickupStates && this.pickup.pickupStates.length > 0) {
-      const openPrs = ctx.world.pullRequests.filter((p) => !p.merged);
+    // Every open PR the world knows about: the dispatch view plus the ones the
+    // operator's ignore tag hid from it. Nothing below *acts* on an excluded PR —
+    // they're here only so "no PR in the world" can't be mistaken for "the PR
+    // merged", which would put a second agent on an ignored PR's own branch.
+    const openPrs = ctx.excludedPrs?.length ? [...ctx.world.pullRequests, ...ctx.excludedPrs] : ctx.world.pullRequests;
+
+    // 3b: Keep a work item's state in step with whether a PR is open for it. An
+    // item in a pickup state ("Ready"/"Doing") with an open PR moves to the review
+    // state, so it isn't re-picked while it waits on CI/review; the inverse moves
+    // an item parked in the review state back to the *first* pickup state once its
+    // PR is no longer open, so work left over after that PR merged can be picked up
+    // instead of the item staying parked forever. Both directions are idempotent
+    // (after either move the item no longer matches) and neither fires on a closed
+    // item. Opt-in — off unless the operator set both a review state and pickup
+    // states, and only for items carrying a native state (Azure work items; GitHub
+    // issues have none, so this is a no-op for them).
+    const { inReviewState, pickupStates } = this.pickup;
+    if (inReviewState && pickupStates && pickupStates.length > 0) {
+      // No separate config for where an item returns to: the first pickup state is
+      // the operator's own "start here" (e.g. "Ready" in ["Ready","Doing"]).
+      const returnState = pickupStates[0]!;
       for (const issue of ctx.world.issues) {
         const state = issue.workItemState;
-        if (state === undefined || !this.pickup.pickupStates.includes(state)) continue;
+        if (state === undefined || issue.state !== 'open') continue;
         // The agent for issue N works branch `issue/N` (see rule 4), so its PR lands
         // on that branch — the reliable link even when Azure hasn't wired the
-        // ArtifactLink relation. Fall back to an explicit linked-PR number too.
-        const branch = `issue/${issue.number}`;
-        const pr = openPrs.find((p) => p.branch === branch || p.number === issue.linkedPrNumber);
-        if (!pr) continue;
-        raw.push({
-          type: 'set_work_item_state',
-          number: issue.number,
-          state: inReviewState,
-          rule: 'work-item-in-review',
-          reason: `PR #${pr.number} is open for work item #${issue.number}; move it to "${inReviewState}" so it isn't re-picked while under review.`,
-        } satisfies RawAction);
+        // ArtifactLink relation. `openPrForIssue` falls back to the linked-PR number.
+        const pr = openPrForIssue(issue, openPrs);
+        if (pickupStates.includes(state)) {
+          if (!pr) continue;
+          raw.push({
+            type: 'set_work_item_state',
+            number: issue.number,
+            state: inReviewState,
+            rule: 'work-item-in-review',
+            reason: `PR #${pr.number} is open for work item #${issue.number}; move it to "${inReviewState}" so it isn't re-picked while under review.`,
+          } satisfies RawAction);
+        } else if (state === inReviewState && !pr) {
+          raw.push({
+            type: 'set_work_item_state',
+            number: issue.number,
+            state: returnState,
+            rule: 'work-item-back-to-pickup',
+            reason: `Work item #${issue.number} is still open in "${inReviewState}" with no open PR; move it back to "${returnState}" so remaining work can be picked up.`,
+          } satisfies RawAction);
+        }
       }
     }
 
     // 4: Resolve open GitHub issues into PRs — the front of the issue → PR → merge loop.
-    // Gate on the pickup label (when configured) so operators can say "work these,
-    // leave the rest" — untagged issues stay visible in the world, just unacted-on —
-    // and order by label-encoded priority so the important ones claim limited
-    // headroom first (tie-break by issue number for determinism).
+    // Gate on *no open PR* rather than on `linkedPrNumber` being unset: that field is
+    // sticky (the last PR to ever cross-reference the issue), so gating on it retires
+    // an issue the first time any PR touches it, even when the issue needs a second
+    // one. Also gate on the pickup label (when configured) so operators can say "work
+    // these, leave the rest" — untagged issues stay visible in the world, just
+    // unacted-on — and order by label-encoded priority so the important ones claim
+    // limited headroom first (tie-break by issue number for determinism).
     const eligibleIssues = ctx.world.issues
-      .filter((i) => i.state === 'open' && i.linkedPrNumber === null && isIssuePickupEligible(i, this.pickup).eligible)
+      .filter(
+        (i) =>
+          i.state === 'open' && openPrForIssue(i, openPrs) === null && isIssuePickupEligible(i, this.pickup).eligible,
+      )
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
     for (const { issue } of eligibleIssues) {
@@ -344,29 +378,31 @@ export class RuleDispatcher implements Dispatcher {
       // An agent already on this issue owns it — don't throttle/escalate over a
       // live attempt; the active-task de-dup handles it.
       if (activeOrigins.has(origin)) continue;
+      const branch = issueBranch(issue.number);
+      const reason = `Open issue #${issue.number} has no open PR and no agent is on it.`;
       consider(
         {
           origin,
           rule: 'issue-pickup',
           title: `Resolve issue #${issue.number}`,
           kind: 'code',
-          branch: `issue/${issue.number}`,
-          reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
+          branch,
+          reason,
           action: {
             type: 'dispatch_code_agent',
-            branch: `issue/${issue.number}`,
+            branch,
             title: `Resolve issue #${issue.number}`,
             prompt: this.templates.render('issue-pickup', {
               number: issue.number,
               title: issue.title,
               body: issue.body,
-              branch: `issue/${issue.number}`,
+              branch,
             }),
             originRef: origin,
             originTitle: issue.title,
             originSummary: issue.body,
             rule: 'issue-pickup',
-            reason: `Open issue #${issue.number} has no linked PR and no agent is on it.`,
+            reason,
           } satisfies RawAction,
         },
         (attempts) => ({

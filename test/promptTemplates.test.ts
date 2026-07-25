@@ -33,7 +33,9 @@ test('defaults render the built-in prompt', () => {
   const t = defaultPromptTemplates();
   assert.equal(
     t.render('issue-pickup', { number: 3, title: 'Bug', body: 'It breaks', branch: 'issue/3' }),
-    'GitHub issue #3 ("Bug") needs resolving.\n\nIt breaks\n\nImplement the fix on branch issue/3 and open a pull request that closes this issue.',
+    'GitHub issue #3 ("Bug") needs resolving.\n\nIt breaks\n\nImplement the fix on branch issue/3 and open a pull request that resolves it. ' +
+      'Reference the issue as "closes #3" only if this PR completes the whole thing; if work remains afterwards, ' +
+      'reference it as "part of #3" so it stays open for the rest.',
   );
 });
 

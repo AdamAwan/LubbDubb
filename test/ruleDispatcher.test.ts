@@ -221,13 +221,58 @@ test('among equal-priority issues the lowest issue number is dispatched first', 
   assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
 });
 
-test('an issue already linked to a PR is not re-dispatched', async () => {
+test('an issue whose linked PR is still open is not re-dispatched', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
     ctx({
       issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }],
+      pullRequests: [
+        { id: 'p', number: 43, title: 'wip', branch: 'issue/101', ciStatus: 'pending', unresolvedComments: [] },
+      ],
     }),
   );
+  assert.equal(actions[0]?.type, 'no_op');
+});
+
+test('an issue whose only PR merged is picked up again', async () => {
+  // `linkedPrNumber` is sticky (the last PR to ever cross-reference the issue), so
+  // gating on it retired an issue needing a second PR. The live PRs decide instead.
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }],
+      pullRequests: [],
+    }),
+  );
+  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101');
+  assert.match((actions[0] as { reason: string }).reason, /has no open PR/);
+});
+
+test('an ignore-tagged PR still holds its issue back', async () => {
+  // The harness hides `-ignore` PRs from the dispatch world and hands them back via
+  // `excludedPrs`; without them "absent" reads as "merged" and a second agent lands
+  // on the branch the operator said to leave alone.
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      { issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }] },
+      {
+        excludedPrs: [
+          {
+            id: 'p',
+            number: 43,
+            title: 'wip',
+            branch: 'issue/101',
+            ciStatus: 'failing',
+            unresolvedComments: [],
+            labels: ['lubbdubb-ignore'],
+          },
+        ],
+      },
+    ),
+  );
+  // Held back, and the excluded PR itself is still never acted on.
   assert.equal(actions[0]?.type, 'no_op');
 });
 
@@ -923,6 +968,133 @@ test('in-review back-off is off unless both pickupStates and inReviewState are s
       ],
       pullRequests: [
         { id: 'p', number: 93, title: 'wip', branch: 'issue/8', ciStatus: 'pending', unresolvedComments: [] },
+      ],
+    }),
+  );
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+test('return-from-review: an item parked in review whose PR merged goes back to the first pickup state', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 9,
+          title: 'more to do',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'In Review',
+          linkedPrNumber: 94,
+        },
+      ],
+      pullRequests: [], // #94 merged, so it has dropped out of the active list
+    }),
+  );
+  const transition = actions.find((a) => a.type === 'set_work_item_state');
+  assert.ok(transition, 'the item is moved back into pickup rather than parked forever');
+  assert.equal((transition as { number: number }).number, 9);
+  assert.equal((transition as { state: string }).state, 'Ready');
+});
+
+test('return-from-review: an item whose PR is still open stays in review', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 10,
+          title: 'reviewing',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'In Review',
+          linkedPrNumber: 95,
+        },
+      ],
+      pullRequests: [
+        { id: 'p', number: 95, title: 'wip', branch: 'issue/10', ciStatus: 'pending', unresolvedComments: [] },
+      ],
+    }),
+  );
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+test('return-from-review: a closed item is left in the review state', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 11,
+          title: 'shipped',
+          body: '',
+          labels: [],
+          state: 'closed',
+          workItemState: 'In Review',
+          linkedPrNumber: 96,
+        },
+      ],
+    }),
+  );
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+test('return-from-review: an ignore-tagged open PR keeps the item in review', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx(
+      {
+        issues: [
+          {
+            id: 'i1',
+            number: 12,
+            title: 'reviewing',
+            body: '',
+            labels: [],
+            state: 'open',
+            workItemState: 'In Review',
+            linkedPrNumber: 97,
+          },
+        ],
+      },
+      {
+        excludedPrs: [
+          {
+            id: 'p',
+            number: 97,
+            title: 'wip',
+            branch: 'issue/12',
+            ciStatus: 'pending',
+            unresolvedComments: [],
+            labels: ['lubbdubb-ignore'],
+          },
+        ],
+      },
+    ),
+  );
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+test('return-from-review is off unless both pickupStates and inReviewState are set', async () => {
+  const d = new RuleDispatcher({ inReviewState: 'In Review' }); // no pickupStates
+  const { actions } = await d.decide(
+    ctx({
+      issues: [
+        {
+          id: 'i1',
+          number: 13,
+          title: 'parked',
+          body: '',
+          labels: [],
+          state: 'open',
+          workItemState: 'In Review',
+          linkedPrNumber: 98,
+        },
       ],
     }),
   );

@@ -1,8 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { issuePriority, isIssuePickupEligible, issuePickupStatus } from '../src/dispatcher/issuePickup.js';
+import {
+  issueBranch,
+  issuePriority,
+  isIssuePickupEligible,
+  issuePickupStatus,
+  openPrForIssue,
+} from '../src/dispatcher/issuePickup.js';
 import type { IssuePickupPolicy, IssuePickupContext } from '../src/dispatcher/issuePickup.js';
-import type { Decision, Issue, Task } from '../src/types.js';
+import type { Decision, Issue, PullRequest, Task } from '../src/types.js';
 
 const SCHEME: IssuePickupPolicy = {
   priorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
@@ -11,6 +17,10 @@ const SCHEME: IssuePickupPolicy = {
 
 function issue(over: Partial<Issue> = {}): Issue {
   return { id: 'i', number: 1, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: null, ...over };
+}
+
+function pr(over: Partial<PullRequest> = {}): PullRequest {
+  return { id: 'p', number: 41, title: 'P', branch: 'issue/1', ciStatus: 'pending', unresolvedComments: [], ...over };
 }
 
 test('issuePriority returns the mapped weight for a matching label', () => {
@@ -127,6 +137,40 @@ test('isIssuePickupEligible: the state and label gates both report their reasons
   });
 });
 
+// -- openPrForIssue: the "does this issue still have a PR open?" predicate -----
+
+test('openPrForIssue: no PRs at all means no open PR', () => {
+  assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), []), null);
+});
+
+test('openPrForIssue: a linked PR that is still open is found by number', () => {
+  const found = openPrForIssue(issue({ linkedPrNumber: 41 }), [pr({ number: 41, branch: 'other' })]);
+  assert.equal(found?.number, 41);
+});
+
+test('openPrForIssue: a PR on the issue branch counts before the provider links it', () => {
+  const found = openPrForIssue(issue({ number: 12, linkedPrNumber: null }), [pr({ number: 99, branch: 'issue/12' })]);
+  assert.equal(found?.number, 99);
+});
+
+test('openPrForIssue: a merged linked PR no longer parks the issue', () => {
+  // The `linkedPrNumber` from the timeline is sticky, so this is the whole point:
+  // an issue whose PR merged without closing it must re-enter pickup.
+  assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [pr({ number: 41, merged: true })]), null);
+});
+
+test('openPrForIssue: an ignore-tagged PR still parks its issue', () => {
+  // The harness hides `-ignore` PRs from the dispatch world, so callers pass them
+  // back in — otherwise "absent" reads as "merged" and a second agent lands on the
+  // very branch the operator said to leave alone.
+  const hidden = pr({ number: 41, branch: 'issue/1', labels: ['lubbdubb-ignore'] });
+  assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [hidden])?.number, 41);
+});
+
+test('issueBranch is the branch rule 4 dispatches onto', () => {
+  assert.equal(issueBranch(12), 'issue/12');
+});
+
 // -- issuePickupStatus: the combined per-item verdict -------------------------
 
 const NOW = '2026-07-21T01:00:00Z';
@@ -170,6 +214,7 @@ function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
     now: NOW,
     tasks: [],
     recentDecisions: [],
+    openPrs: [],
     headroom: 2,
     paused: false,
     ...over,
@@ -181,9 +226,15 @@ test('issuePickupStatus: a closed issue is done', () => {
   assert.deepEqual(v, { eligible: false, status: 'done', reasons: ['closed'] });
 });
 
-test('issuePickupStatus: a linked issue reports its PR', () => {
-  const v = issuePickupStatus(issue({ linkedPrNumber: 41 }), ctx());
+test('issuePickupStatus: an issue with a live PR reports it', () => {
+  const v = issuePickupStatus(issue({ linkedPrNumber: 41 }), ctx({ openPrs: [pr({ number: 41 })] }));
   assert.deepEqual(v, { eligible: false, status: 'has_pr', reasons: ['has open PR #41'] });
+});
+
+test('issuePickupStatus: "has open PR" is never claimed for a PR that merged', () => {
+  // The reason said "open" without checking; the issue is eligible again instead.
+  const v = issuePickupStatus(issue({ linkedPrNumber: 41 }), ctx({ openPrs: [pr({ number: 41, merged: true })] }));
+  assert.deepEqual(v, { eligible: true, status: 'eligible', reasons: [] });
 });
 
 test('issuePickupStatus: an active task on the origin reports the agent state', () => {

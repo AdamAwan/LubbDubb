@@ -56,11 +56,17 @@ export const DISPATCH_RULES = {
     description:
       'A work item still in a pickup state whose PR is already open is moved to the configured review state, so it waits on review/CI instead of being re-picked every cycle.',
   },
+  'work-item-back-to-pickup': {
+    number: '3b',
+    name: 'Return from review state',
+    description:
+      'The inverse of the back-off: a still-open work item parked in the review state whose PR is no longer open is moved back to the first configured pickup state, so work left over after that PR merged can be picked up instead of the item staying parked forever.',
+  },
   'issue-pickup': {
     number: '4',
     name: 'Open issue without a PR',
     description:
-      'An open, pickup-eligible issue with no linked PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority.',
+      'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR.',
   },
   'cooldown-escalate': {
     number: '1–4',
