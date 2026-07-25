@@ -66,8 +66,6 @@ export interface AgentManagerOptions {
 
 interface AgentManagerEvents {
   output: [{ agentId: string; delta: string }];
-  /** Legible PTY mode only: the settled transcript was rewritten in place — replaces all prior output. */
-  transcript: [{ agentId: string; text: string }];
   waiting: [{ agentId: string; taskId: string; reason: string }];
   autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
   done: [{ agentId: string; taskId: string; status: AgentStatus }];
@@ -133,6 +131,8 @@ export class AgentManager extends EventEmitter {
         ...this.eventsDirEnv(eventsKey),
       },
       waitingPatterns: this.opts.waitingPatterns,
+      sessionId,
+      resume: false,
     });
 
     const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
@@ -190,6 +190,8 @@ export class AgentManager extends EventEmitter {
         ...this.eventsDirEnv(eventsKey),
       },
       waitingPatterns: this.opts.waitingPatterns,
+      sessionId: agent.sessionId,
+      resume: true,
     });
     if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
     debugLog(
@@ -367,18 +369,6 @@ export class AgentManager extends EventEmitter {
       // Piggyback the spool drain on the output stream: an agent that writes a
       // file also produces output around it, so captured writes surface promptly
       // without a polling timer. A no-op when no spool is wired / nothing pending.
-      this.drainFileEvents(agentId);
-    });
-
-    // Legible PTY sessions occasionally re-render the settled text wholesale
-    // (an in-place TUI rewrite); the stored transcript follows the rewrite.
-    session.on('transcript', (text: string) => {
-      this.store.setTranscript(agentId, text);
-      this.emit('transcript', { agentId, text });
-      // Drain here too, not just on 'output': once the TUI's frame is full its
-      // updates are almost all in-place rewrites, so an `output`-only drain
-      // leaves a mid-run write spooled until the agent finishes (never, if it's
-      // waiting on a human to review that very file).
       this.drainFileEvents(agentId);
     });
 

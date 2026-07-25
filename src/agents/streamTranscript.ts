@@ -21,6 +21,14 @@ export interface ContentBlock {
   is_error?: boolean;
 }
 
+/**
+ * Synthetic block type for a message *sent to* the agent — a human answer, or one
+ * the harness injected. The wire protocol has no such block (stream mode only ever
+ * renders what comes back), but the session-file transcript carries both halves of
+ * the conversation and the drawer should show what you sent.
+ */
+export const HUMAN_BLOCK = 'human';
+
 /** Tool output longer than this many lines is truncated with a remaining-lines marker. */
 export const MAX_RESULT_LINES = 12;
 /** Cap on a one-line tool-input summary before it's ellipsised. */
@@ -31,6 +39,7 @@ const MAX_SUMMARY_LEN = 140;
 const CYAN = '\x1b[36m';
 const GRAY = '\x1b[90m';
 const RED = '\x1b[31m';
+const GREEN = '\x1b[32m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
@@ -47,14 +56,31 @@ export function renderBlocks(blocks: ContentBlock[]): string {
   let out = '';
   for (const b of blocks) {
     if (b.type === 'text') {
-      out += stripSentinels(b.text ?? '');
+      const text = stripSentinels(b.text ?? '');
+      // Tool blocks close with a single newline, so prose following one would sit
+      // flush against the last line of a result. Give it its own paragraph.
+      if (text && out && !out.endsWith('\n\n')) out += '\n';
+      out += text;
     } else if (b.type === 'tool_use') {
       out += renderToolUse(b);
     } else if (b.type === 'tool_result') {
       out += renderToolResult(b);
+    } else if (b.type === HUMAN_BLOCK) {
+      out += renderHuman(b);
     }
   }
   return out;
+}
+
+/** A message sent *to* the agent, labelled so it reads as a turn rather than agent output. */
+function renderHuman(b: ContentBlock): string {
+  const text = sanitise(stripSentinels(b.text ?? '')).trim();
+  if (!text) return '';
+  const indented = text
+    .split('\n')
+    .map((l) => `  ${l}`)
+    .join('\n');
+  return `\n${GREEN}▸ sent${RESET}\n${indented}\n`;
 }
 
 function renderToolUse(b: ContentBlock): string {

@@ -230,27 +230,43 @@ full-rewrite `replace` frame no longer snaps you to the bottom — the pane stic
 when you're already there, and offers a "New output" jump pill otherwise), and the text is
 selectable. The one terminal feature it reproduces is SGR colour, via `ansi.ts` (pure + tested,
 `test/ansi.test.ts`), which parses the five codes `renderBlocks` emits and threads the active style
-across streamed deltas. The headless xterm on the _server_ (`@xterm/headless`) is unrelated and
-stays; only the browser-side `@xterm/xterm` + `@xterm/addon-fit` were dropped.
+across streamed deltas. No xterm remains anywhere: the browser-side `@xterm/xterm` +
+`@xterm/addon-fit` went first, and `@xterm/headless` went with the server-side screen-scraping
+it existed to do.
 
-**Transcript legibility (PTY mode, issue #63).** The interactive claude TUI paints the
-screen with cursor-addressed redraws, so the raw PTY byte stream is illegible once escapes
-are stripped — stripping deletes the escapes but can't interpret them. `PtySession` with
-`legibleTranscript: true` (wired for `agentMode: 'pty'` only; `raw`/mock sessions stay raw)
-therefore routes the sentinel-stripped bytes through `TerminalTranscript`
-(`src/pty/terminalTranscript.ts`): a headless xterm (`@xterm/headless`) sized to the real
-PTY (`PTY_COLS`/`PTY_ROWS` in `backend.ts` — keep them in sync or cursor addressing
-garbles), read back as settled screen text with wrapped rows re-joined and TUI chrome
-(spinner/input box/hints — the heuristic `isTuiChromeLine`) dropped. Updates are debounced
-and diffed: an extension flows out the normal `output` delta path, while an in-place
-rewrite of already-emitted text becomes a `transcript` (full-replacement) event —
-`AgentManager` maps it to `Store.setTranscript`, the `Hub` ships it to subscribers as
-`agent:transcript` and rebuilds the rolling tail from it, and the cockpit replaces its
-accumulated live buffer. Two sharp edges: xterm parses writes _asynchronously_, so
-transcript content lands a beat after detection events (detection still scans the raw
-bytes synchronously and is unaffected), and `PtySession.handleExit` settles the emulator
-_before_ reporting `exit`/`done`/`failed` so the final text never races the terminal
-transition. Tests: `test/terminalTranscript.test.ts`, `test/ptyLegibleTranscript.test.ts`.
+**Transcript legibility (PTY mode).** The screen is the wrong source. The interactive
+claude TUI paints cursor-addressed redraws, so its byte stream carries the slash-command
+dropdown, `Tip:` hints, `(ctrl+o to expand)` markers and input-box rules as _content_, with
+prose already hard-wrapped at the emulator's column width — and no chrome blacklist recovers
+the logical lines. So PTY mode doesn't read the screen at all: Claude Code writes every
+session's conversation to `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, and since
+PTY is the runtime that pins `--session-id`, the harness knows exactly which file is its
+agent's. `PtySession` with `sessionTranscript` (wired for `agentMode: 'pty'` only; `raw`/mock
+sessions have no session file and stay raw) tails it through `SessionTranscriptTail`
+(`src/agents/sessionTranscript.ts`) and renders the records with the _same_ `renderBlocks`
+stream mode uses — so both runtimes converge on one legibility seam and the TUI becomes
+purely an input device. Consequences worth knowing: the file is append-only, so PTY emits
+plain `output` deltas like stream (the old `transcript` full-replacement event, and the whole
+`Store.setTranscript` → `agent:transcript` → drawer-replace path behind it, is **gone**);
+records are written per content block as each completes, so the transcript is live at block
+granularity, not token-by-token; the file is located by globbing `<root>/*/<id>.jsonl` rather
+than deriving the directory-encoding rule, so an encoding change can't break it; and
+`parseSessionEntries` must drop **local-command envelopes** (`<local-command-caveat>`,
+`<command-name>`, `<local-command-stdout>`) or `exitOnDone`'s `/exit` reintroduces exactly the
+noise this replaced. Human/injected messages render too (the `human` block), so the drawer
+shows both halves of the conversation. Tests: `test/sessionTranscript.test.ts`.
+
+**Sentinel detection is two-source (PTY).** The session file is the _primary_ detector —
+clean text through the same `stripSentinels`/`extractWaitingReason` helpers stream mode uses,
+so the styled-token bug class simply can't occur there. The raw-stream `scanSentinels` scan
+stays as a **backstop**: a terminal sighting is deferred by `SENTINEL_BACKSTOP_MS` to let the
+file claim it first, and if that never happens the terminal detection is applied _and_
+`onWarning` records it, so drift shows up in the Errors panel instead of rotting silently.
+Two detectors that quietly disagree is the bug fixed once in `fd560e6` — the announcing
+property is what stops it recurring. The deferral is skipped entirely when the tail hasn't
+located a file (`SessionTranscriptTail.located()`), otherwise every transition would wait the
+full window on a source that may never speak. Both paths converge on `noteSentinel`, and each
+transition is idempotent, so a double report is harmless.
 
 **Exit on done (issue #66).** The interactive claude REPL has no natural end — after a turn
 it sits at the prompt forever — so the done sentinel alone would orphan the process and leak
@@ -322,14 +338,12 @@ claude REPL paints its input box a second or two before its input loop honours a
 Enter, so the first Enter is silently dropped and the pasted prompt sits unsent — the "agent
 pauses after the first message" bug. The prompt is pasted **once** (a re-paste accumulates it
 in the box) and only the bare CR is re-sent until the message lands. "Landed" is **observed, not
-timed**: in legible mode the session reads its headless emulator's input box via
-`TerminalTranscript.inputBoxText()` (a chrome-preserving read path — `snapshot()` deliberately
-_drops_ the box as chrome, so don't reuse it here) and stops the instant the box empties. The
-read awaits xterm's async parse, so `tryResubmit` re-checks liveness/status after the await.
-Without a mirror (`raw`/mock sessions, `this.mirror` null) there's nothing to read, so it
-degrades to the original blind open-loop nudge, bounded by `initialSubmitAttempts`. Tests
-(`test/ptyInitialSubmit.test.ts`) render an input box by hand — box-drawing rows through the
-mirror — since `FakePtyBackend` doesn't emulate a TUI.
+timed**: the session file records a `user` entry the moment the REPL accepts a message, so a
+rise in the tail's accepted-message count is direct proof the paste was submitted — no emulator
+and no screen reading involved. Without a session file (`raw`/mock sessions) there's nothing to
+observe, so it degrades to the original blind open-loop nudge, bounded by
+`initialSubmitAttempts`. Tests (`test/ptyInitialSubmit.test.ts`) append session records by hand,
+since `FakePtyBackend` runs no real claude.
 
 ## Testing patterns
 
@@ -440,6 +454,13 @@ structured field, feed it into `buildRefUrls`.
 
 ## Gotchas
 
+- **Don't launch the server from inside a Claude Code session** when using `agentMode: 'pty'`.
+  `NodePtyBackend` merges `process.env` into the agent's env, so the parent session's
+  `CLAUDE_CODE_SESSION_ID` / `CLAUDECODE` / `CLAUDE_CODE_CHILD_SESSION` leak into the spawned
+  `claude`, which then treats itself as a child of _that_ session and **writes no session
+  transcript of its own**. The agent still runs and its sentinels still fire (the terminal
+  backstop), but the transcript falls back to raw screen output with a recorded warning. Run
+  `npm start` from an ordinary terminal, or unset the `CLAUDE_*` vars first.
 - The default `agentMode` is `stream`, **not** a PTY — don't assume terminal semantics when
   reasoning about the default path.
 - Relative paths in `claudeArgs` are resolved to absolute at config load, because agents run

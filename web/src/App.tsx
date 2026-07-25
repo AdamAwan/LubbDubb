@@ -68,11 +68,6 @@ export function App() {
           // the watched session no longer loses history. Capped to bound memory.
           liveOutput.current.set(e.agentId, (cur + e.delta).slice(-1_000_000));
           forceRender((n) => n + 1);
-        } else if (e.type === 'agent:transcript' && e.agentId && typeof e.text === 'string') {
-          // Legible PTY sessions occasionally rewrite their settled text in
-          // place; the frame replaces everything accumulated so far.
-          liveOutput.current.set(e.agentId, e.text.slice(-1_000_000));
-          forceRender((n) => n + 1);
         } else if (e.type === 'agent:tail' && e.agentId && e.line) {
           tails.current.set(e.agentId, e.line);
           forceRender((n) => n + 1);

@@ -114,6 +114,12 @@ export interface Config {
    * appended system prompt and sets a permission mode.
    */
   agentMode: 'stream' | 'pty' | 'raw';
+  /**
+   * Where Claude Code keeps per-project session transcripts, which PTY mode tails
+   * for its transcript. Defaults to `~/.claude/projects`; override only if the
+   * agent runs with a different HOME than the server.
+   */
+  sessionTranscriptRoot?: string;
   /** Passed to `claude --permission-mode` so unattended tool calls don't hang the agent. */
   agentPermissionMode: string;
   /** Wait this long after spawn before typing the task in, giving the REPL time to boot. */

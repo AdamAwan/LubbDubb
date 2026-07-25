@@ -46,6 +46,14 @@ export interface AgentSessionSpec {
   cwd: string;
   env?: Record<string, string>;
   waitingPatterns?: string[];
+  /**
+   * The id this session runs under, when the runtime pins one. It names the
+   * session's transcript file, which the PTY runtime tails instead of scraping the
+   * screen — so a resumed session reopens the very file its predecessor wrote.
+   */
+  sessionId?: string | null;
+  /** Resuming an existing session: its transcript already holds the earlier turns. */
+  resume?: boolean;
 }
 
 /** Builds a session for a given launch spec. Chosen per `agentMode` in the composition root. */

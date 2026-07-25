@@ -7,6 +7,7 @@ import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
 import type { ActionSink } from './sink/actionSink.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
+import { defaultSessionRoot } from './agents/sessionTranscript.js';
 import { WorktreeManager } from './worktree/worktreeManager.js';
 import { AgentManager } from './agents/agentManager.js';
 import {
@@ -101,9 +102,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // Pick the agent runtime and how it's launched from the configured mode.
   // `claudeTui` marks the real interactive claude REPL, which needs two things
-  // raw/mock sessions don't: the terminal-emulation transcript (settled text
-  // instead of raw TUI bytes), and an active exit-on-done — the REPL never ends
-  // a session by itself, so without it the process and its worktree leak (#66).
+  // raw/mock sessions don't: its transcript read from the session file Claude
+  // Code writes (the screen carries slash menus, hints and column-wrapped prose
+  // that no chrome filter can undo), and an active exit-on-done — the REPL never
+  // ends a session by itself, so without it the process and its worktree leak (#66).
+  const sessionRoot = config.sessionTranscriptRoot ?? defaultSessionRoot();
   const ptyFactory = (claudeTui: boolean): SessionFactory => {
     return (spec) =>
       new PtySession(backend, {
@@ -113,7 +116,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         env: spec.env,
         waitingPatterns: spec.waitingPatterns,
         submitDelayMs: config.agentSubmitDelayMs,
-        legibleTranscript: claudeTui,
+        // Needs a pinned session id to name the transcript file; only the resumable
+        // PTY runtime has one, which is exactly the mode that needs it.
+        sessionTranscript:
+          claudeTui && spec.sessionId
+            ? { root: sessionRoot, sessionId: spec.sessionId, startAtEof: spec.resume === true }
+            : undefined,
+        onWarning: (message) => errors.record({ source: 'agent', message }),
         exitOnDone: claudeTui,
         // Real-TUI only: raw/mock sessions are line-oriented and legitimately
         // silent between steps, so idle means nothing there.

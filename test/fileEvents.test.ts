@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -226,13 +226,14 @@ test('FileEventsSpool drains each record once, then dispose removes the dir', ()
 
 // -- end-to-end through AgentManager -----------------------------------------
 
-function testConfig(agentMode: 'raw' | 'pty' = 'raw') {
+function testConfig(agentMode: 'raw' | 'pty' = 'raw', sessionTranscriptRoot?: string) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-fe-'));
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode,
+    sessionTranscriptRoot,
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
@@ -276,13 +277,13 @@ test('a captured write records a file for every path and an artifact chip only f
 });
 
 /** Spawn one agent in a fake-PTY system and hand back it plus the driving backend. */
-async function spawnedPtyAgent(): Promise<{
+async function spawnedPtyAgent(sessionRoot?: string): Promise<{
   system: ReturnType<typeof buildSystem>;
   backend: FakePtyBackend;
   agent: NonNullable<ReturnType<Store['getAgent']>>;
 }> {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig('pty'), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig('pty', sessionRoot), { backend, errorMirror: () => {} });
   system.connector.inject({ kind: 'new_story', title: 'Write a report', wafPillars: ['Reliability'] });
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0];
@@ -290,25 +291,37 @@ async function spawnedPtyAgent(): Promise<{
   return { system, backend, agent };
 }
 
-test('a captured write surfaces on an in-place transcript rewrite, not just on appends', async () => {
-  // The legible PTY runtime routes an in-place TUI redraw to `transcript`, not
-  // `output` — and once the frame is full that's nearly every update. An
-  // output-only drain therefore left a mid-run report spooled indefinitely.
-  const { system, backend, agent } = await spawnedPtyAgent();
+test('a captured write surfaces on a session-file update mid-run', async () => {
+  // A mid-run report must not sit spooled until the agent finishes (never, if it
+  // is waiting on a human to review that very file). PTY transcript updates come
+  // from the session file rather than the screen, so that is the stream the drain
+  // has to ride.
+  const root = mkdtempSync(join(tmpdir(), 'lubbdubb-fe-sess-'));
+  const { system, agent } = await spawnedPtyAgent(root);
+  const sessionId = system.store.getAgent(agent.id)?.sessionId;
+  assert.ok(sessionId, 'a pty agent pins a session id');
 
-  // Settle an initial append first, so the update under test is purely a replace.
-  backend.last().emit('one\r\ntwo\r\n');
-  await tick(300);
+  const projectDir = join(root, 'project');
+  mkdirSync(projectDir);
+  const sessionFile = join(projectDir, `${sessionId}.jsonl`);
+  writeFileSync(sessionFile, '');
 
   const dir = system.agents.fileEventsDir(agent.id);
   writeFileSync(join(dir!, '1-a.json'), JSON.stringify({ path: join(agent.cwd, 'reports/x.md'), tool: 'Write' }));
 
-  const replaces: string[] = [];
-  system.agents.on('transcript', (e) => replaces.push(e.text));
-  backend.last().emit('\x1b[2A\x1b[2KONE\r\n\r\n');
-  await tick(300);
+  const deltas: string[] = [];
+  system.agents.on('output', (e) => deltas.push(e.delta));
+  const record = {
+    type: 'assistant',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'wrote the report' }] },
+  };
+  appendFileSync(sessionFile, `${JSON.stringify(record)}\n`);
+  await tick(900);
 
-  assert.equal(replaces.length, 1, 'the redraw arrived as a transcript replace (no output delta)');
+  assert.ok(
+    deltas.some((d) => d.includes('wrote the report')),
+    'the session-file record arrived as an output delta',
+  );
   assert.deepEqual(
     system.store.listFlags(agent.id).map((f) => f.ref),
     ['reports/x.md'],

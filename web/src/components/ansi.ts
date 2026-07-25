@@ -9,7 +9,7 @@
  * one xterm feature the HTML pane has to replace; kept pure so it's unit-tested
  * directly (`test/ansi.test.ts`).
  */
-export type AnsiColor = 'cyan' | 'gray' | 'red';
+export type AnsiColor = 'cyan' | 'gray' | 'red' | 'green';
 
 export interface AnsiStyle {
   color?: AnsiColor;
@@ -22,7 +22,7 @@ export interface AnsiSegment {
 }
 
 /** SGR foreground codes `renderBlocks` uses (90 = bright black → our "gray"). */
-const FG: Record<number, AnsiColor> = { 31: 'red', 36: 'cyan', 90: 'gray' };
+const FG: Record<number, AnsiColor> = { 31: 'red', 32: 'green', 36: 'cyan', 90: 'gray' };
 
 // One SGR colour sequence (capturing its params), or any other CSI / two-byte
 // escape (dropped). Order matters: the SGR alternative must come first.
