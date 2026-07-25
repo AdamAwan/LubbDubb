@@ -92,6 +92,9 @@
   "// repoRoot": "The git repo the harness operates on; per-branch worktrees are cut from it. Defaults to the launch directory (process.cwd()), so the common case needs nothing. Set it (or the LUBBDUBB_REPO_ROOT env override) to point at a repo elsewhere; a relative path resolves against the launch dir.",
   "repoRoot": ".",
 
+  "// defaultBranch": "The repository's integration branch. A NEW agent branch is cut from it (origin/<defaultBranch> preferred over the local ref), and it's the base named in a PR's base-update prompt when the provider reports none. Previously a hardcoded 'main' fallback, so new branches actually forked from whatever repoRoot was checked out on. Existing branches/worktrees are reused untouched and never re-based. Default 'main'.",
+  "defaultBranch": "main",
+
   "// worktreeRoot": "Root under which per-branch worktrees are created. A relative value resolves against repoRoot (not the launch dir). Default '.lubbdubb/worktrees'.",
   "worktreeRoot": ".lubbdubb/worktrees",
 

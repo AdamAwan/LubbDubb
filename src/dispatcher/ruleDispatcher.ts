@@ -46,6 +46,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly pickup: IssuePickupPolicy;
   private readonly cooldown: CooldownPolicy;
   private readonly templates: PromptTemplates;
+  private readonly defaultBranch: string;
 
   /**
    * `pickup` gates and orders issue pickup (rule 4). Omitted/partial => no gate
@@ -55,12 +56,16 @@ export class RuleDispatcher implements Dispatcher {
    * concern (see {@link dispatchVerdict}); defaults keep the loop bounded.
    * `templates` supplies the agent/escalation prompt bodies; omitted => the
    * built-in defaults (the composition root loads operator overrides).
+   * `defaultBranch` names the base a PR is assumed to target when the provider
+   * doesn't report one, and only phrases the base-update prompt.
    */
   constructor(
     pickup: Partial<IssuePickupPolicy> = {},
     cooldown: Partial<CooldownPolicy> = {},
     templates: PromptTemplates = defaultPromptTemplates(),
+    defaultBranch = 'main',
   ) {
+    this.defaultBranch = defaultBranch;
     this.templates = templates;
     this.pickup = {
       watchLabel: pickup.watchLabel,
@@ -173,7 +178,7 @@ export class RuleDispatcher implements Dispatcher {
         });
       }
       if (needsBaseUpdate(pr)) {
-        const base = pr.baseBranch ?? 'main';
+        const base = pr.baseBranch ?? this.defaultBranch;
         const behind = pr.mergeableState === 'behind';
         concerns.push({
           rule: 'pr-base-update',

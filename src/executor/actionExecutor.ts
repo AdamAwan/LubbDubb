@@ -21,6 +21,11 @@ export interface ExecutorDeps {
   /** Confidence-gated auto-send policy. */
   autoSend: AutoSendConfig;
   deskRoot: string;
+  /**
+   * Base a *new* agent branch is cut from. Passed on every `ensure` so the base is
+   * explicit config rather than whatever `repoRoot` is checked out on.
+   */
+  defaultBranch: string;
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
 }
@@ -256,7 +261,7 @@ export class ActionExecutor {
         originSummary: action.originSummary,
         dispatchReason: action.reason,
       });
-      const cwd = await this.deps.worktrees.ensure(action.branch);
+      const cwd = await this.deps.worktrees.ensure(action.branch, this.deps.defaultBranch);
       return { task, cwd };
     }
     const task = store.createTask({

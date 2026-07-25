@@ -171,6 +171,15 @@ export interface Config {
   deskRoot: string;
   /** The git repo the harness operates on (worktrees are cut from here). */
   repoRoot: string;
+  /**
+   * The repository's integration branch — what a new agent branch is cut from and
+   * what a PR is expected to target. Defaults to `"main"`. It was previously an
+   * incidental fallback in two places rather than real config, which meant a new
+   * agent branch actually forked from whatever `repoRoot` happened to be checked
+   * out on. Not auto-detected: the harness may run against a clone whose HEAD is
+   * anywhere, and a wrong guess silently mis-bases work.
+   */
+  defaultBranch: string;
   /** SQLite file. */
   dbPath: string;
   /** HTTP/WS port. */
@@ -256,6 +265,7 @@ const DEFAULTS: Config = {
   worktreeRoot: '.lubbdubb/worktrees',
   deskRoot: '.lubbdubb/desk',
   repoRoot: process.cwd(),
+  defaultBranch: 'main',
   dbPath: '.lubbdubb/lubbdubb.sqlite',
   port: 4300,
 };

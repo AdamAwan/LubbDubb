@@ -1,9 +1,6 @@
-import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { promisify } from 'node:util';
-
-const exec = promisify(execFile);
+import { runGit, resolveCommit } from '../git/gitCli.js';
 
 /**
  * Creates git worktrees lazily — only when a code task needs one — keyed by
@@ -18,10 +15,22 @@ export class WorktreeManager {
   ) {}
 
   /**
-   * Return the path to a worktree for `branch`, creating it if needed. If the
-   * branch doesn't exist yet it's created from the current HEAD.
+   * Return the path to a worktree for `branch`, creating it if needed. A *new*
+   * branch is cut from `base` (resolved by {@link resolveCommit}, so
+   * `origin/<base>` wins over the local ref); omitting `base` forks it from the
+   * repo root's HEAD, which is whatever that checkout happens to be sitting on.
+   *
+   * **Reuse comes first, and `base` is then ignored entirely** — an existing
+   * worktree, or an existing local branch, is handed back as-is. That is
+   * deliberate (you don't move an in-flight agent's branch out from under it),
+   * but it means `ensure(branch, base)` does *not* guarantee the branch is based
+   * on `base`; it only decides where a branch that didn't exist starts.
+   *
+   * A `base` that resolves to nothing throws rather than quietly falling back to
+   * HEAD: silently picking an incidental base is the bug this parameter exists to
+   * fix. The executor records the failure as a rejected dispatch.
    */
-  async ensure(branch: string): Promise<string> {
+  async ensure(branch: string, base?: string): Promise<string> {
     const existing = await this.findExisting(branch);
     if (existing) return existing;
 
@@ -30,10 +39,17 @@ export class WorktreeManager {
 
     if (await this.branchExists(branch)) {
       await this.git(['worktree', 'add', dir, branch]);
-    } else {
-      // New branch off current HEAD.
-      await this.git(['worktree', 'add', '-b', branch, dir]);
+      return dir;
     }
+    if (base === undefined) {
+      await this.git(['worktree', 'add', '-b', branch, dir]);
+      return dir;
+    }
+    const startPoint = await resolveCommit(this.repoRoot, base);
+    if (!startPoint) {
+      throw new Error(`Cannot create branch ${branch}: base '${base}' resolves to no commit in ${this.repoRoot}.`);
+    }
+    await this.git(['worktree', 'add', '-b', branch, dir, startPoint]);
     return dir;
   }
 
@@ -62,7 +78,7 @@ export class WorktreeManager {
   }
 
   private git(args: string[]): Promise<{ stdout: string; stderr: string }> {
-    return exec('git', args, { cwd: this.repoRoot });
+    return runGit(this.repoRoot, args);
   }
 }
 

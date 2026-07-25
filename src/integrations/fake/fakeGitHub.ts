@@ -38,6 +38,8 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
   constructor(
     private readonly world: FakeWorldStore,
     private readonly store: Store,
+    /** Base an injected `new_pr` targets when the event doesn't name one. */
+    private readonly defaultBranch = 'main',
   ) {}
 
   async snapshot(): Promise<WorldSlice> {
@@ -83,7 +85,7 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
               number: event.number,
               title: event.title,
               branch: event.branch,
-              baseBranch: event.baseBranch ?? 'main',
+              baseBranch: event.baseBranch ?? this.defaultBranch,
               ciStatus: 'pending',
               unresolvedComments: [],
               approved: false,

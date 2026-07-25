@@ -210,6 +210,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sink: opts.sink ?? connector,
     autoSend: config.autoSend,
     deskRoot: config.deskRoot,
+    defaultBranch: config.defaultBranch,
     runtime: runtimeControl,
   });
 
@@ -233,7 +234,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           cwd: config.repoRoot,
           issuePickup,
         })
-      : new RuleDispatcher(issuePickup, {}, loadPromptTemplates(config.promptTemplatesDir));
+      : new RuleDispatcher(issuePickup, {}, loadPromptTemplates(config.promptTemplatesDir), config.defaultBranch);
 
   const harness = new Harness({
     store,

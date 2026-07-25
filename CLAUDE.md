@@ -108,6 +108,23 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   swallowed `catch`es; route them here. The event is named `logged`, not `error` — an
   unlistened `error` event throws, and recording a failure must never throw. Tests silence
   the stderr mirror with `buildSystem(config, { errorMirror: () => {} })`.
+- **`src/git/` is the git-shell-out corner.** `gitCli.ts` holds the two primitives
+  everything else uses: `runGit(repoRoot, args)` (one place where `cwd: repoRoot` lives) and
+  `resolveCommit(repoRoot, ref)`, which resolves a branch name to a **SHA** preferring
+  `origin/<ref>` over the local ref — the harness's clone never checks the integration branch
+  out, so its `refs/heads/main` is frozen at clone time while the remote-tracking one moves.
+  It returns a SHA rather than a ref name on purpose: handing `git worktree add -b` a
+  remote-tracking ref sets the new branch's _upstream_ to it. `WorktreeManager.ensure(branch,
+base)` cuts a **new** branch from `config.defaultBranch` (threaded through `ExecutorDeps`) —
+  but it is **reuse-first**, so an existing worktree or local branch is handed back and `base`
+  is ignored entirely: `ensure` does _not_ guarantee the branch is based on `base`, it only
+  decides where a branch that didn't exist starts. An unresolvable `base` throws (the
+  executor's existing `catch` audits it as a rejected dispatch) rather than falling back to
+  HEAD — silently picking an incidental base is the bug the parameter exists to fix.
+  `gitObserver.ts` is the read-only `GitObserver` seam (branch presence, ahead/behind,
+  `hasCommitsBeyond`) with `fakeGitObserver.ts` alongside; it is deliberately **fetch-free**
+  and, as of stage 1 of the multi-PR design, has no caller — its consumer is plan
+  reconciliation. Don't wire it into the pulse to give it one.
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
