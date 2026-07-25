@@ -11,7 +11,8 @@ import type {
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
-import type { GhCheckRun, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
+import { closedWindowStart } from '../closedWindow.js';
+import type { GhCheckRun, GhClosedPull, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
 import { githubRefUrl } from './refUrl.js';
 
 export interface GitHubSourceControlOpts {
@@ -25,6 +26,14 @@ export interface GitHubSourceControlOpts {
   /** Repo identity for building web URLs. When unset, ref resolution returns null. */
   owner?: string;
   repo?: string;
+  /**
+   * How far back to look for PRs that have left the open set (`config.closedPrWindowMs`).
+   * 0 / unset skips the lookup entirely, so the extra request is never paid for by
+   * an operator who hasn't asked for closed-PR visibility.
+   */
+  closedPrWindowMs?: number;
+  /** Injectable clock, so the retention window is testable without waiting for one. */
+  now?: () => number;
 }
 
 /**
@@ -43,6 +52,7 @@ export class GitHubSourceControlIntegration
 
   /** Last successful slice, served on a transient failure so PRs don't flap. */
   private lastGood: PullRequest[] = [];
+  private lastGoodClosed: PullRequest[] = [];
 
   constructor(private readonly opts: GitHubSourceControlOpts) {}
 
@@ -52,6 +62,7 @@ export class GitHubSourceControlIntegration
       const viewer = await api.viewerLogin();
       let pulls = await api.listOpenPulls();
       if (prAuthor) pulls = pulls.filter((p) => p.authorLogin === prAuthor);
+      const closedPullRequests = await this.recentlyClosed();
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
@@ -73,6 +84,8 @@ export class GitHubSourceControlIntegration
             approved: computeApproved(reviews),
             mergeableState: normalizeMergeState(detail.mergeableState),
             merged: detail.merged,
+            // Listed as open, so 'open' unless the detail read caught it mid-merge.
+            state: detail.merged ? 'merged' : 'open',
             labels: p.labels,
             url: p.url,
           };
@@ -84,14 +97,29 @@ export class GitHubSourceControlIntegration
       );
 
       this.lastGood = pullRequests;
-      return { pullRequests };
+      this.lastGoodClosed = closedPullRequests;
+      return { pullRequests, closedPullRequests };
     } catch (err) {
       this.opts.errors?.record({
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      return { pullRequests: this.lastGood };
+      return { pullRequests: this.lastGood, closedPullRequests: this.lastGoodClosed };
     }
+  }
+
+  /**
+   * The PRs that left the open set inside the retention window, in the same
+   * domain shape as an open one. They carry no CI/review/comment signal — nothing
+   * acts on a dead PR, and fetching those per PR is exactly the cost this feature
+   * mustn't have.
+   */
+  private async recentlyClosed(): Promise<PullRequest[]> {
+    const { api, prAuthor, closedPrWindowMs } = this.opts;
+    if (!closedPrWindowMs || closedPrWindowMs <= 0) return [];
+    const since = closedWindowStart((this.opts.now ?? Date.now)(), closedPrWindowMs);
+    const closed = await api.listRecentlyClosedPulls(since);
+    return closed.filter((p) => !prAuthor || p.authorLogin === prAuthor).map(mapClosedPull);
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
@@ -120,6 +148,28 @@ export class GitHubSourceControlIntegration
     this.opts.store.recordConnectorEvent('pr_label_set', { ...input });
     return { ok: true };
   }
+}
+
+/**
+ * A closed GitHub PR as the world models it. `ciStatus`/`unresolvedComments` are
+ * blanked rather than fetched: this row exists to be *seen* (in the cockpit, in
+ * the world diff, in plan reconciliation), never to be acted on, and the harness
+ * only reaches those fields for open PRs.
+ */
+export function mapClosedPull(p: GhClosedPull): PullRequest {
+  return {
+    id: `pr_${p.number}`,
+    number: p.number,
+    title: p.title,
+    branch: p.branch,
+    baseBranch: p.baseBranch,
+    ciStatus: 'unknown',
+    unresolvedComments: [],
+    state: p.merged ? 'merged' : 'closed',
+    merged: p.merged,
+    closedAt: p.closedAt,
+    url: p.url,
+  };
 }
 
 /** Fold GitHub's `mergeable_state` down to the values the harness reacts to. */

@@ -100,6 +100,19 @@ export interface Config {
    * Only the `rule` dispatcher implements the funnel.
    */
   planning: PlanningPolicy;
+  /**
+   * How far back a provider looks for pull requests that have *left* the open set,
+   * so a merged or abandoned PR is observed rather than inferred from its
+   * disappearance. Feeds `WorldSnapshot.closedPullRequests`, which drives the
+   * cockpit's "recently closed" list, the `pr_merged`/`pr_closed` world events, and
+   * plan reconciliation's ability to tell a merge from an abandonment.
+   *
+   * Costs one extra list request per snapshot per provider (no per-PR fan-out —
+   * closed PRs are read in summary form only), bounded by this window. Defaults to
+   * 6 hours; `0` disables the lookup entirely, which is a supported configuration:
+   * every consumer falls back to the older "absence means merged" reading.
+   */
+  closedPrWindowMs: number;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -263,6 +276,7 @@ const DEFAULTS: Config = {
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, gitFetchIntervalMs: 60_000 },
+  closedPrWindowMs: 6 * 60 * 60 * 1000,
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',

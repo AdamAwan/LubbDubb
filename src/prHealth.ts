@@ -1,4 +1,19 @@
-import type { PullRequest } from './types.js';
+import type { PrState, PullRequest } from './types.js';
+
+/**
+ * A PR's open/merged/closed state, tolerant of the two shapes that reach us: the
+ * explicit `state` a closed-PR-aware provider sets, and the bare `merged` flag
+ * everything wrote before that existed (and still writes for open PRs).
+ *
+ * Deliberately never invents `closed`: a PR nobody told us was closed is open or
+ * merged, never abandoned. That asymmetry is the whole point — "closed unmerged"
+ * has to be *observed*, because inferring it from a disappearance is precisely
+ * the bug this replaced.
+ */
+export function prState(pr: PullRequest): PrState {
+  if (pr.state) return pr.state;
+  return pr.merged ? 'merged' : 'open';
+}
 
 export interface PrHealth {
   /** True when the PR can't progress on its own and needs work or attention. */

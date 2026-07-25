@@ -166,9 +166,46 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     an error rather than overriding the planner silently. `retired` is a new `PlanPartStatus`;
     everything that counts parts goes through `liveParts` (progress, roll-up, sibling context,
     rule 4a), and the reconciler skips retired rows so nothing quietly resurrects them.
-  - **Deferred, deliberately:** the closed-unmerged hole. Both providers list only open PRs, so a
-    PR leaving the world still reads as `merged`; telling merged from closed-unmerged needs a
-    closed-PR state in `PullRequest` and both provider seams, which is its own change.
+  - **The closed-unmerged hole, closed** — see "Recently-closed PRs" below.
+- **Recently-closed PRs (`WorldSnapshot.closedPullRequests`).** Both providers list only open PRs,
+  so a PR that merged used to just _vanish_ — and three things were wrong because of it. The world
+  snapshot now carries a **separate** list of PRs that left the open set within
+  `config.closedPrWindowMs` (default 6h, `0` disables). Separate, not merged into `pullRequests`:
+  rules 1/2/2b/3, `openPrForIssue`, `basePrOf`, `inheritedCiFailure` and `isStackedPr` all take a PR
+  list they trust to be open, and carrying closed rows alongside (the way `excludedPrs` is carried
+  into `DispatchContext`) keeps that true **by construction** rather than by remembering to skip a
+  status in nine places. Nothing in the dispatcher reads the list at all. `PullRequest` gained
+  `state?: PrState` + `closedAt?`; read the state through the pure `prState` (`prHealth.ts`), which
+  folds a missing value back onto `merged` and **never invents `closed`** — abandonment has to be
+  observed, since inferring it from a disappearance is the bug being fixed. What it fixes:
+
+  - **`pr_merged` was fake-provider-only.** `worldDiff` defined it as `!before.merged && pr.merged`,
+    which needs the PR to still be in the snapshot; `state: 'open'` / `status: 'active'` guarantee it
+    isn't. The merge now arrives as an _appearance_ in the closed list (plus a new `pr_closed` for an
+    abandonment). One row is news the first cycle it appears and never again — it lingers for the
+    whole window — and a merge already announced off the open list (the fake marks a PR merged in
+    place before it closes) is not announced twice.
+  - **Plan reconciliation guessed.** `foldPr` read absence as `merged`, which silently _completed_ a
+    plan whose part PR had been abandoned. The pure `observePartPr` (`plans/parts.ts`) now orders the
+    readings: open PR → merged-in-window (matched by branch _or_ number; merged is terminal so the
+    loose match is safe) → closed-unmerged → absence. **Absence-means-merged stays the fallback** —
+    the observed signal replaces the inference only _inside_ the window, or a part whose PR merged
+    last week would reopen finished work. The closed-unmerged reading matches by **`prNumber` only**
+    and clears it: a dead PR sits in the window for hours, so matching by branch would yank the part
+    back to `ready` every pulse, including after it was re-dispatched.
+  - **The cockpit forgot.** `/api/state` ships the list (and `buildRefUrls` covers its numbers); the
+    World panel draws a "Recently closed" section marked merged vs closed-unmerged.
+
+  Cost: **one** extra list request per snapshot per provider, and deliberately no per-PR fan-out — a
+  closed row carries no CI/review/comment signal, because nothing acts on a dead PR. GitHub sorts by
+  `updated` desc and stops paginating at the first entry outside the window (`updated_at >= closed_at`
+  always, so that break is sound); Azure uses `queryTimeRangeType=closed` + `minTime` with
+  `status=all`, one request covering completions and abandonments, re-filtered client-side because the
+  range is boundary-inclusive and an older API version may ignore the parameters. The fake models the
+  transition through a `pr_closed` injectable event, which **moves** the row rather than copying it —
+  `mergePr` still marks a PR merged in place so the deterministic loop settles, and a PR in both lists
+  would have the diff report one merge twice. Tests: `test/closedPrs.test.ts`.
+
 - **Plan reconciliation (`src/plans/planReconciler.ts`).** The store holds intent; the outside
   world stays the source of truth. Runs each pulse in `harness.ts` next to `worldDiff` and
   **before** `decide`, so a part it readies is dispatchable the same cycle. Two sources:

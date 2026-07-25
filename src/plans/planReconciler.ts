@@ -5,7 +5,7 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanPart, PullRequest, Task, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
-import { bySlug, dependencyOf, dependencySatisfied, partBranch, planIssueNumber } from './parts.js';
+import { bySlug, dependencyOf, dependencySatisfied, observePartPr, partBranch, planIssueNumber } from './parts.js';
 import type { PlanningPolicy } from './planning.js';
 
 export interface PlanReconcilerDeps {
@@ -59,7 +59,7 @@ export class PlanReconciler {
     await this.maybeFetch();
     const tasks = this.deps.store.listTasks();
     for (const plan of plans) {
-      await this.reconcilePlan(plan, world.pullRequests, tasks);
+      await this.reconcilePlan(plan, world.pullRequests, world.closedPullRequests ?? [], tasks);
     }
   }
 
@@ -83,7 +83,7 @@ export class PlanReconciler {
     }
   }
 
-  private async reconcilePlan(plan: Plan, prs: PullRequest[], tasks: Task[]): Promise<void> {
+  private async reconcilePlan(plan: Plan, prs: PullRequest[], closedPrs: PullRequest[], tasks: Task[]): Promise<void> {
     const { store } = this.deps;
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) return;
@@ -104,7 +104,7 @@ export class PlanReconciler {
       // was started for it, so there is no reality to fold on and nothing that
       // should quietly bring it back.
       if (part.status === 'retired') continue;
-      const patch = this.foldPr(part, issueNumber, prs) ?? this.foldStalled(part, tasks);
+      const patch = this.foldPr(part, issueNumber, prs, closedPrs) ?? this.foldStalled(part, tasks);
       if (patch) next.set(part.slug, patch);
     }
     // Applied to a working copy so readiness below sees this pulse's observations,
@@ -148,23 +148,25 @@ export class PlanReconciler {
   }
 
   /**
-   * What the provider says about a part's PR. Absence is read as **merged**, not as
-   * closed: both real providers list only open/active PRs, so a merged PR simply
-   * leaves the world (the same reading `openPrForIssue` already relies on). The
-   * world model carries no closed-PR state to tell the two apart, and guessing
-   * `ready` instead would re-dispatch an agent onto merged work on every single
-   * merge — see the PR description for what that costs a stack.
+   * What the provider says about a part's PR — see {@link observePartPr} for the
+   * ordering, which is the whole substance of this fold.
+   *
+   * The reason it's worth naming here: absence used to be read as **merged**
+   * unconditionally, because both providers list only open PRs and the world model
+   * had no closed state to tell a merge from an abandonment. That inference is now
+   * the *fallback* rather than the only reading — inside `closedPrWindowMs` the
+   * closed list says which it was, and a part whose PR was abandoned goes back to
+   * `ready` instead of silently completing its plan. Outside the window nothing
+   * changes, deliberately: a PR that merged last week is still absent, and reading
+   * that as un-merged would be a far worse bug than the one this fixes.
    */
-  private foldPr(part: PlanPart, issueNumber: number, prs: PullRequest[]): Partial<PlanPart> | null {
-    const branch = part.branch ?? partBranch(issueNumber, part.slug);
-    const pr = prs.find((p) => p.branch === branch) ?? prs.find((p) => p.number === part.prNumber);
-    if (pr) {
-      return pr.merged
-        ? { status: 'merged', branch, prNumber: pr.number }
-        : { status: 'in_review', branch, prNumber: pr.number };
-    }
-    if (part.status === 'in_review' && part.prNumber !== null) return { status: 'merged' };
-    return null;
+  private foldPr(
+    part: PlanPart,
+    issueNumber: number,
+    prs: PullRequest[],
+    closedPrs: PullRequest[],
+  ): Partial<PlanPart> | null {
+    return observePartPr(part, part.branch ?? partBranch(issueNumber, part.slug), prs, closedPrs);
   }
 
   /**

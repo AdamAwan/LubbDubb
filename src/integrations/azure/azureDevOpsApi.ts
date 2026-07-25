@@ -20,6 +20,15 @@ export interface AzureDevOpsApi {
 
   /** Active pull requests in the repo (includes reviewer votes, mergeStatus, isDraft). */
   listActivePullRequests(): Promise<AzPull[]>;
+  /**
+   * Pull requests completed or abandoned at or after `since` — the counterpart to
+   * {@link GitHubApi.listRecentlyClosedPulls}.
+   *
+   * Summary-only by design: no threads, policy evaluations or labels are fetched
+   * for a closed PR, so this stays one bounded request per snapshot rather than
+   * O(closed PRs).
+   */
+  listRecentlyClosedPullRequests(since: string): Promise<AzClosedPull[]>;
   /** Comment threads on a PR — the review-comment signal. */
   listPullThreads(pullRequestId: number): Promise<AzThread[]>;
   /**
@@ -101,6 +110,28 @@ export interface AzPull {
   mergeStatus: string;
   /** Reviewer votes: 10 approved, 5 approved-with-suggestions, 0 no vote, -5 waiting, -10 rejected. */
   reviewerVotes: number[];
+}
+
+/**
+ * A PR that has left the active set. Narrower than {@link AzPull} on purpose:
+ * merge status, reviewer votes and the head commit are meaningless once a PR is
+ * closed, and not asking for them is what keeps the extra call cheap.
+ */
+export interface AzClosedPull {
+  pullRequestId: number;
+  title: string;
+  /** source branch, `refs/heads/` stripped. */
+  branch: string;
+  /** target branch, `refs/heads/` stripped. */
+  baseBranch: string;
+  /** createdBy.uniqueName — the `prAuthor` filter applies to closed PRs too. */
+  authorUniqueName: string;
+  /** Web URL to the PR. */
+  url: string;
+  /** True when the PR completed (merged); false when it was abandoned. */
+  merged: boolean;
+  /** closedDate — when it left the active set. */
+  closedAt: string;
 }
 
 export interface AzThread {

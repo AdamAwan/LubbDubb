@@ -20,6 +20,16 @@ export interface GitHubApi {
 
   /** Open PRs in the repo (list endpoint — note: `mergeable` is NOT populated here). */
   listOpenPulls(): Promise<GhPullSummary[]>;
+  /**
+   * PRs closed (merged or not) at or after `since`, newest activity first.
+   *
+   * Summary-only by design: a closed PR gets no review/check/comment fan-out, so
+   * this stays one paginated call rather than O(closed PRs) requests. The
+   * implementation stops paginating at the first page that falls out of the
+   * window, so a repo closing fewer than a page of PRs in the window costs
+   * exactly one request per snapshot.
+   */
+  listRecentlyClosedPulls(since: string): Promise<GhClosedPull[]>;
   /** Single-PR detail, the only place `mergeable`/`merged` are populated. */
   getPull(number: number): Promise<GhPullDetail>;
   listPullReviews(number: number): Promise<GhReview[]>;
@@ -62,6 +72,28 @@ export interface GhPullSummary {
   url: string;
   /** Label names on the PR (the Issues/PR `labels` array). */
   labels: string[];
+}
+
+/**
+ * A PR that has left the open set. Deliberately narrower than
+ * {@link GhPullSummary}: nothing downstream reads CI, labels or a head SHA off a
+ * dead PR, and not asking for them is what keeps the extra call cheap.
+ */
+export interface GhClosedPull {
+  number: number;
+  title: string;
+  /** head.ref */
+  branch: string;
+  /** base.ref */
+  baseBranch: string;
+  /** user.login of the PR author — the `prAuthor` filter applies to closed PRs too. */
+  authorLogin: string;
+  /** html_url. */
+  url: string;
+  /** True when it was merged; false when it was closed without merging. */
+  merged: boolean;
+  /** closed_at — when it left the open set. */
+  closedAt: string;
 }
 
 export interface GhPullDetail {

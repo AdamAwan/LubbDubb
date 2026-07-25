@@ -333,6 +333,11 @@ function WorldSummary({
   onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
 }) {
   const { pullRequests, issues, stories } = state.world;
+  // Newest first: a PR you were watching disappears mid-session otherwise, with
+  // nothing to say whether it landed or was abandoned.
+  const recentlyClosed = [...(state.world.closedPullRequests ?? [])].sort((a, b) =>
+    (b.closedAt ?? '').localeCompare(a.closedAt ?? ''),
+  );
   const { refUrls } = state;
   const tag = state.config.ignoreLabel;
   const { watchLabel, ignoreLabel } = state.config;
@@ -382,6 +387,25 @@ function WorldSummary({
           </div>
         );
       })}
+      {recentlyClosed.length > 0 && (
+        <>
+          <div className="world-row">
+            <span>Recently closed</span>
+            <b>{recentlyClosed.length}</b>
+          </div>
+          {recentlyClosed.map((pr) => (
+            <div key={pr.id} className="world-item excluded">
+              {refLink(`#${pr.number}`, refUrls)} {pr.title}
+              <span
+                className={`chip small${pr.state === 'merged' ? '' : ' warn'}`}
+                title={pr.closedAt ? `${pr.state === 'merged' ? 'Merged' : 'Closed'} ${pr.closedAt}` : undefined}
+              >
+                {pr.state === 'merged' ? 'merged' : 'closed unmerged'}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
       <div className="world-row">
         <span>Issues</span>
         <b>{issues.length}</b>

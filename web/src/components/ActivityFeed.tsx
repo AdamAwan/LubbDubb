@@ -62,6 +62,7 @@ function labelOf(kind: WorldEventKind): string {
     pr_approved: 'approved',
     pr_mergeable: 'mergeable',
     pr_merged: 'merged',
+    pr_closed: 'PR closed',
     pr_comment: 'comment',
     issue_opened: 'issue opened',
     issue_closed: 'issue closed',

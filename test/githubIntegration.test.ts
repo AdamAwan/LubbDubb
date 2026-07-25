@@ -11,6 +11,7 @@ import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from
 import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
 import type {
   GhCheckRun,
+  GhClosedPull,
   GhCombinedStatus,
   GhCommentRef,
   GhIssue,
@@ -28,6 +29,7 @@ import type { MergeMethod } from '../src/sink/actionSink.js';
 interface Script {
   viewer?: string;
   pulls?: GhPullSummary[];
+  closedPulls?: GhClosedPull[];
   detail?: Record<number, GhPullDetail>;
   reviews?: Record<number, GhReview[]>;
   reviewComments?: Record<number, GhReviewComment[]>;
@@ -45,6 +47,7 @@ interface Recorded {
   merges: Array<{ number: number; method: MergeMethod }>;
   issueLabelQueries: Array<string | undefined>;
   labelSets: Array<{ number: number; label: string; present: boolean }>;
+  closedSince: string[];
 }
 
 function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
@@ -55,6 +58,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     merges: [],
     issueLabelQueries: [],
     labelSets: [],
+    closedSince: [],
   };
   const api: GitHubApi = {
     async viewerLogin() {
@@ -63,6 +67,10 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async listOpenPulls() {
       if (script.throwOn === 'listOpenPulls') throw new Error('boom');
       return script.pulls ?? [];
+    },
+    async listRecentlyClosedPulls(since) {
+      recorded.closedSince.push(since);
+      return (script.closedPulls ?? []).filter((p) => p.closedAt >= since);
     },
     async getPull(number) {
       return script.detail?.[number] ?? { mergeable: null, mergeableState: null, merged: false };

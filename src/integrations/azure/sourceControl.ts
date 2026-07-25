@@ -10,7 +10,8 @@ import type {
   PrReplyCapable,
   WorldSlice,
 } from '../integration.js';
-import type { AzPolicyEvaluation, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
+import { closedWindowStart } from '../closedWindow.js';
+import type { AzClosedPull, AzPolicyEvaluation, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
 
 export interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
@@ -20,6 +21,13 @@ export interface AzureSourceControlOpts {
   errors?: ErrorRecorder;
   /** Only surface PRs opened by this uniqueName. Unset = all active PRs. */
   prAuthor?: string;
+  /**
+   * How far back to look for PRs that have left the active set
+   * (`config.closedPrWindowMs`). 0 / unset skips the lookup entirely.
+   */
+  closedPrWindowMs?: number;
+  /** Injectable clock, so the retention window is testable without waiting for one. */
+  now?: () => number;
 }
 
 /**
@@ -38,6 +46,7 @@ export class AzureDevOpsSourceControlIntegration
 
   /** Last successful slice, served on a transient failure so PRs don't flap. */
   private lastGood: PullRequest[] = [];
+  private lastGoodClosed: PullRequest[] = [];
   /** commitId per PR from the last snapshot — needed to complete a merge later. */
   private mergeCommits = new Map<number, string>();
 
@@ -49,6 +58,7 @@ export class AzureDevOpsSourceControlIntegration
       const viewer = await api.viewerUniqueName();
       let pulls = await api.listActivePullRequests();
       if (prAuthor) pulls = pulls.filter((p) => p.authorUniqueName === prAuthor);
+      const closedPullRequests = await this.recentlyClosed();
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
@@ -69,6 +79,7 @@ export class AzureDevOpsSourceControlIntegration
             approved: computeApproved(p.reviewerVotes),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
             merged: false, // active PRs only; a completed PR drops out of the list
+            state: 'open',
             labels,
             url: p.url,
           };
@@ -82,14 +93,28 @@ export class AzureDevOpsSourceControlIntegration
       );
 
       this.lastGood = pullRequests;
-      return { pullRequests };
+      this.lastGoodClosed = closedPullRequests;
+      return { pullRequests, closedPullRequests };
     } catch (err) {
       this.opts.errors?.record({
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      return { pullRequests: this.lastGood };
+      return { pullRequests: this.lastGood, closedPullRequests: this.lastGoodClosed };
     }
+  }
+
+  /**
+   * The PRs that left the active set inside the retention window, in the same
+   * domain shape as an active one — minus every signal only an *open* PR has
+   * (policy evaluations, threads, labels), which is what keeps this one request.
+   */
+  private async recentlyClosed(): Promise<PullRequest[]> {
+    const { api, prAuthor, closedPrWindowMs } = this.opts;
+    if (!closedPrWindowMs || closedPrWindowMs <= 0) return [];
+    const since = closedWindowStart((this.opts.now ?? Date.now)(), closedPrWindowMs);
+    const closed = await api.listRecentlyClosedPullRequests(since);
+    return closed.filter((p) => !prAuthor || p.authorUniqueName === prAuthor).map(mapClosedPull);
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
@@ -122,6 +147,27 @@ export class AzureDevOpsSourceControlIntegration
     this.opts.store.recordConnectorEvent('pr_label_set', { ...input });
     return { ok: true };
   }
+}
+
+/**
+ * A completed/abandoned Azure PR as the world models it. CI and comments are
+ * blanked rather than fetched: nothing acts on a closed PR, and per-PR fan-out is
+ * exactly the cost this feature must not have.
+ */
+export function mapClosedPull(p: AzClosedPull): PullRequest {
+  return {
+    id: `pr_${p.pullRequestId}`,
+    number: p.pullRequestId,
+    title: p.title,
+    branch: p.branch,
+    baseBranch: p.baseBranch,
+    ciStatus: 'unknown',
+    unresolvedComments: [],
+    state: p.merged ? 'merged' : 'closed',
+    merged: p.merged,
+    closedAt: p.closedAt,
+    url: p.url,
+  };
 }
 
 /** Strip a `refs/heads/` prefix down to the plain branch name. */

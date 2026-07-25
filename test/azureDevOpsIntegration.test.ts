@@ -25,6 +25,7 @@ import {
   type AzureAuth,
 } from '../src/integrations/azure/restAzureDevOpsApi.js';
 import type {
+  AzClosedPull,
   AzCommentRef,
   AzMergeResult,
   AzPolicyEvaluation,
@@ -40,6 +41,7 @@ import type { MergeMethod } from '../src/sink/actionSink.js';
 interface Script {
   viewer?: string;
   pulls?: AzPull[];
+  closedPulls?: AzClosedPull[];
   threads?: Record<number, AzThread[]>;
   policyEvals?: Record<number, AzPolicyEvaluation[]>;
   labels?: Record<number, string[]>;
@@ -59,6 +61,7 @@ interface Recorded {
   stateSets: Array<{ id: number; state: string }>;
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
   comments: Array<{ id: number; commentId: number | null; text: string }>;
+  closedSince: string[];
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -73,6 +76,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     stateSets: [],
     tagSets: [],
     comments: [],
+    closedSince: [],
   };
   const api: AzureDevOpsApi = {
     async viewerUniqueName() {
@@ -81,6 +85,10 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async listActivePullRequests() {
       if (script.throwOn === 'listActivePullRequests') throw new Error('boom');
       return script.pulls ?? [];
+    },
+    async listRecentlyClosedPullRequests(since) {
+      recorded.closedSince.push(since);
+      return (script.closedPulls ?? []).filter((p) => p.closedAt >= since);
     },
     async listPullThreads(prId) {
       return script.threads?.[prId] ?? [];

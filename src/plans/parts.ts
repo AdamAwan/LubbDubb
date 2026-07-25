@@ -1,4 +1,5 @@
-import type { Plan, PlanPart, PlanStatus } from '../types.js';
+import { prState } from '../prHealth.js';
+import type { Plan, PlanPart, PlanStatus, PullRequest } from '../types.js';
 
 /**
  * Scheduling a multi-PR plan's parts, as pure functions over the part rows.
@@ -106,6 +107,55 @@ export function liveParts(parts: PlanPart[]): PlanPart[] {
 export function planProgress(parts: PlanPart[]): { merged: number; total: number } {
   const live = liveParts(parts);
   return { merged: live.filter((p) => p.status === 'merged').length, total: live.length };
+}
+
+/**
+ * What the world says about one part's pull request — the pure core of
+ * `PlanReconciler.foldPr`. Returns the patch to apply, or null for "nothing
+ * observable, the caller's other folds get a turn".
+ *
+ * The readings, in the order they're allowed to fire:
+ *
+ * 1. **An open PR on the branch** — the part is in review. Unchanged.
+ * 2. **A merged PR** in the closed window, matched by branch *or* number. Merged
+ *    is terminal and idempotent, so the looser match is safe and catches a part
+ *    whose PR opened and merged between two pulses.
+ * 3. **A closed-unmerged PR**, matched by **number only**, and only when this
+ *    part was tracking that number. It goes back to `ready` with `prNumber`
+ *    cleared, so the plan re-does the work instead of quietly completing on an
+ *    abandoned PR. Matching by *branch* here would be a trap: a dead PR sits in
+ *    the retention window for hours, so the part would be yanked back to `ready`
+ *    on every pulse — including the ones after it was re-dispatched. Clearing the
+ *    number is what makes the transition fire exactly once.
+ * 4. **Absence** — the pre-existing inference, and still the fallback: a part
+ *    that *was* in review whose PR is in neither list merged, out of sight. It
+ *    has to stay, or a PR that merged before the retention window would read as
+ *    un-merged and its plan would reopen days of finished work. The observed
+ *    signals above replace the inference only *within* the window.
+ */
+export function observePartPr(
+  part: PlanPart,
+  branch: string,
+  openPrs: PullRequest[],
+  closedPrs: PullRequest[],
+): Partial<PlanPart> | null {
+  const open = openPrs.find((p) => p.branch === branch) ?? openPrs.find((p) => p.number === part.prNumber);
+  if (open) {
+    return open.merged
+      ? { status: 'merged', branch, prNumber: open.number }
+      : { status: 'in_review', branch, prNumber: open.number };
+  }
+
+  const merged = closedPrs.find((p) => prState(p) === 'merged' && (p.branch === branch || p.number === part.prNumber));
+  if (merged) return { status: 'merged', branch, prNumber: merged.number };
+
+  if (part.prNumber !== null) {
+    const abandoned = closedPrs.find((p) => p.number === part.prNumber && prState(p) === 'closed');
+    if (abandoned) return { status: 'ready', branch, prNumber: null };
+  }
+
+  if (part.status === 'in_review' && part.prNumber !== null) return { status: 'merged' };
+  return null;
 }
 
 /**

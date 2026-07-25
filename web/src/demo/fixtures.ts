@@ -77,6 +77,34 @@ export function buildDemoState(): DemoSeed {
           health: { blocked: true, reasons: ['behind base branch'] },
         },
       ],
+      // What the World panel used to lose: a PR you were watching disappears when
+      // it leaves the open set, with nothing to say whether it landed.
+      closedPullRequests: [
+        {
+          id: 'pr-140',
+          number: 140,
+          title: 'Fold check-runs and combined status into one CI verdict',
+          branch: 'feature/ci-aggregate',
+          ciStatus: 'unknown',
+          unresolvedComments: [],
+          baseBranch: 'main',
+          merged: true,
+          state: 'merged',
+          closedAt: ago(52),
+        },
+        {
+          id: 'pr-138',
+          number: 138,
+          title: 'Screen-scrape the PTY transcript',
+          branch: 'feature/screen-scrape',
+          ciStatus: 'unknown',
+          unresolvedComments: [],
+          baseBranch: 'main',
+          merged: false,
+          state: 'closed',
+          closedAt: ago(96),
+        },
+      ],
       issues: [
         {
           id: 'iss-208',
