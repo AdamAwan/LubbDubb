@@ -372,6 +372,7 @@ export function buildStateSnapshot(system: System) {
       // Same plan inputs rules 3c/4 read, so the chip explains an issue parked in
       // the funnel rather than claiming it's eligible for a pickup that won't fire.
       plans: store.listPlans(),
+      planParts: store.listAllPlanParts(),
       planning: config.planning,
       headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
       paused: control.paused,

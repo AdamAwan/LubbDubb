@@ -60,6 +60,18 @@ export interface StoryLabelInput {
   present: boolean;
 }
 
+export interface IssueCommentInput {
+  /** The issue / work item to comment on. */
+  number: number;
+  body: string;
+  /**
+   * The provider comment id to edit in place, or null to create one. A plan keeps a
+   * single living status comment rather than a stream, so this is the id the last
+   * write returned (persisted on `plans.status_comment_ref`).
+   */
+  commentRef: string | null;
+}
+
 export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
@@ -83,4 +95,11 @@ export interface ActionSink {
    * it fails. Only providers with a rich state model implement it.
    */
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult>;
+  /**
+   * Create or update a comment on an issue / work item — the plan's status comment,
+   * the one progress channel both providers share. `ref` on the result is the
+   * provider comment id, so the next write edits rather than re-posts. Throws if it
+   * fails. Only providers with a comment API implement it.
+   */
+  upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
 }

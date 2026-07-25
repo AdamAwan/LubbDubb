@@ -18,7 +18,7 @@ import type { Decision, Issue, Plan, WorldSnapshot } from '../src/types.js';
 
 // -- the pure route ----------------------------------------------------------
 
-const enabled = { enabled: true, maxConcurrentPartsPerIssue: 2 };
+const enabled = { ...DEFAULT_PLANNING, enabled: true };
 
 function plan(status: Plan['status']): Plan {
   return {

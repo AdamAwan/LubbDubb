@@ -46,6 +46,24 @@ export function needsBaseUpdate(pr: PullRequest): boolean {
 }
 
 /**
+ * A PR that targets something other than the integration branch — i.e. it is
+ * stacked on another in-flight branch.
+ *
+ * The merge rule fires on green + approved + mergeable, which on a stack would
+ * merge part 2 **into part 1's branch** mid-flight rather than into the default
+ * branch: the change lands nowhere real, part 1's review now contains part 2's
+ * code, and the stack is scrambled. Stacked children instead wait for the provider
+ * to retarget them when their parent merges, at which point their base *is* the
+ * default branch and this predicate stops holding them.
+ *
+ * A PR whose base the provider didn't report is not treated as stacked — unknown
+ * must not silently stop merging PRs that merged fine before.
+ */
+export function isStackedPr(pr: PullRequest, defaultBranch: string): boolean {
+  return pr.baseBranch !== undefined && pr.baseBranch !== defaultBranch;
+}
+
+/**
  * The operator's "leave this PR alone" tag: true when the PR carries the
  * configured exclusion label. Pure and provider-agnostic — reads `PullRequest.labels`,
  * so it gates the fake/github/azure providers identically. An empty `label` (feature

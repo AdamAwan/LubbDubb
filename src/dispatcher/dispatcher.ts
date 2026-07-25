@@ -1,4 +1,4 @@
-import type { Agent, Decision, Escalation, Job, Plan, PullRequest, Task, WorldSnapshot } from '../types.js';
+import type { Agent, Decision, Escalation, Job, Plan, PlanPart, PullRequest, Task, WorldSnapshot } from '../types.js';
 import type { ParseResult } from './actions.js';
 import type { DispatchRuleId } from './rules.js';
 
@@ -28,6 +28,12 @@ export interface DispatchContext {
    * stays empty for good and every issue routes straight to pickup.
    */
   plans?: Plan[];
+  /**
+   * Every plan's parts — the scheduling graph rule 4a walks. Reconciliation has
+   * already folded git and provider reality onto these rows *this* cycle, so a part
+   * that became ready during the pulse is dispatchable in the same pulse.
+   */
+  planParts?: PlanPart[];
   /** Optional operator hints, injected only as a corrective. */
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */

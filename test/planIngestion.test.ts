@@ -235,3 +235,24 @@ test('the plan file is tracked as a written file but never promoted to an artifa
   assert.deepEqual(system.store.listFlags(agent.id), [], 'a side-channel file is not an artifact');
   system.store.close();
 });
+
+test('a part may declare at most one dependency, and the graph must be acyclic', () => {
+  const doc = (parts: string): string => `{"version":1,"verdict":"parts","reason":"x","parts":[${parts}]}`;
+  const part = (slug: string, deps: string[]): string =>
+    `{"slug":"${slug}","title":"T","scope":"s","dependsOn":[${deps.map((d) => `"${d}"`).join(',')}]}`;
+
+  // Two dependencies is the static form of "two *open* dependencies": both could be
+  // in review at once and there would be no single branch to base the part on.
+  const two = parsePlanDocument(doc([part('a', []), part('b', []), part('c', ['a', 'b'])].join(',')));
+  assert.equal(two.ok, false);
+  assert.match(two.ok === false ? two.error : '', /at most one/);
+
+  // A cycle deadlocks every part in it — none is ever ready, and the issue silently
+  // stops progressing. Reject the document so the planner is retried instead.
+  const cycle = parsePlanDocument(doc([part('a', ['b']), part('b', ['a'])].join(',')));
+  assert.equal(cycle.ok, false);
+  assert.match(cycle.ok === false ? cycle.error : '', /dependency cycle/);
+
+  // A chain is fine — that is exactly what a stack is.
+  assert.equal(parsePlanDocument(doc([part('a', []), part('b', ['a']), part('c', ['b'])].join(','))).ok, true);
+});

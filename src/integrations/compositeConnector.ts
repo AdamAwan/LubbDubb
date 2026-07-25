@@ -1,6 +1,7 @@
 import type { Connector, InjectableEvent } from '../connector/connector.js';
 import type {
   ActionSink,
+  IssueCommentInput,
   IssueLabelInput,
   PrLabelInput,
   PrMergeInput,
@@ -13,6 +14,7 @@ import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
 import {
   isInjectable,
+  isIssueCommentCapable,
   isIssueLabelCapable,
   isPrLabelCapable,
   isPrMergeCapable,
@@ -85,6 +87,12 @@ export class CompositeConnector implements Connector, ActionSink {
     if (!handler)
       throw new Error('no integration can set work item state (no issues provider is WorkItemStateCapable)');
     return handler.setWorkItemState(input);
+  }
+
+  async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
+    const handler = this.integrations.find(isIssueCommentCapable);
+    if (!handler) throw new Error('no integration can comment on issues (no issues provider is IssueCommentCapable)');
+    return handler.upsertIssueComment(input);
   }
 
   /**

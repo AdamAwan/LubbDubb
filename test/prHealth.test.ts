@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prHealth, isConflicted, needsBaseUpdate } from '../src/prHealth.js';
+import { isStackedPr, prHealth, isConflicted, needsBaseUpdate } from '../src/prHealth.js';
 import type { PullRequest } from '../src/types.js';
 
 function pr(over: Partial<PullRequest> = {}): PullRequest {
@@ -55,4 +55,13 @@ test('a merged PR is done, never blocked, never needs an update', () => {
   assert.equal(prHealth(p).blocked, false);
   assert.equal(needsBaseUpdate(p), false);
   assert.equal(isConflicted(p), false);
+});
+
+test('a PR targeting anything but the integration branch is stacked', () => {
+  // The merge rule fires on green + approved, which on a stack would merge part 2
+  // into part 1's branch mid-flight rather than into the default branch.
+  assert.equal(isStackedPr(pr({ baseBranch: 'issue/12/schema' }), 'main'), true);
+  assert.equal(isStackedPr(pr({ baseBranch: 'main' }), 'main'), false);
+  // Unknown must not silently stop merging PRs that merged fine before.
+  assert.equal(isStackedPr(pr({}), 'main'), false);
 });

@@ -3,6 +3,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type {
+  IssueCommentInput,
   IssueLabelInput,
   PrLabelInput,
   PrMergeInput,
@@ -130,6 +131,15 @@ export interface WorkItemStateCapable {
 
 export function isWorkItemStateCapable(x: Integration): x is Integration & WorkItemStateCapable {
   return typeof (x as Partial<WorkItemStateCapable>).setWorkItemState === 'function';
+}
+
+/** An integration that can comment on an issue / work item — the plan's status comment. */
+export interface IssueCommentCapable {
+  upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
+}
+
+export function isIssueCommentCapable(x: Integration): x is Integration & IssueCommentCapable {
+  return typeof (x as Partial<IssueCommentCapable>).upsertIssueComment === 'function';
 }
 
 // ---------------------------------------------------------------------------

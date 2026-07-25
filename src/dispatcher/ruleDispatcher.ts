@@ -1,12 +1,13 @@
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
-import { needsBaseUpdate } from '../prHealth.js';
-import type { Agent, Decision, PullRequest, Task } from '../types.js';
+import { isStackedPr, needsBaseUpdate } from '../prHealth.js';
+import type { Agent, Decision, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import {
   isIssuePickupEligible,
   issueBranch,
   issuePriority,
+  issueWatchGateReason,
   openPrForIssue,
   watchGateReason,
   type IssuePickupPolicy,
@@ -24,6 +25,15 @@ import {
   type PlanningPolicy,
   type PlanRouteVerdict,
 } from '../plans/planning.js';
+import {
+  bySlug,
+  partBase,
+  partBranch,
+  partDepth,
+  partOrigin,
+  planIssueNumber,
+  siblingContext,
+} from '../plans/parts.js';
 
 /**
  * A deterministic, dependency-free dispatcher that encodes the harness's default
@@ -84,6 +94,8 @@ export class RuleDispatcher implements Dispatcher {
     this.planning = {
       enabled: planning.enabled ?? DEFAULT_PLANNING.enabled,
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
+      // Reconciliation's knob, not the dispatcher's; carried so the policy stays one object.
+      gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
     };
     this.templates = templates;
     this.pickup = {
@@ -171,6 +183,16 @@ export class RuleDispatcher implements Dispatcher {
             };
       candidates.push({ origin, rule: 'manual-job', title: job.title, kind: job.kind, branch, reason, action });
     }
+
+    // The plan funnel's memory, read by rules 3b, 3c, 4 and 4a alike so none of
+    // them can hold a different opinion about an issue. Empty with the funnel off.
+    const plansByOrigin = new Map((ctx.plans ?? []).map((p) => [p.originRef, p]));
+    /** Is this issue decomposed — i.e. owned by the part scheduler, not by pickup? */
+    const partsPlanFor = (issueNumber: number): Plan | null => {
+      if (!this.planning.enabled) return null;
+      const plan = plansByOrigin.get(issueOrigin(issueNumber));
+      return plan && (plan.status === 'active' || plan.status === 'complete') ? plan : null;
+    };
 
     // 1–3: React to PR signals first — they're time-sensitive. At most one code
     // agent works a given branch, so a fresh signal for a branch that already
@@ -274,7 +296,13 @@ export class RuleDispatcher implements Dispatcher {
       // decides whether to merge autonomously or escalate for approval. A
       // 'behind'/'blocked'/'dirty' state is handled above, so it never counts as
       // merge-ready here.
+      //
+      // A stacked PR is held: merging it would land part 2 *into part 1's branch*
+      // mid-flight rather than into the integration branch. It becomes mergeable on
+      // its own the moment the provider retargets it, which is when its parent
+      // merges — no separate release step (see `isStackedPr`).
       const mergeReady =
+        !isStackedPr(pr, this.defaultBranch) &&
         pr.ciStatus === 'passing' &&
         pr.approved === true &&
         pr.mergeable === true &&
@@ -361,16 +389,25 @@ export class RuleDispatcher implements Dispatcher {
         // on that branch — the reliable link even when Azure hasn't wired the
         // ArtifactLink relation. `openPrForIssue` falls back to the linked-PR number.
         const pr = openPrForIssue(issue, openPrs);
+        // A decomposed item belongs in the review state for the whole life of its
+        // plan: it isn't waiting on one PR, it's waiting on several, and the inverse
+        // below would bounce it back to "Ready" in every gap between parts — and
+        // again the moment the last one merges. This is also the design's
+        // "completion moves an Azure work item to the review state", reusing the
+        // action rather than inventing a second path to it.
+        const decomposed = partsPlanFor(issue.number) !== null;
         if (pickupStates.includes(state)) {
-          if (!pr) continue;
+          if (!pr && !decomposed) continue;
           raw.push({
             type: 'set_work_item_state',
             number: issue.number,
             state: inReviewState,
             rule: 'work-item-in-review',
-            reason: `PR #${pr.number} is open for work item #${issue.number}; move it to "${inReviewState}" so it isn't re-picked while under review.`,
+            reason: decomposed
+              ? `Work item #${issue.number} is delivered as a multi-part plan; move it to "${inReviewState}" for the life of the plan.`
+              : `PR #${pr!.number} is open for work item #${issue.number}; move it to "${inReviewState}" so it isn't re-picked while under review.`,
           } satisfies RawAction);
-        } else if (state === inReviewState && !pr) {
+        } else if (state === inReviewState && !pr && !decomposed) {
           raw.push({
             type: 'set_work_item_state',
             number: issue.number,
@@ -402,7 +439,6 @@ export class RuleDispatcher implements Dispatcher {
     // the persisted plan plus the plan origin's own cooldown verdict, and shared by
     // rules 3c and 4 so the two can never disagree about an issue. With planning
     // disabled every issue routes to `single`, so rule 4 below is un-narrowed.
-    const plansByOrigin = new Map((ctx.plans ?? []).map((p) => [p.originRef, p]));
     const routes = new Map<number, PlanRouteVerdict>();
     for (const { issue } of eligibleIssues) {
       routes.set(
@@ -458,6 +494,69 @@ export class RuleDispatcher implements Dispatcher {
         } satisfies RawAction,
       });
     }
+
+    // 4a: Schedule the parts of a decomposed issue — what makes a `parts` verdict
+    // mean anything. Ranked *after* planners (a planner unblocks work) and *before*
+    // one-shot pickups, and within that by dependency depth, so the bottom of a
+    // stack is cut before the branch its dependents will base on is needed.
+    //
+    // Deliberately not driven off `eligibleIssues`: that list gates on the issue
+    // having no open PR, and a part's PR is exactly what makes the parent issue
+    // look taken. Parts inherit the issue's watch/ignore tag (evaluated once, on
+    // the parent) and nothing else — see `issueWatchGateReason` for why the
+    // workflow-state gate must not apply here.
+    const partCandidates: PartCandidate[] = [];
+    for (const plan of this.planning.enabled ? (ctx.plans ?? []) : []) {
+      if (plan.status !== 'active') continue; // complete/abandoned/single schedule nothing
+      const issueNumber = planIssueNumber(plan.originRef);
+      if (issueNumber === null) continue;
+      const issue = ctx.world.issues.find((i) => i.number === issueNumber);
+      if (!issue || issue.state !== 'open') continue;
+      if (issueWatchGateReason(issue, this.pickup) !== null) continue;
+
+      const parts = (ctx.planParts ?? []).filter((p) => p.planId === plan.id);
+      const index = bySlug(parts);
+      // The concurrency cap is on *agents*, so it counts live tasks rather than the
+      // `dispatched` status — a part whose agent died is not occupying a slot.
+      const inFlight = parts.filter((p) => activeOrigins.has(partOrigin(issueNumber, p.slug))).length;
+      let room = this.planning.maxConcurrentPartsPerIssue - inFlight;
+      const ready = parts
+        .filter((p) => p.status === 'ready' && !activeOrigins.has(partOrigin(issueNumber, p.slug)))
+        .map((part) => ({ part, depth: partDepth(part, index) }))
+        .sort((a, b) => a.depth - b.depth || a.part.seq - b.part.seq);
+      for (const { part, depth } of ready) {
+        if (room <= 0) break;
+        const origin = partOrigin(issueNumber, part.slug);
+        const verdict = dispatchVerdict(origin, now, ctx.recentDecisions, this.cooldown);
+        // 'hold' (already escalated) must not eat a slot the plan could give to a
+        // sibling — that is how one stuck part would stall a whole plan.
+        if (verdict.kind === 'hold') continue;
+        if (verdict.kind === 'escalate') {
+          raw.push({
+            type: 'escalate_to_human',
+            escalationType: 'resolve_ambiguity',
+            prompt: this.templates.render('plan-part-escalation', {
+              number: issueNumber,
+              part: part.title,
+              attempts: verdict.attempts,
+            }),
+            context: { originRef: origin, taskTitle: part.title },
+            rule: 'cooldown-escalate',
+            reason: `Origin ${origin} hit the ${this.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
+          } satisfies RawAction);
+          continue;
+        }
+        room -= 1;
+        partCandidates.push({
+          depth,
+          issueNumber,
+          seq: part.seq,
+          candidate: this.partCandidate(plan, issue, part, parts, index, issueNumber, verdict.kind === 'cooldown'),
+        });
+      }
+    }
+    partCandidates.sort((a, b) => a.depth - b.depth || a.issueNumber - b.issueNumber || a.seq - b.seq);
+    for (const c of partCandidates) candidates.push(c.candidate);
 
     for (const { issue } of eligibleIssues) {
       // Narrowed by the funnel: an issue is picked up only once its plan says one
@@ -632,6 +731,78 @@ export class RuleDispatcher implements Dispatcher {
       upcoming,
     };
   }
+
+  /**
+   * One part's dispatch candidate. The prompt carries what the siblings have done
+   * and what is still to come — goal 3 of the multi-PR design, and the thing a
+   * second agent on the same issue has never had.
+   *
+   * `base` is the branch this part stacks on, resolved from the dependency's state
+   * (its branch while its PR is open, the integration branch once it merged) and
+   * carried on the action so the executor cuts the worktree from it. Whether the
+   * PR *body* states the plan context is left to the prompt: making it automatic
+   * would need either a new outbound capability or an instruction the agent may
+   * ignore anyway, and prompt-only degrades quietly rather than wrongly.
+   */
+  private partCandidate(
+    plan: Plan,
+    issue: { number: number; title: string },
+    part: PlanPart,
+    parts: PlanPart[],
+    index: Map<string, PlanPart>,
+    issueNumber: number,
+    cooldown: boolean,
+  ): Candidate {
+    const origin = partOrigin(issueNumber, part.slug);
+    const branch = part.branch ?? partBranch(issueNumber, part.slug);
+    const base = partBase(part, index, issueNumber, this.defaultBranch);
+    const { done, remaining } = siblingContext(parts, part);
+    const title = `Issue #${issueNumber} part: ${part.title}`;
+    const reason =
+      base === this.defaultBranch
+        ? `Part "${part.slug}" of issue #${issueNumber} is ready and has no agent.`
+        : `Part "${part.slug}" of issue #${issueNumber} is ready and stacks on ${base}.`;
+    return {
+      origin,
+      rule: 'plan-part',
+      title,
+      kind: 'code',
+      branch,
+      reason,
+      cooldown,
+      action: {
+        type: 'dispatch_code_agent',
+        branch,
+        base,
+        partId: part.id,
+        title,
+        prompt: this.templates.render('plan-part', {
+          number: issueNumber,
+          title: issue.title,
+          part: part.title,
+          scope: part.scope,
+          branch,
+          base,
+          plan: plan.reason ?? 'the planner gave no reason',
+          done,
+          remaining,
+        }),
+        originRef: origin,
+        originTitle: `${issue.title} — ${part.title}`,
+        originSummary: part.scope,
+        rule: 'plan-part',
+        reason,
+      } satisfies RawAction,
+    };
+  }
+}
+
+/** A part candidate awaiting the cross-plan depth ranking. */
+interface PartCandidate {
+  depth: number;
+  issueNumber: number;
+  seq: number;
+  candidate: Candidate;
 }
 
 type RawAction = Record<string, unknown> & { type: string; reason: string; rule: DispatchRuleId };

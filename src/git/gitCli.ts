@@ -13,6 +13,19 @@ export function runGit(repoRoot: string, args: string[]): Promise<{ stdout: stri
 }
 
 /**
+ * Refresh the remote-tracking refs. The {@link GitObserver} is deliberately
+ * fetch-free, so this is the caller's half of that split: plan reconciliation runs
+ * it on the pulse (floored by `planning.gitFetchIntervalMs`) because otherwise the
+ * observer never sees a branch pushed from anywhere but this machine.
+ *
+ * `--prune` so a deleted remote branch stops reading as present. Failure is the
+ * caller's to record — a repo with no `origin` is a legitimate configuration.
+ */
+export async function fetchRemote(repoRoot: string): Promise<void> {
+  await runGit(repoRoot, ['fetch', '--prune', 'origin']);
+}
+
+/**
  * Resolve a branch name (or any commit-ish) to a commit SHA, or null if it names
  * nothing. **`origin/` wins over the local ref**: the harness's clone is a server
  * -side one whose `refs/heads/main` is frozen at clone time — nothing ever checks

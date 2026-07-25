@@ -20,6 +20,8 @@ import { basename, extname, join } from 'node:path';
  */
 export type PromptId =
   | 'issue-plan'
+  | 'plan-part'
+  | 'plan-part-escalation'
   | 'issue-pickup'
   | 'issue-pickup-escalation'
   | 'pr-ci-fix'
@@ -61,10 +63,34 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '    {"slug": "dispatcher", "title": "...", "scope": "src/dispatcher/...", "dependsOn": ["schema"]}\n' +
       '  ]}\n\n' +
       'Slugs are short, lowercase, kebab-case and unique; "scope" names the files or areas that part owns, ' +
-      'so parts running at the same time do not collide; "dependsOn" lists sibling slugs only.\n\n' +
+      'so parts running at the same time do not collide; "dependsOn" names **at most one** sibling slug — a part ' +
+      'stacks on a single branch, so two dependencies is not expressible and the plan will be rejected.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you ' +
       'are on branch {branch} only so you have the repository to read.',
     doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule 3c). The agent writes its verdict to the plan file; nothing else it does is read. Placeholders: {number} {title} {body} {branch} {planFile}.',
+  },
+  'plan-part': {
+    placeholders: ['number', 'title', 'part', 'scope', 'branch', 'base', 'plan', 'done', 'remaining'],
+    template:
+      'Issue #{number} ("{title}") was split into parts, and you own the part "{part}".\n\n' +
+      'Why it was split: {plan}\n\n' +
+      'Your scope — the files and areas this part owns. Stay inside it; a sibling part may be running right now:\n' +
+      '{scope}\n\n' +
+      'Other parts whose work already exists (do not redo it; some of it may already be on your branch):\n' +
+      '{done}\n\n' +
+      'Other parts still to come. These are explicitly NOT yours — leave them alone:\n' +
+      '{remaining}\n\n' +
+      'Work on branch {branch}, which is cut from {base}. Open a pull request from {branch} **into {base}** — if ' +
+      'that is not the default branch, this PR is stacked on another part and must target it, not the default. ' +
+      'Say in the PR body which part of #{number} this is and what it stacks on. Reference the issue as ' +
+      '"part of #{number}" and never as "closes #{number}": other parts still have to land.',
+    doc: "Sent to a code agent for one part of a multi-PR plan (rule 4a). {plan} is the planner's justification, {done}/{remaining} the sibling parts either side of this one, {base} the branch this part stacks on (the default branch when it stacks on nothing). Placeholders: {number} {title} {part} {scope} {branch} {base} {plan} {done} {remaining}.",
+  },
+  'plan-part-escalation': {
+    placeholders: ['number', 'part', 'attempts'],
+    template:
+      'Part "{part}" of issue #{number} keeps failing: {attempts} agent attempt(s) produced no pull request. The rest of the plan may be stacked on it — please take a look.',
+    doc: 'Escalated to a human when one part of a plan keeps failing to produce a PR. Placeholders: {number} {part} {attempts}.',
   },
   'issue-pickup': {
     placeholders: ['number', 'title', 'body', 'branch'],

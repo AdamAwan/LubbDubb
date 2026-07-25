@@ -64,6 +64,18 @@ export const PlanDocumentSchema = z
       slugs.add(part.slug);
     }
     for (const part of doc.parts) {
+      // The static form of "a part may stack on at most one *open* dependency":
+      // with two declared dependencies both can be in review at the same moment
+      // and there is no single branch to base the part on. Multi-parent merge
+      // bases aren't worth the complexity, so the constraint is enforced here
+      // rather than discovered at dispatch, where the plan is already persisted.
+      if (part.dependsOn.length > 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['parts'],
+          message: `"${part.slug}" declares ${part.dependsOn.length} dependencies; a part may stack on at most one`,
+        });
+      }
       for (const dep of part.dependsOn) {
         if (dep === part.slug) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['parts'], message: `"${part.slug}" depends on itself` });
@@ -76,7 +88,38 @@ export const PlanDocumentSchema = z
         }
       }
     }
+    // A cycle deadlocks every part in it — none is ever ready, and the issue
+    // silently stops progressing. Reject the document instead: the planner is
+    // retried and eventually fails the issue open to `single`.
+    const cycle = findDependencyCycle(doc.parts);
+    if (cycle) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['parts'],
+        message: `dependency cycle: ${cycle.join(' -> ')}`,
+      });
+    }
   });
+
+/** The slugs of one dependency cycle, or null when the graph is acyclic. */
+function findDependencyCycle(parts: { slug: string; dependsOn: string[] }[]): string[] | null {
+  const deps = new Map(parts.map((p) => [p.slug, p.dependsOn]));
+  const settled = new Set<string>();
+  for (const start of deps.keys()) {
+    if (settled.has(start)) continue;
+    const path: string[] = [];
+    const onPath = new Set<string>();
+    let current: string | undefined = start;
+    while (current !== undefined && deps.has(current) && !settled.has(current)) {
+      if (onPath.has(current)) return [...path.slice(path.indexOf(current)), current];
+      path.push(current);
+      onPath.add(current);
+      current = deps.get(current)?.[0];
+    }
+    for (const slug of path) settled.add(slug);
+  }
+  return null;
+}
 
 export type PlanDocument = z.infer<typeof PlanDocumentSchema>;
 

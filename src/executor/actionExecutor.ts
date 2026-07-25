@@ -96,6 +96,10 @@ export class ActionExecutor {
             // actually running — so a deferred (capped/paused) dispatch keeps it
             // queued for a later cycle.
             if (action.jobId) store.markJobDispatched(action.jobId, task.id);
+            // Same rule as a job, for the same reason: a dispatch the cap/pause gate
+            // held must leave the part `ready` for a later cycle, not claim it started.
+            if (action.type === 'dispatch_code_agent' && action.partId)
+              store.markPartDispatched(action.partId, task.id, action.branch);
             record(
               'executed',
               `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`,
@@ -261,7 +265,9 @@ export class ActionExecutor {
         originSummary: action.originSummary,
         dispatchReason: action.reason,
       });
-      const cwd = await this.deps.worktrees.ensure(action.branch, this.deps.defaultBranch);
+      // A stacked plan part names the branch it forks from; everything else takes
+      // the configured integration branch.
+      const cwd = await this.deps.worktrees.ensure(action.branch, action.base ?? this.deps.defaultBranch);
       return { task, cwd };
     }
     const task = store.createTask({

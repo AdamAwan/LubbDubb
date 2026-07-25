@@ -202,12 +202,17 @@ export class OctokitGitHubApi implements GitHubApi {
       comment_id: inReplyTo,
       body,
     });
-    return { url: data.html_url };
+    return { url: data.html_url, id: data.id };
   }
 
   async createIssueComment(number: number, body: string): Promise<GhCommentRef> {
     const { data } = await this.octokit.issues.createComment({ ...this.base, issue_number: number, body });
-    return { url: data.html_url };
+    return { url: data.html_url, id: data.id };
+  }
+
+  async updateIssueComment(commentId: number, body: string): Promise<GhCommentRef> {
+    const { data } = await this.octokit.issues.updateComment({ ...this.base, comment_id: commentId, body });
+    return { url: data.html_url, id: data.id };
   }
 
   async mergePull(number: number, method: MergeMethod): Promise<GhMergeResult> {

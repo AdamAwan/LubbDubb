@@ -36,6 +36,18 @@ const job = {
   jobId: z.string().nullable().default(null),
 };
 
+/**
+ * Links a dispatch to the {@link PlanPart} it works, so the executor can record the
+ * part dispatched once its agent spawns — and carries the branch that part stacks
+ * on. `base` is only consulted when the branch doesn't exist yet (see
+ * `WorktreeManager.ensure`); null means the executor's configured default branch,
+ * which is every dispatch but a stacked part's.
+ */
+const part = {
+  partId: z.string().nullable().default(null),
+  base: z.string().min(1).nullable().default(null),
+};
+
 export const ActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('dispatch_code_agent'),
@@ -45,6 +57,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     originRef: z.string().nullable().default(null),
     ...origin,
     ...job,
+    ...part,
     ...base,
   }),
   z.object({
