@@ -128,6 +128,11 @@ test('an absolute worktreeRoot/deskRoot override is honoured as-is', () => {
   assert.equal(cfg.deskRoot, '/var/desk');
 });
 
+test('defaultBranch defaults to main and is overridable', () => {
+  assert.equal(loadConfig().defaultBranch, 'main');
+  assert.equal(loadConfig({ defaultBranch: 'trunk' }).defaultBranch, 'trunk');
+});
+
 test('a relative claudeArg that points at a real file is resolved to an absolute path', () => {
   const cfg = loadConfig({ claudeArgs: ['scripts/mock-agent.sh', '--flag'] });
   assert.ok(cfg.claudeArgs[0]!.startsWith('/'), 'existing script path is made absolute');

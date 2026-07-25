@@ -12,7 +12,9 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 function gitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
   const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  git(['init', '-q']);
+  // Named explicitly: agent branches are cut from `config.defaultBranch` ("main"),
+  // while bare `git init` takes whatever the host's init.defaultBranch says.
+  git(['init', '-q', '-b', 'main']);
   git(['config', 'user.email', 'test@example.com']);
   git(['config', 'user.name', 'Test']);
   git(['commit', '-q', '--allow-empty', '-m', 'root']);

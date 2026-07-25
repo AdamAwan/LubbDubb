@@ -19,7 +19,9 @@ const scriptPath = join(process.cwd(), 'scripts/mock-agent.sh');
 function tempGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-smoke-repo-'));
   const git = (args: string[]) => execFileSync('git', args, { cwd: dir });
-  git(['init', '-q']);
+  // Named explicitly: agent branches are cut from `config.defaultBranch` ("main"),
+  // while bare `git init` takes whatever the host's init.defaultBranch says.
+  git(['init', '-q', '-b', 'main']);
   git(['config', 'user.email', 't@t.com']);
   git(['config', 'user.name', 'Smoke']);
   writeFileSync(join(dir, 'README.md'), '# smoke\n');

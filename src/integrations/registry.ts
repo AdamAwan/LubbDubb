@@ -22,7 +22,7 @@ type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integ
  */
 const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   sourceControl: {
-    fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.store),
+    fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.store, ctx.config.defaultBranch),
     github: (ctx) => {
       const { api, gh } = githubApi(ctx);
       return new GitHubSourceControlIntegration({

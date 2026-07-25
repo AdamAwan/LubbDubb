@@ -407,6 +407,28 @@ test('a behind PR gets a clean base-update dispatch, not conflict framing', asyn
   assert.doesNotMatch((actions[0] as { prompt: string }).prompt, /resolve the conflicts/i);
 });
 
+test('a PR with no reported base falls back to the configured defaultBranch', async () => {
+  const d = new RuleDispatcher({}, {}, undefined, 'trunk');
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 42,
+          title: 'X',
+          branch: 'feat',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          mergeable: true,
+          mergeableState: 'behind',
+        },
+      ],
+    }),
+  );
+  assert.match((actions[0] as { prompt: string }).prompt, /trunk/);
+  assert.match((actions[0] as { reason: string }).reason, /behind trunk/);
+});
+
 test('a blocked PR is not auto-acted (surfaced only)', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
