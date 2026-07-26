@@ -523,6 +523,38 @@ base)` cuts a **new** branch from `config.defaultBranch` (threaded through `Exec
 - **Server surface** is `src/server/app.ts` (Fastify REST + the `/ws` route) and
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
+- **`src/server/auth.ts` guards that surface, and the guard is a path prefix, not a per-route
+  opt-in.** The severity is `POST /api/jobs`: rule 0 dispatches a queued job ahead of every
+  world-driven rule, so an unauthenticated cockpit is an RCE endpoint with repo write and a billing
+  side-effect, not a dashboard. `authorizeRequest` is pure — the Fastify `onRequest` hook is a thin
+  adapter — and answers **origin and host before the token**, so a leaked credential never re-opens
+  the rebinding door. Things to preserve:
+  - **The hook is registered before `app.register(websocket)` and every route.** A Fastify hook is
+    inherited only by contexts created _after_ it, and `/ws` lives in a child context — register it
+    later and the live transcript stream (source, agent output) is the one unguarded surface.
+  - **A refused upgrade needs `Connection: close` + an explicit socket destroy.** A 401 answering a
+    request that asked to switch protocols leaves a socket neither the HTTP server nor the WS server
+    counts, and `app.close()` then waits on it forever — anyone probing `/ws` would stop the harness
+    shutting down. `test/cockpitAuth.test.ts` asserts this by closing without forcing connections.
+  - **No secret in `Config`**, same rule as `GITHUB_TOKEN`: `auth` carries `enabled` + `tokenFile`
+    only, and the token comes from `LUBBDUBB_TOKEN` or a minted 0600 file. `loadConfig` **throws**
+    for a routable `host` plus `auth.enabled: false` — each half is a supported choice, the pair
+    never is.
+  - **The cockpit holds the token in `localStorage` and attaches it by hand** (`web/src/api.ts`),
+    arriving via a `#t=` fragment the browser never sends to a server. Not a cookie: a cookie is
+    attached unbidden, which is the whole reason cookie auth needs CSRF tokens bolted on. The SPA
+    shell is deliberately unguarded — the page must load before it can authenticate.
+  - **Refusals are throttled (20/source/minute), successes never counted** — the cockpit polls
+    `/api/state` continuously, and throttling that is what `global: false` rate limiting exists to
+    avoid. The counter lives in the hook, not in `authorizeRequest`, which takes a `throttled`
+    boolean so the verdict stays pure. It isn't what makes the token unguessable (256 bits is); it
+    bounds the cost of a hammer.
+  - Tests that drive routes opt out with `auth: { enabled: false } as never`; coverage lives in the
+    structural test that walks `app.ts`'s route table and requires a refusal from each, so a route
+    added later is asserted on the day it is written. That test accepts 401 **or** 429 — walking the
+    table spends the failure budget partway through — which doesn't weaken it, because the path check
+    precedes the throttle and an unguarded route would answer 200/404 instead.
+    Tests: `test/cockpitAuth.test.ts`.
 
 ## Agent runtimes (the part that surprises people)
 

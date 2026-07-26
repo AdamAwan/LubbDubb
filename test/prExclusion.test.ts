@@ -27,6 +27,8 @@ function gitRepo(): string {
 function build(overrides: Partial<Config> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
+    auth: { enabled: false } as never,
     dbPath: ':memory:',
     dispatcher: 'rule',
     agentMode: 'raw',

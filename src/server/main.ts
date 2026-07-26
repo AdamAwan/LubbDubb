@@ -29,9 +29,18 @@ async function main(): Promise<void> {
     console.log(`[lubbdubb] boot: resumed ${resumed} agent(s), interrupted ${interrupted} from a previous run`);
   }
 
-  const { app } = await buildApp(system);
-  await app.listen({ port: config.port, host: '0.0.0.0' });
-  console.log(`[lubbdubb] cockpit listening on http://localhost:${config.port}`);
+  const { app, cockpitUrl, tokenPath } = await buildApp(system);
+  await app.listen({ port: config.port, host: config.host });
+  console.log(`[lubbdubb] cockpit listening on ${config.host}:${config.port}`);
+  if (cockpitUrl) {
+    // The token rides in the URL *fragment*, which browsers never send to a
+    // server — so this line is safe to be the thing you click, and the cockpit
+    // lifts the token out of it client-side.
+    console.log(`[lubbdubb] open the cockpit: ${cockpitUrl}`);
+    if (tokenPath) console.log(`[lubbdubb] token minted at ${tokenPath} (0600) — reused on the next start`);
+  } else {
+    console.log('[lubbdubb] cockpit auth is DISABLED — anyone who can reach this port can queue jobs');
+  }
   console.log(
     `[lubbdubb] dispatcher=${config.dispatcher} heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`,
   );

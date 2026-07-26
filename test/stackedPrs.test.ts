@@ -412,6 +412,8 @@ function systemWithPlans(): { system: System; repoRoot: string } {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const repoRoot = gitRepo();
   const config = loadConfig({
+    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
+    auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',

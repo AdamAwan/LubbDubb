@@ -229,6 +229,35 @@ export interface Config {
   dbPath: string;
   /** HTTP/WS port. */
   port: number;
+  /**
+   * Address the HTTP/WS server binds to. Defaults to `127.0.0.1`: the cockpit can
+   * queue a job, which spawns an agent with write access to the repo and the
+   * launching shell's environment, so reachability is a decision an operator
+   * should make deliberately rather than inherit. Set `"0.0.0.0"` to expose it on
+   * the network — `auth.enabled: false` is refused in that combination at load.
+   */
+  host: string;
+  /** Cockpit access control. See `src/server/auth.ts`. */
+  auth: AuthConfig;
+}
+
+/**
+ * Bearer-token access control for the cockpit surface.
+ *
+ * There is deliberately **no `token` field**: `Config` holds no secrets (the same
+ * rule that keeps the GitHub token in `GITHUB_TOKEN` alone), and this file is the
+ * one an operator pastes when asking for help. The token comes from
+ * `LUBBDUBB_TOKEN` or is minted into {@link AuthConfig.tokenFile} at 0600.
+ */
+interface AuthConfig {
+  /**
+   * Master switch, **on by default** — unlike `autoSend` and `planning`, which
+   * are off because they act on the world. This one only refuses callers, and an
+   * off-by-default guard is one nobody turns on.
+   */
+  enabled: boolean;
+  /** Where a minted token is persisted. Relative paths resolve against the launch directory. */
+  tokenFile: string;
 }
 
 export interface GitHubConfig {
@@ -316,6 +345,8 @@ const DEFAULTS: Config = {
   defaultBranch: 'main',
   dbPath: '.lubbdubb/lubbdubb.sqlite',
   port: 4300,
+  host: '127.0.0.1',
+  auth: { enabled: true, tokenFile: '.lubbdubb/cockpit-token' },
 };
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
@@ -330,6 +361,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   }
   const fromEnv: Partial<Config> = {};
   if (process.env.PORT) fromEnv.port = Number(process.env.PORT);
+  if (process.env.LUBBDUBB_HOST) fromEnv.host = process.env.LUBBDUBB_HOST;
   if (process.env.LUBBDUBB_DB) fromEnv.dbPath = process.env.LUBBDUBB_DB;
   if (process.env.LUBBDUBB_REPO_ROOT) fromEnv.repoRoot = process.env.LUBBDUBB_REPO_ROOT;
   const merged = { ...DEFAULTS, ...fromFile, ...fromEnv, ...overrides };
@@ -372,6 +404,22 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
   // than an accidental off.
   merged.mcp = { ...DEFAULTS.mcp, ...fromFile.mcp, ...overrides.mcp };
+
+  // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.
+  merged.auth = { ...DEFAULTS.auth, ...fromFile.auth, ...overrides.auth };
+
+  // The one configuration that is never what anyone means. Turning auth off is a
+  // supported local choice (it is how the test suite runs); binding a routable
+  // address is a supported deliberate one. Together they publish an endpoint that
+  // spawns agents with repo write to every peer on the network, so the pair is
+  // refused here rather than warned about — a warning scrolls past a boot log.
+  if (merged.host !== '127.0.0.1' && merged.host !== 'localhost' && merged.host !== '::1' && !merged.auth.enabled) {
+    throw new Error(
+      `Refusing to start: host "${merged.host}" is reachable off this machine and auth.enabled is false. ` +
+        `The cockpit can queue jobs, which spawn agents with write access to your repo. ` +
+        `Either bind 127.0.0.1 (the default) or leave auth on.`,
+    );
+  }
 
   // Agents run in a worktree/scratch cwd, so any relative script path in
   // claudeArgs (e.g. the demo mock-agent) must be made absolute up front or the

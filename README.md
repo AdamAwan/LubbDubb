@@ -116,10 +116,24 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 
 ```bash
 npm install                                        # builds native deps (better-sqlite3, node-pty)
-cp lubbdubb.config.example.json lubbdubb.config.json # your local config (gitignored); the example runs the mock agent, no auth needed
+cp lubbdubb.config.example.json lubbdubb.config.json # your local config (gitignored); the example runs the mock agent, so no model or provider credentials are needed
 npm run web:build                                  # build the cockpit SPA into web/dist
-npm start                                          # start the server (serves the cockpit at http://localhost:4300)
+npm start                                          # start the server (binds 127.0.0.1:4300)
 ```
+
+`npm start` prints the link to open:
+
+```
+[lubbdubb] open the cockpit: http://127.0.0.1:4300/#t=<token>
+```
+
+Open that once per browser and the cockpit remembers the token. The harness binds **loopback only**
+and every API route needs that token, because the cockpit can queue a job — and a job spawns a real
+agent with write access to your repo and your shell's environment. The token is minted on first start
+into `.lubbdubb/cockpit-token` (0600, gitignored) and reused across restarts, so the link stays the
+same. Set `LUBBDUBB_TOKEN` to choose your own, or see **`host` / `auth`** below to expose the cockpit
+on your network deliberately. Nothing here talks to an identity provider or any other service: it is
+32 random bytes and a header.
 
 Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story), and watch the harness react. The inject bar (and its `/api/inject` route) only exists while a `fake` provider is configured — synthetic events can't land on real integrations, so a real deployment hides it. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Use the **New job** panel to launch an ad-hoc job from a prompt — it queues server-side and the dispatcher drains it _ahead of_ all world-driven work (rule 0), so it takes the next free agent slot and simply waits in the queue (shown with its place in line, cancellable) when the fleet is at its concurrency cap. Answer items in **Needs you** to unblock parked agents. **Up next** shows the dispatcher's ordered pickup plan from the last pulse, with the cut-line at the current concurrency headroom — above it dispatches now, below it waits for a free slot. The **Decision log** shows what the harness decided each cycle — click a row to expand the dispatcher rule that produced it (its number, name and standing rationale); the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved), so it works for the real GitHub provider too, not just injected events.
 
@@ -166,6 +180,7 @@ Copy the tracked `lubbdubb.config.example.json` as a starting point. All keys ar
 - **`agentPermissionMode`** — passed to `claude --permission-mode` so unattended tool calls don't hang (default `acceptEdits`). Note: `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root — run the harness as a non-root user if you need it.
 - **`claudeCommand` / `claudeArgs`** — the agent binary and any extra args. Defaults to `claude`.
 - **`docsFolderPrefix`** — folder(s) the **file-events hook** treats as the artifacts area; a string or an array. Any file an agent writes _under_ a prefix (e.g. `"docs"` → everything in `docs/`) is promoted to an **artifact chip** in the cockpit regardless of extension, on top of the built-in report/doc heuristic (report extensions like `.md`/`.html`/`.pdf` and any `reports/` folder); a file promotes if it's under _any_ entry. A **relative** entry is worktree-relative; an **absolute** entry (e.g. `"D:/shared/reports"`) also matches files an agent writes under that real directory _outside_ its worktree, and — being operator-configured — widens the artifact-serving boundary so those chips open too (still `..`/symlink-confined to the configured root). Unset = heuristic only. Artifact detection itself needs no per-skill cooperation: a `PostToolUse` hook captures every write, so a report surfaces without the agent's prompt knowing the flag protocol; **every** written file is also listed in the agent drawer's "files changed" view.
+- **`host` / `auth`** — who can reach the cockpit. `host` defaults to `"127.0.0.1"` (this machine only); `auth.enabled` defaults to `true`, requiring a bearer token on every `/api/*` route and on the `/ws` stream. The token comes from `LUBBDUBB_TOKEN` or is minted into `auth.tokenFile` (default `.lubbdubb/cockpit-token`, mode 0600) and printed as a `#t=` link at startup — it is deliberately **not** a config-file key, for the same reason `GITHUB_TOKEN` isn't: `lubbdubb.config.json` should stay safe to paste. Setting `host` to something reachable (e.g. `"0.0.0.0"`) works, but with `auth.enabled: false` it is **refused at startup** — that pair hands anyone on the network an endpoint that spawns agents with write access to your repo. Cross-origin requests and non-loopback `Host` headers are refused too, which is what stops a web page you happen to visit from driving your harness.
 - **`whitelistedApprovals`** — waiting prompts the harness may auto-answer instead of escalating.
 - **`steeringPriorities`** — optional hints injected into the LLM dispatcher's prompt.
 - **`integrations`** — which provider fulfils each capability. The world behind the `Connector` is built from one integration per capability — `sourceControl` (pull requests, including their merge-readiness for PR monitoring), `issues` (GitHub-style issues the harness resolves into PRs), `backlog` (stories) — and each capability has interchangeable providers registered in `src/integrations/registry.ts`. This is the **swap switch**: change a value to point a capability at another provider without touching the harness, executor, or the other integrations. Three providers ship: the built-in `fake` (an editable, persisted world you inject events into) and two real ones for `sourceControl` and `issues` — **`github`** (see **`github`** below) and **`azure`** (Azure DevOps, see **`azureDevOps`** below). Unlisted capabilities keep the `fake` default; further real adapters are drop-ins — add them to the registry and select them here.
@@ -218,8 +233,11 @@ Drive it from the cockpit topbar (the `−`/`+` cap stepper and the Pause/Resume
 or the endpoint directly:
 
 ```bash
-curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"cap":5}'
-curl -XPOST localhost:4300/api/control -H 'content-type: application/json' -d '{"paused":true}'
+# The cockpit token — minted at first start, printed in the `#t=` link.
+TOKEN=$(cat .lubbdubb/cockpit-token)
+
+curl -XPOST localhost:4300/api/control -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"cap":5}'
+curl -XPOST localhost:4300/api/control -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"paused":true}'
 ```
 
 `POST /api/control` accepts `{ cap?, paused? }` (`cap` must be a non-negative integer),
@@ -244,9 +262,11 @@ Use the cockpit button — which writes the labels through the provider — appl
 directly in GitHub/Azure, or call the endpoints:
 
 ```bash
-curl -XPOST localhost:4300/api/prs/42/exclude -H 'content-type: application/json' -d '{"excluded":true}'
-curl -XPOST localhost:4300/api/issues/208/watch -H 'content-type: application/json' -d '{"watched":true}'
-curl -XPOST localhost:4300/api/stories/st-9/watch -H 'content-type: application/json' -d '{"watched":false}'
+TOKEN=$(cat .lubbdubb/cockpit-token)
+
+curl -XPOST localhost:4300/api/prs/42/exclude -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"excluded":true}'
+curl -XPOST localhost:4300/api/issues/208/watch -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"watched":true}'
+curl -XPOST localhost:4300/api/stories/st-9/watch -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"watched":false}'
 ```
 
 `POST /api/prs/:number/exclude` (`{ excluded: boolean }`) toggles the `-ignore` tag on a

@@ -142,6 +142,8 @@ test('both transports honour the gate, so a verdict lands the same way whichever
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const system = buildSystem(
     loadConfig({
+      // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
+      auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       dispatcher: 'rule',
@@ -458,6 +460,8 @@ function plannedSystem(opts: { requireApproval?: boolean } = {}): { system: Syst
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const repoRoot = gitRepo();
   const config = loadConfig({
+    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
+    auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',

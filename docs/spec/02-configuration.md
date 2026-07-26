@@ -10,13 +10,21 @@ Values are merged in this order, later winning:
 1. `DEFAULTS` (in `src/config.ts`)
 2. `lubbdubb.config.json`, read from `process.cwd()` — absent is fine; unparseable throws with the
    file path and the parse error
-3. Environment overrides: `PORT` → `port`, `LUBBDUBB_DB` → `dbPath`, `LUBBDUBB_REPO_ROOT` →
-   `repoRoot`
+3. Environment overrides: `PORT` → `port`, `LUBBDUBB_HOST` → `host`, `LUBBDUBB_DB` → `dbPath`,
+   `LUBBDUBB_REPO_ROOT` → `repoRoot`
 4. Explicit `overrides` passed to `loadConfig(overrides)` (tests, embedding)
 
-Four keys are **deep-merged** rather than replaced, so a config file can set one field of them
-without dropping the rest: `autoSend`, `integrations`, `planning`, `mcp`. Everything else — including
-`issuePriorityLabels` — is replaced wholesale.
+Five keys are **deep-merged** rather than replaced, so a config file can set one field of them
+without dropping the rest: `autoSend`, `integrations`, `planning`, `mcp`, `auth`. Everything else —
+including `issuePriorityLabels` — is replaced wholesale.
+
+`loadConfig` **throws** for one combination: a `host` that is reachable off this machine together
+with `auth.enabled: false`. Each half alone is a supported deliberate choice; together they expose an
+endpoint that queues jobs — which spawn agents with write access to the repo — to every peer on the
+network. A warning would scroll past in a boot log, so it is refused instead.
+
+No secret is ever a config key. The GitHub token comes from `GITHUB_TOKEN`, and the cockpit token
+from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays safe to paste.
 
 ## Path resolution at load
 
@@ -40,6 +48,9 @@ resolve them against the wrong directory:
 | `maxConcurrentAgents` | `number`  | `3`       | Seeds the runtime cap. Live changes go through `POST /api/control` and are **not** persisted.                                  |
 | `startPaused`         | `boolean` | `false`   | Seeds the runtime pause flag. The only config-level pause knob; live pause/resume is ephemeral, so a restart reverts to this.  |
 | `port`                | `number`  | `4300`    | HTTP/WS port. Overridable via `PORT`.                                                                                         |
+| `host`                | `string`  | `127.0.0.1` | Bind address. Loopback by default; `"0.0.0.0"` exposes the cockpit on the network and then requires `auth.enabled`. Overridable via `LUBBDUBB_HOST`. |
+| `auth.enabled`        | `boolean` | `true`    | Require a bearer token on `/api/*` and `/ws`. See [16 — HTTP API](16-http-api.md#authentication).                              |
+| `auth.tokenFile`      | `string`  | `.lubbdubb/cockpit-token` | Where a minted token is persisted (0600). Ignored when `LUBBDUBB_TOKEN` is set.                             |
 | `dbPath`              | `string`  | `.lubbdubb/lubbdubb.sqlite` | SQLite file. Overridable via `LUBBDUBB_DB`. `:memory:` is supported (tests).                                |
 
 ### Repository
