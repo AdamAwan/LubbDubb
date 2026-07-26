@@ -19,6 +19,8 @@ import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
 import { authorizeRequest, createAuthThrottle, resolveCockpitToken } from './auth.js';
+import { mintArtifactCapability, verifyArtifactCapability } from './artifactCapability.js';
+import { randomBytes } from 'node:crypto';
 
 /**
  * Whether the configured world accepts synthetic events: only the `fake`
@@ -113,6 +115,20 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // entries add nothing here — they're already covered by the worktree root.
   const artifactRoots = absolutePrefixes(config.docsFolderPrefix);
 
+  // How the artifact route authorizes a browser *navigation*. The `/artifacts`
+  // route sits outside the `/api` prefix on purpose (see the route below), so the
+  // bearer-token guard doesn't apply and it must authorize itself. It does so with
+  // a per-flag capability: a fresh per-run secret signs `<flag id>.<expiry>`, the
+  // signer mints one into every artifact URL the snapshot ships, and the route
+  // verifies it against the flag id in its own path. A per-run key (not the cockpit
+  // token) means a capability is never the cockpit token even derived. Null when
+  // auth is off — the whole surface is then open by the operator's choice and
+  // loopback-only, so there is nothing to verify against.
+  const artifactKey = auth ? randomBytes(32) : null;
+  const artifactSigner = artifactKey
+    ? (flagId: string): string => mintArtifactCapability(artifactKey, flagId, Date.now() + ARTIFACT_CAP_TTL_MS)
+    : undefined;
+
   // An unanticipated throw in a route must not vanish into a silent 500: record
   // it to the error log (which also mirrors it to stderr and streams it to the
   // cockpit), then return a plain 500.
@@ -135,7 +151,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   });
 
   // -- State ---------------------------------------------------------------
-  app.get('/api/state', async () => buildStateSnapshot(system));
+  app.get('/api/state', async () => buildStateSnapshot(system, { artifactSigner }));
 
   app.get('/api/agents/:id/transcript', async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -152,8 +168,27 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // The response is sandboxed (CSP `sandbox`) so agent-authored HTML can't script
   // the cockpit's origin. Rate-limited since it reads off disk. URL flags aren't
   // served here; the cockpit links those directly.
-  app.get('/api/artifacts/:id', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
+  //
+  // **This route lives outside the `/api` prefix on purpose (issue #129).** It is
+  // reached by a top-level browser navigation — the operator clicks a chip, a new
+  // tab opens here — and a navigation cannot set an `Authorization` header, only
+  // `fetch` can. So the cockpit's bearer token (attached by hand to every `fetch`,
+  // held in a fragment the browser never sends) structurally cannot reach a route
+  // under `/api`, and the prefix guard would 401 it. Rather than carve an exception
+  // *into* the guard — which would erode "guarded by prefix, not per-route opt-in"
+  // — the route sits outside the prefix and authorizes itself with a per-flag
+  // capability the navigation can carry in the query string (see
+  // {@link ./artifactCapability.ts} for why that is not the cockpit token in a URL).
+  app.get('/artifacts/:id', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { id } = req.params as { id: string };
+    // Capability first, before the flag is even looked up: it is bound to this id,
+    // and refusing early keeps the route from confirming which flag ids exist to a
+    // caller that holds no capability. Skipped only when auth is off (no key).
+    if (artifactKey) {
+      const tk = (req.query as { tk?: unknown })?.tk;
+      if (typeof tk !== 'string' || !verifyArtifactCapability(artifactKey, tk, id, Date.now()))
+        return reply.code(401).send({ error: 'missing or invalid artifact capability' });
+    }
     const flag = store.getFlag(id);
     if (!flag) return reply.code(404).send({ error: 'artifact not found' });
     if (/^https?:\/\//i.test(flag.ref))
@@ -524,6 +559,33 @@ export function absolutePrefixes(docsFolderPrefix?: string | string[]): string[]
   return list.filter((p) => isAbsolute(p)).map((p) => resolve(p));
 }
 
+/**
+ * How long an artifact capability lives. Short, because a capability travels in a
+ * URL (the one place a navigation can carry it) and a URL is the leakiest transport
+ * we have. Long enough to comfortably outlast the gap between a state poll minting
+ * the URL and the operator clicking it: the snapshot re-mints on every poll, so a
+ * click is almost always against a capability seconds old, and even a backgrounded
+ * tab's stale chip stays clickable for a few minutes.
+ */
+const ARTIFACT_CAP_TTL_MS = 5 * 60_000;
+
+/** Build the `flag id → artifact URL` map the cockpit opens chips from. */
+function artifactUrls(
+  flags: { id: string; ref: string }[],
+  signer?: (flagId: string) => string,
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const flag of flags) {
+    // http(s) refs are linked directly by the cockpit and never served here.
+    if (/^https?:\/\//i.test(flag.ref)) continue;
+    const base = `/artifacts/${encodeURIComponent(flag.id)}`;
+    // A signer is present exactly when auth is on. Off, the route needs no
+    // capability, so the bare path is the whole URL.
+    map[flag.id] = signer ? `${base}?tk=${encodeURIComponent(signer(flag.id))}` : base;
+  }
+  return map;
+}
+
 const ARTIFACT_MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.htm': 'text/html; charset=utf-8',
@@ -544,7 +606,7 @@ function artifactMime(file: string): string {
   return ARTIFACT_MIME[extname(file).toLowerCase()] ?? 'application/octet-stream';
 }
 
-export function buildStateSnapshot(system: System) {
+export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (flagId: string) => string }) {
   const { store, connector, config, runtimeControl, harness } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
   // getState is async on the interface, but FakeConnector is synchronous under
@@ -552,6 +614,9 @@ export function buildStateSnapshot(system: System) {
   return connector.getState().then((world) => {
     const tasks = store.listTasks();
     const control = runtimeControl.snapshot();
+    // Hoisted (not inlined into the returned object) because the artifact-URL map
+    // below is derived from the same list.
+    const flags = store.listAllFlags();
     // What agents noticed outside their own tasks. Read here (not only in the
     // panel) because their refs feed the link map below: a finding often names an
     // item that is *not* in the current world — a closed duplicate, say — so its
@@ -666,7 +731,12 @@ export function buildStateSnapshot(system: System) {
       agents: store.listAgents(),
       // Artifacts agents surfaced mid-run (design docs, reports, links). The
       // cockpit groups these by agentId onto the fleet card / drawer.
-      flags: store.listAllFlags(),
+      flags,
+      // The URL to open each local artifact by navigation, carrying its per-flag
+      // capability (auth on) or a bare path (auth off). The cockpit opens chips
+      // from this map rather than string-building a URL, the same way it looks refs
+      // up in refUrls — an http(s) flag is absent here and linked directly.
+      artifactUrls: artifactUrls(flags, opts?.artifactSigner),
       // Every file agents wrote (captured by the file-events hook), grouped by
       // agentId in the drawer's "files changed" list; the report-like ones also
       // appear above as artifact chips.

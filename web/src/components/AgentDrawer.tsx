@@ -50,6 +50,7 @@ export function AgentDrawer({
   refUrls,
   live,
   flags,
+  artifactUrls,
   files,
   onClose,
   onRespond,
@@ -61,6 +62,7 @@ export function AgentDrawer({
   refUrls: Record<string, string>;
   live: string | undefined;
   flags?: AgentFlag[];
+  artifactUrls: Record<string, string>;
   files?: AgentFile[];
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
@@ -185,7 +187,7 @@ export function AgentDrawer({
         {flags && flags.length > 0 && (
           <div className="drawer-flags">
             <span className="drawer-flags-label">Artifacts</span>
-            <FlagChips flags={flags} />
+            <FlagChips flags={flags} artifactUrls={artifactUrls} />
           </div>
         )}
         <FilesList files={files} />

@@ -192,7 +192,7 @@ function testConfig() {
   });
 }
 
-test('GET /api/artifacts/:id serves a confined file by flag id and refuses traversal', async () => {
+test('GET /artifacts/:id serves a confined file by flag id and refuses traversal', async () => {
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
@@ -204,18 +204,18 @@ test('GET /api/artifacts/:id serves a confined file by flag id and refuses trave
   const escaped = system.store.recordFlag(agent.id, { kind: 'x', label: 'p', ref: '../../../etc/passwd' });
   const urlFlag = system.store.recordFlag(agent.id, { kind: 'link', label: 'a', ref: 'https://x.test/a' });
 
-  const ok = await app.inject({ method: 'GET', url: `/api/artifacts/${good.id}` });
+  const ok = await app.inject({ method: 'GET', url: `/artifacts/${good.id}` });
   assert.equal(ok.statusCode, 200);
   assert.equal(ok.headers['content-type'], 'text/html; charset=utf-8');
   assert.match(ok.headers['content-security-policy'] as string, /sandbox/);
   assert.equal(ok.body, '<h1>Design</h1>');
 
   // A ref that escapes the worktree is refused even though the flag exists.
-  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${escaped.id}` })).statusCode, 404);
+  assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${escaped.id}` })).statusCode, 404);
   // A URL ref isn't served (the cockpit links it directly).
-  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${urlFlag.id}` })).statusCode, 400);
+  assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${urlFlag.id}` })).statusCode, 400);
   // An unknown flag id is a 404.
-  assert.equal((await app.inject({ method: 'GET', url: '/api/artifacts/flag_nope' })).statusCode, 404);
+  assert.equal((await app.inject({ method: 'GET', url: '/artifacts/flag_nope' })).statusCode, 404);
 
   // The snapshot carries the flags so the cockpit can render them.
   const snap = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
@@ -234,7 +234,7 @@ test('absolutePrefixes keeps only the absolute docsFolderPrefix entries, resolve
   assert.deepEqual(abs, [join(tmpdir(), 'shared')]);
 });
 
-test('GET /api/artifacts/:id serves an out-of-worktree file under a configured absolute prefix', async () => {
+test('GET /artifacts/:id serves an out-of-worktree file under a configured absolute prefix', async () => {
   // The operator points docsFolderPrefix at a shared dir outside any worktree.
   const shared = mkdtempSync(join(tmpdir(), 'lubbdubb-shared-'));
   writeFileSync(join(shared, 'plan.md'), '# Plan');
@@ -249,7 +249,7 @@ test('GET /api/artifacts/:id serves an out-of-worktree file under a configured a
   const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
   const under = system.store.recordFlag(agent.id, { kind: 'report', label: 'plan.md', ref: join(shared, 'plan.md') });
 
-  const ok = await app.inject({ method: 'GET', url: `/api/artifacts/${under.id}` });
+  const ok = await app.inject({ method: 'GET', url: `/artifacts/${under.id}` });
   assert.equal(ok.statusCode, 200);
   assert.equal(ok.body, '# Plan');
 
@@ -257,11 +257,11 @@ test('GET /api/artifacts/:id serves an out-of-worktree file under a configured a
   const outside = mkdtempSync(join(tmpdir(), 'lubbdubb-outside-'));
   writeFileSync(join(outside, 'secret.md'), 'nope');
   const bad = system.store.recordFlag(agent.id, { kind: 'x', label: 's', ref: join(outside, 'secret.md') });
-  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${bad.id}` })).statusCode, 404);
+  assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${bad.id}` })).statusCode, 404);
 
   // A `..` escape out of the configured prefix is still refused.
   const escaped = system.store.recordFlag(agent.id, { kind: 'x', label: 'e', ref: join(shared, '..', 'etc') });
-  assert.equal((await app.inject({ method: 'GET', url: `/api/artifacts/${escaped.id}` })).statusCode, 404);
+  assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${escaped.id}` })).statusCode, 404);
 
   await app.close();
   system.store.close();

@@ -7,7 +7,13 @@ import { artifactHref } from './util.js';
  * of clickable chips. Each opens in a new tab — a local path through the confined
  * artifact route, an http(s) ref directly. Renders nothing when there are none.
  */
-export function FlagChips({ flags }: { flags: AgentFlag[] | undefined }): JSX.Element | null {
+export function FlagChips({
+  flags,
+  artifactUrls,
+}: {
+  flags: AgentFlag[] | undefined;
+  artifactUrls: Record<string, string>;
+}): JSX.Element | null {
   if (!flags || flags.length === 0) return null;
   return (
     <div className="flag-chips">
@@ -15,7 +21,7 @@ export function FlagChips({ flags }: { flags: AgentFlag[] | undefined }): JSX.El
         <a
           key={f.id}
           className="chip small flag-chip"
-          href={artifactHref(f)}
+          href={artifactHref(f, artifactUrls)}
           target="_blank"
           rel="noopener noreferrer"
           title={`${f.kind}: ${f.ref}`}

@@ -62,6 +62,17 @@ test('every API route declared in app.ts refuses an unauthenticated request', as
   const { app } = await buildApp(system);
 
   for (const route of routes) {
+    // `/artifacts/:id` is the one route deliberately outside the `/api` prefix
+    // (issue #129): a top-level browser navigation cannot carry the bearer header,
+    // so the chip opens a route that authorizes itself with a per-flag capability
+    // instead. The prefix guard therefore does *not* apply — but the route must
+    // still refuse a bare request, which is what makes moving it out of `/api`
+    // safe. Asserted here so it can't silently become reachable.
+    if (route.url.startsWith('/artifacts/')) {
+      const res = await app.inject({ method: route.method, url: route.url });
+      assert.equal(res.statusCode, 401, `${route.url} must refuse a request carrying no capability`);
+      continue;
+    }
     assert.ok(route.url.startsWith('/api'), `unexpected non-API route ${route.url} — is it guarded?`);
     const res = await app.inject({ method: route.method, url: route.url });
     // 401 or 429: walking the whole table from one source spends the failure
@@ -131,6 +142,87 @@ test('the SPA shell is deliberately not guarded — the token arrives in a fragm
   // authenticate, and it carries no world state of its own.
   const res = await app.inject({ method: 'GET', url: '/' });
   assert.notEqual(res.statusCode, 401);
+
+  await app.close();
+  system.store.close();
+});
+
+// ---------------------------------------------------------------------------
+// The artifact navigation path (issue #129). A chip opens a new tab, which is a
+// top-level navigation and cannot carry the bearer header — so the artifact route
+// lives outside `/api` and authorizes itself with a per-flag capability minted
+// into the snapshot. These assert the whole loop and, crucially, that the
+// capability is unusable as a general cockpit credential.
+// ---------------------------------------------------------------------------
+
+test('a flagged artifact opens by navigation with only the capability the snapshot minted', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const { app, cockpitUrl } = await buildApp(system);
+  const token = tokenOf(cockpitUrl);
+
+  // A real flagged file in an agent's worktree.
+  const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
+  writeFileSync(join(wt, 'report.html'), '<h1>Report</h1>');
+  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
+  const flag = system.store.recordFlag(agent.id, { kind: 'report', label: 'report.html', ref: 'report.html' });
+
+  // The cockpit reads the artifact URL out of the (bearer-authenticated) snapshot,
+  // exactly as it would in the browser — capability and all.
+  const state = await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${token}` } });
+  const artifactUrl: string = state.json().artifactUrls[flag.id];
+  assert.match(artifactUrl, /^\/artifacts\/[^?]+\?tk=/, 'the snapshot must ship a capability-bearing URL');
+
+  // The navigation itself carries NO bearer header — a browser navigation cannot —
+  // only the capability in the URL. This is the exact request that was 401ing.
+  const nav = await app.inject({ method: 'GET', url: artifactUrl });
+  assert.equal(nav.statusCode, 200, 'the capability alone must open the artifact');
+  assert.equal(nav.body, '<h1>Report</h1>');
+  // The sandbox CSP survives — agent-authored HTML still cannot script the cockpit.
+  assert.match(nav.headers['content-security-policy'] as string, /sandbox/);
+
+  // Without the capability the route refuses — moving it out of `/api` is only safe
+  // because it guards itself.
+  assert.equal((await app.inject({ method: 'GET', url: `/artifacts/${flag.id}` })).statusCode, 401);
+
+  await app.close();
+  system.store.close();
+});
+
+test('an artifact capability is scoped to one flag and is not a cockpit credential', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const { app, cockpitUrl } = await buildApp(system);
+  const token = tokenOf(cockpitUrl);
+
+  const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
+  writeFileSync(join(wt, 'a.html'), 'A');
+  writeFileSync(join(wt, 'b.html'), 'B');
+  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
+  const agent = system.store.createAgent({ taskId: task.id, cwd: wt, pid: null });
+  const a = system.store.recordFlag(agent.id, { kind: 'r', label: 'a', ref: 'a.html' });
+  const b = system.store.recordFlag(agent.id, { kind: 'r', label: 'b', ref: 'b.html' });
+
+  const state = await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${token}` } });
+  const urls: Record<string, string> = state.json().artifactUrls;
+  const cap = new URL(`http://x${urls[a.id]}`).searchParams.get('tk');
+  assert.ok(cap, 'a capability should be present in the artifact URL');
+
+  // Flag-scoped: a's capability opens a, never b.
+  assert.equal((await app.inject({ method: 'GET', url: urls[a.id] })).statusCode, 200);
+  assert.equal(
+    (await app.inject({ method: 'GET', url: `/artifacts/${b.id}?tk=${encodeURIComponent(cap)}` })).statusCode,
+    401,
+    "one artifact's capability must not open another",
+  );
+
+  // Not a cockpit credential: the capability is refused against the guarded API,
+  // both as a bearer token and as the WebSocket's `?t=` query token — so a leaked
+  // capability can never be replayed against /api/state or /api/jobs.
+  assert.equal(
+    (await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${cap}` } })).statusCode,
+    401,
+  );
+  assert.equal((await app.inject({ method: 'GET', url: `/api/state?t=${encodeURIComponent(cap)}` })).statusCode, 401);
 
   await app.close();
   system.store.close();

@@ -10,6 +10,7 @@ export function AgentCard({
   refUrls,
   lastLine,
   flags,
+  artifactUrls,
   onOpen,
   onKill,
   past,
@@ -20,6 +21,7 @@ export function AgentCard({
   refUrls: Record<string, string>;
   lastLine?: string;
   flags?: AgentFlag[];
+  artifactUrls: Record<string, string>;
   onOpen: () => void;
   onKill?: () => Promise<unknown> | unknown;
   past?: boolean;
@@ -47,7 +49,7 @@ export function AgentCard({
         )}
       </div>
       {agent.waitingReason && <div className="waiting-reason">⏳ {agent.waitingReason}</div>}
-      <FlagChips flags={flags} />
+      <FlagChips flags={flags} artifactUrls={artifactUrls} />
       {/*
         The agent's own account of what it is doing, and beneath it the raw output
         tail. Both, never one instead of the other: the note is a claim (durable,

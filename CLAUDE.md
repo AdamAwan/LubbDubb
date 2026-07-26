@@ -605,13 +605,34 @@ status, so a sliding window would otherwise re-emit it). `AgentManager.recordFla
 (`agent_flags`, deduped by `(agent, ref)` so an evolving doc refreshes in place), re-emits it as the
 `flag` event, and the `Hub` ships it as `agent:flag` + a `dirty`. `buildStateSnapshot` includes
 `flags` per snapshot; the cockpit groups them by agent onto the card/drawer as chips. Local-path
-refs are served by `GET /api/artifacts/:id` (addressed by **flag id**, so the served path comes from
+refs are served by `GET /artifacts/:id` (addressed by **flag id**, so the served path comes from
 the stored flag row, not the request — the taint never reaches a path expression), **confined to the
 flag's agent worktree** (a lexical prefix check runs before any fs access; `realpathSync` then defeats
 symlink escape), **rate-limited** (`@fastify/rate-limit`, `global:false` + per-route opt-in so the
 cockpit's state polling is never throttled), and sandboxed (`Content-Security-Policy: sandbox`) so
 agent-authored HTML can't script the cockpit origin; URL refs are linked directly. It's purely
 additive detection — on in every agent mode, gated behind nothing.
+
+**The route lives _outside_ the `/api` prefix, on purpose (issue #129), and authorizes itself.**
+Opening a chip is a top-level browser navigation, and a navigation cannot carry the `Authorization`
+header the cockpit attaches to every `fetch` (the token lives in the `#t=` fragment a browser never
+sends). So a route under `/api` — where `authorizeRequest` refuses anything without the bearer token
+— is structurally unreachable by a chip click, which is why every artifact link 401'd once the cockpit
+was authenticated (#126). Rather than carve an exception _into_ the prefix guard (which would erode
+"guarded by prefix, not per-route opt-in"), the route sits at `/artifacts/:id` and guards itself with
+a **per-flag capability** (`src/server/artifactCapability.ts`, pure + tested): a fresh per-run secret
+HMAC-signs `<flag id>.<expiry>`, `buildStateSnapshot` mints one into every local artifact URL it ships
+(`artifactUrls`, keyed by flag id — the cockpit looks a chip's URL up there the way it looks refs up in
+`refUrls`, never string-building it), and the route verifies it against the flag id in its _own path_
+before touching the store. Three properties make the capability safe to put in a URL — which the
+cockpit token deliberately never is: it is **flag-scoped** (a capability for one artifact can't open
+another and can't be replayed against `/api/state` or `/api/jobs`, which accept only the bearer token),
+**short-lived** (`ARTIFACT_CAP_TTL_MS`, 5 min — the snapshot re-mints every poll, so a leak dies fast),
+and **stateless** (an HMAC, so nothing is stored to leak or evict). The signing key is a per-run random
+secret, never the cockpit token, so a capability is not the cockpit token even derived. When
+`auth.enabled` is off there is no key and the route serves without a capability (the whole surface is
+open by the operator's choice, loopback-only). Tests: the navigation + capability-scoping cases in
+`test/cockpitAuth.test.ts`, and `test/artifactCapability.test.ts` for the mint/verify predicate.
 
 **File-events hook (skill-agnostic artifacts).** The flag sentinel only surfaces an artifact if
 the agent's _prompt_ tells it to print the sentinel — so every skill that emits a report has to
@@ -630,7 +651,7 @@ terminal/kill, so no polling timer) folds each captured write in through the pur
 **every** path is recorded in the `agent_files` table (the drawer's "files changed" list, snapshot
 key `files`), while **report-like** ones additionally go through the _same_ `Store.recordFlag` +
 `flag` event as a sentinel flag — so a report becomes a chip via the identical dedup / `agent:flag` /
-confined `GET /api/artifacts/:id` machinery. Promotion is: under one of the configured `docsFolderPrefix`
+confined `GET /artifacts/:id` machinery. Promotion is: under one of the configured `docsFolderPrefix`
 entries (`string | string[]` — an artifacts folder, _any_ extension), or under a `reports/` segment, else
 the report/doc extension allowlist. A prefix entry is matched **prefix-aware**: a _relative_ entry matches
 the worktree-relative path, an _absolute_ entry (e.g. `D:/docs`) matches an _out-of-worktree_ write left
