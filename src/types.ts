@@ -366,6 +366,61 @@ export interface AgentFile {
 export type AgentFileInput = Pick<AgentFile, 'path' | 'tool' | 'promoted'>;
 
 // ---------------------------------------------------------------------------
+// Findings (what an agent discovers outside its own task)
+// ---------------------------------------------------------------------------
+
+/**
+ * What sort of discovery a finding is.
+ *
+ * The vocabulary is three concrete gaps, not a taxonomy: each kind is one thing
+ * an agent could previously only write into a PR comment, and each implies a
+ * *different operator action*, which is the axis that earns a separate kind.
+ *
+ * - `duplicate` — "this issue duplicates #41". Two tracked items are one piece of
+ *   work; the operator closes or links one.
+ * - `blocked` — "the real fix is in a package I don't own". The work cannot be
+ *   completed from here; the operator unblocks it or parks it.
+ * - `out_of_scope` — "there's an unrelated bug in the module I touched". Work
+ *   nobody has yet; the operator decides whether it becomes a job.
+ */
+export type FindingKind = 'duplicate' | 'blocked' | 'out_of_scope';
+
+/**
+ * Where a finding sits: `open` until an operator acts on it, then either
+ * `promoted` (queued as a job — see {@link Finding.jobId}) or `dismissed`.
+ * Nothing in the dispatcher reads findings; the transition is operator-driven by
+ * design (see `src/mcp/findings.ts`).
+ */
+export type FindingStatus = 'open' | 'promoted' | 'dismissed';
+
+/**
+ * Something an agent noticed that is not its own task — filed through the
+ * `report_finding` tool. Attribution is structural: `agentId`/`taskId`/`originRef`
+ * come from the credential the call arrived on, never from an argument, so a
+ * finding always says truthfully who found it and what they were working on.
+ */
+export interface Finding {
+  id: string;
+  /** The agent that filed it, from its credential. */
+  agentId: string;
+  /** That agent's task, and the origin it was dispatched for. */
+  taskId: string;
+  originRef: string | null;
+  kind: FindingKind;
+  /** The world item the finding is *about* (`issue:41`), or null — not every finding has one. */
+  ref: string | null;
+  summary: string;
+  status: FindingStatus;
+  /** The operator-queued job this was promoted into, if it was. */
+  jobId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A finding as reported, before the store assigns identity and status. */
+export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary'>;
+
+// ---------------------------------------------------------------------------
 // Plans (the multi-PR issue funnel)
 // ---------------------------------------------------------------------------
 

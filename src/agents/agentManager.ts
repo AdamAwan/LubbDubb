@@ -6,7 +6,7 @@ import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
-import type { Agent, AgentAsk, AgentFlag, AgentStatus, AgentUsage, Task } from '../types.js';
+import type { Agent, AgentAsk, AgentFlag, AgentStatus, AgentUsage, Finding, FindingInput, Task } from '../types.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -106,6 +106,8 @@ interface AgentManagerEvents {
   usage: [{ agentId: string; taskId: string; usage: AgentUsage }];
   /** The agent surfaced an artifact/link mid-run (already persisted, deduped by ref). */
   flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
+  /** The agent filed something outside its own task (already persisted). `created` is false for a verbatim repeat. */
+  finding: [{ agentId: string; taskId: string; finding: Finding; created: boolean }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
 }
@@ -313,6 +315,26 @@ export class AgentManager extends EventEmitter {
     // escalation or the whitelist answered and moved the agent back to running.
     const open = this.store.listOpenEscalations().find((e) => e.agentId === agentId) ?? null;
     return { ok: true, escalationId: open?.id ?? null };
+  }
+
+  /**
+   * File something an agent noticed outside its own task (the `report_finding`
+   * tool). It goes through the manager rather than straight to the store for the
+   * same reason a flag does: the cockpit should hear about it the moment it is
+   * filed, not on the next pulse, and the `finding` event is what carries it.
+   *
+   * The agent id comes from the caller's credential, so `agentId -> task ->
+   * origin` is the whole attribution and there is nothing an argument could
+   * forge. Unlike {@link ask} this does not require a *live* session — a finding
+   * is a durable note, and one filed on an agent's last breath is still true.
+   */
+  recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const { finding, created } = this.store.recordFinding(agentId, task.id, task.originRef, input);
+    this.emit('finding', { agentId, taskId: task.id, finding, created });
+    return { ok: true, finding };
   }
 
   /**

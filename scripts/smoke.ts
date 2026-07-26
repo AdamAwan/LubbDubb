@@ -142,6 +142,31 @@ async function smokeToolCall(system: System): Promise<void> {
   }
   log(`✓ world_read saw the harness's own PR #42: ci=${view.item.ciStatus} health=[${view.item.health.reasons}]`);
 
+  // A finding filed over the same transport: attributed from the credential (the
+  // call names no agent), and it must queue nothing — an operator's promotion is
+  // the only path from a finding to an agent.
+  const queuedBefore = system.store.listQueuedJobs().length;
+  send({
+    jsonrpc: '2.0',
+    id: 6,
+    method: 'tools/call',
+    params: {
+      name: 'report_finding',
+      arguments: { kind: 'duplicate', ref: 'issue:41', summary: 'Issue #12 asks for the same work as #41.' },
+    },
+  });
+  await waitFor('report_finding', () => frames.length >= 6, 5_000);
+  const filed = frames[5]?.result as { isError?: boolean; content: { text: string }[] };
+  if (filed.isError) throw new Error(`report_finding failed: ${filed.content[0]?.text}`);
+  const finding = system.store.listFindings()[0];
+  if (!finding || finding.agentId !== agent.id || finding.originRef !== 'issue:12:plan') {
+    throw new Error(`report_finding wrote the wrong attribution: ${JSON.stringify(finding)}`);
+  }
+  if (system.store.listQueuedJobs().length !== queuedBefore) {
+    throw new Error('report_finding queued work by itself — promotion must be the operator’s');
+  }
+  log(`✓ finding filed as ${finding.kind} on ${finding.ref} by ${finding.originRef}, and queued no work`);
+
   bridge.kill();
   system.mcp.release(credential.token);
   await system.mcp.close();

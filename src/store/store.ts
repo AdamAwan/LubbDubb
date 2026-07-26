@@ -16,6 +16,10 @@ import type {
   ErrorLogInput,
   Escalation,
   EscalationContext,
+  Finding,
+  FindingInput,
+  FindingKind,
+  FindingStatus,
   Job,
   Plan,
   PlanPart,
@@ -219,6 +223,84 @@ export class Store {
     const updatedAt = this.now();
     this.db.prepare(`UPDATE jobs SET status='cancelled', updated_at=? WHERE id=?`).run(updatedAt, id);
     return { ...existing, status: 'cancelled', updatedAt };
+  }
+
+  // -- Findings (what an agent noticed outside its own task) ----------------
+
+  /**
+   * File a finding for an agent. `agentId`/`taskId`/`originRef` are the caller's
+   * own, resolved from its credential by the tool layer — there is no argument
+   * for them, so a finding cannot be filed as another agent.
+   *
+   * An identical repeat (same agent, kind, ref and summary) refreshes the
+   * existing row instead of inserting: an agent that reports the same thing on
+   * every turn should not fill the operator's list. The status is deliberately
+   * *not* reset — a dismissed finding repeated verbatim stays dismissed, which is
+   * what dismissing it meant.
+   */
+  recordFinding(
+    agentId: string,
+    taskId: string,
+    originRef: string | null,
+    input: FindingInput,
+  ): { finding: Finding; created: boolean } {
+    const ts = this.now();
+    // `IS` rather than `=` so a null ref matches a null ref (SQL equality doesn't).
+    const existing = this.db
+      .prepare(`SELECT * FROM findings WHERE agent_id=? AND kind=? AND ref IS ? AND summary=?`)
+      .get(agentId, input.kind, input.ref, input.summary) as FindingRow | undefined;
+    if (existing) {
+      this.db.prepare(`UPDATE findings SET updated_at=? WHERE id=?`).run(ts, existing.id);
+      return { finding: { ...rowToFinding(existing), updatedAt: ts }, created: false };
+    }
+    const finding: Finding = {
+      id: `find_${nanoid(10)}`,
+      agentId,
+      taskId,
+      originRef,
+      kind: input.kind,
+      ref: input.ref,
+      summary: input.summary,
+      status: 'open',
+      jobId: null,
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO findings (id, agent_id, task_id, origin_ref, kind, ref, summary, status, job_id, created_at, updated_at)
+         VALUES (@id, @agentId, @taskId, @originRef, @kind, @ref, @summary, @status, @jobId, @createdAt, @updatedAt)`,
+      )
+      .run(finding);
+    return { finding, created: true };
+  }
+
+  getFinding(id: string): Finding | null {
+    const row = this.db.prepare(`SELECT * FROM findings WHERE id=?`).get(id) as FindingRow | undefined;
+    return row ? rowToFinding(row) : null;
+  }
+
+  /** Every finding, newest first — the snapshot feed. */
+  listFindings(limit = 100): Finding[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM findings ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(limit) as FindingRow[];
+    return rows.map(rowToFinding);
+  }
+
+  /**
+   * Resolve an open finding: `promoted` (with the job it became) or `dismissed`.
+   * Only an open finding can be resolved, so a double-click can't queue a second
+   * job for one finding. Returns null when there was nothing open to resolve.
+   */
+  resolveFinding(id: string, status: Exclude<FindingStatus, 'open'>, jobId: string | null = null): Finding | null {
+    const existing = this.getFinding(id);
+    if (!existing || existing.status !== 'open') return null;
+    const updatedAt = this.now();
+    this.db
+      .prepare(`UPDATE findings SET status=?, job_id=?, updated_at=? WHERE id=?`)
+      .run(status, jobId, updatedAt, id);
+    return { ...existing, status, jobId, updatedAt };
   }
 
   // -- Plans (the multi-PR issue funnel) -----------------------------------
@@ -841,6 +923,19 @@ interface JobRow {
   created_at: string;
   updated_at: string;
 }
+interface FindingRow {
+  id: string;
+  agent_id: string;
+  task_id: string;
+  origin_ref: string | null;
+  kind: string;
+  ref: string | null;
+  summary: string;
+  status: string;
+  job_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
 interface PlanRow {
   id: string;
   origin_ref: string;
@@ -959,6 +1054,21 @@ function rowToJob(r: JobRow): Job {
     branch: r.branch,
     status: r.status as Job['status'],
     taskId: r.task_id,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+function rowToFinding(r: FindingRow): Finding {
+  return {
+    id: r.id,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    originRef: r.origin_ref,
+    kind: r.kind as FindingKind,
+    ref: r.ref,
+    summary: r.summary,
+    status: r.status as FindingStatus,
+    jobId: r.job_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

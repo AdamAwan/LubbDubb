@@ -102,6 +102,27 @@ export interface AgentFile {
   createdAt: string;
 }
 /**
+ * Something an agent noticed outside its own task (mirrors the server's Finding):
+ * a duplicate, work blocked on something outside its reach, an out-of-scope
+ * discovery. Operator-facing — it becomes work only when promoted from here.
+ */
+export interface Finding {
+  id: string;
+  agentId: string;
+  taskId: string;
+  /** The origin the reporting agent was working when it noticed this. */
+  originRef: string | null;
+  kind: 'duplicate' | 'blocked' | 'out_of_scope';
+  /** The item it is about (`issue:41`), or null when it names nothing tracked. */
+  ref: string | null;
+  summary: string;
+  status: 'open' | 'promoted' | 'dismissed';
+  /** The queued job it was promoted into, if it was. */
+  jobId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+/**
  * One issue's delivery plan (mirrors the server's Plan). `single` means the
  * planner said one PR will do and the issue falls through to ordinary pickup;
  * `active`/`complete` mean it was decomposed into the parts below.
@@ -316,6 +337,8 @@ export interface AppState {
   flags?: AgentFlag[];
   /** Every file agents wrote (file-events hook), grouped by agentId for the drawer's "files changed" list. Optional for older servers. */
   files?: AgentFile[];
+  /** What agents noticed outside their own tasks, newest first. Optional for older servers. */
+  findings?: Finding[];
   escalations: Escalation[];
   decisions: Decision[];
   /**

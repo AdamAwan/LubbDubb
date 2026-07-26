@@ -13,6 +13,7 @@ import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
+import { findingJobRequest } from '../mcp/findings.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
 /**
@@ -263,6 +264,44 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     return { ok: true, job };
   });
 
+  // Promote a finding into work. **This is the only path from a finding to an
+  // agent, and it starts with an operator's click** — an agent that could queue
+  // jobs could put agents on the fleet (rule 0 dispatches a job ahead of every
+  // world-driven rule), which is a capability escalation rather than a
+  // convenience. So `report_finding` files a claim, and this route is where a
+  // human turns one into work. See src/mcp/findings.ts for the full argument.
+  app.post('/api/findings/:id/promote', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const finding = store.getFinding(id);
+    if (!finding) return reply.code(404).send({ error: 'finding not found' });
+    if (finding.status !== 'open') return reply.code(409).send({ error: `finding is already ${finding.status}` });
+    const body = (req.body ?? {}) as { prompt?: unknown; title?: unknown; kind?: unknown };
+    if (body.kind !== undefined && body.kind !== 'code' && body.kind !== 'desk')
+      return reply.code(400).send({ error: "kind must be 'code' or 'desk'" });
+    const derived = findingJobRequest(finding);
+    // The operator may reword it before it runs; the derived text is only the default.
+    const title = (typeof body.title === 'string' && body.title.trim()) || derived.title;
+    const prompt = (typeof body.prompt === 'string' && body.prompt.trim()) || derived.prompt;
+    const job = store.createJob({ title, prompt, kind: (body.kind as 'code' | 'desk' | undefined) ?? 'code' });
+    // Resolve only after the job exists, so a failed create leaves the finding open.
+    const resolved = store.resolveFinding(id, 'promoted', job.id);
+    hub.broadcast({ type: 'world:changed' });
+    const report = await harness.runCycle('manual');
+    return { ok: true, finding: resolved, job, report };
+  });
+
+  // Dismiss a finding: the operator read it and it needs nothing. It stays in the
+  // list (muted) rather than being deleted — "we looked at this" is information,
+  // and a verbatim re-report is deduped onto the dismissed row rather than
+  // reopening it.
+  app.post('/api/findings/:id/dismiss', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const finding = store.resolveFinding(id, 'dismissed');
+    if (!finding) return reply.code(409).send({ error: 'finding not found or already resolved' });
+    hub.broadcast({ type: 'dirty' });
+    return { ok: true, finding };
+  });
+
   app.post('/api/escalations/:id/answer', async (req, reply) => {
     const { id } = req.params as { id: string };
     const { response } = (req.body ?? {}) as { response?: string };
@@ -379,6 +418,11 @@ export function buildStateSnapshot(system: System) {
   return connector.getState().then((world) => {
     const tasks = store.listTasks();
     const control = runtimeControl.snapshot();
+    // What agents noticed outside their own tasks. Read here (not only in the
+    // panel) because their refs feed the link map below: a finding often names an
+    // item that is *not* in the current world — a closed duplicate, say — so its
+    // ref has to be resolved directly rather than looked up off the snapshot.
+    const findings = store.listFindings();
     // The plan graph, read once and shared by the per-issue pickup verdict below
     // and the snapshot itself, so the chip and the panel can't disagree.
     const plans = store.listPlans();
@@ -411,6 +455,7 @@ export function buildStateSnapshot(system: System) {
       pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? [])],
       issues: world.issues,
       taskBranches: tasks.map((t) => t.branch),
+      refs: findings.map((f) => f.ref),
       resolve: (ref) => connector.resolveRefUrl(ref),
     });
     return {
@@ -458,6 +503,10 @@ export function buildStateSnapshot(system: System) {
       // agentId in the drawer's "files changed" list; the report-like ones also
       // appear above as artifact chips.
       files: store.listAllFiles(),
+      // Things agents noticed outside their own tasks (the `report_finding` tool).
+      // Operator-facing only: nothing in the dispatcher reads them, and one becomes
+      // work only through `POST /api/findings/:id/promote`.
+      findings,
       escalations: store.listEscalations(),
       decisions: store.listDecisions(100),
       // The "Up next" queue: the last cycle's ordered pickup plan with the

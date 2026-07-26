@@ -184,6 +184,38 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * Promote a finding into a queued job — the demo mirror of
+   * `POST /api/findings/:id/promote`, and the only path from a finding to work in
+   * either backend: the operator's click is the gate.
+   */
+  async promoteFinding(id: string): Promise<{ ok: true }> {
+    const finding = (this.state.findings ?? []).find((f) => f.id === id);
+    if (finding && finding.status === 'open') {
+      const title = `[${finding.kind}]${finding.ref ? ` ${finding.ref}` : ''} ${finding.summary.split('\n')[0]!}`.slice(
+        0,
+        80,
+      );
+      await this.launchJob({ prompt: finding.summary, title });
+      finding.status = 'promoted';
+      finding.jobId = this.state.jobs[0]?.id ?? null;
+      finding.updatedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /** Dismiss a finding (demo mirror of POST /api/findings/:id/dismiss). */
+  async dismissFinding(id: string): Promise<{ ok: true }> {
+    const finding = (this.state.findings ?? []).find((f) => f.id === id);
+    if (finding && finding.status === 'open') {
+      finding.status = 'dismissed';
+      finding.updatedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async killAgent(id: string): Promise<{ ok: true }> {
     const agent = this.state.agents.find((a) => a.id === id);
     if (agent && agent.status !== 'done') {
@@ -568,6 +600,8 @@ export const demoApi = {
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),
+  promoteFinding: (id: string) => getServer().promoteFinding(id),
+  dismissFinding: (id: string) => getServer().dismissFinding(id),
   killAgent: (id: string) => getServer().killAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
 };

@@ -1,26 +1,30 @@
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
-import type { Agent, AgentAsk, Task } from '../types.js';
+import type { Agent, AgentAsk, Finding, FindingInput, Task } from '../types.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
+import { FINDING_KIND_HELP, FINDING_KINDS, validateFinding } from './findings.js';
 import { MCP_TOOL_NAMES } from './names.js';
 import { type McpTool, toolError, toolJson, type ToolCallResult } from './protocol.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from './worldRead.js';
 
 /**
- * What the tool layer needs from the fleet. Narrow on purpose: the escalate tool
- * must go through the *same* park transition the WAITING sentinel drives, so it
- * asks {@link AgentManager} rather than writing to the store itself.
+ * What the tool layer needs from the fleet. Narrow on purpose, and both methods
+ * are here for the same reason: each has a fleet-side transition or event that
+ * must not be bypassed. `ask` goes through the *same* park the WAITING sentinel
+ * drives; `recordFinding` persists and then emits, so the cockpit hears about a
+ * finding the moment it is filed rather than on the next pulse.
  */
-export interface AgentAskTarget {
+export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
+  recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string };
 }
 
 export interface McpToolDeps {
   store: Store;
-  agents: AgentAskTarget;
+  agents: AgentToolTarget;
   errors?: ErrorRecorder;
 }
 
@@ -231,6 +235,66 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
       handler: (args) => {
         const read = readWorld(deps.store, task, args);
         return read.ok ? ok(read.payload) : toolError(read.error);
+      },
+    },
+    {
+      name: MCP_TOOL_NAMES[3],
+      description:
+        'File something you noticed that is NOT your task — a duplicate, work blocked on something ' +
+        'outside your reach, an unrelated problem you ran into. It lands in the harness and shows up ' +
+        'in the cockpit for an operator, instead of being buried in a PR comment nobody reads. ' +
+        'It does NOT create work or dispatch anyone: an operator decides whether it becomes a job. ' +
+        'So report it and carry on with your own task — do not wait, and do not go fix it yourself.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            enum: [...FINDING_KINDS],
+            description: FINDING_KINDS.map((k) => `${k}: ${FINDING_KIND_HELP[k]}`).join('. '),
+          },
+          summary: {
+            type: 'string',
+            description:
+              'One or two sentences an operator can act on without asking you: what it is, where, ' +
+              'and why it matters. Include the evidence — you are the only one who saw it.',
+          },
+          ref: {
+            type: 'string',
+            description:
+              'The item this is about, if there is one: "issue:41", "pr:42", "story:abc". For a ' +
+              'duplicate, the item you believe it duplicates. Omit it when the finding is about ' +
+              'something the harness does not track.',
+          },
+        },
+        required: ['kind', 'summary'],
+      },
+      handler: (args) => {
+        // Validated at the boundary, with the reason handed back — the whole point
+        // of a tool over a PR comment is that a malformed report is a fixable error
+        // in this turn rather than a paragraph nobody parses.
+        const parsed = validateFinding(args);
+        if (!parsed.ok) return toolError(`Finding rejected: ${parsed.error}`);
+        // Attribution is the credential's, never an argument's. `world_read` could
+        // relax the no-cross-origin rule because a read forges nothing and mutates
+        // nothing; this is a *write* that puts words in an agent's mouth in front of
+        // an operator. An agent that could name the reporter could file a finding as
+        // another agent — and a finding is read as testimony about work its author
+        // actually did, so a forged one is worse than no channel at all.
+        const result = deps.agents.recordFinding(agent.id, parsed.input);
+        if (!result.ok) return toolError(result.error);
+        return ok({
+          recorded: true,
+          finding: {
+            id: result.finding.id,
+            kind: result.finding.kind,
+            ref: result.finding.ref,
+            status: result.finding.status,
+          },
+          // Said again in the response, not only in the description: an agent that
+          // believes reporting a bug scheduled its fix will stop watching for it.
+          note: 'Filed for an operator. It queues no work by itself — keep going with your own task.',
+        });
       },
     },
   ];

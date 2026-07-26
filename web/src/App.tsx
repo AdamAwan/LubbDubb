@@ -13,6 +13,7 @@ import { UsageChip } from './components/UsageChip.js';
 import { DecisionLog } from './components/DecisionLog.js';
 import { UpNext } from './components/UpNext.js';
 import { PlanPanel } from './components/PlanPanel.js';
+import { FindingsPanel } from './components/FindingsPanel.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { AsyncButton } from './components/AsyncButton.js';
@@ -98,6 +99,9 @@ export function App() {
   const liveAgents = state.agents.filter((a) => ['starting', 'running', 'waiting'].includes(a.status));
   const pastAgents = state.agents.filter((a) => !['starting', 'running', 'waiting'].includes(a.status));
   const openEscalations = state.escalations.filter((e) => e.status === 'open');
+  // Findings awaiting an operator's call — the count on the panel heading. A
+  // finding never expires into work on its own, so this is the only nudge there is.
+  const openFindings = (state.findings ?? []).filter((f) => f.status === 'open').length;
   const selectedAgent = state.agents.find((a) => a.id === selected) ?? null;
 
   // Heartbeat countdown: fraction of the interval elapsed since the last pulse.
@@ -238,6 +242,22 @@ export function App() {
                 now={now}
                 refUrls={state.refUrls}
                 onReplan={(planId) => api.replan(planId).then(refresh)}
+              />
+            </>
+          )}
+
+          {(state.findings?.length ?? 0) > 0 && (
+            <>
+              <h3 className="muted">
+                Findings
+                {openFindings > 0 && <span className="count">{openFindings}</span>}
+              </h3>
+              <FindingsPanel
+                findings={state.findings ?? []}
+                now={now}
+                refUrls={state.refUrls}
+                onPromote={(id) => api.promoteFinding(id).then(refresh)}
+                onDismiss={(id) => api.dismissFinding(id).then(refresh)}
               />
             </>
           )}

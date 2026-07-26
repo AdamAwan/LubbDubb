@@ -9,6 +9,15 @@ import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/pr
 import { ALLOWED_MCP_TOOLS, MCP_SERVER_ID, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
+import {
+  FINDING_KIND_HELP,
+  FINDING_KINDS,
+  findingJobRequest,
+  parseFindingRef,
+  validateFinding,
+} from '../src/mcp/findings.js';
+import { buildTools } from '../src/mcp/tools.js';
+import { buildApp } from '../src/server/app.js';
 import { escalationTypeForAsk } from '../src/escalation/context.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
@@ -289,6 +298,85 @@ test('a miss names what the harness is tracking instead of just saying no', () =
   assert.match(!empty.ok ? empty.error : '', /tracking no Stories/);
 });
 
+// -- report_finding's pure layer ---------------------------------------------
+
+test('the finding kinds are the three things agents concretely could not say', () => {
+  // Not a taxonomy: one kind per gap in Exhibit C of #108, each implying a
+  // different operator action. A catch-all fourth would be where findings rot.
+  assert.deepEqual([...FINDING_KINDS], ['duplicate', 'blocked', 'out_of_scope']);
+  for (const kind of FINDING_KINDS) assert.ok(FINDING_KIND_HELP[kind], `${kind} is described to the agent`);
+});
+
+test('a finding ref is the harness vocabulary, suffix-tolerant, and optional', () => {
+  const cases: [unknown, string | null][] = [
+    [undefined, null], // not every finding is about a tracked item
+    ['', null],
+    ['issue:41', 'issue:41'],
+    ['pr:42', 'pr:42'],
+    // The origin ref an agent holds names its item, so it can be passed back as-is.
+    ['pr:42:ci', 'pr:42'],
+    ['issue:12:part:schema', 'issue:12'],
+    ['story:st_1', 'story:st_1'],
+  ];
+  for (const [input, expected] of cases) {
+    const parsed = parseFindingRef(input);
+    assert.equal(parsed.ok, true, `${JSON.stringify(input)} should parse`);
+    assert.equal(parsed.ok && parsed.ref, expected);
+  }
+});
+
+test('a bare number is refused rather than guessed at, unlike world_read', () => {
+  // world_read has a `kind` argument to say which list a number belongs to; this
+  // has none, and "#41" is an issue or a PR. A duplicate report must not guess.
+  const bare = parseFindingRef('41');
+  assert.equal(bare.ok, false);
+  assert.match(!bare.ok ? bare.error : '', /ambiguous between an issue and a PR/);
+
+  // And an off-vocabulary ref is refused with somewhere to put it instead: an
+  // open-ended ref field is an unqueryable junk drawer.
+  const upstream = parseFindingRef('npm:left-pad');
+  assert.equal(upstream.ok, false);
+  assert.match(!upstream.ok ? upstream.error : '', /omit ref and describe it in the summary/);
+  assert.equal(parseFindingRef('issue:main').ok, false);
+});
+
+test('a finding is validated at the boundary, with the reason handed back', () => {
+  const bad = validateFinding({ kind: 'idea', summary: 'x' });
+  assert.equal(bad.ok, false);
+  assert.match(!bad.ok ? bad.error : '', /kind must be one of/);
+
+  const empty = validateFinding({ kind: 'duplicate', summary: '   ' });
+  assert.equal(empty.ok, false);
+  assert.match(!empty.ok ? empty.error : '', /summary is required/);
+
+  const good = validateFinding({ kind: 'duplicate', summary: '  Same as #41. ', ref: 'issue:41:plan' });
+  assert.ok(good.ok);
+  assert.deepEqual(good.input, { kind: 'duplicate', ref: 'issue:41', summary: 'Same as #41.' });
+});
+
+test('a promoted finding carries its provenance into the job it becomes', () => {
+  const request = findingJobRequest({
+    id: 'f1',
+    agentId: 'a1',
+    taskId: 't1',
+    originRef: 'pr:142:ci',
+    kind: 'out_of_scope',
+    ref: 'issue:41',
+    summary: 'The retry helper squares the delay instead of doubling it.',
+    status: 'open',
+    jobId: null,
+    createdAt: TAKEN_AT,
+    updatedAt: TAKEN_AT,
+  });
+  assert.match(request.title, /^\[out_of_scope\] issue:41 /);
+  // Who saw it and what they were doing at the time — the thing a PR comment
+  // could never be trusted to keep attached to the claim.
+  assert.match(request.prompt, /pr:142:ci/);
+  assert.match(request.prompt, /squares the delay/);
+  // And it is a claim, not an instruction: the promoted agent verifies first.
+  assert.match(request.prompt, /Verify it before acting on it/);
+});
+
 // -- end to end through a built system ---------------------------------------
 
 function testConfig(overrides: Record<string, unknown> = {}) {
@@ -321,6 +409,14 @@ function spawnAgent(system: System, originRef: string, title = 'Big thing'): Age
     originTitle: title,
   });
   return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+}
+
+/** The input schema a tool advertises to an agent's client on `tools/list`. */
+function advertisedSchema(system: System, agent: Agent, name: string): { properties: Record<string, unknown> } {
+  const task = system.store.getTask(agent.taskId)!;
+  const tool = buildTools({ store: system.store, agents: system.agents }, { agent, task }).find((t) => t.name === name);
+  assert.ok(tool, `${name} is built`);
+  return tool.inputSchema as { properties: Record<string, unknown> };
 }
 
 /** Call a tool as an agent would, through the same entry point its bridge reaches. */
@@ -664,6 +760,174 @@ test('a desk agent with no origin is told to name a ref rather than reading noth
   // ...and naming one works, which is the whole reason it isn't origin-fenced.
   const named = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '12' });
   assert.equal(named.isError, false);
+  system.store.close();
+});
+
+// -- report_finding, end to end ----------------------------------------------
+
+test('report_finding lands in the store, attributed from the credential', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'pr:142:ci');
+
+  const res = await callTool(system, agent, 'report_finding', {
+    kind: 'out_of_scope',
+    summary: 'The retry helper squares the delay instead of doubling it.',
+    ref: 'issue:41',
+  });
+  assert.equal(res.isError, false);
+
+  const [finding, ...rest] = system.store.listFindings();
+  assert.equal(rest.length, 0);
+  // Attribution is the caller's, and it is the *whole* attribution: the tool takes
+  // no agent, task or author argument, so this can only ever describe its caller.
+  assert.equal(finding!.agentId, agent.id);
+  assert.equal(finding!.taskId, agent.taskId);
+  assert.equal(finding!.originRef, 'pr:142:ci');
+  assert.equal(finding!.kind, 'out_of_scope');
+  assert.equal(finding!.ref, 'issue:41');
+  assert.equal(finding!.status, 'open');
+
+  const payload = JSON.parse(res.text) as {
+    recorded: boolean;
+    note: string;
+    finding: { id: string };
+    _status: Record<string, unknown>;
+  };
+  assert.equal(payload.recorded, true);
+  assert.equal(payload.finding.id, finding!.id);
+  // The response says the finding queues nothing, so an agent doesn't report a bug
+  // and then assume its fix is now scheduled.
+  assert.match(payload.note, /queues no work/);
+  assert.equal(payload._status.origin, 'pr:142:ci');
+  system.store.close();
+});
+
+test('a finding is a write, so it stays structurally attributed — there is no argument to forge one with', async () => {
+  const system = build();
+  const one = spawnAgent(system, 'pr:142:ci');
+  const two = spawnAgent(system, 'issue:12');
+
+  // world_read relaxed the no-cross-origin rule because a read forges nothing.
+  // That reasoning does not carry: this write puts words in an agent's mouth in
+  // front of an operator, and a finding is read as testimony about work its author
+  // actually did. So the schema offers nothing that could name a different agent.
+  const schema = advertisedSchema(system, one, 'report_finding');
+  assert.deepEqual(Object.keys(schema.properties).sort(), ['kind', 'ref', 'summary']);
+
+  await callTool(system, one, 'report_finding', { kind: 'blocked', summary: 'Upstream typings are wrong.' });
+  await callTool(system, two, 'report_finding', { kind: 'duplicate', summary: 'Same as #41.', ref: 'issue:41' });
+
+  const byAgent = new Map(system.store.listFindings().map((f) => [f.agentId, f]));
+  assert.equal(byAgent.get(one.id)?.originRef, 'pr:142:ci');
+  assert.equal(byAgent.get(two.id)?.originRef, 'issue:12');
+  system.store.close();
+});
+
+test('a finding queues no work by itself; promotion is the operator’s click', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const agent = spawnAgent(system, 'pr:142:ci');
+
+  await callTool(system, agent, 'report_finding', {
+    kind: 'out_of_scope',
+    summary: 'The retry helper squares the delay instead of doubling it.',
+  });
+  // The deliberate half of the design: an agent that could queue jobs could put
+  // agents on the fleet (rule 0 dispatches a job ahead of every world-driven
+  // rule), so filing one changes nothing about what runs.
+  assert.deepEqual(system.store.listQueuedJobs(), []);
+
+  const finding = system.store.listFindings()[0]!;
+  const promoted = await app.inject({ method: 'POST', url: `/api/findings/${finding.id}/promote` });
+  assert.equal(promoted.statusCode, 200);
+
+  const job = system.store.listJobs()[0]!;
+  assert.match(job.title, /\[out_of_scope\]/);
+  assert.match(job.prompt, /squares the delay/);
+  assert.equal(system.store.getFinding(finding.id)?.status, 'promoted');
+  assert.equal(system.store.getFinding(finding.id)?.jobId, job.id);
+
+  // And only once: a second promote can't spend a second slot on one finding.
+  const again = await app.inject({ method: 'POST', url: `/api/findings/${finding.id}/promote` });
+  assert.equal(again.statusCode, 409);
+  assert.equal(system.store.listJobs().length, 1);
+  await app.close();
+  system.store.close();
+});
+
+test('a dismissed finding stays dismissed, and a verbatim repeat does not refile it', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const agent = spawnAgent(system, 'issue:12');
+  const report = (): Promise<{ isError: boolean; text: string }> =>
+    callTool(system, agent, 'report_finding', { kind: 'duplicate', summary: 'Same as #41.', ref: 'issue:41' });
+
+  await report();
+  const finding = system.store.listFindings()[0]!;
+  assert.equal((await app.inject({ method: 'POST', url: `/api/findings/${finding.id}/dismiss` })).statusCode, 200);
+
+  // An agent that repeats itself every turn must not refill the operator's list —
+  // and dismissing it has to mean something, so the repeat lands on the same row
+  // without reopening it.
+  await report();
+  assert.equal(system.store.listFindings().length, 1);
+  assert.equal(system.store.getFinding(finding.id)?.status, 'dismissed');
+
+  // A *different* summary is a different finding, not a repeat.
+  await callTool(system, agent, 'report_finding', { kind: 'duplicate', summary: 'Also overlaps #7.' });
+  assert.equal(system.store.listFindings().length, 2);
+  await app.close();
+  system.store.close();
+});
+
+test('a malformed finding is refused with the reason and stores nothing', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+
+  const badKind = await callTool(system, agent, 'report_finding', { kind: 'idea', summary: 'Something.' });
+  assert.equal(badKind.isError, true);
+  assert.match(badKind.text, /kind must be one of/);
+
+  const badRef = await callTool(system, agent, 'report_finding', {
+    kind: 'duplicate',
+    summary: 'Same as 41.',
+    ref: '41',
+  });
+  assert.equal(badRef.isError, true);
+  assert.match(badRef.text, /ambiguous between an issue and a PR/);
+  assert.deepEqual(system.store.listFindings(), []);
+
+  // ...and the corrected retry lands, in the same turn.
+  const fixed = await callTool(system, agent, 'report_finding', {
+    kind: 'duplicate',
+    summary: 'Same as #41.',
+    ref: 'issue:41',
+  });
+  assert.equal(fixed.isError, false);
+  assert.equal(system.store.listFindings().length, 1);
+  system.store.close();
+});
+
+test('the cockpit is shipped the findings and a link for the item they name', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const agent = spawnAgent(system, 'issue:12');
+  await callTool(system, agent, 'report_finding', { kind: 'duplicate', summary: 'Same as #41.', ref: 'issue:41' });
+
+  const snap = (await (await app.inject({ method: 'GET', url: '/api/state' })).json()) as {
+    findings: { ref: string | null; summary: string }[];
+    refUrls: Record<string, string>;
+  };
+  // A finding nobody sees is the PR comment it replaces.
+  assert.deepEqual(
+    snap.findings.map((f) => f.ref),
+    ['issue:41'],
+  );
+  // Its ref is resolved directly rather than looked up off the world: #41 is a
+  // *closed* duplicate here, so it is in no snapshot list. (The `fake` provider
+  // resolves nothing, so the key is simply absent rather than wrong.)
+  assert.equal('issue:41' in snap.refUrls, false);
+  await app.close();
   system.store.close();
 });
 

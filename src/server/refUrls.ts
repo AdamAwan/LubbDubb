@@ -15,12 +15,18 @@ export interface RefUrlInputs {
   issues: { number: number; url?: string; linkedPrNumber: number | null }[];
   /** Branches the tracked tasks operate on (nulls ignored). */
   taskBranches: (string | null)[];
+  /**
+   * Canonical refs to resolve and key by themselves (`issue:41`), for items that
+   * aren't in the snapshot's lists — a finding names one that may well be closed,
+   * and the `#n` keys above only cover what the world currently holds.
+   */
+  refs?: (string | null)[];
   /** The provider's canonical ref → URL resolver (returns null when it can't). */
   resolve: (ref: string) => string | null;
 }
 
 export function buildRefUrls(inputs: RefUrlInputs): Record<string, string> {
-  const { pullRequests, issues, taskBranches, resolve } = inputs;
+  const { pullRequests, issues, taskBranches, refs, resolve } = inputs;
   const map: Record<string, string> = {};
   const put = (key: string, url: string | null | undefined): void => {
     // First writer wins so an authoritative item url is never overwritten by a
@@ -39,6 +45,9 @@ export function buildRefUrls(inputs: RefUrlInputs): Record<string, string> {
   }
   for (const branch of taskBranches) {
     if (branch) put(branch, resolve(branch));
+  }
+  for (const ref of refs ?? []) {
+    if (ref) put(ref, resolve(ref));
   }
   return map;
 }

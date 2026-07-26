@@ -85,6 +85,25 @@ CREATE TABLE IF NOT EXISTS agent_files (
   UNIQUE (agent_id, path)
 );
 
+-- Things agents noticed that were not their own task (the report_finding tool):
+-- duplicates, work blocked on something outside the repo, out-of-scope discoveries.
+-- Attribution is structural — agent_id/task_id/origin_ref come from the caller's
+-- credential, never from an argument. A finding is a claim, not work: it stays
+-- 'open' until an operator promotes it into a job (job_id) or dismisses it.
+CREATE TABLE IF NOT EXISTS findings (
+  id         TEXT PRIMARY KEY,
+  agent_id   TEXT NOT NULL,
+  task_id    TEXT NOT NULL,
+  origin_ref TEXT,
+  kind       TEXT NOT NULL,          -- duplicate | blocked | out_of_scope
+  ref        TEXT,                   -- the world item it is about ("issue:41"), if any
+  summary    TEXT NOT NULL,
+  status     TEXT NOT NULL,          -- open | promoted | dismissed
+  job_id     TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- One delivery plan per issue — the planning agent's verdict. Written for *both*
 -- outcomes ('single' as much as a decomposition), so the planner never re-runs on
 -- the same issue. The graph lives here and nowhere else: it is scheduling intent,
@@ -198,6 +217,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
 CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);

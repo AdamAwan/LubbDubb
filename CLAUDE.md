@@ -432,6 +432,36 @@ preserve:
     unauthenticated over HTTP while this path needs a 0600 bearer token. The part that _is_ kept: an
     agent can only name items the harness already holds, in the harness's own vocabulary — no query,
     no provider passthrough, no path or URL argument, so no reaching another repo or project.
+- **`report_finding(kind, ref?, summary)` — what an agent noticed that isn't its task.** Closes
+  Exhibit C: "this issue duplicates #41", "the real fix is in a package I don't own", "there's an
+  unrelated bug in the module I touched" all used to go into a PR comment and hope. Now they land in
+  the `findings` table and the cockpit's Findings panel. The parts that carry the weight:
+  - **`kind` is `duplicate` / `blocked` / `out_of_scope`** (`src/mcp/findings.ts`) — three, one per
+    gap, split on the axis that matters: each implies a _different operator action_. There is
+    deliberately no catch-all fourth; a bucket implying no action is where findings rot, and the
+    summary is free text already.
+  - **It queues nothing, and that is the design, not an omission.** A queued job is dispatched by
+    rule 0 _ahead of every world-driven rule_, so an agent that could queue jobs could put agents on
+    the fleet — a capability escalation, and exactly the back-door round the auto-send seam that
+    #108's open question 3 warns about. Promotion is the operator's click
+    (`POST /api/findings/:id/promote` → `Store.createJob`, `findingJobRequest` carrying the
+    provenance into the prompt); `/dismiss` is the other arm. **Nothing in the dispatcher reads
+    `findings`.** The tool's description _and_ its response say so, so an agent doesn't report a bug
+    and then assume its fix is scheduled.
+  - **Identity is structural again, with full force** — the opposite of the `world_read` bullet
+    above, and the code says why: a read forges nothing, while this write puts words in an agent's
+    mouth in front of an operator and is read as testimony about work its author actually did. So
+    the schema is `{kind, summary, ref}` and nothing else; attribution
+    (`agentId`/`taskId`/`originRef`) comes from the credential.
+  - **`ref` is optional and kind-strict**: the same `pr:`/`issue:`/`story:` vocabulary, suffix-
+    tolerant so an origin ref passes back verbatim, but a **bare number is refused** — unlike
+    `world_read` there is no `kind` argument to say whether `41` is an issue or a PR, and a duplicate
+    report must not guess. Anything off-vocabulary is refused with "omit ref, describe it in the
+    summary": an open-ended ref field is an unqueryable junk drawer.
+  - It routes through `AgentManager.recordFinding` (not straight to the store) for the same reason a
+    flag does — the `finding` event is what puts it in the cockpit now rather than next pulse — and a
+    verbatim repeat (same agent, kind, ref, summary) refreshes the row **without resetting status**,
+    so dismissing one means something. Tests: the `report_finding` block in `test/mcpChannel.test.ts`.
 - **Transport is a Unix socket (named pipe on Windows), never a TCP port** — the cockpit's HTTP
   surface is already unauthenticated on `0.0.0.0`. `bridge.mjs` (spawned by `claude`, shipped `.mjs`
   like `statusCapture.mjs`) is a **byte-transparent pipe** with no protocol logic, so `initialize` /
