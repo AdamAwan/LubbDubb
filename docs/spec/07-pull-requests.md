@@ -89,6 +89,71 @@ Two properties of the fix:
 Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.excludedPrs` — so an
 `-ignore`d base still attributes.
 
+## `prAttentionStatus(pr, ctx)`
+
+`src/prAttention.ts`, pure and unit-tested (`test/prAttention.test.ts`). The PR-side sibling of
+`issuePickupStatus`: it folds every gate that decides what happens to a PR into one verdict about
+**whose turn it is** — `{ status, reasons }`, reasons most actionable first and never empty.
+
+It sits **beside** `prHealth`, not inside it. Health answers *can this merge* and is consumed by the
+merge gate's phrasing and by `world_read`'s agent-facing output; attention answers *who is this
+waiting on*. The two have different right answers for the same PR — a stacked PR with red inherited
+CI is honestly `CI failing on base PR #7` to the first and `waiting on PR #7` to the second — so
+folding them would make one of the two a lie every time they disagree.
+
+### The arms, in the order they are checked
+
+| Status      | Court                        | When                                                                       |
+| ----------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| `done`      | nobody — off the board       | `prState(pr) !== 'open'`.                                                   |
+| `ignored`   | nobody, by your instruction  | `isPrExcluded(pr, ignoreLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire. |
+| `you`       | yours                        | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; or a concern whose **attempt cap is spent** (rule `cooldown-escalate` handed it to a human). |
+| `harness`   | the harness's                | An agent is **running or queued** on the branch; an unstaffed **concern** (rules 1/2/2b) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window. |
+| `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left. |
+| `elsewhere` | outside the loop             | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews. |
+| `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule 3's reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing. |
+
+Because the first matching arm wins, the ones below it are moot — a PR with an agent on its branch
+reads `an agent is working this branch` whatever its CI says, which is the answer prose about health
+cannot give.
+
+### What it reads, and what it deliberately does not
+
+- **The same lists the other predicates read**: the **unfiltered** open PR list (the dispatch world
+  plus `ctx.excludedPrs`), so an `-ignore`d base still attributes, exactly as `inheritedCiFailure`
+  requires; the tasks; the proposals in the store's newest-first order; the recent decision window;
+  and the world snapshot's `takenAt` as "now".
+- **`proposalHold`, not the proposal row.** The `settled` arm asks the gate, so a rejection that
+  stopped standing at the first world event on that PR ([#122](05-dispatcher.md#rule-3--the-merge-gate))
+  stops reading as settled at the same instant rule 3 starts firing again. `rejectionSignals` comes
+  from the same `rejectionSignalQuery` → `Store.listWorldEventsSince` pair the harness and the
+  executor use.
+- **`last_actor` is not the predicate**, and cannot be. It works on a closed two-party board where
+  every state change has a participant actor; ours is not closed. CI turning a PR red, a base branch
+  moving, a third-party review landing all arrive through `worldDiff` with **no participant identity
+  attached**, and they are the most common reason a PR needs attention. What transfers is the
+  discipline — many gates folded into one pure verdict with reasons — not the signal.
+- **`PrComment.author` is not read as a signal.** It is the one place participant identity genuinely
+  exists, and branching on it would recreate the two-party assumption in that one corner. An
+  unhandled comment is what makes rule 2b dispatch, whoever wrote it: `handled` decides, and the
+  author appears only in the wording of a reason.
+
+### Nothing in the dispatcher reads it
+
+It is a **lens**, like `findings` and `overlaps` and unlike the pending-proposal gate. Every input it
+folds is already a gate that fires on its own — the branch gate, `proposalHold`, `dispatchVerdict`,
+`isPrExcluded` — so a rule reading this verdict would be taking a second opinion about a decision
+made elsewhere, from a function sitting nowhere near the rule it duplicates. A verdict the dispatcher
+acts on is a new gate with its own failure modes; a verdict only the cockpit reads cannot change what
+happens, only what an operator can see. `test/prAttention.test.ts` asserts the property both
+structurally (one importer, `src/server/app.ts`) and behaviourally (building the snapshot between two
+pulses changes no decision).
+
+The concern list and the merge-readiness test are re-derived here from the same predicates rather
+than shared with the dispatcher, which builds prompt-bearing concerns it has no use for — the same
+relationship `issuePickupStatus` has to rule 4. The orders are stated once, above and in
+[05](05-dispatcher.md), for both.
+
 ## `isPrExcluded(pr, label)`
 
 True when `pr.labels` includes the configured ignore label. Pure and provider-agnostic. An empty label

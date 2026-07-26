@@ -131,7 +131,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | --------------- | ------------------------------------------------------------------------------------------------------------ |
 | `config`        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`. |
 | `control`       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                   |
-| `world`         | The snapshot, with `health` attached per open PR and `pickup` per issue.                                     |
+| `world`         | The snapshot, with `health` and `attention` attached per open PR and `pickup` per issue.                     |
 | `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads.                                               |
 | `tasks`         | Every task.                                                                                                |
 | `jobs`          | Operator jobs, newest first.                                                                               |
@@ -149,13 +149,19 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `dispatchRules` | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                            |
 | `usage`         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                |
 
-Three consistency points:
+Four consistency points:
 
 - **The pickup verdict uses the same inputs rule 4 consults** — the policy, `DEFAULT_COOLDOWN`, the
   world's `takenAt`, tasks, the last 200 decisions, the **unfiltered** open PR list, the plan graph,
   the planning policy, and the same headroom arithmetic — so the chip predicts what happens next cycle.
 - **PR health is passed the full open-PR list** as stack context, so an inherited CI failure names the
   PR underneath; otherwise a stacked PR reads as "CI failing" with no agent and no visible reason.
+- **The attention verdict sits beside health, never inside it** — health answers *can this merge*,
+  attention answers *whose turn is it*, and they have different right answers for the same PR (see
+  [07](07-pull-requests.md#prattentionstatuspr-ctx)). It reads the same unfiltered PR list and the
+  same decision window, plus the proposals and the world events since the oldest standing rejection
+  (`rejectionSignalQuery` → `Store.listWorldEventsSince`, so nothing is read until an operator has
+  rejected something). Nothing in the dispatcher reads it.
 - **`refUrls` covers closed PRs too**, since the cockpit's "recently closed" section links their
   numbers, and it resolves finding refs directly (a finding often names an item not in the world).
 

@@ -71,9 +71,9 @@ for the world to change — chosen from `config.injectable`.
   are the only ones an operator can still act on; a settled overlap stays as the record of what
   collided. Each row shows the path, its writers with their origins and branches, and marks the
   `sameWorktree` case.
-- **World** (`WorldSummary`) — open PRs with their health verdict and an exclude toggle; issues with
-  their state, linked PR and pickup chip, and a watch toggle; stories with a watch toggle; and a
-  **Recently closed** section marking each PR merged vs closed-unmerged.
+- **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
+  toggle; issues with their state, linked PR and pickup chip, and a watch toggle; stories with a watch
+  toggle; and a **Recently closed** section marking each PR merged vs closed-unmerged.
 
 ### Right column
 
@@ -118,12 +118,19 @@ resolve is absent from the map and renders as plain text — which is what the `
 
 ## Chips and verdicts
 
-Two per-item verdicts are computed **on the server** and merely rendered here, so the UI can never
+Three per-item verdicts are computed **on the server** and merely rendered here, so the UI can never
 disagree with what the dispatcher does:
 
 - **PR health** — `prHealth(pr, allOpenPrs)`, attached per PR. It names an inherited CI failure as
   `CI failing on base PR #n`, which is the only place an operator sees why no agent came for a red
   stacked PR.
+- **PR attention** — `prAttentionStatus(pr, ctx)`, attached per PR beside health and rendered by
+  `attentionChip`. The chip names the **court** and nothing else — `your turn`, `harness on it`,
+  `waiting on others`, `settled`, `stalled` — because scanning a list for "what is mine" is what it
+  exists for; the health chip beside it carries the visible detail of *why*, and the full reasons are
+  in the `title`. `done` and `ignored` render nothing: the row already draws a "merged" and an
+  "ignored" chip, and one home per fact. Only `your turn` and `stalled` warn — the two arms actually
+  asking for a person. An older server that ships no verdict renders nothing at all.
 - **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue and rendered by `pickupChip`.
   `done` and `has_pr` render nothing, because the state chip and the "→ PR" chip already say it; an
   older server that ships no verdict renders nothing at all. Every other status shows its first reason,
