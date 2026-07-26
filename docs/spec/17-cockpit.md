@@ -59,7 +59,10 @@ for the world to change — chosen from `config.injectable`.
 - **Needs you** — open escalations, newest first, as `EscalationCard`s. Each card carries the task
   title, the origin ref, a tail of the agent's output, and — when the park came through the `escalate`
   tool — the `detail` and one-click `options`. Answering posts to
-  `POST /api/escalations/:id/answer`; the card can also open the agent's drawer.
+  `POST /api/escalations/:id/answer`; the card can also open the agent's drawer. A **permission
+  request** (`context.permission`, issue #130) renders the command and **Allow / Deny** buttons
+  instead of the answer box — the agent is blocked in a tool call, so the verdict goes to
+  `POST /api/escalations/:id/permission`, not `/answer`.
 - **Plans** (`PlanPanel`, rendered only when plans exist) — each plan's parts drawn as a stack, joined
   to `upcoming` **by origin** (`issue:<n>:part:<slug>`) so the dispatch cut is visible, with a
   **Replan** button. A plan `awaiting_approval` says so on the card and states that nothing below is
