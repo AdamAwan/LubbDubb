@@ -167,6 +167,23 @@ async function smokeToolCall(system: System): Promise<void> {
   }
   log(`✓ finding filed as ${finding.kind} on ${finding.ref} by ${finding.originRef}, and queued no work`);
 
+  // A progress note over the same transport: it lands on the agent row as a
+  // current value (the second call replaces the first, it does not accumulate),
+  // which is what the fleet card reads.
+  const notes = ['Reading the store schema', 'Running the full suite after the rename'];
+  for (const [i, note] of notes.entries()) {
+    const before = frames.length;
+    send({ jsonrpc: '2.0', id: 7 + i, method: 'tools/call', params: { name: 'note_progress', arguments: { note } } });
+    await waitFor(`note_progress ${i + 1}`, () => frames.length > before, 5_000);
+    const noteFrame = frames[frames.length - 1]?.result as { isError?: boolean; content: { text: string }[] };
+    if (noteFrame.isError) throw new Error(`note_progress failed: ${noteFrame.content[0]?.text}`);
+  }
+  const noted = system.store.getAgent(agent.id);
+  if (noted?.note !== 'Running the full suite after the rename' || !noted.notedAt) {
+    throw new Error(`note_progress left the wrong note: ${JSON.stringify(noted?.note)}`);
+  }
+  log(`✓ progress note on the agent row: "${noted.note}" (${noted.notedAt})`);
+
   bridge.kill();
   system.mcp.release(credential.token);
   await system.mcp.close();

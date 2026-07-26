@@ -73,6 +73,11 @@ export class Hub {
       this.broadcast({ type: 'agent:finding', finding: e.finding });
       this.broadcast({ type: 'dirty' });
     });
+    // The agent said what it is working on. No dedicated frame: the note lives on
+    // the agent row, so the /api/state refetch a `dirty` triggers *is* the whole
+    // delivery — unlike `agent:tail`, which exists only as a broadcast and has to
+    // carry its own payload. Same treatment as `usage` for the same reason.
+    agents.on('progress', () => this.broadcast({ type: 'dirty' }));
     // The file-events hook recorded a written file; a coarse dirty repaints the
     // drawer's "files changed" list via the /api/state refetch (report-like ones
     // also arrive as an agent:flag above).

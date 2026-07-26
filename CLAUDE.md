@@ -462,6 +462,43 @@ preserve:
     flag does — the `finding` event is what puts it in the cockpit now rather than next pulse — and a
     verbatim repeat (same agent, kind, ref, summary) refreshes the row **without resetting status**,
     so dismissing one means something. Tests: the `report_finding` block in `test/mcpChannel.test.ts`.
+- **`note_progress(note)` — the agent's own answer to "what is it doing, and is it stuck?"** The
+  fleet card's live line is `agent:tail` (`Hub.updateTail`): the last non-empty line the process
+  happened to print. It's a byproduct rather than a statement (in stream mode it's as likely to be a
+  `renderBlocks` tool label as a sentence), it's **ephemeral** — it lives only in the `Hub`'s map and
+  the cockpit's `tails` ref, so a reload or a cockpit opened twenty minutes into a run shows an empty
+  card — and it answers "is output still coming out", which is liveness, not progress. Three
+  decisions carry this one:
+
+  - **It sits beside the tail, never replacing it.** Same asymmetry as `@@LUBBDUBB_DONE@@` against
+    the `result` event: a note an agent forgets to call is _silence_, and silence must not read as
+    "no progress". An agent that never calls it leaves a card identical to the pre-tool one — there
+    is no placeholder and nothing inferred from output. Where both exist the card shows both: the
+    note is a claim (durable, attributed, as old as its timestamp), the tail is evidence the process
+    is still emitting.
+  - **Latest value, so a column and not a table.** One row per call would be an audit trail, and that
+    trail already exists — every call is a tool use in the agent's transcript, in order, with context.
+    A second lossier copy in SQLite answers nothing new. What didn't exist is a cheap _current_
+    reading for a fleet view, so exactly one is kept: `note` + `noted_at` on the `agents` row,
+    overwritten per call, riding to the cockpit inside `listAgents()` with no new snapshot key, no
+    route and no panel. Existing table → the pair needs an `ensureColumns('agents', …)` entry in
+    `Store.migrate()`. The note deliberately outlives the agent (a finished agent's last note is the
+    one-line summary of the run).
+  - **`notedAt` is display context, never liveness.** Nothing derives a staleness or health verdict
+    from it, and `test/mcpChannel.test.ts` asserts no derived field appears on the shipped agent. The
+    reason is that the longest gaps between notes are the long test runs and big refactors — the
+    healthiest stretches — so reading age as "stuck" would punish honest use and turn an optional
+    note into a heartbeat agents must keep sending. Liveness stays the process, the status
+    transitions and the `waiting` park.
+
+  One field, `note`, and the tool's prose says why there isn't a `stage` enum: the only member that
+  would imply an operator action is `blocked`, and `escalate` already owns that and does it properly.
+  Over-long notes are **trimmed and stored** (with the trim reported) rather than refused — the
+  opposite of `report_finding`, because a finding is testimony an operator acts on while a note is a
+  status line whose value is being cheap and frequent. Only an empty note is refused. It routes
+  through `AgentManager.recordProgress` for the `progress` event, which the `Hub` turns into a plain
+  `dirty` (unlike `agent:tail`, the payload is already on the row that the refetch brings).
+
 - **Transport is a Unix socket (named pipe on Windows), never a TCP port** — the cockpit's HTTP
   surface is already unauthenticated on `0.0.0.0`. `bridge.mjs` (spawned by `claude`, shipped `.mjs`
   like `statusCapture.mjs`) is a **byte-transparent pipe** with no protocol logic, so `initialize` /

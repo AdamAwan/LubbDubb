@@ -16,6 +16,7 @@ import {
   parseFindingRef,
   validateFinding,
 } from '../src/mcp/findings.js';
+import { MAX_NOTE_LENGTH, normaliseNote } from '../src/mcp/progress.js';
 import { buildTools } from '../src/mcp/tools.js';
 import { buildApp } from '../src/server/app.js';
 import { escalationTypeForAsk } from '../src/escalation/context.js';
@@ -375,6 +376,40 @@ test('a promoted finding carries its provenance into the job it becomes', () => 
   assert.match(request.prompt, /squares the delay/);
   // And it is a claim, not an instruction: the promoted agent verifies first.
   assert.match(request.prompt, /Verify it before acting on it/);
+});
+
+// -- progress notes, as a pure normalisation --------------------------------
+
+test('a progress note is reduced to the one line the fleet card can render', () => {
+  const wrapped = normaliseNote('  Reworking the fold\n  so a superseded push   stops poisoning CI  ');
+  assert.deepEqual(wrapped, {
+    ok: true,
+    note: 'Reworking the fold so a superseded push stops poisoning CI',
+    trimmed: false,
+  });
+  // "One line" is a property this establishes rather than one it demands: a note
+  // that happens to arrive with a newline in it is a fine note, badly formatted.
+  assert.equal((normaliseNote('a\nb') as { note: string }).note, 'a b');
+});
+
+test('an over-long note is kept and trimmed, where a malformed finding is refused', () => {
+  const long = normaliseNote('x'.repeat(MAX_NOTE_LENGTH + 50)) as { ok: true; note: string; trimmed: boolean };
+  assert.equal(long.ok, true);
+  assert.equal(long.note.length, MAX_NOTE_LENGTH);
+  assert.equal(long.trimmed, true);
+  // The asymmetry is deliberate. A finding is testimony an operator acts on, so a
+  // malformed one must not land at all; a progress note is a status line whose
+  // whole value is being cheap and frequent, and a trimmed one still answers the
+  // question a refusal would have left blank.
+  assert.equal(validateFinding({ kind: 'duplicate', summary: '' }).ok, false);
+});
+
+test('an empty note is the one thing refused — there is nothing to store', () => {
+  for (const empty of ['', '   ', '\n', undefined, 42]) {
+    const res = normaliseNote(empty);
+    assert.equal(res.ok, false, `${JSON.stringify(empty)} is not a note`);
+    if (!res.ok) assert.match(res.error, /note is required/);
+  }
 });
 
 // -- end to end through a built system ---------------------------------------
@@ -931,6 +966,146 @@ test('the cockpit is shipped the findings and a link for the item they name', as
   system.store.close();
 });
 
+test('note_progress lands on the agent row and hands back the status envelope', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'pr:142:ci');
+
+  const before = system.store.getAgent(agent.id)!.status;
+  const res = await callTool(system, agent, 'note_progress', {
+    note: 'Reading how the dispatcher ranks candidates before touching rule 4a',
+  });
+  assert.equal(res.isError, false);
+
+  const stored = system.store.getAgent(agent.id)!;
+  assert.equal(stored.note, 'Reading how the dispatcher ranks candidates before touching rule 4a');
+  assert.ok(stored.notedAt, 'the note is dated so a reader can tell how current it is');
+  // It says something and changes nothing: not a status transition, not a park.
+  assert.equal(stored.status, before);
+  assert.equal(stored.waitingReason, null);
+  assert.deepEqual(system.store.listOpenEscalations(), []);
+
+  const payload = JSON.parse(res.text) as { noted: boolean; note: string; _status: Record<string, unknown> };
+  assert.equal(payload.noted, true);
+  assert.equal(payload._status.origin, 'pr:142:ci');
+  system.store.close();
+});
+
+test('a note is a current value, not a stream — the second one replaces the first', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+
+  await callTool(system, agent, 'note_progress', { note: 'Reading the store schema' });
+  await callTool(system, agent, 'note_progress', { note: 'Running the full suite after the rename' });
+
+  // One row, one note. The audit trail of what an agent said, in order, already
+  // exists in its transcript — every call is a tool use there — so a second,
+  // lossier copy in SQLite would answer nothing. What the transcript can't answer
+  // cheaply from a fleet view is "where is this one up to *now*", and that is
+  // exactly what is kept.
+  const stored = system.store.getAgent(agent.id)!;
+  assert.equal(stored.note, 'Running the full suite after the rename');
+
+  // ...and it survives the agent, because a finished agent's last note is the best
+  // one-line summary of the run there is.
+  system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
+  assert.equal(system.store.getAgent(agent.id)!.note, 'Running the full suite after the rename');
+  system.store.close();
+});
+
+test('an over-long note is stored trimmed and the agent is told, rather than losing it', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+
+  const res = await callTool(system, agent, 'note_progress', { note: 'y'.repeat(MAX_NOTE_LENGTH + 20) });
+  assert.equal(res.isError, false);
+  const payload = JSON.parse(res.text) as { note: string; trimmed?: string };
+  assert.equal(payload.note.length, MAX_NOTE_LENGTH);
+  assert.match(payload.trimmed ?? '', /trimmed/);
+  assert.equal(system.store.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
+
+  // An empty one is the only refusal, and it stores nothing over the good note.
+  const empty = await callTool(system, agent, 'note_progress', { note: '   ' });
+  assert.equal(empty.isError, true);
+  assert.equal(system.store.getAgent(agent.id)!.note?.length, MAX_NOTE_LENGTH);
+  system.store.close();
+});
+
+test('silence is not "no progress": an agent that never notes leaves the card as it was', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
+  const { app } = await buildApp(system);
+  const agent = spawnAgent(system, 'issue:12');
+
+  // A whole run's worth of output and not one call to the tool. The note stays
+  // null and nothing stands in for it — no placeholder, no note inferred from the
+  // output, no "quiet" marker. Same asymmetry as @@LUBBDUBB_DONE@@ against the
+  // result event: a tool an agent forgets to call is silence, and silence must
+  // not be read as a statement.
+  backend.last().emit('Running tests…\n');
+  backend.last().emit('@@LUBBDUBB_DONE@@');
+  assert.equal(system.store.getAgent(agent.id)!.status, 'done');
+
+  const snap = (await (await app.inject({ method: 'GET', url: '/api/state' })).json()) as {
+    agents: Record<string, unknown>[];
+  };
+  const shipped = snap.agents.find((a) => a.id === agent.id)!;
+  assert.equal(shipped.note, null);
+  assert.equal(shipped.notedAt, null);
+  // The output that *did* happen is still the fallback the card shows. It reaches
+  // the cockpit as a Hub broadcast rather than on the row, so nothing about it
+  // changed here — which is the point: the note sits beside the tail, never
+  // instead of it, and an agent that skips the tool costs the operator nothing.
+  assert.equal('lastLine' in shipped, false);
+  assert.equal('note' in shipped, true);
+  await app.close();
+  system.store.close();
+});
+
+test('a note is dated but nothing reads the date as liveness', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const agent = spawnAgent(system, 'issue:12');
+  await callTool(system, agent, 'note_progress', { note: 'Waiting on a twenty-minute test run' });
+
+  const snap = (await (await app.inject({ method: 'GET', url: '/api/state' })).json()) as {
+    agents: Record<string, unknown>[];
+  };
+  const shipped = snap.agents.find((a) => a.id === agent.id)!;
+  assert.equal(typeof shipped.notedAt, 'string');
+  // The raw timestamp is shipped and *nothing is derived from it*. This guard is
+  // the decision, not decoration: the longest gaps between notes are the long
+  // test runs and big refactors — the stretches where an agent is healthiest — so
+  // a staleness verdict would punish honest use and quietly turn an optional note
+  // into a heartbeat an agent must keep sending. If a derived field ever wants to
+  // exist here, this failing is the prompt to re-argue it.
+  const derived = Object.keys(shipped).filter((k) => /stale|stuck|idle|silent|heartbeat|alive/i.test(k));
+  assert.deepEqual(derived, []);
+  // And the fleet keeps working off real liveness signals, not the note's age:
+  // the agent is live because its session is, and noting nothing would not have
+  // changed that either way.
+  assert.equal(shipped.status, system.store.getAgent(agent.id)!.status);
+  assert.deepEqual(system.store.listErrors(10), []);
+  await app.close();
+  system.store.close();
+});
+
+test('a note is a write, so it too is attributed structurally — one field, and it is the note', async () => {
+  const system = build();
+  const one = spawnAgent(system, 'pr:142:ci');
+  const two = spawnAgent(system, 'issue:12');
+
+  // Same rule as report_finding, for the same reason: this speaks in an agent's
+  // name to an operator. There is no agent, task or origin argument to forge with.
+  const schema = advertisedSchema(system, one, 'note_progress');
+  assert.deepEqual(Object.keys(schema.properties), ['note']);
+
+  await callTool(system, one, 'note_progress', { note: 'Fixing the CI failure' });
+  await callTool(system, two, 'note_progress', { note: 'Reading the issue' });
+  assert.equal(system.store.getAgent(one.id)!.note, 'Fixing the CI failure');
+  assert.equal(system.store.getAgent(two.id)!.note, 'Reading the issue');
+  system.store.close();
+});
+
 // -- the fail-open floor -----------------------------------------------------
 
 test('with the channel off, no launch carries it and the sentinels still park and finish', () => {
@@ -951,6 +1126,10 @@ test('with the channel off, no launch carries it and the sentinels still park an
   system.escalations.answer(system.store.listOpenEscalations()[0]!.id, 'Auth0');
   backend.last().emit('@@LUBBDUBB_DONE@@');
   assert.equal(system.store.getAgent(agent.id)?.status, 'done');
+  // With no channel there is no way to note progress, and nothing pretends there
+  // was one: the row's note stays null and the card falls back to the tail, which
+  // is exactly the pre-tool cockpit.
+  assert.equal(system.store.getAgent(agent.id)?.note, null);
   system.store.close();
 });
 

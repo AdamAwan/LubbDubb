@@ -340,6 +340,8 @@ export function buildDemoState(): DemoSeed {
         inputTokens: 412_000,
         outputTokens: 18_400,
         numTurns: 3,
+        note: 'Reworking the policy-evaluation fold so a superseded push stops poisoning CI status',
+        notedAt: ago(3),
       },
       {
         id: 'agent-a2',
@@ -354,6 +356,8 @@ export function buildDemoState(): DemoSeed {
         inputTokens: 168_000,
         outputTokens: 6_200,
         numTurns: 2,
+        note: 'Rebasing onto main — three files conflict, working through them in order',
+        notedAt: ago(9),
       },
       {
         id: 'agent-a0',
@@ -368,6 +372,9 @@ export function buildDemoState(): DemoSeed {
         inputTokens: 1_240_000,
         outputTokens: 54_000,
         numTurns: 9,
+        // A finished agent keeps its last note: the one-line summary of the run.
+        note: 'Suite green, PR opened',
+        notedAt: ago(22),
       },
     ],
     escalations: [

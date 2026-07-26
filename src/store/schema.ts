@@ -48,7 +48,15 @@ CREATE TABLE IF NOT EXISTS agents (
   cost_usd       REAL,
   input_tokens   INTEGER,
   output_tokens  INTEGER,
-  num_turns      INTEGER
+  num_turns      INTEGER,
+  -- The agent's own one-line answer to "what are you doing right now" (the
+  -- note_progress tool). A *current value*, overwritten on each call, not a
+  -- stream: the audit trail already exists in the transcript, where every call
+  -- appears as a tool use. What did not exist is a cheap current reading, so
+  -- that is the only thing stored. noted_at dates the note for display and is
+  -- deliberately never read as evidence the agent is alive — see src/mcp/progress.ts.
+  note           TEXT,
+  noted_at       TEXT
 );
 
 -- Timestamped per-report cost deltas (not cumulative), so account-level rolling

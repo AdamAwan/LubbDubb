@@ -78,6 +78,8 @@ export class Store {
       input_tokens: 'INTEGER',
       output_tokens: 'INTEGER',
       num_turns: 'INTEGER',
+      note: 'TEXT',
+      noted_at: 'TEXT',
     });
     this.ensureColumns('decisions', {
       rule: 'TEXT',
@@ -510,6 +512,8 @@ export class Store {
       inputTokens: null,
       outputTokens: null,
       numTurns: null,
+      note: null,
+      notedAt: null,
     };
     this.db
       .prepare(
@@ -567,6 +571,28 @@ export class Store {
     if (delta > 0) {
       this.db.prepare(`INSERT INTO usage_events (agent_id, cost_usd, at) VALUES (?,?,?)`).run(id, delta, this.now());
     }
+  }
+
+  /**
+   * Record an agent's own one-line account of what it is doing (`note_progress`).
+   *
+   * **Latest value, not a stream** — which is why this is two columns on the agent
+   * row and not a table. One row per call would be an audit trail, and that audit
+   * trail already exists: every call appears in the agent's transcript as a tool
+   * use, in order, with everything around it for context. A second, lossier copy
+   * in SQLite would answer nothing the transcript doesn't. What the transcript
+   * cannot answer cheaply — from a fleet view, for eight agents at once — is
+   * "where is this one up to *now*", so exactly that is stored: overwritten each
+   * call, and read straight off `listAgents()` with no new snapshot key.
+   *
+   * The note deliberately survives the agent: a finished agent's last note is the
+   * best one-line summary of the run there is, and it costs nothing to keep.
+   */
+  recordAgentNote(id: string, note: string): string {
+    const at = this.now();
+    const changed = this.db.prepare(`UPDATE agents SET note=?, noted_at=? WHERE id=?`).run(note, at, id).changes;
+    if (changed === 0) throw new Error(`Agent ${id} not found`);
+    return at;
   }
 
   /** Total agent cost recorded since `sinceIso` — the rolling-window aggregate. */
@@ -975,6 +1001,8 @@ interface AgentRow {
   input_tokens: number | null;
   output_tokens: number | null;
   num_turns: number | null;
+  note: string | null;
+  noted_at: string | null;
 }
 interface AgentFlagRow {
   id: string;
@@ -1127,6 +1155,8 @@ function rowToAgent(r: AgentRow): Agent {
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
     numTurns: r.num_turns,
+    note: r.note,
+    notedAt: r.noted_at,
   };
 }
 function rowToFlag(r: AgentFlagRow): AgentFlag {

@@ -13,7 +13,7 @@
 export const MCP_SERVER_ID = 'lubbdubb';
 
 /** Every tool we expose. Asserted against the built tool set in `test/mcpChannel.test.ts`. */
-export const MCP_TOOL_NAMES = ['plan_submit', 'escalate', 'world_read', 'report_finding'] as const;
+export const MCP_TOOL_NAMES = ['plan_submit', 'escalate', 'world_read', 'report_finding', 'note_progress'] as const;
 
 /**
  * The names as the permission layer sees them.

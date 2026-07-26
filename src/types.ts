@@ -321,6 +321,22 @@ export interface Agent {
   inputTokens: number | null;
   outputTokens: number | null;
   numTurns: number | null;
+  /**
+   * The agent's own one-line answer to "what are you doing right now", from the
+   * `note_progress` tool — a *current value*, replaced on each call, and null for
+   * an agent that never called it (which is a supported state, not a degraded
+   * one: the output tail is what the fleet card falls back to).
+   */
+  note: string | null;
+  /**
+   * When {@link Agent.note} was written. Display context only — it dates the note
+   * so a reader knows how current it is. **Nothing derives liveness or health from
+   * it**, by decision: the longest gaps between notes are the long test runs and
+   * big refactors, i.e. exactly the stretches where an agent is healthiest, so a
+   * staleness verdict would punish honest use and turn this into a heartbeat.
+   * Liveness is the process, the status transitions and the `waiting` park.
+   */
+  notedAt: string | null;
 }
 
 /**
