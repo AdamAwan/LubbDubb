@@ -53,7 +53,7 @@ import type { Decision, Proposal, PullRequest, Task, WorldEvent } from './types.
  * Whose court the PR is in. Seven arms, and each names a *different party* rather
  * than a different flavour of stuck — that split is the whole verdict.
  */
-export type PrAttentionKind =
+type PrAttentionKind =
   | 'done' // merged or closed — off the board, nobody's turn
   | 'ignored' // you tagged it: nobody's turn, by your instruction
   | 'you' // your court — a verdict is owed, or an agent parked on you
@@ -62,7 +62,7 @@ export type PrAttentionKind =
   | 'settled' // you answered; nothing is owed until the world moves
   | 'stalled'; // nobody's court, and *that* is the thing to look at
 
-export interface PrAttention {
+interface PrAttention {
   status: PrAttentionKind;
   /** Human-readable, most actionable first. Never empty — every arm says why. */
   reasons: string[];

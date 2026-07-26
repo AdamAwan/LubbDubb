@@ -12,7 +12,7 @@ export interface FakeWorld {
   stories: Story[];
 }
 
-export const EMPTY_WORLD: FakeWorld = { pullRequests: [], closedPullRequests: [], issues: [], stories: [] };
+const EMPTY_WORLD: FakeWorld = { pullRequests: [], closedPullRequests: [], issues: [], stories: [] };
 
 /**
  * A thin read/write wrapper over the single persisted `fake_world` document in
@@ -44,6 +44,6 @@ export class FakeWorldStore {
   }
 }
 
-export function clone(world: FakeWorld): FakeWorld {
+function clone(world: FakeWorld): FakeWorld {
   return JSON.parse(JSON.stringify(world)) as FakeWorld;
 }

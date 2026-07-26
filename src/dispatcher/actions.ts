@@ -48,7 +48,7 @@ const part = {
   base: z.string().min(1).nullable().default(null),
 };
 
-export const ActionSchema = z.discriminatedUnion('type', [
+const ActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('dispatch_code_agent'),
     branch: z.string().min(1),

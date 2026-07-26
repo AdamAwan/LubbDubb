@@ -25,7 +25,7 @@ import type {
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Tuning for {@link resolvePullDetail}: how hard to chase a lazily-computed merge state. */
-export interface ResolvePullOpts {
+interface ResolvePullOpts {
   /** Extra reads after the first while GitHub is still computing (`mergeable === null`). */
   retries?: number;
   /** Pause between reads — GitHub's background compute needs a beat to land. */

@@ -20,7 +20,7 @@ import { debugEnabled, debugLog } from '../debug.js';
  * manager mints a credential per launch and hands it back when the agent leaves
  * the fleet, and knows nothing about sockets or the tool surface.
  */
-export interface McpChannel {
+interface McpChannel {
   /** Mint a per-launch credential. `configPath` is null when tools can't be wired. */
   open(): { token: string; configPath: string | null };
   /** Complete the credential's identity once the agent row exists. */
@@ -29,7 +29,7 @@ export interface McpChannel {
   release(token: string): void;
 }
 
-export interface AgentManagerOptions {
+interface AgentManagerOptions {
   command: string;
   /**
    * Builds the argv for a launch. `sessionId` is the id the agent runs under and
@@ -356,6 +356,11 @@ export class AgentManager extends EventEmitter {
    * Also like a finding, this does not require a *live* session: the note is a
    * durable line on the agent's row, and one written on an agent's last breath is
    * the summary of the run.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally rather than by an `implements` clause: the tool layer
+   * depends on the fleet, never the reverse. knip's member analysis is name-based, so
+   * without the tag it reads as uncalled.
    */
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string } {
     const agent = this.store.getAgent(agentId);

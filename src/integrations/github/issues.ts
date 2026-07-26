@@ -13,7 +13,7 @@ import type {
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
 import { githubRefUrl } from './refUrl.js';
 
-export interface GitHubIssuesOpts {
+interface GitHubIssuesOpts {
   /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
   store: Store;

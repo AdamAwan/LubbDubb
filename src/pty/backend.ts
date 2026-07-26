@@ -28,8 +28,8 @@ export interface PtyBackend {
 // Default PTY geometry. The legible-transcript emulator (terminalTranscript.ts)
 // must model the same screen size or cursor-addressed redraws land on the wrong
 // rows, so both read these constants.
-export const PTY_COLS = 120;
-export const PTY_ROWS = 40;
+const PTY_COLS = 120;
+const PTY_ROWS = 40;
 
 /**
  * Real backend backed by node-pty. Imported lazily so environments/tests that

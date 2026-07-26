@@ -24,7 +24,7 @@ export interface AgentToolTarget {
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string };
 }
 
-export interface McpToolDeps {
+interface McpToolDeps {
   store: Store;
   agents: AgentToolTarget;
   /** `planning.requireApproval` — see {@link ingestPlanDocument}. */

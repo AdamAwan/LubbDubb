@@ -33,7 +33,7 @@ import type {
 } from '../types.js';
 
 /** Injectable clock so tests are deterministic. */
-export type Clock = () => string;
+type Clock = () => string;
 const systemClock: Clock = () => new Date().toISOString();
 
 /**

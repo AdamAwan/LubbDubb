@@ -141,7 +141,7 @@ export interface AzThread {
   comments: AzComment[];
 }
 
-export interface AzComment {
+interface AzComment {
   id: number;
   authorUniqueName: string;
   content: string;

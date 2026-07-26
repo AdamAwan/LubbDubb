@@ -21,10 +21,10 @@ import { basePrOf, inheritedCiFailure, prHealth, prState } from '../prHealth.js'
  */
 export const WORLD_READ_KINDS = ['pr', 'issue', 'story'] as const;
 
-export type WorldReadKind = (typeof WORLD_READ_KINDS)[number];
+type WorldReadKind = (typeof WORLD_READ_KINDS)[number];
 
 /** A parsed target: which of the snapshot's lists to look in, and which row. */
-export interface WorldRef {
+interface WorldRef {
   kind: WorldReadKind;
   /** PR/issue number. Null for a story, which providers address by opaque id. */
   number: number | null;

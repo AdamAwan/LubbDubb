@@ -18,7 +18,7 @@ import { basename, extname, join } from 'node:path';
  * The `claude` dispatcher composes its prompts via the LLM and is unaffected —
  * this is the rule dispatcher's template book.
  */
-export type PromptId =
+type PromptId =
   | 'issue-plan'
   | 'issue-replan'
   | 'plan-part'

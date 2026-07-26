@@ -24,7 +24,7 @@ import {
 import { releasePlan } from '../plans/planApproval.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
-export interface ExecutorDeps {
+interface ExecutorDeps {
   store: Store;
   agents: AgentManager;
   worktrees: WorktreeManager;

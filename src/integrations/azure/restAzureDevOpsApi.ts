@@ -51,7 +51,7 @@ export interface AzureAuth {
 }
 
 /** Basic auth with a Personal Access Token — the empty username is the ADO convention. */
-export class PatAuth implements AzureAuth {
+class PatAuth implements AzureAuth {
   constructor(private readonly pat: string) {}
   async header(): Promise<string> {
     return `Basic ${Buffer.from(`:${this.pat}`).toString('base64')}`;
@@ -64,7 +64,7 @@ export class PatAuth implements AzureAuth {
  * ambiguous local-time `expiresOn` — ADO tokens live well past this, so a
  * conservative refresh is safe and avoids a fragile date parse.
  */
-export class AzCliAuth implements AzureAuth {
+class AzCliAuth implements AzureAuth {
   private cached: { token: string; fetchedAtMs: number } | null = null;
   /** Refresh well inside the token's real lifetime (typically 60–90 min). */
   private static readonly TTL_MS = 45 * 60 * 1000;

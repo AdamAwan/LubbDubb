@@ -5,7 +5,7 @@ import type { Agent, AgentFile, AgentStatus, Task } from './types.js';
  * Everything here is provenance the operator needs to judge it: who, working what,
  * on which branch, when — and whether that agent is still going.
  */
-export interface OverlapWriter {
+interface OverlapWriter {
   agentId: string;
   taskId: string;
   /** What the agent was dispatched to do, so the two writes can be compared as *work*. */
@@ -18,7 +18,7 @@ export interface OverlapWriter {
 }
 
 /** A path two or more concurrently-live code agents wrote. */
-export interface FileOverlap {
+interface FileOverlap {
   path: string;
   /** Most recent writer first. Always at least two. */
   writers: OverlapWriter[];

@@ -9,14 +9,14 @@
  * one xterm feature the HTML pane has to replace; kept pure so it's unit-tested
  * directly (`test/ansi.test.ts`).
  */
-export type AnsiColor = 'cyan' | 'gray' | 'red' | 'green';
+type AnsiColor = 'cyan' | 'gray' | 'red' | 'green';
 
 export interface AnsiStyle {
   color?: AnsiColor;
   dim?: boolean;
 }
 
-export interface AnsiSegment {
+interface AnsiSegment {
   text: string;
   style: AnsiStyle;
 }

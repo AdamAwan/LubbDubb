@@ -8,7 +8,7 @@ import { renderPlanComment } from './planComment.js';
 import { bySlug, dependencyOf, dependencySatisfied, observePartPr, partBranch, planIssueNumber } from './parts.js';
 import type { PlanningPolicy } from './planning.js';
 
-export interface PlanReconcilerDeps {
+interface PlanReconcilerDeps {
   store: Store;
   /** Branch reality. The seam stage 1 landed; this is its consumer. */
   git: GitObserver;

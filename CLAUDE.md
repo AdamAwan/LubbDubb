@@ -20,9 +20,18 @@ npm run check   # = format:check && lint && typecheck && typecheck:web && knip &
 
 Run it before committing. Notable failure modes that aren't obvious:
 
-- **knip** fails the build on _unused files, exports, or dependencies_. If you add an
-  `export` nothing imports, or a dependency you don't end up using, `check` goes red. Remove
-  dead code or wire it up.
+- **knip runs with every rule at `error`** — there is no `warn` tier, so no class of dead code
+  accumulates unnoticed. An `export` nothing imports, a **type** nothing names, a dependency you
+  don't end up using, or a **public class member** nothing calls all turn `check` red.
+  `includeEntryExports` holds test and script files to the same standard. The usual fix for a
+  reported type or helper is to **drop the `export` keyword**, not delete it — a type naming an
+  exported function's parameters or return value stays usable by callers unexported, and ESLint's
+  `no-unused-vars` catches whatever is then genuinely dead. Class-member analysis is **name-based**,
+  so a method reached only through a structural seam reads as unused; fix it by declaring the
+  `implements` clause when the interface is the class's own contract (`PtySession implements
+AgentSession`), or by tagging the member `@public` with a note naming the seam when the interface
+  belongs to a consumer that mustn't be depended on backwards (`AgentManager.recordProgress` ←
+  `AgentToolTarget`). Don't reach for an ignore list.
 - **Two typecheckers**: `typecheck` (server, `tsconfig.json`) and `typecheck:web` (cockpit,
   `web/tsconfig.json`) are separate passes. A change spanning `src/` and `web/` must satisfy
   both.

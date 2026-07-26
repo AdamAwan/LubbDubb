@@ -80,10 +80,6 @@ export class FakeConnector implements Connector, ActionSink {
     this.composite.inject(event);
   }
 
-  markCommentHandled(prNumber: number, commentId: string): void {
-    this.github.markCommentHandled(prNumber, commentId);
-  }
-
   markStoryState(storyId: string, state: Story['state']): void {
     this.backlog.markStoryState(storyId, state);
   }

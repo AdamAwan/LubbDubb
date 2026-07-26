@@ -86,7 +86,7 @@ export interface System {
   errors: ErrorLog;
 }
 
-export interface BuildOptions {
+interface BuildOptions {
   /** Inject a fake PTY backend (tests) instead of the real node-pty one. */
   backend?: PtyBackend;
   /** Override the outbound sink (tests). Defaults to the FakeConnector. */

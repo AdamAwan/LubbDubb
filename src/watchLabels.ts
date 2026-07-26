@@ -13,7 +13,7 @@
  * dispatcher, `prHealth`, the server and the cockpit can't drift apart.
  */
 
-export interface WatchLabels {
+interface WatchLabels {
   /** `${prefix}-watch` — an explicit "work this" tag. */
   watchLabel: string;
   /** `${prefix}-ignore` — an explicit "leave this alone" tag (always wins). */
@@ -31,9 +31,9 @@ export function watchLabelsFor(prefix: string): WatchLabels {
   return { watchLabel: `${prefix}-watch`, ignoreLabel: `${prefix}-ignore` };
 }
 
-export type WatchState = 'watched' | 'ignored';
+type WatchState = 'watched' | 'ignored';
 
-export interface ResolveWatchOpts extends WatchLabels {
+interface ResolveWatchOpts extends WatchLabels {
   /**
    * What an item with neither tag defaults to: `true` for PRs (opt-out), `false`
    * for issues/stories (opt-in).

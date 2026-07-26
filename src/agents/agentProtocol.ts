@@ -79,7 +79,7 @@ function protocolPrompt(opts: ClaudeArgsOptions): string {
   return opts.mcpConfigPath ? PROTOCOL_SYSTEM_PROMPT + '\n' + MCP_PROTOCOL_ADDENDUM : PROTOCOL_SYSTEM_PROMPT;
 }
 
-export interface ClaudeArgsOptions {
+interface ClaudeArgsOptions {
   /** Passed to `--permission-mode` (e.g. "acceptEdits", "bypassPermissions"). Omitted if empty. */
   permissionMode?: string;
   /** Any additional operator-supplied args appended after ours. */

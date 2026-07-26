@@ -15,7 +15,7 @@ export function prState(pr: PullRequest): PrState {
   return pr.merged ? 'merged' : 'open';
 }
 
-export interface PrHealth {
+interface PrHealth {
   /** True when the PR can't progress on its own and needs work or attention. */
   blocked: boolean;
   /** Human-readable reasons, most actionable first. Empty when healthy. */

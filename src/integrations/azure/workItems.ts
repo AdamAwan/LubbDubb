@@ -12,7 +12,7 @@ import type {
 } from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItemUpdate } from './azureDevOpsApi.js';
 
-export interface AzureWorkItemsOpts {
+interface AzureWorkItemsOpts {
   /** The Azure DevOps client, already bound to a single organization/project. */
   api: AzureDevOpsApi;
   store: Store;
