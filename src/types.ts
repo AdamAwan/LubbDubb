@@ -592,6 +592,51 @@ export interface Escalation {
   answeredAt: string | null;
 }
 
+/**
+ * What a human is being asked to authorize. Two today (issue #109 phase 1), both
+ * acts the auto-send gate already refuses to perform on its own: a drafted PR
+ * reply and a merge.
+ */
+export type ProposalKind = 'reply_draft' | 'merge';
+
+/** One-way: a proposal leaves `pending` exactly once, in one of two directions. */
+export type ProposalStatus = 'pending' | 'accepted' | 'rejected';
+
+/**
+ * An act the harness proposed and a human accepted or rejected — the object that
+ * was missing between "approve" and "the approved thing happens" (issue #109).
+ *
+ * An {@link Escalation} can record that a human *typed something*; only this can
+ * record that they said **yes**, which is the difference between an approval the
+ * harness can branch on and one that goes nowhere. It hangs off an escalation
+ * rather than replacing it: the escalation stays the inbox item and the routing
+ * mechanism, and a plain question still has no proposal at all.
+ */
+export interface Proposal {
+  id: string;
+  kind: ProposalKind;
+  /**
+   * The act's subject in the harness's own ref vocabulary (`pr:42:merge`,
+   * `pr:42:comment:c_7`). This is what the gate keys on, which is why it's a
+   * column and not something re-derived from the payload at read time.
+   */
+  ref: string;
+  status: ProposalStatus;
+  /**
+   * The validated action the executor was about to run, kept verbatim: accepting
+   * runs *that act*, not a re-derivation of it from the world as it is minutes later.
+   */
+  action: Action;
+  /** Free text alongside the verdict — never instead of it. */
+  note: string | null;
+  /** Who decided. Only `human` is written today; phase 2 folds `autoSend` in here. */
+  decidedBy: 'human' | 'auto_send' | null;
+  decidedAt: string | null;
+  /** The inbox item this hangs off, so answering and deciding stay one surface. */
+  escalationId: string | null;
+  createdAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Dispatcher output — the bounded action vocabulary
 // ---------------------------------------------------------------------------

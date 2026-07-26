@@ -1,19 +1,24 @@
 import { useState } from 'react';
-import type { Escalation } from '../types.js';
+import type { Escalation, Proposal } from '../types.js';
 import { relTime, linkify } from './util.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
 export function EscalationCard({
   escalation,
+  proposal,
   now,
   refUrls,
   onAnswer,
+  onDecide,
   onOpenAgent,
 }: {
   escalation: Escalation;
+  /** The act this item asks you to authorize, when it is a decision and not a question. */
+  proposal?: Proposal;
   now?: number;
   refUrls: Record<string, string>;
   onAnswer: (text: string) => Promise<unknown> | unknown;
+  onDecide?: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
   /** Open the originating agent's drawer for the full transcript. */
   onOpenAgent?: (agentId: string) => void;
 }) {
@@ -26,11 +31,20 @@ export function EscalationCard({
   // guess from wording. Fall back to the guess when it didn't say (the sentinel path).
   const offered = agentOptions(context.options);
   const quick = offered ?? quickAnswers(escalation.prompt);
+  // A decision, not a question. Free text can't be branched on — that is the
+  // whole reason the proposal exists — so the text box is replaced rather than
+  // supplemented: the note rides *with* the verdict instead of standing in for it.
+  const decidable = proposal?.status === 'pending' && onDecide ? proposal : null;
 
   return (
     <div className="card escalation">
       <div className="card-head">
         <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
+        {decidable && (
+          <span className="chip small warn" title="Accepting performs this act; nothing happens until you do">
+            needs your decision
+          </span>
+        )}
         {signal && <span className="chip small">{signal}</span>}
         <span className="muted small esc-time">{relTime(escalation.createdAt, now)}</span>
       </div>
@@ -65,7 +79,7 @@ export function EscalationCard({
         </button>
       ) : null}
 
-      {quick.length > 0 && (
+      {!decidable && quick.length > 0 && (
         <div className="esc-quick">
           {quick.map((q) => (
             <AsyncButton key={q} className="small" onClick={() => onAnswer(q)}>
@@ -75,23 +89,47 @@ export function EscalationCard({
         </div>
       )}
 
-      <form
-        className="reply"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const value = text.trim();
-          if (!value) return;
-          void send.run(async () => {
-            await onAnswer(value);
-            setText('');
-          });
-        }}
-      >
-        <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
-        <SubmitButton phase={send.phase} className="primary">
-          Send
-        </SubmitButton>
-      </form>
+      {decidable ? (
+        <div className="esc-decide">
+          <input
+            placeholder="Why (optional) — recorded either way"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <AsyncButton
+            className="primary"
+            title={decidable.kind === 'merge' ? 'Merge it now' : 'Send this reply now'}
+            onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined)}
+          >
+            {decidable.kind === 'merge' ? 'Approve merge' : 'Approve & send'}
+          </AsyncButton>
+          <AsyncButton
+            className="ghost"
+            title="Nothing goes out, and the harness won't ask again"
+            onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
+          >
+            Reject
+          </AsyncButton>
+        </div>
+      ) : (
+        <form
+          className="reply"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const value = text.trim();
+            if (!value) return;
+            void send.run(async () => {
+              await onAnswer(value);
+              setText('');
+            });
+          }}
+        >
+          <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
+          <SubmitButton phase={send.phase} className="primary">
+            Send
+          </SubmitButton>
+        </form>
+      )}
     </div>
   );
 }

@@ -158,7 +158,8 @@ test('merge_pr is escalated for approval by default (nothing merges autonomously
   const open = system.store.listOpenEscalations();
   assert.equal(open.length, 1, 'should escalate, not merge');
   assert.equal(open[0]!.type, 'approve_change');
-  assert.match(mergeDecision(system)!.detail, /escalated for merge approval/);
+  // Still escalated, now as a proposal the human can accept (which merges it).
+  assert.match(mergeDecision(system)!.detail, /proposed the merge for approval/);
   system.store.close();
 });
 

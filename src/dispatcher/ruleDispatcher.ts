@@ -13,6 +13,7 @@ import {
   type IssuePickupPolicy,
 } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
+import { mergeProposalRef, proposalHold } from '../proposals/proposals.js';
 import type { DispatchRuleId } from './rules.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { PLAN_FILE } from '../plans/planDocument.js';
@@ -329,7 +330,14 @@ export class RuleDispatcher implements Dispatcher {
         pr.mergeableState !== 'blocked' &&
         pr.mergeableState !== 'dirty' &&
         pr.unresolvedComments.every((c) => c.handled);
-      if (mergeReady) {
+      // A merge already put to a human is not put to them again: while the
+      // verdict on `pr:<n>:merge` stands — unanswered, or a "no" — this rule is
+      // held off that PR. Without it every pulse re-proposes the same merge and
+      // "Needs you" fills with copies of one question, which is what made the
+      // approval inert to begin with (issue #109). The pending item in the inbox
+      // is the visible state; there is no action to audit because none was taken.
+      const mergeHeld = proposalHold('merge', mergeProposalRef(pr.number), ctx.proposals ?? []);
+      if (mergeReady && !mergeHeld) {
         raw.push({
           type: 'merge_pr',
           prNumber: pr.number,

@@ -9,7 +9,8 @@ import type { AutoSendConfig } from '../config.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
-import type { Action, DecisionOutcome, Task } from '../types.js';
+import { mergeProposalRef, proposalHold, readProposedAct, replyProposalRef } from '../proposals/proposals.js';
+import type { Action, DecisionOutcome, Proposal, Task } from '../types.js';
 
 export interface ExecutorDeps {
   store: Store;
@@ -205,13 +206,29 @@ export class ActionExecutor {
             break;
           }
 
-          // Not eligible for auto-send: draft, then escalate for sign-off (v1 default).
+          // Not eligible for auto-send: draft it, and put it to a human as a
+          // proposal they can accept (which sends it) or reject.
+          const proposalRef = replyProposalRef(action.prNumber, action.commentId);
+          const heldBy = proposalHold('reply_draft', proposalRef, store.listProposals());
+          if (heldBy) {
+            record('skipped', `Reply on PR #${action.prNumber} was already put to you: ${heldBy}.`);
+            break;
+          }
           const esc = this.deps.escalations.create({
             type: 'review_reply',
             prompt: `Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
             context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft, confidence },
           });
-          record('executed', `Drafted PR reply and escalated for approval (${blockedBy}): ${esc.id}.`);
+          const proposal = store.createProposal({
+            kind: 'reply_draft',
+            ref: proposalRef,
+            action: action as unknown as Action,
+            escalationId: esc.id,
+          });
+          record(
+            'executed',
+            `Drafted PR reply and proposed it for approval (${blockedBy}): ${esc.id} / ${proposal.id}. Accepting sends it.`,
+          );
           break;
         }
 
@@ -245,15 +262,31 @@ export class ActionExecutor {
             break;
           }
 
-          // Not eligible for auto-merge: escalate for explicit human sign-off (v1 default).
+          // Not eligible for auto-merge: put it to a human as a proposal. Rule 3
+          // suppresses itself while that proposal stands, so this is asked once —
+          // but the check is repeated here because it must hold for *every* path
+          // that reaches the executor, the LLM dispatcher's included. One
+          // predicate, two call sites: the same discipline as the branch gate above.
+          const proposalRef = mergeProposalRef(action.prNumber);
+          const heldBy = proposalHold('merge', proposalRef, store.listProposals());
+          if (heldBy) {
+            record('skipped', `Merge of PR #${action.prNumber} was already put to you: ${heldBy}.`);
+            break;
+          }
           const esc = this.deps.escalations.create({
             type: 'approve_change',
             prompt: `PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
             context: { prNumber: action.prNumber, method: action.method, confidence },
           });
+          const proposal = store.createProposal({
+            kind: 'merge',
+            ref: proposalRef,
+            action: action as unknown as Action,
+            escalationId: esc.id,
+          });
           record(
             'executed',
-            `PR #${action.prNumber} is merge-ready; escalated for merge approval (${blockedBy}): ${esc.id}.`,
+            `PR #${action.prNumber} is merge-ready; proposed the merge for approval (${blockedBy}): ${esc.id} / ${proposal.id}. Accepting merges it.`,
           );
           break;
         }
@@ -282,6 +315,81 @@ export class ActionExecutor {
     }
 
     return summary;
+  }
+
+  /**
+   * Perform an act a human accepted (issue #109). Lives here rather than in the
+   * route handler for one reason: this is where the harness's outbound acts
+   * happen, so the `ActionSink` keeps one caller and the outcome lands in the
+   * decision log in the same shape as everything else — with the *human* named as
+   * the authority, which is the half of the audit trail that was missing.
+   *
+   * The cycle id is `human:<proposal id>` rather than a cycle's, the way
+   * `agent-lifecycle` already marks a decision made outside the pulse.
+   *
+   * The failure path mirrors the auto-send one exactly (`autoSendFailed` /
+   * `autoMergeFailed` context + a fresh escalation) instead of inventing a second
+   * one: an accepted act that can't be delivered must not evaporate. The proposal
+   * stays `accepted` — the human did accept — and, because a settled proposal no
+   * longer holds the gate, the next pulse re-proposes the act if the world still
+   * warrants it. That is the recovery, and it needs no new state to express.
+   */
+  async runAuthorized(proposal: Proposal): Promise<{ ok: boolean; detail: string }> {
+    const { store } = this.deps;
+    const cycleId = `human:${proposal.id}`;
+    const audit = (outcome: DecisionOutcome, detail: string): { ok: boolean; detail: string } => {
+      store.recordDecision({ cycleId, action: proposal.action, outcome, detail });
+      return { ok: outcome === 'executed', detail };
+    };
+
+    const read = readProposedAct(proposal);
+    if (!read.ok) return audit('rejected', `Cannot run the accepted proposal: ${read.error}.`);
+    const act = read.act;
+    // Named in the audit line, because "who authorized this" is the point of the
+    // record. Only `human` today; phase 2 gives `auto_send` the same sentence.
+    const by = proposal.decidedBy === 'human' ? 'you' : (proposal.decidedBy ?? 'an unrecorded decider');
+
+    try {
+      if (act.kind === 'merge') {
+        const res = await this.deps.sink.mergePr({ prNumber: act.prNumber, method: act.method });
+        return audit(
+          'executed',
+          `Merged PR #${act.prNumber} via ${act.method} — authorized by ${by} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
+        );
+      }
+      const res = await this.deps.sink.postPrReply({
+        prNumber: act.prNumber,
+        commentId: act.commentId,
+        body: act.body,
+      });
+      return audit(
+        'executed',
+        `Sent the reply on PR #${act.prNumber} — authorized by ${by} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
+      );
+    } catch (err) {
+      const message = (err as Error).message;
+      const esc =
+        act.kind === 'merge'
+          ? this.deps.escalations.create({
+              type: 'approve_change',
+              prompt: `You approved merging PR #${act.prNumber}, but the merge failed (${message}); merge it manually or wait for the harness to re-propose it.`,
+              context: { prNumber: act.prNumber, method: act.method, autoMergeFailed: true },
+            })
+          : this.deps.escalations.create({
+              type: 'review_reply',
+              prompt: `You approved this reply, but sending it failed (${message}); send it manually.\n\nDraft reply for PR #${act.prNumber}:\n\n${act.body}`,
+              context: {
+                prNumber: act.prNumber,
+                commentId: act.commentId,
+                draft: act.body,
+                autoSendFailed: true,
+              },
+            });
+      return audit(
+        'rejected',
+        `Approved ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
+      );
+    }
   }
 
   /** Create the task row and its working directory (worktree for code, scratch for desk). */

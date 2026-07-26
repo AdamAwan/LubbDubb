@@ -128,6 +128,9 @@ export class Harness extends EventEmitter {
       const plans = store.listPlans();
       const planParts = store.listAllPlanParts();
       const recentDecisions = store.listDecisions(200);
+      // Acts already put to a human: a rule that proposed one holds off while the
+      // verdict stands, so one question is asked once (issue #109).
+      const proposals = store.listProposals();
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
@@ -157,6 +160,7 @@ export class Harness extends EventEmitter {
         plans,
         planParts,
         recentDecisions,
+        proposals,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
       });

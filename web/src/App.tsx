@@ -100,6 +100,10 @@ export function App() {
   const liveAgents = state.agents.filter((a) => ['starting', 'running', 'waiting'].includes(a.status));
   const pastAgents = state.agents.filter((a) => !['starting', 'running', 'waiting'].includes(a.status));
   const openEscalations = state.escalations.filter((e) => e.status === 'open');
+  // The act an inbox item asks you to authorize, if it is one. Keyed by escalation
+  // so a decision-bearing card offers accept/reject instead of a text box — free
+  // text is exactly what the harness could never act on (issue #109).
+  const proposalFor = new Map((state.proposals ?? []).map((p) => [p.escalationId ?? '', p]));
   // Findings awaiting an operator's call — the count on the panel heading. A
   // finding never expires into work on its own, so this is the only nudge there is.
   const openFindings = (state.findings ?? []).filter((f) => f.status === 'open').length;
@@ -229,9 +233,13 @@ export function App() {
             <EscalationCard
               key={e.id}
               escalation={e}
+              proposal={proposalFor.get(e.id)}
               now={now}
               refUrls={state.refUrls}
               onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)}
+              onDecide={(id, verdict, note) =>
+                (verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)).then(refresh)
+              }
               onOpenAgent={(id) => setSelected(id)}
             />
           ))}
@@ -292,7 +300,13 @@ export function App() {
           </h2>
           <UpNext plan={state.upcoming ?? null} now={now} refUrls={state.refUrls} rules={state.dispatchRules} />
           <h2 className="feed-heading">Decision log</h2>
-          <DecisionLog decisions={state.decisions} now={now} refUrls={state.refUrls} rules={state.dispatchRules} />
+          <DecisionLog
+            decisions={state.decisions}
+            proposals={state.proposals}
+            now={now}
+            refUrls={state.refUrls}
+            rules={state.dispatchRules}
+          />
           <h2 className="feed-heading">Activity</h2>
           <ActivityFeed events={state.worldEvents} now={now} />
           <h2 className="feed-heading">

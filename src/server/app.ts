@@ -43,7 +43,7 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   // artifact route opts in because it reads files off disk.
   await app.register(rateLimit, { global: false });
 
-  const { store, connector, harness, agents, escalations, config, errors } = system;
+  const { store, connector, harness, agents, escalations, proposals, config, errors } = system;
   // The watch/ignore label pair the cockpit's toggles write and the gates read.
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
 
@@ -324,12 +324,47 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     const { id } = req.params as { id: string };
     const { response } = (req.body ?? {}) as { response?: string };
     if (!response) return reply.code(400).send({ error: 'response required' });
+    // An item carrying a pending proposal is a decision, not a question: free text
+    // cannot be branched on, so answering one here would settle the inbox item
+    // while leaving the proposal pending — which holds the rule that made it off
+    // that PR for good. Refuse and name the two routes that do settle it.
+    const pending = store.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
+    if (pending)
+      return reply.code(409).send({
+        error: `this item is a proposal (${pending.id}) — accept or reject it via /api/proposals/${pending.id}/accept|reject`,
+      });
     try {
       const result = escalations.answer(id, response);
       return { ok: true, ...result };
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
     }
+  });
+
+  // Accept a proposed act: the harness performs it, through the same `ActionSink`
+  // it would have used had auto-send been on — this is the wire between "approve"
+  // and "the approved thing happens" that issue #109 found missing. The verdict
+  // transition is one-way, so a double-click merges once and the second call 409s.
+  app.post('/api/proposals/:id/accept', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { note } = (req.body ?? {}) as { note?: unknown };
+    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
+    const result = await proposals.accept(id, note);
+    if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
+    hub.broadcast({ type: 'world:changed' });
+    return { ok: result.outcome !== 'failed', ...result };
+  });
+
+  // Reject it: nothing goes out, the reason is recorded, and the rule that
+  // proposed it does not ask again (see `proposalHold`).
+  app.post('/api/proposals/:id/reject', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { note } = (req.body ?? {}) as { note?: unknown };
+    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
+    const result = proposals.reject(id, note);
+    if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
+    hub.broadcast({ type: 'dirty' });
+    return { ok: true, ...result };
   });
 
   app.post('/api/agents/:id/respond', async (req, reply) => {
@@ -441,6 +476,10 @@ export function buildStateSnapshot(system: System) {
     // item that is *not* in the current world — a closed duplicate, say — so its
     // ref has to be resolved directly rather than looked up off the snapshot.
     const findings = store.listFindings();
+    // Acts put to a human. Read here for the same reason as findings: a proposal's
+    // ref (`pr:42:merge`) names the item its card links to, so it feeds the link
+    // map below as well as the cards themselves.
+    const proposals = store.listProposals();
     // Every file every agent wrote, read once: the drawer groups it by agent, and
     // the overlap detector below joins it *across* agents — the one question the
     // rows could always answer and nothing ever asked.
@@ -477,7 +516,7 @@ export function buildStateSnapshot(system: System) {
       pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? [])],
       issues: world.issues,
       taskBranches: tasks.map((t) => t.branch),
-      refs: findings.map((f) => f.ref),
+      refs: [...findings.map((f) => f.ref), ...proposals.map((p) => p.ref)],
       resolve: (ref) => connector.resolveRefUrl(ref),
     });
     return {
@@ -536,6 +575,11 @@ export function buildStateSnapshot(system: System) {
       // work only through `POST /api/findings/:id/promote`.
       findings,
       escalations: store.listEscalations(),
+      // Acts a human was asked to authorize (issue #109). The cockpit joins these
+      // to their escalation so a decision-bearing item gets accept/reject rather
+      // than a text box, and the decision log reads the settled ones as the human
+      // half of the audit trail.
+      proposals,
       decisions: store.listDecisions(100),
       // The "Up next" queue: the last cycle's ordered pickup plan with the
       // headroom cut (issue #69). A per-pulse projection — null until a cycle

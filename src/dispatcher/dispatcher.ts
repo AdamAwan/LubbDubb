@@ -1,4 +1,15 @@
-import type { Agent, Decision, Escalation, Job, Plan, PlanPart, PullRequest, Task, WorldSnapshot } from '../types.js';
+import type {
+  Agent,
+  Decision,
+  Escalation,
+  Job,
+  Plan,
+  PlanPart,
+  Proposal,
+  PullRequest,
+  Task,
+  WorldSnapshot,
+} from '../types.js';
 import type { ParseResult } from './actions.js';
 import type { DispatchRuleId } from './rules.js';
 
@@ -40,6 +51,13 @@ export interface DispatchContext {
   agentHeadroom: number;
   /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */
   recentDecisions: Decision[];
+  /**
+   * Acts already put to a human (issue #109), newest first. A rule that proposed
+   * an act must not propose it again while the human's verdict stands, or the
+   * inbox fills with duplicates of one question — see `proposalHold`. Absent/empty
+   * means nothing has been proposed, which is every deployment until one is.
+   */
+  proposals?: Proposal[];
 }
 
 /**
