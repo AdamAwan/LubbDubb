@@ -14,6 +14,7 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { findingJobRequest } from '../mcp/findings.js';
+import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
 /**
@@ -423,6 +424,10 @@ export function buildStateSnapshot(system: System) {
     // item that is *not* in the current world — a closed duplicate, say — so its
     // ref has to be resolved directly rather than looked up off the snapshot.
     const findings = store.listFindings();
+    // Every file every agent wrote, read once: the drawer groups it by agent, and
+    // the overlap detector below joins it *across* agents — the one question the
+    // rows could always answer and nothing ever asked.
+    const files = store.listAllFiles();
     // The plan graph, read once and shared by the per-issue pickup verdict below
     // and the snapshot itself, so the chip and the panel can't disagree.
     const plans = store.listPlans();
@@ -502,7 +507,13 @@ export function buildStateSnapshot(system: System) {
       // Every file agents wrote (captured by the file-events hook), grouped by
       // agentId in the drawer's "files changed" list; the report-like ones also
       // appear above as artifact chips.
-      files: store.listAllFiles(),
+      files,
+      // Paths two agents wrote while both were running (issue #113). The three
+      // dispatch gates are complete for what they see, and origin/branch are 1:1
+      // for every world-driven rule — but none of them can see what an agent does
+      // once it is running. This is that blind spot, read off rows we already have
+      // rather than off an advisory claim an agent has to remember to make.
+      overlaps: detectFileOverlaps({ files, agents: store.listAgents(), tasks }),
       // Things agents noticed outside their own tasks (the `report_finding` tool).
       // Operator-facing only: nothing in the dispatcher reads them, and one becomes
       // work only through `POST /api/findings/:id/promote`.
