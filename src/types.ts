@@ -629,7 +629,12 @@ export interface Proposal {
   action: Action;
   /** Free text alongside the verdict — never instead of it. */
   note: string | null;
-  /** Who decided. Only `human` is written today; phase 2 folds `autoSend` in here. */
+  /**
+   * Who decided. `human` is a click in the cockpit; `auto_send` is the harness
+   * accepting its own proposal because the confidence gate cleared it (phase 2) —
+   * one authorization representation rather than two, so the audit log answers
+   * "who authorized this outbound act" the same way for both.
+   */
   decidedBy: 'human' | 'auto_send' | null;
   decidedAt: string | null;
   /** The inbox item this hangs off, so answering and deciding stay one surface. */

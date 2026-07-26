@@ -43,6 +43,41 @@ function replyDecision(system: ReturnType<typeof buildSystem>) {
   return system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
 }
 
+/** A sink that counts what actually went out, so "exactly one call" is observable. */
+function countingSink(fail = false): ActionSink & { merges: number[]; replies: number[] } {
+  const merges: number[] = [];
+  const replies: number[] = [];
+  return {
+    merges,
+    replies,
+    async mergePr({ prNumber }) {
+      merges.push(prNumber);
+      if (fail) throw new Error('merge conflict');
+      return { ok: true, ref: `pr:${prNumber}` };
+    },
+    async postPrReply({ prNumber }) {
+      replies.push(prNumber);
+      if (fail) throw new Error('network down');
+      return { ok: true, ref: `pr:${prNumber}` };
+    },
+    async setPrLabel() {
+      return { ok: true };
+    },
+    async setIssueLabel() {
+      return { ok: true };
+    },
+    async setStoryLabel() {
+      return { ok: true };
+    },
+    async setWorkItemState() {
+      return { ok: true };
+    },
+    async upsertIssueComment() {
+      return { ok: true };
+    },
+  };
+}
+
 test('auto-send is off by default: even a 1.0-confidence reply is drafted and escalated', async () => {
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
   await system.executor.execute('cyc', replyPlan(1.0));
@@ -51,46 +86,131 @@ test('auto-send is off by default: even a 1.0-confidence reply is drafted and es
   assert.equal(open.length, 1, 'should escalate, not send');
   assert.equal(open[0]!.type, 'review_reply');
   assert.match(replyDecision(system)!.detail, /auto-send disabled/);
+  // The safety default, in the phase-2 vocabulary: nobody has authorized it, so
+  // the proposal is pending and carries no decider at all.
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.status, 'pending');
+  assert.equal(proposal!.decidedBy, null);
   system.store.close();
 });
 
 test('enabled + confidence at/above threshold auto-sends through the sink', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
-  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const sink = countingSink();
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(0.9));
 
   assert.equal(system.store.listOpenEscalations().length, 0, 'nothing to escalate — it was sent');
-  assert.match(replyDecision(system)!.detail, /Auto-sent reply on PR #42/);
+  assert.deepEqual(sink.replies, [42], 'exactly one send');
+  assert.match(replyDecision(system)!.detail, /Sent the reply on PR #42 — authorized by auto-send/);
   assert.match(replyDecision(system)!.detail, /ref=/);
   system.store.close();
 });
 
+test('an auto-sent act is recorded as an accepted proposal decided by auto_send', async () => {
+  const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
+  const sink = countingSink();
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  await system.executor.execute('cyc', mergePlan(0.9));
+
+  // The machine verdict is the same object the human verdict is, which is the
+  // whole of phase 2: one authorization representation, queryable either way.
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.kind, 'merge');
+  assert.equal(proposal!.ref, 'pr:42:merge');
+  assert.equal(proposal!.status, 'accepted');
+  assert.equal(proposal!.decidedBy, 'auto_send');
+  assert.ok(proposal!.decidedAt, 'an accepted proposal is dated, whoever accepted it');
+  assert.equal(proposal!.note, 'confidence 0.90 ≥ 0.85 threshold', 'the decider records its own reason');
+  assert.equal(proposal!.escalationId, null, 'nothing was asked of anyone');
+  assert.deepEqual(sink.merges, [42], 'exactly one merge');
+  system.store.close();
+});
+
+test('an auto-sent act stays under its cycle and is never attributed to the operator', async () => {
+  const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink: countingSink() });
+  await system.executor.execute('cyc-7', mergePlan(0.9));
+
+  const audited = system.store.listDecisions().find((d) => d.action.type === 'merge_pr')!;
+  // Auto-send decides *inside* the pulse, so the row groups with the cycle that
+  // produced the action. The cockpit badges "you · accepted" off the `human:`
+  // prefix, so carrying it here would read as something the operator clicked.
+  assert.equal(audited.cycleId, 'cyc-7');
+  assert.equal(audited.outcome, 'executed');
+  assert.match(audited.detail, /authorized by auto-send \(confidence 0\.90 ≥ 0\.85 threshold\)/);
+  assert.equal(
+    system.store.listDecisions().filter((d) => d.cycleId.startsWith('human:')).length,
+    0,
+    'no human decided anything here',
+  );
+  system.store.close();
+});
+
+test('a settled act is not re-proposed every pulse', async () => {
+  const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
+  const sink = countingSink();
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+
+  // The same merge-ready world three pulses running: the world has not caught up
+  // with the merge yet, which is the normal case for a pulse or two. An accepted
+  // proposal holds its own ref for a settle window precisely so this does not
+  // write a row per pulse into a list the gate itself re-reads.
+  await system.executor.execute('cyc-1', mergePlan(0.9));
+  await system.executor.execute('cyc-2', mergePlan(0.9));
+  await system.executor.execute('cyc-3', mergePlan(0.9));
+
+  assert.equal(system.store.listProposals().length, 1, 'one act, one proposal');
+  assert.deepEqual(sink.merges, [42], 'and one merge');
+  const skipped = system.store.listDecisions().filter((d) => d.outcome === 'skipped');
+  assert.equal(skipped.length, 2);
+  assert.match(skipped[0]!.detail, /Skipped merge of PR #42: already authorized by auto-send/);
+  system.store.close();
+});
+
+/**
+ * A gate that refuses is not a rejection: nothing went out, and the act is put to
+ * a human as a pending proposal with no decider yet. Asserted for every way the
+ * gate can refuse, because that is the safety default the README promises.
+ */
+function assertNothingSentAndAsked(system: ReturnType<typeof buildSystem>, sink: { replies: number[] }) {
+  assert.deepEqual(sink.replies, [], 'nothing may go out unauthorized');
+  assert.equal(system.store.listOpenEscalations().length, 1);
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.status, 'pending');
+  assert.equal(proposal!.decidedBy, null);
+  assert.ok(proposal!.escalationId, 'a pending proposal hangs off its inbox item');
+}
+
 test('enabled but below threshold falls back to draft + escalate', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
-  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const sink = countingSink();
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(0.5));
 
-  assert.equal(system.store.listOpenEscalations().length, 1);
+  assertNothingSentAndAsked(system, sink);
   assert.match(replyDecision(system)!.detail, /confidence 0\.50 < 0\.85 threshold/);
   system.store.close();
 });
 
 test('missing confidence is treated as 0 and never auto-sends', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
-  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const sink = countingSink();
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(undefined));
 
-  assert.equal(system.store.listOpenEscalations().length, 1);
+  assertNothingSentAndAsked(system, sink);
   assert.match(replyDecision(system)!.detail, /confidence 0\.00 < 0\.85 threshold/);
   system.store.close();
 });
 
 test('action type not in the allow-list is escalated even when confident', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: [] });
-  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const sink = countingSink();
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(0.99));
 
-  assert.equal(system.store.listOpenEscalations().length, 1);
+  assertNothingSentAndAsked(system, sink);
   assert.match(replyDecision(system)!.detail, /not in allowed auto-send actions/);
   system.store.close();
 });
@@ -126,7 +246,14 @@ test('a send failure never drops the reply — it falls back to escalation', asy
   const open = system.store.listOpenEscalations();
   assert.equal(open.length, 1, 'failed send must still surface for a human');
   assert.equal(open[0]!.context.autoSendFailed, true);
-  assert.match(replyDecision(system)!.detail, /Auto-send to PR #42 failed \(network down\)/);
+  assert.match(open[0]!.prompt, /Auto-send authorized this reply, but sending it failed \(network down\)/);
+  assert.match(replyDecision(system)!.detail, /Authorized reply on PR #42 failed \(network down\)/);
+  // The proposal reflects the attempt: it *was* authorized, and the send failing
+  // does not un-authorize it. Once the settle window lapses the gate lets the act
+  // be proposed again if the world still warrants it — no new state for that.
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.status, 'accepted');
+  assert.equal(proposal!.decidedBy, 'auto_send');
   system.store.close();
 });
 
@@ -171,7 +298,7 @@ test('merge_pr auto-merges when enabled, allow-listed and confident', async () =
   await system.executor.execute('cyc', mergePlan(0.9));
 
   assert.equal(system.store.listOpenEscalations().length, 0, 'nothing to escalate — it was merged');
-  assert.match(mergeDecision(system)!.detail, /Auto-merged PR #42 via squash/);
+  assert.match(mergeDecision(system)!.detail, /Merged PR #42 via squash — authorized by auto-send/);
   assert.equal((await system.connector.getState()).pullRequests[0]!.merged, true);
   system.store.close();
 });
@@ -207,7 +334,8 @@ test('a merge failure never merges silently — it escalates for approval', asyn
   const open = system.store.listOpenEscalations();
   assert.equal(open.length, 1, 'failed merge must still surface for a human');
   assert.equal(open[0]!.context.autoMergeFailed, true);
-  assert.match(mergeDecision(system)!.detail, /Auto-merge of PR #42 failed \(merge conflict\)/);
+  assert.match(open[0]!.prompt, /Auto-send authorized merging PR #42, but the merge failed \(merge conflict\)/);
+  assert.match(mergeDecision(system)!.detail, /Authorized merge of PR #42 failed \(merge conflict\)/);
   system.store.close();
 });
 
