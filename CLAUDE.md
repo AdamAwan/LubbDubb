@@ -129,9 +129,13 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     re-asking is the duplicate that filled the inbox, **rejected because a "no" that expires next
     pulse means "not this second"**, which is worse than not asking (the operator can't make the
     question stop except by doing the act by hand). Phase 4 turns that into a cooldown that re-asks
-    on new signal; until then a no is durable, which is the safe direction. `accepted` holds nothing
-    — that is deliberately what lets a _failed_ accept be re-proposed next pulse, so the failure
-    path needs no new state. Asked in **two places off one predicate** (the jobs 409/defer pattern):
+    on new signal; until then a no is durable, which is the safe direction. `accepted` holds for a
+    **bounded settle window** (`SETTLE_WINDOW_MS`, deliberately the same 15 min as
+    `DEFAULT_COOLDOWN` — it is the same statement, "already attempted recently") and then stops:
+    long enough that a successful act is not re-proposed while the world catches up, short enough
+    that a _failed_ one still is. That window is phase 2's doing and is the one behaviour the fold
+    cost — see the phase 2 entry below. Asked in **two places off one predicate** (the jobs
+    409/defer pattern):
     rule 3 suppresses itself, and the executor refuses a duplicate whatever produced it — the LLM
     dispatcher's `reply_on_pr` included, since prose-driven actions can't be gated rule-side. The
     dispatcher reads it from `DispatchContext.proposals`, wired in `harness.ts` from
@@ -152,9 +156,53 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     auto-send fallback exactly (`autoSendFailed`/`autoMergeFailed` context + a fresh escalation)
     rather than inventing a second one; the proposal stays `accepted` (you did accept) and the
     now-unheld gate lets the next pulse re-propose if the world still warrants it.
-  - Phases 2–4 (`autoSend` as `decidedBy: 'auto_send'`, `planning.requireApproval`, rejection
-    feeding cooldown) are **not** here; `decidedBy` is typed for the first of them and nothing else
-    anticipates them. Tests: `test/proposals.test.ts`.
+  - **Phase 2 — `autoSend` is a decider, not a parallel system.** The gate answered "may this act go
+    out?" from a confidence threshold and an allow-list: the same question a human answers by
+    clicking accept, reached a second way, sharing no representation with it. And when it _passed_,
+    the executor called the sink itself, so phase 1's "the `ActionSink` keeps one caller" had two
+    callers again. Both now converge on `ActionExecutor.authorize`, the one place an outbound act is
+    authorized — it hold-checks, asks the gate, and on a yes **writes the proposal and immediately
+    settles it** `accepted` / `decidedBy: 'auto_send'` (two store calls, through the same one-way
+    `decideProposal` a click uses), then performs it via `runAuthorized`. `reply_on_pr` and
+    `merge_pr` differ only in `kind`/`ref`/escalation payload, so they are one path now, not two
+    mirrored ones. Four things carry it:
+  - **The gate decides only in the affirmative.** `autoSendVerdict` returns `authorized` plus the
+    note that becomes the decider's reason on the row (`confidence 0.90 ≥ 0.85 threshold`, which
+    `runAuthorized` then quotes verbatim), or `blockedBy` plus the reason the escalation quotes. It
+    never returns a **rejection**: rejection is durable, so a machine "no" would suppress the human
+    ask for good — blocked means "not mine to authorize", which is what a pending proposal already
+    says. Order matters equally: the **hold is asked before the gate**, so a standing verdict
+    governs regardless of which decider would answer next.
+  - **The decider → cycle id → badge chain is decided once**, in the pure `authorityOf`, which takes
+    the proposal plus the pulse's cycle id and returns the `{cycleId, by, approved}` triple: where
+    the audit row groups, how the authority reads in the line, how the failure escalation opens its
+    sentence. A human
+    accept is outside the pulse (`human:<proposal id>`); auto-send accepts _inside_ a cycle and
+    keeps that cycle's id, so its row stays grouped with the pulse that produced the action **and
+    cannot carry the `human:` prefix** that `DecisionLog.tsx` badges "you · accepted" off. One
+    function, not three string checks that can drift. The cockpit deliberately leaves an auto-sent
+    row unbadged — that is the harness acting on its own, the already-unlabelled case — with the
+    authority named in the detail line instead.
+  - **Accepted had to start holding something** (the settle window above). Holding nothing was right
+    while only a click could accept: the sole thing an un-held ref could cause was re-proposing an
+    act whose send _failed_, which is exactly what should happen. Auto-send accepts on the pulse,
+    and a merge that succeeded is still an open PR in the snapshot until the next fetch, so an
+    un-held ref would write a fresh accepted row **every pulse** into a list the gate itself re-reads
+    unbounded. Not a cost worth paying for the failure path — so the failure path gets a bounded
+    window rather than nothing, and a failed act still escalates the instant it fails, so nobody is
+    waiting on the gate to find out.
+  - **The operator-facing string is chosen, not inherited.** `decidedByLabel` renders `human` as
+    **you** and `auto_send` as **auto-send** everywhere: the audit line ("authorized by auto-send
+    (confidence 0.90 ≥ 0.85 threshold)"), the hold reason, and the failure prompt ("Auto-send
+    authorized merging PR #42, but the merge failed"). The old wording ("Auto-sent reply on PR #42",
+    "Auto-merged PR #42 via squash") is gone _because_ the paths converged; the behaviours those
+    lines guarded are unchanged and still asserted. One outcome changed honestly: a failed
+    auto-send audits as `rejected` now, not `executed` — the act did not go out — with the same
+    `autoSendFailed`/`autoMergeFailed` escalation as before.
+  - `autoSend` stays **off by default** and phase 2 changes nothing about _what_ it may do, so the
+    README's safety guarantee holds literally. Phases 3–4 (`planning.requireApproval`, rejection
+    feeding cooldown) are **not** here and nothing anticipates them. Tests:
+    `test/proposals.test.ts`, `test/autoSend.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —

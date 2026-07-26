@@ -187,7 +187,7 @@ test('the executor refuses a duplicate proposal even when the dispatcher gate is
   assert.equal(system.store.listProposals().length, 1);
   assert.equal(system.store.listOpenEscalations().length, 1);
   const skipped = system.store.listDecisions().find((d) => d.outcome === 'skipped' && d.action.type === 'merge_pr');
-  assert.match(skipped!.detail, /already put to you: awaiting your accept\/reject/);
+  assert.match(skipped!.detail, /Skipped merge of PR #42: awaiting your accept\/reject/);
   system.store.close();
 });
 

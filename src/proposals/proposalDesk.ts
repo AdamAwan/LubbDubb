@@ -15,6 +15,13 @@ export interface DecideResult {
  * Where a human's verdict is applied (issue #109). Small on purpose — the three
  * things it does are the three the issue says have to hold:
  *
+ * It is deliberately only the *human* desk. Auto-send settles its own proposals
+ * in the executor, on the pulse (issue #109 phase 2), because there is no inbox
+ * item to close and no route to answer — but it settles them with the same
+ * one-way transition and runs them through the same
+ * {@link ActionExecutor.runAuthorized}, so "who authorized this" has one answer
+ * shape whichever decider gave it.
+ *
  * 1. **One-way transition.** The `pending → accepted | rejected` move is a
  *    compare-and-set in the store, so accepting twice performs the act once. The
  *    second call finds nothing pending and gets `null`, exactly as a second
@@ -42,8 +49,10 @@ export class ProposalDesk {
     const proposal = this.store.decideProposal(id, 'accepted', note?.trim() || null, 'human');
     if (!proposal) return null;
     this.closeEscalation(proposal, `Accepted${proposal.note ? `: ${proposal.note}` : '.'}`);
+    // No cycle id: a human decides outside the pulse, and `runAuthorized` records
+    // it as such. Auto-send is the caller that passes one (see `ActionExecutor`).
     const run = await this.executor.runAuthorized(proposal);
-    return { proposal, outcome: run.ok ? 'performed' : 'failed', detail: run.detail };
+    return { proposal, outcome: run.outcome === 'executed' ? 'performed' : 'failed', detail: run.detail };
   }
 
   /**

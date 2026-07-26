@@ -43,6 +43,12 @@ export function DecisionLog({
   // A human-authorized act is recorded under the cycle id `human:<proposal id>`,
   // the way lifecycle bookkeeping uses `agent-lifecycle` — so the link back to who
   // decided (and what they said about it) needs no column on the decisions table.
+  //
+  // An act *auto-send* authorized also carries a proposal now (issue #109 phase 2),
+  // but it is settled on the pulse and stays under that cycle's id — so it does not
+  // match here and is not badged as yours. That is the intent, not an omission: it
+  // is the harness acting on its own, the unlabelled case below, and its own
+  // authority is named in the detail line ("authorized by auto-send").
   const byId = new Map((proposals ?? []).map((p) => [p.id, p]));
   const deciderOf = (d: Decision): Proposal | undefined =>
     d.cycleId.startsWith('human:') ? byId.get(d.cycleId.slice('human:'.length)) : undefined;

@@ -9,8 +9,14 @@ import type { AutoSendConfig } from '../config.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
-import { mergeProposalRef, proposalHold, readProposedAct, replyProposalRef } from '../proposals/proposals.js';
-import type { Action, DecisionOutcome, Proposal, Task } from '../types.js';
+import {
+  authorityOf,
+  mergeProposalRef,
+  proposalHold,
+  readProposedAct,
+  replyProposalRef,
+} from '../proposals/proposals.js';
+import type { Action, DecisionOutcome, Proposal, ProposalKind, Task } from '../types.js';
 
 export interface ExecutorDeps {
   store: Store;
@@ -68,11 +74,14 @@ export class ActionExecutor {
     let liveCount = store.countLiveAgents();
 
     for (const action of plan.actions) {
-      const record = (outcome: DecisionOutcome, detail: string): void => {
-        store.recordDecision({ cycleId, action: action as unknown as Action, outcome, detail });
+      const tally = (outcome: DecisionOutcome): void => {
         if (outcome === 'executed') summary.executed += 1;
         else if (outcome === 'deferred') summary.deferred += 1;
         else if (outcome === 'rejected') summary.rejected += 1;
+      };
+      const record = (outcome: DecisionOutcome, detail: string): void => {
+        store.recordDecision({ cycleId, action: action as unknown as Action, outcome, detail });
+        tally(outcome);
       };
 
       switch (action.type) {
@@ -167,127 +176,14 @@ export class ActionExecutor {
           break;
         }
 
-        case 'reply_on_pr': {
-          // Absent confidence means "no confidence stated" -> treat as 0 -> never auto-send.
-          const confidence = action.confidence ?? 0;
-          const gate = this.deps.autoSend;
-          const blockedBy = autoSendBlockedBy(gate, 'reply_on_pr', confidence);
-
-          if (!blockedBy) {
-            // Confident enough and enabled: actually send it through the sink.
-            try {
-              const res = await this.deps.sink.postPrReply({
-                prNumber: action.prNumber,
-                commentId: action.commentId,
-                body: action.draft,
-              });
-              record(
-                'executed',
-                `Auto-sent reply on PR #${action.prNumber} (confidence ${confidence.toFixed(2)} ≥ ${gate.confidenceThreshold} threshold).${res.ref ? ` ref=${res.ref}` : ''}`,
-              );
-            } catch (err) {
-              // Send failed — never drop the reply; fall back to draft + escalate.
-              const esc = this.deps.escalations.create({
-                type: 'review_reply',
-                prompt: `Auto-send failed (${(err as Error).message}); review and send manually.\n\nDraft reply for PR #${action.prNumber}:\n\n${action.draft}`,
-                context: {
-                  prNumber: action.prNumber,
-                  commentId: action.commentId,
-                  draft: action.draft,
-                  confidence,
-                  autoSendFailed: true,
-                },
-              });
-              record(
-                'executed',
-                `Auto-send to PR #${action.prNumber} failed (${(err as Error).message}); drafted and escalated for approval: ${esc.id}.`,
-              );
-            }
-            break;
-          }
-
-          // Not eligible for auto-send: draft it, and put it to a human as a
-          // proposal they can accept (which sends it) or reject.
-          const proposalRef = replyProposalRef(action.prNumber, action.commentId);
-          const heldBy = proposalHold('reply_draft', proposalRef, store.listProposals());
-          if (heldBy) {
-            record('skipped', `Reply on PR #${action.prNumber} was already put to you: ${heldBy}.`);
-            break;
-          }
-          const esc = this.deps.escalations.create({
-            type: 'review_reply',
-            prompt: `Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
-            context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft, confidence },
-          });
-          const proposal = store.createProposal({
-            kind: 'reply_draft',
-            ref: proposalRef,
-            action: action as unknown as Action,
-            escalationId: esc.id,
-          });
-          record(
-            'executed',
-            `Drafted PR reply and proposed it for approval (${blockedBy}): ${esc.id} / ${proposal.id}. Accepting sends it.`,
-          );
-          break;
-        }
-
+        case 'reply_on_pr':
         case 'merge_pr': {
-          // Merging is side-effectful, so it runs through the same auto-send gate
-          // as reply_on_pr: send only when enabled, allow-listed, and confident;
-          // otherwise escalate for a human to approve the merge.
-          const confidence = action.confidence ?? 0;
-          const gate = this.deps.autoSend;
-          const blockedBy = autoSendBlockedBy(gate, 'merge_pr', confidence);
-
-          if (!blockedBy) {
-            try {
-              const res = await this.deps.sink.mergePr({ prNumber: action.prNumber, method: action.method });
-              record(
-                'executed',
-                `Auto-merged PR #${action.prNumber} via ${action.method} (confidence ${confidence.toFixed(2)} ≥ ${gate.confidenceThreshold} threshold).${res.ref ? ` ref=${res.ref}` : ''}`,
-              );
-            } catch (err) {
-              // Merge failed — surface it for a human rather than silently dropping it.
-              const esc = this.deps.escalations.create({
-                type: 'approve_change',
-                prompt: `Auto-merge failed (${(err as Error).message}); review and merge PR #${action.prNumber} manually.`,
-                context: { prNumber: action.prNumber, method: action.method, confidence, autoMergeFailed: true },
-              });
-              record(
-                'executed',
-                `Auto-merge of PR #${action.prNumber} failed (${(err as Error).message}); escalated for approval: ${esc.id}.`,
-              );
-            }
-            break;
-          }
-
-          // Not eligible for auto-merge: put it to a human as a proposal. Rule 3
-          // suppresses itself while that proposal stands, so this is asked once —
-          // but the check is repeated here because it must hold for *every* path
-          // that reaches the executor, the LLM dispatcher's included. One
-          // predicate, two call sites: the same discipline as the branch gate above.
-          const proposalRef = mergeProposalRef(action.prNumber);
-          const heldBy = proposalHold('merge', proposalRef, store.listProposals());
-          if (heldBy) {
-            record('skipped', `Merge of PR #${action.prNumber} was already put to you: ${heldBy}.`);
-            break;
-          }
-          const esc = this.deps.escalations.create({
-            type: 'approve_change',
-            prompt: `PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
-            context: { prNumber: action.prNumber, method: action.method, confidence },
-          });
-          const proposal = store.createProposal({
-            kind: 'merge',
-            ref: proposalRef,
-            action: action as unknown as Action,
-            escalationId: esc.id,
-          });
-          record(
-            'executed',
-            `PR #${action.prNumber} is merge-ready; proposed the merge for approval (${blockedBy}): ${esc.id} / ${proposal.id}. Accepting merges it.`,
-          );
+          const outbound = await this.authorize(cycleId, action);
+          // The authorized path audits itself, under this same cycle id and
+          // through the one function that performs an authorized act — so there
+          // is nothing left to write, only to count.
+          if (outbound.recorded) tally(outbound.outcome);
+          else record(outbound.outcome, outbound.detail);
           break;
         }
 
@@ -318,43 +214,133 @@ export class ActionExecutor {
   }
 
   /**
-   * Perform an act a human accepted (issue #109). Lives here rather than in the
+   * The one place an outbound act is authorized (issue #109 phase 2). Both PR
+   * acts the harness can publish — a drafted reply and a merge — come through
+   * here, and so do both authorities.
+   *
+   * Before this, "may this go out?" was answered twice over: a human clicked
+   * accept on a `Proposal` and the act ran through {@link runAuthorized}, or the
+   * confidence gate said yes and the executor called the sink itself. Two answers
+   * to one question, and no code could tell they were the same question — so an
+   * auto-merged PR's only record of its authority was a threshold quoted in
+   * prose. Auto-send is now a decider on the same record: the proposal is written
+   * first, the gate settles it as `auto_send`, and the act runs down the same path
+   * a human accept takes. The audit log answers "who authorized this" one way.
+   *
+   * The order matters and is the point: the **gate is asked after the hold**, so a
+   * standing verdict (a pending question, a rejection you made, an act just
+   * authorized) governs regardless of which decider would answer next. And a
+   * blocked gate is emphatically **not** a `rejected` verdict — a rejection is
+   * durable and would suppress the human ask for good. Blocked means "not mine to
+   * authorize", which is exactly what a pending proposal says.
+   */
+  private async authorize(
+    cycleId: string,
+    action: ValidatedAction & { type: 'reply_on_pr' | 'merge_pr' },
+  ): Promise<{ outcome: DecisionOutcome; detail: string; recorded: boolean }> {
+    const { store } = this.deps;
+    const merge = action.type === 'merge_pr';
+    const kind: ProposalKind = merge ? 'merge' : 'reply_draft';
+    const ref = merge ? mergeProposalRef(action.prNumber) : replyProposalRef(action.prNumber, action.commentId);
+    const subject = merge ? `merge of PR #${action.prNumber}` : `reply on PR #${action.prNumber}`;
+
+    // Rule 3 suppresses itself while a merge proposal stands, so on the default
+    // path this is asked once — but it is repeated here because it must hold for
+    // *every* path that reaches the executor, the LLM dispatcher's prose-composed
+    // `reply_on_pr` included. One predicate, two call sites: the same discipline
+    // as the branch gate above.
+    const heldBy = proposalHold(kind, ref, store.listProposals());
+    if (heldBy) return { outcome: 'skipped', detail: `Skipped ${subject}: ${heldBy}.`, recorded: false };
+
+    // Absent confidence means "no confidence stated" -> treat as 0 -> never auto-send.
+    const confidence = action.confidence ?? 0;
+    const verdict = autoSendVerdict(this.deps.autoSend, action.type, confidence);
+
+    if (verdict.authorized) {
+      const proposal = store.createProposal({
+        kind,
+        ref,
+        action: action as unknown as Action,
+        // No inbox item: nothing is being asked of anyone. An escalation appears
+        // only if the act then fails, which is the fallback `runAuthorized` owns.
+        escalationId: null,
+      });
+      // The row was created `pending` one statement ago, so this compare-and-set
+      // always wins; `?? proposal` is the type narrowing, not a fallback path.
+      const accepted = store.decideProposal(proposal.id, 'accepted', verdict.note, 'auto_send') ?? proposal;
+      const run = await this.runAuthorized(accepted, cycleId);
+      return { ...run, recorded: true };
+    }
+
+    // Not the harness's to authorize: draft it and put it to a human as a
+    // proposal they can accept (which performs it) or reject.
+    const esc = this.deps.escalations.create(
+      merge
+        ? {
+            type: 'approve_change',
+            prompt: `PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
+            context: { prNumber: action.prNumber, method: action.method, confidence },
+          }
+        : {
+            type: 'review_reply',
+            prompt: `Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
+            context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft, confidence },
+          },
+    );
+    const proposal = store.createProposal({ kind, ref, action: action as unknown as Action, escalationId: esc.id });
+    return {
+      outcome: 'executed',
+      detail: merge
+        ? `PR #${action.prNumber} is merge-ready; proposed the merge for approval (${verdict.blockedBy}): ${esc.id} / ${proposal.id}. Accepting merges it.`
+        : `Drafted PR reply and proposed it for approval (${verdict.blockedBy}): ${esc.id} / ${proposal.id}. Accepting sends it.`,
+      recorded: false,
+    };
+  }
+
+  /**
+   * Perform an act that was authorized (issue #109). Lives here rather than in the
    * route handler for one reason: this is where the harness's outbound acts
    * happen, so the `ActionSink` keeps one caller and the outcome lands in the
-   * decision log in the same shape as everything else — with the *human* named as
-   * the authority, which is the half of the audit trail that was missing.
+   * decision log in the same shape as everything else — with the authority named,
+   * which is the half of the audit trail that was missing.
    *
-   * The cycle id is `human:<proposal id>` rather than a cycle's, the way
-   * `agent-lifecycle` already marks a decision made outside the pulse.
+   * Who authorized it, where the row is grouped and how the operator reads it all
+   * come from {@link authorityOf}, which is the only thing that branches on the
+   * decider. A human accept is recorded outside the pulse as `human:<proposal
+   * id>`; auto-send accepted *during* a cycle, so it keeps that cycle's id and
+   * stays grouped with the pulse that produced the action.
    *
-   * The failure path mirrors the auto-send one exactly (`autoSendFailed` /
-   * `autoMergeFailed` context + a fresh escalation) instead of inventing a second
-   * one: an accepted act that can't be delivered must not evaporate. The proposal
-   * stays `accepted` — the human did accept — and, because a settled proposal no
-   * longer holds the gate, the next pulse re-proposes the act if the world still
-   * warrants it. That is the recovery, and it needs no new state to express.
+   * The failure path is one path for both deciders (`autoSendFailed` /
+   * `autoMergeFailed` context + a fresh escalation): an authorized act that can't
+   * be delivered must not evaporate. The proposal stays `accepted` — it *was*
+   * accepted — and once its settle window lapses the gate re-proposes the act if
+   * the world still warrants it. That is the recovery, and it needs no new state.
    */
-  async runAuthorized(proposal: Proposal): Promise<{ ok: boolean; detail: string }> {
+  async runAuthorized(
+    proposal: Proposal,
+    pulseCycleId?: string,
+  ): Promise<{ outcome: DecisionOutcome; detail: string }> {
     const { store } = this.deps;
-    const cycleId = `human:${proposal.id}`;
-    const audit = (outcome: DecisionOutcome, detail: string): { ok: boolean; detail: string } => {
+    const { cycleId, by, approved } = authorityOf(proposal, pulseCycleId ?? null);
+    const audit = (outcome: DecisionOutcome, detail: string): { outcome: DecisionOutcome; detail: string } => {
       store.recordDecision({ cycleId, action: proposal.action, outcome, detail });
-      return { ok: outcome === 'executed', detail };
+      return { outcome, detail };
     };
 
     const read = readProposedAct(proposal);
     if (!read.ok) return audit('rejected', `Cannot run the accepted proposal: ${read.error}.`);
     const act = read.act;
-    // Named in the audit line, because "who authorized this" is the point of the
-    // record. Only `human` today; phase 2 gives `auto_send` the same sentence.
-    const by = proposal.decidedBy === 'human' ? 'you' : (proposal.decidedBy ?? 'an unrecorded decider');
+    // The verdict's note is the decider's own reason — a human's comment, or the
+    // threshold auto-send cleared — so the audit line carries it verbatim rather
+    // than re-deriving why the act was allowed.
+    const because = proposal.note ? ` (${proposal.note})` : '';
 
     try {
       if (act.kind === 'merge') {
         const res = await this.deps.sink.mergePr({ prNumber: act.prNumber, method: act.method });
         return audit(
           'executed',
-          `Merged PR #${act.prNumber} via ${act.method} — authorized by ${by} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
+          `Merged PR #${act.prNumber} via ${act.method} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
         );
       }
       const res = await this.deps.sink.postPrReply({
@@ -364,7 +350,7 @@ export class ActionExecutor {
       });
       return audit(
         'executed',
-        `Sent the reply on PR #${act.prNumber} — authorized by ${by} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
+        `Sent the reply on PR #${act.prNumber} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
       );
     } catch (err) {
       const message = (err as Error).message;
@@ -372,12 +358,12 @@ export class ActionExecutor {
         act.kind === 'merge'
           ? this.deps.escalations.create({
               type: 'approve_change',
-              prompt: `You approved merging PR #${act.prNumber}, but the merge failed (${message}); merge it manually or wait for the harness to re-propose it.`,
+              prompt: `${approved} merging PR #${act.prNumber}, but the merge failed (${message}); merge it manually or wait for the harness to re-propose it.`,
               context: { prNumber: act.prNumber, method: act.method, autoMergeFailed: true },
             })
           : this.deps.escalations.create({
               type: 'review_reply',
-              prompt: `You approved this reply, but sending it failed (${message}); send it manually.\n\nDraft reply for PR #${act.prNumber}:\n\n${act.body}`,
+              prompt: `${approved} this reply, but sending it failed (${message}); send it manually.\n\nDraft reply for PR #${act.prNumber}:\n\n${act.body}`,
               context: {
                 prNumber: act.prNumber,
                 commentId: act.commentId,
@@ -387,7 +373,7 @@ export class ActionExecutor {
             });
       return audit(
         'rejected',
-        `Approved ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
+        `Authorized ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
       );
     }
   }
@@ -430,16 +416,28 @@ export class ActionExecutor {
 }
 
 /**
- * Why an action may NOT be auto-sent, as a human-readable reason for the audit
- * log — or `null` if it's clear to send. Centralises the gate so the reason the
- * harness escalated is always explicit and consistent.
+ * The auto-send policy as a verdict on one act: either the harness authorizes it,
+ * with the reason that goes on the proposal as the decider's note, or it does not,
+ * with the reason the escalation quotes. Both directions come from here so the
+ * threshold is stated once and the audit log cannot explain a send and a refusal
+ * in two different vocabularies.
+ *
+ * Note what it does *not* return: a rejection. Only a human can reject, because a
+ * rejection is durable and a machine "no" would mean the question is never put to
+ * anyone. Everything this refuses becomes a pending proposal.
  */
-function autoSendBlockedBy(gate: AutoSendConfig, actionType: string, confidence: number): string | null {
-  if (!gate.enabled) return 'auto-send disabled';
-  if (!gate.allowedActions.includes(actionType)) return `${actionType} not in allowed auto-send actions`;
+type AutoSendVerdict = { authorized: true; note: string } | { authorized: false; blockedBy: string };
+
+function autoSendVerdict(gate: AutoSendConfig, actionType: string, confidence: number): AutoSendVerdict {
+  if (!gate.enabled) return { authorized: false, blockedBy: 'auto-send disabled' };
+  if (!gate.allowedActions.includes(actionType))
+    return { authorized: false, blockedBy: `${actionType} not in allowed auto-send actions` };
   if (confidence < gate.confidenceThreshold)
-    return `confidence ${confidence.toFixed(2)} < ${gate.confidenceThreshold} threshold`;
-  return null;
+    return {
+      authorized: false,
+      blockedBy: `confidence ${confidence.toFixed(2)} < ${gate.confidenceThreshold} threshold`,
+    };
+  return { authorized: true, note: `confidence ${confidence.toFixed(2)} ≥ ${gate.confidenceThreshold} threshold` };
 }
 
 function safeJson(v: unknown): string {
