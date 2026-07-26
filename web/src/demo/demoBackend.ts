@@ -102,6 +102,18 @@ class DemoServer {
     return { ok: true };
   }
 
+  async decidePermission(id: string, allow: boolean, note?: string): Promise<{ ok: true; allowed: boolean }> {
+    const esc = this.state.escalations.find((e) => e.id === id);
+    if (esc) {
+      esc.status = 'answered';
+      esc.response = allow ? 'Allowed' : `Denied${note ? `: ${note}` : ''}`;
+      esc.answeredAt = new Date().toISOString();
+      this.addDecision('answer', 'ok', `${allow ? 'allowed' : 'denied'} a permission request`);
+    }
+    this.dirty();
+    return { ok: true, allowed: allow };
+  }
+
   async respondAgent(id: string, text: string): Promise<{ ok: true }> {
     const agent = this.state.agents.find((a) => a.id === id);
     if (agent) {
@@ -669,6 +681,7 @@ export const demoApi = {
   pulse: () => getServer().pulse(),
   inject: (event: unknown) => getServer().inject(event),
   answerEscalation: (id: string, response: string) => getServer().answerEscalation(id, response),
+  decidePermission: (id: string, allow: boolean, note?: string) => getServer().decidePermission(id, allow, note),
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),

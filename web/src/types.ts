@@ -248,6 +248,8 @@ interface EscalationContext {
   method?: string;
   autoSendFailed?: boolean;
   autoMergeFailed?: boolean;
+  /** Set when this is a live permission request (issue #130): the blocked tool call. */
+  permission?: { toolName: string; summary: string };
   [key: string]: unknown;
 }
 export interface Escalation {

@@ -21,10 +21,13 @@ discover what a synchronous error would have said in one turn.
 | `world_read`     | Read the harness's own view of a PR, issue or story.                                      |
 | `report_finding` | File something noticed outside the agent's own task.                                      |
 | `note_progress`  | Say in one line what the agent is working on right now.                                   |
+| `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
 
 ### The `_status` envelope
 
-**Every** tool response carries `_status`, which is what removes the need for a polling tool: an agent
+**Every** tool response carries `_status` — *except* `request_permission`, whose response is the bare
+`{behavior, …}` verdict Claude's permission parser expects. The envelope is what removes the need for
+a polling tool: an agent
 that calls anything at all learns its origin, whether a human is currently parked on it, and how its
 plan is progressing.
 
@@ -136,6 +139,40 @@ emitting.
 It routes through `AgentManager.recordProgress` for the `progress` event, which the `Hub` turns into a
 plain `dirty` (unlike `agent:tail`, the payload is already on the row the refetch brings).
 
+### `request_permission`
+
+The permission backstop (issue #130 phase B). Arguments `{tool_name, input, tool_use_id}` — but the
+agent never supplies them: Claude Code calls this tool through `--permission-prompt-tool` when a tool
+request is covered by neither `agentAllowedTools` nor the permission mode. It is the one tool an agent
+is not told about and does not call itself.
+
+- **It blocks.** The handler returns a Promise that resolves only when the operator decides. So a
+  blocked agent holds its concurrency slot until answered (or killed) — deliberately, since the
+  allow-list covers the mechanical happy path and the backstop fires only on genuinely unusual
+  commands, the ones that *should* wait for a human. There is no auto-timeout-deny: a silent timeout
+  would tell the agent a command is forbidden when the operator merely hadn't looked.
+- **`PermissionDesk` (`src/agents/permissionDesk.ts`), not a `Proposal`.** A permission request is
+  ephemeral and single-shot — the agent is blocked on an open socket *now*, and if the harness
+  restarts the blocked call dies with the process — the opposite of a durable re-read-every-pulse
+  verdict with settle windows. The desk is a small in-memory `Map<escalationId, resolve>`. It reuses
+  the **escalation inbox** purely as the visible "Needs you" surface (`context.permission` marks it),
+  filing an `approve_change` escalation with the command as its prompt and `['Allow','Deny']` options.
+- **The verdict is bare.** The handler returns `toolJson({behavior:'allow', updatedInput})` /
+  `{behavior:'deny', message}` directly — never `ok()` (its `_status` envelope breaks Claude's
+  permission parser) and never `toolError` (Claude reads an error as a tool *failure*, not a deny).
+- **Settled out of band.** `POST /api/escalations/:id/permission {allow, note?}` → `PermissionDesk.decide`
+  resolves the blocked call and settles the inbox item through `EscalationInbox.settleResolved`, which
+  never types into the session — the agent is blocked in a tool call, not parked at a prompt, so the
+  "answer" is the return value. The ordinary `/answer` route **409s** a permission escalation and names
+  the permission route (the same pattern it uses for a pending proposal). The **same live agent** then
+  continues (allow) or reads the denial (deny); a refusal does not orphan the task.
+- **Deny on death.** `PermissionDesk.denyAll(agentId)` resolves any request an agent was blocked on as
+  a denial. It hangs off `McpBridgeServer.release(token)` — the one choke point every terminal path
+  (kill / crash / shutdown) already hits — so a dead agent never leaves Claude blocked.
+- **Off-switch.** `mcp.permissionEscalation: false` (or `mcp.enabled: false`) leaves the tool
+  unwired; called anyway, it denies rather than blocks. Gated on `mcp.enabled` because the tool lives
+  on the MCP server.
+
 ## Identity
 
 **Identity is structural, not argued — for every write.** No write tool takes an agent, task or issue
@@ -201,6 +238,10 @@ Both verified empirically against `claude` 2.1.220 in headless `-p` mode, not as
   them. Without the flag every call returns `"Claude requested permissions to use mcp__lubbdubb__…, but
   you haven't granted it yet."` with no human at the prompt. The flag is **additive, not restrictive**:
   an agent launched with it still uses Bash and Write normally.
+- **`--permission-prompt-tool <name>` wires the backstop** (issue #130). Passed only alongside
+  `--mcp-config` (the tool lives on that server) and only when `mcp.permissionEscalation` is on. Its
+  value is `PERMISSION_PROMPT_TOOL` (`mcp__lubbdubb__request_permission`), derived from the same server
+  id + tool name as every grant, so it can never drift from what `buildTools` exposes.
 
 This is why `src/mcp/names.ts` exists. Three things must agree — the `mcpServers` key
 (`MCP_SERVER_ID = 'lubbdubb'`), the tool names, and the `mcp__<key>__<tool>` grants — and drift between

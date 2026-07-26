@@ -156,7 +156,17 @@ decomposition): free text cannot be branched on, so answering here would settle 
 leaving the proposal pending. The error names the accept/reject routes that do settle it.
 Returns `{ ok: true, escalation, routing }`, where `routing` is `typed_into_agent` (the escalation is
 tied to a live agent, and the answer went straight into its session) or `queued_for_dispatch` (the
-answer is recorded and the next cycle acts on it).
+answer is recorded and the next cycle acts on it). **Also 409 when the item is a permission request**
+(`context.permission`, issue #130) — the agent is blocked in a tool call, not at a prompt, so the
+error names the permission route below.
+
+### `POST /api/escalations/:id/permission`
+
+Body `{allow: boolean, note?}`. Allow or deny a permission request an agent is blocked on (issue #130).
+Resolves the blocked `--permission-prompt-tool` call with the operator's verdict and settles the inbox
+item; the same live agent then continues (allow) or reads the denial (deny). 400 when `allow` is not a
+boolean; **409 when no pending permission request is attached** (already decided, or the agent died
+first). Returns `{ ok: true, allowed }`.
 
 ### `POST /api/agents/:id/respond`
 

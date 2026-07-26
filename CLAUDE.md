@@ -845,9 +845,35 @@ mcp__lubbdubb__…, but you haven't granted it yet."` with no human at the promp
     `src/mcp/names.ts` exists: the launch-config key, the tool names and the `mcp__<key>__<tool>`
     grants must agree, and drift between them yields a _connected_ server whose every call is refused
     — invisible until an agent needs it. `test/mcpChannel.test.ts` asserts all three against each other.
+  - `--permission-prompt-tool <name>` wires the **permission backstop** (#130 phase B). Passed only
+    alongside `--mcp-config` (the tool lives on that server) and only when `mcp.permissionEscalation`
+    is on; its value `PERMISSION_PROMPT_TOOL` is derived off the same server id + tool name as the
+    grants, so it can't drift. See the permission-model bullet below.
+- **`mcpConfigPath` is per-launch, and the `ArgsBuilder` in `src/system.ts` MUST thread it.**
+  `AgentManager.spawn` mints the credential and passes `mcpConfigPath` to `buildArgs`; if the
+  system.ts closure drops it (as it silently did before #130 — the `ArgsBuilder` type omitted the
+  field and every closure ignored it), `appendMcpConfig` never fires and **the whole tool channel is
+  dead in production** — no test catches it, because they all drive `mcp.session()` in-process and
+  `npm run smoke` builds the bridge by hand from `open()`. `test/mcpChannel.test.ts` now spawns on a
+  listening server and asserts `--mcp-config`/`--permission-prompt-tool` actually land on the argv.
 - Tests drive `mcp.session(agentId)`, which converges on the same `dispatch` an agent's bridge
   reaches — there is no test-only tool path. `npm run smoke` runs a real `bridge.mjs` child over a
   real socket, which is the half unit tests can't cover.
+- **The permission model (#130) — authorise the routine, ask about the rest.** `acceptEdits` (default
+  `agentPermissionMode`) auto-accepts _file edits only_, so a headless agent hangs the moment it runs
+  `npm run check`/`git`/`gh`, and the escalation it printed was unanswerable (the gate is a launch
+  flag, not a conversation). Two mechanisms, same split as `autoSend`: **(A)** `agentAllowedTools`
+  merges a `permissions.allow` fragment into `--settings` (`collectSettings`) pre-approving the
+  mechanical commands — deliberately **not** `--allowedTools`, which carries the MCP grants (mixing a
+  Bash rule in risks dropping them, the exact `names.ts` drift). **(B)** the `request_permission` tool
+  - `--permission-prompt-tool`: Claude evaluates allow rules _before_ it, so an allowlisted command
+    never reaches it and the unattended path stays synchronous; a miss files an escalation and blocks
+    the _same_ agent via the in-memory `PermissionDesk` (`src/agents/permissionDesk.ts`) — **not** a
+    `Proposal` (ephemeral single-shot, not a durable re-read verdict). It returns the **bare**
+    `{behavior}` verdict (`toolJson`, never `ok()`'s `_status`, never `toolError`), settles the inbox
+    out of band (`EscalationInbox.settleResolved`, never typing into a blocked session), and denies on
+    agent death via `McpBridgeServer.release` — the one choke point every terminal path hits. Tests:
+    `test/agentProtocol.test.ts` (allow-list), the permission-backstop block in `test/mcpChannel.test.ts`.
 - **`claim(ref)` was investigated and closed, not forgotten** (#113). Phase 2's table listed it; the
   five tools above are the whole surface, and a sixth should not be added back for symmetry. The
   reasoning, so it isn't re-derived: **origin and branch are 1:1 for every world-driven dispatch
@@ -1185,7 +1211,13 @@ structured field, feed it into `buildRefUrls`.
 - Relative paths in `claudeArgs` are resolved to absolute at config load, because agents run
   in a worktree/scratch `cwd` (`src/config.ts`).
 - `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under
-  root — run as non-root if you need it.
+  root — run as non-root if you need it. You should rarely need it: `agentAllowedTools` +
+  the permission backstop (#130, above) make the default `acceptEdits` complete a task unattended
+  without handing every agent unrestricted shell access.
+- **Don't allow-list Bash via `claudeArgs: ["--allowedTools", …]`** — operator args are appended
+  last and an explicit `--allowedTools` there wins over the harness's, silently dropping the
+  `mcp__lubbdubb__*` grants (a _connected_ server whose every call is refused). Use
+  `agentAllowedTools` instead; it rides in `--settings`, a different flag from the MCP grants.
 - Config precedence: explicit overrides → `lubbdubb.config.json` → defaults, with `PORT` and
   `LUBBDUBB_DB` env overrides. `autoSend` is deep-merged.
 - The `github` provider's auth token comes from `GITHUB_TOKEN` **only** — never from `Config`

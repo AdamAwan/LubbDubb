@@ -114,6 +114,27 @@ interface ClaudeArgsOptions {
    * alone, which is the fail-open floor — never a broken state.
    */
   mcpConfigPath?: string | null;
+  /**
+   * Operator-configured tool allow rules (`agentAllowedTools`), e.g.
+   * `Bash(npm:*)` / `Bash(git:*)` — the mechanical validate/commit/push commands
+   * a headless agent must run unattended (issue #130). They ride in a
+   * `permissions.allow` fragment inside `--settings`, **not** in `--allowedTools`:
+   * that flag carries the `mcp__lubbdubb__*` grants, and letting a Bash rule share
+   * it is exactly the drift `src/mcp/names.ts` exists to prevent — an operator
+   * adjusting Bash access could silently drop the MCP grants. Two different flags,
+   * two different concerns. `acceptEdits` still governs everything not listed here;
+   * anything outside the list falls through to the permission backstop (#130
+   * phase B) rather than hanging.
+   */
+  allowedTools?: string[];
+  /**
+   * The qualified MCP tool name for `--permission-prompt-tool` — the permission
+   * backstop (issue #130 phase B). When a tool call is covered by neither the
+   * allow-list nor the permission mode, Claude Code calls this tool instead of
+   * denying, and it routes the request to the operator. Only takes effect when
+   * {@link mcpConfigPath} is also set, since the tool lives on the MCP server.
+   */
+  permissionPromptTool?: string;
 }
 
 /**
@@ -143,6 +164,10 @@ function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
   if (!opts.mcpConfigPath) return;
   args.push('--mcp-config', opts.mcpConfigPath);
   args.push('--allowedTools', ALLOWED_MCP_TOOLS.join(','));
+  // The permission backstop lives on this same server, so it's only wirable when
+  // the channel is (issue #130 phase B). Claude Code then calls it — rather than
+  // denying — for any tool the allow-list and permission mode don't resolve.
+  if (opts.permissionPromptTool) args.push('--permission-prompt-tool', opts.permissionPromptTool);
 }
 
 /** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */
@@ -167,11 +192,19 @@ export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
   return args;
 }
 
-/** Combine the enabled `--settings` fragments into one JSON string, or null if none. */
+/**
+ * Combine the enabled `--settings` fragments into one JSON string, or null if
+ * none. The flag has no array form, so status-line, file-events and the
+ * permission allow-list must share one JSON object; their top-level keys
+ * (`statusLine` / `hooks` / `permissions`) are disjoint, so a plain merge is
+ * lossless. Used by **both** runtimes (the stream launch just never asks for the
+ * PTY-only status line), so an operator allow-list reaches headless agents too.
+ */
 function collectSettings(opts: ClaudeArgsOptions): string | null {
   const settings: Record<string, unknown> = {};
   if (opts.statusLine) Object.assign(settings, STATUS_LINE_SETTINGS);
   if (opts.fileEvents) Object.assign(settings, FILE_EVENTS_SETTINGS);
+  if (opts.allowedTools?.length) settings.permissions = { allow: opts.allowedTools };
   return Object.keys(settings).length > 0 ? JSON.stringify(settings) : null;
 }
 
@@ -201,9 +234,12 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
     '--append-system-prompt',
     protocolPrompt(opts),
   ];
-  // The status line never renders headless, but PostToolUse hooks do fire — so
-  // file-events capture is wired here too (unlike the PTY-only status line).
-  if (opts.fileEvents) args.push('--settings', JSON.stringify(FILE_EVENTS_SETTINGS));
+  // The status line never renders headless, but PostToolUse hooks and permission
+  // rules do apply — so file-events capture and the operator allow-list are wired
+  // here too (unlike the PTY-only status line, which collectSettings skips when
+  // `statusLine` isn't requested).
+  const settings = collectSettings(opts);
+  if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);

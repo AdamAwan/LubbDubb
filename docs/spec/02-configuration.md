@@ -93,6 +93,7 @@ resolve them against the wrong directory:
 | `planning.requireApproval`          | `boolean` | `false`   | Put a `parts` verdict to a human before anything is scheduled from it. Off leaves an enabled funnel byte-for-byte as it was: a decomposition commits the moment the planner writes it. |
 | `planning.gitFetchIntervalMs`       | `number`  | `60000`   | Floor on how often plan reconciliation runs `git fetch`. `0` = every pulse.                                             |
 | `mcp.enabled`                       | `boolean` | `true`    | The agent tool channel. **On by default**, because it is purely additive; off leaves agents on the sentinels alone.     |
+| `mcp.permissionEscalation`          | `boolean` | `true`    | The permission backstop (`--permission-prompt-tool`). A tool call the `agentAllowedTools` list doesn't cover is routed to the operator (allow/deny in "Needs you") instead of hanging. Gated by `mcp.enabled` — the tool lives on the MCP server. Off falls back to Claude's default headless deny. |
 
 ### Agent launch
 
@@ -101,7 +102,8 @@ resolve them against the wrong directory:
 | `agentMode`               | `'stream' \| 'pty' \| 'raw'`    | `'stream'`     | Which runtime launches agents.                                                                                                   |
 | `claudeCommand`           | `string`                        | `'claude'`     | The command spawned for an agent (and for the `claude` dispatcher).                                                              |
 | `claudeArgs`              | `string[]`                      | `[]`           | Extra args, appended **after** the harness's own, so an explicit flag there has the last word.                                    |
-| `agentPermissionMode`     | `string`                        | `'acceptEdits'`| Passed to `--permission-mode`. `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root.   |
+| `agentPermissionMode`     | `string`                        | `'acceptEdits'`| Passed to `--permission-mode`. `acceptEdits` auto-accepts file edits only. `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root. |
+| `agentAllowedTools`       | `string[]`                      | JS toolchain + git + gh | Tool allow rules merged into `--settings` as `permissions.allow` (Claude Code syntax, e.g. `Bash(npm:*)`). Pre-approves the mechanical validate/commit/push commands so the default config completes a task unattended without `bypassPermissions`. Never on `--allowedTools` (that carries the MCP grants). Default: `Bash(npm:*)`, `Bash(npx:*)`, `Bash(pnpm:*)`, `Bash(yarn:*)`, `Bash(node:*)`, `Bash(git:*)`, `Bash(gh:*)`. |
 | `agentPromptDelayMs`      | `number`                        | `1200`         | Delay before the first message is delivered, giving an interactive REPL time to boot. Stream mode uses `0`.                       |
 | `agentSubmitDelayMs`      | `number`                        | `60`           | PTY only: gap between writing message text and writing the submitting carriage return.                                            |
 | `agentIdleWaitMs`         | `number`                        | `90000`        | PTY (real TUI) only: park a session as waiting after this long with no terminal output. `0` disables. Unlatched — output un-parks it. |

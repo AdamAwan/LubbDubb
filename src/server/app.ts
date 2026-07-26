@@ -106,7 +106,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // artifact route opts in because it reads files off disk.
   await app.register(rateLimit, { global: false });
 
-  const { store, connector, harness, agents, escalations, proposals, config, errors } = system;
+  const { store, connector, harness, agents, escalations, proposals, permissions, config, errors } = system;
   // The watch/ignore label pair the cockpit's toggles write and the gates read.
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
 
@@ -458,12 +458,35 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       return reply.code(409).send({
         error: `this item is a proposal (${pending.id}) — accept or reject it via /api/proposals/${pending.id}/accept|reject`,
       });
+    // A permission request is the same shape of problem: the agent is blocked inside
+    // a tool call, so free text can't be branched on and answering here would type
+    // into a session that isn't at a prompt. Name the route that does settle it.
+    const perm = store.getEscalation(id);
+    if (perm?.context?.permission)
+      return reply.code(409).send({
+        error: `this item is a permission request — allow or deny it via /api/escalations/${id}/permission`,
+      });
     try {
       const result = escalations.answer(id, response);
       return { ok: true, ...result };
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
     }
+  });
+
+  // Allow or deny a permission request an agent is blocked on (issue #130 phase B).
+  // Resolves the blocked `--permission-prompt-tool` call with the operator's verdict
+  // and settles the inbox item — the same live agent then continues (allow) or gets
+  // the denial (deny), rather than being lost the way a config-and-restart was.
+  app.post('/api/escalations/:id/permission', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { allow, note } = (req.body ?? {}) as { allow?: unknown; note?: unknown };
+    if (typeof allow !== 'boolean') return reply.code(400).send({ error: 'allow (boolean) required' });
+    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
+    const decided = permissions.decide(id, allow, note);
+    if (!decided) return reply.code(409).send({ error: 'no pending permission request for this escalation' });
+    hub.broadcast({ type: 'dirty' });
+    return { ok: true, allowed: allow };
   });
 
   // Accept a proposed act: the harness performs it, through the same `ActionSink`

@@ -592,7 +592,25 @@ export interface EscalationContext {
   // -- propose_plan escalations -------------------------------------------
   /** The plan whose decomposition this item asks you to authorize (issue #109 phase 3). */
   planId?: string;
+  // -- grant_permission escalations (issue #130 phase B) ------------------
+  /**
+   * Set when this escalation is a live permission request: an agent's tool call
+   * fell through the allow-list, and it is blocked inside a `--permission-prompt-tool`
+   * call until the operator allows or denies. Its presence is what marks the card
+   * un-answerable by the ordinary free-text route (answering would type into a
+   * session that is blocked in a tool call, not parked at a prompt); it is settled
+   * through `POST /api/escalations/:id/permission` instead.
+   */
+  permission?: PermissionRequest;
   [key: string]: unknown;
+}
+
+/** The tool call an agent is blocked on, awaiting the operator's allow/deny (issue #130). */
+interface PermissionRequest {
+  /** The tool Claude Code asked permission for, e.g. `Bash`. */
+  toolName: string;
+  /** A one-line, human-readable rendering of what it wants to do (the Bash command, …). */
+  summary: string;
 }
 
 export interface Escalation {

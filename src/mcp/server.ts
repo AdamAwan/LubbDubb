@@ -39,6 +39,13 @@ interface McpBridgeServerOptions {
    * the property the shared `ingestPlanDocument` exists to keep.
    */
   requirePlanApproval?: boolean;
+  /**
+   * The permission backstop (issue #130 phase B), resolved lazily for the same
+   * reason as {@link agents}: it is built after this server (it needs the
+   * escalation inbox, which needs the fleet). The `request_permission` tool reaches
+   * it, and {@link release} denies any request a leaving agent was blocked on.
+   */
+  permissions?: () => import('../agents/permissionDesk.js').PermissionDesk | undefined;
   errors?: ErrorRecorder;
 }
 
@@ -160,6 +167,10 @@ export class McpBridgeServer {
 
   /** Revoke a credential and remove its config file. Called when an agent leaves the fleet. */
   release(token: string): void {
+    // Before the identity is dropped: deny anything this agent was blocked on at
+    // the permission prompt, so a killed/crashed agent never leaves Claude waiting.
+    const agentId = this.identities.get(token);
+    if (agentId) this.opts.permissions?.()?.denyAll(agentId, 'The agent was stopped before this was decided.');
     this.identities.delete(token);
     try {
       rmSync(join(this.opts.configDir, `${token}.json`), { force: true });
@@ -240,6 +251,7 @@ export class McpBridgeServer {
         store: this.opts.store,
         agents: this.opts.agents(),
         requirePlanApproval: this.opts.requirePlanApproval,
+        permissions: this.opts.permissions?.(),
         errors: this.opts.errors,
       },
       resolved.identity,

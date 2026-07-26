@@ -276,6 +276,7 @@ export function App() {
               onDecide={(id, verdict, note) =>
                 (verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)).then(refresh)
               }
+              onPermission={(id, allow, note) => api.decidePermission(id, allow, note).then(refresh)}
               onOpenAgent={(id) => setSelected(id)}
             />
           ))}

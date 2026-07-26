@@ -11,6 +11,17 @@ interface McpPolicy {
    * degrades to, so this is an escape hatch rather than a distinct mode.
    */
   enabled: boolean;
+  /**
+   * The permission backstop (issue #130 phase B). When on, a tool call the
+   * `agentAllowedTools` allow-list doesn't cover is routed to the operator via
+   * Claude Code's `--permission-prompt-tool` — it files an escalation in "Needs
+   * you" and blocks the *same* live agent until the operator allows or denies,
+   * rather than the agent hanging on a prompt no human can answer. Off falls back
+   * to Claude's default headless behaviour for an un-allowlisted tool (a silent
+   * deny). Gated by {@link McpPolicy.enabled} — the tool lives on the MCP server.
+   * Defaults on. See `docs/spec/10-agent-runtimes.md`.
+   */
+  permissionEscalation: boolean;
 }
 
 /**
@@ -168,6 +179,22 @@ export interface Config {
   sessionTranscriptRoot?: string;
   /** Passed to `claude --permission-mode` so unattended tool calls don't hang the agent. */
   agentPermissionMode: string;
+  /**
+   * Tool allow rules handed to every agent as a `permissions.allow` fragment in
+   * `--settings` (issue #130). `acceptEdits` auto-accepts *file edits only*, so a
+   * headless agent with no human at the prompt hangs the moment it runs `npm run
+   * check`, `git` or `gh`. These rules pre-approve exactly those mechanical
+   * validate/commit/push commands so the default config completes a task
+   * unattended — without the all-or-nothing `bypassPermissions`. Anything *not*
+   * listed still falls through to the permission prompt, which the backstop
+   * (`agentPermissionEscalation`) routes to the operator rather than hanging.
+   *
+   * These are **not** put on `--allowedTools`: that flag carries the MCP tool
+   * grants, and mixing a Bash rule into it risks silently dropping them (the drift
+   * `src/mcp/names.ts` guards against). Use Claude Code's rule syntax, e.g.
+   * `"Bash(npm:*)"`, `"Bash(git diff:*)"`.
+   */
+  agentAllowedTools: string[];
   /** Wait this long after spawn before typing the task in, giving the REPL time to boot. */
   agentPromptDelayMs: number;
   /**
@@ -336,12 +363,25 @@ const DEFAULTS: Config = {
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: false, gitFetchIntervalMs: 60_000 },
-  mcp: { enabled: true },
+  mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
+  // The mechanical validate/commit/push commands a coding agent must run to take
+  // an issue through to an opened PR unattended: the JS toolchain (validate), git
+  // (commit/push) and gh (open the PR). Everything else still prompts and is
+  // routed to the operator by the permission backstop rather than hanging (#130).
+  agentAllowedTools: [
+    'Bash(npm:*)',
+    'Bash(npx:*)',
+    'Bash(pnpm:*)',
+    'Bash(yarn:*)',
+    'Bash(node:*)',
+    'Bash(git:*)',
+    'Bash(gh:*)',
+  ],
   agentPromptDelayMs: 1200,
   agentSubmitDelayMs: 60,
   agentIdleWaitMs: 90_000,

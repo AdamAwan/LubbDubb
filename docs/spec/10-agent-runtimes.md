@@ -44,8 +44,8 @@ arrives whole inside one text block, so that is sufficient there.
 
 The protocol is injected as an appended system prompt (`PROTOCOL_SYSTEM_PROMPT`,
 `src/agents/agentProtocol.ts`) on every launch — a live `claude` emits none of it on its own. Tool
-permission prompts are a separate CLI concern, handled by `--permission-mode`, never by scraping
-output.
+permission prompts are a separate CLI concern, handled by `--permission-mode` and the permission
+model below, never by scraping output.
 
 ### The flag payload
 
@@ -64,8 +64,8 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 ```
 -p --input-format stream-json --output-format stream-json --verbose
 --append-system-prompt <protocol>
-[--settings <file-events fragment>]
-[--mcp-config <path> --allowedTools <names>]
+[--settings <file-events + permissions.allow fragments>]
+[--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
 [...claudeArgs]
 ```
@@ -75,8 +75,8 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 ```
 --append-system-prompt <protocol>
 (--session-id <id> | --resume <id>)
-[--settings <merged status-line + file-events fragments>]
-[--mcp-config <path> --allowedTools <names>]
+[--settings <merged status-line + file-events + permissions.allow fragments>]
+[--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
 [...claudeArgs]
 ```
@@ -86,16 +86,43 @@ Points that are load-bearing:
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
 - `--session-id` and `--resume` are mutually exclusive; a resume must not also mint the id.
-- `--settings` has no array form, so the status-line and file-events fragments are **merged into one
-  JSON object** (`collectSettings`).
+- `--settings` has no array form, so the status-line, file-events and `permissions.allow` fragments
+  are **merged into one JSON object** (`collectSettings`) — disjoint top-level keys, so the merge is
+  lossless. `collectSettings` is used by **both** runtimes, so the allow-list reaches headless agents.
 - Operator `claudeArgs` are appended last, so an explicit flag there has the last word.
 - The status line never renders headless, so it is wired for PTY only. `PostToolUse` hooks *do* fire
   headless, so file-events capture is wired for both.
+- `mcpConfigPath` is **per-launch** (minted by `AgentManager`, not fixed at wiring time) and is
+  threaded through the `ArgsBuilder` in `src/system.ts` — without that, `--mcp-config` (and the
+  permission-prompt tool that lives on that server) never reach the agent.
 - When a launch carries the tool channel, `MCP_PROTOCOL_ADDENDUM` is appended too — see
   [11](11-mcp-tools.md).
 
 `buildInitialMessage(task)` is the task prompt. `buildResumeMessage()` is the nudge typed into a
 resumed agent that was mid-work.
+
+## Permission model (issue #130)
+
+`agentPermissionMode: 'acceptEdits'` (the default) auto-accepts **file edits only**, so a headless
+agent — the production default, with no human at the permission prompt — hangs the moment it runs
+`npm run check`, `git` or `gh`. The old workaround, `bypassPermissions`, removes *every* gate at once
+in a worktree of the real repo with the operator's shell environment inherited, and is refused under
+root. Two mechanisms replace that, mirroring the "authorise the routine, ask about the rest" split
+`autoSend` makes for outbound acts:
+
+- **The allow-list (`agentAllowedTools`).** A `permissions.allow` fragment merged into `--settings`,
+  pre-approving the mechanical validate/commit/push commands (the JS toolchain, `git`, `gh`) so the
+  default config takes an issue to an opened PR unattended. It rides in `--settings`, deliberately
+  **not** `--allowedTools`: that flag carries the `mcp__lubbdubb__*` grants, and mixing a Bash rule
+  into it risks silently dropping them (the drift `src/mcp/names.ts` guards against). Two flags, two
+  concerns — the operator cannot lose the MCP grants by adjusting Bash access, by construction.
+- **The backstop (`mcp.permissionEscalation`, `--permission-prompt-tool`).** Claude Code evaluates
+  allow rules *before* the permission-prompt tool, so an allowlisted command never reaches it and the
+  unattended path stays synchronous; the backstop fires only for what the allow-list misses. See
+  [11](11-mcp-tools.md#request_permission) for the `request_permission` tool, the blocking
+  `PermissionDesk`, and how the operator's Allow/Deny reaches the same live agent.
+
+`agentPermissionMode` stays available and unchanged, root-refusal caveat included.
 
 ## `StreamJsonSession`
 

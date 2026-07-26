@@ -67,6 +67,55 @@ test('buildClaudeStreamArgs requests headless bidirectional stream-json', () => 
   assert.ok(args.includes('--permission-mode'));
 });
 
+/** Pull the single `--settings` JSON object out of an argv, or null if absent. */
+function settingsOf(args: string[]): Record<string, unknown> | null {
+  const i = args.indexOf('--settings');
+  if (i < 0) return null;
+  return JSON.parse(args[i + 1]!) as Record<string, unknown>;
+}
+
+test('allowedTools become a permissions.allow fragment in --settings (stream)', () => {
+  const allow = ['Bash(npm:*)', 'Bash(git:*)'];
+  const args = buildClaudeStreamArgs({ permissionMode: 'acceptEdits', allowedTools: allow, fileEvents: true });
+  const settings = settingsOf(args);
+  assert.deepEqual((settings?.permissions as { allow: string[] }).allow, allow);
+  // The file-events hook fragment is still present in the same object.
+  assert.ok(settings?.hooks, 'file-events hook should merge alongside permissions');
+});
+
+test('allowedTools become a permissions.allow fragment in --settings (pty)', () => {
+  const allow = ['Bash(gh:*)'];
+  const args = buildClaudeArgs({
+    permissionMode: 'acceptEdits',
+    allowedTools: allow,
+    statusLine: true,
+    fileEvents: true,
+  });
+  const settings = settingsOf(args);
+  assert.deepEqual((settings?.permissions as { allow: string[] }).allow, allow);
+  // Merged alongside the other fragments, not replacing them.
+  assert.ok(settings?.statusLine, 'status-line fragment should merge alongside permissions');
+  assert.ok(settings?.hooks, 'file-events hook should merge alongside permissions');
+});
+
+test('the Bash allowlist never touches --allowedTools (MCP grants stay intact)', () => {
+  const args = buildClaudeStreamArgs({
+    allowedTools: ['Bash(npm:*)'],
+    mcpConfigPath: '/tmp/mcp.json',
+  });
+  // permissions.allow carries the Bash rules...
+  assert.deepEqual((settingsOf(args)?.permissions as { allow: string[] }).allow, ['Bash(npm:*)']);
+  // ...while --allowedTools carries only the MCP grants, uncontaminated by Bash rules.
+  const at = args[args.indexOf('--allowedTools') + 1]!;
+  assert.ok(at.includes('mcp__lubbdubb__'), 'MCP grants present');
+  assert.equal(at.includes('Bash'), false, '--allowedTools must not carry Bash rules');
+});
+
+test('no allowedTools means no permissions fragment', () => {
+  assert.equal(settingsOf(buildClaudeStreamArgs({ allowedTools: [] })), null);
+  assert.equal(settingsOf(buildClaudeArgs({ allowedTools: [] })), null);
+});
+
 function claudeModeConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-claude-'));
   return loadConfig({
