@@ -87,6 +87,27 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   last plan (`harness.upcoming`, null for the LLM dispatcher which returns none) and
   `buildStateSnapshot` ships it as `upcoming`; the cockpit's `UpNext` panel draws the
   cut-line. It's a per-pulse projection — never treat it as a persisted FIFO.
+  - **Operator re-ordering (issue #128) is an override keyed on origin, not a mutation of the
+    projection.** A drag on the cockpit that rewrote the shipped array would be undone by the
+    next pulse a minute later, because the array is recomputed from the world every cycle. So
+    what persists is a per-origin priority (`priority_overrides` table, keyed on the same stable
+    origin every dispatch rule and gate already keys on), read back into the ranking as
+    `DispatchContext.priorityOverrides` (wired in `harness.ts` from `store.listPriorityOverrides()`
+    beside `queuedJobs`). The pure `rankByPriorityOverride` (`src/dispatcher/priorityOverride.ts`)
+    re-sorts the collected `candidates` **once, just before the headroom cut**, into three tiers:
+    rule-0 jobs first (a manual job is distinct work, not a re-prioritisation — an override never
+    moves one), then overridden origins by ascending rank (`0` = "do this next"), then everything
+    else in its natural order. It **only re-orders**: it never clears a `held` verdict, so a
+    cooldown / cap / ignore tag / unapproved plan still holds an item wherever the override placed
+    it — the cut loop reads `held` independently. Overriding a hold into dispatch is a different
+    feature and out of scope. `QueueItem.origin` is the join the cockpit sends back through
+    `POST /api/upnext/order` (replace-all: the body is the whole desired order, ranked `0..n-1`).
+    An override for an origin the harness has stopped tracking is pruned by
+    `Store.reconcilePriorityOverrides(trackedOrigins, upNextOverrideTtlMs)`, called each pulse from
+    `harness.ts`: it refreshes `last_seen_at` for every origin still queued **or staffed** (so a
+    long-running item keeps its priority) and drops any untracked longer than the TTL (default 7
+    days; `0` disables). Tests: `test/priorityOverride.test.ts` (the pure ranking) and the override
+    block in `test/upNext.test.ts` (persistence, restart, held-stays-held, rule-0-first, pruning).
 - **Operator-launched jobs (the `jobs` table + rule 0).** A job is an ad-hoc prompt queued from
   the cockpit (`POST /api/jobs` → `Store.createJob`, status `queued`). Unlike a `Task` (created
   the instant an agent spawns), a job persists _ahead of_ dispatch so it can sit in a queue when

@@ -332,7 +332,13 @@ export function App() {
             Up next
             {(state.upcoming?.items.length ?? 0) > 0 && <span className="count">{state.upcoming!.items.length}</span>}
           </h2>
-          <UpNext plan={state.upcoming ?? null} now={now} refUrls={state.refUrls} rules={state.dispatchRules} />
+          <UpNext
+            plan={state.upcoming ?? null}
+            now={now}
+            refUrls={state.refUrls}
+            rules={state.dispatchRules}
+            onReorder={(origins) => api.reorderUpNext(origins).then(refresh)}
+          />
           <h2 className="feed-heading">Decision log</h2>
           <DecisionLog
             decisions={state.decisions}

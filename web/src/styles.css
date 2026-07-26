@@ -1251,6 +1251,31 @@ body {
 }
 .upnext-title {
   min-width: 0;
+  flex: 1;
+}
+/* Re-order controls (issue #128): pushed to the right of each queued row. */
+.upnext-reorder {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.reorder-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.reorder-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.reorder-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 /* The cut-line: everything below waits for a free agent slot. */
 .upnext-cut {

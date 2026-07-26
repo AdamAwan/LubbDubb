@@ -33,8 +33,9 @@ Current entries:
 | `decisions` | `rule`                                                                           |
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
-`CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`
-and `agent_files` were all introduced as new tables and therefore have no migration entry.
+`CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
+`agent_files` and `priority_overrides` were all introduced as new tables and therefore have no
+migration entry.
 
 ## Tables
 
@@ -42,6 +43,7 @@ and `agent_files` were all introduced as new tables and therefore have no migrat
 | ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------- |
 | `tasks`             | Units of work materialised at dispatch.                                                | —                                        |
 | `jobs`              | Operator-queued prompts awaiting a slot.                                               | —                                        |
+| `priority_overrides`| Operator "Up next" re-ordering, keyed on candidate origin.                             | `origin` is `PRIMARY KEY`                |
 | `agents`            | One row per launched agent, including usage and the progress note.                     | —                                        |
 | `usage_events`      | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`. | —                                       |
 | `agent_flags`       | Artifacts surfaced to the cockpit.                                                     | `UNIQUE (agent_id, ref)`                 |
@@ -78,6 +80,15 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
 
 `createJob`, `getJob`, `listJobs(limit=100)` (newest first), `listQueuedJobs()` (oldest first),
 `markJobDispatched(id, taskId)`, `cancelJob(id)` (still-queued only).
+
+### Priority overrides
+
+`setPriorityOverrides(origins)` (replace-all: ranks the given origins `0..n-1` and clears any not
+listed), `listPriorityOverrides()` (lowest rank first),
+`reconcilePriorityOverrides(trackedOrigins, ttlMs)` (bumps `last_seen_at` for still-tracked origins,
+then drops any untracked longer than `ttlMs`; `ttlMs <= 0` disables pruning). Called each pulse from
+the harness with the origins still queued or staffed, so an override for work the harness has stopped
+tracking is pruned rather than lingering forever (issue #128).
 
 ### Agents
 

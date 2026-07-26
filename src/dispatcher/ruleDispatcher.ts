@@ -15,6 +15,7 @@ import {
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } from '../proposals/proposals.js';
 import type { DispatchRuleId } from './rules.js';
+import { rankByPriorityOverride } from './priorityOverride.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { PLAN_FILE } from '../plans/planDocument.js';
 import {
@@ -817,12 +818,19 @@ export class RuleDispatcher implements Dispatcher {
       });
     }
 
+    // Apply the operator's "Up next" re-ordering (issue #128) before the cut:
+    // an override jumps a world item ahead of the natural cross-rule ranking,
+    // but stays behind rule 0 (jobs first) and never clears a `held` verdict —
+    // the cut below still holds a held candidate wherever the override placed it.
+    const overrideRank = new Map((ctx.priorityOverrides ?? []).map((o) => [o.origin, o.rank]));
+    const ranked = rankByPriorityOverride(candidates, overrideRank);
+
     // The headroom cut: dispatch the above-cut prefix (each claiming a slot),
     // keep everything ranked as the visible queue. A cooling-down candidate is
     // shown but never dispatched, whatever the headroom.
     let headroom = ctx.agentHeadroom;
     const upcoming: QueueItem[] = [];
-    for (const c of candidates) {
+    for (const c of ranked) {
       if (activeOrigins.has(c.origin)) continue; // staffed — not "up next"
       const { origin, rule, title, kind, branch, reason } = c;
       if (c.held) {

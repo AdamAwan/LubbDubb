@@ -38,7 +38,10 @@ A cycle's `source` is `'timer'`, `'manual'` or `'boot'`.
 8. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
 9. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
    and the world's `takenAt`. Null when the dispatcher returns no plan (the `claude` dispatcher
-   returns none).
+   returns none). The operator priority overrides (issue #128) are then reconciled:
+   `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
+   active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
+   lingers forever.
 10. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
 11. **`executor.execute(cycleId, plan)`**.
@@ -96,6 +99,7 @@ What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 | `queuedJobs`          | Operator jobs awaiting a slot, oldest first.                                                 |
 | `plans`, `planParts`  | The plan graph, already reconciled this cycle.                                               |
 | `recentDecisions`     | The last 200 decisions — the cooldown and notify-dedup memory.                               |
+| `priorityOverrides?`  | Operator "Up next" re-ordering, keyed on candidate origin (issue #128).                      |
 | `steeringPriorities`  | Operator hints.                                                                              |
 | `agentHeadroom`       | How many agents may still be started this cycle.                                             |
 

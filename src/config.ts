@@ -135,6 +135,15 @@ export interface Config {
    * every consumer falls back to the older "absence means merged" reading.
    */
   closedPrWindowMs: number;
+  /**
+   * How long an operator "Up next" priority override (issue #128) survives after
+   * the harness stops tracking its origin. The override's `last_seen_at` is
+   * refreshed every pulse the origin is still a live candidate or staffed, so a
+   * long-running item keeps its priority; once the work is gone (merged, closed,
+   * abandoned) for this long, the stale override is pruned rather than lingering
+   * forever. Defaults to 7 days; `0` disables pruning entirely (supported).
+   */
+  upNextOverrideTtlMs: number;
   /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
   dispatcher: 'rule' | 'claude';
   /**
@@ -329,6 +338,7 @@ const DEFAULTS: Config = {
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: false, gitFetchIntervalMs: 60_000 },
   mcp: { enabled: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
+  upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',

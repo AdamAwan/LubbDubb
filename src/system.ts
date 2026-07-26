@@ -321,6 +321,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     runtime: runtimeControl,
     steeringPriorities: config.steeringPriorities,
     prIgnoreLabel: ignoreLabel,
+    upNextOverrideTtlMs: config.upNextOverrideTtlMs,
   });
 
   // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.

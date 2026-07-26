@@ -292,6 +292,18 @@ export interface Job {
   updatedAt: string;
 }
 
+/**
+ * An operator priority override for the "Up next" queue (issue #128). Keyed on a
+ * candidate's stable `origin` so it survives pulses and restarts while the queue
+ * itself stays a per-pulse projection. `rank` is ascending — `0` means "do this
+ * next" — and only orders *among* overridden origins; a lower rank never
+ * un-holds a held item, it only re-orders.
+ */
+export interface PriorityOverride {
+  origin: string;
+  rank: number;
+}
+
 export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed';
 
 export interface Agent {

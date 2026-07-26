@@ -119,6 +119,14 @@ Queue an operator job. See [13](13-jobs-and-findings.md). 400 on a missing/empty
 a non-string `title` or `branch`; **409** when a code job names a branch a live task holds. Returns
 `{ ok: true, job, report }`.
 
+### `POST /api/upnext/order`
+
+Re-order the "Up next" queue (issue #128). Body `{origins: string[]}` — the operator's desired
+priority order of candidate origins. **400** when `origins` is not an array of strings, or contains a
+duplicate. Replaces the whole override set (ranked `0..n-1`), broadcasts `world:changed`, and runs a
+cycle so the new order takes effect immediately. It only re-orders — it never un-holds a held item,
+and rule-0 jobs stay first regardless — so this is safe to run inline. Returns `{ ok: true, report }`.
+
 ### `POST /api/jobs/:id/cancel`
 
 409 when the job is absent or no longer queued. Returns `{ ok: true, job }`.

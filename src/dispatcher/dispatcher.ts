@@ -5,6 +5,7 @@ import type {
   Job,
   Plan,
   PlanPart,
+  PriorityOverride,
   Proposal,
   PullRequest,
   Task,
@@ -46,6 +47,15 @@ export interface DispatchContext {
    * that became ready during the pulse is dispatchable in the same pulse.
    */
   planParts?: PlanPart[];
+  /**
+   * Operator "Up next" priority overrides (issue #128), keyed on candidate
+   * origin. Applied ahead of the natural cross-rule ranking but behind rule 0
+   * and behind every `held` verdict, so an override changes *order* only —
+   * never whether a cooldown, cap, ignore tag or unapproved plan holds an item.
+   * Absent/empty means the natural ranking stands. The LLM dispatcher ignores
+   * it (it materialises no ranked queue).
+   */
+  priorityOverrides?: PriorityOverride[];
   /** Optional operator hints, injected only as a corrective. */
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */

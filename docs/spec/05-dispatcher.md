@@ -103,6 +103,31 @@ Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `escala
 `respond_to_agent`) are
 pushed directly, because they claim no headroom.
 
+### Operator re-ordering (issue #128)
+
+The operator can change what the harness picks up first by re-ordering the cockpit's Up next panel.
+Because the queue is a per-pulse projection, what persists is not the array but a **priority
+override keyed on the candidate's origin** — the same stable identity every rule and gate already
+uses. Overrides live in the `priority_overrides` store table and reach the dispatcher as
+`DispatchContext.priorityOverrides`.
+
+The pure `rankByPriorityOverride` (`src/dispatcher/priorityOverride.ts`) re-sorts the collected
+candidates **once, immediately before the headroom cut**, into three tiers:
+
+1. **Rule-0 jobs stay first**, in their own order — a manual job is distinct work, not a
+   re-prioritisation of existing work, so an override never moves one.
+2. **Overridden origins next**, by ascending rank (`0` = "do this next"). This is what jumps a
+   world-driven item ahead of the natural cross-rule ranking above.
+3. **Everything else** keeps its natural (already-ranked) order, so an item the harness surfaces
+   later slots in behind the arranged prefix until the operator re-arranges.
+
+It **only re-orders**. It never clears a `held` verdict: a cooldown, cap, pause, ignore tag or
+unapproved plan holds an item wherever the override places it, because the cut walk reads `held`
+independently of position. Overriding a hold *into* dispatch is a different feature, out of scope.
+
+An override is written by `POST /api/upnext/order` (replace-all) and pruned once its origin stops
+being tracked — see [16](16-http-api.md) and [14](14-persistence.md).
+
 ## `QueueItem`
 
 ```ts

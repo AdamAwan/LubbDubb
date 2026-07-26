@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
-import type { WorldSnapshot } from '../src/types.js';
+import type { Job, WorldSnapshot } from '../src/types.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { Store } from '../src/store/store.js';
 
 // The "Up next" queue (issue #69): the dispatcher's ordered pickup plan with the
 // headroom cut — above-cut candidates dispatch this cycle, below-cut ones wait
@@ -219,6 +220,110 @@ test('an origin with an active task never enters the queue', async () => {
 });
 
 // --------------------------------------------------------------------------
+// Operator priority overrides (issue #128): re-order the queue by origin.
+// --------------------------------------------------------------------------
+
+const queuedJob = (id: string): Job => ({
+  id,
+  title: `Job ${id}`,
+  prompt: 'do it',
+  kind: 'code',
+  branch: `job/${id}`,
+  status: 'queued',
+  taskId: null,
+  createdAt: 'n',
+  updatedAt: 'n',
+});
+
+test('an operator override jumps a world item ahead of the natural ranking', async () => {
+  const d = new RuleDispatcher();
+  const result = await d.decide(
+    ctx(
+      { issues: [issue(101), issue(102), issue(103)] },
+      { agentHeadroom: 1, priorityOverrides: [{ origin: 'issue:103', rank: 0 }] },
+    ),
+  );
+  // #103 is pinned to the top, so it takes the single slot the natural ranking
+  // would have given #101.
+  assert.deepEqual(
+    result.upcoming?.map((q) => [q.origin, q.status]),
+    [
+      ['issue:103', 'dispatching'],
+      ['issue:101', 'waiting'],
+      ['issue:102', 'waiting'],
+    ],
+  );
+  const dispatched = result.actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:103', 'the pinned issue wins the slot');
+});
+
+test('rule-0 jobs stay first whatever the override', async () => {
+  const d = new RuleDispatcher();
+  const result = await d.decide(
+    ctx(
+      { issues: [issue(5)] },
+      { agentHeadroom: 2, queuedJobs: [queuedJob('j1')], priorityOverrides: [{ origin: 'issue:5', rank: 0 }] },
+    ),
+  );
+  // The override cannot outrank a queued job: a manual request always takes the
+  // next free slot.
+  assert.deepEqual(
+    result.upcoming?.map((q) => q.origin),
+    ['job:j1', 'issue:5'],
+  );
+});
+
+test('an override re-orders a held item but never un-holds it', async () => {
+  const d = new RuleDispatcher();
+  const result = await d.decide(
+    ctx(
+      {
+        takenAt: '2026-07-21T00:00:30Z',
+        issues: [issue(5)],
+        pullRequests: [
+          {
+            id: 'p',
+            number: 42,
+            title: 'X',
+            branch: 'feat',
+            baseBranch: 'main',
+            ciStatus: 'passing',
+            unresolvedComments: [],
+            mergeable: false,
+            mergeableState: 'dirty',
+          },
+        ],
+      },
+      {
+        agentHeadroom: 1,
+        // Pin the cooling-down PR to the very top.
+        priorityOverrides: [{ origin: 'pr:42:mergeable', rank: 0 }],
+        recentDecisions: [
+          {
+            id: 'd1',
+            cycleId: 'c',
+            outcome: 'executed',
+            detail: '',
+            rule: null,
+            createdAt: '2026-07-21T00:00:00Z',
+            action: { type: 'dispatch_code_agent', reason: 'r', originRef: 'pr:42:mergeable' },
+          },
+        ],
+      },
+    ),
+  );
+  // The held PR sits at the top (the override re-ordered it) but stays `cooldown`
+  // and claims no slot, so the free headroom still goes to the fresh issue.
+  assert.deepEqual(
+    result.upcoming?.map((q) => [q.origin, q.status]),
+    [
+      ['pr:42:mergeable', 'cooldown'],
+      ['issue:5', 'dispatching'],
+    ],
+  );
+});
+
+// --------------------------------------------------------------------------
 // Snapshot plumbing: the harness caches the last cycle's plan for /api/state
 // --------------------------------------------------------------------------
 
@@ -259,4 +364,116 @@ test('buildStateSnapshot ships the last cycle plan as upcoming', async () => {
     ],
   );
   system.store.close();
+});
+
+test('a priority override holds after the next pulse and after a restart', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const dbPath = join(dir, 'db.sqlite');
+  const cfg = () =>
+    loadConfig({
+      labelPrefix: '',
+      dbPath,
+      dispatcher: 'rule',
+      agentMode: 'raw',
+      deskRoot: join(dir, 'desk'),
+      worktreeRoot: join(dir, 'wt'),
+      heartbeatIntervalMs: 999_999,
+      maxConcurrentAgents: 3,
+      // Paused → zero headroom → everything waits below the cut, so the test
+      // never spawns an agent or touches a git worktree.
+      startPaused: true,
+    });
+
+  const system = buildSystem(cfg(), { backend: new FakePtyBackend() });
+  system.connector.inject({ kind: 'new_issue', number: 8101, title: 'A' });
+  system.connector.inject({ kind: 'new_issue', number: 8102, title: 'B' });
+  await system.harness.runCycle('manual');
+  // Natural order is by issue number: 8101 then 8102.
+  let snap = await buildStateSnapshot(system);
+  assert.deepEqual(
+    snap.upcoming!.items.map((q) => q.origin),
+    ['issue:8101', 'issue:8102'],
+  );
+
+  // Operator says "do #8102 next".
+  system.store.setPriorityOverrides(['issue:8102']);
+  await system.harness.runCycle('manual');
+  snap = await buildStateSnapshot(system);
+  assert.deepEqual(
+    snap.upcoming!.items.map((q) => q.origin),
+    ['issue:8102', 'issue:8101'],
+    'the override holds after the pulse',
+  );
+  system.store.close();
+
+  // Restart: a fresh system on the same DB file (the fake world survives too).
+  const restarted = buildSystem(cfg(), { backend: new FakePtyBackend() });
+  await restarted.harness.runCycle('manual');
+  snap = await buildStateSnapshot(restarted);
+  assert.deepEqual(
+    snap.upcoming!.items.map((q) => q.origin),
+    ['issue:8102', 'issue:8101'],
+    'the override survives a restart',
+  );
+  restarted.store.close();
+});
+
+// --------------------------------------------------------------------------
+// Store: persistence, replace-all semantics, and stale-override pruning.
+// --------------------------------------------------------------------------
+
+test('setPriorityOverrides replaces the whole set and ranks by position', () => {
+  const store = new Store(':memory:');
+  store.setPriorityOverrides(['issue:1', 'pr:2:ci', 'issue:3']);
+  assert.deepEqual(store.listPriorityOverrides(), [
+    { origin: 'issue:1', rank: 0 },
+    { origin: 'pr:2:ci', rank: 1 },
+    { origin: 'issue:3', rank: 2 },
+  ]);
+  // Replace-all: a re-order that drops an origin clears its override.
+  store.setPriorityOverrides(['issue:3']);
+  assert.deepEqual(store.listPriorityOverrides(), [{ origin: 'issue:3', rank: 0 }]);
+  // An empty list clears every override.
+  store.setPriorityOverrides([]);
+  assert.deepEqual(store.listPriorityOverrides(), []);
+  store.close();
+});
+
+test('a stale override is pruned once its origin stops being tracked', () => {
+  let t = Date.parse('2026-07-01T00:00:00Z');
+  const store = new Store(':memory:', () => new Date(t).toISOString());
+  store.setPriorityOverrides(['issue:1', 'issue:2']);
+
+  // Both tracked this pulse — nothing pruned.
+  store.reconcilePriorityOverrides(['issue:1', 'issue:2'], 1000);
+  t += 500;
+  // #1 stops being tracked, but only 500ms < the 1000ms TTL: it survives.
+  store.reconcilePriorityOverrides(['issue:2'], 1000);
+  assert.deepEqual(
+    store.listPriorityOverrides().map((o) => o.origin),
+    ['issue:1', 'issue:2'],
+  );
+
+  t += 2000;
+  // #1 now untracked for 2500ms > TTL → pruned; #2 refreshed → kept.
+  store.reconcilePriorityOverrides(['issue:2'], 1000);
+  assert.deepEqual(
+    store.listPriorityOverrides().map((o) => o.origin),
+    ['issue:2'],
+  );
+  store.close();
+});
+
+test('a zero TTL disables pruning entirely', () => {
+  let t = Date.parse('2026-07-01T00:00:00Z');
+  const store = new Store(':memory:', () => new Date(t).toISOString());
+  store.setPriorityOverrides(['issue:1']);
+  t += 10_000_000;
+  store.reconcilePriorityOverrides([], 0);
+  assert.deepEqual(
+    store.listPriorityOverrides().map((o) => o.origin),
+    ['issue:1'],
+    'nothing is pruned when the TTL is disabled',
+  );
+  store.close();
 });
