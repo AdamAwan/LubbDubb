@@ -47,6 +47,18 @@ export function replyProposalRef(prNumber: number, commentId: string | null): st
 }
 
 /**
+ * The subject of a plan proposal: the decomposition of one issue. Deliberately
+ * the same string as the planning agent's origin (`issue:12:plan`) — it names the
+ * same thing, the plan for that issue, and re-using the harness's existing
+ * vocabulary is what keeps a ref an operator sees in one surface readable in the
+ * others. Proposals key on `(kind, ref)`, so sharing the string with a dispatch
+ * origin collides with nothing.
+ */
+export function planProposalRef(planOriginRef: string): string {
+  return `${planOriginRef}:plan`;
+}
+
+/**
  * How long an accepted act holds its own ref before it may be proposed again.
  *
  * Deliberately the same span as the dispatcher's `DEFAULT_COOLDOWN`, because it
@@ -110,6 +122,40 @@ export function proposalHold(
 }
 
 /**
+ * Why a plan's decomposition must not be put to the operator again, or null when
+ * it may be. The plan sibling of {@link proposalHold}, and **not** that function,
+ * for a reason worth stating rather than discovering:
+ *
+ * `proposalHold` holds on all three statuses because a merge or a reply is
+ * proposed off *world state that persists* — a green PR is still green next
+ * pulse, so without a durable "no" the same question refills the inbox every
+ * cycle, and without a settle window an act that just went out is re-proposed
+ * before the world reflects it. A plan proposal has neither problem: it is made
+ * once per **verdict**, and the verdict is a row (`Plan.status`) that accepting
+ * and rejecting both rewrite. So the only arm that carries over is `pending`.
+ *
+ * The other two would be actively wrong here, in opposite directions:
+ *
+ * - **`rejected` must not hold.** A rejection already moved the plan out of
+ *   `awaiting_approval`, so the ask cannot repeat spontaneously — which is what
+ *   durability protects against. The only way back is a replan the operator asked
+ *   for, and refusing to re-ask *that* would leave the amended plan unapprovable
+ *   for good: a "no" to one decomposition silently vetoing every future one.
+ * - **`accepted` must not expire.** A released plan stays released for its life;
+ *   re-proposing an approved decomposition fifteen minutes later — the settle
+ *   window that is right for a merge — would ask the operator to authorize work
+ *   its own agents are already doing.
+ *
+ * Release is therefore *not* asked here at all. Rule 4a's question is "is this
+ * plan released", which is `Plan.status === 'active'`: one one-way transition, no
+ * verdict lookup that could disagree with the row it gates.
+ */
+export function planProposalHold(ref: string, proposals: Proposal[]): string | null {
+  const standing = proposals.find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
+  return standing ? `awaiting your accept/reject (${standing.id})` : null;
+}
+
+/**
  * Who authorized an act, in the three forms the rest of the harness needs it —
  * decided **once**, here, because the three are a chain and not three facts.
  *
@@ -143,22 +189,46 @@ interface Authority {
   approved: string;
 }
 
-/** The act a proposal carries, narrowed to what the sink needs to perform it. */
+/**
+ * The act a proposal carries, narrowed to what performing it needs.
+ *
+ * Two of the three are outbound and name a PR. `plan` names neither: accepting it
+ * releases a rule — the parts of an approved decomposition become dispatchable —
+ * and publishes nothing at all. It is read back here anyway, and performed
+ * through the same `ActionExecutor.runAuthorized`, because what matters about
+ * that function is not that it talks to the sink but that it is the one
+ * place an accepted proposal turns into its effect *and its audit row*. A second
+ * route for the one kind with no outbound act would buy nothing and cost the
+ * property.
+ */
 export type ProposedAct =
   | { kind: 'merge'; prNumber: number; method: 'merge' | 'squash' | 'rebase' }
-  | { kind: 'reply_draft'; prNumber: number; commentId: string | null; body: string };
+  | { kind: 'reply_draft'; prNumber: number; commentId: string | null; body: string }
+  | { kind: 'plan'; planId: string; originRef: string };
 
 /**
  * Read the stored action back into something performable.
  *
  * The action was validated by zod when the dispatcher emitted it, but it has been
  * through JSON and SQLite since, and a row may predate a change to the action
- * vocabulary — so accepting re-checks the few fields the sink is about to be
+ * vocabulary — so accepting re-checks the few fields the effect is about to be
  * handed rather than trusting the round trip. A malformed payload is reported,
  * never guessed at: half a merge request is not a merge request.
  */
 export function readProposedAct(proposal: Proposal): { ok: true; act: ProposedAct } | { ok: false; error: string } {
   const action = proposal.action as Record<string, unknown>;
+
+  // Checked before the PR number, because a plan proposal has none — and reading
+  // "names no PR number" off an approved decomposition is exactly the failure a
+  // shared-shape reader invites.
+  if (proposal.kind === 'plan') {
+    const planId = action.planId;
+    const originRef = action.originRef;
+    if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
+      return { ok: false, error: `proposal ${proposal.id} names no plan` };
+    return { ok: true, act: { kind: 'plan', planId, originRef } };
+  }
+
   const prNumber = action.prNumber;
   if (typeof prNumber !== 'number' || !Number.isInteger(prNumber))
     return { ok: false, error: `proposal ${proposal.id} names no PR number` };

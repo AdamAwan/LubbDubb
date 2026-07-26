@@ -13,7 +13,7 @@ import {
   type IssuePickupPolicy,
 } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
-import { mergeProposalRef, proposalHold } from '../proposals/proposals.js';
+import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } from '../proposals/proposals.js';
 import type { DispatchRuleId } from './rules.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { PLAN_FILE } from '../plans/planDocument.js';
@@ -27,6 +27,7 @@ import {
   type PlanningPolicy,
   type PlanRouteVerdict,
 } from '../plans/planning.js';
+import { describeProposedParts } from '../plans/planApproval.js';
 import {
   bySlug,
   currentPlanSummary,
@@ -50,6 +51,7 @@ import {
  *   3. A PR is green/approved/mergeable -> merge it in (gated by auto-send)
  *   3b. A work item's state lags its PR -> move it to/from the review state
  *   3c. A watched open issue has no plan -> planning agent (funnel, off by default)
+ *   3d. A decomposition awaits approval  -> put it to a human (opt-in, off by default)
  *   4. An open issue has no open PR   -> code agent to resolve it into a PR
  *
  * At most one code agent works a given PR branch: when a fresh signal lands on a
@@ -98,6 +100,7 @@ export class RuleDispatcher implements Dispatcher {
     this.planning = {
       enabled: planning.enabled ?? DEFAULT_PLANNING.enabled,
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
+      requireApproval: planning.requireApproval ?? DEFAULT_PLANNING.requireApproval,
       // Reconciliation's knob, not the dispatcher's; carried so the policy stays one object.
       gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
     };
@@ -552,9 +555,51 @@ export class RuleDispatcher implements Dispatcher {
     // look taken. Parts inherit the issue's watch/ignore tag (evaluated once, on
     // the parent) and nothing else — see `issueWatchGateReason` for why the
     // workflow-state gate must not apply here.
+    // 3d: With `planning.requireApproval` on, a decomposition is a proposal
+    // before it is work. Ingestion parks the verdict as `awaiting_approval` and
+    // this puts it to the operator — once: the executor writes the proposal, and
+    // a pending one holds this rule off the plan (`planProposalHold`, asked here
+    // *and* there for the same reason rule 3 and the executor both ask about a
+    // merge). It claims no headroom; it starts nothing. Accepting releases the
+    // plan to `active` and rule 4a takes over on the next pulse.
+    //
+    // Read off `ctx.plans` rather than `eligibleIssues` for the same reason rule
+    // 4a is: a replan of an in-flight plan needs re-approving, and by then the
+    // issue's parts have PRs, so the "no open PR" gate would hide it exactly when
+    // the question matters most.
+    for (const plan of this.planning.enabled ? (ctx.plans ?? []) : []) {
+      if (plan.status !== 'awaiting_approval') continue;
+      const issueNumber = planIssueNumber(plan.originRef);
+      if (issueNumber === null) continue;
+      const issue = ctx.world.issues.find((i) => i.number === issueNumber);
+      if (!issue || issue.state !== 'open') continue;
+      if (issueWatchGateReason(issue, this.pickup) !== null) continue;
+      if (planProposalHold(planProposalRef(plan.originRef), ctx.proposals ?? []) !== null) continue;
+      const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));
+      raw.push({
+        type: 'propose_plan',
+        planId: plan.id,
+        originRef: plan.originRef,
+        prompt: this.templates.render('plan-approval', {
+          number: issueNumber,
+          title: issue.title,
+          parts: parts.length,
+          reason: plan.reason ?? 'the planner gave no reason',
+          list: describeProposedParts(parts),
+        }),
+        rule: 'plan-approval',
+        reason: `Issue #${issueNumber} was decomposed into ${parts.length} part(s) and approval is required before any of them is scheduled.`,
+      } satisfies RawAction);
+    }
+
     const partCandidates: PartCandidate[] = [];
     for (const plan of this.planning.enabled ? (ctx.plans ?? []) : []) {
-      if (plan.status !== 'active') continue; // complete/abandoned/single schedule nothing
+      // `awaiting_approval` is walked too, and dispatches nothing: its parts are
+      // queued as `unapproved` so the hold is visible. Skipping the plan outright
+      // would make an unapproved decomposition look like an idle fleet with no
+      // work in it — the same invisibility that gave `capped` its name.
+      const unapproved = plan.status === 'awaiting_approval';
+      if (plan.status !== 'active' && !unapproved) continue; // complete/abandoned/single schedule nothing
       const issueNumber = planIssueNumber(plan.originRef);
       if (issueNumber === null) continue;
       const issue = ctx.world.issues.find((i) => i.number === issueNumber);
@@ -573,6 +618,19 @@ export class RuleDispatcher implements Dispatcher {
         .sort((a, b) => a.depth - b.depth || a.part.seq - b.part.seq);
       for (const { part, depth } of ready) {
         const origin = partOrigin(issueNumber, part.slug);
+        // An unapproved plan is queued and nothing else: no cooldown arithmetic,
+        // no attempt-cap escalation. Both would be answering "why did this part
+        // not get an agent" with the wrong reason — it did not get one because
+        // you have not approved the plan, and that is the only thing to say.
+        if (unapproved) {
+          partCandidates.push({
+            depth,
+            issueNumber,
+            seq: part.seq,
+            candidate: this.partCandidate(plan, issue, part, parts, index, issueNumber, 'unapproved'),
+          });
+          continue;
+        }
         const verdict = dispatchVerdict(origin, now, ctx.recentDecisions, this.cooldown);
         // 'hold' (already escalated) must not eat a slot the plan could give to a
         // sibling — that is how one stuck part would stall a whole plan.
@@ -804,7 +862,7 @@ export class RuleDispatcher implements Dispatcher {
     parts: PlanPart[],
     index: Map<string, PlanPart>,
     issueNumber: number,
-    held: 'cooldown' | 'capped' | undefined,
+    held: 'cooldown' | 'capped' | 'unapproved' | undefined,
   ): Candidate {
     const origin = partOrigin(issueNumber, part.slug);
     const branch = part.branch ?? partBranch(issueNumber, part.slug);
@@ -818,7 +876,9 @@ export class RuleDispatcher implements Dispatcher {
     const reason =
       held === 'capped'
         ? `${stacks} Held: issue #${issueNumber} is already at its ${this.planning.maxConcurrentPartsPerIssue}-part concurrency cap.`
-        : stacks;
+        : held === 'unapproved'
+          ? `${stacks} Held: the plan for issue #${issueNumber} is awaiting your approval — nothing is scheduled until you accept it.`
+          : stacks;
     return {
       origin,
       rule: 'plan-part',
@@ -891,9 +951,10 @@ interface Candidate {
   /**
    * Held this cycle for a reason that isn't fleet headroom — kept visible in the
    * queue, never dispatched. `cooldown` is the per-origin re-dispatch throttle;
-   * `capped` is a per-plan concurrency limit (`maxConcurrentPartsPerIssue`).
+   * `capped` is a per-plan concurrency limit (`maxConcurrentPartsPerIssue`);
+   * `unapproved` is a plan whose decomposition a human hasn't accepted yet.
    */
-  held?: 'cooldown' | 'capped';
+  held?: 'cooldown' | 'capped' | 'unapproved';
 }
 
 /** Cross-PR rank of a concern class: CI beats base-update beats review comment. */

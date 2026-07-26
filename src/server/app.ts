@@ -14,6 +14,7 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { findingJobRequest } from '../mcp/findings.js';
+import { planProposalRef } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
@@ -224,9 +225,19 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
   // never picked up leaves the issue exactly where it was, not parked.
   app.post('/api/plans/:id/replan', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const plan = store.listPlans().find((p) => p.id === id);
+    const plan = store.getPlan(id);
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
     const next = store.setPlanStatus(id, 'planning');
+    // A replan supersedes an approval that was still being asked for. Withdrawing
+    // it is not optional: a pending proposal holds rule 3d off this plan, so the
+    // amended verdict would never be put to anyone — and the stale card, if
+    // accepted, would release a decomposition its reader never saw. The status
+    // write above is what makes this safe to route through the ordinary reject:
+    // the plan is no longer `awaiting_approval`, so `refusePlan` finds nothing to
+    // settle and the withdrawal is only the inbox item closing.
+    const ref = planProposalRef(plan.originRef);
+    const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
+    if (pending) proposals.reject(pending.id, 'superseded by a replan');
     hub.broadcast({ type: 'world:changed' });
     await harness.runCycle('manual');
     return { ok: true, plan: next };

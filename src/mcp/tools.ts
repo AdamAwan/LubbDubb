@@ -27,6 +27,8 @@ export interface AgentToolTarget {
 export interface McpToolDeps {
   store: Store;
   agents: AgentToolTarget;
+  /** `planning.requireApproval` — see {@link ingestPlanDocument}. */
+  requirePlanApproval?: boolean;
   errors?: ErrorRecorder;
 }
 
@@ -146,6 +148,7 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
           doc: parsed.document,
           originRef: issueOrigin(number),
           title: task.originTitle ?? task.title,
+          requireApproval: deps.requirePlanApproval,
         });
         if (result.overriddenSingle) {
           const message = overriddenSingleMessage(issueOrigin(number), result.overriddenSingle.liveParts);
@@ -154,7 +157,14 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
           // the world no longer allows and would otherwise assume it landed.
           return ok({ accepted: true, status: result.status, retired: result.retired, warning: message });
         }
-        return ok({ accepted: true, status: result.status, retired: result.retired });
+        // Said out loud rather than left to be read off the status string: a
+        // planner that thinks its parts are being worked would otherwise sit
+        // waiting for siblings that will not start until a human clicks accept.
+        const awaiting =
+          result.status === 'awaiting_approval'
+            ? { awaitingApproval: 'The plan is recorded, but nothing is scheduled until an operator approves it.' }
+            : {};
+        return ok({ accepted: true, status: result.status, retired: result.retired, ...awaiting });
       },
     },
     {

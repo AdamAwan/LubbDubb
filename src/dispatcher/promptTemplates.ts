@@ -22,6 +22,7 @@ export type PromptId =
   | 'issue-plan'
   | 'issue-replan'
   | 'plan-part'
+  | 'plan-approval'
   | 'plan-part-escalation'
   | 'issue-pickup'
   | 'issue-pickup-escalation'
@@ -114,6 +115,16 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Say in the PR body which part of #{number} this is and what it stacks on. Reference the issue as ' +
       '"part of #{number}" and never as "closes #{number}": other parts still have to land.',
     doc: "Sent to a code agent for one part of a multi-PR plan (rule 4a). {plan} is the planner's justification, {done}/{remaining} the sibling parts either side of this one, {base} the branch this part stacks on (the default branch when it stacks on nothing). Placeholders: {number} {title} {part} {scope} {branch} {base} {plan} {done} {remaining}.",
+  },
+  'plan-approval': {
+    placeholders: ['number', 'title', 'parts', 'reason', 'list'],
+    template:
+      'Issue #{number} ("{title}") was planned as {parts} stacked pull request(s), and nothing is scheduled until ' +
+      'you approve the decomposition.\n\nWhy it was split: {reason}\n\n{list}\n\n' +
+      'Approve and each part gets its own agent, branch and pull request, bottom of the stack first. Reject and the ' +
+      'issue is worked as a single pull request instead — parts nothing has been started for are retired. If you ' +
+      'want a different split, use Replan on the plan panel: that asks the planner again and comes back here.',
+    doc: 'Put to a human when `planning.requireApproval` is on and a `parts` verdict has landed (rule 3d). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. Placeholders: {number} {title} {parts} {reason} {list}.',
   },
   'plan-part-escalation': {
     placeholders: ['number', 'part', 'attempts'],

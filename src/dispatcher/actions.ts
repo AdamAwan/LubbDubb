@@ -109,6 +109,24 @@ export const ActionSchema = z.discriminatedUnion('type', [
     confidence: z.number().min(0).max(1).optional(),
     ...base,
   }),
+  /**
+   * Put an issue's decomposition to a human before anything is scheduled from it
+   * (issue #109 phase 3). Unlike every other proposal-bearing action this one
+   * carries no act to publish: the executor turns it into an inbox item plus a
+   * `plan` proposal, and accepting that proposal releases the plan row. It is an
+   * action rather than a store write at ingestion time so proposals keep being
+   * born in exactly one place — the executor, from a validated action.
+   */
+  z.object({
+    type: z.literal('propose_plan'),
+    /** The plan row the verdict landed on; what accepting/refusing transitions. */
+    planId: z.string().min(1),
+    /** The issue the plan hangs off (`issue:12`) — the proposal's ref is derived from it. */
+    originRef: z.string().min(1),
+    /** What the operator is shown: the decomposition, and what each verdict means. */
+    prompt: z.string().min(1),
+    ...base,
+  }),
   z.object({
     type: z.literal('set_work_item_state'),
     /** The work item / issue number to transition. */

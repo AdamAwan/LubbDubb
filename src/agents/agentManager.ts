@@ -85,6 +85,14 @@ export interface AgentManagerOptions {
    * which is a supported configuration, not a degraded one.
    */
   mcp?: McpChannel;
+  /**
+   * `planning.requireApproval` — carried only so a `plan.json` a planner writes
+   * lands the same way one submitted through `plan_submit` does. It is a policy
+   * the *ingestion* needs, not the fleet, and it is here rather than read from a
+   * config because this class deliberately takes a store and options and nothing
+   * else. Unset = the default (no approval gate).
+   */
+  requirePlanApproval?: boolean;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
 }
@@ -527,6 +535,7 @@ export class AgentManager extends EventEmitter {
       doc,
       originRef: origin,
       title: task.originTitle ?? task.title,
+      requireApproval: this.opts.requirePlanApproval,
     });
     if (result.overriddenSingle) {
       // Not silently overridden: the planner asked for something the world no

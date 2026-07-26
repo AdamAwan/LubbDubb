@@ -12,10 +12,13 @@ import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
   authorityOf,
   mergeProposalRef,
+  planProposalHold,
+  planProposalRef,
   proposalHold,
   readProposedAct,
   replyProposalRef,
 } from '../proposals/proposals.js';
+import { releasePlan } from '../plans/planApproval.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task } from '../types.js';
 
 export interface ExecutorDeps {
@@ -187,6 +190,39 @@ export class ActionExecutor {
           break;
         }
 
+        case 'propose_plan': {
+          // The one proposal with no act to send (issue #109 phase 3). It is
+          // born here anyway, with the other two: proposals are created in one
+          // place, from a validated action, so "who may put something to a human"
+          // has a single answer. The hold is re-asked here for the same reason
+          // `authorize` re-asks about a merge — rule 3d suppresses itself, but
+          // every path that reaches the executor must be covered, not just the
+          // one that happens to check first.
+          const ref = planProposalRef(action.originRef);
+          const heldBy = planProposalHold(ref, store.listProposals());
+          if (heldBy) {
+            record('skipped', `Skipped proposing the plan for ${action.originRef}: ${heldBy}.`);
+            break;
+          }
+          const esc = this.deps.escalations.create({
+            type: 'approve_change',
+            prompt: action.prompt,
+            context: { originRef: action.originRef, planId: action.planId },
+          });
+          const proposal = store.createProposal({
+            kind: 'plan',
+            ref,
+            action: action as unknown as Action,
+            escalationId: esc.id,
+          });
+          record(
+            'executed',
+            `Proposed the plan for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
+              `Accepting releases its parts; nothing is scheduled until then.`,
+          );
+          break;
+        }
+
         case 'set_work_item_state': {
           // A mechanical bookkeeping transition (e.g. move a work item to "In
           // Review" once its PR is open), not a publish-to-the-world action — so it
@@ -330,6 +366,17 @@ export class ActionExecutor {
     const read = readProposedAct(proposal);
     if (!read.ok) return audit('rejected', `Cannot run the accepted proposal: ${read.error}.`);
     const act = read.act;
+    // A plan act publishes nothing: accepting it releases rule 4a onto the plan's
+    // parts. It runs here rather than in the desk so an approved decomposition
+    // lands in the decision log in the same shape, under the same authority, as
+    // an approved merge — the audit trail is the reason this function exists, and
+    // the sink is only what two of its three acts happen to need.
+    if (act.kind === 'plan') {
+      const settled = releasePlan(store, act.planId, act.originRef);
+      return settled.ok
+        ? audit('executed', `Approved the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`)
+        : audit('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
+    }
     // The verdict's note is the decider's own reason — a human's comment, or the
     // threshold auto-send cleared — so the audit line carries it verbatim rather
     // than re-deriving why the act was allowed.

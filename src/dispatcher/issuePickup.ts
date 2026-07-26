@@ -246,6 +246,19 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,
   });
+  // Answered here, beside the `parts` arm and before the PR gate, for the same
+  // reason: an issue whose decomposition is awaiting approval is planned, and a
+  // part's PR (a replan of a live plan) would otherwise report it as "has open
+  // PR #n" — hiding the one thing the operator has to do about it.
+  if (planVerdict.route === 'awaiting_approval' && plan) {
+    const total = liveParts(parts).length;
+    return {
+      eligible: false,
+      status: 'planning',
+      reasons: [`awaiting your approval of the ${total}-part plan`],
+    };
+  }
+
   if (planVerdict.route === 'parts' && plan) {
     const { merged, total } = planProgress(parts);
     // A `complete` plan is the one arm that never moves again on its own: rule 4a

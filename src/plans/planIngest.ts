@@ -35,7 +35,19 @@ export interface PlanIngestResult {
  */
 export function ingestPlanDocument(
   store: Store,
-  input: { doc: PlanDocument; originRef: string; title: string },
+  input: {
+    doc: PlanDocument;
+    originRef: string;
+    title: string;
+    /**
+     * `planning.requireApproval` — whether a `parts` verdict lands as a proposal
+     * (`awaiting_approval`) rather than as work (`active`). Carried in rather than
+     * read from a config here because ingestion is deliberately store-only: both
+     * transports (the `plan.json` drain and the `plan_submit` tool) pass their own
+     * operator's policy, so neither can persist a verdict the other wouldn't.
+     */
+    requireApproval?: boolean;
+  },
 ): PlanIngestResult {
   const { doc, originRef, title } = input;
   // An *amended* plan is the interesting case: `upsertPlanParts` merges on slug
@@ -52,7 +64,7 @@ export function ingestPlanDocument(
   );
   const retiring = new Set(retire.map((p) => p.id));
   const surviving = existing.filter((p) => !retiring.has(p.id));
-  const status = amendedPlanStatus(doc.verdict, surviving);
+  const status = amendedPlanStatus(doc.verdict, surviving, input.requireApproval ?? false);
 
   const plan = store.upsertPlan({ originRef, title, status, reason: doc.reason });
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });

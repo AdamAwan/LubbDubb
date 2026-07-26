@@ -186,9 +186,17 @@ export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPar
 }
 
 /**
- * The status an amended plan resolves to, given the parts that survive the
- * amendment. A `parts` verdict is always `active` (the roll-up moves it to
- * `complete` when the last part merges).
+ * The status an ingested (or amended) plan resolves to, given the parts that
+ * survive it. A `parts` verdict is `active` (the roll-up moves it to `complete`
+ * when the last part merges) — or `awaiting_approval` when the operator asked to
+ * approve decompositions before anything is scheduled from them (issue #109
+ * phase 3). That is the whole implementation of the gate on the write side: the
+ * status *is* the verdict's standing, so releasing it is a one-way transition on
+ * this row rather than a proposal lookup that could expire or be re-read wrongly.
+ *
+ * `requireApproval` gates only the `parts` arm. A `single` verdict proposes
+ * nothing — it is the path the funnel already falls open to — so gating it would
+ * park an issue on a question with no decision in it.
  *
  * A `single` verdict can only stand while nothing is in flight. Once a part has a
  * branch or a PR, the issue *is* already split: collapsing it back would hand rule
@@ -197,8 +205,12 @@ export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPar
  * `active` and the caller says so out loud rather than the collapse failing later
  * as an unattributable git error.
  */
-export function amendedPlanStatus(verdict: 'single' | 'parts', surviving: PlanPart[]): PlanStatus {
-  if (verdict === 'parts') return 'active';
+export function amendedPlanStatus(
+  verdict: 'single' | 'parts',
+  surviving: PlanPart[],
+  requireApproval = false,
+): PlanStatus {
+  if (verdict === 'parts') return requireApproval ? 'awaiting_approval' : 'active';
   return surviving.some(partHasWork) ? 'active' : 'single';
 }
 

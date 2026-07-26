@@ -415,5 +415,10 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   const branches = execFileSync('git', ['branch', '--format=%(refname:short)'], { cwd: repoRoot, encoding: 'utf8' });
   assert.match(branches, /issue\/12\/schema/);
   assert.match(branches, /issue\/12\/api/);
+  // `planning.requireApproval` is off here, which is its default: an `active`
+  // plan is released work, so the approval gate writes nothing at all (issue #109
+  // phase 3). Asserted on the *existing* path, not only on the new one.
+  assert.deepEqual(system.store.listProposals(), []);
+  assert.deepEqual(system.store.listOpenEscalations(), []);
   system.store.close();
 });

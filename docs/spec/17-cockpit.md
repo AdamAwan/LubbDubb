@@ -62,7 +62,8 @@ for the world to change — chosen from `config.injectable`.
   `POST /api/escalations/:id/answer`; the card can also open the agent's drawer.
 - **Plans** (`PlanPanel`, rendered only when plans exist) — each plan's parts drawn as a stack, joined
   to `upcoming` **by origin** (`issue:<n>:part:<slug>`) so the dispatch cut is visible, with a
-  **Replan** button.
+  **Replan** button. A plan `awaiting_approval` says so on the card and states that nothing below is
+  scheduled until you accept the proposal in "Needs you".
 - **Findings** (`FindingsPanel`, when any exist) — the open count in the heading, since a finding
   never expires into work on its own and this is the only nudge there is. Each has **Promote** and
   **Dismiss**.
@@ -78,7 +79,7 @@ for the world to change — chosen from `config.injectable`.
 
 - **Up next** (`UpNext`) — the last cycle's ranked queue with the headroom cut drawn. Each row shows
   its rule (expandable into the rule's description from `dispatchRules`), title, branch and status
-  (`dispatching` / `waiting` / `cooldown` / `capped`). Empty under the `claude` dispatcher, which
+  (`dispatching` / `waiting` / `cooldown` / `capped` / `unapproved`). Empty under the `claude` dispatcher, which
   materialises no plan.
 - **Decision log** (`DecisionLog`) — the last 100 decisions with outcome, detail and, where present,
   the rule that fired, expandable into that rule's standing rationale.

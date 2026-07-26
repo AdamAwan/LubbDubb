@@ -12,8 +12,10 @@ import { refLink, relTime } from './util.js';
  * Each part carries its position in the dispatcher's own "Up next" projection
  * (joined by origin, so the two can't disagree), including the cut line — and
  * `capped`, the state a part reaches when its *plan* is at
- * `maxConcurrentPartsPerIssue` rather than the fleet being full. A capped part used
- * to be skipped silently, which is why it now has a name.
+ * `maxConcurrentPartsPerIssue` rather than the fleet being full, and `unapproved`,
+ * the state every part of a plan sits in while its decomposition is a proposal a
+ * human hasn't accepted. Both used to be invisible — a silently skipped part looks
+ * exactly like an idle fleet — which is why each now has a name.
  */
 export function PlanPanel({
   plans,
@@ -81,7 +83,11 @@ function PlanCard({
     <div className="plan-card">
       <div className="plan-head">
         {issueNumber !== null && refLink(`#${issueNumber}`, refUrls)} <span className="plan-title">{plan.title}</span>
-        <span className={`chip small${plan.status === 'complete' ? ' ok' : ''}`}>{plan.status}</span>
+        <span
+          className={`chip small${plan.status === 'complete' ? ' ok' : plan.status === 'awaiting_approval' ? ' warn' : ''}`}
+        >
+          {plan.status.replace(/_/g, ' ')}
+        </span>
         {live.length > 0 && (
           <span className="chip small" title="Parts merged out of the parts this plan still declares">
             {merged}/{live.length} merged
@@ -99,6 +105,12 @@ function PlanCard({
           replan
         </AsyncButton>
       </div>
+      {plan.status === 'awaiting_approval' && (
+        <div className="plan-reason">
+          Nothing below is scheduled until you approve this decomposition — the proposal is in “Needs you”. Rejecting it
+          works the issue as a single pull request instead.
+        </div>
+      )}
       {plan.reason && <div className="plan-reason">{plan.reason}</div>}
       {parts.length === 0 && (
         <div className="plan-reason">
@@ -155,7 +167,13 @@ function PartRow({
       )}
       {queue && (
         <span
-          className={`chip small${queue.status === 'dispatching' ? ' ok' : queue.status === 'capped' ? ' warn' : ''}`}
+          className={`chip small${
+            queue.status === 'dispatching'
+              ? ' ok'
+              : queue.status === 'capped' || queue.status === 'unapproved'
+                ? ' warn'
+                : ''
+          }`}
           title={queue.reason}
         >
           {queue.status === 'dispatching' ? '▶ now' : queue.status}

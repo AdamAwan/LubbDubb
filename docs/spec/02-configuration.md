@@ -78,6 +78,7 @@ resolve them against the wrong directory:
 | ----------------------------------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `planning.enabled`                  | `boolean` | `false`   | The multi-PR planning funnel. **Off by default**, and off leaves it out entirely — rule 4 is un-narrowed and no planner ever runs. |
 | `planning.maxConcurrentPartsPerIssue` | `number` | `2`       | How many parts of one plan may have live agents at once.                                                               |
+| `planning.requireApproval`          | `boolean` | `false`   | Put a `parts` verdict to a human before anything is scheduled from it. Off leaves an enabled funnel byte-for-byte as it was: a decomposition commits the moment the planner writes it. |
 | `planning.gitFetchIntervalMs`       | `number`  | `60000`   | Floor on how often plan reconciliation runs `git fetch`. `0` = every pulse.                                             |
 | `mcp.enabled`                       | `boolean` | `true`    | The agent tool channel. **On by default**, because it is purely additive; off leaves agents on the sentinels alone.     |
 

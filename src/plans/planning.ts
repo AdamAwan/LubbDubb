@@ -19,6 +19,18 @@ export interface PlanningPolicy {
    */
   maxConcurrentPartsPerIssue: number;
   /**
+   * Put a `parts` verdict to a human before anything is scheduled from it
+   * (issue #109 phase 3). Off by default, so a configured funnel behaves exactly
+   * as it did: a decomposition commits the moment the planner writes it.
+   *
+   * On, ingestion persists a `parts` verdict as `awaiting_approval` instead of
+   * `active`, rule `plan-approval` puts it to the operator once, and rule 4a
+   * schedules nothing until they accept — approve-before rather than replan-after,
+   * which is the undo we built in place of this gate. A `single` verdict is never
+   * gated: it is the status quo path and proposes nothing.
+   */
+  requireApproval: boolean;
+  /**
    * Minimum gap between the `git fetch`es plan reconciliation runs before reading
    * branch reality.
    *
@@ -35,6 +47,7 @@ export interface PlanningPolicy {
 export const DEFAULT_PLANNING: PlanningPolicy = {
   enabled: false,
   maxConcurrentPartsPerIssue: 2,
+  requireApproval: false,
   gitFetchIntervalMs: 60_000,
 };
 
@@ -76,11 +89,16 @@ export function planBranch(issueNumber: number): string {
  * - `single` — fall through to normal pickup (rule 4). `failedOpen` marks the
  *   issue that got there because planning gave up, not because a planner said so.
  * - `parts`  — decomposed; the part scheduler owns it, pickup stays off.
+ * - `awaiting_approval` — decomposed, but the decomposition is a proposal a human
+ *   has not answered yet (`planning.requireApproval`). Pickup stays off exactly as
+ *   for `parts` — the issue is planned — and the part scheduler queues its parts
+ *   without dispatching any of them.
  * - `planning` — a planner is still owed, either dispatchable now or cooling down.
  */
 export type PlanRouteVerdict =
   | { route: 'single'; failedOpen: boolean }
   | { route: 'parts' }
+  | { route: 'awaiting_approval' }
   | { route: 'planning'; planner: 'dispatch' | 'cooldown' };
 
 export interface PlanRouteInput {
@@ -144,6 +162,12 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   const plan = input.plan;
   if (plan) {
     if (plan.status === 'single') return { route: 'single', failedOpen: false };
+    // Named rather than folded into `parts`: the two behave identically for
+    // pickup (the issue is planned either way) and differently for everything
+    // downstream, and this is the one place the arm is decided — so an
+    // "awaiting your approval" issue must be answerable here rather than the
+    // dispatcher and the cockpit chip each inferring it from the plan row.
+    if (plan.status === 'awaiting_approval') return { route: 'awaiting_approval' };
     // A row still in `planning` is a replan in flight — a planner is owed again.
     if (plan.status !== 'planning') return { route: 'parts' };
   }

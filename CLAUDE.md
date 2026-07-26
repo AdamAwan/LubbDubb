@@ -206,9 +206,63 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     auto-send audits as `rejected` now, not `executed` — the act did not go out — with the same
     `autoSendFailed`/`autoMergeFailed` escalation as before.
   - `autoSend` stays **off by default** and phase 2 changes nothing about _what_ it may do, so the
-    README's safety guarantee holds literally. Phases 3–4 (`planning.requireApproval`, rejection
-    feeding cooldown) are **not** here and nothing anticipates them. Tests:
+    README's safety guarantee holds literally. Phase 4 (a rejection feeding the cooldown / the
+    next prompt) is **not** here and nothing anticipates it. Tests:
     `test/proposals.test.ts`, `test/autoSend.test.ts`.
+  - **Phase 3 — `planning.requireApproval`, the one proposal with no act.** The planning funnel
+    had the same shape and no gate: a `parts` verdict is a proposal in every meaningful sense
+    (_decompose this issue into five stacked PRs, on five branches, with agents_), `ingestPlanDocument`
+    committed it unconditionally, and rule 4a started dispatching — we built the undo (`replan`)
+    instead of the gate. Five decisions carry it, and each is the point where the phase-1/2
+    machinery does **not** fit unchanged:
+  - **Release is the plan's status, not a verdict lookup.** `amendedPlanStatus` takes
+    `requireApproval` and persists a `parts` verdict as **`awaiting_approval`** instead of `active`;
+    accepting moves it to `active` and that is the entire effect, because `awaiting_approval` was
+    only ever `active` with the gate closed. So rule 4a's question — "is this plan released" — is
+    the `plan.status !== 'active'` check it already had, and the old verdict structurally cannot
+    release a new one: a replan resets the row. The alternative (rule 4a joining on an accepted
+    proposal) needs a "is this proposal for the plan's _current_ verdict" predicate, and the only
+    honest key for that is a timestamp against `plan.updatedAt`, which the reconciler moves.
+  - **`proposalHold` has the wrong polarity, in both directions**, so plan proposals get
+    `planProposalHold` beside it (holds on `pending` only, and the doc comment there is the
+    argument). `proposalHold` holds on all three statuses because a merge is proposed off world
+    state that _persists_; a plan proposal is made once per **verdict**, and both verdicts rewrite
+    the row the gate reads. `rejected` holding would let one "no" veto every future decomposition
+    (the plan is only re-askable via a replan the operator asked for); `accepted` expiring after
+    `SETTLE_WINDOW_MS` would re-propose a decomposition whose agents are already running.
+  - **Rejection has an effect of its own, because a bare "no" parks the issue.** Once the funnel
+    is on, a plan is the only thing that schedules anything for a decomposed issue — rule 3b parks
+    the work item in the review state for the life of the plan, and `resolvePlanRoute` fails a spent
+    replan back to `parts`, never open to `single`. So `refusePlan` (`plans/planApproval.ts`)
+    retires every part `partHasWork` says nothing was started for and then takes whatever
+    `amendedPlanStatus('single', …)` makes of the survivors: `single`, so rule 4 works the issue as
+    one PR (the arm the funnel already fails open to), or `active` when parts are genuinely in
+    flight — that case is a _replan_ being refused, and the amendment's new parts are the ones
+    retired. Both arms reuse the two predicates that already decide what an amendment may do; the
+    "different split" case is Replan, which is reachable from the same panel.
+  - **Born in the executor like every other proposal**, from a new validated action `propose_plan`
+    (rule `plan-approval`, 3d) — not at ingestion, which would have to thread an `EscalationInbox`
+    into `AgentManager` (constructed _before_ the inbox, which takes the fleet) and into the MCP
+    tool deps. Exactly-once falls out of the two gates rather than being asserted: the rule fires
+    only on `awaiting_approval`, and a pending proposal holds it. Accepting runs through
+    `ActionExecutor.runAuthorized` and `readProposedAct` learns a third `ProposedAct` — the plan act
+    is checked _before_ the PR number, or an approved decomposition audits as "names no PR number".
+    What matters about `runAuthorized` is that it is the one place an accepted proposal becomes its
+    effect **and its audit row**; the sink is only what two of its three acts happen to need.
+  - **`requireApproval: false` writes no proposal at all.** Phase 2's "one representation" argument
+    cuts the other way here: auto-send is a _decider_ answering the same question a human answers,
+    so folding it in removed a parallel system. Nobody is asked about an ungated plan, and a plan
+    carries no `confidence` for anyone to decide on — a row per plan recording "not asked" is a
+    parallel _record_, not a shared one. `test/planPart.test.ts` asserts the default writes nothing.
+  - Consequences worth knowing: `POST /api/plans/:id/replan` **withdraws** a pending plan proposal
+    (a pending verdict would hold rule 3d off the amended plan, and the stale card would release a
+    decomposition its reader never saw) — routed through the ordinary `ProposalDesk.reject`, which
+    is safe precisely because the status write above already moved the plan, so `refusePlan`
+    no-ops. The reconciler **does** run for `awaiting_approval` plans (readiness is what makes the
+    held parts visible) but does **not** write the tracker status comment for one — an unapproved
+    decomposition announces nothing, and a refusal would otherwise leave that announcement
+    standing. `QueueItem.status` gained **`unapproved`** for the same reason `capped` exists.
+    Tests: `test/planApproval.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
@@ -225,8 +279,11 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   Ingestion is confined to planner origins (`planOriginIssue`): an ordinary pickup agent's
   `plan.json` is ignored, since flipping its own issue to `parts` would strand it while nothing
   schedules parts. `resolvePlanRoute` (`src/plans/planning.ts`, pure) is the one place the arm of
-  the funnel is decided — `single` / `parts` / `planning` — and both the dispatcher (rules 3c + 4)
-  and `issuePickupStatus` read it, so the cockpit chip can never disagree with what fires. Two
+  the funnel is decided — `single` / `parts` / `awaiting_approval` / `planning` — and both the
+  dispatcher (rules 3c + 4) and `issuePickupStatus` read it, so the cockpit chip can never disagree
+  with what fires. (`awaiting_approval` is `planning.requireApproval`'s arm — see the phase 3
+  bullet under "Human decisions" for why the gate is a plan status rather than a proposal lookup.
+  It behaves as `parts` for pickup, which is the point: the issue is planned either way.) Two
   properties to preserve: the verdict is persisted for **both** outcomes (without a `single` row
   the planner re-runs every cycle), and a planner that spends its `dispatchVerdict` attempt cap
   **fails open** to `single` with no escalation — narrowing rule 4 without that turns any planner
@@ -256,7 +313,12 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     isn't `defaultBranch`, or a green part 2 merges into part 1's branch mid-review.
   - `maxConcurrentPartsPerIssue` counts **live tasks** on part origins, not the `dispatched`
     status, and a `hold` verdict never eats a slot — one stuck part must not stall a plan.
-    Tests: `test/planPart.test.ts`.
+  - **Rule 4a also walks an `awaiting_approval` plan, and dispatches nothing from it** — every
+    ready part is queued `held: 'unapproved'`, with the cooldown/attempt-cap arms skipped entirely
+    (they would answer "why did this part not get an agent" with the wrong reason). Skipping the
+    plan outright is the tempting version and the wrong one: an unapproved decomposition would
+    look exactly like an idle fleet, which is the invisibility `capped` was named to fix.
+    Tests: `test/planPart.test.ts`, `test/planApproval.test.ts`.
 - **Stack safety (stage 4 — the last one).** Three things, all in `test/stackedPrs.test.ts`.
   - **CI attribution.** A stacked PR's CI runs the commits of the PR beneath it, so one red base
     turns the whole stack red and rule 1 would put an agent on each of them to fix code that isn't

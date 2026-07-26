@@ -114,10 +114,15 @@ without resetting status. `getFinding`, `listFindings(limit=100)`,
 
 ### Plans
 
-`upsertPlan`, `getPlanByOrigin`, `listPlans`, `setPlanStatus`, `setPlanStatusComment`,
+`upsertPlan`, `getPlan`, `getPlanByOrigin`, `listPlans`, `setPlanStatus`, `setPlanStatusComment`,
 `rollUpPlanStatus(planId)`, `upsertPlanParts(planId, parts)` (merges on slug, **never deletes**),
 `listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
 `markPartDispatched(id, taskId, branch)`.
+
+`plans.status` is `planning | single | awaiting_approval | active | complete | abandoned`. It is a
+*value*, not a column, so a database from an older build needs no migration: an existing row simply
+never holds the new one. `awaiting_approval` is the approval gate itself — see
+[08](08-planning.md#the-approval-gate).
 
 ### Escalations
 
