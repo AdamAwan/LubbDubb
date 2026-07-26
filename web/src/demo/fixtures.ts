@@ -281,6 +281,36 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     jobs: [],
+    // A path two live agents are both editing from different branches. Neither
+    // dispatch gate is violated — the collision only exists inside the worktrees,
+    // which is the whole point of detecting it off what was actually written.
+    overlaps: [
+      {
+        path: 'src/integrations/azure/restAzureDevOpsApi.ts',
+        sameWorktree: false,
+        live: true,
+        writers: [
+          {
+            agentId: 'agent-a2',
+            taskId: 'task-a2',
+            originRef: 'pr:139',
+            originTitle: 'Map Azure DevOps reviewer votes to approval state',
+            branch: 'feature/azure-approval',
+            status: 'waiting',
+            at: ago(2),
+          },
+          {
+            agentId: 'agent-a1',
+            taskId: 'task-a1',
+            originRef: 'pr:142',
+            originTitle: 'Add token-bucket rate limiting to the ingest API',
+            branch: 'feature/rate-limit',
+            status: 'running',
+            at: ago(6),
+          },
+        ],
+      },
+    ],
     // What agents noticed outside their own tasks — one of each kind, which is
     // the whole vocabulary (`report_finding`).
     findings: [

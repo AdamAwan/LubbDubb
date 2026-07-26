@@ -101,6 +101,28 @@ export interface AgentFile {
   promoted: boolean;
   createdAt: string;
 }
+/** One agent's part in a file overlap (mirrors the server's OverlapWriter). */
+export interface OverlapWriter {
+  agentId: string;
+  taskId: string;
+  originRef: string | null;
+  originTitle: string | null;
+  branch: string | null;
+  status: string;
+  at: string;
+}
+/**
+ * A path two agents wrote while both were running (mirrors the server's FileOverlap).
+ * Derived from the file-events rows, not from anything an agent had to declare.
+ */
+export interface FileOverlap {
+  path: string;
+  writers: OverlapWriter[];
+  /** Both on one branch, hence one worktree — one file on disk, two live processes. */
+  sameWorktree: boolean;
+  /** Still happening: two or more of the writers are live. */
+  live: boolean;
+}
 /**
  * Something an agent noticed outside its own task (mirrors the server's Finding):
  * a duplicate, work blocked on something outside its reach, an out-of-scope
@@ -344,6 +366,8 @@ export interface AppState {
   flags?: AgentFlag[];
   /** Every file agents wrote (file-events hook), grouped by agentId for the drawer's "files changed" list. Optional for older servers. */
   files?: AgentFile[];
+  /** Paths two concurrently-running agents both wrote. Optional for older servers. */
+  overlaps?: FileOverlap[];
   /** What agents noticed outside their own tasks, newest first. Optional for older servers. */
   findings?: Finding[];
   escalations: Escalation[];

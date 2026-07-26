@@ -521,6 +521,20 @@ mcp__lubbdubb__…, but you haven't granted it yet."` with no human at the promp
 - Tests drive `mcp.session(agentId)`, which converges on the same `dispatch` an agent's bridge
   reaches — there is no test-only tool path. `npm run smoke` runs a real `bridge.mjs` child over a
   real socket, which is the half unit tests can't cover.
+- **`claim(ref)` was investigated and closed, not forgotten** (#113). Phase 2's table listed it; the
+  five tools above are the whole surface, and a sixth should not be added back for symmetry. The
+  reasoning, so it isn't re-derived: **origin and branch are 1:1 for every world-driven dispatch
+  rule** (`pr:<n>:*`→`pr.branch`, `issue:<n>`→`issue/<n>`, `issue:<n>:plan`→`plan/issue/<n>`,
+  `issue:<n>:part:<slug>`→`issue/<n>/<slug>`, `story:<id>:work`→`story/<id>`), so the
+  `activeOrigins` / `findActiveTaskByOrigin` gate already _is_ a branch gate and the three existing
+  gates leave no dispatch-time collision for a claim to prevent. What they can't see is what an
+  agent does once running — and a claim can't fix that either: **advisory** makes it documentation
+  an agent may forget, **enforcing** needs a lock that vanishes under `mcp.enabled: false` (a lock
+  that silently isn't one), and **letting the dispatcher read claims** would let an agent suppress
+  another's dispatch, which is #108's open question 3 in different clothes. The `scope`-violation
+  case is not blocked on claims at all: `PlanDocumentSchema` types `scope` as free prose
+  (`z.string().min(1)`), so nothing can check it — making it checkable is a schema change, not a
+  tool. What shipped instead is the structural detector below.
 
 **Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
 each message's content blocks through the pure `renderBlocks` in
@@ -761,6 +775,24 @@ so the executor runs it directly.
   **waiting**, the note is **held** (don't inject — `agents.respond` flips `waiting → running` and
   would derail a human escalation). Notify de-dup reads `DispatchContext.recentDecisions` (wired in
   `harness.ts` from `store.listDecisions`), so a persistent signal isn't re-notified every cycle.
+- **`src/fileOverlap.ts` is the blind spot behind all of the above** (#113). Those gates are keyed
+  on what the dispatcher _dispatches_ — a branch, an origin, a plan's part budget — and are complete
+  for that. None can see what an agent does once running: two agents on two branches, each within
+  its own gate, both editing one file. Git reports it only when the hunks collide; when they don't,
+  the second merge quietly undoes or duplicates the first. The pure `detectFileOverlaps` joins
+  `agent_files` **across** agents (the rows the file-events hook already writes for everyone,
+  needing no prompt-side knowledge and no tool channel — which is exactly what an advisory `claim`
+  could never be) and reports paths written by agents whose lifetimes overlapped. Three narrowings
+  carry it: **code tasks only** (a desk agent's scratch-dir `notes.md` is not another's),
+  **concurrency not history** (without it every long-lived file reports), and **agent lifetimes not
+  write timestamps** (a file row is deduped per agent+path, so its timestamp dates the _last_ write).
+  `lifetime()` is the one reading of "still going" so the concurrency test and the panel's `live`
+  flag can't disagree. `sameWorktree` marks the bad case: `WorktreeManager` is reuse-first, so one
+  branch is one directory — two live agents there are editing one file on disk with no merge to
+  reconcile them. It is **diagnostic only** — nothing in the dispatcher reads it, for the same reason
+  nothing reads `findings` — and it is deliberately after-the-fact, which is the trade for being
+  structural. Shipped in `/api/state` as `overlaps` + `web/src/components/OverlapPanel.tsx`.
+  Tests: `test/fileOverlap.test.ts`.
 
 **External references → links.** URL construction lives in the provider, never in `web/`. The
 github providers implement the `RefResolvable` capability (`resolveRefUrl(ref)`, backed by the

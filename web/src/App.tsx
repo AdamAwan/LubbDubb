@@ -14,6 +14,7 @@ import { DecisionLog } from './components/DecisionLog.js';
 import { UpNext } from './components/UpNext.js';
 import { PlanPanel } from './components/PlanPanel.js';
 import { FindingsPanel } from './components/FindingsPanel.js';
+import { OverlapPanel } from './components/OverlapPanel.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { AsyncButton } from './components/AsyncButton.js';
@@ -102,6 +103,9 @@ export function App() {
   // Findings awaiting an operator's call — the count on the panel heading. A
   // finding never expires into work on its own, so this is the only nudge there is.
   const openFindings = (state.findings ?? []).filter((f) => f.status === 'open').length;
+  // Overlaps still in flight — the only ones an operator can still do anything
+  // about. A settled one stays in the panel as the record of what collided.
+  const liveOverlaps = (state.overlaps ?? []).filter((o) => o.live).length;
   const selectedAgent = state.agents.find((a) => a.id === selected) ?? null;
 
   // Heartbeat countdown: fraction of the interval elapsed since the last pulse.
@@ -259,6 +263,16 @@ export function App() {
                 onPromote={(id) => api.promoteFinding(id).then(refresh)}
                 onDismiss={(id) => api.dismissFinding(id).then(refresh)}
               />
+            </>
+          )}
+
+          {(state.overlaps?.length ?? 0) > 0 && (
+            <>
+              <h3 className="muted">
+                File overlaps
+                {liveOverlaps > 0 && <span className="count">{liveOverlaps}</span>}
+              </h3>
+              <OverlapPanel overlaps={state.overlaps ?? []} now={now} refUrls={state.refUrls} />
             </>
           )}
 
