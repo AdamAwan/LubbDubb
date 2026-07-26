@@ -63,6 +63,23 @@ export class EscalationInbox extends EventEmitter {
   }
 
   /**
+   * Settle an escalation the harness resolved *out of band* — not by typing an
+   * answer into the agent's session. The permission backstop (issue #130) is the
+   * one caller: the agent is blocked inside a `--permission-prompt-tool` call, so
+   * the "answer" is the tool's return value, and routing text into the session
+   * (what {@link answer} does) would corrupt a session that isn't at a prompt.
+   * Marks the item answered and emits so the cockpit refreshes, nothing more.
+   */
+  settleResolved(id: string, response: string): Escalation {
+    const esc = this.store.getEscalation(id);
+    if (!esc) throw new Error(`Escalation ${id} not found`);
+    if (esc.status !== 'open') throw new Error(`Escalation ${id} is already ${esc.status}`);
+    const updated = this.store.answerEscalation(id, response);
+    this.emit('answered', { escalation: updated, routing: 'resolved_out_of_band' });
+    return updated;
+  }
+
+  /**
    * Cascade-dismiss every open escalation tied to an agent that has reached a
    * terminal-dead state (server restart / kill / crash). Such an agent can never
    * receive the answer, so leaving these `open` just clutters "Needs you" with

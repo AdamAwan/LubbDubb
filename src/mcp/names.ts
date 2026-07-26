@@ -12,8 +12,24 @@
 /** The key our server is registered under in a launch config. */
 export const MCP_SERVER_ID = 'lubbdubb';
 
-/** Every tool we expose. Asserted against the built tool set in `test/mcpChannel.test.ts`. */
-export const MCP_TOOL_NAMES = ['plan_submit', 'escalate', 'world_read', 'report_finding', 'note_progress'] as const;
+/**
+ * Every tool we expose. Asserted against the built tool set in `test/mcpChannel.test.ts`.
+ *
+ * `request_permission` (issue #130 phase B) is unlike the others: an agent is not
+ * told about it and never calls it directly — Claude Code invokes it through the
+ * `--permission-prompt-tool` seam ({@link PERMISSION_PROMPT_TOOL}) when a tool call
+ * falls through the allow-list. It still has to be in this list, and therefore in
+ * {@link ALLOWED_MCP_TOOLS}, or the permission machinery's own call to it is refused
+ * — the exact "connected but every call refused" trap this module exists to prevent.
+ */
+export const MCP_TOOL_NAMES = [
+  'plan_submit',
+  'escalate',
+  'world_read',
+  'report_finding',
+  'note_progress',
+  'request_permission',
+] as const;
 
 /**
  * The names as the permission layer sees them.
@@ -34,3 +50,10 @@ export const MCP_TOOL_NAMES = ['plan_submit', 'escalate', 'world_read', 'report_
  * advertises it, and every call to it is refused with nothing in the logs to say why.
  */
 export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${MCP_SERVER_ID}__${name}`);
+
+/**
+ * The qualified name passed to `claude --permission-prompt-tool` (issue #130 phase
+ * B). Derived from the same server id + tool name as every grant above, so it can
+ * never drift from the tool `buildTools` actually exposes.
+ */
+export const PERMISSION_PROMPT_TOOL = `mcp__${MCP_SERVER_ID}__request_permission`;

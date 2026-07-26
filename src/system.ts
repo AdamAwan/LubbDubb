@@ -28,6 +28,8 @@ import { EscalationInbox } from './escalation/escalationInbox.js';
 import { ProposalDesk } from './proposals/proposalDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
+import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
+import { PermissionDesk } from './agents/permissionDesk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates } from './dispatcher/promptTemplates.js';
@@ -51,6 +53,11 @@ export interface System {
    * missing wire between "approve" and "the approved thing happens".
    */
   proposals: ProposalDesk;
+  /**
+   * The permission backstop (issue #130 phase B): where an agent's tool call that
+   * the allow-list doesn't cover blocks until the operator allows or denies it.
+   */
+  permissions: PermissionDesk;
   executor: ActionExecutor;
   dispatcher: Dispatcher;
   harness: Harness;
@@ -161,12 +168,27 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const perm = config.agentPermissionMode;
   const extraArgs = config.claudeArgs;
   const allowedTools = config.agentAllowedTools;
-  type ArgsBuilder = (opts: { sessionId: string; resume: boolean }) => string[];
+  // The permission backstop's tool name, wired only when the MCP channel is on and
+  // the operator left the backstop enabled (issue #130 phase B). Passed on every
+  // launch; it only takes effect when that launch also carries an `--mcp-config`.
+  const permissionPromptTool =
+    config.mcp.enabled && config.mcp.permissionEscalation ? PERMISSION_PROMPT_TOOL : undefined;
+  // `mcpConfigPath` is per-launch (minted by AgentManager) and MUST be threaded
+  // through — without it neither `--mcp-config` nor `--permission-prompt-tool` is
+  // ever added, and the tool channel is dead in production.
+  type ArgsBuilder = (opts: { sessionId: string; resume: boolean; mcpConfigPath: string | null }) => string[];
   const agentSetup = {
     stream: {
       // Stream-JSON resume is out of scope; ignore the session id.
-      buildArgs: (() =>
-        buildClaudeStreamArgs({ permissionMode: perm, extraArgs, allowedTools, fileEvents: true })) as ArgsBuilder,
+      buildArgs: (({ mcpConfigPath }) =>
+        buildClaudeStreamArgs({
+          permissionMode: perm,
+          extraArgs,
+          allowedTools,
+          fileEvents: true,
+          mcpConfigPath,
+          permissionPromptTool,
+        })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
       resumeInput: undefined,
@@ -175,7 +197,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
     pty: {
       // The one resumable runtime: pin the session id up front, `--resume` it later.
-      buildArgs: (({ sessionId, resume }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath }) =>
         buildClaudeArgs({
           permissionMode: perm,
           extraArgs,
@@ -184,6 +206,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           resume,
           statusLine: true,
           fileEvents: true,
+          mcpConfigPath,
+          permissionPromptTool,
         })) as ArgsBuilder,
       factory: ptyFactory(true),
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
@@ -224,6 +248,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
     requirePlanApproval: config.planning.requireApproval,
+    // Lazy for the same reason as `agents`: the desk is built after this server
+    // (it needs the escalation inbox). Off entirely when the operator disabled the
+    // backstop, so `request_permission` denies rather than blocks.
+    permissions: (): PermissionDesk | undefined => (config.mcp.permissionEscalation ? permissions : undefined),
     errors,
   });
 
@@ -247,6 +275,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
+  // The permission backstop (issue #130 phase B): where an agent's un-allowlisted
+  // tool call blocks until the operator allows or denies. Reaches the fleet via the
+  // MCP server's `permissions` thunk above; resolved on agent death via its `release`.
+  const permissions = new PermissionDesk(escalations);
 
   // Live, in-memory dispatch controls both the harness and executor read by
   // reference each cycle. Ephemeral by design: a restart reverts to config.
@@ -389,6 +421,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     agents,
     escalations,
     proposals,
+    permissions,
     executor,
     dispatcher,
     harness,

@@ -11,6 +11,17 @@ interface McpPolicy {
    * degrades to, so this is an escape hatch rather than a distinct mode.
    */
   enabled: boolean;
+  /**
+   * The permission backstop (issue #130 phase B). When on, a tool call the
+   * `agentAllowedTools` allow-list doesn't cover is routed to the operator via
+   * Claude Code's `--permission-prompt-tool` — it files an escalation in "Needs
+   * you" and blocks the *same* live agent until the operator allows or denies,
+   * rather than the agent hanging on a prompt no human can answer. Off falls back
+   * to Claude's default headless behaviour for an un-allowlisted tool (a silent
+   * deny). Gated by {@link McpPolicy.enabled} — the tool lives on the MCP server.
+   * Defaults on. See `docs/spec/10-agent-runtimes.md`.
+   */
+  permissionEscalation: boolean;
 }
 
 /**
@@ -343,7 +354,7 @@ const DEFAULTS: Config = {
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: false, gitFetchIntervalMs: 60_000 },
-  mcp: { enabled: true },
+  mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   dispatcher: 'rule',
   agentMode: 'stream',

@@ -83,6 +83,10 @@ const realApi = {
   pulse: () => post('/api/pulse'),
   inject: (event: unknown) => post('/api/inject', event),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),
+  // Allow or deny a permission request an agent is blocked on (issue #130). The
+  // same live agent then continues or gets the denial — no config-and-restart.
+  decidePermission: (id: string, allow: boolean, note?: string) =>
+    post<{ ok: true; allowed: boolean }>(`/api/escalations/${id}/permission`, { allow, note }),
   // Accepting is what performs the act — the harness merges / sends it through the
   // same seam auto-send would have used. Rejecting sends nothing and is durable.
   acceptProposal: (id: string, note?: string) =>

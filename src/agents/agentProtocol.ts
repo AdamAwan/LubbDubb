@@ -127,6 +127,14 @@ interface ClaudeArgsOptions {
    * phase B) rather than hanging.
    */
   allowedTools?: string[];
+  /**
+   * The qualified MCP tool name for `--permission-prompt-tool` — the permission
+   * backstop (issue #130 phase B). When a tool call is covered by neither the
+   * allow-list nor the permission mode, Claude Code calls this tool instead of
+   * denying, and it routes the request to the operator. Only takes effect when
+   * {@link mcpConfigPath} is also set, since the tool lives on the MCP server.
+   */
+  permissionPromptTool?: string;
 }
 
 /**
@@ -156,6 +164,10 @@ function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
   if (!opts.mcpConfigPath) return;
   args.push('--mcp-config', opts.mcpConfigPath);
   args.push('--allowedTools', ALLOWED_MCP_TOOLS.join(','));
+  // The permission backstop lives on this same server, so it's only wirable when
+  // the channel is (issue #130 phase B). Claude Code then calls it — rather than
+  // denying — for any tool the allow-list and permission mode don't resolve.
+  if (opts.permissionPromptTool) args.push('--permission-prompt-tool', opts.permissionPromptTool);
 }
 
 /** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */

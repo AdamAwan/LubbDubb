@@ -1,5 +1,6 @@
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
+import type { PermissionDesk } from '../agents/permissionDesk.js';
 import type { Agent, AgentAsk, Finding, FindingInput, Task } from '../types.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest.js';
@@ -29,6 +30,12 @@ interface McpToolDeps {
   agents: AgentToolTarget;
   /** `planning.requireApproval` — see {@link ingestPlanDocument}. */
   requirePlanApproval?: boolean;
+  /**
+   * The permission backstop (issue #130 phase B). Present when
+   * `mcp.permissionEscalation` is on; the `request_permission` tool blocks on it.
+   * Absent, that tool reports the backstop is off rather than blocking forever.
+   */
+  permissions?: PermissionDesk;
   errors?: ErrorRecorder;
 }
 
@@ -351,6 +358,39 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
               { trimmed: `Kept, trimmed to one line. Shorter notes read better on the card.` }
             : {}),
         });
+      },
+    },
+    {
+      name: MCP_TOOL_NAMES[5],
+      description:
+        'Harness-internal. You do not call this — Claude Code invokes it through --permission-prompt-tool ' +
+        'when one of your tool calls is not covered by the operator allow-list, to ask the operator to ' +
+        'allow or deny it. It blocks until they decide and returns the verdict.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tool_name: { type: 'string', description: 'The tool the permission is for.' },
+          input: { type: 'object', description: 'The tool input awaiting approval.' },
+          tool_use_id: { type: 'string', description: 'Claude Code’s id for this tool use.' },
+        },
+      },
+      // Returns the BARE `{behavior,…}` verdict `--permission-prompt-tool` expects,
+      // through `toolJson` directly — never `ok()` (its `_status` envelope would
+      // break Claude's permission parser) and never `toolError` (Claude reads an
+      // error as a tool *failure*, not a structured deny).
+      handler: async (args) => {
+        if (!deps.permissions) {
+          // Backstop off: deny rather than block. Claude sees a normal deny and the
+          // agent carries on / escalates, exactly as with `mcp.permissionEscalation: false`.
+          return toolJson({ behavior: 'deny', message: 'The permission backstop is disabled.' });
+        }
+        const toolName = typeof args.tool_name === 'string' && args.tool_name ? args.tool_name : 'a tool';
+        const input =
+          typeof args.input === 'object' && args.input !== null ? (args.input as Record<string, unknown>) : {};
+        // Structural identity: like every write tool, the agent is the credential's,
+        // never an argument. The tool/input come from Claude's permission machinery.
+        const verdict = await deps.permissions.request(agent, task, toolName, input);
+        return toolJson(verdict);
       },
     },
   ];

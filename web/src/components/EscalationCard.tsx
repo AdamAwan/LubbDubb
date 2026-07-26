@@ -10,6 +10,7 @@ export function EscalationCard({
   refUrls,
   onAnswer,
   onDecide,
+  onPermission,
   onOpenAgent,
 }: {
   escalation: Escalation;
@@ -19,6 +20,8 @@ export function EscalationCard({
   refUrls: Record<string, string>;
   onAnswer: (text: string) => Promise<unknown> | unknown;
   onDecide?: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
+  /** Allow or deny a permission request an agent is blocked on (issue #130). */
+  onPermission?: (id: string, allow: boolean, note?: string) => Promise<unknown> | unknown;
   /** Open the originating agent's drawer for the full transcript. */
   onOpenAgent?: (agentId: string) => void;
 }) {
@@ -26,6 +29,9 @@ export function EscalationCard({
   const send = useAsyncAction();
   const { context } = escalation;
   const signal = describeSignal(context.originRef, context.prNumber);
+  // A live permission request: the agent is blocked inside a tool call awaiting the
+  // operator's allow/deny. Like a proposal, free text can't stand in for the verdict.
+  const permission = context.permission && onPermission ? context.permission : null;
   // Options the agent supplied through the `escalate` tool beat the prompt-text
   // heuristic: the agent knows what the choices are, where `quickAnswers` can only
   // guess from wording. Fall back to the guess when it didn't say (the sentinel path).
@@ -43,6 +49,11 @@ export function EscalationCard({
         {decidable && (
           <span className="chip small warn" title="Accepting performs this act; nothing happens until you do">
             needs your decision
+          </span>
+        )}
+        {permission && (
+          <span className="chip small warn" title="An agent is blocked on this command until you allow or deny it">
+            wants permission
           </span>
         )}
         {signal && <span className="chip small">{signal}</span>}
@@ -79,7 +90,9 @@ export function EscalationCard({
         </button>
       ) : null}
 
-      {!decidable && quick.length > 0 && (
+      {permission ? <pre className="esc-output">{permission.summary}</pre> : null}
+
+      {!decidable && !permission && quick.length > 0 && (
         <div className="esc-quick">
           {quick.map((q) => (
             <AsyncButton key={q} className="small" onClick={() => onAnswer(q)}>
@@ -89,7 +102,29 @@ export function EscalationCard({
         </div>
       )}
 
-      {decidable ? (
+      {permission ? (
+        <div className="esc-decide">
+          <input
+            placeholder="Why (optional) — recorded either way"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <AsyncButton
+            className="primary"
+            title="Run this command; the same agent continues"
+            onClick={() => onPermission!(escalation.id, true, text.trim() || undefined)}
+          >
+            Allow
+          </AsyncButton>
+          <AsyncButton
+            className="ghost"
+            title="Refuse this command; the agent is told and carries on"
+            onClick={() => onPermission!(escalation.id, false, text.trim() || undefined)}
+          >
+            Deny
+          </AsyncButton>
+        </div>
+      ) : decidable ? (
         <div className="esc-decide">
           <input
             placeholder="Why (optional) — recorded either way"

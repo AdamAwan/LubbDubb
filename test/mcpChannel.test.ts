@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildClaudeArgs, buildClaudeStreamArgs, MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
-import { ALLOWED_MCP_TOOLS, MCP_SERVER_ID, MCP_TOOL_NAMES } from '../src/mcp/names.js';
+import { ALLOWED_MCP_TOOLS, MCP_SERVER_ID, MCP_TOOL_NAMES, PERMISSION_PROMPT_TOOL } from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
 import {
@@ -115,6 +115,20 @@ test('--mcp-config is wired only when a config path was minted, in both runtimes
   }
 });
 
+test('the permission backstop tool is wired only alongside the channel it lives on (#130)', () => {
+  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+    // No --mcp-config → the tool has no server, so no flag however it's asked for.
+    const noChannel = build({ permissionPromptTool: PERMISSION_PROMPT_TOOL });
+    assert.equal(noChannel.includes('--permission-prompt-tool'), false);
+    // Channel on but the operator disabled the backstop → still no flag.
+    const disabled = build({ mcpConfigPath: '/tmp/agent.json' });
+    assert.equal(disabled.includes('--permission-prompt-tool'), false);
+    // Both → Claude Code routes an un-allowlisted call to our tool instead of denying.
+    const on = build({ mcpConfigPath: '/tmp/agent.json', permissionPromptTool: PERMISSION_PROMPT_TOOL });
+    assert.equal(on[on.indexOf('--permission-prompt-tool') + 1], PERMISSION_PROMPT_TOOL);
+  }
+});
+
 test('the granted permission names are exactly the tools the server exposes', () => {
   // Three things must agree — the launch-config key, the tool names, and the
   // `mcp__<key>__<tool>` grants. Drift between them yields a *connected* server
@@ -123,6 +137,10 @@ test('the granted permission names are exactly the tools the server exposes', ()
     ALLOWED_MCP_TOOLS,
     MCP_TOOL_NAMES.map((name) => `mcp__${MCP_SERVER_ID}__${name}`),
   );
+  // The permission-prompt tool is one of them, or the permission machinery's own
+  // call to it is refused — the exact trap names.ts exists to prevent (#130).
+  assert.ok(ALLOWED_MCP_TOOLS.includes(PERMISSION_PROMPT_TOOL));
+  assert.equal(PERMISSION_PROMPT_TOOL, `mcp__${MCP_SERVER_ID}__request_permission`);
 });
 
 test('the addendum keeps the sentinels as the floor rather than withdrawing them', () => {
@@ -1108,6 +1126,130 @@ test('a note is a write, so it too is attributed structurally — one field, and
   system.store.close();
 });
 
+// -- the permission backstop (issue #130 phase B) ----------------------------
+
+/** Let the queued microtasks (the blocking tool handler filing its escalation) run. */
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 10));
+
+/** Start a request_permission call without awaiting it, so we can act while it blocks. */
+function startPermission(
+  system: System,
+  agent: Agent,
+  input: Record<string, unknown>,
+): Promise<{ content: { text: string }[] }> {
+  const session = system.mcp.session(agent.id);
+  assert.ok(session, 'a spawned agent has a live MCP credential');
+  return session!.call('request_permission', { tool_name: 'Bash', input }) as Promise<{ content: { text: string }[] }>;
+}
+
+/** The bare verdict JSON a permission call resolves to (never an `_status` envelope). */
+function verdictOf(result: { content: { text: string }[] }): Record<string, unknown> {
+  const parsed = JSON.parse(result.content[0]!.text) as Record<string, unknown>;
+  assert.equal('_status' in parsed, false, 'the permission verdict must be bare, not the tool envelope');
+  return parsed;
+}
+
+test('an un-allowlisted call blocks, appears in the inbox, and Allow lets the same agent run it', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+
+  const pending = startPermission(system, agent, { command: 'terraform apply' });
+  await tick();
+
+  // It surfaced as a "Needs you" item carrying the exact command.
+  const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id);
+  assert.ok(esc, 'the blocked call files an escalation');
+  assert.ok(esc!.context.permission, 'marked as a permission request');
+  assert.match(esc!.prompt, /terraform apply/);
+  assert.equal(system.agents.isLive(agent.id), true); // still live, blocked in the tool call
+
+  // Operator allows it: the blocked call resolves with a bare allow verdict.
+  assert.equal(system.permissions.decide(esc!.id, true), true);
+  const verdict = verdictOf(await pending);
+  assert.equal(verdict.behavior, 'allow');
+  assert.deepEqual(verdict.updatedInput, { command: 'terraform apply' });
+  // And the inbox item is settled — without typing an answer into the session.
+  assert.equal(system.store.getEscalation(esc!.id)?.status, 'answered');
+  system.store.close();
+});
+
+test('Deny returns a structured denial the agent reads, and does not orphan the task', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+  const pending = startPermission(system, agent, { command: 'rm -rf /' });
+  await tick();
+  const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id)!;
+
+  assert.equal(system.permissions.decide(esc.id, false, 'too destructive'), true);
+  const verdict = verdictOf(await pending);
+  assert.equal(verdict.behavior, 'deny');
+  assert.match(String(verdict.message), /too destructive/);
+  // The task is untouched — a denial is the agent's to handle, not a kill.
+  assert.equal(system.store.getTask(agent.taskId)?.status, 'running');
+  // Deciding twice is a no-op (the second click 409s at the route).
+  assert.equal(system.permissions.decide(esc.id, true), false);
+  system.store.close();
+});
+
+test('killing an agent mid-request resolves its blocked call as a denial (no hung Claude)', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+  const pending = startPermission(system, agent, { command: 'sleep 999' });
+  await tick();
+  assert.ok(system.store.listOpenEscalations().some((e) => e.agentId === agent.id));
+
+  system.agents.kill(agent.id); // releases the credential -> denyAll
+  const verdict = verdictOf(await pending);
+  assert.equal(verdict.behavior, 'deny');
+  system.store.close();
+});
+
+test('the ordinary answer route refuses a permission request and names the one that settles it', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const agent = spawnAgent(system, 'issue:12');
+  const pending = startPermission(system, agent, { command: 'docker run x' });
+  await tick();
+  const esc = system.store.listOpenEscalations().find((e) => e.agentId === agent.id)!;
+
+  // Free text can't be branched on: /answer refuses and points at /permission.
+  const answered = await app.inject({
+    method: 'POST',
+    url: `/api/escalations/${esc.id}/answer`,
+    payload: { response: 'sure' },
+  });
+  assert.equal(answered.statusCode, 409);
+  assert.match(answered.json().error, /\/permission/);
+
+  // The permission route settles it and unblocks the agent.
+  const decided = await app.inject({
+    method: 'POST',
+    url: `/api/escalations/${esc.id}/permission`,
+    payload: { allow: true },
+  });
+  assert.equal(decided.statusCode, 200);
+  assert.equal(verdictOf(await pending).behavior, 'allow');
+  // A second decision has nothing pending to settle.
+  const again = await app.inject({
+    method: 'POST',
+    url: `/api/escalations/${esc.id}/permission`,
+    payload: { allow: false },
+  });
+  assert.equal(again.statusCode, 409);
+  await app.close();
+  system.store.close();
+});
+
+test('with the backstop disabled, the tool denies rather than blocking', async () => {
+  const system = build({ mcp: { enabled: true, permissionEscalation: false } });
+  const agent = spawnAgent(system, 'issue:12');
+  // Resolves immediately (no operator needed) with a deny — no escalation filed.
+  const verdict = verdictOf(await startPermission(system, agent, { command: 'anything' }));
+  assert.equal(verdict.behavior, 'deny');
+  assert.equal(system.store.listOpenEscalations().length, 0);
+  system.store.close();
+});
+
 // -- the fail-open floor -----------------------------------------------------
 
 test('with the channel off, no launch carries it and the sentinels still park and finish', () => {
@@ -1144,6 +1286,26 @@ test('a system that never listened still mints credentials but wires no config p
   assert.ok(system.mcp.session(agent.id));
   assert.equal(backend.spawned[backend.spawned.length - 1]!.args.includes('--mcp-config'), false);
   system.store.close();
+});
+
+test('a listening channel is actually threaded onto the launch (--mcp-config + backstop)', async () => {
+  // The regression guard for the system.ts wiring: AgentManager mints the config
+  // path, but the ArgsBuilder must forward it, or `--mcp-config` (and the backstop
+  // that lives on that server) never reach the agent — invisible to every test
+  // that drives `mcp.session()` in-process. Exercised in pty mode with a fake PTY.
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig({ agentMode: 'pty' }), { backend, errorMirror: () => {} });
+  assert.equal(await system.mcp.listen(), true);
+  try {
+    spawnAgent(system, 'issue:12');
+    const args = backend.spawned[backend.spawned.length - 1]!.args;
+    assert.equal(args.includes('--mcp-config'), true, 'the minted config path is forwarded onto the launch');
+    assert.equal(args[args.indexOf('--allowedTools') + 1], ALLOWED_MCP_TOOLS.join(','));
+    assert.equal(args[args.indexOf('--permission-prompt-tool') + 1], PERMISSION_PROMPT_TOOL);
+  } finally {
+    await system.mcp.close();
+    system.store.close();
+  }
 });
 
 // -- the socket, once, for real ----------------------------------------------
