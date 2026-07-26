@@ -175,8 +175,15 @@ A PR is merge-ready when **all** of:
 - `mergeableState` is none of `behind`, `blocked`, `dirty`,
 - every entry of `unresolvedComments` is `handled`.
 
-It emits `merge_pr` with `method: 'squash'` and `confidence: 0.9`. The executor's auto-send gate then
-decides between merging and escalating for approval.
+It emits `merge_pr` with `method: 'squash'` and `confidence: 0.9`. The executor then authorizes it —
+merging or putting it to a human — see [09](09-execution.md#authorizing-an-outbound-act).
+
+**Unless a verdict on `pr:<n>:merge` is standing.** `proposalHold(kind, ref, ctx.proposals,
+{rejectionSignals: ctx.rejectionSignals})` suppresses the rule while the merge is unanswered or has
+been rejected, so one question is asked once. A rejection stops standing at the first world event on
+that PR since it was given (`DispatchContext.rejectionSignals`, wired in `harness.ts`), at which point
+this rule fires again — and the merge-readiness list above still has to pass, which is what keeps the
+expiry from re-asking on a PR that has merely been commented on.
 
 ## The rationale
 

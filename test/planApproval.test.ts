@@ -65,6 +65,39 @@ test('a plan proposal is held by a pending verdict only — not by a settled one
   assert.equal(planProposalHold(planProposalRef('issue:99'), at('pending')), null);
 });
 
+test('phase 4 stops at the plan predicate: a plan verdict has no signal expiry to inherit', async () => {
+  // The two predicates are separate on purpose, and the polarity is the reason.
+  // `proposalHold` holds a rejection until the world item moves; `planProposalHold`
+  // never holds one at all, so there is no hold for a signal to end — and the
+  // signature says so: it takes no signals, because a transition on `issue:<n>`
+  // says nothing about whether a decomposition is the right shape.
+  const ref = planProposalRef('issue:12');
+  const rejected: Proposal[] = [
+    { ...proposalRow(), ref, status: 'rejected', note: 'one PR is fine', decidedAt: '2026-07-25T00:00:00.000Z' },
+  ];
+  assert.equal(planProposalHold(ref, rejected), null);
+
+  // End to end, with the world moving under a refused decomposition: the route
+  // out of phase 3 still fires, and no world event re-opens the question.
+  const { system } = plannedSystem();
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+  system.proposals.reject(proposal.id, 'one PR is fine');
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'single', 'the phase-3 route out still fires');
+
+  system.connector.inject({ kind: 'new_pr', number: 5, title: 'One PR', branch: 'issue/12' });
+  system.connector.inject({ kind: 'pr_comment', prNumber: 5, author: 'reviewer', body: 'a thought' });
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+  assert.equal(
+    system.store.listProposals().length,
+    1,
+    'a plan is proposed once per verdict — the world moving is not a new verdict',
+  );
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'single');
+  system.store.close();
+});
+
 test('the ask carries the shape of the split, not just a count', () => {
   const rendered = describeProposedParts([
     partRow('schema', 1),

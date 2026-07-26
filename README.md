@@ -337,8 +337,19 @@ rather than a text box, and approving is what performs the act — the harness m
 PR, or sends the draft, through that same seam. Approving twice performs it once; a
 send that fails re-escalates rather than dropping; and while a proposal is unanswered —
 or after you reject it — the rule that raised it stops proposing the same act, so one
-question is asked once. Rejections are durable by design: the harness does not re-ask
-next heartbeat.
+question is asked once.
+
+**A "no" stands until the world gives a reason to ask again.** Not for a fixed number of
+minutes: re-asking on a timer would make "no" mean "not this second", and the only way to
+make the question stop would be to do the act by hand. So a rejection holds its act for as
+many heartbeats as you like, and ends at the first thing that actually happens to the item
+it was about — a push, a CI result, an approval, a comment. Reject a merge because the PR
+needs one more commit and the harness stays quiet; when the commit lands and CI goes green
+it asks once more, saying what you told it and what has changed since. A pull request
+nobody touches is never re-proposed, which is the right answer: nothing about it has
+changed. And the reason you typed is not filed away — it is handed to the next agent the
+harness puts on that exact item, quoted as your words, so "too defensive, just fix the
+lint" reaches the agent instead of the draft you refused.
 
 A proposal is also what the gate produces when it **passes**. Auto-send is a decider on
 that same record rather than a second authorization system beside it: enabled and

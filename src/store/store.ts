@@ -987,6 +987,30 @@ export class Store {
     return rows.map(rowToWorldEvent);
   }
 
+  /**
+   * Transitions observed for `refs` strictly after `since` — "has anything
+   * happened to these items since then", which is what ends a rejection's
+   * standing (issue #109 phase 4, `rejectionSignalQuery`).
+   *
+   * Bounded by time and item rather than by row count, unlike {@link
+   * listWorldEvents}, whose limit serves a feed that only has to be long enough
+   * to read. A rejection is unbounded in age, so a count-bounded read would judge
+   * an old one against events it cannot see; naming the window removes the case
+   * instead of answering it, and keeps the read small — it is the handful of
+   * items actually carrying a rejection, over the `world_events(created_at)`
+   * index. No refs, no query.
+   */
+  listWorldEventsSince(since: string, refs: string[]): WorldEvent[] {
+    if (refs.length === 0) return [];
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM world_events WHERE created_at > ? AND ref IN (${refs.map(() => '?').join(',')})
+         ORDER BY created_at DESC, rowid DESC`,
+      )
+      .all(since, ...refs) as WorldEventRow[];
+    return rows.map(rowToWorldEvent);
+  }
+
   /** The last snapshot the harness diffed against, or null on a fresh store. */
   getWorldBaseline(): WorldSnapshot | null {
     const row = this.db.prepare(`SELECT world FROM world_baseline WHERE id=1`).get() as { world: string } | undefined;
