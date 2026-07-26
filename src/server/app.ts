@@ -406,7 +406,9 @@ export function buildStateSnapshot(system: System) {
     // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
     // cockpit only looks refs up in this map, so it stays provider-agnostic.
     const refUrls = buildRefUrls({
-      pullRequests: world.pullRequests,
+      // Closed PRs are linked from the cockpit's "recently closed" list, so their
+      // `#n` needs a URL too — the ref map is what the UI looks numbers up in.
+      pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? [])],
       issues: world.issues,
       taskBranches: tasks.map((t) => t.branch),
       resolve: (ref) => connector.resolveRefUrl(ref),

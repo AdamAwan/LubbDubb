@@ -1,7 +1,9 @@
 import { Octokit } from '@octokit/rest';
 import type { MergeMethod } from '../../sink/actionSink.js';
+import { withinClosedWindow } from '../closedWindow.js';
 import type {
   GhCheckRun,
+  GhClosedPull,
   GhCombinedStatus,
   GhCommentRef,
   GhIssue,
@@ -96,6 +98,39 @@ export class OctokitGitHubApi implements GitHubApi {
       url: p.html_url,
       labels: p.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
     }));
+  }
+
+  async listRecentlyClosedPulls(since: string): Promise<GhClosedPull[]> {
+    // Sorted by `updated`, descending: GitHub cannot filter the list endpoint by
+    // close time, but `updated_at >= closed_at` always holds (closing *is* an
+    // update), so the first entry whose `updated_at` predates the window proves
+    // every later entry is out of it too — and the iterator stops there instead
+    // of walking the repo's entire closed-PR history.
+    const out: GhClosedPull[] = [];
+    const pages = this.octokit.paginate.iterator(this.octokit.pulls.list, {
+      ...this.base,
+      state: 'closed',
+      sort: 'updated',
+      direction: 'desc',
+      per_page: 100,
+    });
+    for await (const { data } of pages) {
+      for (const p of data) {
+        if ((p.updated_at ?? '') < since) return out;
+        if (!withinClosedWindow(p.closed_at, since)) continue;
+        out.push({
+          number: p.number,
+          title: p.title,
+          branch: p.head.ref,
+          baseBranch: p.base.ref,
+          authorLogin: p.user?.login ?? '',
+          url: p.html_url,
+          merged: p.merged_at !== null,
+          closedAt: p.closed_at,
+        });
+      }
+    }
+    return out;
   }
 
   async getPull(number: number): Promise<GhPullDetail> {

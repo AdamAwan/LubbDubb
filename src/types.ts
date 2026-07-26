@@ -15,6 +15,15 @@ export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 /** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */
 export type MergeableState = 'dirty' | 'behind' | 'blocked' | 'clean' | 'unknown';
 
+/**
+ * Where a pull request sits: still open, merged, or closed without merging.
+ *
+ * Absent on a PR from a provider (or persisted row) that predates closed-PR
+ * visibility — read it through the pure `prState` helper in `prHealth.ts`, which
+ * folds a missing value back onto the long-standing `merged` flag.
+ */
+export type PrState = 'open' | 'merged' | 'closed';
+
 export interface PullRequest {
   id: string;
   number: number;
@@ -40,6 +49,15 @@ export interface PullRequest {
   mergeableState?: MergeableState;
   /** Already merged; once true the harness stops acting on it. */
   merged?: boolean;
+  /**
+   * Open / merged / closed-unmerged. Populated by providers that report recently
+   * closed PRs; absent means "the provider only told us about open PRs", which
+   * `prState` reads back as open-or-merged from {@link merged}. This is the field
+   * that tells a merge apart from an abandoned PR — `merged` alone cannot.
+   */
+  state?: PrState;
+  /** When the PR left the open set (ISO). Only set on a closed/merged PR. */
+  closedAt?: string;
   /**
    * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR
    * carrying `config.prExclusionLabel` is left alone by the dispatcher. Absent when
@@ -120,7 +138,26 @@ export interface Story {
 /** The full picture of the outside world at one instant. */
 export interface WorldSnapshot {
   takenAt: string; // ISO
+  /**
+   * **Open** pull requests, and only those. Every dispatcher rule and every PR
+   * predicate (`openPrForIssue`, `basePrOf`, `inheritedCiFailure`, `isStackedPr`)
+   * takes this list and trusts it to be open — recently-closed PRs are carried
+   * separately below so that stays true by construction.
+   */
   pullRequests: PullRequest[];
+  /**
+   * PRs that left the open set within `config.closedPrWindowMs` — a merge or an
+   * abandonment the harness would otherwise only ever see as a disappearance.
+   * Deliberately *not* merged into {@link pullRequests}: it exists so the world
+   * diff can emit a real `pr_merged`/`pr_closed`, plan reconciliation can tell a
+   * merge from an abandoned PR, and the cockpit can show what just happened —
+   * none of which are reasons to put a dead PR in front of a dispatch rule.
+   *
+   * Absent/empty when the provider doesn't report closed PRs or the window is
+   * disabled; every consumer must degrade to the old "absence means merged"
+   * inference rather than assuming this list is complete.
+   */
+  closedPullRequests?: PullRequest[];
   issues: Issue[];
   stories: Story[];
 }
@@ -135,6 +172,7 @@ export type WorldEventKind =
   | 'pr_approved'
   | 'pr_mergeable'
   | 'pr_merged'
+  | 'pr_closed'
   | 'pr_comment'
   | 'issue_opened'
   | 'issue_closed'

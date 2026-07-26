@@ -6,11 +6,13 @@ const STATE_KEY = 'fake_world';
 /** The editable, persisted document the fake integrations share. */
 export interface FakeWorld {
   pullRequests: PullRequest[];
+  /** PRs an injected `pr_closed` moved out of the open set — the fake's retention window. */
+  closedPullRequests: PullRequest[];
   issues: Issue[];
   stories: Story[];
 }
 
-export const EMPTY_WORLD: FakeWorld = { pullRequests: [], issues: [], stories: [] };
+export const EMPTY_WORLD: FakeWorld = { pullRequests: [], closedPullRequests: [], issues: [], stories: [] };
 
 /**
  * A thin read/write wrapper over the single persisted `fake_world` document in

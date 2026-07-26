@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { MergeMethod } from '../../sink/actionSink.js';
+import { withinClosedWindow } from '../closedWindow.js';
 import type {
+  AzClosedPull,
   AzCommentRef,
   AzMergeResult,
   AzPolicyEvaluation,
@@ -129,6 +131,18 @@ interface RawPull {
   lastMergeSourceCommit?: { commitId?: string };
   createdBy?: { uniqueName?: string };
   reviewers?: Array<{ vote?: number }>;
+}
+
+interface RawClosedPull {
+  pullRequestId: number;
+  title: string;
+  sourceRefName: string;
+  targetRefName: string;
+  /** active | completed | abandoned. */
+  status?: string;
+  /** ISO instant the PR was completed or abandoned. Absent while still active. */
+  closedDate?: string;
+  createdBy?: { uniqueName?: string };
 }
 
 interface RawThread {
@@ -342,6 +356,40 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       mergeStatus: p.mergeStatus ?? 'notSet',
       reviewerVotes: (p.reviewers ?? []).map((r) => r.vote ?? 0),
     }));
+  }
+
+  async listRecentlyClosedPullRequests(since: string): Promise<AzClosedPull[]> {
+    // `queryTimeRangeType=closed` + `minTime` is the server-side window; `status=all`
+    // is what makes one request cover both completions and abandonments (asking for
+    // each separately would double the cost of the feature). The client-side filter
+    // below is not redundant: the range is inclusive at the boundary, and an org on
+    // an older API version that ignores the time parameters must still not be able
+    // to flood the world with a year of closed PRs.
+    const data = await this.request<{ value: RawClosedPull[] }>(
+      this.withApiVersion(`${this.repoUrl}/pullrequests`, {
+        'searchCriteria.status': 'all',
+        'searchCriteria.queryTimeRangeType': 'closed',
+        'searchCriteria.minTime': since,
+        $top: '100',
+      }),
+    );
+    const out: AzClosedPull[] = [];
+    for (const p of data.value) {
+      if (p.status !== 'completed' && p.status !== 'abandoned') continue;
+      const closedAt = p.closedDate;
+      if (!withinClosedWindow(closedAt, since)) continue;
+      out.push({
+        pullRequestId: p.pullRequestId,
+        title: p.title,
+        branch: stripRef(p.sourceRefName),
+        baseBranch: stripRef(p.targetRefName),
+        authorUniqueName: p.createdBy?.uniqueName ?? '',
+        url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${p.pullRequestId}`,
+        merged: p.status === 'completed',
+        closedAt,
+      });
+    }
+    return out;
   }
 
   async listPullThreads(pullRequestId: number): Promise<AzThread[]> {

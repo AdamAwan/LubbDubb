@@ -21,6 +21,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
   'pr_comment',
   'pr_approved',
   'pr_mergeable',
+  'pr_closed',
 ]);
 
 /**
@@ -43,7 +44,8 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
   ) {}
 
   async snapshot(): Promise<WorldSlice> {
-    return { pullRequests: this.world.read().pullRequests };
+    const world = this.world.read();
+    return { pullRequests: world.pullRequests, closedPullRequests: world.closedPullRequests };
   }
 
   handles(kind: InjectableEvent['kind']): boolean {
@@ -78,6 +80,24 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
             }),
           );
           break;
+        case 'pr_closed': {
+          // The one place the fake models a PR *leaving* the world. `mergePr` above
+          // deliberately doesn't: it marks the PR merged in place so the
+          // deterministic loop settles on a world it can still read. Closing is the
+          // separate, later fact, and it moves the row rather than copying it — a PR
+          // in both lists would have the world diff report the same merge twice.
+          const idx = world.pullRequests.findIndex((p) => p.number === event.prNumber);
+          if (idx === -1) break;
+          const [pr] = world.pullRequests.splice(idx, 1);
+          const merged = event.merged ?? pr!.merged ?? false;
+          world.closedPullRequests.push({
+            ...pr!,
+            merged,
+            state: merged ? 'merged' : 'closed',
+            closedAt: new Date().toISOString(),
+          });
+          break;
+        }
         case 'new_pr':
           if (!world.pullRequests.some((p) => p.number === event.number)) {
             world.pullRequests.push({

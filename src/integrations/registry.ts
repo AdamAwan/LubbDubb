@@ -32,6 +32,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         prAuthor: gh.filters?.prAuthor,
         owner: gh.owner,
         repo: gh.repo,
+        closedPrWindowMs: ctx.config.closedPrWindowMs,
       });
     },
     azure: (ctx) => {
@@ -41,6 +42,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         store: ctx.store,
         errors: ctx.errors,
         prAuthor: az.filters?.prAuthor,
+        closedPrWindowMs: ctx.config.closedPrWindowMs,
       });
     },
   },

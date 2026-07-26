@@ -18,6 +18,10 @@ export interface PullRequest {
   baseBranch?: string;
   mergeableState?: string;
   merged?: boolean;
+  /** 'open' | 'merged' | 'closed' — set on recently-closed PRs; absent means open. */
+  state?: string;
+  /** When the PR left the open set (ISO). Only on a closed/merged PR. */
+  closedAt?: string;
   /** Labels/tags on the PR; carries the exclusion tag when the operator ignores it. */
   labels?: string[];
   /** Server-computed health: why the PR is stuck (empty reasons = healthy). */
@@ -50,7 +54,14 @@ export interface Story {
 }
 export interface WorldSnapshot {
   takenAt: string;
+  /** Open PRs, and only those. */
   pullRequests: PullRequest[];
+  /**
+   * PRs that left the open set within the server's retention window, marked
+   * merged vs closed-unmerged. Optional so a cockpit against an older server (or
+   * one with the window disabled) simply draws no "recently closed" list.
+   */
+  closedPullRequests?: PullRequest[];
   issues: Issue[];
   stories: Story[];
 }
@@ -246,6 +257,7 @@ export type WorldEventKind =
   | 'pr_approved'
   | 'pr_mergeable'
   | 'pr_merged'
+  | 'pr_closed'
   | 'pr_comment'
   | 'issue_opened'
   | 'issue_closed'

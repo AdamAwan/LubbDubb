@@ -35,7 +35,7 @@ export type Capability = 'sourceControl' | 'issues' | 'backlog';
 export type IntegrationSelection = Record<Capability, string>;
 
 /** One integration's contribution to the world — only the domains it owns. */
-export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'issues' | 'stories'>>;
+export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'closedPullRequests' | 'issues' | 'stories'>>;
 
 /** Everything a provider factory needs to build an integration. */
 export interface IntegrationContext {
