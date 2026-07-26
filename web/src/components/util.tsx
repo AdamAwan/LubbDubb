@@ -21,12 +21,19 @@ export function refLink(token: string, refUrls: Record<string, string>): ReactNo
 
 /**
  * The URL to open a flagged artifact: an http(s) ref opens directly, a
- * worktree-relative path routes through the confined, sandboxed artifact route
- * (addressed by flag id — the server derives the path from the stored flag).
+ * worktree-relative path routes through the confined, sandboxed artifact route.
+ *
+ * The route sits *outside* the `/api` prefix and carries a per-flag capability in
+ * its query string, because opening a chip is a top-level browser navigation and a
+ * navigation cannot carry the bearer `Authorization` header (issue #129). The
+ * server builds that URL — capability and all — into `artifactUrls`, so the cockpit
+ * looks it up here (the same way `refLink` looks up `refUrls`) rather than
+ * string-building it. A missing entry falls back to the bare path, which is what an
+ * auth-off server serves anyway.
  */
-export function artifactHref(flag: { id: string; ref: string }): string {
+export function artifactHref(flag: { id: string; ref: string }, artifactUrls: Record<string, string>): string {
   if (/^https?:\/\//i.test(flag.ref)) return flag.ref;
-  return `/api/artifacts/${encodeURIComponent(flag.id)}`;
+  return artifactUrls[flag.id] ?? `/artifacts/${encodeURIComponent(flag.id)}`;
 }
 
 // Issue/PR mentions in free text — the universal `#<number>` GitHub syntax.

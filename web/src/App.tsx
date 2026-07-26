@@ -233,6 +233,7 @@ export function App() {
               refUrls={state.refUrls}
               lastLine={lastLineFor(a.id)}
               flags={flagsByAgent.get(a.id)}
+              artifactUrls={state.artifactUrls ?? {}}
               onOpen={() => setSelected(a.id)}
               onKill={() => api.killAgent(a.id).then(refresh)}
             />
@@ -247,6 +248,7 @@ export function App() {
               now={now}
               refUrls={state.refUrls}
               flags={flagsByAgent.get(a.id)}
+              artifactUrls={state.artifactUrls ?? {}}
               onOpen={() => setSelected(a.id)}
               past
             />
@@ -363,6 +365,7 @@ export function App() {
           refUrls={state.refUrls}
           live={liveOutput.current.get(selectedAgent.id)}
           flags={flagsByAgent.get(selectedAgent.id)}
+          artifactUrls={state.artifactUrls ?? {}}
           files={filesByAgent.get(selectedAgent.id)}
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}

@@ -421,6 +421,13 @@ export interface AppState {
    */
   refUrls: Record<string, string>;
   /**
+   * Flag id → the URL to open that artifact by navigation. Built server-side so it
+   * can carry the per-flag capability a navigation needs (a bearer header can't
+   * ride a top-level navigation). An http(s) flag is absent here — the cockpit
+   * links those directly. Optional so an older server degrades gracefully.
+   */
+  artifactUrls?: Record<string, string>;
+  /**
    * The rule dispatcher's rule book, keyed by the rule id a decision carries.
    * The Decision log looks `decision.rule` up here to expand a row into the
    * rule that fired; a missing key ⇒ no rule identity to show.
