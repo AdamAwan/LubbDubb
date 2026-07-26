@@ -168,6 +168,23 @@ export class Store {
     return row ? rowToTask(row) : null;
   }
 
+  /**
+   * Is there already an active (queued/running/waiting) task on this branch?
+   *
+   * The mirror of {@link findActiveTaskByOrigin}, and the enforcement half of the
+   * origin↔branch 1:1 property (issue #116). For every world-driven rule the two
+   * are the same question, so this never fires for one; rule 0's operator-supplied
+   * branch is the one dispatch path where they can diverge, and
+   * `WorktreeManager.ensure` is reuse-first — so without this, two live agents
+   * share one worktree directory with no merge anywhere to reconcile them.
+   */
+  findActiveTaskByBranch(branch: string): Task | null {
+    const row = this.db
+      .prepare(`SELECT * FROM tasks WHERE branch=? AND status IN ('queued','running','waiting') LIMIT 1`)
+      .get(branch) as TaskRow | undefined;
+    return row ? rowToTask(row) : null;
+  }
+
   // -- Jobs (operator-launched queue) --------------------------------------
 
   /** Queue a new operator-launched job. Starts `queued`; the dispatcher drains it. */

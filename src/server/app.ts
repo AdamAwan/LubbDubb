@@ -247,9 +247,26 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     if (body.branch !== undefined && body.branch !== null && typeof body.branch !== 'string')
       return reply.code(400).send({ error: 'branch must be a string' });
     const prompt = body.prompt.trim();
+    const branch = (body.branch as string | undefined) ?? null;
+    // Refuse a branch a live task already holds, up front (issue #116). The
+    // executor's identical check is the real gate and stays — a branch can go busy
+    // between queueing and dispatch, so this one can't be the only one — but a 409
+    // now is worth far more to the operator than a deferral they'd have to read out
+    // of the decision log hours later. The two cannot drift apart because they ask
+    // `Store.findActiveTaskByBranch` the same question; where they differ is only in
+    // *when*, which is why this one rejects (nothing has been promised yet) and the
+    // executor's defers (a queued job the operator is entitled to have retried).
+    // Only for code jobs: rule 0 ignores a desk job's branch entirely.
+    if (kind === 'code' && branch) {
+      const held = store.findActiveTaskByBranch(branch);
+      if (held)
+        return reply.code(409).send({
+          error: `branch ${branch} is held by active task ${held.id}${held.originRef ? ` (${held.originRef})` : ''}`,
+        });
+    }
     // Fall back to a title derived from the prompt's first line when none is given.
     const title = (typeof body.title === 'string' && body.title.trim()) || deriveTitle(prompt);
-    const job = store.createJob({ title, prompt, kind, branch: (body.branch as string | undefined) ?? null });
+    const job = store.createJob({ title, prompt, kind, branch });
     hub.broadcast({ type: 'world:changed' });
     const report = await harness.runCycle('manual');
     return { ok: true, job, report };

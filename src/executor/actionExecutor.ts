@@ -38,11 +38,13 @@ export interface ExecutionSummary {
 }
 
 /**
- * Turns a validated action plan into real effects, applying the two guard rails
- * the design calls for: never start a second agent for work that's already in
- * flight (origin de-duplication), and never exceed the concurrency cap. Every
- * decision — executed, deferred, rejected, or skipped — is written to the audit
- * log with its reason, so "why did/didn't this happen" is always answerable.
+ * Turns a validated action plan into real effects, applying the guard rails the
+ * design calls for: never start a second agent for work that's already in flight
+ * (origin de-duplication), never put a second agent on a branch a live task holds
+ * (the branch half of the same gate — see below), and never exceed the
+ * concurrency cap. Every decision — executed, deferred, rejected, or skipped — is
+ * written to the audit log with its reason, so "why did/didn't this happen" is
+ * always answerable.
  */
 export class ActionExecutor {
   constructor(private readonly deps: ExecutorDeps) {}
@@ -79,6 +81,39 @@ export class ActionExecutor {
           if (origin && store.findActiveTaskByOrigin(origin)) {
             record('skipped', `Skipped: work for ${origin} is already in flight.`);
             break;
+          }
+          // The branch half of the same gate (issue #116). For every world-driven
+          // rule origin and branch are 1:1 (`pr:<n>:*`→`pr.branch`,
+          // `issue:<n>`→`issue/<n>`, `issue:<n>:plan`→`plan/issue/<n>`,
+          // `issue:<n>:part:<slug>`→`issue/<n>/<slug>`, `story:<id>:work`→`story/<id>`),
+          // so the origin check above already *is* a branch check and this one is a
+          // no-op for them — asserted in test/jobQueue.test.ts, because a later rule
+          // that broke the 1:1 property would otherwise break it silently. Two paths
+          // can reach here with a branch the origin doesn't determine: rule 0, whose
+          // `job.branch` is a free string the operator supplies, and the LLM
+          // dispatcher, which names branches in prose. `WorktreeManager.ensure` is
+          // reuse-first, so letting either through puts two live claude processes in
+          // one worktree directory — the same files on disk, and no merge anywhere to
+          // reconcile them.
+          //
+          // Deferred rather than skipped, deliberately. `skipped` is the origin
+          // gate's word and means "this work is already being done"; that is not what
+          // happened here — the job is a distinct request that merely names a busy
+          // branch. Every active task ends, so the collision is transient and the
+          // honest reading is "not yet": the job stays `queued` (nothing calls
+          // `markJobDispatched`) and the gate re-tests next cycle, exactly as the
+          // cap/pause deferrals below do, for one audit row a cycle. An operator who
+          // doesn't want to wait cancels it.
+          if (action.type === 'dispatch_code_agent') {
+            const held = store.findActiveTaskByBranch(action.branch);
+            if (held) {
+              record(
+                'deferred',
+                `Deferred: branch ${action.branch} is held by active task ${held.id}` +
+                  `${held.originRef ? ` (${held.originRef})` : ''}; a second agent would share its worktree. Will retry when it frees.`,
+              );
+              break;
+            }
           }
           if (this.deps.runtime.paused) {
             record('deferred', `Deferred: dispatch is paused; will retry when resumed.`);
