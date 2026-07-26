@@ -91,9 +91,12 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   on branch **`plan/issue/<n>`**, origin `issue:<n>:plan`. That branch namespace is not
   cosmetic: git stores refs as files, so `refs/heads/issue/12` and `refs/heads/issue/12/plan`
   cannot coexist, and `issue/<n>` is exactly what a `single` verdict's pickup agent will want.
-  The planner writes `.lubbdubb/plan.json`; `AgentManager.ingestFileEvent` recognises the
-  reserved path off the **file-events hook**, zod-validates it (`src/plans/planDocument.ts`) and
-  persists it via `Store.upsertPlan`/`upsertPlanParts`. The read must happen **inside the drain**
+  The planner submits its verdict through the `plan_submit` MCP tool (preferred — synchronous
+  validation) _or_ by writing `.lubbdubb/plan.json`, which stays fully wired as the fallback: both
+  converge on `ingestPlanDocument` (see "The MCP tool channel" below). On the file path,
+  `AgentManager.ingestFileEvent` recognises the reserved path off the **file-events hook**,
+  zod-validates it (`src/plans/planDocument.ts`) and persists it via
+  `Store.upsertPlan`/`upsertPlanParts`. The read must happen **inside the drain**
   — `src/system.ts` removes a done agent's worktree on the reap, so a later read finds nothing.
   Ingestion is confined to planner origins (`planOriginIssue`): an ordinary pickup agent's
   `plan.json` is ignored, since flipping its own issue to `parts` would strand it while nothing
@@ -366,6 +369,60 @@ empirically with a nested `claude` run where a project hook and a `--settings` h
 `Write`. Skills/CLAUDE.md are filesystem-discovered and unaffected by `--settings`. Our hook is
 additionally env-gated on `$LUBBDUBB_EVENTS_DIR` (set only in the spawn env), so it's a silent no-op
 for a human running `claude` in that repo by hand.
+
+**The MCP tool channel (`src/mcp/`, issue #108) — the typed, bidirectional half.** Sentinels and the
+file-events hook are both **fire-and-forget**: an agent can announce, but never receive a value back,
+never learn that what it sent was rejected, never ask a question. `plan.json` is the proof — a
+structured payload smuggled through an artifact-detection hook, whose zod rejection the planner never
+hears, costing a whole agent to discover what a synchronous error would have said in one turn. So
+every spawned agent is now wired to a tools-only MCP server inside the harness (`--mcp-config`,
+config `mcp.enabled`, **on by default** — it is purely additive, unlike `planning`). Phase 1 is two
+tools: **`plan_submit`** (replaces the `plan.json` write, same `PlanDocumentSchema`, validated
+synchronously with the error returned) and **`escalate`** (the WAITING sentinel's payload, plus a
+`kind` and `options` the cockpit renders as one-click answers). Every response carries a `_status`
+envelope (origin, task, open escalation, plan roll-up), which is what removes the need for a polling
+tool. Things to preserve:
+
+- **Sentinels stay, as the degradation floor.** `MCP_PROTOCOL_ADDENDUM` states a preference, never a
+  replacement, and `@@LUBBDUBB_DONE@@` has no tool at all: MCP has no turn-boundary event, so a
+  `finish()` the model forgets to call is silence, and silence is indistinguishable from thinking.
+  The `result` event plus the sentinel is what disambiguates _finished_ from _stopped mid-task_.
+  Everything degrades to today's behaviour — `listen()` returning false, an unwritable config, a
+  `claude` that ignores the server, `mcp.enabled: false` — and `test/mcpChannel.test.ts` asserts that
+  floor rather than merely intending it.
+- **One transition, two detectors.** `escalate` and the WAITING sentinel both route through
+  `AgentManager.handleWaiting`, latched by the `parked` set: whichever arrives first owns the park and
+  the second is a no-op until `respond`/terminal releases it. Same discipline as `noteSentinel`'s two
+  PTY detectors, and for the same reason. Likewise `plan_submit` and the `plan.json` drain both call
+  the shared `ingestPlanDocument` (`src/plans/planIngest.ts`) — neither transport gets its own notion
+  of what a plan means.
+- **Identity is structural, not argued.** No tool takes an agent, task or issue argument: the
+  credential minted at spawn resolves `token -> agent -> task -> origin`, so an agent cannot name
+  itself and therefore cannot address another's work. This is what the `planOriginIssue` fencing was
+  approximating over a transport that carried no identity. The token is a bearer credential — it
+  lives in the 0600 launch-config file, never in argv — and is revoked on kill/interrupt/reap.
+- **Transport is a Unix socket (named pipe on Windows), never a TCP port** — the cockpit's HTTP
+  surface is already unauthenticated on `0.0.0.0`. `bridge.mjs` (spawned by `claude`, shipped `.mjs`
+  like `statusCapture.mjs`) is a **byte-transparent pipe** with no protocol logic, so `initialize` /
+  `tools/list` / `tools/call` / validation all live in `protocol.ts` + `tools.ts` and are testable
+  with no transport at all. A connection that doesn't hand over a token first is dropped unanswered.
+- **Two launch flags, both verified empirically** (`claude` 2.1.220, headless `-p`), not assumed —
+  the same discipline as the `--settings` hook merge:
+  - `--mcp-config` is **additive**. Launched in a cwd holding its own `.mcp.json`, the init event
+    reports `mcp_servers: [{theirs}, {ours}]`. So `--strict-mcp-config` is deliberately **not**
+    passed: it would suppress the user's own servers in the user's own checkout.
+  - `--allowedTools ALLOWED_MCP_TOOLS` is **required**, not defensive. An `--mcp-config` server
+    connects with no approval step (a project `.mcp.json` server instead sits at `pending`), but its
+    tool _calls_ are still permission-gated and **`acceptEdits` — our default `agentPermissionMode` —
+    does not cover them**: without the flag every call returns `"Claude requested permissions to use
+mcp__lubbdubb__…, but you haven't granted it yet."` with no human at the prompt. The flag is
+    additive, not restrictive (an agent launched with it still uses Bash/Write normally). This is why
+    `src/mcp/names.ts` exists: the launch-config key, the tool names and the `mcp__<key>__<tool>`
+    grants must agree, and drift between them yields a _connected_ server whose every call is refused
+    — invisible until an agent needs it. `test/mcpChannel.test.ts` asserts all three against each other.
+- Tests drive `mcp.session(agentId)`, which converges on the same `dispatch` an agent's bridge
+  reaches — there is no test-only tool path. `npm run smoke` runs a real `bridge.mjs` child over a
+  real socket, which is the half unit tests can't cover.
 
 **Transcript legibility (stream mode).** `StreamJsonSession` doesn't dump raw events. It runs
 each message's content blocks through the pure `renderBlocks` in

@@ -6,23 +6,38 @@ import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
-import type { Agent, AgentFlag, AgentStatus, AgentUsage, Task } from '../types.js';
+import type { Agent, AgentAsk, AgentFlag, AgentStatus, AgentUsage, Task } from '../types.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
-import { PLAN_FILE, isPlanFile, parsePlanDocument, planPartInputs } from '../plans/planDocument.js';
+import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
+import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
-import { amendedPlanStatus, partHasWork, partsToRetire } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
 import { debugEnabled, debugLog } from '../debug.js';
+
+/**
+ * The MCP tool channel, as {@link AgentManager} needs it. Narrow by design: the
+ * manager mints a credential per launch and hands it back when the agent leaves
+ * the fleet, and knows nothing about sockets or the tool surface.
+ */
+export interface McpChannel {
+  /** Mint a per-launch credential. `configPath` is null when tools can't be wired. */
+  open(): { token: string; configPath: string | null };
+  /** Complete the credential's identity once the agent row exists. */
+  bind(token: string, agentId: string): void;
+  /** Revoke a credential and drop its launch config. */
+  release(token: string): void;
+}
 
 export interface AgentManagerOptions {
   command: string;
   /**
    * Builds the argv for a launch. `sessionId` is the id the agent runs under and
    * `resume` re-attaches to it (`claude --resume`) instead of starting fresh.
-   * Runtimes that don't support session ids (mock/stream) ignore both.
+   * `mcpConfigPath` wires that launch's tool channel, or is null for none.
+   * Runtimes that don't support session ids (mock/stream) ignore the first two.
    */
-  buildArgs: (opts: { sessionId: string; resume: boolean }) => string[];
+  buildArgs: (opts: { sessionId: string; resume: boolean; mcpConfigPath: string | null }) => string[];
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -64,13 +79,20 @@ export interface AgentManagerOptions {
   fileEvents?: FileEventsSpool;
   /** Folder(s) whose files are promoted to artifacts (any extension); relative or absolute. See {@link classifyArtifact}. */
   docsFolderPrefix?: string | string[];
+  /**
+   * The typed tool channel (issue #108). When set, each launch gets its own
+   * credential and `--mcp-config`; unset leaves agents on the sentinels alone,
+   * which is a supported configuration, not a degraded one.
+   */
+  mcp?: McpChannel;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
 }
 
 interface AgentManagerEvents {
   output: [{ agentId: string; delta: string }];
-  waiting: [{ agentId: string; taskId: string; reason: string }];
+  /** `ask` is present only when the park came through the `escalate` tool, which can carry structure. */
+  waiting: [{ agentId: string; taskId: string; reason: string; ask?: AgentAsk }];
   autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
   done: [{ agentId: string; taskId: string; status: AgentStatus }];
   /**
@@ -107,6 +129,15 @@ export class AgentManager extends EventEmitter {
   // agentId → its file-events spool key, so we can drain (and later dispose) the
   // dir the hook writes to. Present only when a spool is wired and the launch got one.
   private readonly eventsKeys = new Map<string, string>();
+  // agentId → its MCP credential, revoked when the agent leaves the fleet.
+  private readonly mcpTokens = new Map<string, string>();
+  // Agents currently parked on a human. The convergence latch for the two ways an
+  // agent can ask: the `escalate` tool and the WAITING sentinel are two detectors
+  // of one transition, so whichever arrives first owns it and the second is a
+  // no-op until the park is released. Same discipline as `noteSentinel`'s two PTY
+  // detectors, and for the same reason — two detectors that quietly disagree is a
+  // bug this codebase has already paid for once.
+  private readonly parked = new Set<string>();
 
   constructor(
     private readonly store: Store,
@@ -124,9 +155,17 @@ export class AgentManager extends EventEmitter {
     // agents (no session id) still get one. Minted before the session so the env
     // carries it; mapped to the agent id below for draining.
     const eventsKey = this.opts.fileEvents ? randomUUID() : null;
+    // Minted before the session so the launch config exists to point `--mcp-config`
+    // at, and bound to the agent row the moment it exists. Nothing can call a tool
+    // in between: `createSession` only builds the session, `start()` is below.
+    const mcp = this.opts.mcp?.open() ?? null;
     const session = this.opts.createSession({
       command: this.opts.command,
-      args: this.opts.buildArgs({ sessionId: sessionId ?? '', resume: false }),
+      args: this.opts.buildArgs({
+        sessionId: sessionId ?? '',
+        resume: false,
+        mcpConfigPath: mcp?.configPath ?? null,
+      }),
       cwd,
       env: {
         LUBBDUBB_PROMPT: task.prompt,
@@ -141,6 +180,10 @@ export class AgentManager extends EventEmitter {
 
     const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
     if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
+    if (mcp) {
+      this.opts.mcp?.bind(mcp.token, agent.id);
+      this.mcpTokens.set(agent.id, mcp.token);
+    }
     debugLog(
       'agent',
       `spawn agent=${agent.id} cwd=${cwd} eventsDir=${this.fileEventsDir(agent.id) ?? '<file-events off>'}`,
@@ -183,9 +226,16 @@ export class AgentManager extends EventEmitter {
     const wasWaiting = agent.status === 'waiting' || agent.waitingReason != null;
     // A restart wiped the old spool, so mint a fresh key for the resumed session.
     const eventsKey = this.opts.fileEvents ? randomUUID() : null;
+    // A restart revoked the old credential with the process that held it, so a
+    // resume mints a fresh one — same agent row, same identity, new bearer token.
+    const mcp = this.opts.mcp?.open() ?? null;
     const session = this.opts.createSession({
       command: this.opts.command,
-      args: this.opts.buildArgs({ sessionId: agent.sessionId, resume: true }),
+      args: this.opts.buildArgs({
+        sessionId: agent.sessionId,
+        resume: true,
+        mcpConfigPath: mcp?.configPath ?? null,
+      }),
       cwd: agent.cwd,
       env: {
         LUBBDUBB_PROMPT: task.prompt,
@@ -198,6 +248,10 @@ export class AgentManager extends EventEmitter {
       resume: true,
     });
     if (eventsKey) this.eventsKeys.set(agent.id, eventsKey);
+    if (mcp) {
+      this.opts.mcp?.bind(mcp.token, agent.id);
+      this.mcpTokens.set(agent.id, mcp.token);
+    }
     debugLog(
       'agent',
       `resume agent=${agent.id} cwd=${agent.cwd} eventsDir=${this.fileEventsDir(agent.id) ?? '<file-events off>'}`,
@@ -228,8 +282,37 @@ export class AgentManager extends EventEmitter {
     const session = this.sessions.get(agentId);
     if (!session) return false;
     session.send(text);
+    this.parked.delete(agentId); // the park is over; the next ask is a new one
     this.store.updateAgent(agentId, { status: 'running', waitingReason: null });
     return true;
+  }
+
+  /**
+   * Park an agent on a human question raised through the `escalate` MCP tool.
+   *
+   * This is the *same* transition the WAITING sentinel drives — deliberately, and
+   * routed through the same {@link handleWaiting} so the whitelist, the drain and
+   * the store writes can't diverge between the two. The tool is the richer signal
+   * (it carries a kind and options); the sentinel is the one that always works.
+   * Whichever fires first parks the agent, and the latch makes the second a no-op,
+   * so an agent that calls `escalate` *and* prints the sentinel raises one
+   * escalation, not two.
+   *
+   * Returns the escalation the park produced, or `null` for `escalationId` when an
+   * operator whitelist rule auto-answered it and the agent was never parked at all.
+   */
+  ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string } {
+    if (!this.sessions.has(agentId)) return { ok: false, error: 'agent is no longer live' };
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const question = ask.question.trim();
+    if (!question) return { ok: false, error: 'question must not be empty' };
+    this.handleWaiting(agentId, task, question, ask);
+    // Listeners are synchronous, so by now the inbox has either created the
+    // escalation or the whitelist answered and moved the agent back to running.
+    const open = this.store.listOpenEscalations().find((e) => e.agentId === agentId) ?? null;
+    return { ok: true, escalationId: open?.id ?? null };
   }
 
   /**
@@ -248,6 +331,8 @@ export class AgentManager extends EventEmitter {
     if (!session) return false;
     session.kill();
     this.disposeFileEvents(agentId); // fold any last writes in, then drop the spool
+    this.releaseMcp(agentId); // the credential dies with the agent, not with the process
+    this.parked.delete(agentId);
     this.store.flushTranscript(agentId); // make the killed agent's transcript durable
     const agent = this.store.getAgent(agentId);
     this.store.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
@@ -280,11 +365,15 @@ export class AgentManager extends EventEmitter {
         /* process already gone */
       }
       this.disposeFileEvents(id); // fold any pending writes in; a resume mints a fresh spool
+      this.releaseMcp(id); // a resume mints a fresh credential, same as the spool
       this.store.flushTranscript(id); // make the transcript durable before we exit
       this.store.updateAgent(id, { status: 'interrupted', endedAt: at, pid: null });
       this.sessions.delete(id);
       this.exitCodes.delete(id);
       this.exited.delete(id);
+      // Not `parked`: `waitingReason` is preserved as the resume signal, and
+      // `restoreWaiting` re-establishes the latch when the agent comes back.
+      this.parked.delete(id);
     }
   }
 
@@ -389,42 +478,25 @@ export class AgentManager extends EventEmitter {
     }
     const doc = parsed.document;
     const origin = issueOrigin(number);
-    // An *amended* plan is the interesting case: `upsertPlanParts` merges on slug
-    // and never deletes, so a part the planner dropped would otherwise linger,
-    // indistinguishable from one still to come. Retire the dropped ones that never
-    // started; the plan status then follows what survived, because a `single`
-    // verdict cannot un-split an issue whose parts already have branches and PRs.
-    const existingPlan = this.store.getPlanByOrigin(origin);
-    const existing = existingPlan ? this.store.listPlanParts(existingPlan.id) : [];
-    const declared = doc.verdict === 'parts' ? planPartInputs(doc) : [];
-    const retire = partsToRetire(
-      existing,
-      declared.map((p) => p.slug),
-    );
-    const retiring = new Set(retire.map((p) => p.id));
-    const surviving = existing.filter((p) => !retiring.has(p.id));
-    const status = amendedPlanStatus(doc.verdict, surviving);
-    const plan = this.store.upsertPlan({
+    // The write itself is shared with the `plan_submit` tool, so the file path and
+    // the tool path cannot drift into two different notions of what a plan means.
+    const result = ingestPlanDocument(this.store, {
+      doc,
       originRef: origin,
       title: task.originTitle ?? task.title,
-      status,
-      reason: doc.reason,
     });
-    for (const part of retire) this.store.updatePlanPart(part.id, { status: 'retired' });
-    if (declared.length > 0) this.store.upsertPlanParts(plan.id, declared);
-    if (doc.verdict === 'single' && status !== 'single') {
+    if (result.overriddenSingle) {
       // Not silently overridden: the planner asked for something the world no
-      // longer allows, and the operator has open PRs that explain why.
+      // longer allows, and the operator has open PRs that explain why. (The tool
+      // path can say this to the agent as well; the file path has no way to.)
       this.opts.errors?.record({
         source: 'agent',
-        message:
-          `Agent ${agent.id} replanned issue #${number} as a single PR, but ${surviving.filter(partHasWork).length} ` +
-          `part(s) already have a branch or an open PR. The plan stays split — close or merge those parts first.`,
+        message: `Agent ${agent.id}: ${overriddenSingleMessage(origin, result.overriddenSingle.liveParts)}`,
       });
     }
     debugLog(
       'fileEvents',
-      `agent=${agent.id} plan ingested issue=#${number} verdict=${doc.verdict} status=${status} retired=${retire.length}`,
+      `agent=${agent.id} plan ingested issue=#${number} verdict=${doc.verdict} status=${result.status} retired=${result.retired.length}`,
     );
   }
 
@@ -519,6 +591,7 @@ export class AgentManager extends EventEmitter {
    */
   private restoreWaiting(agent: Agent, task: Task): void {
     const reason = agent.waitingReason ?? 'Resumed agent is awaiting your input.';
+    this.parked.add(agent.id); // still parked across the restart; don't re-park on a re-announce
     this.store.updateAgent(agent.id, { status: 'waiting', waitingReason: reason });
     this.store.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agent.id, task.id, 'waiting');
@@ -526,22 +599,29 @@ export class AgentManager extends EventEmitter {
     if (!hasOpen) this.emit('waiting', { agentId: agent.id, taskId: task.id, reason });
   }
 
-  private handleWaiting(agentId: string, task: Task, reason: string): void {
+  private handleWaiting(agentId: string, task: Task, reason: string, ask?: AgentAsk): void {
+    // The convergence point for the two ways an agent asks (see `parked`). An
+    // agent already parked is not parked again: re-running the whitelist would
+    // auto-answer the same prompt twice, and re-emitting `waiting` would race the
+    // inbox's own per-agent dedup rather than relying on it.
+    if (this.parked.has(agentId)) return;
     // Parking on a human is the other point where pending writes must surface: the
     // escalation often *is* "review the file I just wrote", and a waiting agent
     // reaches no terminal drain.
     this.drainFileEvents(agentId);
     const rule = this.opts.whitelistedApprovals.find((r) => reason.includes(r.match));
     if (rule) {
-      // Auto-answer whitelisted prompts without bothering the human.
+      // Auto-answer whitelisted prompts without bothering the human. No latch: the
+      // agent is running again, so its next question is a fresh park.
       this.respond(agentId, rule.response);
       this.emit('autoAnswered', { agentId, taskId: task.id, reason, response: rule.response });
       return;
     }
+    this.parked.add(agentId);
     this.store.updateAgent(agentId, { status: 'waiting', waitingReason: reason });
     this.store.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
-    this.emit('waiting', { agentId, taskId: task.id, reason });
+    this.emit('waiting', { agentId, taskId: task.id, reason, ask });
   }
 
   /** Roll back a spawn that threw before the session ever came up. */
@@ -560,6 +640,7 @@ export class AgentManager extends EventEmitter {
 
   private handleTerminal(agentId: string, taskId: string, status: 'done' | 'failed'): void {
     this.drainFileEvents(agentId); // catch a report written just before finishing
+    this.parked.delete(agentId);
     this.store.flushTranscript(agentId); // make the finished agent's transcript durable
     this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status });
@@ -589,7 +670,16 @@ export class AgentManager extends EventEmitter {
     this.terminals.delete(agentId);
     this.exited.delete(agentId);
     this.disposeFileEvents(agentId); // process is gone; drop its spool dir
+    this.releaseMcp(agentId); // ...and with it the bridge that held the credential
     this.emit('reaped', { agentId, taskId, status });
+  }
+
+  /** Revoke an agent's MCP credential and remove its launch config. Idempotent. */
+  private releaseMcp(agentId: string): void {
+    const token = this.mcpTokens.get(agentId);
+    if (!token) return;
+    this.mcpTokens.delete(agentId);
+    this.opts.mcp?.release(token);
   }
 
   private reflectStatus(agentId: string, taskId: string, status: AgentStatus): void {

@@ -25,7 +25,8 @@ import { StatusFileRateLimits } from './agents/statusLine.js';
 import { FileEventsSpool } from './agents/fileEvents.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
-import { recentOutputExcerpt } from './escalation/context.js';
+import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
+import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates } from './dispatcher/promptTemplates.js';
@@ -67,6 +68,14 @@ export interface System {
    * the real runtimes (stream/pty).
    */
   fileEvents: FileEventsSpool;
+  /**
+   * The agents' typed channel back to the harness (issue #108). Always present,
+   * but inert until `listen()` succeeds *and* `config.mcp.enabled` let it reach
+   * the fleet — so a system built without either behaves exactly as it did before
+   * the channel existed. Tests reach tools through `mcp.session(agentId)`, which
+   * is the same entry point an agent's bridge lands on.
+   */
+  mcp: McpBridgeServer;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
 }
@@ -193,7 +202,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // the real runtimes (stream/pty), so mock/raw agents just leave it empty.
   const fileEvents = new FileEventsSpool(join(tmpdir(), 'lubbdubb', 'events'));
 
-  const agents = new AgentManager(store, {
+  // The typed channel back to the harness (issue #108). Constructed unconditionally
+  // so `system.mcp` is always addressable, but only handed to the fleet when the
+  // operator leaves it on — and it still needs `listen()` (the server's boot does
+  // that) before any launch actually gets a `--mcp-config`. The `agents` thunk is
+  // the mutual reference: a launch needs a credential, a tool call needs the fleet.
+  // Both sides annotated so the mutual reference stays a *runtime* cycle and not
+  // an inference one — TS can't infer either type from the other.
+  const mcp: McpBridgeServer = new McpBridgeServer({
+    store,
+    agents: (): AgentManager => agents,
+    configDir: defaultConfigDir(),
+    socketPath: defaultSocketPath(),
+    errors,
+  });
+
+  const agents: AgentManager = new AgentManager(store, {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
     whitelistedApprovals: config.whitelistedApprovals,
@@ -206,6 +230,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,
+    mcp: config.mcp.enabled ? mcp : undefined,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
@@ -288,16 +313,23 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // repeat 'waiting' (e.g. a resumed agent re-surfacing its park) never doubles up.
   // Enrich with the task's originating signal and a tail of the agent's output so
   // the human can answer from the card without opening the drawer for context.
-  agents.on('waiting', ({ agentId, taskId, reason }) => {
+  //
+  // `ask` is present only when the park came through the `escalate` tool, which is
+  // the whole point of that tool: the *type* and the answer options are things the
+  // agent knows and the WAITING sentinel had no way to say. Absent, this behaves
+  // exactly as it did — one free-text question filed as `answer_question`.
+  agents.on('waiting', ({ agentId, taskId, reason, ask }) => {
     if (store.listOpenEscalations().some((e) => e.agentId === agentId)) return;
     const task = store.getTask(taskId);
     escalations.create({
-      type: 'answer_question',
+      type: escalationTypeForAsk(ask?.kind),
       prompt: reason,
       context: {
         taskTitle: task?.title,
         originRef: task?.originRef ?? null,
         recentOutput: recentOutputExcerpt(store.getTranscript(agentId)),
+        ...(ask?.options ? { options: ask.options } : {}),
+        ...(ask?.detail ? { detail: ask.detail } : {}),
       },
       agentId,
       taskId,
@@ -345,6 +377,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     issuePickup,
     rateLimits,
     fileEvents,
+    mcp,
     errors,
   };
 }

@@ -12,6 +12,11 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const system = buildSystem(config);
 
+  // Before boot resume, so a resumed agent's relaunch already carries the tool
+  // channel. Best-effort by contract: a false return means agents run on the
+  // sentinels alone, which is a supported configuration, not a failed start.
+  const mcpReady = config.mcp.enabled ? await system.mcp.listen() : false;
+
   // Runs before the boot cycle so resumed agents occupy their concurrency slots
   // before any new work is dispatched.
   const { resumed, interrupted } = reconcileAndResumeOnBoot(
@@ -30,6 +35,9 @@ async function main(): Promise<void> {
   console.log(
     `[lubbdubb] dispatcher=${config.dispatcher} heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`,
   );
+  console.log(
+    `[lubbdubb] agent tools: ${mcpReady ? 'on' : config.mcp.enabled ? 'unavailable — sentinels only' : 'disabled'}`,
+  );
 
   system.harness.start();
   await system.harness.runCycle('boot');
@@ -39,6 +47,7 @@ async function main(): Promise<void> {
     system.harness.stop();
     // Interrupt (not kill) so the next boot can resume this in-flight work.
     system.agents.interruptAll();
+    await system.mcp.close();
     await app.close();
     system.store.close();
     process.exit(0);

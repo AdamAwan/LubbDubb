@@ -21,7 +21,11 @@ export function EscalationCard({
   const send = useAsyncAction();
   const { context } = escalation;
   const signal = describeSignal(context.originRef, context.prNumber);
-  const quick = quickAnswers(escalation.prompt);
+  // Options the agent supplied through the `escalate` tool beat the prompt-text
+  // heuristic: the agent knows what the choices are, where `quickAnswers` can only
+  // guess from wording. Fall back to the guess when it didn't say (the sentinel path).
+  const offered = agentOptions(context.options);
+  const quick = offered ?? quickAnswers(escalation.prompt);
 
   return (
     <div className="card escalation">
@@ -38,6 +42,13 @@ export function EscalationCard({
         <details className="esc-context" open>
           <summary className="muted small">What the agent was doing</summary>
           <pre className="esc-output">{context.recentOutput}</pre>
+        </details>
+      ) : null}
+
+      {context.detail ? (
+        <details className="esc-context" open>
+          <summary className="muted small">Detail from the agent</summary>
+          <pre className="esc-output">{String(context.detail)}</pre>
         </details>
       ) : null}
 
@@ -111,4 +122,18 @@ const YESNO = /\b(should|shall|can|may|is it ok|ok to|approve|proceed|do you wan
 /** Quick-answer buttons for prompts that read like a yes/no decision. */
 function quickAnswers(prompt: string): string[] {
   return prompt.includes('?') && YESNO.test(prompt) ? ['Yes', 'No'] : [];
+}
+
+/**
+ * The options an agent offered through the `escalate` tool, or null if it offered
+ * none. Null rather than `[]` so the caller can tell "the agent said nothing"
+ * (fall back to the heuristic) from "the agent offered no choices".
+ *
+ * Defensive about the shape: `context` is an open bag reaching us from an agent's
+ * tool arguments, so anything non-string is dropped rather than rendered.
+ */
+function agentOptions(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const options = value.filter((o): o is string => typeof o === 'string' && o.trim() !== '');
+  return options.length > 0 ? options : null;
 }

@@ -99,6 +99,12 @@
     "gitFetchIntervalMs": 60000
   },
 
+  "// mcp": "The agents' typed channel BACK to the harness: a tools-only MCP server (a Unix socket / named pipe, never a port) wired into every launch via --mcp-config. Today it exposes plan_submit (a planning agent's verdict, validated synchronously so a rejection comes back with its reason instead of silently costing an attempt) and escalate (a question with a kind and concrete options the cockpit renders as one-click answers). Identity rides on a per-agent credential, not a tool argument, so an agent can only ever write its own work. ON by default because it is purely additive — the @@LUBBDUBB_DONE@@/@@LUBBDUBB_WAITING@@ sentinels and the .lubbdubb/plan.json file path both stay wired, and are exactly what an agent falls back to when the tools are off, unavailable, or simply unused.",
+  "mcp": {
+    "// enabled": "Master switch. Default true. Off = agents run on the sentinels alone, which is a supported configuration rather than a degraded one.",
+    "enabled": true
+  },
+
   "// repoRoot": "The git repo the harness operates on; per-branch worktrees are cut from it. Defaults to the launch directory (process.cwd()), so the common case needs nothing. Set it (or the LUBBDUBB_REPO_ROOT env override) to point at a repo elsewhere; a relative path resolves against the launch dir.",
   "repoRoot": ".",
 
