@@ -1,6 +1,7 @@
 import type { Task } from '../types.js';
 import { STATUS_LINE_SETTINGS } from './statusLine.js';
 import { FILE_EVENTS_SETTINGS } from './fileEvents.js';
+import { ALLOWED_MCP_TOOLS } from '../mcp/names.js';
 
 /**
  * How a real Claude Code session is made to speak the harness's PTY protocol.
@@ -30,6 +31,42 @@ export const PROTOCOL_SYSTEM_PROMPT = [
   'Do not print either sentinel for any other reason. Keep working autonomously between them.',
 ].join('\n');
 
+/**
+ * Appended when the launch carries the MCP tool channel (issue #108).
+ *
+ * The sentinels are **not** withdrawn here, and that is the design, not caution.
+ * They are the degradation floor: the tool channel can be absent (no config, a
+ * refused socket, a `claude` that ignores the server) and an agent must still be
+ * able to park and finish, which only stdout guarantees. So the prompt states a
+ * preference — richer channel first — and the *same* park transition backs both,
+ * so an agent that does both, or neither-but-one, is never in a wrong state.
+ *
+ * `plan_submit` is stated as replacing the `.lubbdubb/plan.json` write; that file
+ * path stays wired and stays documented in the planner's own prompt template, so
+ * a planner that never sees the tool behaves exactly as it does today.
+ */
+export const MCP_PROTOCOL_ADDENDUM = [
+  '',
+  'You also have LubbDubb harness tools (the "lubbdubb" MCP server). Prefer them to the sentinels',
+  'where they overlap — they are validated, they can answer you back, and they carry structure the',
+  'sentinels cannot:',
+  '',
+  '- escalate(question, kind, options, detail) instead of the WAITING sentinel. Offer `options` when',
+  '  the decision is a choice; the human gets one-click answers. You are parked when it returns, and',
+  "  the human's reply arrives as your next message — exactly as with the sentinel.",
+  '- plan_submit(verdict, reason, parts) instead of writing .lubbdubb/plan.json, when you were',
+  '  dispatched to plan an issue. It validates immediately: if it rejects your plan, read the reason,',
+  '  fix it and call again in this same turn.',
+  '',
+  'If a tool call fails or the tools are unavailable, fall back to the sentinels above — they always work.',
+  'Still print @@LUBBDUBB_DONE@@ when finished. There is no tool for that.',
+].join('\n');
+
+/** The system prompt for a launch: the protocol, plus the tool addendum when tools are wired. */
+function protocolPrompt(opts: ClaudeArgsOptions): string {
+  return opts.mcpConfigPath ? PROTOCOL_SYSTEM_PROMPT + '\n' + MCP_PROTOCOL_ADDENDUM : PROTOCOL_SYSTEM_PROMPT;
+}
+
 export interface ClaudeArgsOptions {
   /** Passed to `--permission-mode` (e.g. "acceptEdits", "bypassPermissions"). Omitted if empty. */
   permissionMode?: string;
@@ -58,6 +95,42 @@ export interface ClaudeArgsOptions {
    * protocol. Both runtimes — hooks fire in headless stream mode too.
    */
   fileEvents?: boolean;
+  /**
+   * Path to this launch's `--mcp-config`, wiring the harness's tool channel in
+   * (issue #108). Per-agent, because the file carries the credential that gives
+   * the launch its identity. Unset (or null) leaves the agent on the sentinels
+   * alone, which is the fail-open floor — never a broken state.
+   */
+  mcpConfigPath?: string | null;
+}
+
+/**
+ * Append the MCP tool channel to a launch, when one was minted for it.
+ *
+ * Two flags, both load-bearing, both verified empirically against `claude`
+ * 2.1.220 rather than assumed:
+ *
+ * - `--mcp-config` is **additive**: launched alongside a target repo's own
+ *   `.mcp.json`, both servers appear (`mcp_servers: [{theirs}, {ours}]`). That
+ *   is why `--strict-mcp-config` is deliberately *not* passed — it would suppress
+ *   the user's own servers in their own checkout. Same coexistence property the
+ *   `--settings` hook merge has.
+ * - `--allowedTools` is **required**, not belt-and-braces. An `--mcp-config`
+ *   server connects with no approval step (a project `.mcp.json` server instead
+ *   sits at `pending`), but its tool *calls* are still permission-gated and
+ *   `--permission-mode acceptEdits` does not cover them: every call comes back
+ *   `"Claude requested permissions to use mcp__lubbdubb__…, but you haven't
+ *   granted it yet."` with no human at the prompt to grant it. The flag is
+ *   additive rather than restrictive — an agent launched with it still uses
+ *   Bash/Write normally — so this grants our two tools and nothing else changes.
+ *
+ * Operator `claudeArgs` are appended *after* these, so an explicit
+ * `--allowedTools` there still has the last word.
+ */
+function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
+  if (!opts.mcpConfigPath) return;
+  args.push('--mcp-config', opts.mcpConfigPath);
+  args.push('--allowedTools', ALLOWED_MCP_TOOLS.join(','));
 }
 
 /** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */
@@ -65,7 +138,7 @@ export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
   // Re-append the protocol on every launch, including resume: `--resume` replays
   // the conversation but does not retain the original invocation's appended
   // system prompt, so waiting/done detection would break without this.
-  const args: string[] = ['--append-system-prompt', PROTOCOL_SYSTEM_PROMPT];
+  const args: string[] = ['--append-system-prompt', protocolPrompt(opts)];
   if (opts.sessionId) {
     // `--session-id` (pick a new id) and `--resume` (re-open that id) are mutually
     // exclusive — a resume must not also try to mint the id.
@@ -76,6 +149,7 @@ export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
   // has no array form, so status-line + file-events must share one JSON object.
   const settings = collectSettings(opts);
   if (settings) args.push('--settings', settings);
+  appendMcpConfig(args, opts);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;
@@ -113,11 +187,12 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
     'stream-json',
     '--verbose', // required for stream-json output
     '--append-system-prompt',
-    PROTOCOL_SYSTEM_PROMPT,
+    protocolPrompt(opts),
   ];
   // The status line never renders headless, but PostToolUse hooks do fire — so
   // file-events capture is wired here too (unlike the PTY-only status line).
   if (opts.fileEvents) args.push('--settings', JSON.stringify(FILE_EVENTS_SETTINGS));
+  appendMcpConfig(args, opts);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;

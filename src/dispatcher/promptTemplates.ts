@@ -56,7 +56,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Bias hard toward one: splitting is the exception, and turning a twenty-minute fix into three PRs ' +
       'costs far more than it saves. Split only when the work genuinely cannot land as a single reviewable ' +
       'PR — for example when a schema or interface change must merge before the code that consumes it.\n\n' +
-      'Write your verdict to {planFile} in this worktree, creating the directory if needed. For one PR:\n\n' +
+      'Submit your verdict with the plan_submit tool if you have it — it validates on the spot, so a ' +
+      'rejected plan comes back with the reason and you can fix it and call again. Otherwise write the ' +
+      'same document to {planFile} in this worktree, creating the directory if needed. For one PR:\n\n' +
       '  {"version": 1, "verdict": "single", "reason": "<one sentence>"}\n\n' +
       'For several, each part being one reviewable PR:\n\n' +
       '  {"version": 1, "verdict": "parts", "reason": "<one sentence>", "parts": [\n' +
@@ -75,8 +77,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'Issue #{number} ("{title}") already has a delivery plan, and an operator has asked for it to be replanned. ' +
       'Amend the existing plan — do not start from scratch.\n\n{body}\n\n{current}\n\n' +
-      'Read the repository and the state above, then write the amended plan to {planFile} in this worktree, in the ' +
-      'same format as the original:\n\n' +
+      'Read the repository and the state above, then submit the amended plan with the plan_submit tool if you ' +
+      'have it (it validates on the spot and tells you why if it rejects), otherwise write it to {planFile} in ' +
+      'this worktree. Either way it is the same document as the original:\n\n' +
       '  {"version": 1, "verdict": "parts", "reason": "<one sentence>", "parts": [\n' +
       '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": []}\n' +
       '  ]}\n\n' +

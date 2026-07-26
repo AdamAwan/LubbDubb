@@ -7,12 +7,12 @@
  *
  * Run with: npm run smoke
  */
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
-import { buildSystem, reconcileAndResumeOnBoot } from '../src/system.js';
+import { buildSystem, reconcileAndResumeOnBoot, type System } from '../src/system.js';
 
 const scriptPath = join(process.cwd(), 'scripts/mock-agent.sh');
 
@@ -37,6 +37,103 @@ async function waitFor(label: string, pred: () => boolean, timeoutMs = 10_000): 
     await new Promise((r) => setTimeout(r, 100));
   }
 }
+
+/**
+ * Exercise the MCP tool channel the way an agent actually reaches it: a real
+ * `bridge.mjs` child process, a real Unix socket, real JSON-RPC frames. The unit
+ * tests drive `mcp.session()`, which shares everything from `dispatch` inward —
+ * this is the half they can't cover, and the half where a transport bug would
+ * otherwise only show up against a live `claude`.
+ */
+async function smokeToolCall(system: System): Promise<void> {
+  const log = (m: string): void => console.log(`  ${m}`);
+  if (!(await system.mcp.listen())) throw new Error('MCP bridge server would not listen');
+
+  // A planning agent, since `plan_submit` is confined to one by identity. No live
+  // process is needed: the credential names the agent row, and the row is enough.
+  const task = system.store.createTask({
+    kind: 'code',
+    title: 'Plan issue #12',
+    prompt: 'plan it',
+    branch: 'plan/issue/12',
+    originRef: 'issue:12:plan',
+    originTitle: 'Big thing',
+  });
+  const agent = system.store.createAgent({ taskId: task.id, cwd: process.cwd(), pid: null, status: 'running' });
+  const credential = system.mcp.open();
+  if (!credential.configPath) throw new Error('no launch config was written');
+  system.mcp.bind(credential.token, agent.id);
+
+  const launch = JSON.parse(readFileSync(credential.configPath, 'utf8')) as {
+    mcpServers: { lubbdubb: { command: string; args: string[]; env: Record<string, string> } };
+  };
+  const server = launch.mcpServers.lubbdubb;
+  log(`✓ launch config written: ${server.command} ${server.args.join(' ')}`);
+
+  const bridge = spawn(server.command, server.args, { env: { ...process.env, ...server.env }, stdio: 'pipe' });
+  const frames: { id?: number; result?: unknown }[] = [];
+  let buffer = '';
+  bridge.stdout.setEncoding('utf8');
+  bridge.stdout.on('data', (chunk: string) => {
+    buffer += chunk;
+    let nl: number;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (line) frames.push(JSON.parse(line) as { id?: number });
+    }
+  });
+
+  const send = (frame: unknown): void => bridge.stdin.write(JSON.stringify(frame) + '\n');
+  send({ jsonrpc: '2.0', id: 1, method: 'initialize' });
+  send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  await waitFor('initialize + tools/list', () => frames.length >= 2, 5_000);
+  const tools = (frames[1]?.result as { tools: { name: string }[] }).tools.map((t) => t.name);
+  log(`✓ bridge negotiated MCP and advertised: ${tools.join(', ')}`);
+
+  send({
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'tools/call',
+    params: {
+      name: 'plan_submit',
+      arguments: { verdict: 'parts', reason: 'Schema before reader.', parts: SMOKE_PARTS },
+    },
+  });
+  await waitFor('plan_submit', () => frames.length >= 3, 5_000);
+  const call = frames[2]?.result as { isError?: boolean; content: { text: string }[] };
+  if (call.isError) throw new Error(`plan_submit failed: ${call.content[0]?.text}`);
+
+  const plan = system.store.getPlanByOrigin('issue:12');
+  if (!plan) throw new Error('plan_submit returned success but wrote nothing');
+  const parts = system.store.listPlanParts(plan.id).map((p) => p.slug);
+  log(`✓ plan persisted through the tool: status=${plan.status} parts=${parts.join(',')}`);
+
+  // ...and a rejection comes back as a reason the agent could act on, not silence.
+  send({
+    jsonrpc: '2.0',
+    id: 4,
+    method: 'tools/call',
+    params: { name: 'plan_submit', arguments: { verdict: 'parts', reason: 'No parts.', parts: [] } },
+  });
+  await waitFor('plan_submit rejection', () => frames.length >= 4, 5_000);
+  const rejected = frames[3]?.result as { isError?: boolean; content: { text: string }[] };
+  if (!rejected.isError) throw new Error('an empty parts list should have been rejected');
+  log(`✓ validation error returned to the caller: "${rejected.content[0]?.text.trim()}"`);
+
+  bridge.kill();
+  system.mcp.release(credential.token);
+  await system.mcp.close();
+  // Retire the synthetic agent/task, or the next step's boot reconcile sees an
+  // orphan and its "expected 0/0" stops meaning anything.
+  system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString(), pid: null });
+  system.store.updateTask(task.id, { status: 'done' });
+}
+
+const SMOKE_PARTS = [
+  { slug: 'schema', title: 'Add the table', scope: 'src/store', dependsOn: [] },
+  { slug: 'reader', title: 'Read it', scope: 'src/dispatcher', dependsOn: ['schema'] },
+];
 
 async function main(): Promise<void> {
   const scratch = mkdtempSync(join(tmpdir(), 'lubbdubb-smoke-'));
@@ -90,7 +187,10 @@ async function main(): Promise<void> {
     .slice(-6)
     .forEach((l) => console.log('    ' + l.trim()));
 
-  console.log('5. Simulate a crash + restart: reconcile should be a no-op now (agent already done).');
+  console.log('5. Drive one real tool call through the real bridge over the real socket.');
+  await smokeToolCall(system);
+
+  console.log('6. Simulate a crash + restart: reconcile should be a no-op now (agent already done).');
   const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
   log(`✓ boot reconcile: resumed ${resumed}, interrupted ${interrupted} (expected 0/0)`);
 

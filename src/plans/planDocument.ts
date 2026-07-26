@@ -134,7 +134,17 @@ export function parsePlanDocument(raw: string): PlanParseResult {
   } catch (err) {
     return { ok: false, error: `not valid JSON: ${(err as Error).message}` };
   }
-  const result = PlanDocumentSchema.safeParse(json);
+  return validatePlanDocument(json);
+}
+
+/**
+ * Validate an already-decoded document. The `plan_submit` MCP tool arrives with
+ * arguments the client already parsed, so it enters here rather than through
+ * {@link parsePlanDocument} — but both reach the same schema, which is the point:
+ * the two transports must accept and reject exactly the same plans.
+ */
+export function validatePlanDocument(value: unknown): PlanParseResult {
+  const result = PlanDocumentSchema.safeParse(value);
   if (!result.success) {
     return { ok: false, error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
   }

@@ -3,6 +3,16 @@ import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
 import type { PlanningPolicy } from './plans/planning.js';
 
+/** Operator control over the MCP tool channel. See {@link Config.mcp}. */
+export interface McpPolicy {
+  /**
+   * Wire the tool channel into agent launches. Off leaves every agent on the
+   * sentinels and the `plan.json` file path — the same floor a failed socket
+   * degrades to, so this is an escape hatch rather than a distinct mode.
+   */
+  enabled: boolean;
+}
+
 /**
  * Central configuration. Everything the operator can tune lives here.
  *
@@ -100,6 +110,18 @@ export interface Config {
    * Only the `rule` dispatcher implements the funnel.
    */
   planning: PlanningPolicy;
+  /**
+   * The typed tool channel back to the harness — the `lubbdubb` MCP server every
+   * spawned agent is wired to (issue #108).
+   *
+   * **On by default**, because it is purely additive: it adds tools an agent may
+   * use, and changes nothing about how one is dispatched, parked or finished. The
+   * sentinels remain the floor everything degrades to, and the `plan.json` side
+   * channel stays wired, so turning this off — or having it fail to start — leaves
+   * behaviour byte-for-byte as it was. That is the opposite trade from `planning`,
+   * which is off by default precisely because it *does* change what the fleet does.
+   */
+  mcp: McpPolicy;
   /**
    * How far back a provider looks for pull requests that have *left* the open set,
    * so a merged or abandoned PR is observed rather than inferred from its
@@ -276,6 +298,7 @@ const DEFAULTS: Config = {
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, gitFetchIntervalMs: 60_000 },
+  mcp: { enabled: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   dispatcher: 'rule',
   agentMode: 'stream',
@@ -345,6 +368,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // planning is nested too — deep-merge so `{"enabled": true}` alone keeps the
   // default part-concurrency cap instead of leaving it undefined.
   merged.planning = { ...DEFAULTS.planning, ...fromFile.planning, ...overrides.planning };
+
+  // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
+  // than an accidental off.
+  merged.mcp = { ...DEFAULTS.mcp, ...fromFile.mcp, ...overrides.mcp };
 
   // Agents run in a worktree/scratch cwd, so any relative script path in
   // claudeArgs (e.g. the demo mock-agent) must be made absolute up front or the

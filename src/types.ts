@@ -461,6 +461,23 @@ export interface AccountRateLimits {
 
 export type EscalationType = 'approve_change' | 'answer_question' | 'resolve_ambiguity' | 'review_reply';
 
+/**
+ * A structured question an agent raised through the `escalate` MCP tool — the
+ * typed form of what the WAITING sentinel can only carry as one line of free
+ * text. `question` is the sentinel's equivalent and is all that is required; the
+ * rest is what the sentinel could never express.
+ */
+export interface AgentAsk {
+  /** One line: what the agent needs decided. Becomes the escalation prompt. */
+  question: string;
+  /** What sort of decision this is; maps onto {@link EscalationType}. */
+  kind?: string;
+  /** Concrete answers the cockpit renders as one-click replies. */
+  options?: string[];
+  /** Background the human needs in order to decide. */
+  detail?: string;
+}
+
 export type EscalationStatus = 'open' | 'answered' | 'dismissed';
 
 /**
