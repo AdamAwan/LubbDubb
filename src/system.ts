@@ -160,11 +160,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   const perm = config.agentPermissionMode;
   const extraArgs = config.claudeArgs;
+  const allowedTools = config.agentAllowedTools;
   type ArgsBuilder = (opts: { sessionId: string; resume: boolean }) => string[];
   const agentSetup = {
     stream: {
       // Stream-JSON resume is out of scope; ignore the session id.
-      buildArgs: (() => buildClaudeStreamArgs({ permissionMode: perm, extraArgs, fileEvents: true })) as ArgsBuilder,
+      buildArgs: (() =>
+        buildClaudeStreamArgs({ permissionMode: perm, extraArgs, allowedTools, fileEvents: true })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
       resumeInput: undefined,
@@ -177,6 +179,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         buildClaudeArgs({
           permissionMode: perm,
           extraArgs,
+          allowedTools,
           sessionId,
           resume,
           statusLine: true,
