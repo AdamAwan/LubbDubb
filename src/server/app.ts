@@ -8,13 +8,14 @@ import type { System } from '../system.js';
 import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
+import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { findingJobRequest } from '../mcp/findings.js';
-import { planProposalRef } from '../proposals/proposals.js';
+import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
@@ -519,6 +520,24 @@ export function buildStateSnapshot(system: System) {
       headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
       paused: control.paused,
     };
+    // The PR-side sibling: whose turn each PR is on. Asked off the same predicates
+    // the rules ask, including the rejection expiry — the query is null (and the
+    // read never happens) until an operator has actually rejected something, which
+    // is the same shape `Harness.runCycle` and the executor use.
+    const signals = rejectionSignalQuery(proposals);
+    const attentionCtx: PrAttentionContext = {
+      // Unfiltered, exactly as `inheritedCiFailure`/`basePrOf` need it (and as the
+      // pickup context above takes it): an `-ignore`d base still attributes.
+      openPrs: world.pullRequests,
+      defaultBranch: config.defaultBranch,
+      ignoreLabel,
+      tasks,
+      proposals,
+      rejectionSignals: signals ? store.listWorldEventsSince(signals.since, signals.refs) : [],
+      recentDecisions: pickupCtx.recentDecisions,
+      cooldown: DEFAULT_COOLDOWN,
+      now: world.takenAt,
+    };
     // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
     // cockpit only looks refs up in this map, so it stays provider-agnostic.
     const refUrls = buildRefUrls({
@@ -555,7 +574,15 @@ export function buildStateSnapshot(system: System) {
         // The full open-PR list is passed as stack context so an inherited CI
         // failure names the PR underneath — otherwise a stacked PR reads as
         // "CI failing" with no agent on it and no visible reason why.
-        pullRequests: world.pullRequests.map((pr) => ({ ...pr, health: prHealth(pr, world.pullRequests) })),
+        //
+        // `attention` sits beside `health`, not inside it: health answers "can this
+        // merge" and attention answers "whose turn is it", and the two have
+        // different right answers for the same PR (see `src/prAttention.ts`).
+        pullRequests: world.pullRequests.map((pr) => ({
+          ...pr,
+          health: prHealth(pr, world.pullRequests),
+          attention: prAttentionStatus(pr, attentionCtx),
+        })),
         issues: world.issues.map((issue) => ({ ...issue, pickup: issuePickupStatus(issue, pickupCtx) })),
       },
       // The plan graph, which until now existed only in the database: the per-issue

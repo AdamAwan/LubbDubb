@@ -982,6 +982,46 @@ so the executor runs it directly.
   `basePrOf` / `inheritedCiFailure` (see "Stack safety" above). Keep these pure and unit-tested
   (`test/prHealth.test.ts` / `test/prExclusion.test.ts` / `test/stackedPrs.test.ts`); don't inline
   the logic.
+- **`src/prAttention.ts` is the second PR verdict, and it answers a different question (#123).**
+  `prHealth` answers _can this merge_; `prAttentionStatus(pr, ctx)` answers **whose turn is it** —
+  `{status, reasons}` over `done` / `ignored` / `you` / `harness` / `elsewhere` / `settled` /
+  `stalled`, first matching arm wins. They are kept apart because they have different right answers
+  for the same PR: a stacked PR with red inherited CI is honestly `CI failing on base PR #7` to the
+  first and `waiting on PR #7` to the second, and a PR with three unresolved comments and an agent on
+  the branch is `3 unresolved comments` to the first and `an agent is working this branch` to the
+  second. Fold them and one answer is a lie every time they disagree. Four things carry it:
+  - **`last_actor` could not be the predicate**, which is why #109 spun this out rather than porting
+    it. That signal works on a closed two-party board where every state change has a participant
+    actor; ours is not closed — CI going red, a base branch moving, a third-party review landing all
+    arrive through `worldDiff` with **no participant identity attached**, and they are the most common
+    reason a PR needs attention. What transfers is the _discipline_ (`issuePickupStatus`'s: many gates,
+    one pure verdict, reasons), not the signal. `PrComment.author` is the one place identity genuinely
+    exists and is deliberately **not** branched on — an unhandled comment dispatches rule 2b whoever
+    wrote it, so `handled` decides and the author only ever appears in the wording of a reason.
+  - **It is a lens: nothing in the dispatcher reads it**, following `findings`/`overlaps` and not the
+    pending-proposal gate. Every input it folds is already a gate that fires on its own (the branch
+    gate, `proposalHold`, `dispatchVerdict`, `isPrExcluded`), so a rule reading it would be a _second_
+    opinion about a decision made elsewhere, from a function sitting nowhere near the rule it
+    duplicates — the drift class already paid for twice. `test/prAttention.test.ts` asserts it
+    structurally (one importer: `src/server/app.ts`) **and** behaviourally (building the snapshot
+    between two pulses changes no decision), rather than trusting the import graph.
+  - **`settled` and `you` are the two arms that did not exist before.** A pending proposal is named on
+    the PR row rather than deferred to "Needs you": that inbox counts open escalations across the whole
+    world, and the row not saying why it is stalled is exactly the four-panel re-derivation this
+    removes — the cost, one PR in two places, is paid by quoting the proposal id so the surfaces join.
+    A standing rejection is _nobody's_ turn by design (#122), and was invisible, which is the same
+    invisibility `capped`/`unapproved` were added to `QueueItem` to fix; it quotes the note you left.
+    The `settled` arm asks `proposalHold`, **not** the proposal row, so a rejection the world has
+    overtaken stops reading as settled at the instant rule 3 starts firing again.
+  - **It reads the same lists the predicates beside it read** — the **unfiltered** open PR list
+    (dispatch world + `ctx.excludedPrs`), so an `-ignore`d base still attributes exactly as
+    `inheritedCiFailure` needs. `-ignore` on the PR itself is a **status**, checked first, because the
+    harness filters those out of the dispatch world entirely and every arm below would be describing
+    rules that cannot fire. The concern list and the merge-readiness test are re-derived from the same
+    predicates rather than shared with the dispatcher (which builds prompt-bearing concerns) — the same
+    relationship `issuePickupStatus` has to rule 4. Shipped per-PR in `/api/state` as `attention` and
+    drawn by `attentionChip` in `web/src/App.tsx`, which names the court only and leaves the detail to
+    the health chip. Tests: `test/prAttention.test.ts`.
 - **Issue pickup state is the mirror on the issue side.** `isIssuePickupEligible` returns
   `{ eligible, reasons }` (not a bare bool) for the intrinsic policy gates, and the pure
   `issuePickupStatus(issue, ctx)` (both in `src/dispatcher/issuePickup.ts`) folds in the

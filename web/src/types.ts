@@ -26,6 +26,12 @@ export interface PullRequest {
   labels?: string[];
   /** Server-computed health: why the PR is stuck (empty reasons = healthy). */
   health?: { blocked: boolean; reasons: string[] };
+  /**
+   * Server-computed attention verdict, beside `health` rather than inside it:
+   * health says *can this merge*, attention says *whose turn is it*.
+   * `done`|`ignored`|`you`|`harness`|`elsewhere`|`settled`|`stalled`.
+   */
+  attention?: { status: string; reasons: string[] };
 }
 export interface Issue {
   id: string;

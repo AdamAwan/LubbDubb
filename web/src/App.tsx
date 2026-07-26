@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, connectWs, isDemo } from './api.js';
 import type { WsClient } from './api.js';
-import type { AppState, Agent, Issue } from './types.js';
+import type { AppState, Agent, Issue, PullRequest } from './types.js';
 import { InjectPanel } from './components/InjectPanel.js';
 import { AgentCard } from './components/AgentCard.js';
 import { EscalationCard } from './components/EscalationCard.js';
@@ -362,6 +362,36 @@ function pickupChip(pickup: Issue['pickup']) {
   );
 }
 
+/** How each attention arm reads on the chip. `done`/`ignored` are omitted — see below. */
+const COURT_LABEL: Record<string, string> = {
+  you: 'your turn',
+  harness: 'harness on it',
+  elsewhere: 'waiting on others',
+  settled: 'settled',
+  stalled: 'stalled',
+};
+
+/**
+ * The per-PR attention chip: *whose turn* the PR is on, with the reasons in the
+ * title. It names the court and nothing else, because scanning a list for "what
+ * is mine" is the thing it exists for — the health chip beside it carries the
+ * visible detail of *why*.
+ *
+ * `done` and `ignored` render nothing: the row already draws a "merged" and an
+ * "ignored" chip, and one home per fact. Only the two arms that are genuinely
+ * asking for a person — your court, and the PR nothing is happening on — warn.
+ */
+function attentionChip(attention: PullRequest['attention']) {
+  const label = attention ? COURT_LABEL[attention.status] : undefined;
+  if (!attention || !label) return null;
+  const warn = attention.status === 'you' || attention.status === 'stalled';
+  return (
+    <span className={`chip small${warn ? ' warn' : ''}`} title={attention.reasons.join(', ')}>
+      {label}
+    </span>
+  );
+}
+
 /** Opt-in effective state for issues/stories: watched only with the watch tag and no ignore tag. */
 function isItemWatched(labels: string[] | undefined, watchLabel: string, ignoreLabel: string): boolean {
   const set = labels ?? [];
@@ -403,6 +433,7 @@ function WorldSummary({
             {pr.unresolvedComments.filter((c) => !c.handled).length > 0 && (
               <span className="chip small">{pr.unresolvedComments.filter((c) => !c.handled).length} comments</span>
             )}
+            {attentionChip(pr.attention)}
             {isExcluded ? (
               <span className="chip small" title={`Tagged "${tag}" — the harness is leaving this PR alone`}>
                 ignored
