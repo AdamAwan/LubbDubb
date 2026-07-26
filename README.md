@@ -84,6 +84,8 @@ reports. Absent data degrades gracefully — no chip until there is something to
 
 ## Architecture
 
+> **Full specification:** [`docs/spec/`](docs/README.md) documents how every part of the application works, written as fact — the world model, the dispatch rules, the agent runtimes, the tool channel, the schema, the API, the cockpit. This section is the map; those documents are the detail.
+
 A single Node/TypeScript process (HTTP + WebSocket) built as isolated modules that talk only through interfaces — any one (especially the `Connector`) can be swapped without touching the rest.
 
 ```

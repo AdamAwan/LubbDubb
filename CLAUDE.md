@@ -4,6 +4,12 @@ Operating notes for AI agents working in this repo. The [README](README.md) cove
 LubbDubb _is_ and how to run it — this file is the stuff you need to change code safely and
 not trip the CI gate. Read the README's Architecture table once; it won't be repeated here.
 
+**[`docs/spec/`](docs/README.md) is the specification of how every part of this application
+works, written as fact.** It is the truth of the application: if the code does something a spec
+doesn't say, that is a bug in one of them. When you change behaviour, update the spec document
+that owns it in the same change. This file stays what it is — the operating notes and sharp
+edges — and the specs carry the full description.
+
 ## Verify before you commit
 
 One command is the source of truth, and CI enforces the same thing on every PR:
