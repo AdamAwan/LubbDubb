@@ -16,6 +16,8 @@ const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 function testConfig(maxConcurrentAgents = 1, repoRoot?: string) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-jobs-'));
   return loadConfig({
+    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
+    auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',

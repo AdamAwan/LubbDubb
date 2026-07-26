@@ -121,5 +121,11 @@
   "dbPath": ".lubbdubb/lubbdubb.sqlite",
 
   "// port": "HTTP/WS port for the server + cockpit. Overridable via the PORT env var. Default 4300.",
-  "port": 4300
+  "port": 4300,
+
+  "// host": "Bind address. Default '127.0.0.1' — this machine only, because the cockpit can queue jobs and a job spawns an agent with write access to your repo. Set '0.0.0.0' to expose it on your network; doing that with auth.enabled false is refused at startup. Overridable via LUBBDUBB_HOST.",
+  "host": "127.0.0.1",
+
+  "// auth": "Cockpit access control. 'enabled' (default true) requires a bearer token on every /api/* route and on /ws. There is deliberately no token key here — a secret must not live in a committable file: set LUBBDUBB_TOKEN, or let the harness mint one into 'tokenFile' (0600) and print it as the #t= link at startup.",
+  "auth": { "enabled": true, "tokenFile": ".lubbdubb/cockpit-token" }
 }

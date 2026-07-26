@@ -18,6 +18,7 @@ import { findingJobRequest } from '../mcp/findings.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
+import { authorizeRequest, resolveCockpitToken } from './auth.js';
 
 /**
  * Whether the configured world accepts synthetic events: only the `fake`
@@ -30,15 +31,67 @@ export function isWorldInjectable(integrations: IntegrationSelection): boolean {
   return Object.values(integrations).some((provider) => provider === 'fake');
 }
 
+/** Bind addresses that mean "this machine only" — the ones the Host check is sound for. */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+
+interface BuiltApp {
+  app: FastifyInstance;
+  hub: Hub;
+  /** The cockpit URL to open, token fragment included, or null when auth is off. */
+  cockpitUrl: string | null;
+  /** Where a minted token was persisted, for the banner. Null when it came from the env or auth is off. */
+  tokenPath: string | null;
+}
+
 /**
  * Builds the cockpit HTTP + WebSocket surface. REST for actions and state,
  * WebSocket for live streaming, and (in production) the built SPA served from
  * `web/dist`. Returns the Fastify instance and the hub so `main.ts` can wire the
- * harness lifecycle around it and tests can drive it via `.inject()`.
+ * harness lifecycle around it and tests can drive it via `.inject()`, plus the
+ * tokenised URL for the startup banner.
  */
-export async function buildApp(system: System): Promise<{ app: FastifyInstance; hub: Hub }> {
+export async function buildApp(system: System): Promise<BuiltApp> {
   const app = Fastify({ logger: false });
   const hub = new Hub(system);
+
+  // Registered before every route and plugin below, because a Fastify hook is
+  // inherited only by contexts created after it — the `/ws` route lives in a
+  // child context, and adding this later would leave the live transcript stream
+  // (source code, agent output) as the one unguarded surface.
+  const auth = system.config.auth.enabled ? resolveCockpitToken(system.config.auth.tokenFile) : null;
+  if (auth) {
+    const requireLoopbackHost = LOOPBACK_HOSTS.has(system.config.host);
+    app.addHook('onRequest', async (req, reply) => {
+      const verdict = authorizeRequest(
+        {
+          url: req.url,
+          host: req.headers.host,
+          origin: req.headers.origin,
+          authorization: req.headers.authorization,
+          queryToken:
+            typeof (req.query as { t?: unknown } | undefined)?.t === 'string'
+              ? (req.query as { t: string }).t
+              : undefined,
+        },
+        { token: auth.token, requireLoopbackHost },
+      );
+      if (verdict.ok) return;
+      // A refused *upgrade* needs its connection torn down explicitly. The client
+      // asked to switch protocols and got an ordinary response instead, which
+      // leaves a socket that belongs to neither side's bookkeeping — the HTTP
+      // server no longer counts it, so `app.close()` waits on it forever and the
+      // harness never shuts down. `Connection: close` makes node end it with the
+      // response.
+      if (req.headers.upgrade) {
+        reply.header('connection', 'close');
+        reply.raw.once('finish', () => reply.raw.socket?.destroy());
+      }
+      // Returning the reply is what tells Fastify the lifecycle is over —
+      // without it the route handler still runs.
+      return reply.code(verdict.code).send({ error: verdict.error });
+    });
+  }
+
   await app.register(websocket);
   // Opt-in rate limiting (`global: false`): only routes that set `config.rateLimit`
   // are limited, so the cockpit's frequent state polling is never throttled. The
@@ -411,7 +464,17 @@ export async function buildApp(system: System): Promise<{ app: FastifyInstance; 
     });
   }
 
-  return { app, hub };
+  // `0.0.0.0` is a bind address, not somewhere to point a browser; a URL built
+  // from it lands nowhere. Loopback is the honest thing to print in that case —
+  // the operator exposing the port knows their own hostname, and the token in the
+  // fragment is what actually matters to them.
+  const urlHost = LOOPBACK_HOSTS.has(config.host) ? config.host : '127.0.0.1';
+  return {
+    app,
+    hub,
+    cockpitUrl: auth ? `http://${urlHost}:${config.port}/#t=${auth.token}` : null,
+    tokenPath: auth?.source === 'minted' ? auth.path : null,
+  };
 }
 
 /**

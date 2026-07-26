@@ -34,6 +34,24 @@ body {
   color: var(--muted);
 }
 
+.locked-out {
+  max-width: 46rem;
+  line-height: 1.6;
+}
+
+.locked-out h1 {
+  font-size: 1.1rem;
+  margin: 0 0 1rem;
+  color: var(--text);
+}
+
+.locked-out code {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
 .topbar {
   display: flex;
   align-items: center;

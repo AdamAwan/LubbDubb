@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, connectWs, isDemo } from './api.js';
+import { api, connectWs, isDemo, UnauthorizedError } from './api.js';
 import type { WsClient } from './api.js';
 import type { AppState, Agent, Issue, PullRequest } from './types.js';
 import { InjectPanel } from './components/InjectPanel.js';
@@ -22,6 +22,34 @@ import { statusDot, refLink } from './components/util.js';
 import { useNow } from './hooks.js';
 
 /**
+ * What the cockpit shows when the harness refuses its credential. Worth a screen
+ * rather than a silent retry: the fix is a URL only the operator's terminal has,
+ * so an unexplained "Connecting…" would leave them looking at the browser for a
+ * problem whose answer is in the server log.
+ */
+function LockedOut({ error }: { error: UnauthorizedError }) {
+  return (
+    <div className="loading locked-out">
+      <h1>{error.message}</h1>
+      {error.status === 403 ? (
+        <p>
+          The harness refused this request&apos;s origin. Open the cockpit on <code>localhost</code> or{' '}
+          <code>127.0.0.1</code> — a different hostname pointing at this machine is refused on purpose.
+        </p>
+      ) : (
+        <p>
+          Open the tokenised link the harness printed at startup — the <code>[lubbdubb] open the cockpit: …</code> line
+          in its terminal. The token is stored per browser, so this is a one-off per machine.
+        </p>
+      )}
+      <p className="muted">
+        Running <code>npm start</code> again prints the same link; the token is reused across restarts.
+      </p>
+    </div>
+  );
+}
+
+/**
  * The cockpit. One page: fleet + tasks on the left, the escalation inbox in the
  * middle, the audit log on the right, and a live agent drawer over the top when
  * you drill in. It refetches state on any `dirty` signal from the server and
@@ -29,6 +57,7 @@ import { useNow } from './hooks.js';
  */
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
+  const [denied, setDenied] = useState<UnauthorizedError | null>(null);
   const [connected, setConnected] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
@@ -46,8 +75,12 @@ export function App() {
   const refresh = useCallback(async () => {
     try {
       setState(await api.getState());
-    } catch {
-      /* transient */
+      setDenied(null);
+    } catch (err) {
+      // A refused credential is the one fetch failure that never resolves itself
+      // by retrying, so it gets a screen. Everything else is a transient the next
+      // poll fixes, and must not replace a working cockpit with an error page.
+      if (err instanceof UnauthorizedError) setDenied(err);
     }
   }, []);
 
@@ -95,6 +128,7 @@ export function App() {
     return () => ws.unsubscribe(selected);
   }, [selected]);
 
+  if (denied) return <LockedOut error={denied} />;
   if (!state) return <div className="loading">Connecting to the cockpit…</div>;
 
   const liveAgents = state.agents.filter((a) => ['starting', 'running', 'waiting'].includes(a.status));

@@ -11,6 +11,8 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
+    auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     dispatcher: 'rule',

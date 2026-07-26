@@ -1,89 +1,113 @@
 import type { AppState } from './types.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
+/**
+ * Thrown when the server refuses the cockpit's credential, so `App` can render
+ * the one screen that tells the operator what to do instead of retrying forever.
+ * A distinct type rather than a status check at each call site: every request
+ * goes through {@link authFetch}, so there is exactly one place it can arise.
+ */
+export class UnauthorizedError extends Error {
+  constructor(readonly status: number) {
+    super(status === 403 ? 'Request refused by the cockpit' : 'Cockpit token missing or invalid');
+    this.name = 'UnauthorizedError';
+  }
+}
+
+const TOKEN_KEY = 'lubbdubb.cockpitToken';
+
+/**
+ * The cockpit's bearer token, taken from the `#t=` fragment the server prints at
+ * startup and remembered thereafter.
+ *
+ * **The fragment is the transport because a browser never sends it to a server** —
+ * it stays client-side, so it cannot land in an access log, a `Referer` header or
+ * a proxy trace the way a query parameter would. It is stripped from the address
+ * bar immediately so a copied URL is not a copied credential.
+ *
+ * **`localStorage`, not a cookie, and that is the security property, not a
+ * convenience.** A cookie is attached by the browser to any request that reaches
+ * this origin — including one a hostile page makes — which is exactly what forces
+ * cookie-based auth to invent CSRF tokens. A value the page must read and attach
+ * itself cannot be used by a page that cannot read it, and origin-scoped storage
+ * is unreadable both to another site and to the CSP-sandboxed artifact frames
+ * (which have an opaque origin). `localStorage` over `sessionStorage` so a second
+ * tab and a browser restart keep working; the difference only matters given an
+ * XSS in the cockpit itself, and an attacker with script execution here can call
+ * the API directly regardless of where the token sits.
+ */
+function readToken(): string {
+  try {
+    const match = /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash);
+    if (match) {
+      localStorage.setItem(TOKEN_KEY, match[1]);
+      history.replaceState(null, '', location.pathname + location.search);
+      return match[1];
+    }
+    return localStorage.getItem(TOKEN_KEY) ?? '';
+  } catch {
+    // Storage can throw when cookies/site data are blocked. The in-memory token
+    // from this page load still works; only persistence is lost.
+    return /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1] ?? '';
+  }
+}
+
+const token = readToken();
+
+/** Every request to the harness, with the credential attached in one place. */
+async function authFetch(url: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  if (token) headers.set('authorization', `Bearer ${token}`);
+  const res = await fetch(url, { ...init, headers });
+  if (res.status === 401 || res.status === 403) throw new UnauthorizedError(res.status);
+  return res;
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return (await res.json()) as T;
 }
 
+/** POST a JSON body. Collapses the header/stringify boilerplate every action repeated. */
+function post<T>(url: string, body?: unknown): Promise<T> {
+  return authFetch(url, {
+    method: 'POST',
+    ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  }).then((r) => json<T>(r));
+}
+
 const realApi = {
-  getState: () => fetch('/api/state').then((r) => json<AppState>(r)),
+  getState: () => authFetch('/api/state').then((r) => json<AppState>(r)),
   getTranscript: (agentId: string) =>
-    fetch(`/api/agents/${agentId}/transcript`).then((r) => json<{ transcript: string }>(r)),
-  pulse: () => fetch('/api/pulse', { method: 'POST' }).then((r) => json(r)),
-  inject: (event: unknown) =>
-    fetch('/api/inject', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(event),
-    }).then((r) => json(r)),
-  answerEscalation: (id: string, response: string) =>
-    fetch(`/api/escalations/${id}/answer`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ response }),
-    }).then((r) => json(r)),
+    authFetch(`/api/agents/${agentId}/transcript`).then((r) => json<{ transcript: string }>(r)),
+  pulse: () => post('/api/pulse'),
+  inject: (event: unknown) => post('/api/inject', event),
+  answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),
   // Accepting is what performs the act — the harness merges / sends it through the
   // same seam auto-send would have used. Rejecting sends nothing and is durable.
   acceptProposal: (id: string, note?: string) =>
-    fetch(`/api/proposals/${id}/accept`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ note }),
-    }).then((r) => json<{ ok: boolean; detail: string }>(r)),
+    post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/accept`, { note }),
   rejectProposal: (id: string, note?: string) =>
-    fetch(`/api/proposals/${id}/reject`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ note }),
-    }).then((r) => json<{ ok: boolean; detail: string }>(r)),
-  respondAgent: (id: string, text: string) =>
-    fetch(`/api/agents/${id}/respond`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text }),
-    }).then((r) => json(r)),
+    post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/reject`, { note }),
+  respondAgent: (id: string, text: string) => post(`/api/agents/${id}/respond`, { text }),
   setControl: (patch: { cap?: number; paused?: boolean }) =>
-    fetch('/api/control', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(patch),
-    }).then((r) => json<{ ok: true; cap: number; paused: boolean }>(r)),
+    post<{ ok: true; cap: number; paused: boolean }>('/api/control', patch),
   setPrExcluded: (prNumber: number, excluded: boolean) =>
-    fetch(`/api/prs/${prNumber}/exclude`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ excluded }),
-    }).then((r) => json<{ ok: true; excluded: boolean }>(r)),
+    post<{ ok: true; excluded: boolean }>(`/api/prs/${prNumber}/exclude`, { excluded }),
   setIssueWatched: (issueNumber: number, watched: boolean) =>
-    fetch(`/api/issues/${issueNumber}/watch`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ watched }),
-    }).then((r) => json<{ ok: true; watched: boolean }>(r)),
+    post<{ ok: true; watched: boolean }>(`/api/issues/${issueNumber}/watch`, { watched }),
   setStoryWatched: (storyId: string, watched: boolean) =>
-    fetch(`/api/stories/${storyId}/watch`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ watched }),
-    }).then((r) => json<{ ok: true; watched: boolean }>(r)),
-  replan: (planId: string) =>
-    fetch(`/api/plans/${planId}/replan`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
+    post<{ ok: true; watched: boolean }>(`/api/stories/${storyId}/watch`, { watched }),
+  replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
-    fetch('/api/jobs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(job),
-    }).then((r) => json<{ ok: true }>(r)),
-  cancelJob: (id: string) => fetch(`/api/jobs/${id}/cancel`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
+    post<{ ok: true }>('/api/jobs', job),
+  cancelJob: (id: string) => post<{ ok: true }>(`/api/jobs/${id}/cancel`),
   // A finding becomes work only here: the operator's click is the gate, because
   // an agent that could queue jobs could put agents on the fleet.
-  promoteFinding: (id: string) =>
-    fetch(`/api/findings/${id}/promote`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
-  dismissFinding: (id: string) =>
-    fetch(`/api/findings/${id}/dismiss`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
-  killAgent: (id: string) => fetch(`/api/agents/${id}/kill`, { method: 'POST' }).then((r) => json(r)),
-  interruptAgent: (id: string) => fetch(`/api/agents/${id}/interrupt`, { method: 'POST' }).then((r) => json(r)),
+  promoteFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/promote`),
+  dismissFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/dismiss`),
+  killAgent: (id: string) => post(`/api/agents/${id}/kill`),
+  interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),
 };
 
 /**
@@ -111,7 +135,13 @@ class ReconnectingWs {
 
   private open(): void {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    // The token goes in the query string here, not a header: the browser
+    // WebSocket API exposes no way to set one on the upgrade request. That is a
+    // weaker channel in general — query strings reach access logs and `Referer`
+    // — but this connection is to loopback and traverses no proxy, so there is no
+    // log between here and the harness for it to leak into.
+    const query = token ? `?t=${encodeURIComponent(token)}` : '';
+    const ws = new WebSocket(`${proto}://${location.host}/ws${query}`);
     this.ws = ws;
     ws.onopen = () => {
       this.backoff = ReconnectingWs.BASE; // reset backoff on a good connection

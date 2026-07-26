@@ -1,11 +1,49 @@
 # 16 — HTTP and WebSocket API
 
 `src/server/app.ts` builds the Fastify instance; `src/server/hub.ts` fans events out to sockets. The
-server listens on `0.0.0.0:<port>` and is **unauthenticated** — it is a self-hosted cockpit, and that
-is why the MCP tool channel uses a Unix socket with a bearer token rather than a second HTTP surface.
+server listens on `config.host:<port>`, defaulting to **loopback** (`127.0.0.1`), and every `/api/*`
+route and the `/ws` socket require a **bearer token** — see [Authentication](#authentication) below.
+The MCP tool channel still uses a Unix socket rather than a second HTTP surface: a socket with 0600
+file permissions is a stronger boundary than a token for a channel with fleet-wide write access to
+the store, and it needs no credential in an agent's argv.
 
 Rate limiting is registered with `global: false`: only routes that opt in are limited, so the
 cockpit's frequent state polling is never throttled.
+
+## Authentication
+
+`src/server/auth.ts` holds the whole decision as one pure function, `authorizeRequest`, with a
+Fastify `onRequest` hook as a thin adapter. Three layers:
+
+1. **Loopback binding.** `config.host` defaults to `127.0.0.1`. Binding a routable address with
+   `auth.enabled: false` is refused at config load — the pair publishes an endpoint that spawns
+   agents with write access to the repo.
+2. **A bearer token.** `Authorization: Bearer <token>` on every `/api/*` request; `?t=<token>` on the
+   `/ws` upgrade, because browsers cannot set headers on a WebSocket. The token is 32 CSPRNG bytes,
+   base64url, taken from `LUBBDUBB_TOKEN` or minted into `auth.tokenFile` (0600, reused across
+   restarts). It is **never** a config-file key and never a cookie — the cockpit holds it in
+   `localStorage` and attaches it by hand, which is what makes the surface CSRF-proof by
+   construction rather than by a second token.
+3. **Host and Origin checks.** When bound to loopback, a non-loopback `Host` is refused (DNS
+   rebinding). A present `Origin` that is not loopback is refused whatever it is; an absent one is
+   fine, since no non-browser client sends it. Any loopback origin passes, so the Vite dev proxy on
+   another port keeps working.
+
+Origin and host are answered **before** the token, so a leaked credential never turns a rebinding
+attempt back into a way in. The refusal is `403` for those two and `401` for the token.
+
+The guard matches a **path prefix**, so a route added later is protected without opting in;
+`test/cockpitAuth.test.ts` asserts this by walking the route table in `app.ts` and requiring a 401
+from each. The SPA shell and its assets are deliberately unguarded: the token arrives in a URL
+fragment the browser never sends, so the page has to load before it can authenticate, and it holds
+no world state of its own.
+
+A refused **upgrade** is answered with `Connection: close` and its socket destroyed. Without that the
+connection belongs to neither side's bookkeeping and `app.close()` waits on it forever, so anyone
+probing `/ws` would stop the harness shutting down.
+
+`auth.enabled: false` removes all of it. That is how the test suite drives the routes, and it is a
+supported local choice — but only while bound to loopback.
 
 An unanticipated throw in any route is caught by `setErrorHandler`, recorded to the error log (which
 mirrors it to stderr and streams it to the cockpit), and returned as a plain `500 {error}`.
