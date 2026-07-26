@@ -8,11 +8,12 @@ import { buildClaudeArgs, buildClaudeStreamArgs, MCP_PROTOCOL_ADDENDUM } from '.
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
 import { ALLOWED_MCP_TOOLS, MCP_SERVER_ID, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
+import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
 import { escalationTypeForAsk } from '../src/escalation/context.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
-import type { Agent } from '../src/types.js';
+import type { Agent, Issue, PullRequest, Story, WorldSnapshot } from '../src/types.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -129,6 +130,163 @@ test('an escalate kind files as an inbox type, unknown kinds landing where the s
   assert.equal(escalationTypeForAsk('review'), 'review_reply');
   assert.equal(escalationTypeForAsk(undefined), 'answer_question');
   assert.equal(escalationTypeForAsk('nonsense'), 'answer_question');
+});
+
+// -- world_read's pure layer -------------------------------------------------
+
+const TAKEN_AT = '2026-01-01T00:00:00.000Z';
+
+function fakePr(number: number, extra: Partial<PullRequest> = {}): PullRequest {
+  return {
+    id: `pr_${number}`,
+    number,
+    title: `PR ${number}`,
+    branch: `feat/${number}`,
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    ...extra,
+  };
+}
+
+function fakeIssue(number: number, extra: Partial<Issue> = {}): Issue {
+  return {
+    id: `i_${number}`,
+    number,
+    title: `Issue ${number}`,
+    body: 'Body.',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+    ...extra,
+  };
+}
+
+function fakeStory(id: string, extra: Partial<Story> = {}): Story {
+  return {
+    id,
+    title: `Story ${id}`,
+    description: null,
+    acceptanceCriteria: null,
+    wafPillars: [],
+    state: 'ready',
+    priority: 1,
+    ...extra,
+  };
+}
+
+function fakeWorld(overrides: Partial<WorldSnapshot> = {}): WorldSnapshot {
+  return { takenAt: TAKEN_AT, pullRequests: [], issues: [], stories: [], ...overrides };
+}
+
+/** A parsed target, asserting the parse succeeded — for tests about the *read*. */
+function target(kind: string, ref: string) {
+  const parsed = parseWorldRef(kind, ref);
+  assert.ok(parsed.ok, `${kind}/${ref} should parse`);
+  return parsed.target;
+}
+
+test('the kind vocabulary is the one the dispatcher already models', () => {
+  // Not a new taxonomy: exactly the three lists a WorldSnapshot carries and the
+  // three ref prefixes the rest of the system writes.
+  assert.deepEqual([...WORLD_READ_KINDS], ['pr', 'issue', 'story']);
+});
+
+test('a ref is accepted in every shape the harness itself writes', () => {
+  const cases: [string, string, string][] = [
+    ['pr', 'pr:42', 'pr:42'],
+    ['pr', '42', 'pr:42'],
+    ['pr', '#42', 'pr:42'],
+    // Origin refs carry a concern after the number; they name the same world item.
+    ['pr', 'pr:42:ci', 'pr:42'],
+    ['pr', 'pr:42:comment:c_9', 'pr:42'],
+    ['issue', 'issue:12', 'issue:12'],
+    ['issue', 'issue:12:plan', 'issue:12'],
+    ['issue', 'issue:12:part:schema', 'issue:12'],
+    ['story', 'story:st_1', 'story:st_1'],
+    ['story', 'st_1', 'story:st_1'],
+  ];
+  for (const [kind, ref, canonical] of cases) {
+    const parsed = parseWorldRef(kind, ref);
+    assert.equal(parsed.ok, true, `${kind}/${ref} should parse`);
+    assert.equal(parsed.ok && parsed.target.canonical, canonical);
+  }
+});
+
+test('a ref that disagrees with its kind is reported rather than guessed at', () => {
+  const mismatch = parseWorldRef('pr', 'issue:12');
+  assert.equal(mismatch.ok, false);
+  assert.match(!mismatch.ok ? mismatch.error : '', /is a issue ref, but kind is "pr"/);
+
+  const badKind = parseWorldRef('epic', '12');
+  assert.equal(badKind.ok, false);
+  assert.match(!badKind.ok ? badKind.error : '', /kind must be one of pr, issue, story/);
+
+  const noNumber = parseWorldRef('pr', 'pr:main');
+  assert.equal(noNumber.ok, false);
+  assert.match(!noNumber.ok ? noNumber.error : '', /does not contain a pr number/);
+
+  assert.equal(parseWorldRef('pr', '   ').ok, false);
+});
+
+test('a PR reads back with the same health verdict and stack attribution the cockpit shows', () => {
+  // #12 is stacked on #7, and #7 is the one that is actually red.
+  const world = fakeWorld({
+    pullRequests: [
+      fakePr(7, { branch: 'issue/12/schema', baseBranch: 'main', ciStatus: 'failing' }),
+      fakePr(12, {
+        branch: 'issue/12/reader',
+        baseBranch: 'issue/12/schema',
+        ciStatus: 'failing',
+        unresolvedComments: [{ id: 'c1', author: 'rev', body: 'rename this', handled: false }],
+      }),
+    ],
+  });
+
+  const read = readWorldItem(world, target('pr', 'pr:12'));
+  assert.equal(read.ok, true);
+  assert.ok(read.ok);
+  const item = prPayload(read.item);
+  // Whose failure it is — the same attribution that stopped an agent being
+  // dispatched here, so the agent is told rather than left to wonder.
+  assert.equal(item.ciFailingOnBasePr, 7);
+  assert.equal(item.basePr?.number, 7);
+  assert.ok(item.health.reasons.includes('CI failing on base PR #7'));
+  assert.deepEqual(
+    item.unresolvedComments.map((c) => c.body),
+    ['rename this'],
+  );
+});
+
+/** Narrow a read PR payload for assertions. */
+function prPayload(item: Record<string, unknown>) {
+  return item as unknown as {
+    ciFailingOnBasePr: number | null;
+    basePr: { number: number } | null;
+    health: { blocked: boolean; reasons: string[] };
+    unresolvedComments: { body: string }[];
+    state: string;
+  };
+}
+
+test('a recently-closed PR is still readable, so a stacked agent can tell a merge from an abandonment', () => {
+  const world = fakeWorld({
+    pullRequests: [fakePr(12)],
+    closedPullRequests: [fakePr(7, { state: 'merged', merged: true, closedAt: TAKEN_AT })],
+  });
+  const merged = readWorldItem(world, target('pr', '7'));
+  assert.equal(merged.ok, true);
+  assert.ok(merged.ok);
+  assert.equal(prPayload(merged.item).state, 'merged');
+});
+
+test('a miss names what the harness is tracking instead of just saying no', () => {
+  const world = fakeWorld({ pullRequests: [fakePr(7), fakePr(12)], issues: [fakeIssue(3)], stories: [fakeStory('a')] });
+  const missPr = readWorldItem(world, target('pr', '99'));
+  assert.equal(missPr.ok, false);
+  assert.match(!missPr.ok ? missPr.error : '', /no PR pr:99\. PRs the harness is tracking: #7, #12\./);
+
+  const empty = readWorldItem(fakeWorld(), target('story', 'x'));
+  assert.match(!empty.ok ? empty.error : '', /tracking no Stories/);
 });
 
 // -- end to end through a built system ---------------------------------------
@@ -365,6 +523,147 @@ test('escalate refuses an empty question instead of parking on nothing', async (
   assert.equal(res.isError, true);
   assert.deepEqual(system.store.listOpenEscalations(), []);
   assert.equal(system.store.getAgent(agent.id)?.status, 'running');
+  system.store.close();
+});
+
+test('world_read answers out of the harness view, with the status envelope on it', async () => {
+  const system = build();
+  // The baseline is what `Harness.recordWorldChanges` persists each pulse — so
+  // seeding it is exactly what a cycle would have left behind.
+  system.store.setWorldBaseline(
+    fakeWorld({
+      pullRequests: [
+        fakePr(42, {
+          branch: 'issue/12',
+          baseBranch: 'main',
+          ciStatus: 'failing',
+          unresolvedComments: [{ id: 'c1', author: 'rev', body: 'this leaks a handle', handled: false }],
+        }),
+      ],
+      issues: [fakeIssue(12, { labels: ['bug'], linkedPrNumber: 42 })],
+    }),
+  );
+  const agent = spawnAgent(system, 'pr:42:ci');
+
+  const res = await callTool(system, agent, 'world_read', { kind: 'pr' });
+  assert.equal(res.isError, false);
+  const payload = JSON.parse(res.text) as {
+    observedAt: string;
+    item: Record<string, unknown>;
+    _status: Record<string, unknown>;
+  };
+  // No ref argument: the common case is "how is the thing I was dispatched for",
+  // and the origin the envelope hands back is the ref it defaults to.
+  assert.equal(payload.item.number, 42);
+  assert.equal(payload.item.ciStatus, 'failing');
+  assert.deepEqual(payload.item.health, { blocked: true, reasons: ['CI failing', '1 unresolved comment'] });
+  assert.equal(prPayload(payload.item).unresolvedComments[0]?.body, 'this leaks a handle');
+  // A pulse-old reading, not a live fetch — and it says which.
+  assert.equal(payload.observedAt, TAKEN_AT);
+  assert.equal(payload._status.origin, 'pr:42:ci');
+  system.store.close();
+});
+
+test('reading an issue carries the plan graph, which lives only in the store', async () => {
+  const system = build();
+  system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12, { body: 'Split me.' })] }));
+  const planner = spawnAgent(system, 'issue:12:plan');
+  await callTool(system, planner, 'plan_submit', {
+    verdict: 'parts',
+    reason: 'Schema before reader.',
+    parts: [
+      { slug: 'schema', title: 'Add the table', scope: 'src/store' },
+      { slug: 'reader', title: 'Read it', scope: 'src/dispatcher', dependsOn: ['schema'] },
+    ],
+  });
+
+  // A part agent reading its parent issue: the sibling graph is most of what it
+  // needs, and it is in the store rather than in the world snapshot.
+  const part = spawnAgent(system, 'issue:12:part:reader');
+  const res = await callTool(system, part, 'world_read', { kind: 'issue', ref: 'issue:12:part:reader' });
+  assert.equal(res.isError, false);
+  const item = (JSON.parse(res.text) as { item: Record<string, unknown> }).item;
+  assert.equal(item.body, 'Split me.');
+  const plan = item.plan as { status: string; parts: { slug: string; dependsOn: string[] }[] };
+  assert.equal(plan.status, 'active');
+  assert.deepEqual(
+    plan.parts.map((p) => p.slug),
+    ['schema', 'reader'],
+  );
+  assert.deepEqual(plan.parts[1]!.dependsOn, ['schema']);
+  system.store.close();
+});
+
+test('world_read is deliberately a general read, not one fenced to the caller origin', async () => {
+  // The choice, asserted rather than merely intended. The dispatcher's own
+  // reasoning is cross-item — #12's red CI belongs to #7 — so an agent told that
+  // must be able to look at #7, or it is back to shelling out to `gh`, which is
+  // the gap this tool closes. Writes stay fenced: see the plan_submit test above.
+  const system = build();
+  system.store.setWorldBaseline(
+    fakeWorld({
+      pullRequests: [
+        fakePr(7, { branch: 'issue/12/schema', baseBranch: 'main', ciStatus: 'failing' }),
+        fakePr(12, { branch: 'issue/12/reader', baseBranch: 'issue/12/schema', ciStatus: 'failing' }),
+      ],
+      issues: [fakeIssue(3)],
+      stories: [fakeStory('st_1', { labels: ['later'] })],
+    }),
+  );
+  const agent = spawnAgent(system, 'pr:12:ci');
+
+  const base = await callTool(system, agent, 'world_read', { kind: 'pr', ref: 'pr:7' });
+  assert.equal(base.isError, false);
+  assert.equal((JSON.parse(base.text) as { item: { number: number } }).item.number, 7);
+
+  // Not just other PRs — any item the harness tracks, in any kind. It can only
+  // ever name what the harness already holds: there is no query and no passthrough.
+  const issue = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '3' });
+  assert.equal((JSON.parse(issue.text) as { item: { title: string } }).item.title, 'Issue 3');
+  const story = await callTool(system, agent, 'world_read', { kind: 'story', ref: 'story:st_1' });
+  assert.deepEqual((JSON.parse(story.text) as { item: { labels: string[] } }).item.labels, ['later']);
+  system.store.close();
+});
+
+test('world_read explains itself rather than failing blankly', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+
+  // Before any cycle there is no snapshot at all: an actionable message, not a throw.
+  const early = await callTool(system, agent, 'world_read', { kind: 'issue' });
+  assert.equal(early.isError, true);
+  assert.match(early.text, /has not completed a cycle yet/);
+
+  system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12)] }));
+  const missing = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '99' });
+  assert.equal(missing.isError, true);
+  assert.match(missing.text, /no issue issue:99\. Issues the harness is tracking: #12\./);
+
+  const wrongKind = await callTool(system, agent, 'world_read', { kind: 'pr', ref: 'issue:12' });
+  assert.equal(wrongKind.isError, true);
+  assert.match(wrongKind.text, /but kind is "pr"/);
+  system.store.close();
+});
+
+test('a desk agent with no origin is told to name a ref rather than reading nothing', async () => {
+  const system = build();
+  system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12)] }));
+  // An operator job has no world origin, so there is nothing for `ref` to default to.
+  const task = system.store.createTask({
+    kind: 'desk',
+    title: 'Ad-hoc',
+    prompt: 'poke about',
+    branch: null,
+    originRef: null,
+  });
+  const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-desk-')));
+
+  const res = await callTool(system, agent, 'world_read', { kind: 'issue' });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /needs a ref/);
+  // ...and naming one works, which is the whole reason it isn't origin-fenced.
+  const named = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '12' });
+  assert.equal(named.isError, false);
   system.store.close();
 });
 

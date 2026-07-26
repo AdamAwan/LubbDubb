@@ -57,6 +57,10 @@ export const MCP_PROTOCOL_ADDENDUM = [
   '- plan_submit(verdict, reason, parts) instead of writing .lubbdubb/plan.json, when you were',
   '  dispatched to plan an issue. It validates immediately: if it rejects your plan, read the reason,',
   '  fix it and call again in this same turn.',
+  '- world_read(kind, ref) instead of shelling out to `gh`/`az` to look up a pull request, issue or',
+  "  story. It returns the harness's own view — CI status, review comments, merge state, an issue",
+  '  body and its plan graph — from the same snapshot the dispatcher decided on, whichever provider',
+  '  is configured. Call it with no ref to read the item you were dispatched for.',
   '',
   'If a tool call fails or the tools are unavailable, fall back to the sentinels above — they always work.',
   'Still print @@LUBBDUBB_DONE@@ when finished. There is no tool for that.',
@@ -122,7 +126,7 @@ export interface ClaudeArgsOptions {
  *   `"Claude requested permissions to use mcp__lubbdubb__…, but you haven't
  *   granted it yet."` with no human at the prompt to grant it. The flag is
  *   additive rather than restrictive — an agent launched with it still uses
- *   Bash/Write normally — so this grants our two tools and nothing else changes.
+ *   Bash/Write normally — so this grants our tools and nothing else changes.
  *
  * Operator `claudeArgs` are appended *after* these, so an explicit
  * `--allowedTools` there still has the last word.
