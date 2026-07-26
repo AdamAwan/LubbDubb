@@ -220,6 +220,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     agents: (): AgentManager => agents,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
+    requirePlanApproval: config.planning.requireApproval,
     errors,
   });
 
@@ -237,6 +238,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,
     mcp: config.mcp.enabled ? mcp : undefined,
+    // The `plan.json` transport's half of the approval gate — the tool transport
+    // gets the same flag above, so a verdict lands identically either way.
+    requirePlanApproval: config.planning.requireApproval,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);

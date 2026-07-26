@@ -74,12 +74,15 @@ export interface QueueItem {
   branch: string | null;
   /**
    * Where the candidate sits relative to the headroom cut: dispatched this
-   * cycle, waiting on a free slot, throttled by the re-dispatch cooldown, or
+   * cycle, waiting on a free slot, throttled by the re-dispatch cooldown,
    * `capped` — held by a per-plan concurrency limit rather than by fleet
-   * headroom, so it would not dispatch even with every slot free. A capped part
-   * used to be skipped silently, which made the limit invisible.
+   * headroom, so it would not dispatch even with every slot free — or
+   * `unapproved`, held because its plan's decomposition is still a proposal you
+   * have not accepted (`planning.requireApproval`). Both of the latter two exist
+   * for the same reason: a part held by something other than capacity used to be
+   * skipped silently, which made the thing holding it invisible.
    */
-  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped';
+  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped' | 'unapproved';
   reason: string;
 }
 

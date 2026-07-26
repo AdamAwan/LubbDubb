@@ -16,8 +16,11 @@ export function githubRefUrl(owner: string, repo: string, ref: string): string |
   let m = /^pr:(\d+)(?::|$)/.exec(r);
   if (m) return `${base}/pull/${m[1]}`;
 
-  // Issue origin ref: `issue:13` → the issue page.
-  m = /^issue:(\d+)$/.exec(r);
+  // Issue refs: `issue:13`, and the suffixed shapes the funnel writes —
+  // `issue:13:plan` (a planner's origin, and a plan proposal's ref) and
+  // `issue:13:part:<slug>` — all name the same issue page, exactly as the PR
+  // shapes above all name one PR.
+  m = /^issue:(\d+)(?::|$)/.exec(r);
   if (m) return `${base}/issues/${m[1]}`;
 
   // Explicit commit ref: `commit:<sha>` → the commit page.

@@ -128,6 +128,12 @@ called by the plan reconciler rather than the executor.
 ## Other actions
 
 - **`escalate_to_human`** — creates the escalation via `EscalationInbox.create`; always `executed`.
+- **`propose_plan`** — the one proposal with no outbound act. It creates an `approve_change`
+  escalation plus a `plan` proposal (ref `issue:<n>:plan`), or is `skipped` when
+  `planProposalHold` finds a pending verdict for that plan. Accepting it runs through the same
+  `ActionExecutor.runAuthorized` an accepted merge does — `readProposedAct` yields a `plan` act,
+  checked before the PR number so an approved decomposition cannot audit as "names no PR number" —
+  and releases the plan row rather than calling the sink. See [08](08-planning.md#the-approval-gate).
 - **`respond_to_agent`** — `agents.respond(agentId, response)`. `executed` when the agent is live,
   `skipped` (`Agent <id> not live; nothing typed.`) when it is not.
 - **`no_op`** — recorded as `executed` with its reason, so idleness is auditable.

@@ -444,11 +444,15 @@ export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary'>;
  * Where a plan sits in its life:
  * - `planning` — a verdict is still being worked out (a replan in flight).
  * - `single`   — the planner said one PR; the issue falls through to normal pickup.
+ * - `awaiting_approval` — decomposed, and `planning.requireApproval` is on, so a
+ *   human has been asked to authorize the decomposition (issue #109 phase 3).
+ *   Nothing is scheduled from it: this status *is* the gate, which is why release
+ *   is a one-way move to `active` rather than a verdict re-read every pulse.
  * - `active`   — decomposed into parts, at least one still outstanding.
  * - `complete` — every part merged.
  * - `abandoned`— the operator gave up on the decomposition.
  */
-export type PlanStatus = 'planning' | 'single' | 'active' | 'complete' | 'abandoned';
+export type PlanStatus = 'planning' | 'single' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
 
 /**
  * One issue's delivery plan — the planning agent's verdict, persisted so the
@@ -573,6 +577,9 @@ export interface EscalationContext {
   method?: string;
   autoSendFailed?: boolean;
   autoMergeFailed?: boolean;
+  // -- propose_plan escalations -------------------------------------------
+  /** The plan whose decomposition this item asks you to authorize (issue #109 phase 3). */
+  planId?: string;
   [key: string]: unknown;
 }
 
@@ -593,11 +600,13 @@ export interface Escalation {
 }
 
 /**
- * What a human is being asked to authorize. Two today (issue #109 phase 1), both
- * acts the auto-send gate already refuses to perform on its own: a drafted PR
- * reply and a merge.
+ * What a human is being asked to authorize. Two of them are acts the auto-send
+ * gate refuses to perform on its own (issue #109 phase 1): a drafted PR reply and
+ * a merge. The third, `plan`, is the odd one and deliberately so — it publishes
+ * nothing. Accepting it *releases a rule*: a decomposition of an issue into
+ * stacked PRs stays unscheduled until a human says yes (phase 3).
  */
-export type ProposalKind = 'reply_draft' | 'merge';
+export type ProposalKind = 'reply_draft' | 'merge' | 'plan';
 
 /** One-way: a proposal leaves `pending` exactly once, in one of two directions. */
 export type ProposalStatus = 'pending' | 'accepted' | 'rejected';
@@ -653,6 +662,7 @@ export type ActionType =
   | 'respond_to_agent'
   | 'reply_on_pr'
   | 'merge_pr'
+  | 'propose_plan'
   | 'set_work_item_state'
   | 'no_op';
 

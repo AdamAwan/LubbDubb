@@ -180,6 +180,9 @@ test('a planner writing plan.json persists the verdict at drain time, for both o
   );
   const plan = system.store.getPlanByOrigin('issue:12');
   assert.ok(plan, 'the plan was ingested from the worktree');
+  // `active`, not `awaiting_approval`: `planning.requireApproval` is off by
+  // default, so the file transport commits a decomposition exactly as it always
+  // has (issue #109 phase 3 changes only where an *opted-in* verdict lands).
   assert.equal(plan!.status, 'active');
   assert.equal(plan!.reason, 'Schema first.');
   assert.equal(plan!.title, 'Big thing', 'the issue title, not the task title');

@@ -53,7 +53,15 @@ export class PlanReconciler {
 
   async reconcile(world: WorldSnapshot): Promise<void> {
     if (!this.deps.planning.enabled) return; // off means off, including for a stale DB
-    const plans = this.deps.store.listPlans().filter((p) => p.status === 'active' || p.status === 'complete');
+    // `awaiting_approval` is reconciled too. It dispatches nothing, but readiness
+    // is what the "Up next" queue renders as held — an unreconciled plan's parts
+    // are all still `pending`, so the operator would be asked to approve a
+    // decomposition whose parts were invisible everywhere but the panel. (A
+    // replan of a live plan sits here as well, and its in-flight parts must keep
+    // being folded while the amendment waits on a human.)
+    const plans = this.deps.store
+      .listPlans()
+      .filter((p) => p.status === 'active' || p.status === 'complete' || p.status === 'awaiting_approval');
     if (plans.length === 0) return; // nothing to observe — don't pay for a fetch
 
     await this.maybeFetch();
@@ -142,7 +150,13 @@ export class PlanReconciler {
     // yet), a part moving, or the plan completing. It's edited in place, so this is
     // one living comment rather than a stream, which is what keeps it off the
     // auto-send gate: it's mechanical bookkeeping, not authored prose.
-    if (current.statusCommentRef === null || changed || rolled) {
+    //
+    // Not while the plan is awaiting approval: the comment is the plan's progress
+    // channel, and an unapproved decomposition has no progress to report — posting
+    // it would announce a commitment on the tracker that the operator has not made,
+    // and a refusal would then leave that announcement standing (a refused plan is
+    // `single`, which this loop never revisits).
+    if (current.status !== 'awaiting_approval' && (current.statusCommentRef === null || changed || rolled)) {
       await this.writeStatusComment(current, store.listPlanParts(plan.id), issueNumber);
     }
   }

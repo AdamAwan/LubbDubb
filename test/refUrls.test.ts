@@ -21,6 +21,13 @@ test('githubRefUrl: issue origin ref resolves to the issue page', () => {
   assert.equal(githubRefUrl(O, R, 'issue:13'), `${BASE}/issues/13`);
 });
 
+test('githubRefUrl: suffixed issue refs from the funnel resolve to the same issue page', () => {
+  // `issue:13:plan` is both a planning agent's origin and a plan proposal's ref;
+  // `issue:13:part:<slug>` is a part's. All three name one issue, like the PR shapes.
+  assert.equal(githubRefUrl(O, R, 'issue:13:plan'), `${BASE}/issues/13`);
+  assert.equal(githubRefUrl(O, R, 'issue:13:part:schema'), `${BASE}/issues/13`);
+});
+
 test('githubRefUrl: a bare or #-prefixed number resolves to /issues (GitHub redirects PRs)', () => {
   assert.equal(githubRefUrl(O, R, '#7'), `${BASE}/issues/7`);
   assert.equal(githubRefUrl(O, R, '7'), `${BASE}/issues/7`);

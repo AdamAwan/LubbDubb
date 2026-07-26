@@ -33,6 +33,12 @@ export interface McpBridgeServerOptions {
   configDir: string;
   /** The socket (POSIX) or named pipe (Windows) agents' bridges connect back on. */
   socketPath: string;
+  /**
+   * `planning.requireApproval`, passed through to `plan_submit`'s ingestion so
+   * the tool transport and the `plan.json` one persist a verdict identically —
+   * the property the shared `ingestPlanDocument` exists to keep.
+   */
+  requirePlanApproval?: boolean;
   errors?: ErrorRecorder;
 }
 
@@ -230,7 +236,12 @@ export class McpBridgeServer {
       return await handleRequest(frame, []);
     }
     const tools = buildTools(
-      { store: this.opts.store, agents: this.opts.agents(), errors: this.opts.errors },
+      {
+        store: this.opts.store,
+        agents: this.opts.agents(),
+        requirePlanApproval: this.opts.requirePlanApproval,
+        errors: this.opts.errors,
+      },
       resolved.identity,
     );
     return await handleRequest(frame, tools);

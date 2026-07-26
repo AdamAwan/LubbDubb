@@ -154,7 +154,7 @@ export interface Plan {
   /** `issue:12` — the issue this plan hangs off. */
   originRef: string;
   title: string;
-  /** 'planning' | 'single' | 'active' | 'complete' | 'abandoned'. */
+  /** 'planning' | 'single' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned'. */
   status: string;
   reason: string | null;
   createdAt: string;
@@ -263,9 +263,9 @@ export interface Escalation {
  */
 export interface Proposal {
   id: string;
-  /** 'reply_draft' | 'merge'. */
+  /** 'reply_draft' | 'merge' | 'plan'. */
   kind: string;
-  /** The act's subject, e.g. `pr:42:merge`. */
+  /** The act's subject, e.g. `pr:42:merge` or `issue:12:plan`. */
   ref: string;
   /** 'pending' | 'accepted' | 'rejected'. */
   status: string;
@@ -304,10 +304,12 @@ export interface QueueItem {
   kind: 'code' | 'desk';
   branch: string | null;
   /**
-   * Above the headroom cut, waiting on a free slot, throttled by the cooldown, or
-   * `capped` — held by a per-plan concurrency limit, so a free slot wouldn't help.
+   * Above the headroom cut, waiting on a free slot, throttled by the cooldown,
+   * `capped` — held by a per-plan concurrency limit, so a free slot wouldn't help
+   * — or `unapproved`, held because the plan it belongs to is a decomposition you
+   * have not accepted yet.
    */
-  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped';
+  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped' | 'unapproved';
   reason: string;
 }
 

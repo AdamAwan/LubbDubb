@@ -88,12 +88,17 @@ a non-string `title` or `branch`; **409** when a code job names a branch a live 
 
 ### `POST /api/plans/:id/replan`
 
-404 when the plan is unknown. Flips the plan to `planning`, broadcasts, runs a cycle. **Tears nothing
-down** — see [08](08-planning.md). Returns `{ ok: true, plan }`.
+404 when the plan is unknown. Flips the plan to `planning`, **withdraws any pending plan proposal**
+(the amended verdict is a new proposal, and the superseded card must not release a decomposition its
+reader never saw), broadcasts, runs a cycle. **Tears nothing down** — see [08](08-planning.md).
+Returns `{ ok: true, plan }`.
 
 ### `POST /api/escalations/:id/answer`
 
 Body `{response}`. 400 when the response is missing, the escalation is unknown, or it is not `open`.
+**409 when the item carries a pending proposal** (a merge, a drafted reply, or a plan's
+decomposition): free text cannot be branched on, so answering here would settle the inbox item while
+leaving the proposal pending. The error names the accept/reject routes that do settle it.
 Returns `{ ok: true, escalation, routing }`, where `routing` is `typed_into_agent` (the escalation is
 tied to a live agent, and the answer went straight into its session) or `queued_for_dispatch` (the
 answer is recorded and the next cycle acts on it).

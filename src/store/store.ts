@@ -362,6 +362,11 @@ export class Store {
     return plan;
   }
 
+  getPlan(id: string): Plan | null {
+    const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
+    return row ? rowToPlan(row) : null;
+  }
+
   getPlanByOrigin(originRef: string): Plan | null {
     const row = this.db.prepare(`SELECT * FROM plans WHERE origin_ref=?`).get(originRef) as PlanRow | undefined;
     return row ? rowToPlan(row) : null;

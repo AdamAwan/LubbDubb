@@ -98,14 +98,14 @@ export function EscalationCard({
           />
           <AsyncButton
             className="primary"
-            title={decidable.kind === 'merge' ? 'Merge it now' : 'Send this reply now'}
+            title={ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now'}
             onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined)}
           >
-            {decidable.kind === 'merge' ? 'Approve merge' : 'Approve & send'}
+            {ACCEPT_LABEL[decidable.kind] ?? 'Approve'}
           </AsyncButton>
           <AsyncButton
             className="ghost"
-            title="Nothing goes out, and the harness won't ask again"
+            title={REJECT_HINT[decidable.kind] ?? "Nothing goes out, and the harness won't ask again"}
             onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
           >
             Reject
@@ -133,6 +133,28 @@ export function EscalationCard({
     </div>
   );
 }
+
+/**
+ * What each verdict does, per kind. Spelled out because they differ in a way the
+ * word "reject" hides: refusing an outbound act is refusing to *do* something,
+ * whereas refusing a plan reassigns the issue to the single-PR path — the button
+ * has to say so before it is pressed.
+ */
+const ACCEPT_LABEL: Record<string, string> = {
+  merge: 'Approve merge',
+  reply_draft: 'Approve & send',
+  plan: 'Approve plan',
+};
+const ACCEPT_HINT: Record<string, string> = {
+  merge: 'Merge it now',
+  reply_draft: 'Send this reply now',
+  plan: 'Release the plan — each part gets its own agent, branch and PR',
+};
+const REJECT_HINT: Record<string, string> = {
+  merge: "Nothing goes out, and the harness won't ask again",
+  reply_draft: "Nothing goes out, and the harness won't ask again",
+  plan: 'Retires the parts nothing has started for and works the issue as a single PR instead',
+};
 
 /**
  * Turn a task's `originRef` (or a bare PR number) into a friendly label for the

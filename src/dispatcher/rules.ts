@@ -68,6 +68,12 @@ export const DISPATCH_RULES = {
     description:
       'With the planning funnel enabled, a watched open issue with no plan yet gets a planning agent first: it reads the repository and decides whether the work is one pull request or several, biasing hard toward one. Planners rank ahead of pickups because a planner unblocks work. The same rule fires for a *replan* (an operator sent an existing plan back), with the planner primed with the current plan and part states so it amends rather than re-derives. Off by default; a planner that never produces a plan fails open to the single-PR path after the attempt cap — or, for a replan, back to the decomposition the issue already had — so a failure can never park an issue.',
   },
+  'plan-approval': {
+    number: '3d',
+    name: 'Plan needs your approval',
+    description:
+      'With `planning.requireApproval` on, a `parts` verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and rule 4a schedules none of its parts until you accept. Accepting releases the plan; rejecting retires the parts nothing has started for and falls the issue back to a single pull request, so a "no" leaves it a route instead of parking it. A replan asks again — the amended decomposition is a new proposal, and the old verdict cannot release it. Off by default: without the flag a decomposition commits the moment the planner writes it, exactly as before.',
+  },
   'plan-part': {
     number: '4a',
     name: 'Plan part ready',

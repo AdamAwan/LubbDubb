@@ -25,6 +25,7 @@ is rejected and audited rather than executed.
 | `respond_to_agent`    | `agentId`, `response`, `reason`                         | `originRefs`, `rule`                                                     |
 | `reply_on_pr`         | `prNumber`, `draft`, `reason`                           | `commentId`, `confidence` (0..1), `rule`                                 |
 | `merge_pr`            | `prNumber`, `reason`                                    | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
+| `propose_plan`        | `planId`, `originRef`, `prompt`, `reason`               | `rule`                                                                   |
 | `set_work_item_state` | `number`, `state`, `reason`                             | `rule`                                                                   |
 | `no_op`               | `reason`                                                | `rule`                                                                   |
 
@@ -53,6 +54,7 @@ expand a row into the rule that fired and why that rule exists.
 | `work-item-in-review`     | 3b | Back off to review state    | A work item in a pickup state has an open PR (or is decomposed).                            |
 | `work-item-back-to-pickup`| 3b | Return from review state    | A still-open work item parked in the review state has no open PR and is not decomposed.     |
 | `issue-plan`              | 3c | Issue needs a plan          | With planning on, a watched open issue has no plan yet — or an operator asked for a replan. |
+| `plan-approval`           | 3d | Plan needs your approval    | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending. |
 | `plan-part`               | 4a | Plan part ready             | A part of an active plan is `ready` and unstaffed.                                          |
 | `issue-pickup`            | 4  | Open issue without a PR     | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.    |
 | `cooldown-escalate`       | 1–4 | Attempt cap reached        | An origin spent its dispatch attempts without clearing.                                     |
@@ -97,7 +99,8 @@ Candidates are appended in this order, and the order *is* the priority:
 7. **Story pickup** (rule 7) — ranked last, so at zero headroom it queues as `waiting` rather than
    silently vanishing.
 
-Non-dispatch actions (`merge_pr`, `set_work_item_state`, `escalate_to_human`, `respond_to_agent`) are
+Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `escalate_to_human`,
+`respond_to_agent`) are
 pushed directly, because they claim no headroom.
 
 ## `QueueItem`
@@ -204,7 +207,7 @@ instead.
 dispatcher emits, each under a stable `PromptId`, each with a built-in default, a declared placeholder
 list, and a doc string.
 
-Ids: `issue-plan`, `issue-replan`, `plan-part`, `plan-part-escalation`, `issue-pickup`,
+Ids: `issue-plan`, `issue-replan`, `plan-part`, `plan-approval`, `plan-part-escalation`, `issue-pickup`,
 `issue-pickup-escalation`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-comment`, `pr-concern-escalation`, `story-groom`, `story-waf`, `story-pickup`.
 
