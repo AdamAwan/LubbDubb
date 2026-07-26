@@ -240,6 +240,13 @@ reads. A holding `rejected` would let one refusal veto every future decompositio
 replan can bring the question back); an expiring `accepted` would re-propose a decomposition whose
 agents are already running.
 
+It follows that **phase 4's signal expiry stops here**, and could not have been inherited: it ends a
+rejected hold, and this predicate never applies one — the signature says so, since it takes no signals
+at all. It would also read the wrong thing if it did. The transitions on `issue:<n>` are its comments
+and its links, none of which say anything about whether a decomposition is the right *shape*, while the
+row that **is** that verdict is rewritten by both settlements. `test/planApproval.test.ts` asserts the
+polarity in both predicates rather than trusting the two to stay apart.
+
 **Rejection has an effect of its own**, because a bare "no" would park the issue: once the funnel is
 on, a plan is the only thing that schedules work for a decomposed issue (rule 3b parks the work item in
 the review state for the life of the plan, and `resolvePlanRoute` fails a spent replan back to `parts`).

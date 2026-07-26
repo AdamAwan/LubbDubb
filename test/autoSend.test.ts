@@ -215,6 +215,35 @@ test('action type not in the allow-list is escalated even when confident', async
   system.store.close();
 });
 
+test('a blocked gate is still not a rejection — and phase 4 is no back door to one', async () => {
+  const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
+  const sink = countingSink();
+  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  await system.executor.execute('cyc-1', mergePlan(0.5));
+
+  // "Blocked" means "not mine to authorize", which is what a *pending* proposal
+  // already says. A machine "no" would be durable and would suppress the human
+  // ask for good, so `autoSendVerdict` has no rejecting arm to reach.
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.status, 'pending');
+  assert.equal(proposal!.decidedBy, null);
+  assert.deepEqual(sink.merges, []);
+  assert.equal(system.store.listProposals().filter((p) => p.status === 'rejected').length, 0);
+
+  // And the expiry does not reach it: only a rejection has a standing to end, so
+  // the world moving neither settles the question nor asks it twice. Whether the
+  // gate would clear on a second look is beside the point — the operator has been
+  // asked, and their answer is the only thing that decides it.
+  system.store.recordWorldEvents([{ kind: 'pr_ci', ref: 'pr:42', summary: 'PR #42 CI passing' }]);
+  await system.executor.execute('cyc-2', mergePlan(0.99));
+
+  assert.equal(system.store.listProposals().length, 1, 'a pending ask is not re-asked by a world signal');
+  assert.deepEqual(sink.merges, [], 'and a confident second look does not overrule the human it is waiting on');
+  const skipped = system.store.listDecisions().find((d) => d.outcome === 'skipped')!;
+  assert.match(skipped.detail, /Skipped merge of PR #42: awaiting your accept\/reject/);
+  system.store.close();
+});
+
 test('a send failure never drops the reply — it falls back to escalation', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
   const failingSink: ActionSink = {

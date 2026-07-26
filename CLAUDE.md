@@ -130,12 +130,12 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     pulse and a `ref` the gate keys on. Widening would have given every existing question five
     permanently-null columns and no way to tell "not a proposal" from "not yet decided". The name
     avoids the `decisions` audit table and the `Decision` type in `src/types.ts`.
-  - **`pending` is a gate, and so is `rejected`.** `proposalHold(kind, ref, proposals)` (pure,
+  - **`pending` is a gate, and so is `rejected`.** `proposalHold(kind, ref, proposals, ctx)` (pure,
     `proposals.ts`) reads the _standing_ verdict for an act and holds on both — pending because
     re-asking is the duplicate that filled the inbox, **rejected because a "no" that expires next
     pulse means "not this second"**, which is worse than not asking (the operator can't make the
-    question stop except by doing the act by hand). Phase 4 turns that into a cooldown that re-asks
-    on new signal; until then a no is durable, which is the safe direction. `accepted` holds for a
+    question stop except by doing the act by hand). Phase 4 ends that hold on world signal rather
+    than on a timer — see its bullet below. `accepted` holds for a
     **bounded settle window** (`SETTLE_WINDOW_MS`, deliberately the same 15 min as
     `DEFAULT_COOLDOWN` — it is the same statement, "already attempted recently") and then stops:
     long enough that a successful act is not re-proposed while the world catches up, short enough
@@ -146,7 +146,8 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     dispatcher's `reply_on_pr` included, since prose-driven actions can't be gated rule-side. The
     dispatcher reads it from `DispatchContext.proposals`, wired in `harness.ts` from
     `store.listProposals()` beside `recentDecisions`/`queuedJobs`. That list is **unbounded** on
-    purpose: a rejection that aged out of a window would quietly re-propose a refused act.
+    purpose: a rejection that aged out of a window would quietly re-propose a refused act — which is
+    also why phase 4's event read is bounded by _time and item_ rather than by row count.
   - **Accept executes inline, through `ActionExecutor.runAuthorized` — not via a next-pulse action.**
     The action is already formed and validated on the row, so emitting one for the next cycle to run
     would only re-emit what the proposal holds, at the cost of a pulse of latency _and_ an
@@ -206,8 +207,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     auto-send audits as `rejected` now, not `executed` — the act did not go out — with the same
     `autoSendFailed`/`autoMergeFailed` escalation as before.
   - `autoSend` stays **off by default** and phase 2 changes nothing about _what_ it may do, so the
-    README's safety guarantee holds literally. Phase 4 (a rejection feeding the cooldown / the
-    next prompt) is **not** here and nothing anticipates it. Tests:
+    README's safety guarantee holds literally. Tests:
     `test/proposals.test.ts`, `test/autoSend.test.ts`.
   - **Phase 3 — `planning.requireApproval`, the one proposal with no act.** The planning funnel
     had the same shape and no gate: a `parts` verdict is a proposal in every meaningful sense
@@ -229,7 +229,13 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     state that _persists_; a plan proposal is made once per **verdict**, and both verdicts rewrite
     the row the gate reads. `rejected` holding would let one "no" veto every future decomposition
     (the plan is only re-askable via a replan the operator asked for); `accepted` expiring after
-    `SETTLE_WINDOW_MS` would re-propose a decomposition whose agents are already running.
+    `SETTLE_WINDOW_MS` would re-propose a decomposition whose agents are already running. Phase 4's
+    signal expiry therefore **stops here too**, and could not have been inherited: it ends a
+    _rejected_ hold, which this predicate never applies (the signature takes no signals at all). It
+    would read the wrong thing anyway — the transitions on `issue:<n>` are its comments and links,
+    none of which say whether a decomposition is the right _shape_, while the row that **is** that
+    verdict is rewritten by both settlements. `test/planApproval.test.ts` asserts the polarity in
+    both predicates rather than trusting them to stay apart.
   - **Rejection has an effect of its own, because a bare "no" parks the issue.** Once the funnel
     is on, a plan is the only thing that schedules anything for a decomposed issue — rule 3b parks
     the work item in the review state for the life of the plan, and `resolvePlanRoute` fails a spent
@@ -263,6 +269,58 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     decomposition announces nothing, and a refusal would otherwise leave that announcement
     standing. `QueueItem.status` gained **`unapproved`** for the same reason `capped` exists.
     Tests: `test/planApproval.test.ts`.
+  - **Phase 4 — a rejection expires on signal, and its reason reaches an agent.** Phases 1–3 made a
+    "no" durable _forever_, deliberately and with a stated reason. That is the safe direction and not
+    the right one: **the world moves and the verdict doesn't**, so a merge refused because the PR
+    needed one more commit is still held off it after the commit lands, CI goes green and a second
+    reviewer approves — and the only way to make the harness act is to merge it yourself, which is
+    #109's opening inert-approval failure mirrored. Two things, both off the existing record:
+  - **What ends a "no" is the world, and nothing else.** `proposalHold` gained a `ctx`
+    (`{now, rejectionSignals}`) and its `rejected` arm now returns null once any `WorldEvent` for the
+    proposal's world item is stamped strictly after `decidedAt`. Three choices carry it. **Any
+    transition, not a per-kind list** — the rules that would re-propose re-evaluate on exactly these
+    events, so a filter here is a _second_ opinion about which changes matter, sitting nowhere near
+    the rule it second-guesses. **No timer arm at all**, even though the issue says "cooldown": a
+    time-only expiry re-asks a question the world hasn't changed its answer to, which is "not this
+    second" under a longer name, and if both existed signal would dominate, leaving the timer able
+    only to _delay_ an expiry the signal already granted. (The asymmetry with `accepted`'s
+    `SETTLE_WINDOW_MS` is the point: an accepted act waits on the world to _reflect_ something done,
+    which is a duration; a rejected one waits on it to _become_ something else, which is an event.)
+    And it **cannot flood** — expiring only un-holds the rule, whose own preconditions still decide
+    (the commonest signal on a refused PR, a new comment, un-holds rule 3 and then fails its
+    merge-readiness test), and the fresh pending proposal re-holds the ref, so the act is re-proposed
+    **once**, not once per pulse. `reaskContext` prefixes the re-ask with the refusal, its note and
+    the transition that ended it, or a second ask reads as the harness having forgotten the first.
+  - **The two records don't agree on ref shape, so one predicate owns the join.** A proposal names an
+    _act_ (`pr:42:merge`, `pr:42:comment:c_7`), a world event names an _object_ (`pr:42`).
+    `proposalWorldRef` maps one to the other and is **not exported**: it is used to _match_ events
+    and to _ask_ for them, and those two answering differently is the bug class fixed twice already.
+    The ask is `rejectionSignalQuery(proposals)` → `Store.listWorldEventsSince(since, refs)`, bounded
+    by **time and item** rather than row count — `listWorldEvents`' 200-row limit serves a feed, but a
+    rejection is unbounded in age, so a count-bounded read would judge an old one against events it
+    cannot see. Naming the window removes the case instead of answering it, and the read stays small
+    (the handful of items actually carrying a rejection, over the `world_events(created_at)` index);
+    nothing standing means no query and no read at all. Wired in `harness.ts` as
+    `DispatchContext.rejectionSignals` and re-asked in the executor off the same predicate — a hold
+    the two disagreed about would have the rule dispatch a merge the executor then skips.
+  - **The note lands in `materializeTask`, on an exact ref match.** A rejected `reply_draft`'s ref
+    _is_ rule 2b's dispatch origin, so "what did the human say about this exact thing" is a lookup;
+    widening to the world item would put a refusal to _merge_ in front of an agent fixing CI, so a
+    rejected merge deliberately reaches no agent. It is in the **executor** for the branch gate's
+    reason (every dispatch passes), which is load-bearing here rather than tidy: a `reply_draft` is
+    only ever proposed off the LLM dispatcher's `reply_on_pr`, so a rule-dispatcher-side hook would
+    miss the one path that produces rejected replies. It is **appended** to the rendered prompt, not
+    filled into it — templates are operator-overridable and `loadPromptTemplates` only rejects
+    _unknown_ placeholders, so an override omitting a new `{rejection}` token would silently drop a
+    human's words on exactly the deployments that customised most. Appending has no fallback to get
+    wrong. The note is **attributed and quoted** (an agent will act on it, and must not read it as
+    the harness's own instruction), and an **empty note appends nothing**.
+  - Out of scope and stated so: `last_actor`/`prAttentionStatus`, any new outbound capability, any
+    change to what `autoSend` may authorize, any new proposal kind. `autoSendVerdict` still has no
+    rejecting arm — a blocked gate is a _pending_ proposal, never a "no" — and phase 4 must not make
+    it cheaper to treat one as the other; `test/autoSend.test.ts` asserts a pending ask is untouched
+    by world signal. Tests: `test/proposals.test.ts`, `test/autoSend.test.ts`,
+    `test/planApproval.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —

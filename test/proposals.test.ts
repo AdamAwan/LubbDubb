@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,7 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 
@@ -33,6 +35,50 @@ function mergePlan(prNumber = 42): DispatchResult {
     ],
   } as unknown as DispatchResult;
 }
+
+/** A plan carrying a single reply_on_pr draft threaded on one comment. */
+function draftPlan(prNumber: number, commentId: string): DispatchResult {
+  return {
+    rationale: 'test',
+    rejected: [],
+    actions: [
+      {
+        type: 'reply_on_pr',
+        prNumber,
+        commentId,
+        draft: 'The current approach is deliberate.',
+        confidence: 0.5,
+        reason: 'reviewer asked a question',
+      },
+    ],
+  } as unknown as DispatchResult;
+}
+
+/** What rule 2b's prompt is before anything is appended to it. */
+function reviewCommentPrompt(number: number, branch: string, comment: string): string {
+  return defaultPromptTemplates().render('pr-review-comment', { number, branch, author: 'reviewer', comment });
+}
+
+/** A PR rule 3 wants to merge: green, approved, mergeable, nothing else pending. */
+function mergeReadyPr(system: ReturnType<typeof buildSystem>, number: number): void {
+  system.connector.inject({ kind: 'new_pr', number, title: 'Add the widget', branch: `feat/widget-${number}` });
+  system.connector.inject({ kind: 'ci_passed', prNumber: number });
+  system.connector.inject({ kind: 'pr_approved', prNumber: number });
+  system.connector.inject({ kind: 'pr_mergeable', prNumber: number, mergeable: true, mergeableState: 'clean' });
+}
+
+/** A repo to cut agent worktrees from, for the rules that actually dispatch. */
+function gitRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
+  git(['init', '-q', '-b', 'main']);
+  git(['config', 'user.email', 'test@example.com']);
+  git(['config', 'user.name', 'Test']);
+  git(['commit', '-q', '--allow-empty', '-m', 'root']);
+  return dir;
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A sink that counts what actually went out, so "exactly once" is observable. */
 function countingSink(fail = false): ActionSink & { merges: number[]; replies: number[] } {
@@ -172,6 +218,98 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
   await system.harness.runCycle('manual');
   assert.equal(system.store.listProposals().length, 1);
   assert.equal(sink.merges.length, 0);
+  system.store.close();
+});
+
+test('a rejection stands while nothing happens to the PR, and stops standing when something does', async () => {
+  // Paused, so the CI signal below moves the world without also putting an agent
+  // on the branch: this is about the verdict, not about dispatch. `merge_pr`
+  // claims no headroom, so rule 3 is unaffected by the pause.
+  const sink = countingSink();
+  const system = buildSystem(testConfig({ startPaused: true }), { backend: new FakePtyBackend(), sink });
+  mergeReadyPr(system, 7);
+
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+  assert.equal(proposal.ref, 'pr:7:merge');
+  system.proposals.reject(proposal.id, 'needs one more commit');
+
+  // Durable is still durable. Nothing has happened to PR #7, so the answer to the
+  // question has not changed and the question is not asked again — for as many
+  // pulses as you like.
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.listProposals().length, 1, 'a "no" is not re-asked every heartbeat');
+  assert.equal(sink.merges.length, 0);
+
+  // The world moves: CI goes red and then green again — the commit landed.
+  // `world_events` timestamps to the millisecond, and the expiry is strictly
+  // after the verdict, so the clock has to actually advance between the two.
+  await sleep(5);
+  system.connector.inject({ kind: 'ci_failed', prNumber: 7 });
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.listProposals().length, 1, 'a red PR is not merge-ready — the rule still says no');
+
+  system.connector.inject({ kind: 'ci_passed', prNumber: 7 });
+  await system.harness.runCycle('manual');
+  const proposals = system.store.listProposals();
+  assert.equal(proposals.length, 2, 'the verdict was about a PR that has since changed — so it is asked again');
+  assert.equal(proposals[0]!.status, 'pending');
+  assert.equal(proposals[1]!.id, proposal.id, 'the rejection is not retracted, only overtaken');
+  // The re-ask says why it is being asked twice, or it reads as the harness
+  // having forgotten the first answer.
+  const esc = system.store.getEscalation(proposals[0]!.escalationId!)!;
+  assert.match(esc.prompt, /You rejected this on .* — "needs one more commit"\. Since then: PR #7 CI passing\./);
+
+  // Once, not once per pulse: the fresh pending verdict is what holds the rule
+  // now, so the expiry cannot turn into the duplicate flood it was avoiding.
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.listProposals().length, 2);
+  assert.equal(sink.merges.length, 0, 'and still nothing has been merged without you');
+  system.store.close();
+});
+
+test("a rejection reaches the next agent on that ref, in the operator's own words", async () => {
+  const system = buildSystem(testConfig({ repoRoot: gitRepo(), agentMode: 'raw', maxConcurrentAgents: 4 }), {
+    backend: new FakePtyBackend(),
+    sink: countingSink(),
+    errorMirror: () => {},
+  });
+  const commented = async (number: number, branch: string, body: string): Promise<string> => {
+    system.connector.inject({ kind: 'new_pr', number, title: `PR ${number}`, branch });
+    system.connector.inject({ kind: 'pr_comment', prNumber: number, author: 'reviewer', body });
+    const world = await system.connector.getState();
+    return world.pullRequests.find((p) => p.number === number)!.unresolvedComments[0]!.id;
+  };
+  // Two PRs with a review comment each. A draft is proposed for both and refused
+  // for both — one with a reason, one with nothing typed.
+  const withNote = await commented(1, 'feat/one', 'This looks over-engineered.');
+  const withoutNote = await commented(2, 'feat/two', 'Same question here.');
+  await system.executor.execute('cyc', draftPlan(1, withNote));
+  await system.executor.execute('cyc', draftPlan(2, withoutNote));
+  const [second, first] = system.store.listProposals();
+  system.proposals.reject(first!.id, 'too defensive — just fix the lint');
+  system.proposals.reject(second!.id, '   ');
+
+  await system.harness.runCycle('manual');
+  const tasks = new Map(system.store.listTasks().map((t) => [t.originRef, t]));
+
+  // The reason a human typed reaches the agent that goes to work on that exact
+  // comment — attributed to them, never as the harness's own instruction.
+  const told = tasks.get(`pr:1:comment:${withNote}`)!;
+  assert.match(told.prompt, /An operator refused a reply the harness proposed for this exact item/);
+  assert.match(told.prompt, /operator's own words, quoted verbatim/);
+  assert.match(told.prompt, /"too defensive — just fix the lint"/);
+  // Appended to the rendered template rather than filled into it, so an operator
+  // override that never heard of the feature cannot drop it.
+  assert.ok(told.prompt.startsWith(reviewCommentPrompt(1, 'feat/one', 'This looks over-engineered.')));
+
+  // An empty note changes the prompt not at all: there is nothing to pass on, and
+  // a placeholder saying so would only invite the agent to speculate.
+  const untold = tasks.get(`pr:2:comment:${withoutNote}`)!;
+  assert.equal(untold.prompt, reviewCommentPrompt(2, 'feat/two', 'Same question here.'));
   system.store.close();
 });
 

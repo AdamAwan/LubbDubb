@@ -9,6 +9,7 @@ import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { isPrExcluded } from './prHealth.js';
+import { rejectionSignalQuery } from './proposals/proposals.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 
@@ -131,6 +132,14 @@ export class Harness extends EventEmitter {
       // Acts already put to a human: a rule that proposed one holds off while the
       // verdict stands, so one question is asked once (issue #109).
       const proposals = store.listProposals();
+      // What ends a rejection's standing: anything observed on the item it
+      // concerns since it was given (phase 4). The query is derived from the
+      // rejections themselves, so it costs a read only once one exists — and the
+      // executor asks the same question off the same predicate, since a hold the
+      // two disagreed about would have the rule dispatch a merge the executor
+      // then skips.
+      const signals = rejectionSignalQuery(proposals);
+      const rejectionSignals = signals ? store.listWorldEventsSince(signals.since, signals.refs) : [];
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
@@ -161,6 +170,7 @@ export class Harness extends EventEmitter {
         planParts,
         recentDecisions,
         proposals,
+        rejectionSignals,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
       });

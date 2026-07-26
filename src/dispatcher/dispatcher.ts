@@ -8,6 +8,7 @@ import type {
   Proposal,
   PullRequest,
   Task,
+  WorldEvent,
   WorldSnapshot,
 } from '../types.js';
 import type { ParseResult } from './actions.js';
@@ -58,6 +59,15 @@ export interface DispatchContext {
    * means nothing has been proposed, which is every deployment until one is.
    */
   proposals?: Proposal[];
+  /**
+   * World transitions on the items a standing rejection concerns, since the
+   * oldest of those rejections (issue #109 phase 4). A "no" stands until its item
+   * changes, and this is what the gate reads to notice that it has — narrowed by
+   * `rejectionSignalQuery`, so it is empty until an operator rejects something.
+   * Absent = nothing observed, which holds every rejection: the direction that
+   * refuses rather than acts.
+   */
+  rejectionSignals?: WorldEvent[];
 }
 
 /**

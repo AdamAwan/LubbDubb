@@ -88,12 +88,46 @@ A throw from either step is caught and audited as `rejected: Failed to start age
 - **Desk** — `store.createTask({kind:'desk', branch:null})`, then `mkdirSync(resolve(deskRoot, task.id))`.
 
 The task carries `originTitle`, `originSummary` and `dispatchReason` from the action, so the cockpit
-can explain a running agent without re-fetching from the provider.
+can explain a running agent without re-fetching from the provider. Its **prompt** is the action's plus
+anything an operator said when they refused an act for the same origin — see
+[A rejection's reason reaches the next agent](#a-rejections-reason-reaches-the-next-agent).
 
-## Auto-send
+## Authorizing an outbound act
 
-Side-effectful actions that publish to the outside world run through one gate,
-`autoSendBlockedBy(gate, actionType, confidence)`, which returns a human-readable reason or `null`:
+`reply_on_pr` and `merge_pr` — the two acts the harness can publish — both go through
+`ActionExecutor.authorize`, the one place an outbound act is authorized. They differ only in `kind`,
+`ref` and escalation payload; there is not a path per act, and there is not a path per authority.
+
+Both authorities settle the same record. A human clicking approve and a cleared confidence gate are
+the same verdict reached two ways, so the gate does not call the sink itself: it **writes a proposal
+and immediately settles it** through the same one-way `Store.decideProposal` a click uses, then
+performs it through the same `runAuthorized`. What this buys is the audit log answering "who
+authorized this outbound act" one way for both.
+
+In order:
+
+### 1. The hold — `skipped`
+
+`proposalHold(kind, ref, proposals, {rejectionSignals})` (`src/proposals/proposals.ts`). A standing
+verdict governs **before** the gate is asked, so it applies regardless of which decider would answer
+next. Refs are `pr:<n>:merge` and `pr:<n>:comment:<id>` (or `pr:<n>:reply` when untargeted), so one
+PR can be the subject of a merge and a reply at once without the two holding each other.
+
+| Standing verdict | Held for |
+| ---------------- | -------- |
+| `pending` | Until answered. Asking again is the duplicate that filled the inbox. |
+| `rejected` | Until something happens to the world item (below). |
+| `accepted` | `SETTLE_WINDOW_MS` (15 min, deliberately `DEFAULT_COOLDOWN` — the same statement), then it stops, so a *failed* act is re-proposed while a successful one is not re-proposed before the world reflects it. |
+
+Rule 3 suppresses itself off the same predicate, so on the default path the question is asked once —
+but it is repeated here because it must hold for *every* path that reaches the executor, the LLM
+dispatcher's prose-composed `reply_on_pr` included. Two call sites, one predicate.
+
+### 2. The gate — `autoSendVerdict(gate, actionType, confidence)`
+
+Returns `{authorized: true, note}` — the note becoming the decider's reason on the proposal row,
+quoted verbatim by the audit line — or `{authorized: false, blockedBy}`, the reason the escalation
+quotes:
 
 1. `!gate.enabled` → `auto-send disabled`
 2. `!gate.allowedActions.includes(actionType)` → `<type> not in allowed auto-send actions`
@@ -102,21 +136,119 @@ Side-effectful actions that publish to the outside world run through one gate,
 Defaults are `{enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr']}`, so **out
 of the box nothing side-effectful leaves without an explicit human action.** Absent `confidence` is 0.
 
-### `reply_on_pr`
+**It never returns a rejection.** Only a human can reject, because a rejection is durable and a
+machine "no" would mean the question is never put to anyone. Blocked means "not mine to authorize",
+which is exactly what a pending proposal already says.
 
-- **Clear to send** → `sink.postPrReply({prNumber, commentId, body: draft})`, audited with the
-  confidence, the threshold and any returned `ref`. A **failure never drops the reply**: it falls back
-  to creating a `review_reply` escalation carrying the draft and `autoSendFailed: true`, and the
-  decision is still `executed` (an escalation did happen).
-- **Blocked** → a `review_reply` escalation with the draft, audited with the blocking reason.
+### 3. Either a decider or an ask
 
-### `merge_pr`
+- **Authorized** → `store.createProposal(…)`, then `decideProposal(id, 'accepted', verdict.note,
+  'auto_send')`, then `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of
+  anyone. One appears only if the act then fails.
+- **Blocked** → an escalation (`approve_change` for a merge, `review_reply` carrying the draft) plus a
+  **pending** proposal hanging off it, audited `executed` with the blocking reason — an escalation did
+  happen. Accepting performs the act; rejecting records the reason and stops.
 
-Identical shape. Clear to send → `sink.mergePr({prNumber, method})`; a failure escalates
-`approve_change` with `autoMergeFailed: true`. Blocked → an `approve_change` escalation asking the
-human to approve the merge with the stated method.
+## Performing an authorized act
 
-### `set_work_item_state` — not gated
+`ActionExecutor.runAuthorized(proposal, pulseCycleId?)` is the one place an accepted proposal becomes
+its effect *and* its audit row. `ProposalDesk.accept` calls it with no cycle id; `authorize` calls it
+with the pulse's.
+
+`readProposedAct(proposal)` re-reads the stored action into one of three `ProposedAct`s, re-checking
+the fields the effect is about to be handed rather than trusting a round trip through JSON and SQLite:
+
+| Act | Effect |
+| --- | ------ |
+| `merge` | `sink.mergePr({prNumber, method})` |
+| `reply_draft` | `sink.postPrReply({prNumber, commentId, body})` |
+| `plan` | `releasePlan(store, planId, originRef)` — publishes nothing; see [08](08-planning.md#the-approval-gate) |
+
+`plan` is checked **before** the PR number, or an approved decomposition audits as "names no PR
+number". A malformed payload is reported, never guessed at.
+
+`authorityOf(proposal, pulseCycleId)` decides the whole decider → cycle id → wording chain at once,
+because the three are a chain and not three facts:
+
+| Decider | Cycle id | Reads as |
+| ------- | -------- | -------- |
+| `human` | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you` |
+| `auto_send` | the pulse's own cycle id | `authorized by auto-send (confidence 0.90 ≥ 0.85 threshold)` |
+
+Auto-send accepts *inside* a cycle, so its row stays grouped with the pulse that produced the action
+and **cannot** carry the `human:` prefix the cockpit badges "you · accepted" off. An auto-sent row is
+deliberately left unbadged — that is the harness acting on its own — with the authority in the detail.
+
+**The failure path is one path for both deciders.** A send that throws creates the same
+`autoSendFailed` / `autoMergeFailed` escalation as before and audits `rejected` (the act did not go
+out). The proposal stays `accepted` — it *was* accepted — and once its settle window lapses the gate
+re-proposes if the world still warrants it. That is the recovery; it needs no new state.
+
+## A rejection expires on signal
+
+A "no" used to be durable forever. That is the safe direction and not the right one: the world moves
+and the verdict doesn't, so a merge refused because the PR needed one more commit stays refused after
+the commit lands, and the only way to make the harness act is to do it by hand — the inert-approval
+failure mirrored.
+
+A rejection therefore stands until the **world item it concerns** changes, and then stops standing.
+
+- **What counts.** Any `WorldEvent` on the item, `createdAt` strictly after `decidedAt`. A proposal
+  names an *act* (`pr:42:merge`) and an event names an *object* (`pr:42`), so `proposalWorldRef` maps
+  one to the other — in one place, used both to match events and to ask for them, because two matchers
+  over two views is the bug class this repo has fixed twice. Any transition rather than a per-kind
+  list: the rules that would re-propose re-evaluate on exactly these events, so a filter here would be
+  a second opinion about which changes matter, sitting nowhere near the rule it second-guesses.
+- **No timer arm.** A time-only expiry re-asks a question the world has not changed its answer to,
+  which is "not this second" under a longer name. If both existed signal would dominate anyway, so a
+  timer could only ever delay an expiry the signal already granted. The asymmetry with the `accepted`
+  window is intended: an accepted act waits on the world to *reflect* something done (a duration), a
+  rejected one waits on it to *become* something else (an event).
+- **It cannot flood.** Expiring only un-holds the rule; the rule's own preconditions still decide, and
+  the fresh pending proposal holds the ref again. So the act is re-proposed **once**, not once per
+  pulse — and the most common signal on a refused PR, a new review comment, un-holds rule 3 and then
+  fails its first merge-readiness test.
+- **The re-ask says why it is being asked twice.** `reaskContext` prefixes the escalation with the
+  refusal, its note and the transition that ended it; without it a second ask reads as the harness
+  having forgotten the first.
+- **Reading the signals.** `rejectionSignalQuery(proposals)` derives `{since, refs}` from the standing
+  rejections and `Store.listWorldEventsSince(since, refs)` reads them — bounded by time and item, not
+  by row count, so a rejection older than a window is a case that cannot arise. Nothing standing, no
+  query, no read. The harness wires it into `DispatchContext.rejectionSignals` and the executor asks
+  the same question off the same predicate, so the two cannot disagree about a hold.
+- **`planProposalHold` does not inherit it**, and could not: it holds on `pending` only, so there is no
+  rejected hold for a signal to end. See [08](08-planning.md#the-approval-gate).
+
+Expiry governs re-*asking*, not the verdict: the row stays `rejected`, and the operator's reason keeps
+being delivered (below).
+
+## A rejection's reason reaches the next agent
+
+`rejectionGuidance(originRef, proposals)` is the second half of "a rejection is usable signal". The
+reason was already captured, rendered into a hold string and written to the audit line — and read by
+no agent at all, so refusing a draft with *"too defensive — just fix the lint"* left the next agent on
+`pr:<n>:comment:<id>` starting from the prompt that produced the draft you refused.
+
+`materializeTask` appends it to the dispatch prompt when the standing verdict for the action's
+**exact** origin ref is a rejection carrying a note.
+
+- **In the executor, not the dispatcher.** Every dispatch passes here whatever composed it — and that
+  is not a technicality: a `reply_draft` is only ever proposed off the LLM dispatcher's `reply_on_pr`,
+  so the path where a rejected reply exists is precisely the one a rule-dispatcher-side hook misses.
+- **Appended, not filled in.** Prompt templates are operator-overridable and the loader only rejects
+  *unknown* placeholders, so an override that omitted a new `{rejection}` token would silently drop a
+  human's words — on exactly the deployments that customised the prompt most. Appending has no
+  fallback to get wrong.
+- **Exact ref, not the world item.** A rejected `reply_draft`'s ref *is* rule 2b's dispatch origin, so
+  this is a lookup. Widening it to the PR would put a refusal to *merge* in front of an agent fixing
+  CI, as guidance it can neither act on nor tell apart from its own task — so a rejected merge reaches
+  no agent, because no agent's job is to hear about it.
+- **Attributed, and quoted.** The note is free text a human typed, passed through verbatim and framed
+  as *their* words about what was refused, never as the harness's own instruction, because an agent
+  will act on it. An **empty note appends nothing**: the prompt is byte-identical to one with no
+  rejection behind it.
+
+## `set_work_item_state` — not authorized, just done
 
 Mechanical bookkeeping (move a work item to "In Review" once its PR is open), not a publish-to-the-
 world action, so it runs directly. It is idempotent, so a repeat before the next snapshot reflects the

@@ -339,7 +339,13 @@ export class RuleDispatcher implements Dispatcher {
       // "Needs you" fills with copies of one question, which is what made the
       // approval inert to begin with (issue #109). The pending item in the inbox
       // is the visible state; there is no action to audit because none was taken.
-      const mergeHeld = proposalHold('merge', mergeProposalRef(pr.number), ctx.proposals ?? []);
+      //
+      // A "no" stops standing once something has happened to the PR since it was
+      // given (phase 4) — the rule then fires again, and its own preconditions
+      // above still decide whether the merge is proposed at all.
+      const mergeHeld = proposalHold('merge', mergeProposalRef(pr.number), ctx.proposals ?? [], {
+        rejectionSignals: ctx.rejectionSignals,
+      });
       if (mergeReady && !mergeHeld) {
         raw.push({
           type: 'merge_pr',

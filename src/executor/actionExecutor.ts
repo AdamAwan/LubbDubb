@@ -15,11 +15,14 @@ import {
   planProposalHold,
   planProposalRef,
   proposalHold,
+  reaskContext,
   readProposedAct,
+  rejectionGuidance,
+  rejectionSignalQuery,
   replyProposalRef,
 } from '../proposals/proposals.js';
 import { releasePlan } from '../plans/planApproval.js';
-import type { Action, DecisionOutcome, Proposal, ProposalKind, Task } from '../types.js';
+import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
 export interface ExecutorDeps {
   store: Store;
@@ -285,7 +288,12 @@ export class ActionExecutor {
     // *every* path that reaches the executor, the LLM dispatcher's prose-composed
     // `reply_on_pr` included. One predicate, two call sites: the same discipline
     // as the branch gate above.
-    const heldBy = proposalHold(kind, ref, store.listProposals());
+    //
+    // Re-read per action rather than hoisted: a proposal created earlier in this
+    // same plan is what stops a second identical action asking twice.
+    const proposals = store.listProposals();
+    const signals = this.rejectionSignals(proposals);
+    const heldBy = proposalHold(kind, ref, proposals, { rejectionSignals: signals });
     if (heldBy) return { outcome: 'skipped', detail: `Skipped ${subject}: ${heldBy}.`, recorded: false };
 
     // Absent confidence means "no confidence stated" -> treat as 0 -> never auto-send.
@@ -310,16 +318,23 @@ export class ActionExecutor {
 
     // Not the harness's to authorize: draft it and put it to a human as a
     // proposal they can accept (which performs it) or reject.
+    //
+    // When this is a *re*-ask over a rejection the world has overtaken, the
+    // question names the refusal and what has happened since — otherwise the
+    // second ask is indistinguishable from the harness having forgotten the
+    // first, which is the duplicate-question failure the gate exists to prevent.
+    const again = reaskContext(kind, ref, proposals, { rejectionSignals: signals });
+    const preamble = again ? `${again}\n\n` : '';
     const esc = this.deps.escalations.create(
       merge
         ? {
             type: 'approve_change',
-            prompt: `PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
+            prompt: `${preamble}PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
             context: { prNumber: action.prNumber, method: action.method, confidence },
           }
         : {
             type: 'review_reply',
-            prompt: `Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
+            prompt: `${preamble}Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
             context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft, confidence },
           },
     );
@@ -425,16 +440,45 @@ export class ActionExecutor {
     }
   }
 
-  /** Create the task row and its working directory (worktree for code, scratch for desk). */
+  /**
+   * The world since each standing rejection, for the hold gate. The query is
+   * derived from the proposals themselves by the one predicate the harness also
+   * uses, so the two askers cannot disagree about what counts as having moved on.
+   */
+  private rejectionSignals(proposals: Proposal[]): WorldEvent[] {
+    const query = rejectionSignalQuery(proposals);
+    return query ? this.deps.store.listWorldEventsSince(query.since, query.refs) : [];
+  }
+
+  /**
+   * Create the task row and its working directory (worktree for code, scratch for
+   * desk) — and the one place a dispatch prompt picks up what an operator said
+   * when they refused an act for this exact origin (issue #109 phase 4).
+   *
+   * It happens here, not in the dispatcher that composed the prompt, for the
+   * reason the branch gate lives here: every dispatch passes through, whatever
+   * produced it. That is not a technicality in this case — a `reply_draft` is
+   * only ever proposed off the LLM dispatcher's `reply_on_pr`, so the path where
+   * a rejected reply exists is precisely the one a rule-dispatcher-side hook
+   * would miss.
+   *
+   * It is appended to the rendered prompt rather than filled into it. Templates
+   * are operator-overridable and the loader only rejects *unknown* placeholders,
+   * so an override that simply omits a new `{rejection}` token would silently
+   * drop a human's words — and it would drop them on exactly the deployments that
+   * customised the prompt most. Appending has no fallback to get wrong.
+   */
   private async materializeTask(
     action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
   ): Promise<{ task: Task; cwd: string }> {
     const { store } = this.deps;
+    const guidance = rejectionGuidance(action.originRef, store.listProposals());
+    const prompt = guidance ? `${action.prompt}\n\n${guidance}` : action.prompt;
     if (action.type === 'dispatch_code_agent') {
       const task = store.createTask({
         kind: 'code',
         title: action.title,
-        prompt: action.prompt,
+        prompt,
         branch: action.branch,
         originRef: action.originRef,
         originTitle: action.originTitle,
@@ -449,7 +493,7 @@ export class ActionExecutor {
     const task = store.createTask({
       kind: 'desk',
       title: action.title,
-      prompt: action.prompt,
+      prompt,
       branch: null,
       originRef: action.originRef,
       originTitle: action.originTitle,
