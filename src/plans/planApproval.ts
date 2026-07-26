@@ -33,7 +33,7 @@ export function describeProposedParts(parts: PlanPart[]): string {
 }
 
 /** The outcome of settling a plan, in the form both callers audit. */
-export interface PlanSettlement {
+interface PlanSettlement {
   ok: boolean;
   detail: string;
 }

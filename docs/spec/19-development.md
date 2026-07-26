@@ -16,10 +16,26 @@ npm run check   # = format:check && lint && typecheck && typecheck:web && knip &
 
 CI enforces exactly the same thing on every PR. Failure modes that are not obvious:
 
-- **knip** fails the build on **unused files, exports or dependencies**. Adding an `export` nothing
-  imports, or a dependency you do not end up using, turns `check` red. Remove dead code or wire it up.
-  Its rules are `error` for files, dependencies, devDependencies, unlisted, binaries and unresolved;
-  `warn` for exports, types, namespace exports/types, duplicates and enum members.
+- **knip** fails the build on **every** class of unused code it can find. Adding an `export` nothing
+  imports, a type nothing names, a dependency you do not end up using, or a public method nothing
+  calls turns `check` red. Remove dead code or wire it up. **Every** rule is `error` — there is no
+  `warn` tier, so nothing accumulates unnoticed: files, dependencies, devDependencies,
+  optionalPeerDependencies, unlisted, unresolved, binaries, exports, types, namespace exports/types,
+  duplicates, enum members and class members. Two switches widen it beyond knip's defaults:
+  `includeEntryExports` (an entry file's own exports are checked too, so a helper exported from a
+  test or a script is held to the same standard) and `include: ["classMembers"]`.
+
+  The usual fix for a type or a helper reported here is to **drop the `export` keyword**, not to
+  delete it: a type naming an exported function's parameters or return value stays perfectly usable
+  by callers without being exported, and structural typing means nothing downstream breaks.
+  ESLint's `no-unused-vars` then catches whatever is left genuinely dead.
+
+  Class-member analysis is **name-based**, so a method reached only through a structural seam — an
+  interface the class satisfies without declaring `implements` — reads as unused. Two honest ways
+  out, and neither is an ignore list: declare the `implements` clause when the interface is the
+  class's own contract (`PtySession implements AgentSession`), or tag the member `@public` with a
+  note naming the seam when the interface belongs to a consumer that must not be depended on
+  backwards (`AgentManager.recordProgress`, reached through `AgentToolTarget` in `src/mcp/`).
 - **Two typecheckers.** `typecheck` covers the server (`tsconfig.json`) and `typecheck:web` the cockpit
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy
   both.

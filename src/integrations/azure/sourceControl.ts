@@ -13,7 +13,7 @@ import type {
 import { closedWindowStart } from '../closedWindow.js';
 import type { AzClosedPull, AzPolicyEvaluation, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
 
-export interface AzureSourceControlOpts {
+interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
   api: AzureDevOpsApi;
   store: Store;

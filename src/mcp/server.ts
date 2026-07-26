@@ -21,7 +21,7 @@ import { type AgentToolTarget, buildTools, type McpIdentity } from './tools.js';
 /** Absolute path to the shipped stdio bridge `claude` spawns. See {@link file://./bridge.mjs}. */
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
 
-export interface McpBridgeServerOptions {
+interface McpBridgeServerOptions {
   store: Store;
   /**
    * Resolved lazily: the fleet and this server are mutually referential (an agent
@@ -43,14 +43,14 @@ export interface McpBridgeServerOptions {
 }
 
 /** A minted credential and the launch config that carries it, when one could be written. */
-export interface McpCredential {
+interface McpCredential {
   token: string;
   /** Path to pass as `--mcp-config`, or null when the server isn't listening (tools stay off). */
   configPath: string | null;
 }
 
 /** An in-process caller bound to one agent's identity. What tests drive instead of a socket. */
-export interface McpSession {
+interface McpSession {
   call(name: string, args: Record<string, unknown>): Promise<ToolCallResult>;
 }
 

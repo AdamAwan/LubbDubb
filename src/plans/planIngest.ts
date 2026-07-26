@@ -5,7 +5,7 @@ import { planPartInputs } from './planDocument.js';
 import { amendedPlanStatus, partHasWork, partsToRetire } from './parts.js';
 
 /** What an ingestion did, so either caller can report it in its own idiom. */
-export interface PlanIngestResult {
+interface PlanIngestResult {
   plan: Plan;
   status: PlanStatus;
   /** Slugs of parts the amended document dropped, retired because nothing was started for them. */

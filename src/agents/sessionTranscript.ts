@@ -46,7 +46,7 @@ function isLocalCommandEnvelope(text: string): boolean {
   return LOCAL_COMMAND_TAGS.some((tag) => t.startsWith(`<${tag}>`));
 }
 
-export interface ParsedBatch {
+interface ParsedBatch {
   /** In-order content blocks, ready for {@link renderBlocks}. */
   blocks: ContentBlock[];
   /**
@@ -139,7 +139,7 @@ export interface SessionTranscriptUpdate {
   userEntries: number;
 }
 
-export interface SessionTranscriptTailOptions {
+interface SessionTranscriptTailOptions {
   root: string;
   sessionId: string;
   /** How often to check the file for growth. */

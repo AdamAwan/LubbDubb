@@ -101,7 +101,7 @@ export type PlanRouteVerdict =
   | { route: 'awaiting_approval' }
   | { route: 'planning'; planner: 'dispatch' | 'cooldown' };
 
-export interface PlanRouteInput {
+interface PlanRouteInput {
   planning: PlanningPolicy;
   /** The persisted plan for this issue, or null when the planner hasn't spoken. */
   plan: Plan | null;

@@ -5,7 +5,7 @@
  * mutated at runtime via the control endpoint; deliberately **not persisted**, so
  * a restart reverts to the configured defaults.
  */
-export interface ControlState {
+interface ControlState {
   /** Hard cap on concurrently-running agents. */
   cap: number;
   /** While true, no new agents are dispatched; live agents keep running. */
@@ -13,7 +13,7 @@ export interface ControlState {
 }
 
 /** A partial change to apply — omit a field to leave it untouched. */
-export interface ControlPatch {
+interface ControlPatch {
   cap?: number;
   paused?: boolean;
 }

@@ -5,7 +5,7 @@
  * Decision log row can expand into "which rule fired, and why it exists".
  * The `number` mirrors the priority ordering documented on {@link RuleDispatcher}.
  */
-export interface DispatchRule {
+interface DispatchRule {
   /** Position in the dispatcher's priority order ('1'..'9', with sub-rules like '2b'). */
   number: string;
   name: string;

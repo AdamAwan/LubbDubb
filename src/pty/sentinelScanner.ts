@@ -17,7 +17,7 @@ import { stripAnsi } from '../agents/streamTranscript.js';
  * from the stream it forwards to the terminal emulator.
  */
 
-export type SentinelKind = 'done' | 'waiting' | 'flag';
+type SentinelKind = 'done' | 'waiting' | 'flag';
 
 /** The protocol tokens to scan for. Empty strings disable that sentinel. */
 export interface SentinelSpec {
@@ -28,7 +28,7 @@ export interface SentinelSpec {
   flagSuffix: string;
 }
 
-export interface SentinelHit {
+interface SentinelHit {
   kind: SentinelKind;
   /** Raw start offset (inclusive) of the whole sentinel. */
   start: number;

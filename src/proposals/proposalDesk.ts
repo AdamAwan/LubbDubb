@@ -5,7 +5,7 @@ import type { Proposal } from '../types.js';
 import { refusePlan } from '../plans/planApproval.js';
 import { readProposedAct } from './proposals.js';
 
-export interface DecideResult {
+interface DecideResult {
   proposal: Proposal;
   /** What the verdict caused: the act ran, the act failed, or nothing (a rejection). */
   outcome: 'performed' | 'failed' | 'none';

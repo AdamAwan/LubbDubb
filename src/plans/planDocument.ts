@@ -39,7 +39,7 @@ const PartSchema = z.object({
  * persisted graph meaningful at all. Dependency *ordering* — readiness, base
  * selection, the at-most-one-open-dependency rule — belongs to the scheduler.
  */
-export const PlanDocumentSchema = z
+const PlanDocumentSchema = z
   .object({
     version: z.literal(1),
     verdict: z.enum(['single', 'parts']),
@@ -124,7 +124,7 @@ function findDependencyCycle(parts: { slug: string; dependsOn: string[] }[]): st
 export type PlanDocument = z.infer<typeof PlanDocumentSchema>;
 
 /** A parsed plan document, or the reason it was rejected. Never throws. */
-export type PlanParseResult = { ok: true; document: PlanDocument } | { ok: false; error: string };
+type PlanParseResult = { ok: true; document: PlanDocument } | { ok: false; error: string };
 
 /** Parse and validate a raw `plan.json` body. Pure. */
 export function parsePlanDocument(raw: string): PlanParseResult {

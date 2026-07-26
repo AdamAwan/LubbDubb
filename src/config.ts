@@ -4,7 +4,7 @@ import type { IntegrationSelection } from './integrations/integration.js';
 import type { PlanningPolicy } from './plans/planning.js';
 
 /** Operator control over the MCP tool channel. See {@link Config.mcp}. */
-export interface McpPolicy {
+interface McpPolicy {
   /**
    * Wire the tool channel into agent launches. Off leaves every agent on the
    * sentinels and the `plan.json` file path — the same floor a failed socket

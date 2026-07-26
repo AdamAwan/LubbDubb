@@ -13,7 +13,7 @@ import { rejectionSignalQuery } from './proposals/proposals.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 
-export interface HarnessDeps {
+interface HarnessDeps {
   store: Store;
   connector: Connector;
   dispatcher: Dispatcher;
@@ -38,13 +38,13 @@ export interface HarnessDeps {
  * pulse". A projection recomputed every cycle, not a persisted queue; `at` is
  * the world snapshot it was planned against.
  */
-export interface UpcomingPlan {
+interface UpcomingPlan {
   cycleId: string;
   at: string;
   items: QueueItem[];
 }
 
-export interface CycleReport {
+interface CycleReport {
   cycleId: string;
   source: 'timer' | 'manual' | 'boot';
   rationale: string;
@@ -92,11 +92,6 @@ export class Harness extends EventEmitter {
 
   stop(): void {
     this.heartbeat.stop();
-  }
-
-  /** Trigger a cycle immediately (used when an event is injected). */
-  async pulse(): Promise<void> {
-    await this.heartbeat.trigger();
   }
 
   async runCycle(source: 'timer' | 'manual' | 'boot' = 'manual'): Promise<CycleReport> {

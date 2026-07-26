@@ -295,7 +295,7 @@ npm run lint           # ESLint (typescript-eslint + react)
 npm run lint:fix       # ESLint with autofix
 npm run format         # Prettier write
 npm run format:check   # Prettier check (what CI enforces)
-npm run knip           # unused files / exports / dependencies
+npm run knip           # unused files / exports / types / dependencies / class members (all fatal)
 npm run audit          # npm audit at the "high" threshold
 npm run check          # format:check + lint + typecheck (x2) + knip + test, in one shot
 ```

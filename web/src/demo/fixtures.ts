@@ -3,7 +3,7 @@
 // cockpit panel has something real-looking to render. No server, no network.
 import type { AppState } from '../types.js';
 
-export interface DemoSeed {
+interface DemoSeed {
   state: AppState;
   // Per-agent scrollback the drawer seeds from before live deltas take over.
   transcripts: Record<string, string>;

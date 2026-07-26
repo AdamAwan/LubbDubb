@@ -8,18 +8,22 @@
   "vite": {
     "config": ["web/vite.config.ts"]
   },
+  "includeEntryExports": true,
+  "include": ["classMembers"],
   "rules": {
     "files": "error",
     "dependencies": "error",
     "devDependencies": "error",
+    "optionalPeerDependencies": "error",
     "unlisted": "error",
-    "binaries": "error",
     "unresolved": "error",
-    "exports": "warn",
-    "types": "warn",
-    "nsExports": "warn",
-    "nsTypes": "warn",
-    "duplicates": "warn",
-    "enumMembers": "warn"
+    "binaries": "error",
+    "exports": "error",
+    "types": "error",
+    "nsExports": "error",
+    "nsTypes": "error",
+    "duplicates": "error",
+    "enumMembers": "error",
+    "classMembers": "error"
   }
 }

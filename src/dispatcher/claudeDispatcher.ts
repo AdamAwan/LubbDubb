@@ -7,7 +7,7 @@ import type { IssuePickupPolicy } from './issuePickup.js';
 const PLAN_START = '@@LUBBDUBB_PLAN_START@@';
 const PLAN_END = '@@LUBBDUBB_PLAN_END@@';
 
-export interface ClaudeDispatcherOptions {
+interface ClaudeDispatcherOptions {
   command: string;
   args: string[];
   cwd: string;

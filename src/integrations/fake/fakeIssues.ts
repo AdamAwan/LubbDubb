@@ -103,11 +103,6 @@ export class FakeIssuesIntegration
     return { ok: true, ref };
   }
 
-  /** Every comment the harness has written, for assertions. */
-  readComments(): { ref: string; number: number; body: string }[] {
-    return [...this.comments].map(([ref, c]) => ({ ref, ...c }));
-  }
-
   /** Reflect harness progress: an agent opened a PR that resolves this issue. */
   markIssueLinked(issueNumber: number, prNumber: number): void {
     this.world.mutate((world) => {

@@ -3,7 +3,7 @@ import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { Escalation, EscalationContext, EscalationType } from '../types.js';
 
-export interface CreateEscalationInput {
+interface CreateEscalationInput {
   type: EscalationType;
   prompt: string;
   context?: EscalationContext;
@@ -11,7 +11,7 @@ export interface CreateEscalationInput {
   taskId?: string | null;
 }
 
-export interface AnswerResult {
+interface AnswerResult {
   escalation: Escalation;
   /** How the answer was applied. */
   routing: 'typed_into_agent' | 'queued_for_dispatch';
@@ -88,9 +88,5 @@ export class EscalationInbox extends EventEmitter {
       dismissed.push(updated);
     }
     return dismissed;
-  }
-
-  listOpen(): Escalation[] {
-    return this.store.listOpenEscalations();
   }
 }

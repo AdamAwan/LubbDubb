@@ -1,6 +1,6 @@
 // Mirrors the server's domain types (kept deliberately small — just what the UI renders).
 
-export interface PrComment {
+interface PrComment {
   id: string;
   author: string;
   body: string;
@@ -47,7 +47,7 @@ export interface Issue {
    */
   pickup?: { eligible: boolean; status: string; reasons: string[] };
 }
-export interface Story {
+interface Story {
   id: string;
   title: string;
   description: string | null;
@@ -108,7 +108,7 @@ export interface AgentFile {
   createdAt: string;
 }
 /** One agent's part in a file overlap (mirrors the server's OverlapWriter). */
-export interface OverlapWriter {
+interface OverlapWriter {
   agentId: string;
   taskId: string;
   originRef: string | null;
@@ -237,7 +237,7 @@ export interface UsageSnapshot {
 }
 // Extra context the server attaches so an escalation can be answered in-place.
 // Mirrors the server's EscalationContext; every key is optional.
-export interface EscalationContext {
+interface EscalationContext {
   taskTitle?: string;
   originRef?: string | null;
   recentOutput?: string;
@@ -427,12 +427,3 @@ export interface AppState {
    */
   dispatchRules: Record<string, DispatchRule>;
 }
-
-export type ServerEvent =
-  | { type: 'dirty' }
-  | { type: 'agent:output'; agentId: string; delta: string }
-  | { type: 'agent:flag'; flag: AgentFlag }
-  | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
-  | { type: 'cycle:end'; cycleId: string; rationale: string }
-  | { type: 'control:changed'; cap: number; paused: boolean }
-  | { type: string; [k: string]: unknown };

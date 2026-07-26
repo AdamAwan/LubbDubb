@@ -15,7 +15,7 @@ import { closedWindowStart } from '../closedWindow.js';
 import type { GhCheckRun, GhClosedPull, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
 import { githubRefUrl } from './refUrl.js';
 
-export interface GitHubSourceControlOpts {
+interface GitHubSourceControlOpts {
   /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
   store: Store;
@@ -173,7 +173,7 @@ export function mapClosedPull(p: GhClosedPull): PullRequest {
 }
 
 /** Fold GitHub's `mergeable_state` down to the values the harness reacts to. */
-export function normalizeMergeState(state: string | null): MergeableState {
+function normalizeMergeState(state: string | null): MergeableState {
   switch (state) {
     case 'dirty':
     case 'behind':

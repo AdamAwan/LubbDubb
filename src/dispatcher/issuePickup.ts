@@ -95,7 +95,7 @@ export function openPrForIssue(issue: Issue, openPrs: PullRequest[]): PullReques
 }
 
 /** The intrinsic pickup verdict, same shape as `prHealth`: eligible, or why not. */
-export interface IssuePickupEligibility {
+interface IssuePickupEligibility {
   eligible: boolean;
   /** Human-readable reasons the issue isn't eligible. Empty when eligible. */
   reasons: string[];
@@ -177,7 +177,7 @@ export function watchGateReason(
 }
 
 /** What LubbDubb is doing (or not) with one issue, and why. */
-export type IssuePickupStatusKind =
+type IssuePickupStatusKind =
   | 'done' // closed — nothing to do
   | 'has_pr' // resolved into a PR; the PR rules own it now
   | 'active' // an agent/task is on it right now
@@ -189,7 +189,7 @@ export type IssuePickupStatusKind =
   | 'blocked' // eligible, but no capacity (paused or cap reached)
   | 'eligible'; // would be picked up next cycle
 
-export interface IssuePickupStatus {
+interface IssuePickupStatus {
   /** True only when the dispatcher would start an agent for it next cycle. */
   eligible: boolean;
   status: IssuePickupStatusKind;

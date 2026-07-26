@@ -11,10 +11,11 @@ import {
 } from '../agents/sentinels.js';
 import { stripAnsi } from '../agents/streamTranscript.js';
 import { excise, holdFrom, scanSentinels, type SentinelSpec } from './sentinelScanner.js';
+import type { AgentSession, AgentSessionStatus } from '../agents/session.js';
 
-export type PtySessionStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'failed';
+type PtySessionStatus = AgentSessionStatus;
 
-export interface PtySessionOptions {
+interface PtySessionOptions {
   command: string;
   args: string[];
   cwd: string;
@@ -163,7 +164,7 @@ const PASTE_END = '\x1b[201~';
  *   'exit'   (code: number)   — process ended (any code)
  *   'status' (status)         — status transitions
  */
-export class PtySession extends EventEmitter {
+export class PtySession extends EventEmitter implements AgentSession {
   private proc: PtyProcess | null = null;
   private _status: PtySessionStatus = 'starting';
   private tail = '';

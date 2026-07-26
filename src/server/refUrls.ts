@@ -8,7 +8,7 @@
  * it as plain text, which is the right behaviour for the `fake` provider (no real
  * pages) or a merged/closed PR outside the open-PR window.
  */
-export interface RefUrlInputs {
+interface RefUrlInputs {
   /** Open PRs in the world — keyed by `#<number>` and their branch. */
   pullRequests: { number: number; branch: string; url?: string }[];
   /** Open issues — keyed by `#<number>`, plus their linked PR. */

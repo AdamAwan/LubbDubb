@@ -114,7 +114,7 @@ export interface Issue {
   url?: string;
 }
 
-export type StoryState = 'ready' | 'in_progress' | 'blocked' | 'done';
+type StoryState = 'ready' | 'in_progress' | 'blocked' | 'done';
 
 export interface Story {
   id: string;
@@ -225,9 +225,9 @@ export type ErrorLogInput = Omit<ErrorLogEntry, 'id' | 'createdAt' | 'detail'> &
 // Harness-internal state
 // ---------------------------------------------------------------------------
 
-export type TaskKind = 'code' | 'desk';
+type TaskKind = 'code' | 'desk';
 
-export type TaskStatus =
+type TaskStatus =
   | 'queued'
   | 'running'
   | 'waiting' // agent parked, needs human/whitelisted input
@@ -270,7 +270,7 @@ export interface Task {
  * cycle. The dispatcher drains queued jobs before any world-driven rule, so a
  * manual request takes priority for the next free slot.
  */
-export type JobStatus =
+type JobStatus =
   | 'queued' // awaiting a free slot
   | 'dispatched' // an agent was spawned for it (see taskId)
   | 'cancelled'; // the operator dropped it before it ran
@@ -481,7 +481,7 @@ export interface Plan {
  * declares. Retiring is a *status transition, not a disappearance*: the row stays
  * so the graph remains readable after a replan, and nothing schedules it again.
  */
-export type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked' | 'retired';
+type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked' | 'retired';
 
 /** One part of a multi-PR plan — a single reviewable PR's worth of work. */
 export interface PlanPart {
@@ -553,7 +553,7 @@ export interface AgentAsk {
   detail?: string;
 }
 
-export type EscalationStatus = 'open' | 'answered' | 'dismissed';
+type EscalationStatus = 'open' | 'answered' | 'dismissed';
 
 /**
  * The extra context an escalation carries so a human can answer it in-place,
@@ -609,7 +609,7 @@ export interface Escalation {
 export type ProposalKind = 'reply_draft' | 'merge' | 'plan';
 
 /** One-way: a proposal leaves `pending` exactly once, in one of two directions. */
-export type ProposalStatus = 'pending' | 'accepted' | 'rejected';
+type ProposalStatus = 'pending' | 'accepted' | 'rejected';
 
 /**
  * An act the harness proposed and a human accepted or rejected — the object that
@@ -655,7 +655,7 @@ export interface Proposal {
 // Dispatcher output — the bounded action vocabulary
 // ---------------------------------------------------------------------------
 
-export type ActionType =
+type ActionType =
   | 'dispatch_code_agent'
   | 'dispatch_desk_agent'
   | 'escalate_to_human'
