@@ -25,6 +25,7 @@ import type {
   PlanPart,
   PlanPartInput,
   PlanStatus,
+  Proposal,
   Task,
   WorldEvent,
   WorldEventInput,
@@ -820,6 +821,66 @@ export class Store {
     return this.listEscalations().filter((e) => e.status === 'open');
   }
 
+  // -- Proposals (human decisions) -----------------------------------------
+
+  createProposal(input: Omit<Proposal, 'id' | 'status' | 'note' | 'decidedBy' | 'decidedAt' | 'createdAt'>): Proposal {
+    const proposal: Proposal = {
+      id: `prop_${nanoid(10)}`,
+      status: 'pending',
+      note: null,
+      decidedBy: null,
+      decidedAt: null,
+      createdAt: this.now(),
+      kind: input.kind,
+      ref: input.ref,
+      action: input.action,
+      escalationId: input.escalationId,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO proposals (id, kind, ref, status, action, note, decided_by, decided_at, escalation_id, created_at)
+         VALUES (@id, @kind, @ref, @status, @action, @note, @decidedBy, @decidedAt, @escalationId, @createdAt)`,
+      )
+      .run({ ...proposal, action: JSON.stringify(proposal.action) });
+    return proposal;
+  }
+
+  /**
+   * Settle a pending proposal, once. The `status='pending'` predicate makes this a
+   * compare-and-set rather than a read-then-write: a second accept changes no rows
+   * and gets `null` back, so "accepting twice posts once" is a property of the
+   * write, not of whoever remembered to check first.
+   */
+  decideProposal(
+    id: string,
+    status: Extract<Proposal['status'], 'accepted' | 'rejected'>,
+    note: string | null,
+    decidedBy: NonNullable<Proposal['decidedBy']>,
+  ): Proposal | null {
+    const decidedAt = this.now();
+    const res = this.db
+      .prepare(`UPDATE proposals SET status=?, note=?, decided_by=?, decided_at=? WHERE id=? AND status='pending'`)
+      .run(status, note, decidedBy, decidedAt, id);
+    if (res.changes === 0) return null;
+    const existing = this.getProposal(id);
+    return existing;
+  }
+
+  getProposal(id: string): Proposal | null {
+    const row = this.db.prepare(`SELECT * FROM proposals WHERE id=?`).get(id) as ProposalRow | undefined;
+    return row ? rowToProposal(row) : null;
+  }
+
+  /**
+   * Every proposal, newest first — deliberately unbounded. The dispatcher's gate
+   * reads the *standing* verdict for a ref, so a rejection that aged out of a
+   * window would quietly re-propose an act the operator already refused.
+   */
+  listProposals(): Proposal[] {
+    const rows = this.db.prepare(`SELECT * FROM proposals ORDER BY created_at DESC, rowid DESC`).all() as ProposalRow[];
+    return rows.map(rowToProposal);
+  }
+
   // -- Decisions (audit) ---------------------------------------------------
 
   recordDecision(input: Omit<Decision, 'id' | 'createdAt' | 'rule'>): Decision {
@@ -1049,6 +1110,18 @@ interface EscalationRow {
   created_at: string;
   answered_at: string | null;
 }
+interface ProposalRow {
+  id: string;
+  kind: string;
+  ref: string;
+  status: string;
+  action: string;
+  note: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  escalation_id: string | null;
+  created_at: string;
+}
 interface DecisionRow {
   id: string;
   cycle_id: string;
@@ -1208,6 +1281,20 @@ function rowToEscalation(r: EscalationRow): Escalation {
     response: r.response,
     createdAt: r.created_at,
     answeredAt: r.answered_at,
+  };
+}
+function rowToProposal(r: ProposalRow): Proposal {
+  return {
+    id: r.id,
+    kind: r.kind as Proposal['kind'],
+    ref: r.ref,
+    status: r.status as Proposal['status'],
+    action: JSON.parse(r.action) as Proposal['action'],
+    note: r.note,
+    decidedBy: r.decided_by as Proposal['decidedBy'],
+    decidedAt: r.decided_at,
+    escalationId: r.escalation_id,
+    createdAt: r.created_at,
   };
 }
 function rowToDecision(r: DecisionRow): Decision {

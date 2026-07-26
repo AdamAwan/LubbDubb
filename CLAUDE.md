@@ -104,6 +104,57 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     (a broad world, then: the gate never fired, yet no two live tasks share a branch), so a later
     rule that broke the 1:1 property fails a test instead of quietly sharing a checkout.
   - Tests: `test/jobQueue.test.ts`.
+- **Human decisions (`src/proposals/`, the `proposals` table, issue #109 phase 1).** "Something
+  proposes an act; a human accepts or rejects it; the accepted act happens" occurred three times
+  in the harness, and in the most common one — a `merge_pr` the auto-send gate refuses, which is
+  the **default** path — the accept was wired to nothing: `EscalationInbox.answer` recorded
+  `routing: 'queued_for_dispatch'` and no consumer existed, so an approval had nowhere to land and
+  you merged the PR by hand. A `Proposal` is the object that was missing in the middle. What
+  carries it:
+  - **A typed verdict is the only genuinely new thing.** An `Escalation` can record that a human
+    _typed something_; only `pending → accepted | rejected` lets the harness branch. The escalation
+    stays the inbox item and the routing mechanism — `typed_into_agent` is still right for a plain
+    question, and a question has no proposal at all. A proposal **hangs off** an escalation
+    (`escalation_id`); deciding answers that escalation with the verdict, so "Needs you" empties on
+    the click. `POST /api/escalations/:id/answer` **409s** while a pending proposal hangs off it:
+    free text can't be branched on, and answering would settle the inbox item while leaving the
+    proposal pending — which holds the rule that made it off that PR for good.
+  - **A fresh table, not columns on `escalations`.** Not only to dodge the `ALTER TABLE`: an
+    escalation is answered once and done, whereas a proposal carries a verdict a rule re-reads every
+    pulse and a `ref` the gate keys on. Widening would have given every existing question five
+    permanently-null columns and no way to tell "not a proposal" from "not yet decided". The name
+    avoids the `decisions` audit table and the `Decision` type in `src/types.ts`.
+  - **`pending` is a gate, and so is `rejected`.** `proposalHold(kind, ref, proposals)` (pure,
+    `proposals.ts`) reads the _standing_ verdict for an act and holds on both — pending because
+    re-asking is the duplicate that filled the inbox, **rejected because a "no" that expires next
+    pulse means "not this second"**, which is worse than not asking (the operator can't make the
+    question stop except by doing the act by hand). Phase 4 turns that into a cooldown that re-asks
+    on new signal; until then a no is durable, which is the safe direction. `accepted` holds nothing
+    — that is deliberately what lets a _failed_ accept be re-proposed next pulse, so the failure
+    path needs no new state. Asked in **two places off one predicate** (the jobs 409/defer pattern):
+    rule 3 suppresses itself, and the executor refuses a duplicate whatever produced it — the LLM
+    dispatcher's `reply_on_pr` included, since prose-driven actions can't be gated rule-side. The
+    dispatcher reads it from `DispatchContext.proposals`, wired in `harness.ts` from
+    `store.listProposals()` beside `recentDecisions`/`queuedJobs`. That list is **unbounded** on
+    purpose: a rejection that aged out of a window would quietly re-propose a refused act.
+  - **Accept executes inline, through `ActionExecutor.runAuthorized` — not via a next-pulse action.**
+    The action is already formed and validated on the row, so emitting one for the next cycle to run
+    would only re-emit what the proposal holds, at the cost of a pulse of latency _and_ an
+    "accepted but not yet run" state needing its own one-way transition. One transition is the
+    point. It stays in the executor rather than the route so `ActionSink` keeps a single caller and
+    the outcome lands in the decision log like every other outcome — audited under cycle id
+    `human:<proposal id>`, the way `agent-lifecycle` already marks a decision made outside the pulse,
+    which is also how the cockpit's Decision log finds its human column with no new column on
+    `decisions`.
+  - **Idempotence is a property of the write**: `Store.decideProposal` updates
+    `WHERE id=? AND status='pending'` and returns null when no row changed, so accepting twice
+    merges once without anyone remembering to check first. A send that **fails** mirrors the
+    auto-send fallback exactly (`autoSendFailed`/`autoMergeFailed` context + a fresh escalation)
+    rather than inventing a second one; the proposal stays `accepted` (you did accept) and the
+    now-unheld gate lets the next pulse re-propose if the world still warrants it.
+  - Phases 2–4 (`autoSend` as `decidedBy: 'auto_send'`, `planning.requireApproval`, rejection
+    feeding cooldown) are **not** here; `decidedBy` is typed for the first of them and nothing else
+    anticipates them. Tests: `test/proposals.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —

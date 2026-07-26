@@ -639,6 +639,24 @@ body {
   margin: 8px 0;
 }
 
+/* An item that needs a verdict rather than an answer: the note is optional and
+   sits beside the two buttons, so the act is one click away either way. */
+.esc-decide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.esc-decide input {
+  flex: 1;
+  min-width: 160px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
 .world {
   background: var(--panel);
   border: 1px solid var(--border);

@@ -407,6 +407,30 @@ export function buildDemoState(): DemoSeed {
         notedAt: ago(22),
       },
     ],
+    // The act behind the drafted-reply escalation below (issue #109). It is what
+    // turns that card from "type something" into "approve & send / reject": the
+    // draft was written, and nothing goes out until you say so.
+    proposals: [
+      {
+        id: 'prop-1',
+        kind: 'reply_draft',
+        ref: 'pr:142:comment:c-1',
+        status: 'pending',
+        action: {
+          type: 'reply_on_pr',
+          reason: 'reviewer asked whether the window is configurable',
+          prNumber: 142,
+          commentId: 'c-1',
+          draft:
+            'Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.',
+        },
+        note: null,
+        decidedBy: null,
+        decidedAt: null,
+        escalationId: 'esc-2',
+        createdAt: ago(1),
+      },
+    ],
     escalations: [
       {
         // A drafted PR reply held for sign-off — the auto-send gate wrote a

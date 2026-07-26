@@ -104,6 +104,7 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 | `PtySession`        | Terminal runtime (mock agent / interactive claude); all PTY waiting/done heuristics isolated behind one testable abstraction.                                                                                                                                                                                                                       |
 | `WorktreeManager`   | Lazily creates/reuses git worktrees keyed by branch — code tasks only. A cleanly finished agent's worktree is removed once its process exits (failed/killed ones keep theirs for debugging).                                                                                                                                                        |
 | `EscalationInbox`   | The human-in-the-loop surface; routes answers into live agents or the next cycle, and auto-dismisses an agent's open escalations when it dies (restart/kill/crash) so "Needs you" never lingers un-actionable.                                                                                                                                      |
+| `ProposalDesk`      | Where your accept/reject on a proposed act is applied. An accepted merge/reply is performed through the same outbound seam auto-send would have used; a rejection sends nothing and stops the rule re-asking.                                                                                                                                       |
 | `McpBridgeServer`   | The agents' typed channel _back_ to the harness: a tools-only MCP server over a Unix socket, wired into every launch. Lets an agent submit a validated plan or raise a structured question and hear the answer — where the sentinels can only announce, one way.                                                                                    |
 | `Store`             | SQLite persistence + reconcile-on-restart.                                                                                                                                                                                                                                                                                                          |
 | `ErrorLog`          | The central error-recording path: every caught failure (cycle exceptions, provider outages, agent crashes + exit codes, route 500s) is persisted, mirrored to stderr, and streamed to the cockpit's Errors panel.                                                                                                                                   |
@@ -326,3 +327,11 @@ same confidence-gated auto-send seam, which is **off by default**: the harness
 pushes, or merges on your behalf without an explicit human action. Opt a specific
 action into autonomy by enabling `autoSend` and adding it to `allowedActions` (e.g.
 `["reply_on_pr", "merge_pr"]`).
+
+What the gate produces is a **proposal**: the inbox item offers _approve_ / _reject_
+rather than a text box, and approving is what performs the act — the harness merges the
+PR, or sends the draft, through that same seam. Approving twice performs it once; a
+send that fails re-escalates rather than dropping; and while a proposal is unanswered —
+or after you reject it — the rule that raised it stops proposing the same act, so one
+question is asked once. Rejections are durable by design: the harness does not re-ask
+next heartbeat.

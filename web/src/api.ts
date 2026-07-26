@@ -23,6 +23,20 @@ const realApi = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ response }),
     }).then((r) => json(r)),
+  // Accepting is what performs the act — the harness merges / sends it through the
+  // same seam auto-send would have used. Rejecting sends nothing and is durable.
+  acceptProposal: (id: string, note?: string) =>
+    fetch(`/api/proposals/${id}/accept`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note }),
+    }).then((r) => json<{ ok: boolean; detail: string }>(r)),
+  rejectProposal: (id: string, note?: string) =>
+    fetch(`/api/proposals/${id}/reject`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note }),
+    }).then((r) => json<{ ok: boolean; detail: string }>(r)),
   respondAgent: (id: string, text: string) =>
     fetch(`/api/agents/${id}/respond`, {
       method: 'POST',

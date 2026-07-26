@@ -25,6 +25,7 @@ import { StatusFileRateLimits } from './agents/statusLine.js';
 import { FileEventsSpool } from './agents/fileEvents.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
+import { ProposalDesk } from './proposals/proposalDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
@@ -45,6 +46,11 @@ export interface System {
   connector: CompositeConnector;
   agents: AgentManager;
   escalations: EscalationInbox;
+  /**
+   * Where a human's accept/reject on a proposed act is applied (issue #109) — the
+   * missing wire between "approve" and "the approved thing happens".
+   */
+  proposals: ProposalDesk;
   executor: ActionExecutor;
   dispatcher: Dispatcher;
   harness: Harness;
@@ -251,6 +257,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     runtime: runtimeControl,
   });
 
+  // The accept/reject surface for acts the auto-send gate refused to perform on
+  // its own. It runs an accepted act through the executor, so the outbound sink
+  // keeps a single caller and the human's authorization lands in the audit log.
+  const proposals = new ProposalDesk(store, escalations, executor);
+
   // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
   // by whichever dispatcher is selected — provider-agnostic.
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
@@ -370,6 +381,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     connector,
     agents,
     escalations,
+    proposals,
     executor,
     dispatcher,
     harness,

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Decision, DispatchRule } from '../types.js';
+import type { Decision, DispatchRule, Proposal } from '../types.js';
 import { relTime, linkify } from './util.js';
 
 /**
@@ -7,14 +7,22 @@ import { relTime, linkify } from './util.js';
  * outcome, the action it chose, the reason the dispatcher gave, and when. The
  * filter chips let you narrow to just what executed, or just what got deferred.
  * Clicking a row expands it to show the dispatcher rule that produced it.
+ *
+ * Rows the *human* authorized are marked as such: the table records what the
+ * harness decided each cycle and had no idea what you decided, which was the
+ * missing half of the trail (issue #109). A row carrying no proposal is the
+ * harness acting on its own — the common case, and deliberately unlabelled.
  */
 export function DecisionLog({
   decisions,
+  proposals,
   now,
   refUrls,
   rules,
 }: {
   decisions: Decision[];
+  /** Acts a human settled; a decision names its proposal through its cycle id. */
+  proposals?: Proposal[];
   now: number;
   refUrls: Record<string, string>;
   /** The rule dispatcher's rule book, keyed by the rule id a decision carries. */
@@ -32,6 +40,13 @@ export function DecisionLog({
   const outcomes = ['all', 'executed', 'deferred', 'skipped', 'rejected'].filter((o) => o === 'all' || counts[o]);
   const shown = filter === 'all' ? decisions : decisions.filter((d) => d.outcome === filter);
 
+  // A human-authorized act is recorded under the cycle id `human:<proposal id>`,
+  // the way lifecycle bookkeeping uses `agent-lifecycle` — so the link back to who
+  // decided (and what they said about it) needs no column on the decisions table.
+  const byId = new Map((proposals ?? []).map((p) => [p.id, p]));
+  const deciderOf = (d: Decision): Proposal | undefined =>
+    d.cycleId.startsWith('human:') ? byId.get(d.cycleId.slice('human:'.length)) : undefined;
+
   return (
     <>
       <div className="log-filters">
@@ -45,6 +60,7 @@ export function DecisionLog({
         {shown.length === 0 && <p className="empty">No decisions match.</p>}
         {shown.map((d) => {
           const rule = d.rule ? rules[d.rule] : undefined;
+          const decider = deciderOf(d);
           const expanded = expandedId === d.id;
           return (
             <div
@@ -64,6 +80,11 @@ export function DecisionLog({
               <div className="audit-top">
                 <span className={`badge ${d.outcome}`}>{d.outcome}</span>
                 <span className="audit-type">{d.action.type}</span>
+                {decider && (
+                  <span className="chip small" title={decider.note ?? 'Authorized by you'}>
+                    you · {decider.status}
+                  </span>
+                )}
                 <span className="muted audit-time">{relTime(d.createdAt, now)}</span>
                 <span className={`audit-chevron ${expanded ? 'open' : ''}`}>▸</span>
               </div>

@@ -256,6 +256,27 @@ export interface Escalation {
   createdAt: string;
   answeredAt: string | null;
 }
+/**
+ * An act the harness proposed and a human accepts or rejects (mirrors the
+ * server's Proposal). Accepting performs the act; rejecting records why and stops
+ * the rule that proposed it from asking again.
+ */
+export interface Proposal {
+  id: string;
+  /** 'reply_draft' | 'merge'. */
+  kind: string;
+  /** The act's subject, e.g. `pr:42:merge`. */
+  ref: string;
+  /** 'pending' | 'accepted' | 'rejected'. */
+  status: string;
+  action: { type: string; reason?: string; [key: string]: unknown };
+  note: string | null;
+  /** 'human' | 'auto_send' | null — who settled it. */
+  decidedBy: string | null;
+  decidedAt: string | null;
+  escalationId: string | null;
+  createdAt: string;
+}
 export interface Decision {
   id: string;
   cycleId: string;
@@ -371,6 +392,8 @@ export interface AppState {
   /** What agents noticed outside their own tasks, newest first. Optional for older servers. */
   findings?: Finding[];
   escalations: Escalation[];
+  /** Acts put to a human, newest first. Optional so an older server degrades to plain escalations. */
+  proposals?: Proposal[];
   decisions: Decision[];
   /**
    * The dispatcher's "Up next" queue from the last pulse, or null when no cycle

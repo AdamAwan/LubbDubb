@@ -6,7 +6,7 @@
 //
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
-import type { AppState, Decision, WorldEvent, WorldEventKind } from '../types.js';
+import type { AppState, Decision, Proposal, WorldEvent, WorldEventKind } from '../types.js';
 import type { WsClient } from '../api.js';
 import { buildDemoState } from './fixtures.js';
 
@@ -214,6 +214,58 @@ class DemoServer {
       this.dirty();
     }
     return { ok: true };
+  }
+
+  /**
+   * Accept a proposed act — the demo mirror of `POST /api/proposals/:id/accept`,
+   * and the one thing the demo has to show faithfully: the accept *performs the
+   * act*. So a merge marks the PR merged and a reply marks its comment handled,
+   * exactly as the real sink would, rather than only flipping a status.
+   */
+  async acceptProposal(id: string, note?: string): Promise<{ ok: boolean; detail: string }> {
+    const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
+    if (!proposal || proposal.status !== 'pending') return { ok: false, detail: 'already decided' };
+    this.settle(proposal, 'accepted', note);
+    const prNumber = proposal.action.prNumber as number | undefined;
+    const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
+    let detail: string;
+    if (proposal.kind === 'merge') {
+      if (pr) pr.merged = true;
+      detail = `Merged PR #${prNumber} — authorized by you (${proposal.id}).`;
+      this.addWorldEvent('pr_merged', `pr:${prNumber}`, `PR #${prNumber} merged on your approval`);
+    } else {
+      const comment = pr?.unresolvedComments.find((c) => c.id === proposal.action.commentId);
+      if (comment) comment.handled = true;
+      detail = `Sent the reply on PR #${prNumber} — authorized by you (${proposal.id}).`;
+    }
+    this.addDecision(proposal.action.type, 'executed', detail);
+    this.dirty();
+    return { ok: true, detail };
+  }
+
+  /** Reject it: nothing goes out, and the reason is recorded (demo mirror of /reject). */
+  async rejectProposal(id: string, note?: string): Promise<{ ok: boolean; detail: string }> {
+    const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
+    if (!proposal || proposal.status !== 'pending') return { ok: false, detail: 'already decided' };
+    this.settle(proposal, 'rejected', note);
+    const detail = `Rejected by you${proposal.note ? `: ${proposal.note}` : ''} — nothing was sent (${proposal.id}).`;
+    this.addDecision(proposal.action.type, 'skipped', detail);
+    this.dirty();
+    return { ok: true, detail };
+  }
+
+  /** The verdict itself: one-way, and it answers the inbox item it hangs off. */
+  private settle(proposal: Proposal, status: 'accepted' | 'rejected', note?: string): void {
+    proposal.status = status;
+    proposal.note = note?.trim() || null;
+    proposal.decidedBy = 'human';
+    proposal.decidedAt = new Date().toISOString();
+    const esc = this.state.escalations.find((e) => e.id === proposal.escalationId);
+    if (esc && esc.status === 'open') {
+      esc.status = 'answered';
+      esc.response = `${status === 'accepted' ? 'Accepted' : 'Rejected'}${proposal.note ? `: ${proposal.note}` : '.'}`;
+      esc.answeredAt = proposal.decidedAt;
+    }
   }
 
   async killAgent(id: string): Promise<{ ok: true }> {
@@ -606,6 +658,8 @@ export const demoApi = {
   cancelJob: (id: string) => getServer().cancelJob(id),
   promoteFinding: (id: string) => getServer().promoteFinding(id),
   dismissFinding: (id: string) => getServer().dismissFinding(id),
+  acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
+  rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
   killAgent: (id: string) => getServer().killAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
 };
