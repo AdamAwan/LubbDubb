@@ -32,6 +32,15 @@ Fastify `onRequest` hook as a thin adapter. Three layers:
 Origin and host are answered **before** the token, so a leaked credential never turns a rebinding
 attempt back into a way in. The refusal is `403` for those two and `401` for the token.
 
+**Refusals are throttled**, at 20 per source per minute, after which that source gets `429` without
+its credential being read at all. Only refusals count — a successful request never does, so the
+cockpit's continuous `/api/state` polling can't throttle itself, which is the same concern that makes
+rate limiting `global: false`. This is not what makes the token unguessable (256 bits already does,
+and no feasible number of attempts changes that); it bounds the cost of someone hammering the port.
+Once tripped it is indiscriminate — a valid token from a source that has just been guessing waits out
+the window too. The counter lives in the hook, not in `authorizeRequest`, which takes the answer as a
+`throttled` boolean so the verdict stays a pure function of its inputs.
+
 The guard matches a **path prefix**, so a route added later is protected without opting in;
 `test/cockpitAuth.test.ts` asserts this by walking the route table in `app.ts` and requiring a 401
 from each. The SPA shell and its assets are deliberately unguarded: the token arrives in a URL

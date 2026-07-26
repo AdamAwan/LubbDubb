@@ -64,7 +64,14 @@ test('every API route declared in app.ts refuses an unauthenticated request', as
   for (const route of routes) {
     assert.ok(route.url.startsWith('/api'), `unexpected non-API route ${route.url} — is it guarded?`);
     const res = await app.inject({ method: route.method, url: route.url });
-    assert.equal(res.statusCode, 401, `${route.method} ${route.url} answered ${res.statusCode}, expected 401`);
+    // 401 or 429: walking the whole table from one source spends the failure
+    // budget partway through, and a throttled refusal is still a refusal. This
+    // does not weaken the claim — the guard checks the *path* before the
+    // throttle, so an unguarded route would answer 200/404 here and never 429.
+    assert.ok(
+      res.statusCode === 401 || res.statusCode === 429,
+      `${route.method} ${route.url} answered ${res.statusCode}, expected a refusal`,
+    );
   }
 
   await app.close();
@@ -209,8 +216,8 @@ test('the Host check is dropped when the operator binds a routable address', () 
   // so the token carries the security alone. Asserted on the pure verdict because
   // the alternative is binding a real routable socket in a test.
   const req = { url: '/api/state', host: 'workstation.lan:4300', authorization: 'Bearer t' };
-  assert.deepEqual(authorizeRequest(req, { token: 't', requireLoopbackHost: false }), { ok: true });
-  assert.equal(authorizeRequest(req, { token: 't', requireLoopbackHost: true }).ok, false);
+  assert.deepEqual(authorizeRequest(req, { token: 't', requireLoopbackHost: false, throttled: false }), { ok: true });
+  assert.equal(authorizeRequest(req, { token: 't', requireLoopbackHost: true, throttled: false }).ok, false);
 });
 
 test('origin and host are answered before the token, so a leak never opens those doors', () => {
@@ -218,9 +225,77 @@ test('origin and host are answered before the token, so a leak never opens those
   // wrong, or a leaked token turns a rebinding attempt back into a way in.
   const rebind = authorizeRequest(
     { url: '/api/state', host: 'evil.example', authorization: 'Bearer wrong' },
-    { token: 'right', requireLoopbackHost: true },
+    { token: 'right', requireLoopbackHost: true, throttled: false },
   );
   assert.deepEqual(rebind, { ok: false, code: 403, error: 'host not allowed' });
+});
+
+test('the Bearer header is parsed without a backtracking regex', () => {
+  const ask = (authorization: string) =>
+    authorizeRequest(
+      { url: '/api/state', host: 'localhost', authorization },
+      { token: 'right', requireLoopbackHost: true, throttled: false },
+    ).ok;
+
+  assert.equal(ask('Bearer right'), true);
+  assert.equal(ask('bearer right'), true, 'the scheme is case-insensitive');
+  assert.equal(ask('Bearer    right'), true, 'padding between scheme and value is skipped');
+  assert.equal(ask('Bearerright'), false);
+  assert.equal(ask('Bearer '), false);
+  assert.equal(ask(' right'), false);
+
+  // The shape that made the old pattern backtrack polynomially: the scheme
+  // followed by a long run of spaces and no value. Unauthenticated input, so the
+  // cost of answering it has to stay linear.
+  const started = process.hrtime.bigint();
+  assert.equal(ask(`Bearer${' '.repeat(50_000)}`), false);
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(elapsedMs < 250, `parsing 50k spaces took ${elapsedMs.toFixed(0)}ms`);
+});
+
+test('a caller is shut out after repeated refusals, and successes never count toward it', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const { app, cockpitUrl } = await buildApp(system);
+  const token = tokenOf(cockpitUrl);
+
+  // Well past any plausible cockpit burst, and only refusals get here.
+  for (let i = 0; i < 20; i++) {
+    const res = await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: 'Bearer wrong' } });
+    assert.equal(res.statusCode, 401, `attempt ${i + 1} should still be answered on its merits`);
+  }
+
+  // Budget spent: refused before the token is even compared.
+  const throttled = await app.inject({
+    method: 'GET',
+    url: '/api/state',
+    headers: { authorization: 'Bearer wrong' },
+  });
+  assert.equal(throttled.statusCode, 429);
+
+  // And the throttle is indiscriminate once tripped — this is a deliberate cost,
+  // not an oversight: a correct token from a source that has just been guessing
+  // waits out the window like everything else.
+  const valid = await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${token}` } });
+  assert.equal(valid.statusCode, 429);
+
+  await app.close();
+  system.store.close();
+});
+
+test('a busy cockpit never throttles itself — successes are not counted', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const { app, cockpitUrl } = await buildApp(system);
+  const token = tokenOf(cockpitUrl);
+
+  // Far more than the failure budget. Polling `/api/state` is what the cockpit
+  // does continuously, and throttling that would be the bug.
+  for (let i = 0; i < 60; i++) {
+    const res = await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: `Bearer ${token}` } });
+    assert.equal(res.statusCode, 200, `poll ${i + 1} was throttled`);
+  }
+
+  await app.close();
+  system.store.close();
 });
 
 // ---------------------------------------------------------------------------
@@ -322,14 +397,20 @@ test('a minted token is 0600, persistent across restarts, and long enough to be 
   assert.equal(readFileSync(file, 'utf8').trim(), first.token);
 });
 
-test('an empty token file is re-minted rather than trusted', () => {
+test('an empty token file is re-minted, and re-minting tightens its permissions', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-token-'));
   const file = join(dir, 'cockpit-token');
-  writeFileSync(file, '   \n');
+  // A half-finished write from a killed boot — and world-readable, which is the
+  // trap: `mode` applies only when a file is *created*, so writing into this one
+  // would leave the fresh token readable by every user on the machine.
+  writeFileSync(file, '   \n', { mode: 0o644 });
 
   const resolved = resolveCockpitToken(file);
   assert.equal(resolved.source, 'minted');
   assert.ok(resolved.token.length >= 43);
+  if (process.platform !== 'win32') {
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+  }
 });
 
 test('LUBBDUBB_TOKEN wins and is never written to disk', () => {

@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 /**
@@ -82,20 +82,33 @@ export function resolveCockpitToken(tokenFile: string): CockpitToken {
   if (fromEnv) return { token: fromEnv, source: 'env', path: null };
 
   const path = resolve(process.cwd(), tokenFile);
-  if (existsSync(path)) {
-    const existing = readFileSync(path, 'utf8').trim();
-    // An empty or truncated file is a half-finished write from a killed boot, not
-    // a token — re-mint rather than run with a guessable credential.
-    if (existing) return { token: existing, source: 'file', path };
-  }
+  // Read and catch rather than `existsSync` then read: the two-call form has a
+  // window in which the file can vanish, which would throw out of a boot path,
+  // and it is the check-then-use shape a hostile local process would race.
+  // An empty or truncated file is a half-finished write from a killed boot, not
+  // a token — re-mint rather than run with a guessable credential.
+  const existing = readTokenFile(path);
+  if (existing) return { token: existing, source: 'file', path };
 
   const token = mintToken();
   mkdirSync(dirname(path), { recursive: true });
-  // 0600 at creation, never chmod-ed afterwards: the mode argument applies only
-  // when the file is created, and umask can only remove bits from it, so the
-  // result is never looser than this.
+  // Remove first so the write always *creates*. `mode` is honoured only on
+  // creation, so writing into a pre-existing file — the empty-file case above
+  // reaches exactly that — would keep whatever permissions it already had and
+  // could leave the token world-readable. umask can only remove bits from 0600,
+  // never add them, so the result is never looser than this.
+  rmSync(path, { force: true });
   writeFileSync(path, `${token}\n`, { mode: 0o600 });
   return { token, source: 'minted', path };
+}
+
+/** The token on disk, or null if there isn't one worth using (missing, empty, unreadable). */
+function readTokenFile(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 /** The request fields the guard reads. Keeps {@link authorizeRequest} free of Fastify. */
@@ -119,9 +132,11 @@ interface AuthPolicy {
    * the token is carrying the security on its own.
    */
   requireLoopbackHost: boolean;
+  /** Whether this caller has already spent its failure budget — see {@link createAuthThrottle}. */
+  throttled: boolean;
 }
 
-type AuthVerdict = { ok: true } | { ok: false; code: 401 | 403; error: string };
+type AuthVerdict = { ok: true } | { ok: false; code: 401 | 403 | 429; error: string };
 
 /**
  * Which paths the token guards: the whole API and the live socket.
@@ -189,10 +204,77 @@ function tokenMatches(expected: string, presented: string | undefined): boolean 
   return timingSafeEqual(a, b);
 }
 
-/** The presented credential: `Authorization: Bearer <token>`, or `?t=` for the WebSocket. */
+/**
+ * The presented credential: `Authorization: Bearer <token>`, or `?t=` for the
+ * WebSocket.
+ *
+ * Parsed by hand rather than with `/^Bearer +(.+)$/i`. That pattern is
+ * ambiguous — `.` matches a space too, so the two quantifiers can split a run of
+ * spaces between them in many ways — which makes it backtrack polynomially on a
+ * header of nothing but spaces. The header is unauthenticated attacker input, so
+ * it is the one string here worth not handing to a regex engine at all.
+ */
 function presentedToken(req: AuthRequest): string | undefined {
-  const bearer = /^Bearer[ ]+(.+)$/i.exec(req.authorization?.trim() ?? '')?.[1];
-  return bearer?.trim() ?? req.queryToken;
+  const header = req.authorization?.trim();
+  if (header) {
+    const space = header.indexOf(' ');
+    if (space > 0 && header.slice(0, space).toLowerCase() === 'bearer') {
+      const value = header.slice(space + 1).trim();
+      if (value) return value;
+    }
+  }
+  return req.queryToken;
+}
+
+/** How many refusals from one source, within {@link FAILURE_WINDOW_MS}, before it is shut out. */
+const FAILURE_LIMIT = 20;
+const FAILURE_WINDOW_MS = 60_000;
+/** Cap on tracked sources, so a spray from many addresses can't grow the map without bound. */
+const MAX_TRACKED_SOURCES = 4096;
+
+interface AuthThrottle {
+  /** Whether this source has spent its failure budget and should be refused unread. */
+  blocked(key: string, now: number): boolean;
+  /** Record a refusal. */
+  fail(key: string, now: number): void;
+}
+
+/**
+ * The throttle is asked and updated by the hook, never by {@link authorizeRequest},
+ * which takes the answer as a plain `throttled` boolean. Keeping the state out of
+ * the verdict is what leaves it a pure function of its inputs — the same split the
+ * rest of the codebase draws between a predicate and the thing that calls it.
+ */
+
+/**
+ * A sliding-window failure counter for the guard.
+ *
+ * **Only refusals are counted**, never successful requests — the cockpit polls
+ * `/api/state` continuously, and throttling that is the thing
+ * `@fastify/rate-limit`'s `global: false` registration exists to avoid. So a
+ * working cockpit can never throttle itself no matter how busy it is.
+ *
+ * It is **not** what makes the token unguessable; 256 bits already does that, and
+ * no feasible number of attempts moves that needle. What it bounds is the *cost*
+ * of someone hammering the port — every attempt otherwise buys a routing pass and
+ * a constant-time compare — and it turns a sustained guessing attempt into
+ * something an operator can see in a log rather than something silent.
+ */
+export function createAuthThrottle(limit = FAILURE_LIMIT, windowMs = FAILURE_WINDOW_MS): AuthThrottle {
+  const failures = new Map<string, number[]>();
+  const live = (key: string, now: number): number[] => (failures.get(key) ?? []).filter((at) => now - at < windowMs);
+
+  return {
+    blocked: (key, now) => live(key, now).length >= limit,
+    fail(key, now) {
+      // Drop expired entries wholesale before growing past the cap, so the map is
+      // bounded by active sources rather than by every address ever seen.
+      if (failures.size >= MAX_TRACKED_SOURCES) {
+        for (const [tracked] of failures) if (live(tracked, now).length === 0) failures.delete(tracked);
+      }
+      failures.set(key, [...live(key, now), now]);
+    },
+  };
 }
 
 /**
@@ -205,6 +287,8 @@ function presentedToken(req: AuthRequest): string | undefined {
  */
 export function authorizeRequest(req: AuthRequest, policy: AuthPolicy): AuthVerdict {
   if (!isGuardedPath(req.url)) return { ok: true };
+
+  if (policy.throttled) return { ok: false, code: 429, error: 'too many failed attempts' };
 
   if (policy.requireLoopbackHost && !isLoopbackHostname(hostnameOf(req.host ?? ''))) {
     return { ok: false, code: 403, error: 'host not allowed' };

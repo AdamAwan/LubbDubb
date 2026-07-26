@@ -1,0 +1,13 @@
+name: LubbDubb CodeQL config
+
+queries:
+  - uses: security-and-quality
+
+# Tests are not shipped attack surface, and analysing them produces findings that
+# describe the test rather than the product: a fixture reading a file it just
+# wrote and sending it to its own ephemeral server is "file data in an outbound
+# network request" by every structural measure and a vulnerability by none. The
+# code that actually serves requests is all under `src/`, which is analysed.
+paths-ignore:
+  - test
+  - web/src/demo

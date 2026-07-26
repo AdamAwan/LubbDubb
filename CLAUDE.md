@@ -544,9 +544,17 @@ base)` cuts a **new** branch from `config.defaultBranch` (threaded through `Exec
     arriving via a `#t=` fragment the browser never sends to a server. Not a cookie: a cookie is
     attached unbidden, which is the whole reason cookie auth needs CSRF tokens bolted on. The SPA
     shell is deliberately unguarded — the page must load before it can authenticate.
+  - **Refusals are throttled (20/source/minute), successes never counted** — the cockpit polls
+    `/api/state` continuously, and throttling that is what `global: false` rate limiting exists to
+    avoid. The counter lives in the hook, not in `authorizeRequest`, which takes a `throttled`
+    boolean so the verdict stays pure. It isn't what makes the token unguessable (256 bits is); it
+    bounds the cost of a hammer.
   - Tests that drive routes opt out with `auth: { enabled: false } as never`; coverage lives in the
-    structural test that walks `app.ts`'s route table and requires a 401 from each, so a route added
-    later is asserted on the day it is written. Tests: `test/cockpitAuth.test.ts`.
+    structural test that walks `app.ts`'s route table and requires a refusal from each, so a route
+    added later is asserted on the day it is written. That test accepts 401 **or** 429 — walking the
+    table spends the failure budget partway through — which doesn't weaken it, because the path check
+    precedes the throttle and an unguarded route would answer 200/404 instead.
+    Tests: `test/cockpitAuth.test.ts`.
 
 ## Agent runtimes (the part that surprises people)
 

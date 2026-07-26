@@ -18,7 +18,7 @@ import { findingJobRequest } from '../mcp/findings.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
-import { authorizeRequest, resolveCockpitToken } from './auth.js';
+import { authorizeRequest, createAuthThrottle, resolveCockpitToken } from './auth.js';
 
 /**
  * Whether the configured world accepts synthetic events: only the `fake`
@@ -61,7 +61,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   const auth = system.config.auth.enabled ? resolveCockpitToken(system.config.auth.tokenFile) : null;
   if (auth) {
     const requireLoopbackHost = LOOPBACK_HOSTS.has(system.config.host);
+    // Only refusals are counted, so the cockpit's continuous state polling can
+    // never throttle itself — the same reason rate limiting is registered
+    // `global: false` below.
+    const throttle = createAuthThrottle();
     app.addHook('onRequest', async (req, reply) => {
+      const now = Date.now();
       const verdict = authorizeRequest(
         {
           url: req.url,
@@ -73,9 +78,10 @@ export async function buildApp(system: System): Promise<BuiltApp> {
               ? (req.query as { t: string }).t
               : undefined,
         },
-        { token: auth.token, requireLoopbackHost },
+        { token: auth.token, requireLoopbackHost, throttled: throttle.blocked(req.ip, now) },
       );
       if (verdict.ok) return;
+      throttle.fail(req.ip, now);
       // A refused *upgrade* needs its connection torn down explicitly. The client
       // asked to switch protocols and got an ordinary response instead, which
       // leaves a socket that belongs to neither side's bookkeeping — the HTTP
