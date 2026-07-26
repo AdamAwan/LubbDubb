@@ -121,6 +121,27 @@ async function smokeToolCall(system: System): Promise<void> {
   if (!rejected.isError) throw new Error('an empty parts list should have been rejected');
   log(`✓ validation error returned to the caller: "${rejected.content[0]?.text.trim()}"`);
 
+  // A read of the harness's own world, over the same real transport. PR #42 is the
+  // one step 1 injected and failed CI on, and this agent was dispatched for an
+  // issue rather than that PR — so this is also the general-read decision holding
+  // end to end, not just in the unit test.
+  send({
+    jsonrpc: '2.0',
+    id: 5,
+    method: 'tools/call',
+    params: { name: 'world_read', arguments: { kind: 'pr', ref: 'pr:42' } },
+  });
+  await waitFor('world_read', () => frames.length >= 5, 5_000);
+  const read = frames[4]?.result as { isError?: boolean; content: { text: string }[] };
+  if (read.isError) throw new Error(`world_read failed: ${read.content[0]?.text}`);
+  const view = JSON.parse(read.content[0]?.text ?? '{}') as {
+    item: { number: number; ciStatus: string; health: { reasons: string[] } };
+  };
+  if (view.item.number !== 42 || view.item.ciStatus !== 'failing') {
+    throw new Error(`world_read returned the wrong view: ${JSON.stringify(view.item)}`);
+  }
+  log(`✓ world_read saw the harness's own PR #42: ci=${view.item.ciStatus} health=[${view.item.health.reasons}]`);
+
   bridge.kill();
   system.mcp.release(credential.token);
   await system.mcp.close();

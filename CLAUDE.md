@@ -381,7 +381,8 @@ tools: **`plan_submit`** (replaces the `plan.json` write, same `PlanDocumentSche
 synchronously with the error returned) and **`escalate`** (the WAITING sentinel's payload, plus a
 `kind` and `options` the cockpit renders as one-click answers). Every response carries a `_status`
 envelope (origin, task, open escalation, plan roll-up), which is what removes the need for a polling
-tool. Things to preserve:
+tool. Phase 2 adds tools one at a time; the first is **`world_read(kind, ref)`** (below). Things to
+preserve:
 
 - **Sentinels stay, as the degradation floor.** `MCP_PROTOCOL_ADDENDUM` states a preference, never a
   replacement, and `@@LUBBDUBB_DONE@@` has no tool at all: MCP has no turn-boundary event, so a
@@ -396,11 +397,41 @@ tool. Things to preserve:
   PTY detectors, and for the same reason. Likewise `plan_submit` and the `plan.json` drain both call
   the shared `ingestPlanDocument` (`src/plans/planIngest.ts`) — neither transport gets its own notion
   of what a plan means.
-- **Identity is structural, not argued.** No tool takes an agent, task or issue argument: the
-  credential minted at spawn resolves `token -> agent -> task -> origin`, so an agent cannot name
-  itself and therefore cannot address another's work. This is what the `planOriginIssue` fencing was
-  approximating over a transport that carried no identity. The token is a bearer credential — it
-  lives in the 0600 launch-config file, never in argv — and is revoked on kill/interrupt/reap.
+- **Identity is structural, not argued** — for every _write_. No write tool takes an agent, task or
+  issue argument: the credential minted at spawn resolves `token -> agent -> task -> origin`, so an
+  agent cannot name itself and therefore cannot address another's work. This is what the
+  `planOriginIssue` fencing was approximating over a transport that carried no identity. The token is
+  a bearer credential — it lives in the 0600 launch-config file, never in argv — and is revoked on
+  kill/interrupt/reap. `world_read` is the deliberate exception, argued in its own bullet below.
+- **`world_read(kind, ref)` — the harness's view, read out of the store, never re-fetched.** Closes
+  the `gh`-shell-out gap: an agent that needed a PR's CI status or review comments had to shell out,
+  which is provider-coupled (nothing works under `azure`) and re-fetches what the pulse already holds.
+  Things that make it what it is:
+  - **`kind` is `pr` / `issue` / `story`** (`WORLD_READ_KINDS`, `src/mcp/worldRead.ts`) — the three
+    lists a `WorldSnapshot` carries and the three ref prefixes everything else writes, not a new
+    taxonomy to keep in step with the rules.
+  - **The source is `Store.getWorldBaseline()`**, which is exactly what `Harness.recordWorldChanges`
+    persists each pulse. So there is no provider fan-out per agent, no provider-shaped payload, and
+    the agent sees the world the dispatch decision was made against. It is a pulse-old reading and
+    says so (`observedAt`); the read errors informatively before the first cycle rather than throwing.
+    Never route this to a connector — that is the coupling the tool exists to remove.
+  - **Same verdicts as the cockpit, from the same functions.** `prHealth` + `basePrOf` +
+    `inheritedCiFailure` (all pure, all already there), over the **unfiltered** open list so an
+    `-ignore`d base still attributes — the same reason `DispatchContext` carries `excludedPrs`. An
+    agent told `CI failing on base PR #7` and an operator reading the same phrase are reading one
+    fact. An issue additionally carries its plan graph, which lives only in the store.
+  - **`ref` is suffix-tolerant, kind-strict.** `pr:42:ci`, `issue:12:part:schema` and `issue:12:plan`
+    all name their world item, so the origin ref an agent is handed in `_status.origin` can be passed
+    back verbatim (and omitting `ref` defaults to it). A prefix that contradicts `kind` is an error,
+    not a guess. A miss lists the refs the harness is tracking — discovery without a second mode.
+  - **It is a general read, deliberately, and the test says so.** It is the first tool where the
+    no-cross-origin property doesn't hold by construction. Fencing it to the caller's origin would
+    defeat the point: the dispatcher's own reasoning is cross-item, so an agent told its red CI
+    belongs to PR #7 must be able to read #7 or it is back to `gh`. What structural identity protects
+    is writes; a read forges and mutates nothing, and the cockpit already serves this same snapshot
+    unauthenticated over HTTP while this path needs a 0600 bearer token. The part that _is_ kept: an
+    agent can only name items the harness already holds, in the harness's own vocabulary — no query,
+    no provider passthrough, no path or URL argument, so no reaching another repo or project.
 - **Transport is a Unix socket (named pipe on Windows), never a TCP port** — the cockpit's HTTP
   surface is already unauthenticated on `0.0.0.0`. `bridge.mjs` (spawned by `claude`, shipped `.mjs`
   like `statusCapture.mjs`) is a **byte-transparent pipe** with no protocol logic, so `initialize` /
