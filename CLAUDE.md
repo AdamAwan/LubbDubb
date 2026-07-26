@@ -84,7 +84,26 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   calls `Store.markJobDispatched(jobId, task.id)` **only after** the agent actually spawns — so a job the
   cap/pause gate holds stays `queued`. `Store.cancelJob` drops a still-queued job; a dispatched one is a
   live agent (kill it instead). The `jobs` table is a fresh `CREATE TABLE`, so no `migrate()` entry is
-  needed. Tests: `test/jobQueue.test.ts`.
+  needed.
+  - **Rule 0 is the one dispatch path where origin and branch are not 1:1 (#116), so it is the one
+    that needs the property enforced rather than merely observed.** `job.branch` is a free string the
+    operator supplies while the origin is `job:<id>` — unique by construction — so `activeOrigins`
+    and `findActiveTaskByOrigin`, which gate the branch for free everywhere else, are both blind to
+    it. `WorktreeManager.ensure` being reuse-first makes the failure silent rather than loud: two
+    live agents land in **one worktree directory**, editing the same files with no merge anywhere to
+    reconcile them. Closed with one predicate, `Store.findActiveTaskByBranch` (the mirror of the
+    origin one), asked in two places: `ActionExecutor` **defers** a `dispatch_code_agent` whose
+    branch a live task holds, and `POST /api/jobs` **409s** a colliding branch at queue time. Two
+    call sites, one predicate — that is what keeps them from disagreeing; they differ only in _when_,
+    which is why the earlier one refuses (nothing has been promised yet) and the later one defers (a
+    queued job the operator is entitled to have retried when the branch frees). **Deferred, not
+    skipped**: `skipped` is the origin gate's word for "already being done", whereas a colliding job
+    is distinct work naming a busy branch, and every active task ends. The executor is the site
+    because every dispatch passes it, the LLM dispatcher's prose-named branches included. It is a
+    **no-op for every world-driven rule** — that is the point, and `test/jobQueue.test.ts` asserts it
+    (a broad world, then: the gate never fired, yet no two live tasks share a branch), so a later
+    rule that broke the 1:1 property fails a test instead of quietly sharing a checkout.
+  - Tests: `test/jobQueue.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
