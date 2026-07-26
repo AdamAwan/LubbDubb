@@ -343,6 +343,25 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, job, report };
   });
 
+  // Re-order the "Up next" queue (issue #128). The body is the operator's desired
+  // priority order of candidate origins; it replaces the whole override set, ranked
+  // 0..n-1. It only re-orders the dispatcher's ranking — it never un-holds a held
+  // item, and rule-0 jobs stay first regardless — so it is safe to run a cycle
+  // immediately so the new order takes effect and the next `/api/state` reflects it.
+  app.post('/api/upnext/order', async (req, reply) => {
+    const body = (req.body ?? {}) as { origins?: unknown };
+    if (!Array.isArray(body.origins) || body.origins.some((o) => typeof o !== 'string'))
+      return reply.code(400).send({ error: 'origins must be an array of strings' });
+    const origins = body.origins as string[];
+    // Guard against a duplicate origin: two ranks for one item is meaningless and
+    // would make the persisted order depend on insertion accident.
+    if (new Set(origins).size !== origins.length) return reply.code(400).send({ error: 'origins must be unique' });
+    store.setPriorityOverrides(origins);
+    hub.broadcast({ type: 'world:changed' });
+    const report = await harness.runCycle('manual');
+    return { ok: true, report };
+  });
+
   // Drop a still-queued job before it runs. A job already dispatched can't be
   // cancelled here — kill its agent instead.
   app.post('/api/jobs/:id/cancel', async (req, reply) => {

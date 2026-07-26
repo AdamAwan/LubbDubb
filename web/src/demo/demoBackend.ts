@@ -475,6 +475,28 @@ class DemoServer {
     return { ok: true };
   }
 
+  /** Re-order the Up next queue (demo mirror of POST /api/upnext/order). */
+  async reorderUpNext(origins: string[]): Promise<{ ok: true }> {
+    const plan = this.state.upcoming;
+    if (plan) {
+      const rank = new Map(origins.map((o, i) => [o, i]));
+      plan.items = plan.items
+        .map((item, index) => ({ item, index }))
+        .sort((a, b) => {
+          const ra = rank.get(a.item.origin);
+          const rb = rank.get(b.item.origin);
+          if (ra !== undefined && rb !== undefined) return ra - rb;
+          if (ra !== undefined) return -1;
+          if (rb !== undefined) return 1;
+          return a.index - b.index;
+        })
+        .map((e) => e.item);
+      this.addDecision('dispatch_code', 'ok', `re-ordered Up next (${origins.length} pinned)`);
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   private applyInjection(ev: Record<string, unknown>): void {
     const kind = String(ev.kind ?? '');
     const world = this.state.world;
@@ -653,6 +675,7 @@ export const demoApi = {
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
   setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
   replan: (planId: string) => getServer().replan(planId),
+  reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),

@@ -99,6 +99,9 @@ const realApi = {
   setStoryWatched: (storyId: string, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/stories/${storyId}/watch`, { watched }),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
+  // Re-order the "Up next" queue (issue #128): the operator's desired priority
+  // order of candidate origins, which the dispatcher reads back into its ranking.
+  reorderUpNext: (origins: string[]) => post<{ ok: true }>('/api/upnext/order', { origins }),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     post<{ ok: true }>('/api/jobs', job),
   cancelJob: (id: string) => post<{ ok: true }>(`/api/jobs/${id}/cancel`),

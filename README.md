@@ -75,6 +75,17 @@ show greyed). It's a projection, not a committed queue: the dispatcher is statel
 cycle, so the plan is "what's next as of the last pulse" and reorders as the world
 changes. The LLM dispatcher materialises no plan (the panel says so).
 
+You can **re-order it** with the ▲/▼ controls on each row to change what gets picked up
+first — for the case where you can see the queue and know that item four is the one
+blocking you. Because the queue is a projection, what persists is a priority override
+keyed on the item's stable origin (not the array itself), read back into the ranking so
+the order survives pulses and restarts. It changes _order_ only: a cooling-down, capped
+or unapproved item stays held wherever you move it, and an operator-launched job (rule 0)
+always keeps the next free slot. Work the harness surfaces later slots in behind your
+arranged order until you re-arrange; an override for work that has since finished is
+pruned after `upNextOverrideTtlMs` (default 7 days). Overriding a _hold_ into dispatch is
+deliberately not a thing — a cooldown, cap or watch gate is not a priority question.
+
 **Claude usage.** Each agent's cumulative cost, tokens and turns (from the stream
 runtime's per-turn `result` events) are persisted and shown on its fleet card and
 drawer, and a topbar chip tracks account-level usage: the real subscriber 5h/weekly
@@ -135,7 +146,7 @@ same. Set `LUBBDUBB_TOKEN` to choose your own, or see **`host` / `auth`** below 
 on your network deliberately. Nothing here talks to an identity provider or any other service: it is
 32 random bytes and a header.
 
-Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story), and watch the harness react. The inject bar (and its `/api/inject` route) only exists while a `fake` provider is configured — synthetic events can't land on real integrations, so a real deployment hides it. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Use the **New job** panel to launch an ad-hoc job from a prompt — it queues server-side and the dispatcher drains it _ahead of_ all world-driven work (rule 0), so it takes the next free agent slot and simply waits in the queue (shown with its place in line, cancellable) when the fleet is at its concurrency cap. Answer items in **Needs you** to unblock parked agents. **Up next** shows the dispatcher's ordered pickup plan from the last pulse, with the cut-line at the current concurrency headroom — above it dispatches now, below it waits for a free slot. The **Decision log** shows what the harness decided each cycle — click a row to expand the dispatcher rule that produced it (its number, name and standing rationale); the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved), so it works for the real GitHub provider too, not just injected events.
+Then open the cockpit, use the **Inject event** bar to simulate the world moving (a CI failure, a review comment, a new story), and watch the harness react. The inject bar (and its `/api/inject` route) only exists while a `fake` provider is configured — synthetic events can't land on real integrations, so a real deployment hides it. Click an agent to see its live terminal and type into it — the drawer also shows the originating item (its title, a body excerpt or state summary, and the dispatcher's reason), captured at dispatch time so you can understand the work without leaving the cockpit. Use the **New job** panel to launch an ad-hoc job from a prompt — it queues server-side and the dispatcher drains it _ahead of_ all world-driven work (rule 0), so it takes the next free agent slot and simply waits in the queue (shown with its place in line, cancellable) when the fleet is at its concurrency cap. Answer items in **Needs you** to unblock parked agents. **Up next** shows the dispatcher's ordered pickup plan from the last pulse, with the cut-line at the current concurrency headroom — above it dispatches now, below it waits for a free slot; use the ▲/▼ controls on a row to re-prioritise what gets picked up first (the order persists as an origin-keyed override, held items stay held, and jobs stay first). The **Decision log** shows what the harness decided each cycle — click a row to expand the dispatcher rule that produced it (its number, name and standing rationale); the **Activity** feed beside it shows how the _world itself_ changed over time — each cycle diffs the fresh `WorldSnapshot` against the previous one and records every observed transition (PR opened, CI green, story moved), so it works for the real GitHub provider too, not just injected events.
 
 ### Configuration
 

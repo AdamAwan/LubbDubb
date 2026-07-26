@@ -7,18 +7,27 @@ import { refLink, relTime } from './util.js';
  * and what waits for a free agent slot. A projection, not a committed queue —
  * the ranking is recomputed from the world every cycle, so it's labelled with
  * the pulse it came from.
+ *
+ * The operator can re-order it (issue #128): the ▲/▼ controls send the desired
+ * order of candidate origins, which the dispatcher persists as a priority
+ * override and reads back into its ranking. It changes *order* only — a held
+ * item stays held wherever it lands, and rule-0 jobs stay first regardless — so
+ * the cut-line still falls where the headroom actually does after the next pulse.
  */
 export function UpNext({
   plan,
   now,
   refUrls,
   rules,
+  onReorder,
 }: {
   plan: UpcomingPlan | null;
   now: number;
   refUrls: Record<string, string>;
   /** The rule book, to label each queued item with the rule that ranked it. */
   rules: Record<string, DispatchRule>;
+  /** Persist a new priority order of origins (issue #128). Omitted = read-only. */
+  onReorder?: (origins: string[]) => void;
 }) {
   if (!plan) {
     return <p className="empty">No pickup plan yet — it appears once a pulse has run (rule dispatcher only).</p>;
@@ -34,6 +43,16 @@ export function UpNext({
   // The cut sits before the first below-cut ("waiting") item; cooldown items
   // keep their rank position but render greyed (throttled, not capacity-bound).
   const cutAt = plan.items.findIndex((q) => q.status === 'waiting');
+  // Moving an item recomputes the whole visible order and sends it as the new
+  // priority override — what you see becomes the order (new items the harness
+  // surfaces later slot in behind it until you re-arrange).
+  const move = (from: number, to: number) => {
+    if (!onReorder || to < 0 || to >= plan.items.length) return;
+    const next = [...plan.items];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    onReorder(next.map((i) => i.origin));
+  };
   return (
     <div className="upnext">
       <div className="upnext-asof" title="Recomputed from the world every cycle — not a committed queue">
@@ -46,7 +65,13 @@ export function UpNext({
               <span>waiting for a slot</span>
             </div>
           )}
-          <QueueRow item={q} refUrls={refUrls} rules={rules} />
+          <QueueRow
+            item={q}
+            refUrls={refUrls}
+            rules={rules}
+            onUp={onReorder && idx > 0 ? () => move(idx, idx - 1) : undefined}
+            onDown={onReorder && idx < plan.items.length - 1 ? () => move(idx, idx + 1) : undefined}
+          />
         </div>
       ))}
     </div>
@@ -57,10 +82,14 @@ function QueueRow({
   item,
   refUrls,
   rules,
+  onUp,
+  onDown,
 }: {
   item: QueueItem;
   refUrls: Record<string, string>;
   rules: Record<string, DispatchRule>;
+  onUp?: () => void;
+  onDown?: () => void;
 }) {
   const rule = rules[item.rule];
   return (
@@ -75,6 +104,16 @@ function QueueRow({
       )}
       <span className="upnext-title">{withOriginLink(item, refUrls)}</span>
       {item.kind === 'desk' && <span className="chip small">desk</span>}
+      {(onUp || onDown) && (
+        <span className="upnext-reorder">
+          <button className="reorder-btn" onClick={onUp} disabled={!onUp} title="Move up (higher priority)">
+            ▲
+          </button>
+          <button className="reorder-btn" onClick={onDown} disabled={!onDown} title="Move down (lower priority)">
+            ▼
+          </button>
+        </span>
+      )}
     </div>
   );
 }

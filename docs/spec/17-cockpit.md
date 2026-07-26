@@ -79,8 +79,13 @@ for the world to change — chosen from `config.injectable`.
 
 - **Up next** (`UpNext`) — the last cycle's ranked queue with the headroom cut drawn. Each row shows
   its rule (expandable into the rule's description from `dispatchRules`), title, branch and status
-  (`dispatching` / `waiting` / `cooldown` / `capped` / `unapproved`). Empty under the `claude` dispatcher, which
-  materialises no plan.
+  (`dispatching` / `waiting` / `cooldown` / `capped` / `unapproved`), plus **▲/▼ re-order controls**
+  (issue #128). Moving a row sends the whole new order of candidate origins to
+  `POST /api/upnext/order`, which the dispatcher persists as a priority override and reads back into
+  its ranking — so the order survives pulses and restarts while the panel stays a projection. It
+  re-orders only: a held row keeps its held status wherever it lands, and rule-0 jobs stay first. New
+  work the harness surfaces later slots in behind the arranged order until you re-arrange. Empty under
+  the `claude` dispatcher, which materialises no plan.
 - **Decision log** (`DecisionLog`) — the last 100 decisions with outcome, detail and, where present,
   the rule that fired, expandable into that rule's standing rationale.
 - **Activity** (`ActivityFeed`) — the last 100 world events.

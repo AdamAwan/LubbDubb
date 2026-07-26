@@ -11,7 +11,7 @@ import { diffWorlds } from './world/worldDiff.js';
 import { isPrExcluded } from './prHealth.js';
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
-import type { Action, WorldEvent, WorldSnapshot } from './types.js';
+import type { Action, Task, WorldEvent, WorldSnapshot } from './types.js';
 
 interface HarnessDeps {
   store: Store;
@@ -26,6 +26,8 @@ interface HarnessDeps {
   steeringPriorities: string[];
   /** PRs carrying this label (`${labelPrefix}-ignore`) are excluded from dispatch (the operator's "leave it alone" tag). */
   prIgnoreLabel: string;
+  /** How long an operator "Up next" priority override survives after its origin stops being tracked (issue #128; 0 disables pruning). */
+  upNextOverrideTtlMs: number;
   /**
    * Folds git + provider reality onto the plan-part rows, next to the world diff.
    * Absent = no plan tracking (and it no-ops anyway with the funnel off).
@@ -135,6 +137,9 @@ export class Harness extends EventEmitter {
       // then skips.
       const signals = rejectionSignalQuery(proposals);
       const rejectionSignals = signals ? store.listWorldEventsSince(signals.since, signals.refs) : [];
+      // Operator "Up next" re-ordering (issue #128), keyed on candidate origin,
+      // so it re-orders the ranking without persisting the projection itself.
+      const priorityOverrides = store.listPriorityOverrides();
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
@@ -166,11 +171,21 @@ export class Harness extends EventEmitter {
         recentDecisions,
         proposals,
         rejectionSignals,
+        priorityOverrides,
         steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
       });
 
       this.lastPlan = plan.upcoming ? { cycleId, at: world.takenAt, items: plan.upcoming } : null;
+
+      // Keep the override set from lingering: an origin still tracked this pulse
+      // (queued/waiting/held in the plan, or staffed by an active task) has its
+      // override refreshed; one gone longer than the TTL is pruned. Reading the
+      // plan and the active tasks together means a long-staffed item keeps its
+      // priority even while it is absent from the ranked queue.
+      const trackedOrigins = new Set<string>((plan.upcoming ?? []).map((i) => i.origin));
+      for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
+      store.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
 
       // The dispatcher's reasoning is itself an audit record.
       store.recordDecision({
@@ -233,4 +248,9 @@ export class Harness extends EventEmitter {
   override on<K extends keyof HarnessEvents>(event: K, listener: (...args: HarnessEvents[K]) => void): this {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
+}
+
+/** A task the fleet is still working — the dispatcher excludes its origin from the ranked queue. */
+function isActiveTask(t: Task): boolean {
+  return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
 }

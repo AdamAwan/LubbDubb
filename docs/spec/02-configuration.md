@@ -71,6 +71,7 @@ resolve them against the wrong directory:
 | `autoSend`                   | object                        | `{ enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] }` | The confidence gate on side-effectful actions. See [09](09-execution.md). |
 | `promptTemplatesDir`         | `string`                      | `.lubbdubb/prompts`                                             | Directory of `<prompt-id>.md` overrides, read once at boot. Absent directory = all built-in defaults.          |
 | `closedPrWindowMs`           | `number`                      | `21600000` (6h)                                                 | How far back providers look for PRs that left the open set. `0` disables the lookup entirely.                  |
+| `upNextOverrideTtlMs`        | `number`                      | `604800000` (7d)                                                | How long an operator "Up next" priority override (issue #128) survives after its origin stops being tracked. `0` disables pruning. |
 
 ### Item selection (labels, priority, states)
 
