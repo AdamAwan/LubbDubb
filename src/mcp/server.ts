@@ -16,7 +16,7 @@ import {
   type ToolCallResult,
 } from './protocol.js';
 import { MCP_SERVER_ID } from './names.js';
-import { type AgentAskTarget, buildTools, type McpIdentity } from './tools.js';
+import { type AgentToolTarget, buildTools, type McpIdentity } from './tools.js';
 
 /** Absolute path to the shipped stdio bridge `claude` spawns. See {@link file://./bridge.mjs}. */
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
@@ -28,7 +28,7 @@ export interface McpBridgeServerOptions {
    * launch needs a credential; a tool call needs the fleet), and a thunk is the
    * honest way to say "not until someone actually calls a tool".
    */
-  agents: () => AgentAskTarget;
+  agents: () => AgentToolTarget;
   /** Where per-agent `--mcp-config` files are written (one per launch, 0600). */
   configDir: string;
   /** The socket (POSIX) or named pipe (Windows) agents' bridges connect back on. */

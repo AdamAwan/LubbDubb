@@ -62,6 +62,12 @@ const realApi = {
       body: JSON.stringify(job),
     }).then((r) => json<{ ok: true }>(r)),
   cancelJob: (id: string) => fetch(`/api/jobs/${id}/cancel`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
+  // A finding becomes work only here: the operator's click is the gate, because
+  // an agent that could queue jobs could put agents on the fleet.
+  promoteFinding: (id: string) =>
+    fetch(`/api/findings/${id}/promote`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
+  dismissFinding: (id: string) =>
+    fetch(`/api/findings/${id}/dismiss`, { method: 'POST' }).then((r) => json<{ ok: true }>(r)),
   killAgent: (id: string) => fetch(`/api/agents/${id}/kill`, { method: 'POST' }).then((r) => json(r)),
   interruptAgent: (id: string) => fetch(`/api/agents/${id}/interrupt`, { method: 'POST' }).then((r) => json(r)),
 };

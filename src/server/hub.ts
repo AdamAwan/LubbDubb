@@ -1,7 +1,7 @@
 import type { WebSocket } from 'ws';
 import type { System } from '../system.js';
 import { stripAnsi } from '../agents/streamTranscript.js';
-import type { AgentFlag, WorldEvent } from '../types.js';
+import type { AgentFlag, Finding, WorldEvent } from '../types.js';
 
 export type ServerEvent =
   | { type: 'cycle:start'; cycleId: string; source: string }
@@ -9,6 +9,7 @@ export type ServerEvent =
   | { type: 'agent:output'; agentId: string; delta: string }
   | { type: 'agent:tail'; agentId: string; line: string }
   | { type: 'agent:flag'; flag: AgentFlag }
+  | { type: 'agent:finding'; finding: Finding }
   | { type: 'agent:status'; agentId: string; taskId: string; status: string }
   | { type: 'agent:waiting'; agentId: string; taskId: string; reason: string }
   | { type: 'agent:done'; agentId: string; taskId: string; status: string }
@@ -63,6 +64,13 @@ export class Hub {
     // output they're broadcast to every socket, not just an agent's subscribers.
     agents.on('flag', (e) => {
       this.broadcast({ type: 'agent:flag', flag: e.flag });
+      this.broadcast({ type: 'dirty' });
+    });
+    // An agent filed something outside its own task. Like flags these are
+    // low-volume and fleet-wide, so they go to every socket; the `dirty` is what
+    // makes the Findings panel durable-consistent via the /api/state refetch.
+    agents.on('finding', (e) => {
+      this.broadcast({ type: 'agent:finding', finding: e.finding });
       this.broadcast({ type: 'dirty' });
     });
     // The file-events hook recorded a written file; a coarse dirty repaints the

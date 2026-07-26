@@ -281,6 +281,51 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     jobs: [],
+    // What agents noticed outside their own tasks — one of each kind, which is
+    // the whole vocabulary (`report_finding`).
+    findings: [
+      {
+        id: 'find-1',
+        agentId: 'agent-a1',
+        taskId: 'task-a1',
+        originRef: 'pr:142:ci',
+        kind: 'out_of_scope',
+        ref: null,
+        summary:
+          'The retry helper in src/net/backoff.ts squares the delay instead of doubling it, so the 5th retry waits ~17 minutes. Not what I was sent to fix, but it is why the flaky test times out.',
+        status: 'open',
+        jobId: null,
+        createdAt: ago(12),
+        updatedAt: ago(12),
+      },
+      {
+        id: 'find-2',
+        agentId: 'agent-a2',
+        taskId: 'task-a2',
+        originRef: 'issue:139',
+        kind: 'duplicate',
+        ref: 'issue:118',
+        summary: 'This asks for the same provider seam as #118, which already has a merged design doc.',
+        status: 'open',
+        jobId: null,
+        createdAt: ago(20),
+        updatedAt: ago(20),
+      },
+      {
+        id: 'find-3',
+        agentId: 'agent-a0',
+        taskId: 'task-a0',
+        originRef: 'issue:205',
+        kind: 'blocked',
+        ref: 'issue:205',
+        summary:
+          'The real fix is in the upstream azure-devops-node-api types — the field exists on the wire but not in the published typings. Nothing I can change from this repo.',
+        status: 'dismissed',
+        jobId: null,
+        createdAt: ago(48),
+        updatedAt: ago(30),
+      },
+    ],
     agents: [
       {
         id: 'agent-a1',
