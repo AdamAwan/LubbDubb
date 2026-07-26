@@ -182,6 +182,13 @@ export interface Agent {
   inputTokens: number | null;
   outputTokens: number | null;
   numTurns: number | null;
+  /**
+   * What the agent last said it was doing (`note_progress`), or null if it never
+   * said — in which case the card falls back to the output tail exactly as before.
+   */
+  note: string | null;
+  /** When the note was written. Shown as an age; never read as a health signal. */
+  notedAt: string | null;
 }
 
 // Account-level Claude usage (issue #60): rolling cost windows self-computed by

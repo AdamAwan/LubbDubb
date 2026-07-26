@@ -108,6 +108,8 @@ interface AgentManagerEvents {
   flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
   /** The agent filed something outside its own task (already persisted). `created` is false for a verbatim repeat. */
   finding: [{ agentId: string; taskId: string; finding: Finding; created: boolean }];
+  /** The agent said what it is working on (already persisted onto its row, replacing the previous note). */
+  progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
 }
@@ -335,6 +337,25 @@ export class AgentManager extends EventEmitter {
     const { finding, created } = this.store.recordFinding(agentId, task.id, task.originRef, input);
     this.emit('finding', { agentId, taskId: task.id, finding, created });
     return { ok: true, finding };
+  }
+
+  /**
+   * Record what an agent says it is working on (the `note_progress` tool). Like
+   * {@link recordFinding} it goes through the manager rather than straight to the
+   * store, so the cockpit repaints on the note rather than on the next pulse —
+   * a note that lands twenty minutes late has already failed at its one job.
+   *
+   * Also like a finding, this does not require a *live* session: the note is a
+   * durable line on the agent's row, and one written on an agent's last breath is
+   * the summary of the run.
+   */
+  recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const notedAt = this.store.recordAgentNote(agentId, note);
+    this.emit('progress', { agentId, taskId: task.id, note, notedAt });
+    return { ok: true, notedAt };
   }
 
   /**

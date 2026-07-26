@@ -967,6 +967,29 @@ body {
     transform: rotate(360deg);
   }
 }
+/* What the agent says it is doing (note_progress). Prose, not terminal output —
+   so it reads in the body font, above the monospaced tail beneath it. */
+.progress-note {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12.5px;
+  color: var(--text);
+  border-left: 2px solid var(--blue);
+  padding-left: 8px;
+}
+.progress-note-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.progress-note-age {
+  margin-left: auto;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
 .last-line {
   margin-top: 8px;
   padding: 6px 8px;

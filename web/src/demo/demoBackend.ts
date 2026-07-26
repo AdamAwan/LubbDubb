@@ -363,6 +363,10 @@ class DemoServer {
         inputTokens: null,
         outputTokens: null,
         numTurns: null,
+        // A fresh agent has said nothing yet — the card falls back to its output
+        // tail, which is exactly the state note_progress must not paper over.
+        note: null,
+        notedAt: null,
       },
       ...this.state.agents,
     ];

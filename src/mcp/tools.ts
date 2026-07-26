@@ -7,19 +7,21 @@ import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import { FINDING_KIND_HELP, FINDING_KINDS, validateFinding } from './findings.js';
 import { MCP_TOOL_NAMES } from './names.js';
+import { normaliseNote } from './progress.js';
 import { type McpTool, toolError, toolJson, type ToolCallResult } from './protocol.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from './worldRead.js';
 
 /**
- * What the tool layer needs from the fleet. Narrow on purpose, and both methods
- * are here for the same reason: each has a fleet-side transition or event that
+ * What the tool layer needs from the fleet. Narrow on purpose, and every method
+ * is here for the same reason: each has a fleet-side transition or event that
  * must not be bypassed. `ask` goes through the *same* park the WAITING sentinel
- * drives; `recordFinding` persists and then emits, so the cockpit hears about a
- * finding the moment it is filed rather than on the next pulse.
+ * drives; `recordFinding` and `recordProgress` persist and then emit, so the
+ * cockpit hears the moment it happens rather than on the next pulse.
  */
 export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
   recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string };
+  recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string };
 }
 
 export interface McpToolDeps {
@@ -294,6 +296,50 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
           // Said again in the response, not only in the description: an agent that
           // believes reporting a bug scheduled its fix will stop watching for it.
           note: 'Filed for an operator. It queues no work by itself — keep going with your own task.',
+        });
+      },
+    },
+    {
+      name: MCP_TOOL_NAMES[4],
+      description:
+        'Say in one line what you are working on right now, so an operator watching the fleet can ' +
+        "see it without reading your transcript. Replaces your card's preview line, which is " +
+        'otherwise just whatever you last printed. Call it when you move on to a different part of ' +
+        'the task, or before a long step (a full test run, a big refactor) so the quiet is explained. ' +
+        'It is optional and it costs you nothing to skip: nothing infers that you are stuck from a ' +
+        'gap between notes, so do not call it to prove you are alive. It asks nothing and changes ' +
+        'nothing about your task — if you need a decision, use escalate instead.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          note: {
+            type: 'string',
+            description:
+              'One line, present tense, in the words you would use to a colleague: "reading how the ' +
+              'dispatcher ranks candidates", "running the full suite after the rename". Say what you ' +
+              'are doing, not that you are doing well.',
+          },
+        },
+        required: ['note'],
+      },
+      handler: (args) => {
+        const parsed = normaliseNote(args.note);
+        if (!parsed.ok) return toolError(parsed.error);
+        // Structural attribution, exactly as for `report_finding` and for the same
+        // reason: this is a write that speaks in an agent's name to an operator.
+        // There is no argument naming an agent, so there is nothing to forge with.
+        const result = deps.agents.recordProgress(agent.id, parsed.note);
+        if (!result.ok) return toolError(result.error);
+        return ok({
+          noted: true,
+          note: parsed.note,
+          notedAt: result.notedAt,
+          ...(parsed.trimmed
+            ? // Stored anyway rather than refused — a trimmed status line still
+              // answers the question a rejected one would have left blank — but the
+              // caller hears that it was cut so the next one fits.
+              { trimmed: `Kept, trimmed to one line. Shorter notes read better on the card.` }
+            : {}),
         });
       },
     },
