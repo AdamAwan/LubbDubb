@@ -1,6 +1,8 @@
 import type { Job, Plan, PlanPart, Task, WorkNode, WorkNodeObservation, WorldSnapshot } from '../types.js';
 import { planIssueNumber, partOrigin } from '../plans/parts.js';
 import { issueOrigin, planOrigin } from '../plans/planning.js';
+import { basePrOf, prState } from '../prHealth.js';
+import { issueBranch } from '../dispatcher/issuePickup.js';
 
 /**
  * Everything the fold reads: this pulse's world, the store rows that hold intent,
@@ -71,6 +73,76 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       // Retired is terminal in the same way merged is: the row stays so the graph
       // remains readable after a replan, and nothing schedules it again.
       terminal: part.status === 'merged' || part.status === 'retired',
+    });
+  }
+
+  // Which node owns each PR. Filled part-first because work lineage is what the
+  // parent means: a part's PR belongs to the part, not to the issue two levels up.
+  const prParent = new Map<number, string>();
+  for (const part of input.parts) {
+    const n = issueOfPlan.get(part.planId);
+    if (n === undefined) continue;
+    if (part.prNumber !== null) prParent.set(part.prNumber, partOrigin(n, part.slug));
+  }
+  for (const issue of input.world.issues) {
+    const branch = issueBranch(issue.number);
+    for (const pr of input.world.pullRequests) {
+      const mine = pr.branch === branch || issue.linkedPrNumber === pr.number;
+      if (mine && !prParent.has(pr.number)) prParent.set(pr.number, issueOrigin(issue.number));
+    }
+  }
+
+  const priorPr = new Map(input.existing.filter((n) => n.kind === 'pr').map((n) => [n.ref, n]));
+  const seen = new Set<string>();
+
+  for (const pr of input.world.pullRequests) {
+    const ref = `pr:${pr.number}`;
+    seen.add(ref);
+    const base = basePrOf(pr, input.world.pullRequests);
+    const merged = pr.merged === true;
+    out.push({
+      ref,
+      kind: 'pr',
+      parentRef: prParent.get(pr.number) ?? null,
+      baseRef: base ? `pr:${base.number}` : null,
+      title: pr.title,
+      // An observation of it being open clears a stale terminal — a reopened PR
+      // corrects itself rather than being stuck on a guess.
+      status: merged ? 'merged' : 'open',
+      terminal: merged,
+      provenance: merged ? 'observed' : null,
+    });
+  }
+
+  for (const pr of input.world.closedPullRequests ?? []) {
+    const ref = `pr:${pr.number}`;
+    if (seen.has(ref)) continue; // in both lists: the open reading wins, it is fresher
+    seen.add(ref);
+    out.push({
+      ref,
+      kind: 'pr',
+      parentRef: prParent.get(pr.number) ?? null,
+      title: pr.title,
+      status: prState(pr),
+      terminal: true,
+      provenance: 'observed',
+    });
+  }
+
+  // A PR the graph knew as open and the world no longer mentions. Absence-means-
+  // merged stays the deliberate fallback it is everywhere else here — but it is
+  // recorded as an inference, and never overwrites something actually observed.
+  for (const [ref, prior] of priorPr) {
+    if (seen.has(ref) || prior.terminal) continue;
+    out.push({
+      ref,
+      kind: 'pr',
+      parentRef: prior.parentRef,
+      baseRef: prior.baseRef,
+      title: prior.title,
+      status: 'merged',
+      terminal: true,
+      provenance: 'inferred',
     });
   }
 

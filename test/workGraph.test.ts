@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
-import type { Issue, Plan, PlanPart, WorkNodeObservation, WorldSnapshot } from '../src/types.js';
+import type { Issue, Plan, PlanPart, PullRequest, WorkNode, WorkNodeObservation, WorldSnapshot } from '../src/types.js';
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
 
 function obs(over: Partial<WorkNodeObservation> & Pick<WorkNodeObservation, 'ref' | 'kind'>): WorkNodeObservation {
@@ -158,4 +158,144 @@ test('a retired part stays in the graph and is terminal', () => {
 test('the fold is idempotent — the same input twice produces the same output', () => {
   const args = input({ world: world({ issues: [issue()] }), plans: [plan()], parts: [part()] });
   assert.deepEqual(foldWorkGraph(args), foldWorkGraph(args));
+});
+
+function pr(over: Partial<PullRequest> = {}): PullRequest {
+  return {
+    id: 'p40',
+    number: 40,
+    title: 'PR #40',
+    branch: 'issue/12',
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    ...over,
+  };
+}
+
+test('a PR is parented to the issue whose branch it is on', () => {
+  const out = foldWorkGraph(input({ world: world({ issues: [issue()], pullRequests: [pr()] }) }));
+  assert.equal(node(out, 'pr:40').parentRef, 'issue:12');
+  assert.equal(node(out, 'pr:40').kind, 'pr');
+  assert.equal(node(out, 'pr:40').status, 'open');
+  assert.equal(node(out, 'pr:40').terminal, false);
+});
+
+test('a PR is parented to the plan part that produced it, in preference to the issue', () => {
+  const out = foldWorkGraph(
+    input({
+      world: world({ issues: [issue()], pullRequests: [pr({ number: 41, branch: 'issue/12/schema' })] }),
+      plans: [plan()],
+      parts: [part({ prNumber: 41, branch: 'issue/12/schema', status: 'in_review' })],
+    }),
+  );
+  assert.equal(node(out, 'pr:41').parentRef, 'issue:12:part:schema', 'work lineage, not the nearest ancestor');
+});
+
+test('a PR seen in the closed list is terminal, and says it was observed', () => {
+  const merged = foldWorkGraph(
+    input({ world: world({ issues: [issue()], closedPullRequests: [pr({ state: 'merged' })] }) }),
+  );
+  assert.equal(node(merged, 'pr:40').status, 'merged');
+  assert.equal(node(merged, 'pr:40').terminal, true);
+  assert.equal(node(merged, 'pr:40').provenance, 'observed');
+
+  const abandoned = foldWorkGraph(
+    input({ world: world({ issues: [issue()], closedPullRequests: [pr({ state: 'closed' })] }) }),
+  );
+  assert.equal(node(abandoned, 'pr:40').status, 'closed');
+  assert.equal(node(abandoned, 'pr:40').terminal, true);
+});
+
+test('a PR that was open and is now absent is inferred merged', () => {
+  const existing: WorkNode[] = [
+    {
+      ref: 'pr:40',
+      kind: 'pr',
+      parentRef: 'issue:12',
+      baseRef: null,
+      title: 'PR #40',
+      status: 'open',
+      terminal: false,
+      provenance: null,
+      firstSeenAt: '2026-07-28T09:00:00.000Z',
+      lastSeenAt: '2026-07-28T09:00:00.000Z',
+    },
+  ];
+  const out = foldWorkGraph(input({ world: world({ issues: [issue()] }), existing }));
+  assert.equal(node(out, 'pr:40').status, 'merged');
+  assert.equal(node(out, 'pr:40').terminal, true);
+  assert.equal(node(out, 'pr:40').provenance, 'inferred', 'absence-means-merged stays, but says so');
+});
+
+test('an observed terminal is never downgraded to an inference', () => {
+  const existing: WorkNode[] = [
+    {
+      ref: 'pr:40',
+      kind: 'pr',
+      parentRef: 'issue:12',
+      baseRef: null,
+      title: 'PR #40',
+      status: 'merged',
+      terminal: true,
+      provenance: 'observed',
+      firstSeenAt: '2026-07-28T09:00:00.000Z',
+      lastSeenAt: '2026-07-28T09:00:00.000Z',
+    },
+  ];
+  const out = foldWorkGraph(input({ world: world({ issues: [issue()] }), existing }));
+  assert.equal(
+    out.find((n) => n.ref === 'pr:40'),
+    undefined,
+    'nothing to say, so nothing is emitted',
+  );
+});
+
+test('a PR observed open again clears a stale terminal', () => {
+  const existing: WorkNode[] = [
+    {
+      ref: 'pr:40',
+      kind: 'pr',
+      parentRef: 'issue:12',
+      baseRef: null,
+      title: 'PR #40',
+      status: 'merged',
+      terminal: true,
+      provenance: 'inferred',
+      firstSeenAt: '2026-07-28T09:00:00.000Z',
+      lastSeenAt: '2026-07-28T09:00:00.000Z',
+    },
+  ];
+  const out = foldWorkGraph(input({ world: world({ issues: [issue()], pullRequests: [pr()] }), existing }));
+  assert.equal(node(out, 'pr:40').status, 'open');
+  assert.equal(node(out, 'pr:40').terminal, false);
+  assert.equal(node(out, 'pr:40').provenance, null);
+});
+
+test('a stacked PR records its base as a cross-link, not as its parent', () => {
+  const out = foldWorkGraph(
+    input({
+      world: world({
+        issues: [issue()],
+        pullRequests: [
+          pr({ number: 41, branch: 'issue/12/schema' }),
+          pr({ number: 42, branch: 'issue/12/api', baseBranch: 'issue/12/schema' }),
+        ],
+      }),
+      plans: [plan()],
+      parts: [
+        part({ prNumber: 41, branch: 'issue/12/schema', status: 'in_review' }),
+        part({
+          id: 'pl1:api',
+          slug: 'api',
+          seq: 2,
+          title: 'API',
+          prNumber: 42,
+          branch: 'issue/12/api',
+          status: 'in_review',
+        }),
+      ],
+    }),
+  );
+  assert.equal(node(out, 'pr:42').baseRef, 'pr:41', 'stacking is its own relation');
+  assert.equal(node(out, 'pr:42').parentRef, 'issue:12:part:api', 'and does not become the parent');
 });
