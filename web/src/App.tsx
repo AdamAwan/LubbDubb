@@ -419,6 +419,7 @@ export function App() {
             onToggleExclude={(prNumber, excluded) => api.setPrExcluded(prNumber, excluded).then(refresh)}
             onToggleIssueWatch={(issueNumber, watched) => api.setIssueWatched(issueNumber, watched).then(refresh)}
             onToggleStoryWatch={(storyId, watched) => api.setStoryWatched(storyId, watched).then(refresh)}
+            onSetConclusion={(issueNumber, verdict) => api.setIssueConclusion(issueNumber, verdict).then(refresh)}
           />
         </section>
 
@@ -499,6 +500,50 @@ function pickupChip(pickup: Issue['pickup']) {
   );
 }
 
+/**
+ * The per-issue conclusion chip: has anyone said this issue is finished?
+ *
+ * It draws for **`done` and `undeclared` alike**, and that is the point. The two
+ * look identical from the outside — a work item sitting in a review state — and
+ * the whole reason the harness now stops on silence is that it cannot tell them
+ * apart. So the chip is where the difference becomes visible: `undeclared` says
+ * nobody vouched for this, which is a prompt to look rather than a fault, and it
+ * draws unwarned for that reason.
+ *
+ * `more_work` renders nothing beyond the note: the pickup chip beside it already
+ * says what is happening to the item, and one home per fact.
+ */
+function conclusionChip(conclusion: Issue['conclusion']) {
+  if (!conclusion) return null;
+  const who =
+    conclusion.by === 'plan'
+      ? 'from its plan'
+      : conclusion.by === 'operator'
+        ? 'you said'
+        : conclusion.by === 'agent'
+          ? 'the agent said'
+          : '';
+  if (conclusion.verdict === 'done') {
+    return (
+      <span className="chip small" title={`${who}: ${conclusion.note}`}>
+        finished
+      </span>
+    );
+  }
+  if (conclusion.verdict === 'more_work') {
+    return (
+      <span className="chip small" title={`${who}: ${conclusion.note}`}>
+        work left
+      </span>
+    );
+  }
+  return (
+    <span className="chip small" title="Nobody has said whether this issue is finished — the harness is leaving it">
+      unconcluded
+    </span>
+  );
+}
+
 /** How each attention arm reads on the chip. `done`/`ignored` are omitted — see below. */
 const COURT_LABEL: Record<string, string> = {
   you: 'your turn',
@@ -547,11 +592,13 @@ function WorldSummary({
   onToggleExclude,
   onToggleIssueWatch,
   onToggleStoryWatch,
+  onSetConclusion,
 }: {
   state: AppState;
   onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
   onToggleIssueWatch: (issueNumber: number, watched: boolean) => Promise<unknown> | unknown;
   onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
+  onSetConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) => Promise<unknown> | unknown;
 }) {
   const [tab, setTab] = useState<WatchBucket>('watched');
   const { pullRequests, issues, stories } = state.world;
@@ -709,6 +756,7 @@ function WorldSummary({
               </span>
             )}
             {showPickupChip && pickupChip(i.pickup)}
+            {conclusionChip(i.conclusion)}
             {i.linkedPrNumber !== null && (
               <span
                 className={`chip small${linkLive ? '' : ' stale'}`}
@@ -735,6 +783,28 @@ function WorldSummary({
                 }
               >
                 {watched ? 'ignore' : 'watch'}
+              </AsyncButton>
+            )}
+            {i.state === 'open' && (
+              <AsyncButton
+                className="ghost world-toggle"
+                onClick={() => onSetConclusion(i.number, i.conclusion?.verdict === 'done' ? null : 'done')}
+                title={
+                  i.conclusion?.verdict === 'done'
+                    ? 'Withdraw "finished" — the issue goes back to whatever its agent or plan says'
+                    : 'Mark this issue finished, so the harness schedules nothing more for it'
+                }
+              >
+                {i.conclusion?.verdict === 'done' ? 'unfinish' : 'finished'}
+              </AsyncButton>
+            )}
+            {i.state === 'open' && i.conclusion?.verdict !== 'more_work' && (
+              <AsyncButton
+                className="ghost world-toggle"
+                onClick={() => onSetConclusion(i.number, 'more_work')}
+                title="Say there is work left here, so the harness picks it up again once no PR is open"
+              >
+                more work
               </AsyncButton>
             )}
           </div>

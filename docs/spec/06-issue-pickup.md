@@ -21,14 +21,14 @@ total — it never throws:
 
 The default differs by item type, and only the default differs:
 
-| Type    | Default          | Meaning                              |
-| ------- | ---------------- | -------------------------------------- |
-| PRs     | opt-**out**      | Worked unless explicitly `-ignore`d.  |
-| Issues  | opt-**in**       | Left alone unless explicitly `-watch`ed. |
-| Stories | opt-**in**       | Left alone unless explicitly `-watch`ed. |
+| Type    | Default     | Meaning                                  |
+| ------- | ----------- | ---------------------------------------- |
+| PRs     | opt-**out** | Worked unless explicitly `-ignore`d.     |
+| Issues  | opt-**in**  | Left alone unless explicitly `-watch`ed. |
+| Stories | opt-**in**  | Left alone unless explicitly `-watch`ed. |
 
 **There is no ingest filter.** Every open issue is fetched and displayed. The gate decides only what
-is *acted on*.
+is _acted on_.
 
 Where each gate lives:
 
@@ -47,15 +47,15 @@ mutually exclusive. These are **label writes, not dispatcher actions**.
 
 Assembled once in `src/system.ts` from config and handed to whichever dispatcher is selected:
 
-| Field             | From config                    | Effect                                                                                 |
-| ----------------- | ------------------------------ | ---------------------------------------------------------------------------------------- |
-| `watchLabel`      | derived from `labelPrefix`     | Opt-in gate. Empty = gate off.                                                          |
-| `ignoreLabel`     | derived from `labelPrefix`     | Explicit exclusion. Empty = gate off.                                                   |
-| `requireOwnLabel` | `issuePickupRequireOwnLabel`   | Read `labelsAddedByViewer` instead of `labels` for the watch check.                     |
-| `priorityLabels`  | `issuePriorityLabels`          | Label → weight.                                                                         |
-| `defaultPriority` | `issueDefaultPriority`         | Weight when no label matches.                                                           |
-| `pickupStates`    | `issuePickupStates`            | Allowed provider-native workflow states.                                                |
-| `inReviewState`   | `issueInReviewState`           | The state rule 3b parks an item in.                                                     |
+| Field             | From config                  | Effect                                                              |
+| ----------------- | ---------------------------- | ------------------------------------------------------------------- |
+| `watchLabel`      | derived from `labelPrefix`   | Opt-in gate. Empty = gate off.                                      |
+| `ignoreLabel`     | derived from `labelPrefix`   | Explicit exclusion. Empty = gate off.                               |
+| `requireOwnLabel` | `issuePickupRequireOwnLabel` | Read `labelsAddedByViewer` instead of `labels` for the watch check. |
+| `priorityLabels`  | `issuePriorityLabels`        | Label → weight.                                                     |
+| `defaultPriority` | `issueDefaultPriority`       | Weight when no label matches.                                       |
+| `pickupStates`    | `issuePickupStates`          | Allowed provider-native workflow states.                            |
+| `inReviewState`   | `issueInReviewState`         | The state rule 3b parks an item in.                                 |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
@@ -63,7 +63,7 @@ act-on-everything behaviour unit tests rely on.
 ## Intrinsic eligibility
 
 `isIssuePickupEligible(issue, policy)` returns `{eligible, reasons}` — pure over the issue and the
-policy alone, and it collects *every* blocking reason rather than short-circuiting, so the cockpit can
+policy alone, and it collects _every_ blocking reason rather than short-circuiting, so the cockpit can
 explain an untouched item:
 
 1. **Ignore** — `ignored ("<label>")`. Wins over everything else.
@@ -111,18 +111,18 @@ checked in the same order rule 4 applies them, so it predicts what happens next 
 guessing. `buildStateSnapshot` attaches it to each issue as `pickup`, and the cockpit renders it as a
 chip.
 
-| Status      | Meaning                                                                         |
-| ----------- | --------------------------------------------------------------------------------- |
-| `done`      | Closed.                                                                          |
-| `planning`  | In the plan funnel — a verdict is owed, or the issue split into parts.            |
-| `has_pr`    | An open PR resolves it; the PR rules own it now.                                  |
-| `active`    | A task on this origin is queued / running / waiting on you.                       |
-| `ignored`   | Carries the explicit ignore tag.                                                  |
-| `unwatched` | Not opted in, or parked by the state gate.                                        |
-| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                              |
-| `escalated` | Attempt cap spent; parked on a human.                                             |
-| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                           |
-| `eligible`  | Would be picked up next cycle.                                                    |
+| Status      | Meaning                                                                |
+| ----------- | ---------------------------------------------------------------------- |
+| `done`      | Closed.                                                                |
+| `planning`  | In the plan funnel — a verdict is owed, or the issue split into parts. |
+| `has_pr`    | An open PR resolves it; the PR rules own it now.                       |
+| `active`    | A task on this origin is queued / running / waiting on you.            |
+| `ignored`   | Carries the explicit ignore tag.                                       |
+| `unwatched` | Not opted in, or parked by the state gate.                             |
+| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                   |
+| `escalated` | Attempt cap spent; parked on a human.                                  |
+| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                |
+| `eligible`  | Would be picked up next cycle.                                         |
 
 The `parts` arm is answered **before** the open-PR gate, and it has to be: a part's PR is on
 `issue/<n>/<slug>`, but `linkedPrNumber` is sticky and will point at one, so the PR gate would report
@@ -148,3 +148,53 @@ An issue is picked up when:
 It dispatches a **code** agent on branch `issue/<n>` with origin `issue:<n>`, prompted from the
 `issue-pickup` template. On an `escalate` verdict it emits `escalate_to_human` from the
 `issue-pickup-escalation` template instead.
+
+## Concluding an issue
+
+A work item parked in `inReviewState` is ambiguous: it sits there when work remains **and** when
+everything is delivered and it is waiting on test. No provider field distinguishes the two, so the
+harness keeps its own record of whether an issue is finished.
+
+`resolveIssueConclusion(stored, plan)` (`src/issueConclusion.ts`, pure) folds one verdict —
+`done` | `more_work` | `undeclared` — with this precedence:
+
+1. **The operator's toggle** (`POST /api/issues/:number/conclusion`), which wins over everything,
+   including a plan roll-up.
+2. **The agent's declaration**, via the `conclude_work` tool.
+3. **Derived from the plan**: `complete` → `done`, `active`/`awaiting_approval` → `more_work`.
+   `single`, `planning` and `abandoned` derive nothing — a `single` verdict describes the delivery's
+   _shape_, not whether it has happened.
+4. Otherwise `undeclared`.
+
+**`undeclared` is a distinct answer, not a synonym for `more_work`.** It is what a missing row
+resolves to, it is never stored, and rule 3b acts only on an explicit `more_work` — so an issue
+nobody has vouched for stays parked and is surfaced rather than re-picked. Folding the two would
+re-open the failure this exists to close: a merged PR leaves the open list, `openPrForIssue` cannot
+tell that from "there was never a PR", and the item would bounce back to a pickup state for rule 4 to
+put a fresh agent on work already on the default branch.
+
+Only a **whole-issue origin** may declare (`conclusionOrigin`). `issue:<n>:part:<slug>`,
+`issue:<n>:plan`, `pr:<n>:*`, `story:*` and `job:<id>` are refused, each with its own reason. That is
+the structural half of _"done" means the issue is finished, not my slice of it_: a part agent has no
+verdict to cast, because the plan roll-up already speaks for the issue.
+
+Storage is the `issue_conclusions` table, keyed on the `issue:<n>` origin — one row per issue,
+overwritten per declaration, and deliberately **not** hung off an agent row the way a `note_progress`
+note is: a conclusion belongs to the issue and outlives every agent that touched it, including across
+a replan. Clearing is a delete, so `undeclared` has exactly one representation.
+
+**Nothing gates pickup on it.** `buildStateSnapshot` ships it per issue as `conclusion`, beside
+`pickup`, and the cockpit draws a chip and a toggle; the only consumer that acts is rule 3b (see
+[the dispatcher spec](05-dispatcher.md)). Gating pickup directly would make a `done` verdict silently
+veto an item the operator had deliberately moved back to a pickup state — the work-item state stays
+the source of truth for pickup, which is also why moving the ticket in the tracker _is_ the override
+and no signal-based expiry is needed.
+
+A `more_work` verdict cast **by an agent** is appended to the next dispatched agent's prompt for that
+issue (`outstandingWorkNote`), attributed and quoted so it does not read as the harness's own
+instruction. Appended rather than filled into a template placeholder, for the reason a rejected
+proposal's note is: an operator override omitting a new token would silently drop it.
+
+Consequence worth knowing: on a provider with no work-item state machine (GitHub, the fake) a
+conclusion is recorded and displayed but changes no dispatch — there is no review state to be parked
+in, so there is no bounce-back to suppress.

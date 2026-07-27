@@ -169,6 +169,24 @@ class DemoServer {
     return { ok: true, excluded };
   }
 
+  /**
+   * Set or clear an issue's conclusion — the demo mirror of the operator override.
+   * Purely local, as on the server: concluding an issue records the harness's own
+   * view and never touches the tracker.
+   */
+  async setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      issue.conclusion =
+        verdict === null
+          ? { verdict: 'undeclared', by: null, note: '', at: null }
+          : { verdict, by: 'operator', note: 'Set by the operator from the cockpit.', at: new Date().toISOString() };
+      this.addDecision('issue_conclusion_set', 'ok', `issue #${issueNumber} → ${verdict ?? 'unconcluded'}`);
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   /** Toggle an issue's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
   async setIssueWatched(issueNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
@@ -751,6 +769,8 @@ export const demoApi = {
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
+  setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
+    getServer().setIssueConclusion(issueNumber, verdict),
   setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
   replan: (planId: string) => getServer().replan(planId),
   reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),

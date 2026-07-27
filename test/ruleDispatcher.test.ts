@@ -999,29 +999,83 @@ test('in-review back-off is off unless both pickupStates and inReviewState are s
   assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
 });
 
-test('return-from-review: an item parked in review whose PR merged goes back to the first pickup state', async () => {
+/** An issue parked in review whose PR has left the open list — the merged-PR case. */
+function reviewedIssue(number: number, prNumber: number): Partial<WorldSnapshot> {
+  return {
+    issues: [
+      {
+        id: `i${number}`,
+        number,
+        title: 'delivered?',
+        body: '',
+        labels: [],
+        state: 'open',
+        workItemState: 'In Review',
+        linkedPrNumber: prNumber,
+      },
+    ],
+    pullRequests: [], // the PR merged, so it has dropped out of the active list
+  };
+}
+
+/** A standing conclusion for `issue:<n>`, as the store would hand it to the dispatcher. */
+function conclusion(number: number, verdict: 'done' | 'more_work', by: 'agent' | 'operator' = 'agent') {
+  return {
+    originRef: `issue:${number}`,
+    verdict,
+    note: 'n',
+    by,
+    agentId: null,
+    taskId: null,
+    createdAt: 'now',
+    updatedAt: 'now',
+  };
+}
+
+// The bug this feature exists for: a merged PR used to bounce its work item back
+// to "Ready" and rule 4 put a fresh agent on work already on the default branch.
+// `openPrForIssue` cannot tell "merged" from "never existed" — both are absence —
+// so the absence itself must not release the item.
+test('return-from-review: an undeclared item whose PR merged stays parked in review', async () => {
   const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
-  const { actions } = await d.decide(
-    ctx({
-      issues: [
-        {
-          id: 'i1',
-          number: 9,
-          title: 'more to do',
-          body: '',
-          labels: [],
-          state: 'open',
-          workItemState: 'In Review',
-          linkedPrNumber: 94,
-        },
-      ],
-      pullRequests: [], // #94 merged, so it has dropped out of the active list
-    }),
+  const { actions } = await d.decide(ctx(reviewedIssue(9, 94)));
+  assert.ok(
+    !actions.some((a) => a.type === 'set_work_item_state'),
+    'nobody said there is more to do, so the item is left for a human rather than re-picked',
   );
+});
+
+test('return-from-review: a concluded-done item stays parked in review', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'done')] }));
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+test('return-from-review: a more_work verdict moves the item back to the first pickup state', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work')] }));
   const transition = actions.find((a) => a.type === 'set_work_item_state');
-  assert.ok(transition, 'the item is moved back into pickup rather than parked forever');
+  assert.ok(transition, 'the agent said work is outstanding, so the item returns to pickup');
   assert.equal((transition as { number: number }).number, 9);
   assert.equal((transition as { state: string }).state, 'Ready');
+});
+
+test("return-from-review: an operator's more_work verdict moves it back too", async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(
+    ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work', 'operator')] }),
+  );
+  const transition = actions.find((a) => a.type === 'set_work_item_state');
+  assert.ok(transition);
+  assert.match((transition as { reason: string }).reason, /you reported work outstanding/);
+});
+
+// A conclusion is keyed on the issue origin, so a verdict on one issue must not
+// release another — the same property every origin-keyed gate here relies on.
+test('return-from-review: a verdict on another issue does not release this one', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inReviewState: 'In Review' });
+  const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(11, 'more_work')] }));
+  assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
 });
 
 test('return-from-review: an item whose PR is still open stays in review', async () => {

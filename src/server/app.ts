@@ -11,6 +11,7 @@ import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
+import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
@@ -327,6 +328,46 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
     }
+  });
+
+  // Set (or clear) an issue's conclusion by hand — the operator's override of what
+  // the agent that worked it said, and of what its plan derives.
+  //
+  // It writes the *harness's* record, not the tracker: nothing here moves the work
+  // item, because concluding an issue in the harness's own view is what stops the
+  // re-pickup, while the tracker transition to a done state stays a human act (in
+  // the workflow this was built for, a finished item is still waiting on test).
+  // Rule 3b then reads the verdict on the next cycle, which is why `more_work`
+  // runs one immediately — the operator's "no, there's more here" should bounce
+  // the item back to pickup now rather than on the next heartbeat.
+  app.post('/api/issues/:number/conclusion', async (req, reply) => {
+    const { number } = req.params as { number: string };
+    const issueNumber = Number(number);
+    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
+    const { verdict, note } = (req.body ?? {}) as { verdict?: unknown; note?: unknown };
+    const originRef = issueConclusionOrigin(issueNumber);
+    // null clears, returning the issue to whatever its plan derives (or to
+    // undeclared) — a delete rather than a third stored verdict, so there is only
+    // ever one way to express "nobody has decided this".
+    if (verdict === null) {
+      store.clearIssueConclusion(originRef);
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, verdict: null };
+    }
+    if (verdict !== 'done' && verdict !== 'more_work') {
+      return reply.code(400).send({ error: 'verdict must be "done", "more_work" or null' });
+    }
+    const conclusion = store.recordIssueConclusion({
+      originRef,
+      verdict,
+      // An operator toggling from the cockpit has the row itself as context, so
+      // unlike the tool a note is optional here; the default says who decided.
+      note: typeof note === 'string' && note.trim() ? note.trim() : 'Set by the operator from the cockpit.',
+      by: 'operator',
+    });
+    hub.broadcast({ type: 'world:changed' });
+    if (verdict === 'more_work') await harness.runCycle('manual');
+    return { ok: true, conclusion };
   });
 
   // Toggle a story's watch/ignore state — same opt-in model as issues. Stories are
@@ -864,6 +905,9 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // and the snapshot itself, so the chip and the panel can't disagree.
   const plans = store.listPlans();
   const planParts = store.listAllPlanParts();
+  // Standing "is this issue finished" verdicts, keyed on the issue origin — the
+  // same rows rule 3b reads, so the chip and the rule can't disagree.
+  const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
   // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
   // below predicts what actually happens next cycle. The decision window (200)
   // and the headroom arithmetic mirror `Harness.runCycle`.
@@ -966,7 +1010,21 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
         health: prHealth(pr, world.pullRequests),
         attention: prAttentionStatus(pr, attentionCtx),
       })),
-      issues: world.issues.map((issue) => ({ ...issue, pickup: issuePickupStatus(issue, pickupCtx) })),
+      // `conclusion` sits beside `pickup` and does not feed it — the same
+      // relationship `attention` has to `health` above. Pickup answers "would an
+      // agent start on this next cycle", which the work-item state already
+      // decides; conclusion answers "has anyone said this is finished", which is
+      // what rule 3b reads and what the operator toggles. Folding the second into
+      // the first would make a `done` verdict silently veto an item the operator
+      // had deliberately moved back to a pickup state.
+      issues: world.issues.map((issue) => ({
+        ...issue,
+        pickup: issuePickupStatus(issue, pickupCtx),
+        conclusion: resolveIssueConclusion(
+          conclusions.get(issueConclusionOrigin(issue.number)) ?? null,
+          plans.find((p) => p.originRef === issueConclusionOrigin(issue.number)) ?? null,
+        ),
+      })),
     },
     // The plan graph, which until now existed only in the database: the per-issue
     // chip could say "2/5 parts merged" and nothing could say *which* five. The

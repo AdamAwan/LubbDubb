@@ -22,6 +22,7 @@ import {
   replyProposalRef,
 } from '../proposals/proposals.js';
 import { releasePlan } from '../plans/planApproval.js';
+import { outstandingWorkNote } from '../mcp/conclusion.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
 interface ExecutorDeps {
@@ -473,7 +474,14 @@ export class ActionExecutor {
   ): Promise<{ task: Task; cwd: string }> {
     const { store } = this.deps;
     const guidance = rejectionGuidance(action.originRef, store.listProposals());
-    const prompt = guidance ? `${action.prompt}\n\n${guidance}` : action.prompt;
+    // What the last agent on this issue said was left. Appended for the same
+    // reason the rejection note is — a `{outstanding}` placeholder would be
+    // dropped silently by any operator template override that omitted it — and
+    // only on an exact origin match: a `more_work` verdict is about *this* issue,
+    // and putting it in front of an agent dispatched for anything else would be
+    // the same widening mistake as showing a merge refusal to a CI-fix agent.
+    const outstanding = outstandingForOrigin(action.originRef, store);
+    const prompt = [action.prompt, guidance, outstanding].filter(Boolean).join('\n\n');
     if (action.type === 'dispatch_code_agent') {
       const task = store.createTask({
         kind: 'code',
@@ -504,6 +512,24 @@ export class ActionExecutor {
     mkdirSync(cwd, { recursive: true });
     return { task, cwd };
   }
+}
+
+/**
+ * The previous agent's "there is more to do here" note, for an issue being
+ * dispatched again — or null when there is none to carry.
+ *
+ * Only ever the **agent's own** verdict, and only `more_work`. A `done` verdict
+ * reaching a dispatched agent would be nonsense (nothing should have dispatched),
+ * and an *operator's* `more_work` toggle deliberately carries no note into the
+ * prompt: the operator has the cockpit, the tracker and the job queue to say what
+ * they want done, whereas this channel exists because an agent has nowhere else
+ * to leave a handover.
+ */
+function outstandingForOrigin(originRef: string | null | undefined, store: Store): string | null {
+  if (!originRef) return null;
+  const stored = store.getIssueConclusion(originRef);
+  if (!stored || stored.verdict !== 'more_work' || stored.by !== 'agent') return null;
+  return outstandingWorkNote(stored.note, stored.updatedAt);
 }
 
 /**
