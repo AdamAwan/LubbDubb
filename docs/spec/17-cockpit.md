@@ -118,6 +118,15 @@ of Classic's markup (`test/fixtures/classic-markup.html`, regenerate with `UPDAT
 golden fixes the static tree only — not effects, not CSS — and its value is forward-looking: a
 change to Classic's DOM has to be deliberate enough to regenerate it.
 
+The golden render is wrapped in a **clock, locale and timezone pin**. The clock is obvious
+(`buildDemoState` stamps relative to `Date.now()`), the other two less so: `UsageChip` formats the
+rate-limit reset with `toLocaleTimeString([])`, i.e. the _runtime's_ locale and zone, so the same
+instant is `14:20` on one machine and `02:20 PM` on another and the golden silently records whichever
+laptop generated it. It did — the test was red on the Linux runner from the day it landed while
+passing locally. The formatters are pinned rather than the component changed, because which clock
+format an operator sees is correctly their machine's business; it is only the golden that needs it to
+be nobody's. An assertion beside the comparison fails if the pin ever stops taking effect.
+
 `test/factorySkin.test.ts` covers that skin's pure vocabulary exhaustively (every `QueueItem.status`
 has a crate label; only `waiting` reads as jammed) plus the two renders where being wrong would be
 worse than being absent: the belt stopping, and the gate tracking the cut.
