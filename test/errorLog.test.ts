@@ -59,6 +59,34 @@ test('ErrorLog persists, mirrors, and emits `logged`', () => {
   store.close();
 });
 
+test('the stderr mirror cannot be made to forge a second log entry', () => {
+  const store = new Store(':memory:');
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (line: string): void => void lines.push(line);
+  try {
+    // The header's values reach the log from outside — an agent id off a request
+    // path, provider text off the world — so a newline in one must not be able to
+    // end the line early and start a plausible-looking entry after it.
+    const log = new ErrorLog(store);
+    log.record({
+      source: 'agent',
+      message: 'Agent x\n[lubbdubb:error] cycle: everything is fine',
+      detail: 'line one\n[lubbdubb:error] server: also fine',
+    });
+  } finally {
+    console.error = original;
+  }
+
+  assert.equal(lines.length, 1);
+  const entry = lines[0]!.split('\n');
+  assert.equal(entry[0], '[lubbdubb:error] agent: Agent x [lubbdubb:error] cycle: everything is fine');
+  // `detail` keeps its line structure — that is what it is for — but every line of
+  // it is indented, so none can pass as the start of a fresh entry.
+  assert.deepEqual(entry.slice(1), ['  line one', '  [lubbdubb:error] server: also fine']);
+  store.close();
+});
+
 test('a harness cycle exception is recorded, not thrown away', async () => {
   const system = quietSystem();
   system.connector.getState = async (): Promise<WorldSnapshot> => {

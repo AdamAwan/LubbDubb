@@ -524,6 +524,15 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   swallowed `catch`es; route them here. The event is named `logged`, not `error` — an
   unlistened `error` event throws, and recording a failure must never throw. Tests silence
   the stderr mirror with `buildSystem(config, { errorMirror: () => {} })`.
+  **The stderr mirror sanitises, and only the mirror does.** It writes one line per entry, so
+  a newline in a value could end that line early and forge a second `[lubbdubb:error]` one —
+  and both halves of the header arrive from outside (an agent id off a request path, provider
+  and exception text off the world). `oneLine` flattens the header, which costs nothing since
+  a `message` is a sentence by contract; `detail` is deliberately multi-line, so it is
+  **indented** rather than flattened — keeping the shape it exists for while making a forged
+  header visibly a continuation. The **stored** entry keeps its exact text: the store is
+  structured rows, not a line-oriented stream, and the cockpit renders it as DOM text, where a
+  newline forges nothing.
 - **`src/git/` is the git-shell-out corner.** `gitCli.ts` holds the two primitives
   everything else uses: `runGit(repoRoot, args)` (one place where `cwd: repoRoot` lives) and
   `resolveCommit(repoRoot, ref)`, which resolves a branch name to a **SHA** preferring
