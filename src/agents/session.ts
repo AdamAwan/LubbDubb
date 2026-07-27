@@ -8,8 +8,21 @@ import type { EventEmitter } from 'node:events';
  *     unattended default: no TUI, structured events, bidirectional streaming.
  *
  * Both emit: 'output'(delta), 'waiting'(reason), 'done'(), 'failed'(),
- * 'status'(status), 'exit'(code), and 'flag'(ParsedFlag) whenever the agent
- * surfaces an artifact/link via the flag sentinel. The stream runtime
+ * 'status'(status), 'exit'(code), 'activity'() each time the agent makes a tool
+ * call, and 'flag'(ParsedFlag) whenever the agent surfaces an artifact/link via
+ * the flag sentinel.
+ *
+ * `activity` exists because parking is only ever a *request*: the `escalate` tool
+ * returns at once, so an agent that keeps working leaves the harness saying
+ * `waiting`. It is the runtime's own statement that the agent did something, and
+ * it must be emitted only from a source that knows the text is model-produced —
+ * which is why it is not simply derived from `output`. A PTY session's raw screen
+ * is TUI repainting, not the agent continuing (the same reason the sentinel park
+ * is latched in `PtySession`), so PTY emits this only off its session file. It is
+ * narrowed to *tool calls* rather than any block: prose after an escalation is
+ * usually the agent explaining that it is waiting.
+ *
+ * The stream runtime
  * additionally emits 'usage'(AgentUsage) at each turn end — cumulative
  * cost/tokens/turns off the `result` event; the PTY runtime has no such channel
  * and never emits it. A legible PTY session (agentMode 'pty') may also emit

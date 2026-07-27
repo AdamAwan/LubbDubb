@@ -85,6 +85,10 @@ export class Hub {
     // Usage lands on the agent row at turn end; a coarse dirty repaints the
     // fleet cards' cost/tokens without a dedicated frame type.
     agents.on('usage', () => this.broadcast({ type: 'dirty' }));
+    // A parked agent was seen working anyway, so its open alert is probably stale.
+    // Same treatment again: `resumedAt` is on the agent row the refetch brings, and
+    // the cockpit derives the staleness itself rather than being told twice.
+    agents.on('resumed', () => this.broadcast({ type: 'dirty' }));
     agents.on('status', (e) => {
       this.broadcast({ type: 'agent:status', ...e });
       this.broadcast({ type: 'dirty' });

@@ -143,6 +143,9 @@ export function App() {
   // so a decision-bearing card offers accept/reject instead of a text box — free
   // text is exactly what the harness could never act on (issue #109).
   const proposalFor = new Map((state.proposals ?? []).map((p) => [p.escalationId ?? '', p]));
+  // An inbox item's staleness is derived here rather than shipped: `resumedAt` is
+  // already on the agent row, and the join is the escalation's own `agentId`.
+  const agentById = new Map(state.agents.map((a) => [a.id, a]));
   // Findings awaiting an operator's call — the count on the panel heading. A
   // finding never expires into work on its own, so this is the only nudge there is.
   const openFindings = (state.findings ?? []).filter((f) => f.status === 'open').length;
@@ -298,6 +301,7 @@ export function App() {
               key={e.id}
               escalation={e}
               proposal={proposalFor.get(e.id)}
+              resumedAt={e.agentId ? (agentById.get(e.agentId)?.resumedAt ?? null) : null}
               now={now}
               refUrls={state.refUrls}
               onAnswer={(text) => api.answerEscalation(e.id, text).then(refresh)}
@@ -305,6 +309,7 @@ export function App() {
                 (verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)).then(refresh)
               }
               onPermission={(id, allow, note) => api.decidePermission(id, allow, note).then(refresh)}
+              onDismiss={(id, note) => api.dismissEscalation(id, note).then(refresh)}
               onOpenAgent={(id) => setSelected(id)}
             />
           ))}

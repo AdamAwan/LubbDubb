@@ -372,6 +372,7 @@ export function buildDemoState(): DemoSeed {
         numTurns: 3,
         note: 'Reworking the policy-evaluation fold so a superseded push stops poisoning CI status',
         notedAt: ago(3),
+        resumedAt: null,
       },
       {
         id: 'agent-a2',
@@ -388,6 +389,9 @@ export function buildDemoState(): DemoSeed {
         numTurns: 2,
         note: 'Rebasing onto main — three files conflict, working through them in order',
         notedAt: ago(9),
+        // Asked, then carried on regardless: the demo's one stale alert, so the
+        // "agent resumed" chip and Dismiss have something to act on.
+        resumedAt: ago(2),
       },
       {
         id: 'agent-a0',
@@ -405,6 +409,7 @@ export function buildDemoState(): DemoSeed {
         // A finished agent keeps its last note: the one-line summary of the run.
         note: 'Suite green, PR opened',
         notedAt: ago(22),
+        resumedAt: null,
       },
     ],
     // The act behind the drafted-reply escalation below (issue #109). It is what

@@ -48,7 +48,22 @@ export function AgentCard({
           </span>
         )}
       </div>
-      {agent.waitingReason && <div className="waiting-reason">⏳ {agent.waitingReason}</div>}
+      {agent.waitingReason && (
+        <div className="waiting-reason">
+          ⏳ {agent.waitingReason}
+          {/*
+            Parking is a request, not a stop: the `escalate` tool returns at once, so
+            an agent that kept calling tools is working while this card says waiting.
+            Said here rather than resolved, because only the reader knows whether the
+            question still matters — the Dismiss button is the other half.
+          */}
+          {agent.resumedAt && (
+            <span className="chip small ok" title={`Last tool call ${relTime(agent.resumedAt, now)}`}>
+              working anyway
+            </span>
+          )}
+        </div>
+      )}
       <FlagChips flags={flags} artifactUrls={artifactUrls} />
       {/*
         The agent's own account of what it is doing, and beneath it the raw output

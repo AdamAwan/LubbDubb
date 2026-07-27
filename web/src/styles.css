@@ -657,6 +657,17 @@ body {
   margin: 8px 0;
 }
 
+/* Clearing an item without answering it. Set apart below the real action rather
+   than beside it: dismissing is the way out, not one of the answers. */
+.esc-dismiss {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
 /* An item that needs a verdict rather than an answer: the note is optional and
    sits beside the two buttons, so the act is one click away either way. */
 .esc-decide {

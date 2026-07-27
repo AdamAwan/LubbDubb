@@ -6,22 +6,34 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 export function EscalationCard({
   escalation,
   proposal,
+  resumedAt,
   now,
   refUrls,
   onAnswer,
   onDecide,
   onPermission,
+  onDismiss,
   onOpenAgent,
 }: {
   escalation: Escalation;
   /** The act this item asks you to authorize, when it is a decision and not a question. */
   proposal?: Proposal;
+  /**
+   * When the agent that raised this was last seen working *after* it parked, if it
+   * was. Parking is only a request — the `escalate` tool returns at once — so an
+   * agent that carried on leaves this question standing with nobody waiting on it.
+   * Shown as a chip rather than clearing the item: the harness can see that the
+   * agent moved on, not that the question stopped mattering.
+   */
+  resumedAt?: string | null;
   now?: number;
   refUrls: Record<string, string>;
   onAnswer: (text: string) => Promise<unknown> | unknown;
   onDecide?: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
   /** Allow or deny a permission request an agent is blocked on (issue #130). */
   onPermission?: (id: string, allow: boolean, note?: string) => Promise<unknown> | unknown;
+  /** Clear the item without answering it — the note rides along and is recorded. */
+  onDismiss?: (id: string, note?: string) => Promise<unknown> | unknown;
   /** Open the originating agent's drawer for the full transcript. */
   onOpenAgent?: (agentId: string) => void;
 }) {
@@ -41,6 +53,9 @@ export function EscalationCard({
   // whole reason the proposal exists — so the text box is replaced rather than
   // supplemented: the note rides *with* the verdict instead of standing in for it.
   const decidable = proposal?.status === 'pending' && onDecide ? proposal : null;
+  // Only meaningful if the agent moved on *after* asking; a stamp from an earlier
+  // park would call a brand-new question stale.
+  const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
 
   return (
     <div className="card escalation">
@@ -54,6 +69,14 @@ export function EscalationCard({
         {permission && (
           <span className="chip small warn" title="An agent is blocked on this command until you allow or deny it">
             wants permission
+          </span>
+        )}
+        {resumed && (
+          <span
+            className="chip small ok"
+            title={`The agent has made tool calls since asking (last ${relTime(resumedAt!, now)}), so it carried on rather than waiting. Probably safe to dismiss.`}
+          >
+            agent resumed
           </span>
         )}
         {signal && <span className="chip small">{signal}</span>}
@@ -165,9 +188,36 @@ export function EscalationCard({
           </SubmitButton>
         </form>
       )}
+
+      {onDismiss && (
+        <div className="esc-dismiss">
+          <AsyncButton
+            className="ghost small"
+            title={DISMISS_HINT[decidable ? 'proposal' : permission ? 'permission' : 'question']}
+            onClick={() => onDismiss(escalation.id, text.trim() || undefined)}
+          >
+            {decidable ? 'Dismiss (rejects)' : permission ? 'Dismiss (denies)' : 'Dismiss'}
+          </AsyncButton>
+          {resumed && <span className="muted small">the agent moved on without this</span>}
+        </div>
+      )}
     </div>
   );
 }
+
+/**
+ * Why the button says something different on the two kinds that carry a verdict.
+ * Dismissing has to mean one thing everywhere — nothing goes out, nobody is left
+ * blocked — and for those two that costs a real decision: a permission request has
+ * an agent stopped inside a tool call and a proposal has a rule held off a PR, so
+ * simply dropping the row would strand one and wedge the other. Each is routed to
+ * its own "no" instead, and the label says so before it is pressed.
+ */
+const DISMISS_HINT: Record<string, string> = {
+  question: 'Clear this from "Needs you" without sending the agent anything',
+  permission: 'Clear this by denying the command — the agent is told and carries on',
+  proposal: 'Clear this by rejecting the proposal — nothing goes out',
+};
 
 /**
  * What each verdict does, per kind. Spelled out because they differ in a way the

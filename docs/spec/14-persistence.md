@@ -29,7 +29,7 @@ Current entries:
 | Table       | Columns added                                                                    |
 | ----------- | -------------------------------------------------------------------------------- |
 | `tasks`     | `origin_title`, `origin_summary`, `dispatch_reason`                              |
-| `agents`    | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at` |
+| `agents`    | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
 | `decisions` | `rule`                                                                           |
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its

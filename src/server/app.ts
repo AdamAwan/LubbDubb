@@ -523,6 +523,47 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     }
   });
 
+  // Clear an alert without answering it. The gap this closes: an item raised
+  // because an agent parked stays in "Needs you" even once the thing was handled
+  // outside the harness, and the only way to empty it was to type a message nobody
+  // wanted sent — least of all the agent, which has to interpret it.
+  //
+  // Available on *every* item, which means the two kinds that carry a verdict can't
+  // simply be cleared: a permission request has an agent blocked inside a tool call
+  // and a proposal has a rule held off a PR, so dropping the inbox row alone would
+  // wedge one and strand the other. Each is routed to its own "no" instead — the
+  // same call its Deny/Reject button makes — so "dismiss" means the same thing
+  // everywhere (nothing goes out, nobody is left blocked) without a special case
+  // that quietly does less than it says.
+  app.post('/api/escalations/:id/dismiss', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { note } = (req.body ?? {}) as { note?: unknown };
+    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
+    const reason = typeof note === 'string' && note.trim() ? note.trim() : undefined;
+
+    const pending = store.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
+    if (pending) {
+      const result = proposals.reject(pending.id, reason);
+      if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, dismissedAs: 'proposal_rejected', proposal: result.proposal };
+    }
+
+    const item = store.getEscalation(id);
+    if (item?.context?.permission && permissions.decide(id, false, reason)) {
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, dismissedAs: 'permission_denied' };
+    }
+
+    try {
+      const escalation = escalations.dismiss(id, reason);
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, dismissedAs: 'cleared', escalation };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
   // Allow or deny a permission request an agent is blocked on (issue #130 phase B).
   // Resolves the blocked `--permission-prompt-tool` call with the operator's verdict
   // and settles the inbox item — the same live agent then continues (allow) or gets

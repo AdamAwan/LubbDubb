@@ -18,8 +18,20 @@ interface AgentSession extends EventEmitter {
 ```
 
 Events, emitted by both: `output(delta)`, `waiting(reason)`, `done()`, `failed()`, `status(status)`,
-`exit(code)`, `flag(ParsedFlag)`. The stream runtime additionally emits `usage(AgentUsage)` at each
-turn end; the PTY runtime has no such channel and never emits it.
+`exit(code)`, `activity()`, `flag(ParsedFlag)`. The stream runtime additionally emits
+`usage(AgentUsage)` at each turn end; the PTY runtime has no such channel and never emits it.
+
+`activity` is the runtime's own statement that the agent **did** something — one per message carrying
+a tool call. It exists because parking is only ever a *request*: the `escalate` tool returns at once,
+so an agent that carries on leaves the harness saying `waiting` against an alert nobody is waiting on.
+Two properties are load-bearing:
+
+- **It is not derived from `output`**, because only the runtime knows whether its own output is
+  model-produced. Stream emits it off `tool_use` blocks; PTY emits it **only** from the session file
+  (`SessionTranscriptUpdate.toolUses`), never from `handleData` — the screen repaints while a session
+  sits parked, which is the same reason the sentinel park is latched there.
+- **It is narrowed to tool calls, not any block.** Prose after an escalation is usually the agent
+  explaining that it is waiting, and reading that as work would mark alerts stale that need answering.
 
 `SessionFactory` builds one from an `AgentSessionSpec` (`command`, `args`, `cwd`, `env`,
 `waitingPatterns`, `sessionId`, `resume`). The composition root picks the factory from `agentMode`.
@@ -287,7 +299,7 @@ in `starting`.
 ### Events emitted
 
 `output`, `waiting`, `autoAnswered`, `done`, `reaped`, `status`, `usage`, `flag`, `finding`,
-`progress`, `files` — all typed via `emit`/`on` overrides.
+`progress`, `files`, `resumed` — all typed via `emit`/`on` overrides.
 
 ### Waiting
 
@@ -307,6 +319,24 @@ the `escalate` MCP tool and the WAITING sentinel:
 `src/system.ts` listens for `waiting` and creates the escalation, idempotently per agent (an agent has
 at most one open escalation), enriched with the task title, the origin ref, a tail of recent output,
 and — when the park came through the tool — the answer `options` and `detail`.
+
+### Resumed while parked
+
+`noteResumed` folds the session's `activity` event onto the agent row as `resumedAt` — but **only for
+a parked agent**, and it deliberately does not un-park one. Flipping the row back to `running` would
+desynchronise it from the runtime's own session status (which is still `waiting`), letting the next
+turn-end file a *second* escalation on top of the one the mark is meant to cast doubt on. The park is
+the harness's model of the session; `resumedAt` is the evidence that model is out of date, and the
+human settles the disagreement by answering or dismissing. Repeated tool calls just refresh the stamp.
+
+It is cleared wherever the park ends or restarts — `respond` (answered), `handleWaiting` (a fresh
+question must not arrive already looking stale), and `releasePark` (dismissed). Nothing in the
+dispatcher reads it; the cockpit joins it to an open escalation by `agentId` and marks the card, and
+`Hub` turns `resumed` into a plain `dirty` because the value already rides on the agent row.
+
+`releasePark(agentId)` drops the latch without typing anything into the agent — what
+`POST /api/escalations/:id/dismiss` calls. Releasing it is the point rather than a detail: while it is
+held `handleWaiting` early-returns, so an agent whose alert was dismissed could never raise another.
 
 ### Terminal, exit and reap
 

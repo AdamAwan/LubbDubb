@@ -120,6 +120,12 @@ interface AgentManagerEvents {
   progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
+  /**
+   * A parked agent was seen making a tool call — i.e. it carried on working rather
+   * than waiting, so the open alert against it is probably stale. Already persisted
+   * as `Agent.resumedAt`; emitted so the cockpit learns now rather than next poll.
+   */
+  resumed: [{ agentId: string; taskId: string; resumedAt: string }];
 }
 
 /**
@@ -295,6 +301,7 @@ export class AgentManager extends EventEmitter {
     if (!session) return false;
     session.send(text);
     this.parked.delete(agentId); // the park is over; the next ask is a new one
+    this.store.setAgentResumed(agentId, null); // answered, so "it carried on anyway" is spent
     this.store.updateAgent(agentId, { status: 'running', waitingReason: null });
     return true;
   }
@@ -604,6 +611,8 @@ export class AgentManager extends EventEmitter {
       this.emit('flag', { agentId, taskId: task.id, flag: saved });
     });
 
+    session.on('activity', () => this.noteResumed(agentId, task.id));
+
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
     // Both runtimes emit `exit` (with the process exit code) before `failed`, so
     // the code is in hand by the time the terminal transition is recorded.
@@ -675,10 +684,44 @@ export class AgentManager extends EventEmitter {
       return;
     }
     this.parked.add(agentId);
+    // A fresh park is a fresh question, so last park's "it carried on anyway" must
+    // not linger and mark the new alert stale on arrival.
+    this.store.setAgentResumed(agentId, null);
     this.store.updateAgent(agentId, { status: 'waiting', waitingReason: reason });
     this.store.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
     this.emit('waiting', { agentId, taskId: task.id, reason, ask });
+  }
+
+  /**
+   * Record that a *parked* agent made a tool call — it is working, not waiting.
+   *
+   * Deliberately does **not** un-park it. The park is a latch (see {@link parked})
+   * and the runtime's own session status is `waiting` too, so flipping the row back
+   * to `running` here would desynchronise the two and let the next turn-end file a
+   * *second* escalation on top of the one this is meant to cast doubt on. The park
+   * is the harness's model of the session; this is an observation about that model
+   * being out of date, and the human resolves the disagreement by answering or
+   * dismissing. Idempotent by intent — repeated tool calls just refresh the stamp.
+   */
+  private noteResumed(agentId: string, taskId: string): void {
+    if (!this.parked.has(agentId)) return;
+    const resumedAt = new Date().toISOString();
+    this.store.setAgentResumed(agentId, resumedAt);
+    this.emit('resumed', { agentId, taskId, resumedAt });
+  }
+
+  /**
+   * Drop the park latch without typing anything into the agent — what dismissing an
+   * alert does. Releasing it is the whole point rather than a detail: while the
+   * latch is held {@link handleWaiting} early-returns, so an agent whose alert was
+   * dismissed could never raise another one. It leaves `status` alone, because the
+   * session's own status is untouched and a dismissed alert makes no claim about
+   * whether the agent is working.
+   */
+  releasePark(agentId: string): void {
+    this.parked.delete(agentId);
+    this.store.setAgentResumed(agentId, null);
   }
 
   /** Roll back a spawn that threw before the session ever came up. */

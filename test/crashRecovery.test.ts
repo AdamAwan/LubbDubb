@@ -238,6 +238,7 @@ const agentRow = (patch: Partial<Agent> = {}): Agent => ({
   numTurns: null,
   note: null,
   notedAt: null,
+  resumedAt: null,
   ...patch,
 });
 
