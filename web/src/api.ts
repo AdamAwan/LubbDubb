@@ -119,6 +119,7 @@ const realApi = {
   decideRecovery: (agentId: string, verdict: RecoveryVerdict) =>
     post<{ ok: true; remaining: number }>(`/api/recovery/${agentId}`, { verdict }),
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
+  completeAgent: (id: string) => post(`/api/agents/${id}/complete`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),
 };
 

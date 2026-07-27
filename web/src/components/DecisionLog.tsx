@@ -49,9 +49,16 @@ export function DecisionLog({
   // match here and is not badged as yours. That is the intent, not an omission: it
   // is the harness acting on its own, the unlabelled case below, and its own
   // authority is named in the detail line ("authorized by auto-send").
+  //
+  // The prefix is what makes a row yours; the proposal, when there is one, only
+  // supplies the *note*. Not every human act is an authorization — marking an
+  // agent done is the operator's own act, already taken, so it writes no proposal
+  // — and keying the badge on the lookup instead would leave those rows reading as
+  // the harness's own.
   const byId = new Map((proposals ?? []).map((p) => [p.id, p]));
+  const isHuman = (d: Decision): boolean => d.cycleId.startsWith('human:');
   const deciderOf = (d: Decision): Proposal | undefined =>
-    d.cycleId.startsWith('human:') ? byId.get(d.cycleId.slice('human:'.length)) : undefined;
+    isHuman(d) ? byId.get(d.cycleId.slice('human:'.length)) : undefined;
 
   return (
     <>
@@ -86,9 +93,9 @@ export function DecisionLog({
               <div className="audit-top">
                 <span className={`badge ${d.outcome}`}>{d.outcome}</span>
                 <span className="audit-type">{d.action.type}</span>
-                {decider && (
-                  <span className="chip small" title={decider.note ?? 'Authorized by you'}>
-                    you · {decider.status}
+                {isHuman(d) && (
+                  <span className="chip small" title={decider?.note ?? 'Your decision, not the harness’s'}>
+                    you{decider ? ` · ${decider.status}` : ''}
                   </span>
                 )}
                 <span className="muted audit-time">{relTime(d.createdAt, now)}</span>

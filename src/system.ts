@@ -408,8 +408,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   agents.on('status', ({ agentId, status }) => {
     if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');
   });
-  agents.on('done', ({ agentId, status }) => {
+  agents.on('done', ({ agentId, status, by }) => {
     if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
+    // An operator-declared done is the other way an agent leaves the fleet with a
+    // question still open, and the commonest one: the shape `complete` exists for
+    // is an agent parked on "ended its turn without finishing" that has in fact
+    // finished. An agent-declared done is deliberately not swept here — it is the
+    // same latent class, but changing it is a separate call.
+    else if (by === 'operator') escalations.dismissEscalationsForAgent(agentId, 'operator marked the work complete');
   });
 
   // A cleanly finished code agent's worktree is removed once its process has

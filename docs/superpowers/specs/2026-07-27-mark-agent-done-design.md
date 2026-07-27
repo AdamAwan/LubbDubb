@@ -6,12 +6,12 @@ An operator-declared terminal that lands on `done` rather than `killed`.
 
 An agent can end four ways today, and only one of them is a clean finish:
 
-| Path                                       | Agent          | Task          | Worktree                       |
-| ------------------------------------------ | -------------- | ------------- | ------------------------------ |
-| `@@LUBBDUBB_DONE@@` → `handleTerminal`     | `done`         | `done`        | removed on `reaped`            |
-| `kill()` (the cockpit button)              | `killed`       | `interrupted` | kept, deliberately, for triage |
-| `interruptAll()` (shutdown)                | `interrupted`  | unchanged     | kept                           |
-| process died / non-zero exit               | `failed`       | `failed`      | kept                           |
+| Path                                   | Agent         | Task          | Worktree                       |
+| -------------------------------------- | ------------- | ------------- | ------------------------------ |
+| `@@LUBBDUBB_DONE@@` → `handleTerminal` | `done`        | `done`        | removed on `reaped`            |
+| `kill()` (the cockpit button)          | `killed`      | `interrupted` | kept, deliberately, for triage |
+| `interruptAll()` (shutdown)            | `interrupted` | unchanged     | kept                           |
+| process died / non-zero exit           | `failed`      | `failed`      | kept                           |
 
 The clean one is reachable **only by the agent**. So when an agent finishes the work
 but never prints the sentinel, an operator who can see the work is done has no way to
@@ -125,8 +125,10 @@ session runtime):
 
 1. Park a fake agent without a sentinel, complete it → agent `done`, task `done`, session
    gone.
-2. Emit the fake process exit → `reaped` fires with `'done'` and the worktree is removed
-   (follows `test/worktreeCleanup.test.ts`).
+2. `reaped` fires with `'done'` and the worktree is removed — the half `kill` suppresses.
+   (The reap rendezvous itself is unchanged and is held on the sentinel path by
+   `test/worktreeCleanup.test.ts`; the fake process exits on kill, so there is no
+   intermediate state to assert here.)
 3. The open escalation is settled; `listOpenEscalations()` is empty.
 4. A decision row exists under `human:<agentId>`.
 5. A non-live agent → 409.

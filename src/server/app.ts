@@ -601,6 +601,15 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
+  // "This is finished" — the verdict only the agent could reach before, via the
+  // done sentinel. Stops the process and records the clean terminal (task `done`,
+  // worktree reclaimed on the reap), unlike kill, which records an abandonment.
+  app.post('/api/agents/:id/complete', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ok = agents.complete(id);
+    return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
+  });
+
   app.post('/api/agents/:id/interrupt', async (req, reply) => {
     const { id } = req.params as { id: string };
     const ok = agents.interrupt(id);
