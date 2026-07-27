@@ -64,10 +64,19 @@ export class ErrorLog extends EventEmitter implements ErrorRecorder {
  * renders it as DOM text, where a newline forges nothing.
  */
 function oneLine(value: string): string {
-  // Newlines first and explicitly — a forged line is the whole risk — then the
-  // remaining control characters, which a terminal would otherwise interpret.
-  // eslint-disable-next-line no-control-regex -- the rule guards against control characters reaching a regex by accident; matching them is this function’s entire job.
-  return value.replace(/[\r\n]+/g, ' ').replace(/[\u0000-\u001F\u007F]/g, '');
+  return (
+    value
+      // One line terminator per call, each matching a constant string. That is
+      // the forgery dealt with, and it is also the shape a static analyser can
+      // recognise as removing it — a character class with a quantifier reads as
+      // opaque, so the taint appears to survive a call that in fact ends it.
+      .replace(/\n/g, ' ')
+      .replace(/\r/g, ' ')
+      // Then the remaining control characters, which a terminal would interpret
+      // rather than print.
+      // eslint-disable-next-line no-control-regex -- the rule guards against control characters reaching a regex by accident; matching them is this function’s entire job.
+      .replace(/[\u0000-\u001F\u007F]/g, '')
+  );
 }
 
 /**
