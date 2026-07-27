@@ -16,6 +16,10 @@ test('the state snapshot reports per-PR health', async () => {
   );
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat', baseBranch: 'main' });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 42, mergeable: false, mergeableState: 'dirty' });
+  // The snapshot draws the world the *pulse* observed, never a fresh provider
+  // read, so an injected world has to be observed before the cockpit can see it.
+  // Seeded rather than pulsed: a real cycle would dispatch agents at these PRs.
+  system.store.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
   const pr = snap.world.pullRequests[0]!;

@@ -346,6 +346,10 @@ test('/api/state ships an attention verdict per PR, beside health rather than in
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   system.connector.inject({ kind: 'new_pr', number: 11, title: 'Add the widget', branch: 'feat/widget' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 11 });
+  // The snapshot draws the world the *pulse* observed, never a fresh provider
+  // read. Seeded rather than pulsed: a cycle would put an agent on the red CI and
+  // the attention verdict under test is the one with no agent on the branch.
+  system.store.setWorldBaseline(await system.connector.getState());
 
   const snapshot = await buildStateSnapshot(system);
   const shipped = snapshot.world.pullRequests.find((p) => p.number === 11)!;

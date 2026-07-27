@@ -13,6 +13,13 @@ One state object, one socket.
 - `api.getState()` fetches `/api/state`. The whole UI renders from that object.
 - A WebSocket connection delivers events. `dirty`, `world:changed`, `control:changed` and
   `world:events` each trigger a refetch; `cycle:end` also resets the heartbeat countdown anchor.
+- **Refetches are coalesced** (`scheduleRefresh`, `REFRESH_COALESCE_MS`): at most one request in
+  flight, at most one queued behind it, and a short trailing window so a burst collapses into one.
+  The server pairs a coarse `dirty` with almost every specific frame, so one pulse alone is four
+  signals, and `agents.on('files')` fires once per file an agent writes — fetching per signal made
+  the request rate a function of agent tool-call volume. The queued refetch **always runs**:
+  coalescing may merge the signals in between but must never drop the last, or the cockpit settles on
+  a state older than what it was told about. The initial fetch on mount is immediate, not delayed.
 - `agent:output` deltas accumulate into a per-agent scrollback (capped at ~1M characters) — but only
   for the agent whose drawer is open, because output is delivered to subscribers only.
 - `agent:tail` lines land in a separate map and drive the fleet-card previews.
@@ -28,8 +35,13 @@ A top bar and three columns.
 ### Top bar
 
 Brand, a **heartbeat countdown** (a progress track showing the fraction of `heartbeatIntervalMs`
-elapsed since the last pulse), a live/offline connection chip, the usage chip, the active dispatcher, a
-`paused` chip when paused, the fleet control, and **Pulse now**.
+elapsed since the last pulse), a **world age** chip, a live/offline connection chip, the usage chip, the
+active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse now**.
+
+- **World age** — `worldObservedAt` rendered relative ("world 2m ago"), or "world not yet observed"
+  before the first cycle. Stated rather than implied because the cockpit's world is the reading the
+  last pulse took, not a live one (see [16](16-http-api.md)); a reading that keeps ageing past an
+  interval is the visible symptom of pulses failing, which no countdown can show.
 
 - **`UsageChip`** — the account 5h/weekly rate limits when the PTY status-line capture has seen any;
   otherwise it falls back to the rolling 5h/7d cost windows.

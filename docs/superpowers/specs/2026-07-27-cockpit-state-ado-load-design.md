@@ -23,10 +23,10 @@ paid the full fan-out, and paid it again for every open tab.
 **The client refetched on five event types with no coalescing.** `App.tsx`
 refreshes on `dirty`, `world:changed`, `control:changed`, `world:events` and
 `cycle:end`, and the `Hub` pairs a coarse `dirty` with almost every specific
-frame. One pulse with world changes emits `world:events` + `dirty` + `cycle:end`
-
-- `dirty` — four refetches for one pulse. `agents.on('files')` emits per written
-  file, so an edit-heavy agent turned each `Write` into a full provider fan-out.
+frame. One pulse with world changes emits `world:events`, `dirty`, `cycle:end`
+and `dirty` — four refetches for one pulse. `agents.on('files')` emits per
+written file, so an edit-heavy agent turned each `Write` into a full provider
+fan-out.
 
 The two together also closed a loop: a failed provider snapshot records an error,
 the `Hub` broadcasts `dirty` for it, the cockpit refetches, the fan-out fails

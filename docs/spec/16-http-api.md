@@ -76,6 +76,20 @@ mirrors it to stderr and streams it to the cockpit), and returned as a plain `50
 
 The whole cockpit snapshot. See below.
 
+**The world in it is `Store.getWorldBaseline()` — the reading the last pulse persisted — never a fresh
+`connector.getState()`.** That call is a provider fan-out (for `azure`, `2 + 3N` REST calls for `N` open
+PRs), and the cockpit refetches this route on every `dirty`, one of which rides _every file an agent
+writes_: reading the provider here made the request rate a function of agent tool-call volume and of how
+many cockpit tabs were open. The pulse is the only provider reader. Two properties make it sound: the
+baseline is written **before** the dispatch world is filtered, so it is the unfiltered world and an
+`-ignore`d PR stays visible here with its health; and the reading's age is shipped as
+`worldObservedAt` rather than implied, the same way `world_read` hands an agent an `observedAt`.
+
+Before the first cycle there is no baseline, and the route ships an **empty** world with
+`worldObservedAt: null` rather than falling back to a live fetch — a fallback re-arms the failure loop
+this removes (boot while the provider throttles → the boot cycle fails → no baseline → every `dirty`
+refetches → each fan-out fails → recording the error broadcasts another `dirty`, unbounded).
+
 ### `GET /api/health`
 
 `{ ok: true, dispatcher }`.
@@ -178,7 +192,7 @@ question a `restore` is about to hand back to the same agent. The error names th
 ### `POST /api/escalations/:id/dismiss`
 
 Body `{note?}`. Clears an item without answering it, for when the thing was dealt with outside the
-harness. The gap it closes: parking is only a *request* — the `escalate` tool returns at once — so an
+harness. The gap it closes: parking is only a _request_ — the `escalate` tool returns at once — so an
 alert can outlive the situation that raised it, and before this the only way to empty it was to type a
 message nobody wanted sent, least of all the agent that has to interpret it.
 
@@ -187,15 +201,15 @@ dropped: a permission request has an agent stopped inside a tool call, and a pro
 off a PR. Each is routed to its own "no" instead, so dismissing means the same thing everywhere —
 nothing goes out, nobody is left blocked. The arms, in order, mirroring the 409s on `/answer`:
 
-| item | effect | `dismissedAs` |
-| --- | --- | --- |
+| item                       | effect                                                | `dismissedAs`       |
+| -------------------------- | ----------------------------------------------------- | ------------------- |
 | carries a pending proposal | rejects it (`ProposalDesk.reject`, the note recorded) | `proposal_rejected` |
-| a live permission request | denies it, unblocking the agent | `permission_denied` |
-| anything else | marks it `dismissed` | `cleared` |
+| a live permission request  | denies it, unblocking the agent                       | `permission_denied` |
+| anything else              | marks it `dismissed`                                  | `cleared`           |
 
 A cleared item records the reason in its own `context.dismissal` (no schema change) and in the
 decision log under cycle id `human:<escalation id>`. **Nothing is typed into the agent** — that is the
-point — but the agent's park latch *is* released, which is load-bearing rather than tidy: while it is
+point — but the agent's park latch _is_ released, which is load-bearing rather than tidy: while it is
 held `AgentManager.handleWaiting` early-returns, so an agent whose alert was dismissed would otherwise
 be unable to raise another one. 400 when the item is unknown or not `open`.
 
@@ -246,28 +260,29 @@ anything that is not `/api` or `/ws` — so client-side routing works.
 `buildStateSnapshot(system)` assembles everything the cockpit needs in one response. Several values are
 read **once** and shared, so two parts of the UI cannot disagree.
 
-| Key             | Contents                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------------ |
-| `config`        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`. |
-| `control`       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                   |
-| `world`         | The snapshot, with `health` and `attention` attached per open PR and `pickup` per issue.                     |
-| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads.                                               |
-| `tasks`         | Every task.                                                                                                |
-| `jobs`          | Operator jobs, newest first.                                                                               |
-| `agents`        | Every agent row, including usage and the progress note.                                                    |
-| `flags`         | Every artifact chip, grouped by the cockpit onto agents.                                                   |
-| `files`         | Every file every agent wrote.                                                                              |
-| `overlaps`      | Paths two concurrently-live code agents wrote.                                                             |
-| `findings`      | Every finding.                                                                                             |
-| `escalations`   | Every escalation.                                                                                          |
-| `recovery`      | Agents the previous run orphaned, each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**. |
-| `decisions`     | The last 100 decisions.                                                                                    |
-| `upcoming`      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher. |
-| `worldEvents`   | The last 100 world events.                                                                                 |
-| `errors`        | The last 100 recorded failures.                                                                            |
-| `refUrls`       | The `ref → URL` map.                                                                                       |
-| `dispatchRules` | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                            |
-| `usage`         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                |
+| Key                  | Contents                                                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`.  |
+| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                     |
+| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                 |
+| `world`              | The snapshot, with `health` and `attention` attached per open PR and `pickup` per issue.                                      |
+| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads.                                                                      |
+| `tasks`              | Every task.                                                                                                                   |
+| `jobs`               | Operator jobs, newest first.                                                                                                  |
+| `agents`             | Every agent row, including usage and the progress note.                                                                       |
+| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                      |
+| `files`              | Every file every agent wrote.                                                                                                 |
+| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                |
+| `findings`           | Every finding.                                                                                                                |
+| `escalations`        | Every escalation.                                                                                                             |
+| `recovery`           | Agents the previous run orphaned, each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**. |
+| `decisions`          | The last 100 decisions.                                                                                                       |
+| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher.                 |
+| `worldEvents`        | The last 100 world events.                                                                                                    |
+| `errors`             | The last 100 recorded failures.                                                                                               |
+| `refUrls`            | The `ref → URL` map.                                                                                                          |
+| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                              |
+| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                  |
 
 Four consistency points:
 
@@ -276,8 +291,8 @@ Four consistency points:
   the planning policy, and the same headroom arithmetic — so the chip predicts what happens next cycle.
 - **PR health is passed the full open-PR list** as stack context, so an inherited CI failure names the
   PR underneath; otherwise a stacked PR reads as "CI failing" with no agent and no visible reason.
-- **The attention verdict sits beside health, never inside it** — health answers *can this merge*,
-  attention answers *whose turn is it*, and they have different right answers for the same PR (see
+- **The attention verdict sits beside health, never inside it** — health answers _can this merge_,
+  attention answers _whose turn is it_, and they have different right answers for the same PR (see
   [07](07-pull-requests.md#prattentionstatuspr-ctx)). It reads the same unfiltered PR list and the
   same decision window, plus the proposals and the world events since the oldest standing rejection
   (`rejectionSignalQuery` → `Store.listWorldEventsSince`, so nothing is read until an operator has
@@ -296,25 +311,25 @@ Clients may send `{type:'subscribe'|'unsubscribe', agentId}`. Malformed frames a
 
 ### Server events
 
-| Event                 | Payload                                    | Delivery                     |
-| --------------------- | -------------------------------------------- | ---------------------------- |
-| `dirty`               | —                                           | broadcast; "re-fetch `/api/state`" |
-| `cycle:start`         | `cycleId`, `source`                         | broadcast                    |
-| `cycle:end`           | `cycleId`, `rationale`, `summary`           | broadcast (+ `dirty`)        |
-| `world:events`        | `events`                                    | broadcast (+ `dirty`)        |
-| `world:changed`       | —                                           | broadcast by mutating routes |
-| `control:changed`     | `cap`, `paused`                             | broadcast                    |
-| `agent:output`        | `agentId`, `delta`                          | **subscribers only**         |
-| `agent:tail`          | `agentId`, `line`                           | broadcast                    |
-| `agent:flag`          | `flag`                                      | broadcast (+ `dirty`)        |
-| `agent:finding`       | `finding`                                   | broadcast (+ `dirty`)        |
-| `agent:status`        | `agentId`, `taskId`, `status`               | broadcast (+ `dirty`)        |
-| `agent:waiting`       | `agentId`, `taskId`, `reason`               | broadcast (+ `dirty`)        |
-| `agent:done`          | `agentId`, `taskId`, `status`               | broadcast (+ `dirty`)        |
-| `escalation:created`  | `escalation`                                | broadcast (+ `dirty`)        |
-| `escalation:answered` | `escalation`, `routing`                     | broadcast (+ `dirty`)        |
-| `escalation:dismissed`| `escalation`                                | broadcast (+ `dirty`)        |
-| `error:logged`        | `error`                                     | broadcast (+ `dirty`)        |
+| Event                  | Payload                           | Delivery                           |
+| ---------------------- | --------------------------------- | ---------------------------------- |
+| `dirty`                | —                                 | broadcast; "re-fetch `/api/state`" |
+| `cycle:start`          | `cycleId`, `source`               | broadcast                          |
+| `cycle:end`            | `cycleId`, `rationale`, `summary` | broadcast (+ `dirty`)              |
+| `world:events`         | `events`                          | broadcast (+ `dirty`)              |
+| `world:changed`        | —                                 | broadcast by mutating routes       |
+| `control:changed`      | `cap`, `paused`                   | broadcast                          |
+| `agent:output`         | `agentId`, `delta`                | **subscribers only**               |
+| `agent:tail`           | `agentId`, `line`                 | broadcast                          |
+| `agent:flag`           | `flag`                            | broadcast (+ `dirty`)              |
+| `agent:finding`        | `finding`                         | broadcast (+ `dirty`)              |
+| `agent:status`         | `agentId`, `taskId`, `status`     | broadcast (+ `dirty`)              |
+| `agent:waiting`        | `agentId`, `taskId`, `reason`     | broadcast (+ `dirty`)              |
+| `agent:done`           | `agentId`, `taskId`, `status`     | broadcast (+ `dirty`)              |
+| `escalation:created`   | `escalation`                      | broadcast (+ `dirty`)              |
+| `escalation:answered`  | `escalation`, `routing`           | broadcast (+ `dirty`)              |
+| `escalation:dismissed` | `escalation`                      | broadcast (+ `dirty`)              |
+| `error:logged`         | `error`                           | broadcast (+ `dirty`)              |
 
 Agent **output** is high volume, so it is delivered scoped to subscribers. Everything else is
 low-volume and fleet-wide.

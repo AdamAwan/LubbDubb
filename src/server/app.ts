@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
+import type { WorldSnapshot } from '../types.js';
 import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
@@ -770,179 +771,211 @@ function artifactMime(file: string): string {
   return ARTIFACT_MIME[extname(file).toLowerCase()] ?? 'application/octet-stream';
 }
 
+/**
+ * The world the cockpit draws: the baseline the last pulse persisted, **never a
+ * fresh provider fetch**. `connector.getState()` is a fan-out — for `azure`,
+ * `2 + 3N` REST calls for `N` open PRs — and the cockpit refetches this snapshot
+ * on every `dirty`, one of which rides *every file an agent writes*. Reading the
+ * provider here made the request rate a function of agent tool-call volume and
+ * of how many cockpit tabs were open, which is a rate-limit block waiting to
+ * happen. So the pulse is the only provider reader, and this is its record.
+ *
+ * Two properties make the substitution sound. The baseline is written *before*
+ * the dispatch world is filtered (`Harness.runCycle`), so it is the **unfiltered**
+ * world and an `-ignore`d PR stays visible here with its health — the very reason
+ * this read the connector directly. And it is a pulse old, so it says so:
+ * `worldObservedAt` is the reading's age, exactly as `world_read` reports
+ * `observedAt` to an agent.
+ *
+ * A missing baseline (before the first cycle) ships an **empty** world rather
+ * than falling back to a live fetch. The fallback is the obvious move and is
+ * wrong: boot while the provider is throttling and the boot cycle fails, so the
+ * baseline is never written, so every `dirty` refetches, fans out, fails, records
+ * an error — which broadcasts another `dirty`. Unbounded, and worst exactly when
+ * the provider is already refusing us. An empty world cannot do that.
+ */
 export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (flagId: string) => string }) {
   const { store, connector, config, runtimeControl, harness, recovery } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
-  // getState is async on the interface, but FakeConnector is synchronous under
-  // the hood; read the same persisted world directly for a snapshot.
-  return connector.getState().then((world) => {
-    const tasks = store.listTasks();
-    const control = runtimeControl.snapshot();
-    // Hoisted (not inlined into the returned object) because the artifact-URL map
-    // below is derived from the same list.
-    const flags = store.listAllFlags();
-    // What agents noticed outside their own tasks. Read here (not only in the
-    // panel) because their refs feed the link map below: a finding often names an
-    // item that is *not* in the current world — a closed duplicate, say — so its
-    // ref has to be resolved directly rather than looked up off the snapshot.
-    const findings = store.listFindings();
-    // Acts put to a human. Read here for the same reason as findings: a proposal's
-    // ref (`pr:42:merge`) names the item its card links to, so it feeds the link
-    // map below as well as the cards themselves.
-    const proposals = store.listProposals();
-    // Every file every agent wrote, read once: the drawer groups it by agent, and
-    // the overlap detector below joins it *across* agents — the one question the
-    // rows could always answer and nothing ever asked.
-    const files = store.listAllFiles();
-    // The plan graph, read once and shared by the per-issue pickup verdict below
-    // and the snapshot itself, so the chip and the panel can't disagree.
-    const plans = store.listPlans();
-    const planParts = store.listAllPlanParts();
-    // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
-    // below predicts what actually happens next cycle. The decision window (200)
-    // and the headroom arithmetic mirror `Harness.runCycle`.
-    const pickupCtx: IssuePickupContext = {
-      policy: system.issuePickup,
-      cooldown: DEFAULT_COOLDOWN,
-      now: world.takenAt,
-      tasks,
-      recentDecisions: store.listDecisions(200),
-      // Unfiltered on purpose: an `-ignore` tagged PR is hidden from dispatch but
-      // is still an open PR, so it still parks its issue (see `openPrForIssue`).
-      openPrs: world.pullRequests,
-      // Same plan inputs rules 3c/4 read, so the chip explains an issue parked in
-      // the funnel rather than claiming it's eligible for a pickup that won't fire.
-      plans,
-      planParts,
-      planning: config.planning,
-      headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
-      paused: control.paused,
-    };
-    // The PR-side sibling: whose turn each PR is on. Asked off the same predicates
-    // the rules ask, including the rejection expiry — the query is null (and the
-    // read never happens) until an operator has actually rejected something, which
-    // is the same shape `Harness.runCycle` and the executor use.
-    const signals = rejectionSignalQuery(proposals);
-    const attentionCtx: PrAttentionContext = {
-      // Unfiltered, exactly as `inheritedCiFailure`/`basePrOf` need it (and as the
-      // pickup context above takes it): an `-ignore`d base still attributes.
-      openPrs: world.pullRequests,
-      defaultBranch: config.defaultBranch,
-      ignoreLabel,
-      tasks,
-      proposals,
-      rejectionSignals: signals ? store.listWorldEventsSince(signals.since, signals.refs) : [],
-      recentDecisions: pickupCtx.recentDecisions,
-      cooldown: DEFAULT_COOLDOWN,
-      now: world.takenAt,
-    };
-    // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
-    // cockpit only looks refs up in this map, so it stays provider-agnostic.
-    const refUrls = buildRefUrls({
-      // Closed PRs are linked from the cockpit's "recently closed" list, so their
-      // `#n` needs a URL too — the ref map is what the UI looks numbers up in.
-      pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? [])],
-      issues: world.issues,
-      taskBranches: tasks.map((t) => t.branch),
-      refs: [...findings.map((f) => f.ref), ...proposals.map((p) => p.ref)],
-      resolve: (ref) => connector.resolveRefUrl(ref),
-    });
-    return {
-      config: {
-        heartbeatIntervalMs: config.heartbeatIntervalMs,
-        maxConcurrentAgents: config.maxConcurrentAgents,
-        dispatcher: config.dispatcher,
-        steeringPriorities: config.steeringPriorities,
-        // The watch/ignore tag pair, so the cockpit knows which labels its toggles
-        // set and how to render an item's effective watched/ignored state.
-        watchLabel,
-        ignoreLabel,
-        // Whether the inject panel should render: synthetic events only land on
-        // the `fake` provider, so real-integration deployments hide it.
-        injectable: isWorldInjectable(config.integrations),
-      },
-      // Live, mutable dispatch controls — the cockpit reads these (not the frozen
-      // config block above) for the current cap and pause state.
-      control,
-      // Agents the previous run left orphaned, each awaiting restore / requeue /
-      // remove. A non-empty list means the harness is running **no cycles**, which
-      // is why the cockpit draws it as a blocking banner rather than one more
-      // panel: the absence of activity everywhere else has exactly one cause, and
-      // it is this.
-      recovery: recovery.pending(),
-      // Fold each PR's signals into a health verdict, and each issue's gates into
-      // a pickup verdict, so the cockpit can show *why* an item is stuck or
-      // untouched rather than leaving it implied by the absence of activity.
-      world: {
-        ...world,
-        // The full open-PR list is passed as stack context so an inherited CI
-        // failure names the PR underneath — otherwise a stacked PR reads as
-        // "CI failing" with no agent on it and no visible reason why.
-        //
-        // `attention` sits beside `health`, not inside it: health answers "can this
-        // merge" and attention answers "whose turn is it", and the two have
-        // different right answers for the same PR (see `src/prAttention.ts`).
-        pullRequests: world.pullRequests.map((pr) => ({
-          ...pr,
-          health: prHealth(pr, world.pullRequests),
-          attention: prAttentionStatus(pr, attentionCtx),
-        })),
-        issues: world.issues.map((issue) => ({ ...issue, pickup: issuePickupStatus(issue, pickupCtx) })),
-      },
-      // The plan graph, which until now existed only in the database: the per-issue
-      // chip could say "2/5 parts merged" and nothing could say *which* five. The
-      // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
-      plans,
-      planParts,
-      tasks,
-      // Operator-launched jobs (newest first) — the cockpit shows the queued
-      // ones and their place in line, plus recently-dispatched/cancelled history.
-      jobs: store.listJobs(),
-      agents: store.listAgents(),
-      // Artifacts agents surfaced mid-run (design docs, reports, links). The
-      // cockpit groups these by agentId onto the fleet card / drawer.
-      flags,
-      // The URL to open each local artifact by navigation, carrying its per-flag
-      // capability (auth on) or a bare path (auth off). The cockpit opens chips
-      // from this map rather than string-building a URL, the same way it looks refs
-      // up in refUrls — an http(s) flag is absent here and linked directly.
-      artifactUrls: artifactUrls(flags, opts?.artifactSigner),
-      // Every file agents wrote (captured by the file-events hook), grouped by
-      // agentId in the drawer's "files changed" list; the report-like ones also
-      // appear above as artifact chips.
-      files,
-      // Paths two agents wrote while both were running (issue #113). The three
-      // dispatch gates are complete for what they see, and origin/branch are 1:1
-      // for every world-driven rule — but none of them can see what an agent does
-      // once it is running. This is that blind spot, read off rows we already have
-      // rather than off an advisory claim an agent has to remember to make.
-      overlaps: detectFileOverlaps({ files, agents: store.listAgents(), tasks }),
-      // Things agents noticed outside their own tasks (the `report_finding` tool).
-      // Operator-facing only: nothing in the dispatcher reads them, and one becomes
-      // work only through `POST /api/findings/:id/promote`.
-      findings,
-      escalations: store.listEscalations(),
-      // Acts a human was asked to authorize (issue #109). The cockpit joins these
-      // to their escalation so a decision-bearing item gets accept/reject rather
-      // than a text box, and the decision log reads the settled ones as the human
-      // half of the audit trail.
-      proposals,
-      decisions: store.listDecisions(100),
-      // The "Up next" queue: the last cycle's ordered pickup plan with the
-      // headroom cut (issue #69). A per-pulse projection — null until a cycle
-      // has run, or when the active dispatcher doesn't materialise a plan.
-      upcoming: harness.upcoming,
-      worldEvents: store.listWorldEvents(100),
-      // Recorded failures (cycle exceptions, provider outages, agent crashes,
-      // route 500s) for the cockpit's Errors panel.
-      errors: store.listErrors(100),
-      refUrls,
-      // The rule book, as data: decision rows carry a rule id; the cockpit looks
-      // the id up here to expand a decision into "which rule fired, and why".
-      dispatchRules: DISPATCH_RULES,
-      usage: buildUsage(system),
-    };
+  const baseline = store.getWorldBaseline();
+  const world: WorldSnapshot = baseline ?? {
+    takenAt: new Date().toISOString(),
+    pullRequests: [],
+    closedPullRequests: [],
+    issues: [],
+    stories: [],
+  };
+  const tasks = store.listTasks();
+  const control = runtimeControl.snapshot();
+  // Hoisted (not inlined into the returned object) because the artifact-URL map
+  // below is derived from the same list.
+  const flags = store.listAllFlags();
+  // What agents noticed outside their own tasks. Read here (not only in the
+  // panel) because their refs feed the link map below: a finding often names an
+  // item that is *not* in the current world — a closed duplicate, say — so its
+  // ref has to be resolved directly rather than looked up off the snapshot.
+  const findings = store.listFindings();
+  // Acts put to a human. Read here for the same reason as findings: a proposal's
+  // ref (`pr:42:merge`) names the item its card links to, so it feeds the link
+  // map below as well as the cards themselves.
+  const proposals = store.listProposals();
+  // Every file every agent wrote, read once: the drawer groups it by agent, and
+  // the overlap detector below joins it *across* agents — the one question the
+  // rows could always answer and nothing ever asked.
+  const files = store.listAllFiles();
+  // The plan graph, read once and shared by the per-issue pickup verdict below
+  // and the snapshot itself, so the chip and the panel can't disagree.
+  const plans = store.listPlans();
+  const planParts = store.listAllPlanParts();
+  // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
+  // below predicts what actually happens next cycle. The decision window (200)
+  // and the headroom arithmetic mirror `Harness.runCycle`.
+  const pickupCtx: IssuePickupContext = {
+    policy: system.issuePickup,
+    cooldown: DEFAULT_COOLDOWN,
+    now: world.takenAt,
+    tasks,
+    recentDecisions: store.listDecisions(200),
+    // Unfiltered on purpose: an `-ignore` tagged PR is hidden from dispatch but
+    // is still an open PR, so it still parks its issue (see `openPrForIssue`).
+    openPrs: world.pullRequests,
+    // Same plan inputs rules 3c/4 read, so the chip explains an issue parked in
+    // the funnel rather than claiming it's eligible for a pickup that won't fire.
+    plans,
+    planParts,
+    planning: config.planning,
+    headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
+    paused: control.paused,
+  };
+  // The PR-side sibling: whose turn each PR is on. Asked off the same predicates
+  // the rules ask, including the rejection expiry — the query is null (and the
+  // read never happens) until an operator has actually rejected something, which
+  // is the same shape `Harness.runCycle` and the executor use.
+  const signals = rejectionSignalQuery(proposals);
+  const attentionCtx: PrAttentionContext = {
+    // Unfiltered, exactly as `inheritedCiFailure`/`basePrOf` need it (and as the
+    // pickup context above takes it): an `-ignore`d base still attributes.
+    openPrs: world.pullRequests,
+    defaultBranch: config.defaultBranch,
+    ignoreLabel,
+    tasks,
+    proposals,
+    rejectionSignals: signals ? store.listWorldEventsSince(signals.since, signals.refs) : [],
+    recentDecisions: pickupCtx.recentDecisions,
+    cooldown: DEFAULT_COOLDOWN,
+    now: world.takenAt,
+  };
+  // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
+  // cockpit only looks refs up in this map, so it stays provider-agnostic.
+  const refUrls = buildRefUrls({
+    // Closed PRs are linked from the cockpit's "recently closed" list, so their
+    // `#n` needs a URL too — the ref map is what the UI looks numbers up in.
+    pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? [])],
+    issues: world.issues,
+    taskBranches: tasks.map((t) => t.branch),
+    refs: [...findings.map((f) => f.ref), ...proposals.map((p) => p.ref)],
+    resolve: (ref) => connector.resolveRefUrl(ref),
   });
+  return {
+    config: {
+      heartbeatIntervalMs: config.heartbeatIntervalMs,
+      maxConcurrentAgents: config.maxConcurrentAgents,
+      dispatcher: config.dispatcher,
+      steeringPriorities: config.steeringPriorities,
+      // The watch/ignore tag pair, so the cockpit knows which labels its toggles
+      // set and how to render an item's effective watched/ignored state.
+      watchLabel,
+      ignoreLabel,
+      // Whether the inject panel should render: synthetic events only land on
+      // the `fake` provider, so real-integration deployments hide it.
+      injectable: isWorldInjectable(config.integrations),
+    },
+    // When the world below was actually observed — null before the first cycle,
+    // when there is no baseline and the lists are empty. Shipped because the
+    // reading is a pulse old rather than live (see this function's contract), the
+    // same reason `world_read` hands an agent an `observedAt`.
+    worldObservedAt: baseline?.takenAt ?? null,
+    // Live, mutable dispatch controls — the cockpit reads these (not the frozen
+    // config block above) for the current cap and pause state.
+    control,
+    // Agents the previous run left orphaned, each awaiting restore / requeue /
+    // remove. A non-empty list means the harness is running **no cycles**, which
+    // is why the cockpit draws it as a blocking banner rather than one more
+    // panel: the absence of activity everywhere else has exactly one cause, and
+    // it is this.
+    recovery: recovery.pending(),
+    // Fold each PR's signals into a health verdict, and each issue's gates into
+    // a pickup verdict, so the cockpit can show *why* an item is stuck or
+    // untouched rather than leaving it implied by the absence of activity.
+    world: {
+      ...world,
+      // The full open-PR list is passed as stack context so an inherited CI
+      // failure names the PR underneath — otherwise a stacked PR reads as
+      // "CI failing" with no agent on it and no visible reason why.
+      //
+      // `attention` sits beside `health`, not inside it: health answers "can this
+      // merge" and attention answers "whose turn is it", and the two have
+      // different right answers for the same PR (see `src/prAttention.ts`).
+      pullRequests: world.pullRequests.map((pr) => ({
+        ...pr,
+        health: prHealth(pr, world.pullRequests),
+        attention: prAttentionStatus(pr, attentionCtx),
+      })),
+      issues: world.issues.map((issue) => ({ ...issue, pickup: issuePickupStatus(issue, pickupCtx) })),
+    },
+    // The plan graph, which until now existed only in the database: the per-issue
+    // chip could say "2/5 parts merged" and nothing could say *which* five. The
+    // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
+    plans,
+    planParts,
+    tasks,
+    // Operator-launched jobs (newest first) — the cockpit shows the queued
+    // ones and their place in line, plus recently-dispatched/cancelled history.
+    jobs: store.listJobs(),
+    agents: store.listAgents(),
+    // Artifacts agents surfaced mid-run (design docs, reports, links). The
+    // cockpit groups these by agentId onto the fleet card / drawer.
+    flags,
+    // The URL to open each local artifact by navigation, carrying its per-flag
+    // capability (auth on) or a bare path (auth off). The cockpit opens chips
+    // from this map rather than string-building a URL, the same way it looks refs
+    // up in refUrls — an http(s) flag is absent here and linked directly.
+    artifactUrls: artifactUrls(flags, opts?.artifactSigner),
+    // Every file agents wrote (captured by the file-events hook), grouped by
+    // agentId in the drawer's "files changed" list; the report-like ones also
+    // appear above as artifact chips.
+    files,
+    // Paths two agents wrote while both were running (issue #113). The three
+    // dispatch gates are complete for what they see, and origin/branch are 1:1
+    // for every world-driven rule — but none of them can see what an agent does
+    // once it is running. This is that blind spot, read off rows we already have
+    // rather than off an advisory claim an agent has to remember to make.
+    overlaps: detectFileOverlaps({ files, agents: store.listAgents(), tasks }),
+    // Things agents noticed outside their own tasks (the `report_finding` tool).
+    // Operator-facing only: nothing in the dispatcher reads them, and one becomes
+    // work only through `POST /api/findings/:id/promote`.
+    findings,
+    escalations: store.listEscalations(),
+    // Acts a human was asked to authorize (issue #109). The cockpit joins these
+    // to their escalation so a decision-bearing item gets accept/reject rather
+    // than a text box, and the decision log reads the settled ones as the human
+    // half of the audit trail.
+    proposals,
+    decisions: store.listDecisions(100),
+    // The "Up next" queue: the last cycle's ordered pickup plan with the
+    // headroom cut (issue #69). A per-pulse projection — null until a cycle
+    // has run, or when the active dispatcher doesn't materialise a plan.
+    upcoming: harness.upcoming,
+    worldEvents: store.listWorldEvents(100),
+    // Recorded failures (cycle exceptions, provider outages, agent crashes,
+    // route 500s) for the cockpit's Errors panel.
+    errors: store.listErrors(100),
+    refUrls,
+    // The rule book, as data: decision rows carry a rule id; the cockpit looks
+    // the id up here to expand a decision into "which rule fired, and why".
+    dispatchRules: DISPATCH_RULES,
+    usage: buildUsage(system),
+  };
 }
 
 /** A concise task/job title from a free-form prompt: its first non-empty line, capped. */
