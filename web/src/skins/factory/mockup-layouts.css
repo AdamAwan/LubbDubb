@@ -1,0 +1,216 @@
+/* MOCKUP ONLY — three candidate wide-screen arrangements for the factory skin,
+   selected with `?layout=a|b|c`. Delete this file, its import in main.tsx and
+   `mockLayout()` in FactoryRoot once one is chosen. */
+
+/* ===================== A — Wide Floor =====================
+   The shipped layout, let out. Nothing moves; the ribbon simply stops being a
+   ribbon, and the two column blocks flatten to three tracks when there is room
+   for three. The smallest change that answers "wasted side space". */
+
+.fx-lay-a {
+  max-width: 2040px;
+}
+
+@media (min-width: 1680px) {
+  /* Flattening the stacks turns 2 columns of piles into N columns of panels. */
+  .fx-lay-a .fx-cols > .fx-stack {
+    display: contents;
+  }
+  .fx-lay-a .fx-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 2400px) {
+  .fx-lay-a {
+    max-width: 2600px;
+  }
+  .fx-lay-a .fx-cols {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ===================== B — Tiled Floor =====================
+   One grid for the whole page instead of nine stacked bands. Every panel is a
+   tile with a span, so a wide panel stays wide and a narrow one stops being
+   forced to full width. Reordered so what you check constantly (faults,
+   signals) rides at the top rather than at the bottom of a 4000px page. */
+
+.fx-lay-b {
+  max-width: none;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+@media (min-width: 1500px) {
+  .fx-lay-b {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+  /* Wrappers dissolve so their panels become tiles of the page grid. */
+  .fx-lay-b .fx-cols,
+  .fx-lay-b .fx-stack {
+    display: contents;
+  }
+  .fx-lay-b > *,
+  .fx-lay-b .fx-cols > * {
+    margin-bottom: 0;
+  }
+
+  .fx-lay-b .fx-status,
+  .fx-lay-b .fx-alerts,
+  .fx-lay-b .recovery-banner {
+    grid-column: span 6;
+  }
+
+  .fx-lay-b .fx-line-wrap {
+    grid-column: span 4;
+  }
+  .fx-lay-b [data-fx='production'] {
+    grid-column: span 2;
+  }
+
+  .fx-lay-b [data-fx='bots'] {
+    grid-column: span 2;
+  }
+  .fx-lay-b [data-fx='stamp'] {
+    grid-column: span 2;
+  }
+  .fx-lay-b [data-fx='launches'] {
+    grid-column: span 1;
+  }
+  .fx-lay-b [data-fx='faults'] {
+    grid-column: span 1;
+  }
+
+  .fx-lay-b [data-fx='research'] {
+    grid-column: span 3;
+  }
+  .fx-lay-b [data-fx='yard'] {
+    grid-column: span 3;
+  }
+
+  .fx-lay-b [data-fx='shift-log'] {
+    grid-column: span 2;
+  }
+  .fx-lay-b [data-fx='signals'] {
+    grid-column: span 2;
+  }
+  .fx-lay-b [data-fx='work-orders'] {
+    grid-column: span 1;
+  }
+  .fx-lay-b [data-fx='off-blueprint'] {
+    grid-column: span 1;
+  }
+
+  /* Document order is the narrow order; `order` is the wide one. */
+  .fx-lay-b .fx-status {
+    order: 0;
+  }
+  .fx-lay-b .recovery-banner {
+    order: 1;
+  }
+  .fx-lay-b .fx-alerts {
+    order: 2;
+  }
+  .fx-lay-b .fx-line-wrap {
+    order: 3;
+  }
+  .fx-lay-b [data-fx='production'] {
+    order: 4;
+  }
+  .fx-lay-b [data-fx='bots'] {
+    order: 5;
+  }
+  .fx-lay-b [data-fx='stamp'] {
+    order: 6;
+  }
+  .fx-lay-b [data-fx='launches'] {
+    order: 7;
+  }
+  .fx-lay-b [data-fx='faults'] {
+    order: 8;
+  }
+  .fx-lay-b [data-fx='research'] {
+    order: 9;
+  }
+  .fx-lay-b [data-fx='yard'] {
+    order: 10;
+  }
+  .fx-lay-b [data-fx='shift-log'] {
+    order: 11;
+  }
+  .fx-lay-b [data-fx='signals'] {
+    order: 12;
+  }
+  .fx-lay-b [data-fx='work-orders'] {
+    order: 13;
+  }
+  .fx-lay-b [data-fx='off-blueprint'] {
+    order: 14;
+  }
+
+  /* A tile that would run away vertically scrolls in itself instead. */
+  .fx-lay-b [data-fx='bots'] .fx-body,
+  .fx-lay-b [data-fx='stamp'] .fx-body,
+  .fx-lay-b [data-fx='faults'] .fx-body {
+    max-height: 620px;
+    overflow-y: auto;
+  }
+}
+
+/* ===================== C — Control Room =====================
+   Three rails that each scroll on their own; the page itself never scrolls.
+   Left is what you act on, centre is the floor, right is the world watching
+   back. A glance answers "is anything waiting on me" without moving. */
+
+.fx-lay-c {
+  max-width: none;
+  padding: 14px 16px 12px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fx-lay-c .fx-rails {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+@media (min-width: 1500px) {
+  .fx-lay-c .fx-rails {
+    grid-template-columns: 26rem minmax(0, 1fr) 24rem;
+  }
+}
+@media (min-width: 2400px) {
+  .fx-lay-c .fx-rails {
+    grid-template-columns: 30rem minmax(0, 1fr) 30rem;
+  }
+}
+.fx-lay-c .fx-rail {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding-right: 4px;
+}
+/* The centre rail is the one with room for two abreast. */
+@media (min-width: 2000px) {
+  .fx-lay-c .fx-rail-floor {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .fx-lay-c .fx-rail-floor .fx-line-wrap,
+  .fx-lay-c .fx-rail-floor [data-fx='yard'] {
+    grid-column: span 2;
+  }
+}
+.fx-lay-c .fx-rail > * {
+  margin-bottom: 0;
+}

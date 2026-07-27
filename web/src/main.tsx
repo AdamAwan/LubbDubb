@@ -9,6 +9,7 @@ import './styles.css';
 // Each sheet is scoped to its own `[data-skin]` selector, so loading them all
 // costs a few kilobytes and collides with nothing.
 import './skins/factory/skin.css';
+import './skins/factory/mockup-layouts.css';
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
