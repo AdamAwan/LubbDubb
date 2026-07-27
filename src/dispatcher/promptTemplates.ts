@@ -4,8 +4,11 @@ import { basename, extname, join } from 'node:path';
 /**
  * Operator-customisable dispatch prompts.
  *
- * Every agent- (and escalation-) facing prompt the {@link RuleDispatcher} emits
- * has a stable id and a built-in default here. An operator can override any of
+ * Every agent- (and escalation-) facing prompt the harness composes itself has a
+ * stable id and a built-in default here — the {@link RuleDispatcher}'s, plus the
+ * route-driven `finding-ticket`, which is here rather than inline in the route
+ * precisely because *how a ticket should be written* is the operator's opinion,
+ * not the harness's. An operator can override any of
  * them by dropping a `<id>.md` file into the prompt-templates directory
  * (`promptTemplatesDir`, default `.lubbdubb/prompts`); unset ids keep their
  * default. Overrides are read once at boot — templates don't change per-cycle.
@@ -33,7 +36,8 @@ type PromptId =
   | 'pr-concern-escalation'
   | 'story-groom'
   | 'story-waf'
-  | 'story-pickup';
+  | 'story-pickup'
+  | 'finding-ticket';
 
 interface TemplateDef {
   /** The placeholder names this template may reference (validated on override). */
@@ -188,6 +192,29 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     placeholders: ['title', 'description', 'acceptanceCriteria'],
     template: 'Implement story "{title}".\n\nDescription: {description}\n\nAcceptance criteria: {acceptanceCriteria}',
     doc: 'Sent to a code agent to implement the highest-priority groomed story when there is idle capacity. Placeholders: {title} {description} {acceptanceCriteria}.',
+  },
+  'finding-ticket': {
+    placeholders: ['kind', 'kindHelp', 'ref', 'summary', 'originRef', 'tracker'],
+    template:
+      'An operator wants a finding filed as a ticket so it can be dealt with later. File it — do not fix it.\n\n' +
+      'It was reported by an agent working {originRef}, about {ref}, as a "{kind}" finding ({kindHelp}).\n\n' +
+      'The report, verbatim:\n\n{summary}\n\n' +
+      'File it in {tracker}\n\n' +
+      'Before you create anything, search the existing open items for the same thing. If one already ' +
+      'covers it, do not file a second — link the existing one instead. Write the ticket for someone ' +
+      'who was not there: a title that says what is wrong, and a body carrying the report above, where ' +
+      'it was found, and what you were able to verify. Verify what you reasonably can from the ' +
+      'repository first, and say in the body which parts you confirmed and which are the reporting ' +
+      "agent's word — it is one agent's reading, not established fact.\n\n" +
+      'When the ticket exists, call the link_ticket tool with its ref ("issue:314") so it shows up ' +
+      'against the finding in the cockpit. That call is what finishes this task: without it the ' +
+      'operator sees a filing that never completed. If you decided not to file because it already ' +
+      'exists, call link_ticket with the existing item’s ref.',
+    doc:
+      'Sent to a desk agent when an operator clicks "File ticket" on a finding, to create it in ' +
+      'GitHub/Azure DevOps and report the ref back via link_ticket. Override this to control how ' +
+      'tickets are worded, labelled, or typed in your tracker. Placeholders: {kind} {kindHelp} {ref} ' +
+      '{summary} {originRef} {tracker}.',
   },
 };
 

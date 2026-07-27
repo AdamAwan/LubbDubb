@@ -33,6 +33,7 @@
  * then assume it is now being handled.
  */
 
+import type { Config } from '../config.js';
 import type { Finding, FindingInput, FindingKind } from '../types.js';
 
 /**
@@ -130,6 +131,75 @@ export function findingJobRequest(finding: Finding): { title: string; prompt: st
       'not to hold, say so and stop rather than inventing work to justify the dispatch.',
   ].join('\n');
   return { title, prompt };
+}
+
+/**
+ * Where a filed ticket goes, in the words the filing agent needs.
+ *
+ * A finding can also be **deferred** rather than worked: the operator wants it
+ * in the tracker's backlog, not on the fleet. That is the one thing promotion
+ * could not do — a queued job either runs or is cancelled, and neither is "deal
+ * with this later".
+ *
+ * The agent files it itself (`gh` / `az` in its own shell) rather than the
+ * harness posting through a provider seam, because the *wording* of a ticket is
+ * the part an operator has opinions about, and a prompt is where those opinions
+ * already live (`finding-ticket`, overridable like every other template). What
+ * the harness must supply is the one thing an agent cannot infer: **which**
+ * tracker. A filing job is a desk job, so it runs in a scratch directory with no
+ * git remote for `gh` to read the repo off — hence explicit coordinates, taken
+ * from the same config block the `issues` provider is built from, so the ticket
+ * lands where the harness reads issues from and nowhere else.
+ *
+ * Null for the `fake` provider (and for a provider whose config is absent):
+ * there is no tracker to file into, and the cockpit hides the button rather than
+ * offering one that fails.
+ */
+export function trackerCoordinates(config: Config): string | null {
+  const provider = config.integrations.issues;
+  if (provider === 'github' && config.github) {
+    const slug = `${config.github.owner}/${config.github.repo}`;
+    return (
+      `the GitHub repository ${slug}. Create it with: ` + `gh issue create -R ${slug} --title "<title>" --body "<body>"`
+    );
+  }
+  if (provider === 'azure' && config.azureDevOps) {
+    const { organization, project } = config.azureDevOps;
+    return (
+      `the Azure DevOps project "${project}" in organization "${organization}". Create it with: ` +
+      `az boards work-item create --org https://dev.azure.com/${organization} --project "${project}" ` +
+      `--type Task --title "<title>" --description "<body>"`
+    );
+  }
+  return null;
+}
+
+/**
+ * The values the `finding-ticket` prompt is rendered with — pure, so the wording
+ * an agent acts on is testable without a server, and so the route is left with
+ * nothing but `render` + `createJob`.
+ *
+ * `title` is the job's, not the ticket's: the agent writes the ticket's title
+ * (that is the judgement being delegated), while this one only has to be
+ * recognisable in the Up next queue.
+ */
+export function findingTicketFields(
+  finding: Finding,
+  tracker: string,
+): { title: string; vars: Record<string, string> } {
+  const firstLine = finding.summary.split('\n')[0]?.trim() ?? finding.summary;
+  const title = `File ticket: ${firstLine}`.slice(0, MAX_TITLE);
+  return {
+    title,
+    vars: {
+      kind: finding.kind,
+      kindHelp: FINDING_KIND_HELP[finding.kind],
+      ref: finding.ref ?? 'nothing the harness tracks',
+      summary: finding.summary,
+      originRef: finding.originRef ?? 'an untracked task',
+      tracker,
+    },
+  };
 }
 
 /**

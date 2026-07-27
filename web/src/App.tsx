@@ -395,7 +395,9 @@ export function App() {
                 findings={state.findings ?? []}
                 now={now}
                 refUrls={state.refUrls}
+                canFileTickets={state.config.canFileTickets}
                 onPromote={(id) => api.promoteFinding(id).then(refresh)}
+                onFile={(id) => api.fileFinding(id).then(refresh)}
                 onDismiss={(id) => api.dismissFinding(id).then(refresh)}
               />
             </>

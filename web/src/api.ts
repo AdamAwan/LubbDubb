@@ -117,6 +117,9 @@ const realApi = {
   // A finding becomes work only here: the operator's click is the gate, because
   // an agent that could queue jobs could put agents on the fleet.
   promoteFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/promote`),
+  // The defer arm: a desk agent files it in the tracker and reports the ticket
+  // back, so the work waits its turn there rather than on the fleet.
+  fileFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/file`),
   dismissFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/dismiss`),
   // Decide what happens to an agent the last run left orphaned. Until every one of
   // these is answered the harness runs no cycles, so this is the one call that can

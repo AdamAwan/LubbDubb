@@ -799,6 +799,37 @@ preserve:
     flag does — the `finding` event is what puts it in the cockpit now rather than next pulse — and a
     verbatim repeat (same agent, kind, ref, summary) refreshes the row **without resetting status**,
     so dismissing one means something. Tests: the `report_finding` block in `test/mcpChannel.test.ts`.
+  - **Filing a finding as a ticket (`POST /api/findings/:id/file`) is the _defer_ arm beside
+    promotion's "work it now"** — the thing a queued job could not express, since a job either runs or
+    is cancelled and neither is "deal with this later". Promotion puts an agent on the problem; filing
+    puts an agent on the **tracker**. Four things carry it:
+    - **An agent files it, with `gh`/`az`, rather than the harness posting through a new
+      `IssueCreateCapable` seam.** The _wording_ of a ticket is what an operator has opinions about,
+      and a prompt is where those already live: `finding-ticket` is an ordinary overridable entry in
+      the template book, so house style is changed by dropping a file in `promptTemplatesDir`, not by
+      patching a route. A capability seam would have moved that judgement inside the harness where an
+      override cannot reach it. Consequence: the book is no longer only the rule dispatcher's —
+      `loadPromptTemplates` is hoisted in `system.ts` and exposed as `System.prompts` so the route
+      renders the same under either dispatcher.
+    - **The one thing an agent cannot infer is _which_ tracker**, so that is what the harness supplies:
+      the pure `trackerCoordinates(config)` renders coordinates from the same config block the
+      **`issues` provider** is built from, so a ticket lands where the harness reads issues from and
+      nowhere else. Null for `fake` (or a provider selected without its config) → the route 409s and
+      the snapshot ships `config.canFileTickets: false`, so the cockpit hides the button off the same
+      predicate the route refuses on. It is a **desk** job (filing writes no file), which is exactly
+      why the coordinates must be explicit — a scratch cwd has no remote for `gh` to read.
+    - **Two statuses, because filing is asynchronous.** `filing` is "an agent is creating it", `filed`
+      carries `ticketRef`. Collapsing them would claim a ticket that does not exist yet and leave
+      nothing to show for a filing agent that died before making one — which is why a `filing` card is
+      drawn among the open ones, not in the resolved tail. `job_id` is **reused** for the filing job
+      (a finding is terminal either way, so only one job ever hangs off it); `ticket_ref` is a column
+      on an **existing** table and therefore needs its `ensureColumns('findings', …)` entry.
+    - **`link_ticket(ref)` closes the loop**, and identity is structural exactly as for
+      `report_finding`: the finding is resolved from the credential (`agent → task → its `job:<id>`
+origin → the finding that job was created for`), so the tool takes only a ref and an agent on any
+      other task resolves to none. Same `parseFindingRef` as the finding's own ref (bare number
+      refused — nothing here says whether `314` is an issue or a PR), and idempotence is in the write
+      (`WHERE id=? AND status='filing'`), not in a read-then-check. Tests: `test/findingTickets.test.ts`.
 - **`note_progress(note)` — the agent's own answer to "what is it doing, and is it stuck?"** The
   fleet card's live line is `agent:tail` (`Hub.updateTail`): the last non-empty line the process
   happened to print. It's a byproduct rather than a statement (in stream mode it's as likely to be a

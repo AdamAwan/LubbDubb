@@ -441,12 +441,20 @@ export type AgentFileInput = Pick<AgentFile, 'path' | 'tool' | 'promoted'>;
 export type FindingKind = 'duplicate' | 'blocked' | 'out_of_scope';
 
 /**
- * Where a finding sits: `open` until an operator acts on it, then either
- * `promoted` (queued as a job — see {@link Finding.jobId}) or `dismissed`.
- * Nothing in the dispatcher reads findings; the transition is operator-driven by
- * design (see `src/mcp/findings.ts`).
+ * Where a finding sits: `open` until an operator acts on it, then `promoted`
+ * (queued as a job — see {@link Finding.jobId}), `dismissed`, or filed as a
+ * ticket in the tracker. Nothing in the dispatcher reads findings; every
+ * transition is operator-driven by design (see `src/mcp/findings.ts`).
+ *
+ * Filing is two statuses rather than one because it is *asynchronous*: the click
+ * queues a desk job, and the ticket exists only once that job's agent has
+ * created it and called `link_ticket`. `filing` is the honest reading in
+ * between — "an agent is filing this" — and `filed` is the one that carries
+ * {@link Finding.ticketRef}. Collapsing them would have the card claim a ticket
+ * that does not exist yet, and leave nothing to show when the filing agent dies
+ * without creating one.
  */
-export type FindingStatus = 'open' | 'promoted' | 'dismissed';
+export type FindingStatus = 'open' | 'promoted' | 'dismissed' | 'filing' | 'filed';
 
 /**
  * Something an agent noticed that is not its own task — filed through the
@@ -466,8 +474,18 @@ export interface Finding {
   ref: string | null;
   summary: string;
   status: FindingStatus;
-  /** The operator-queued job this was promoted into, if it was. */
+  /**
+   * The operator-queued job this became — the one that works it (`promoted`) or
+   * the desk job that files it as a ticket (`filing`/`filed`). One field for
+   * both because a finding is terminal either way, so only ever one job hangs
+   * off it.
+   */
   jobId: string | null;
+  /**
+   * The tracker item this was filed as (`issue:314`), set when the filing agent
+   * reports it back through `link_ticket`. Null until then.
+   */
+  ticketRef: string | null;
   createdAt: string;
   updatedAt: string;
 }

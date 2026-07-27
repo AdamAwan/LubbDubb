@@ -144,9 +144,12 @@ export interface Finding {
   /** The item it is about (`issue:41`), or null when it names nothing tracked. */
   ref: string | null;
   summary: string;
-  status: 'open' | 'promoted' | 'dismissed';
-  /** The queued job it was promoted into, if it was. */
+  /** `filing` is a filing agent in flight; `filed` carries {@link Finding.ticketRef}. */
+  status: 'open' | 'promoted' | 'dismissed' | 'filing' | 'filed';
+  /** The queued job it became — the one working it, or the one filing it. */
   jobId: string | null;
+  /** The tracker item it was filed as (`issue:314`), once the filing agent reported it. */
+  ticketRef: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -407,6 +410,8 @@ export interface AppState {
     ignoreLabel: string;
     /** Whether the world accepts injected events (a `fake` provider is configured) — gates the inject panel. */
     injectable: boolean;
+    /** Whether a real tracker is configured to file findings into — gates the "File ticket" button. */
+    canFileTickets: boolean;
   };
   /** Live, mutable dispatch controls — the current cap and pause state. */
   control: {

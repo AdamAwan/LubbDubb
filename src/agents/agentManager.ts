@@ -362,6 +362,48 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
+   * Record the ticket a filing agent created (the `link_ticket` tool): the
+   * finding it was dispatched for moves `filing -> filed`.
+   *
+   * The finding is reached from the credential — agent → task → the `job:<id>`
+   * origin it was dispatched on → the finding that job was created for — so the
+   * tool takes only a ref. An agent on any other task resolves to no finding and
+   * is told so, which is the whole access check: there is no id to point at
+   * someone else's.
+   *
+   * Routed through the manager for the same reason as {@link recordFinding}: the
+   * `finding` event is what repaints the cockpit now rather than next pulse.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  linkTicket(agentId: string, ticketRef: string): { ok: true; finding: Finding } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
+    const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
+    if (!finding) {
+      return {
+        ok: false,
+        error:
+          `link_ticket is only for a job dispatched to file a finding as a ticket. This task's origin ` +
+          `is ${task.originRef ?? '(none)'}, which was not created from a finding.`,
+      };
+    }
+    // Idempotence lives in the write, not in a read-then-check here.
+    const linked = this.store.linkFindingTicket(finding.id, ticketRef);
+    if (!linked) {
+      return {
+        ok: false,
+        error: `finding ${finding.id} is ${finding.status}, not awaiting a ticket — nothing to link.`,
+      };
+    }
+    this.emit('finding', { agentId, taskId: task.id, finding: linked, created: false });
+    return { ok: true, finding: linked };
+  }
+
+  /**
    * Record what an agent says it is working on (the `note_progress` tool). Like
    * {@link recordFinding} it goes through the manager rather than straight to the
    * store, so the cockpit repaints on the note rather than on the next pulse —

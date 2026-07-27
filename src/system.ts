@@ -32,7 +32,7 @@ import { PermissionDesk } from './agents/permissionDesk.js';
 import { RecoveryDesk } from './agents/recoveryDesk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
-import { loadPromptTemplates } from './dispatcher/promptTemplates.js';
+import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTemplates.js';
 import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
@@ -74,6 +74,12 @@ export interface System {
    * compute the same per-issue pickup verdict the dispatcher will act on.
    */
   issuePickup: IssuePickupPolicy;
+  /**
+   * The operator-customisable prompt book. Exposed because one prompt is
+   * route-driven rather than dispatcher-driven: filing a finding as a ticket
+   * (`finding-ticket`), which must render the same way under either dispatcher.
+   */
+  prompts: PromptTemplates;
   /**
    * Account rate-limit capture (status-line payloads), wired only for the PTY
    * runtime — the status line never fires headless. Null in other modes; the
@@ -323,6 +329,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pickupStates: config.issuePickupStates,
     inReviewState: config.issueInReviewState,
   };
+  // Hoisted out of the RuleDispatcher's construction because the template book is
+  // no longer only the dispatcher's: `POST /api/findings/:id/file` renders
+  // `finding-ticket` from it, and that must work whichever dispatcher is active.
+  const prompts = loadPromptTemplates(config.promptTemplatesDir);
   const dispatcher: Dispatcher =
     config.dispatcher === 'claude'
       ? new ClaudeDispatcher(backend, {
@@ -334,7 +344,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       : new RuleDispatcher(
           issuePickup,
           {},
-          loadPromptTemplates(config.promptTemplatesDir),
+          prompts,
           config.defaultBranch,
           // The plan funnel is a rule-dispatcher feature; the LLM dispatcher
           // composes its own prompts and has no equivalent (see the README).
@@ -449,6 +459,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     harness,
     runtimeControl,
     issuePickup,
+    prompts,
     rateLimits,
     fileEvents,
     mcp,

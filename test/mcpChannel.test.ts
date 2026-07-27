@@ -384,6 +384,7 @@ test('a promoted finding carries its provenance into the job it becomes', () => 
     summary: 'The retry helper squares the delay instead of doubling it.',
     status: 'open',
     jobId: null,
+    ticketRef: null,
     createdAt: TAKEN_AT,
     updatedAt: TAKEN_AT,
   });

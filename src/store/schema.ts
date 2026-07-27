@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS agent_files (
 -- duplicates, work blocked on something outside the repo, out-of-scope discoveries.
 -- Attribution is structural — agent_id/task_id/origin_ref come from the caller's
 -- credential, never from an argument. A finding is a claim, not work: it stays
--- 'open' until an operator promotes it into a job (job_id) or dismisses it.
+-- 'open' until an operator promotes it into a job (job_id), dismisses it, or has
+-- it filed as a tracker ticket (also a job, then ticket_ref via link_ticket).
 CREATE TABLE IF NOT EXISTS findings (
   id         TEXT PRIMARY KEY,
   agent_id   TEXT NOT NULL,
@@ -125,8 +126,9 @@ CREATE TABLE IF NOT EXISTS findings (
   kind       TEXT NOT NULL,          -- duplicate | blocked | out_of_scope
   ref        TEXT,                   -- the world item it is about ("issue:41"), if any
   summary    TEXT NOT NULL,
-  status     TEXT NOT NULL,          -- open | promoted | dismissed
+  status     TEXT NOT NULL,          -- open | promoted | dismissed | filing | filed
   job_id     TEXT,
+  ticket_ref TEXT,                   -- the ticket it was filed as ("issue:314"), once created
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

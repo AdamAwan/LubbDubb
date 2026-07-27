@@ -164,6 +164,16 @@ and rule-0 jobs stay first regardless — so this is safe to run inline. Returns
 `kind`. Creates the job, then resolves the finding, broadcasts, and runs a cycle. Returns
 `{ ok: true, finding, job, report }`.
 
+### `POST /api/findings/:id/file`
+
+The defer arm. 404 when absent, 409 when not `open`, and 409 when no tracker is configured to file
+into (the `issues` provider is `fake` or its config block is missing — the same predicate the snapshot
+ships as `config.canFileTickets`, so the cockpit hides the button rather than offering a click that
+cannot work). Body may override `title`. Renders the `finding-ticket` prompt template, creates a
+**desk** job, then resolves the finding to `filing` with the job id, broadcasts and runs a cycle.
+Returns `{ ok: true, finding, job, report }`. The finding reaches `filed` only when the filing agent
+reports the ticket through `link_ticket` — see [11](11-mcp-tools.md).
+
 ### `POST /api/findings/:id/dismiss`
 
 409 when absent or already resolved. Returns `{ ok: true, finding }`.

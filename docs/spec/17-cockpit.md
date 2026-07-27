@@ -87,8 +87,10 @@ for the world to change — chosen from `config.injectable`.
   **Replan** button. A plan `awaiting_approval` says so on the card and states that nothing below is
   scheduled until you accept the proposal in "Needs you".
 - **Findings** (`FindingsPanel`, when any exist) — the open count in the heading, since a finding
-  never expires into work on its own and this is the only nudge there is. Each has **Promote** and
-  **Dismiss**.
+  never expires into work on its own and this is the only nudge there is. Each has **Queue job**
+  (work it now), **File ticket** (defer it — hidden unless `config.canFileTickets`) and **Dismiss**. A
+  finding being filed shows `filing…` and is drawn among the open ones, since an agent that died
+  before creating the ticket is only visible here; a filed one carries its ticket ref as a link.
 - **File overlaps** (`OverlapPanel`, when any exist) — the **live** count in the heading, since those
   are the only ones an operator can still act on; a settled overlap stays as the record of what
   collided. Each row shows the path, its writers with their origins and branches, and marks the

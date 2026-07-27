@@ -29,6 +29,7 @@ export const MCP_TOOL_NAMES = [
   'report_finding',
   'note_progress',
   'request_permission',
+  'link_ticket',
 ] as const;
 
 /**
