@@ -83,6 +83,11 @@ const realApi = {
   pulse: () => post('/api/pulse'),
   inject: (event: unknown) => post('/api/inject', event),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),
+  // Clear an item without answering it, for when the thing was handled outside the
+  // harness. The server picks the right "no" per kind (a permission request is
+  // denied, a proposal rejected) so nothing is left blocked — see the route.
+  dismissEscalation: (id: string, note?: string) =>
+    post<{ ok: true; dismissedAs: string }>(`/api/escalations/${id}/dismiss`, { note }),
   // Allow or deny a permission request an agent is blocked on (issue #130). The
   // same live agent then continues or gets the denial — no config-and-restart.
   decidePermission: (id: string, allow: boolean, note?: string) =>

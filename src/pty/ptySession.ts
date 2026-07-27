@@ -488,7 +488,12 @@ export class PtySession extends EventEmitter implements AgentSession {
   }
 
   /** A batch of session-file records: the transcript to show, and the text to detect on. */
-  private handleTranscriptUpdate(u: { display: string; assistantText: string; userEntries: number }): void {
+  private handleTranscriptUpdate(u: {
+    display: string;
+    assistantText: string;
+    userEntries: number;
+    toolUses: number;
+  }): void {
     // The file spoke, so the screen goes back to being input-only.
     this.degraded = false;
     if (this.sessionFileTimer) {
@@ -496,6 +501,10 @@ export class PtySession extends EventEmitter implements AgentSession {
       this.sessionFileTimer = null;
     }
     this.acceptedMessages += u.userEntries;
+    // The file is the only source here that can say the agent *did* something: the
+    // screen repaints while a session sits parked, which is why the sentinel wait is
+    // latched below and why `activity` is never emitted from `handleData`.
+    if (u.toolUses > 0) this.emit('activity');
     if (u.display) this.emit('output', u.display);
     if (!u.assistantText) return;
     // Same helpers stream mode detects with — the text is clean here, so there is

@@ -135,6 +135,10 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       // Flags carry no status meaning, so surface them as they land rather than at
       // turn end. A flag always arrives whole in one text block on this transport.
       for (const flag of extractFlags(raw)) this.emit('flag', flag);
+      // A tool call is the agent doing something, as opposed to saying something —
+      // the one signal that distinguishes "carried on with the work" from "wrote a
+      // closing sentence and stopped". See `activity` in AgentSession.
+      if (blocks.some((b) => b.type === 'tool_use')) this.emit('activity');
       const display = renderBlocks(blocks);
       if (display) this.emit('output', display);
       return;

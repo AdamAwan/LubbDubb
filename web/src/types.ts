@@ -217,6 +217,13 @@ export interface Agent {
   note: string | null;
   /** When the note was written. Shown as an age; never read as a health signal. */
   notedAt: string | null;
+  /**
+   * When a *parked* agent was last seen making a tool call — i.e. it carried on
+   * working instead of waiting, so any alert still open against it is probably
+   * stale. Null when that has not happened since its current park. The status stays
+   * `waiting` deliberately; this is the evidence that it is out of date.
+   */
+  resumedAt: string | null;
 }
 
 // Account-level Claude usage (issue #60): rolling cost windows self-computed by

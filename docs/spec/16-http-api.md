@@ -175,6 +175,30 @@ error names the permission route below. **Also 409 when the agent that asked it 
 recovery decision** — it is dead, so there is nothing to type into, and answering would settle a
 question a `restore` is about to hand back to the same agent. The error names the recovery route.
 
+### `POST /api/escalations/:id/dismiss`
+
+Body `{note?}`. Clears an item without answering it, for when the thing was dealt with outside the
+harness. The gap it closes: parking is only a *request* — the `escalate` tool returns at once — so an
+alert can outlive the situation that raised it, and before this the only way to empty it was to type a
+message nobody wanted sent, least of all the agent that has to interpret it.
+
+Offered on **every** item, which means the two kinds carrying a verdict cannot simply have their row
+dropped: a permission request has an agent stopped inside a tool call, and a proposal has a rule held
+off a PR. Each is routed to its own "no" instead, so dismissing means the same thing everywhere —
+nothing goes out, nobody is left blocked. The arms, in order, mirroring the 409s on `/answer`:
+
+| item | effect | `dismissedAs` |
+| --- | --- | --- |
+| carries a pending proposal | rejects it (`ProposalDesk.reject`, the note recorded) | `proposal_rejected` |
+| a live permission request | denies it, unblocking the agent | `permission_denied` |
+| anything else | marks it `dismissed` | `cleared` |
+
+A cleared item records the reason in its own `context.dismissal` (no schema change) and in the
+decision log under cycle id `human:<escalation id>`. **Nothing is typed into the agent** — that is the
+point — but the agent's park latch *is* released, which is load-bearing rather than tidy: while it is
+held `AgentManager.handleWaiting` early-returns, so an agent whose alert was dismissed would otherwise
+be unable to raise another one. 400 when the item is unknown or not `open`.
+
 ### `POST /api/escalations/:id/permission`
 
 Body `{allow: boolean, note?}`. Allow or deny a permission request an agent is blocked on (issue #130).

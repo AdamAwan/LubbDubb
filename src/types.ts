@@ -358,6 +358,24 @@ export interface Agent {
    * Liveness is the process, the status transitions and the `waiting` park.
    */
   notedAt: string | null;
+  /**
+   * When this agent was last seen *doing work after it parked on a human*, or null
+   * if that has not happened since its current park. It exists because the park is
+   * only ever a request: the `escalate` tool returns immediately, telling the agent
+   * to wait, and a model that carries on regardless leaves the row saying `waiting`
+   * with an open alert nobody needs to answer.
+   *
+   * What counts as work is runtime-specific and narrow — a **tool call**, observed
+   * on the legible transcript (see `AgentSession`'s `activity` event). Prose does
+   * not count: an agent that escalates and then writes one more sentence before
+   * ending its turn is still waiting, and reading that as "resumed" would clear
+   * alerts that genuinely need answering.
+   *
+   * Read as display context, never as a status. Nothing un-parks off it and nothing
+   * in the dispatcher reads it — it marks an alert stale so a human can dismiss it
+   * with confidence, which is the whole job.
+   */
+  resumedAt: string | null;
 }
 
 /**

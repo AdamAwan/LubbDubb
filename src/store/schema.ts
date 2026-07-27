@@ -69,7 +69,13 @@ CREATE TABLE IF NOT EXISTS agents (
   -- that is the only thing stored. noted_at dates the note for display and is
   -- deliberately never read as evidence the agent is alive — see src/mcp/progress.ts.
   note           TEXT,
-  noted_at       TEXT
+  noted_at       TEXT,
+  -- When this agent was last observed doing work *after* it parked on a human
+  -- (issue: stale "needs you" alerts). An observation about the park, not a
+  -- status: the escalate tool returns immediately and only *asks* the agent to
+  -- wait, so a model that carries on leaves the row saying waiting while it is
+  -- plainly working. Deliberately does not un-park -- see AgentManager.noteResumed.
+  resumed_at     TEXT
 );
 
 -- Timestamped per-report cost deltas (not cumulative), so account-level rolling

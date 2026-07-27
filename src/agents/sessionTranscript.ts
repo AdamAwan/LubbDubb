@@ -61,6 +61,13 @@ interface ParsedBatch {
    * pasted prompt was actually submitted.
    */
   userEntries: number;
+  /**
+   * Tool calls the agent made in this batch. Counted from the file rather than the
+   * screen because this is the PTY runtime's only trustworthy evidence that the
+   * agent *did* something: the terminal repaints while a session sits parked, so
+   * raw output proves nothing (see `activity` in AgentSession).
+   */
+  toolUses: number;
 }
 
 /** Parse raw JSONL lines into renderable blocks. Pure. */
@@ -68,6 +75,7 @@ export function parseSessionEntries(lines: string[]): ParsedBatch {
   const blocks: ContentBlock[] = [];
   let assistantText = '';
   let userEntries = 0;
+  let toolUses = 0;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -91,6 +99,7 @@ export function parseSessionEntries(lines: string[]): ParsedBatch {
       for (const block of content as ContentBlock[]) {
         blocks.push(block);
         if (block.type === 'text' && typeof block.text === 'string') assistantText += block.text;
+        if (block.type === 'tool_use') toolUses += 1;
       }
       continue;
     }
@@ -106,7 +115,7 @@ export function parseSessionEntries(lines: string[]): ParsedBatch {
     }
   }
 
-  return { blocks, assistantText, userEntries };
+  return { blocks, assistantText, userEntries, toolUses };
 }
 
 /**
@@ -137,6 +146,8 @@ export interface SessionTranscriptUpdate {
   assistantText: string;
   /** Human/injected messages accepted in this batch. */
   userEntries: number;
+  /** Tool calls the agent made in this batch — the PTY runtime's proof of work. */
+  toolUses: number;
 }
 
 interface SessionTranscriptTailOptions {
@@ -253,7 +264,12 @@ export class SessionTranscriptTail {
 
     const batch = parseSessionEntries(lines);
     const display = renderBlocks(batch.blocks);
-    if (!display && !batch.assistantText && !batch.userEntries) return;
-    this.opts.onUpdate({ display, assistantText: batch.assistantText, userEntries: batch.userEntries });
+    if (!display && !batch.assistantText && !batch.userEntries && !batch.toolUses) return;
+    this.opts.onUpdate({
+      display,
+      assistantText: batch.assistantText,
+      userEntries: batch.userEntries,
+      toolUses: batch.toolUses,
+    });
   }
 }

@@ -102,6 +102,25 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * Clear an item without answering it. Nothing is typed into the agent — that is
+   * the point of the button — so the agent's own status is left exactly as it was,
+   * and the stale-alert chip goes with the item.
+   */
+  async dismissEscalation(id: string, note?: string): Promise<{ ok: true; dismissedAs: string }> {
+    const esc = this.state.escalations.find((e) => e.id === id);
+    if (esc) {
+      esc.status = 'dismissed';
+      esc.response = `Dismissed${note ? `: ${note}` : ' without an answer'}`;
+      esc.answeredAt = new Date().toISOString();
+      const agent = esc.agentId ? this.state.agents.find((a) => a.id === esc.agentId) : null;
+      if (agent) agent.resumedAt = null;
+      this.addDecision('answer', 'ok', `dismissed escalation for ${esc.context.taskTitle ?? esc.id}`);
+    }
+    this.dirty();
+    return { ok: true, dismissedAs: 'cleared' };
+  }
+
   async decidePermission(id: string, allow: boolean, note?: string): Promise<{ ok: true; allowed: boolean }> {
     const esc = this.state.escalations.find((e) => e.id === id);
     if (esc) {
@@ -451,6 +470,7 @@ class DemoServer {
         // tail, which is exactly the state note_progress must not paper over.
         note: null,
         notedAt: null,
+        resumedAt: null,
       },
       ...this.state.agents,
     ];
@@ -702,6 +722,7 @@ export const demoApi = {
   inject: (event: unknown) => getServer().inject(event),
   answerEscalation: (id: string, response: string) => getServer().answerEscalation(id, response),
   decidePermission: (id: string, allow: boolean, note?: string) => getServer().decidePermission(id, allow, note),
+  dismissEscalation: (id: string, note?: string) => getServer().dismissEscalation(id, note),
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),

@@ -82,6 +82,7 @@ export class Store {
       num_turns: 'INTEGER',
       note: 'TEXT',
       noted_at: 'TEXT',
+      resumed_at: 'TEXT',
     });
     this.ensureColumns('decisions', {
       rule: 'TEXT',
@@ -589,6 +590,7 @@ export class Store {
       numTurns: null,
       note: null,
       notedAt: null,
+      resumedAt: null,
     };
     this.db
       .prepare(
@@ -608,6 +610,16 @@ export class Store {
         `UPDATE agents SET status=@status, pid=@pid, waiting_reason=@waitingReason, ended_at=@endedAt WHERE id=@id`,
       )
       .run({ id, status: next.status, pid: next.pid, waitingReason: next.waitingReason, endedAt: next.endedAt });
+  }
+
+  /**
+   * Stamp (or clear) the moment an agent was seen working *after* it parked.
+   * Separate from {@link updateAgent} because it is deliberately not part of the
+   * status patch: this records an observation about a park, and folding it in
+   * would invite callers to set it alongside a status they think it implies.
+   */
+  setAgentResumed(id: string, at: string | null): void {
+    this.db.prepare(`UPDATE agents SET resumed_at=? WHERE id=?`).run(at, id);
   }
 
   getAgent(id: string): Agent | null {
@@ -1162,6 +1174,7 @@ interface AgentRow {
   num_turns: number | null;
   note: string | null;
   noted_at: string | null;
+  resumed_at: string | null;
 }
 interface AgentFlagRow {
   id: string;
@@ -1328,6 +1341,7 @@ function rowToAgent(r: AgentRow): Agent {
     numTurns: r.num_turns,
     note: r.note,
     notedAt: r.noted_at,
+    resumedAt: r.resumed_at,
   };
 }
 function rowToFlag(r: AgentFlagRow): AgentFlag {
