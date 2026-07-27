@@ -16,6 +16,7 @@ import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispat
 import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } from '../proposals/proposals.js';
 import type { DispatchRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
+import { resolveIssueConclusion } from '../issueConclusion.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { PLAN_FILE } from '../plans/planDocument.js';
 import {
@@ -195,6 +196,10 @@ export class RuleDispatcher implements Dispatcher {
     // The plan funnel's memory, read by rules 3b, 3c, 4 and 4a alike so none of
     // them can hold a different opinion about an issue. Empty with the funnel off.
     const plansByOrigin = new Map((ctx.plans ?? []).map((p) => [p.originRef, p]));
+    // Standing "is this issue finished" verdicts, keyed on the same `issue:<n>`
+    // origin. Empty until someone declares one, which resolves every issue to
+    // `undeclared` — the direction that stops rather than acts.
+    const conclusions = new Map((ctx.conclusions ?? []).map((c) => [c.originRef, c]));
     /** Is this issue decomposed — i.e. owned by the part scheduler, not by pickup? */
     const partsPlanFor = (issueNumber: number): Plan | null => {
       if (!this.planning.enabled) return null;
@@ -400,14 +405,27 @@ export class RuleDispatcher implements Dispatcher {
 
     // 3b: Keep a work item's state in step with whether a PR is open for it. An
     // item in a pickup state ("Ready"/"Doing") with an open PR moves to the review
-    // state, so it isn't re-picked while it waits on CI/review; the inverse moves
-    // an item parked in the review state back to the *first* pickup state once its
-    // PR is no longer open, so work left over after that PR merged can be picked up
-    // instead of the item staying parked forever. Both directions are idempotent
-    // (after either move the item no longer matches) and neither fires on a closed
-    // item. Opt-in — off unless the operator set both a review state and pickup
-    // states, and only for items carrying a native state (Azure work items; GitHub
-    // issues have none, so this is a no-op for them).
+    // state, so it isn't re-picked while it waits on CI/review.
+    //
+    // The inverse arm returns an item to the *first* pickup state — but **only on
+    // an explicit `more_work` verdict**, never on the mere absence of a PR. That
+    // used to be the other way round, and it was the bug: `openPrForIssue` reads
+    // only the open list, so "this PR merged" and "there was never a PR" are one
+    // observation, and a merged PR bounced its ticket back to "Ready" for rule 4
+    // to put a fresh agent on work already on the default branch. A review state
+    // does not distinguish "waiting on test" from "still has work in it", so the
+    // harness now stops on silence and says so, rather than guessing (see
+    // `src/issueConclusion.ts`).
+    //
+    // A decomposed issue needs no special case here any more: an in-flight plan
+    // resolves to `more_work` through the roll-up and a complete one to `done`,
+    // which is the same behaviour the explicit `decomposed` check used to give it.
+    //
+    // Both directions are idempotent (after either move the item no longer
+    // matches) and neither fires on a closed item. Opt-in — off unless the
+    // operator set both a review state and pickup states, and only for items
+    // carrying a native state (Azure work items; GitHub issues have none, so this
+    // is a no-op for them).
     const { inReviewState, pickupStates } = this.pickup;
     if (inReviewState && pickupStates && pickupStates.length > 0) {
       // No separate config for where an item returns to: the first pickup state is
@@ -438,13 +456,27 @@ export class RuleDispatcher implements Dispatcher {
               ? `Work item #${issue.number} is delivered as a multi-part plan; move it to "${inReviewState}" for the life of the plan.`
               : `PR #${pr!.number} is open for work item #${issue.number}; move it to "${inReviewState}" so it isn't re-picked while under review.`,
           } satisfies RawAction);
-        } else if (state === inReviewState && !pr && !decomposed) {
+        } else if (state === inReviewState && !pr) {
+          // The one question that decides it: did whoever owns this issue say
+          // there is more to do? A plan says so by having parts in flight, an
+          // agent by calling `conclude_work`. `done` and `undeclared` both leave
+          // the item where it is — the first because it is finished, the second
+          // because nobody vouched for it and re-doing merged work is the more
+          // expensive mistake than waiting for a human to look.
+          const conclusion = resolveIssueConclusion(
+            conclusions.get(issueOrigin(issue.number)) ?? null,
+            plansByOrigin.get(issueOrigin(issue.number)) ?? null,
+          );
+          if (conclusion.verdict !== 'more_work') continue;
           raw.push({
             type: 'set_work_item_state',
             number: issue.number,
             state: returnState,
             rule: 'work-item-back-to-pickup',
-            reason: `Work item #${issue.number} is still open in "${inReviewState}" with no open PR; move it back to "${returnState}" so remaining work can be picked up.`,
+            reason:
+              `Work item #${issue.number} is open in "${inReviewState}" with no open PR, and ` +
+              `${conclusion.by === 'plan' ? 'its plan still has parts in flight' : `${conclusion.by === 'operator' ? 'you' : 'the agent that worked it'} reported work outstanding`}` +
+              `; move it back to "${returnState}" so the rest can be picked up.`,
           } satisfies RawAction);
         }
       }

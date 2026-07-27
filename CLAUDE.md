@@ -351,6 +351,42 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     it cheaper to treat one as the other; `test/autoSend.test.ts` asserts a pending ask is untouched
     by world signal. Tests: `test/proposals.test.ts`, `test/autoSend.test.ts`,
     `test/planApproval.test.ts`.
+- **Concluding an issue (`src/issueConclusion.ts`, the `conclude_work` tool).** A work item parked in
+  `issueInReviewState` is ambiguous — it sits there when work remains **and** when everything is
+  delivered and it is waiting on test — and nothing outside the harness distinguishes the two. Rule 3b's
+  inverse arm used to release on the _absence of an open PR_, but `openPrForIssue` reads only the open
+  list, so "the PR merged" and "there was never a PR" are one observation: a merged PR bounced its ticket
+  back to `Ready` and rule 4 put a fresh agent on work already on the default branch. What carries the fix:
+  - **The verdict is asked of whoever owns the whole issue**, which generalises what the decomposed path
+    already did rather than adding a parallel notion. `partsPlanFor` counts a `complete` plan as still
+    owning its issue precisely so it never bounces back, and `planComment` already tells the operator that
+    closing it is theirs. So: a plan **derives** the verdict from its roll-up; an unplanned issue's one
+    agent **declares** it. A part agent is never asked — `conclusionOrigin` **refuses** it (as it refuses
+    the planner, PR-concern and job origins), which is the structural half of "done means the issue is
+    finished, not my slice". Refusing beats silently scoping: an agent handed `{ok: true}` would believe
+    it had concluded the issue. `resolveIssueConclusion(stored, plan)` folds it, operator toggle first
+    (the escape hatch — the only thing that may contradict a roll-up), then the agent, then the plan.
+  - **`undeclared` is a third answer and the whole point.** It is never stored — it is what a missing row
+    resolves to — and rule 3b acts _only_ on an explicit `more_work`. Folding it into `more_work` would
+    restore the bug for every agent that forgets to declare, i.e. make the fix contingent on model
+    diligence; the failure this direction causes instead is a ticket sitting still with a visible marker,
+    which is the cheaper and the visible mistake. Same asymmetry as `@@LUBBDUBB_DONE@@` against the
+    `result` event. A `single` plan derives **nothing**: that verdict is about delivery _shape_, not
+    whether the PR was written.
+  - **Nothing gates pickup on it** — `issuePickupStatus` reports it, rule 3b is the only consumer that
+    acts. A pickup gate would make `done` silently veto an item the operator had deliberately moved back
+    to a pickup state, and would then need signal-based expiry (the phase-4 rejection pattern) to stay
+    honest. The work-item state stays the source of truth for pickup, so **moving the ticket in the
+    tracker _is_ the override** and no expiry logic exists. Consequence, stated: on GitHub/fake there is
+    no review state, so a conclusion is recorded and shown but changes no dispatch.
+  - **A fresh `issue_conclusions` table** keyed on the `issue:<n>` origin (no `migrate()` entry), _not_
+    columns on the agent row the way `note_progress` is: a conclusion belongs to the **issue** and must
+    outlive every agent that touched it, including across a replan, which rewrites the plan row. Clearing
+    is a delete, so `undeclared` has exactly one representation. An agent's `more_work` note is
+    **appended** to the next dispatched agent's prompt for that issue (`outstandingWorkNote`, attributed
+    and quoted) — appended, not filled into a placeholder, for the reason the rejection note is. The loop
+    is bounded by the existing `dispatchVerdict` attempt cap on `issue:<n>`; nothing new was added.
+    Tests: `test/issueConclusion.test.ts`, and the `return-from-review` block in `test/ruleDispatcher.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
@@ -802,34 +838,30 @@ preserve:
   - **Filing a finding as a ticket (`POST /api/findings/:id/file`) is the _defer_ arm beside
     promotion's "work it now"** — the thing a queued job could not express, since a job either runs or
     is cancelled and neither is "deal with this later". Promotion puts an agent on the problem; filing
-    puts an agent on the **tracker**. Four things carry it:
-    - **An agent files it, with `gh`/`az`, rather than the harness posting through a new
-      `IssueCreateCapable` seam.** The _wording_ of a ticket is what an operator has opinions about,
-      and a prompt is where those already live: `finding-ticket` is an ordinary overridable entry in
-      the template book, so house style is changed by dropping a file in `promptTemplatesDir`, not by
-      patching a route. A capability seam would have moved that judgement inside the harness where an
-      override cannot reach it. Consequence: the book is no longer only the rule dispatcher's —
-      `loadPromptTemplates` is hoisted in `system.ts` and exposed as `System.prompts` so the route
-      renders the same under either dispatcher.
-    - **The one thing an agent cannot infer is _which_ tracker**, so that is what the harness supplies:
-      the pure `trackerCoordinates(config)` renders coordinates from the same config block the
-      **`issues` provider** is built from, so a ticket lands where the harness reads issues from and
-      nowhere else. Null for `fake` (or a provider selected without its config) → the route 409s and
-      the snapshot ships `config.canFileTickets: false`, so the cockpit hides the button off the same
-      predicate the route refuses on. It is a **desk** job (filing writes no file), which is exactly
-      why the coordinates must be explicit — a scratch cwd has no remote for `gh` to read.
-    - **Two statuses, because filing is asynchronous.** `filing` is "an agent is creating it", `filed`
-      carries `ticketRef`. Collapsing them would claim a ticket that does not exist yet and leave
-      nothing to show for a filing agent that died before making one — which is why a `filing` card is
-      drawn among the open ones, not in the resolved tail. `job_id` is **reused** for the filing job
-      (a finding is terminal either way, so only one job ever hangs off it); `ticket_ref` is a column
-      on an **existing** table and therefore needs its `ensureColumns('findings', …)` entry.
-    - **`link_ticket(ref)` closes the loop**, and identity is structural exactly as for
-      `report_finding`: the finding is resolved from the credential (`agent → task → its `job:<id>`
+    puts an agent on the **tracker**. Four things carry it: - **An agent files it, with `gh`/`az`, rather than the harness posting through a new
+    `IssueCreateCapable` seam.** The _wording_ of a ticket is what an operator has opinions about,
+    and a prompt is where those already live: `finding-ticket` is an ordinary overridable entry in
+    the template book, so house style is changed by dropping a file in `promptTemplatesDir`, not by
+    patching a route. A capability seam would have moved that judgement inside the harness where an
+    override cannot reach it. Consequence: the book is no longer only the rule dispatcher's —
+    `loadPromptTemplates` is hoisted in `system.ts` and exposed as `System.prompts` so the route
+    renders the same under either dispatcher. - **The one thing an agent cannot infer is _which_ tracker**, so that is what the harness supplies:
+    the pure `trackerCoordinates(config)` renders coordinates from the same config block the
+    **`issues` provider** is built from, so a ticket lands where the harness reads issues from and
+    nowhere else. Null for `fake` (or a provider selected without its config) → the route 409s and
+    the snapshot ships `config.canFileTickets: false`, so the cockpit hides the button off the same
+    predicate the route refuses on. It is a **desk** job (filing writes no file), which is exactly
+    why the coordinates must be explicit — a scratch cwd has no remote for `gh` to read. - **Two statuses, because filing is asynchronous.** `filing` is "an agent is creating it", `filed`
+    carries `ticketRef`. Collapsing them would claim a ticket that does not exist yet and leave
+    nothing to show for a filing agent that died before making one — which is why a `filing` card is
+    drawn among the open ones, not in the resolved tail. `job_id` is **reused** for the filing job
+    (a finding is terminal either way, so only one job ever hangs off it); `ticket_ref` is a column
+    on an **existing** table and therefore needs its `ensureColumns('findings', …)` entry. - **`link_ticket(ref)` closes the loop**, and identity is structural exactly as for
+    `report_finding`: the finding is resolved from the credential (`agent → task → its `job:<id>`
 origin → the finding that job was created for`), so the tool takes only a ref and an agent on any
-      other task resolves to none. Same `parseFindingRef` as the finding's own ref (bare number
-      refused — nothing here says whether `314` is an issue or a PR), and idempotence is in the write
-      (`WHERE id=? AND status='filing'`), not in a read-then-check. Tests: `test/findingTickets.test.ts`.
+    other task resolves to none. Same `parseFindingRef` as the finding's own ref (bare number
+    refused — nothing here says whether `314` is an issue or a PR), and idempotence is in the write
+    (`WHERE id=? AND status='filing'`), not in a read-then-check. Tests: `test/findingTickets.test.ts`.
 - **`note_progress(note)` — the agent's own answer to "what is it doing, and is it stuck?"** The
   fleet card's live line is `agent:tail` (`Hub.updateTail`): the last non-empty line the process
   happened to print. It's a byproduct rather than a statement (in stream mode it's as likely to be a

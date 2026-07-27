@@ -493,6 +493,46 @@ export interface Finding {
 /** A finding as reported, before the store assigns identity and status. */
 export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary'>;
 
+/**
+ * What someone said about whether an issue is finished.
+ *
+ * `undeclared` is a value, not the absence of one, and that distinction is the
+ * whole feature: a work item parked in a review state is genuinely ambiguous —
+ * it sits there when work remains *and* when everything is delivered and it is
+ * waiting on test — so folding "nobody said" into "not finished" is exactly the
+ * assumption that had the harness re-pick merged work. Only
+ * {@link IssueConclusionVerdict} is ever stored; `undeclared` is what the
+ * resolver returns for a row that doesn't exist.
+ */
+export type IssueConclusionVerdict = 'done' | 'more_work';
+
+/** Who cast a verdict: the agent that did the work, or the operator overriding it. */
+export type ConclusionAuthor = 'agent' | 'operator';
+
+/**
+ * One issue's standing conclusion — the `conclude_work` tool's row, or the
+ * operator's override of it.
+ *
+ * Keyed on the `issue:<n>` origin rather than hung off an agent (the way a
+ * `note_progress` note is) because a conclusion belongs to the **issue** and has
+ * to outlive every agent that ever touched it — including across a replan, which
+ * rewrites the plan row. One row per issue, overwritten per declaration, so the
+ * standing verdict is a lookup rather than a fold over history.
+ */
+export interface IssueConclusion {
+  /** The issue, as `issue:<n>` — the same origin every dispatch rule and gate keys on. */
+  originRef: string;
+  verdict: IssueConclusionVerdict;
+  /** What was delivered, or what remains. Required: a bare verdict is not reviewable. */
+  note: string;
+  by: ConclusionAuthor;
+  /** The declaring agent and its task, from the credential. Null for an operator toggle. */
+  agentId: string | null;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Plans (the multi-PR issue funnel)
 // ---------------------------------------------------------------------------

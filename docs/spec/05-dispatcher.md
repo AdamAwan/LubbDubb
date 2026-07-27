@@ -1,6 +1,6 @@
 # 05 — Dispatch
 
-The dispatcher answers one question per cycle: *given the world and the fleet, what should happen?*
+The dispatcher answers one question per cycle: _given the world and the fleet, what should happen?_
 Its output is a bounded, validated action plan — never direct effects.
 
 ```ts
@@ -17,17 +17,17 @@ interface Dispatcher {
 what makes an LLM decision-maker safe: it can only ever ask for one of these, and anything malformed
 is rejected and audited rather than executed.
 
-| Action                | Required payload                                        | Optional payload                                                       |
-| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `dispatch_code_agent` | `branch`, `title`, `prompt`, `reason`                   | `originRef`, `originTitle`, `originSummary`, `jobId`, `partId`, `base`, `rule` |
-| `dispatch_desk_agent` | `title`, `prompt`, `reason`                             | `originRef`, `originTitle`, `originSummary`, `jobId`, `rule`             |
-| `escalate_to_human`   | `escalationType`, `prompt`, `reason`                    | `context`, `taskId`, `agentId`, `rule`                                   |
-| `respond_to_agent`    | `agentId`, `response`, `reason`                         | `originRefs`, `rule`                                                     |
-| `reply_on_pr`         | `prNumber`, `draft`, `reason`                           | `commentId`, `confidence` (0..1), `rule`                                 |
-| `merge_pr`            | `prNumber`, `reason`                                    | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
-| `propose_plan`        | `planId`, `originRef`, `prompt`, `reason`               | `rule`                                                                   |
-| `set_work_item_state` | `number`, `state`, `reason`                             | `rule`                                                                   |
-| `no_op`               | `reason`                                                | `rule`                                                                   |
+| Action                | Required payload                          | Optional payload                                                               |
+| --------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `dispatch_code_agent` | `branch`, `title`, `prompt`, `reason`     | `originRef`, `originTitle`, `originSummary`, `jobId`, `partId`, `base`, `rule` |
+| `dispatch_desk_agent` | `title`, `prompt`, `reason`               | `originRef`, `originTitle`, `originSummary`, `jobId`, `rule`                   |
+| `escalate_to_human`   | `escalationType`, `prompt`, `reason`      | `context`, `taskId`, `agentId`, `rule`                                         |
+| `respond_to_agent`    | `agentId`, `response`, `reason`           | `originRefs`, `rule`                                                           |
+| `reply_on_pr`         | `prNumber`, `draft`, `reason`             | `commentId`, `confidence` (0..1), `rule`                                       |
+| `merge_pr`            | `prNumber`, `reason`                      | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
+| `propose_plan`        | `planId`, `originRef`, `prompt`, `reason` | `rule`                                                                         |
+| `set_work_item_state` | `number`, `state`, `reason`               | `rule`                                                                         |
+| `no_op`               | `reason`                                  | `rule`                                                                         |
 
 `reason` is mandatory on every action — it is what the audit log shows. `rule` defaults to `null`,
 because the LLM dispatcher reasons freely and emits none.
@@ -43,25 +43,25 @@ keeps its raw value and a joined zod error path/message). Absent `confidence` is
 `decisions.rule` column; and `/api/state` ships the whole registry so the cockpit's Decision log can
 expand a row into the rule that fired and why that rule exists.
 
-| Id                        | № | Name                        | Fires when                                                                                |
-| ------------------------- | -- | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `manual-job`              | 0  | Operator-launched job       | A queued job exists. Drained ahead of every world-driven rule.                             |
-| `pr-ci-failing`           | 1  | Failing CI                  | An open PR has failing CI that is not inherited from its base, and no agent is on its branch. |
-| `pr-base-update`          | 2  | Base out of date            | A PR is `behind` its base or conflicts with it.                                            |
-| `pr-review-comment`       | 2b | Unhandled review comment    | A PR carries an unhandled review comment.                                                  |
-| `branch-notify`           | 1–2b | One agent per branch      | A fresh PR signal lands on a branch whose agent is already **running**.                     |
-| `pr-merge-ready`          | 3  | Merge-ready PR              | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.             |
-| `work-item-in-review`     | 3b | Back off to review state    | A work item in a pickup state has an open PR (or is decomposed).                            |
-| `work-item-back-to-pickup`| 3b | Return from review state    | A still-open work item parked in the review state has no open PR and is not decomposed.     |
-| `issue-plan`              | 3c | Issue needs a plan          | With planning on, a watched open issue has no plan yet — or an operator asked for a replan. |
-| `plan-approval`           | 3d | Plan needs your approval    | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending. |
-| `plan-part`               | 4a | Plan part ready             | A part of an active plan is `ready` and unstaffed.                                          |
-| `issue-pickup`            | 4  | Open issue without a PR     | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.    |
-| `cooldown-escalate`       | 1–4 | Attempt cap reached        | An origin spent its dispatch attempts without clearing.                                     |
-| `story-groom`             | 5  | Story grooming              | A ready story lacks a description or acceptance criteria.                                   |
-| `story-waf`               | 6  | Missing WAF pillars         | A ready story has no WAF pillars.                                                           |
-| `story-pickup`            | 7  | Idle capacity pickup        | Headroom remains and a groomed ready story is the highest priority.                         |
-| `idle`                    | 8  | Nothing actionable          | No rule matched — recorded as a `no_op`, so idleness stays auditable.                        |
+| Id                         | №    | Name                     | Fires when                                                                                               |
+| -------------------------- | ---- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `manual-job`               | 0    | Operator-launched job    | A queued job exists. Drained ahead of every world-driven rule.                                           |
+| `pr-ci-failing`            | 1    | Failing CI               | An open PR has failing CI that is not inherited from its base, and no agent is on its branch.            |
+| `pr-base-update`           | 2    | Base out of date         | A PR is `behind` its base or conflicts with it.                                                          |
+| `pr-review-comment`        | 2b   | Unhandled review comment | A PR carries an unhandled review comment.                                                                |
+| `branch-notify`            | 1–2b | One agent per branch     | A fresh PR signal lands on a branch whose agent is already **running**.                                  |
+| `pr-merge-ready`           | 3    | Merge-ready PR           | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                           |
+| `work-item-in-review`      | 3b   | Back off to review state | A work item in a pickup state has an open PR (or is decomposed).                                         |
+| `work-item-back-to-pickup` | 3b   | Return from review state | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion. |
+| `issue-plan`               | 3c   | Issue needs a plan       | With planning on, a watched open issue has no plan yet — or an operator asked for a replan.              |
+| `plan-approval`            | 3d   | Plan needs your approval | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.    |
+| `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                       |
+| `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                |
+| `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                  |
+| `story-groom`              | 5    | Story grooming           | A ready story lacks a description or acceptance criteria.                                                |
+| `story-waf`                | 6    | Missing WAF pillars      | A ready story has no WAF pillars.                                                                        |
+| `story-pickup`             | 7    | Idle capacity pickup     | Headroom remains and a groomed ready story is the highest priority.                                      |
+| `idle`                     | 8    | Nothing actionable       | No rule matched — recorded as a `no_op`, so idleness stays auditable.                                    |
 
 ## Rank-then-slice
 
@@ -85,7 +85,7 @@ The whole ranked list — above and below the cut — is returned as `DispatchRe
 
 ### Candidate order
 
-Candidates are appended in this order, and the order *is* the priority:
+Candidates are appended in this order, and the order _is_ the priority:
 
 1. **Queued jobs** (rule 0), oldest first — a manual request takes the next free slot.
 2. **PR concerns** (rules 1/2/2b), ranked **cross-PR** by concern class (CI > base-update > review
@@ -123,7 +123,7 @@ candidates **once, immediately before the headroom cut**, into three tiers:
 
 It **only re-orders**. It never clears a `held` verdict: a cooldown, cap, pause, ignore tag or
 unapproved plan holds an item wherever the override places it, because the cut walk reads `held`
-independently of position. Overriding a hold *into* dispatch is a different feature, out of scope.
+independently of position. Overriding a hold _into_ dispatch is a different feature, out of scope.
 
 An override is written by `POST /api/upnext/order` (replace-all) and pruned once its origin stops
 being tracked — see [16](16-http-api.md) and [14](14-persistence.md).
@@ -140,17 +140,17 @@ every cycle**, not a persisted FIFO.
 
 ## The re-dispatch cooldown
 
-`src/dispatcher/dispatchCooldown.ts`. The dispatcher's origin de-dup only sees *currently active*
+`src/dispatcher/dispatchCooldown.ts`. The dispatcher's origin de-dup only sees _currently active_
 tasks, so an agent that finishes without clearing its concern would leave the origin dispatchable and
 be re-spawned every heartbeat. `dispatchVerdict(origin, now, recentDecisions, policy)` supplies the
 missing memory, purely from the audit log:
 
-| Verdict     | Meaning                                                            |
-| ----------- | -------------------------------------------------------------------- |
-| `dispatch`  | Free to (re-)dispatch.                                              |
-| `cooldown`  | Attempted too recently; queued as held, retried after the gap.      |
-| `escalate`  | The attempt cap is spent and no human has been looped in yet.       |
-| `hold`      | Cap spent and already escalated — do nothing, do not re-escalate.   |
+| Verdict    | Meaning                                                           |
+| ---------- | ----------------------------------------------------------------- |
+| `dispatch` | Free to (re-)dispatch.                                            |
+| `cooldown` | Attempted too recently; queued as held, retried after the gap.    |
+| `escalate` | The attempt cap is spent and no human has been looped in yet.     |
+| `hold`     | Cap spent and already escalated — do nothing, do not re-escalate. |
 
 `DEFAULT_COOLDOWN` is `{ maxAttempts: 3, cooldownMs: 900000 }` (15 minutes). Only **executed**
 dispatches count as attempts: a deferred one (paused, or no headroom) never ran. "Now" is the world
@@ -181,13 +181,23 @@ issues have none, so it is a no-op for them). It never fires on a closed item.
 
 - Item in a pickup state **and** (an open PR exists for it, or its plan is decomposed) → move it to
   `issueInReviewState`.
-- Item in `issueInReviewState` with no open PR and not decomposed → move it back to the **first**
-  entry of `issuePickupStates`. There is no separate config for the return state: the first pickup
-  state is the operator's own "start here".
+- Item in `issueInReviewState` with no open PR **and an explicit `more_work` conclusion** → move it
+  back to the **first** entry of `issuePickupStates`. There is no separate config for the return
+  state: the first pickup state is the operator's own "start here".
 
-Both directions are idempotent — after either move the item no longer matches. A decomposed item stays
-in the review state for the whole life of its plan, because it is waiting on several PRs rather than
-one, and the inverse would otherwise bounce it back to "Ready" in every gap between parts.
+Both directions are idempotent — after either move the item no longer matches.
+
+The inverse arm's gate is the conclusion, **not** the absence of a PR, and that is load-bearing.
+`openPrForIssue` reads only the open list, so "this PR merged" and "there was never a PR" are one
+observation; releasing on absence therefore bounced a merged ticket back to "Ready" and had rule 4
+put a fresh agent on work already sitting on the default branch. `done` and `undeclared` both leave
+the item where it is — see [the conclusion verdict](06-issue-pickup.md#concluding-an-issue) for why
+silence stops the harness rather than releasing it.
+
+A decomposed item needs no special case here: an in-flight plan resolves to `more_work` through the
+roll-up and a `complete` one to `done`, which is exactly what the old explicit `decomposed` check
+gave it — the item stays in the review state for the whole life of its plan rather than bouncing back
+to "Ready" in every gap between parts.
 
 ## Rule 3 — the merge gate
 

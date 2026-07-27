@@ -105,6 +105,10 @@ const realApi = {
     post<{ ok: true; excluded: boolean }>(`/api/prs/${prNumber}/exclude`, { excluded }),
   setIssueWatched: (issueNumber: number, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/issues/${issueNumber}/watch`, { watched }),
+  // The operator's override of whether an issue is finished. `null` clears it,
+  // returning the issue to whatever its agent or its plan says.
+  setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/conclusion`, { verdict }),
   setStoryWatched: (storyId: string, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/stories/${storyId}/watch`, { watched }),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),

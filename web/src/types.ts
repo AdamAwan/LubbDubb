@@ -46,6 +46,19 @@ export interface Issue {
    * doing with this item — or why it's leaving it alone.
    */
   pickup?: { eligible: boolean; status: string; reasons: string[] };
+  /**
+   * Whether anyone has said this issue is finished — beside `pickup`, not inside
+   * it. Pickup says what the harness would do next cycle; this says whether the
+   * work is concluded, which is what stops a merged ticket being re-picked.
+   * `done`|`more_work`|`undeclared`, with `by` naming the plan derivation, the
+   * declaring agent or the operator.
+   */
+  conclusion?: {
+    verdict: 'done' | 'more_work' | 'undeclared';
+    by: 'agent' | 'operator' | 'plan' | null;
+    note: string;
+    at: string | null;
+  };
 }
 interface Story {
   id: string;

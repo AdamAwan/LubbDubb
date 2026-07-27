@@ -11,6 +11,7 @@ import type {
   AgentFlag,
   AgentFlagInput,
   AgentUsage,
+  ConclusionAuthor,
   Decision,
   ErrorLogEntry,
   ErrorLogInput,
@@ -20,6 +21,8 @@ import type {
   FindingInput,
   FindingKind,
   FindingStatus,
+  IssueConclusion,
+  IssueConclusionVerdict,
   Job,
   Plan,
   PlanPart,
@@ -461,6 +464,70 @@ export class Store {
   listPlans(): Plan[] {
     const rows = this.db.prepare(`SELECT * FROM plans ORDER BY created_at ASC`).all() as PlanRow[];
     return rows.map(rowToPlan);
+  }
+
+  /**
+   * Record who says an issue is finished, replacing any standing verdict for it.
+   *
+   * Latest-wins per issue rather than append-and-fold: a second pickup's agent
+   * supersedes the first's, and an operator's toggle supersedes both. `createdAt`
+   * is preserved across an overwrite so the row still dates the first time anyone
+   * concluded this issue, which is what the cockpit shows when a verdict has been
+   * revised.
+   */
+  recordIssueConclusion(input: {
+    originRef: string;
+    verdict: IssueConclusionVerdict;
+    note: string;
+    by: ConclusionAuthor;
+    agentId?: string | null;
+    taskId?: string | null;
+  }): IssueConclusion {
+    const ts = this.now();
+    const prev = this.getIssueConclusion(input.originRef);
+    const row: IssueConclusion = {
+      originRef: input.originRef,
+      verdict: input.verdict,
+      note: input.note,
+      by: input.by,
+      agentId: input.agentId ?? null,
+      taskId: input.taskId ?? null,
+      createdAt: prev?.createdAt ?? ts,
+      updatedAt: ts,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO issue_conclusions (origin_ref, verdict, note, by, agent_id, task_id, created_at, updated_at)
+         VALUES (@originRef, @verdict, @note, @by, @agentId, @taskId, @createdAt, @updatedAt)
+         ON CONFLICT(origin_ref) DO UPDATE SET
+           verdict=excluded.verdict, note=excluded.note, by=excluded.by,
+           agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
+      )
+      .run(row);
+    return row;
+  }
+
+  getIssueConclusion(originRef: string): IssueConclusion | null {
+    const row = this.db.prepare(`SELECT * FROM issue_conclusions WHERE origin_ref=?`).get(originRef) as
+      | IssueConclusionRow
+      | undefined;
+    return row ? rowToIssueConclusion(row) : null;
+  }
+
+  listIssueConclusions(): IssueConclusion[] {
+    const rows = this.db.prepare(`SELECT * FROM issue_conclusions`).all() as IssueConclusionRow[];
+    return rows.map(rowToIssueConclusion);
+  }
+
+  /**
+   * Drop an issue's standing verdict, returning it to whatever its plan derives —
+   * or to `undeclared`. The operator's "actually, nobody has decided this": a
+   * delete rather than a third stored verdict, because `undeclared` is precisely
+   * the absence of a row and storing it would give the resolver two ways to
+   * express one state.
+   */
+  clearIssueConclusion(originRef: string): boolean {
+    return this.db.prepare(`DELETE FROM issue_conclusions WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
   /**
@@ -1178,6 +1245,16 @@ interface PlanRow {
   created_at: string;
   updated_at: string;
 }
+interface IssueConclusionRow {
+  origin_ref: string;
+  verdict: string;
+  note: string;
+  by: string;
+  agent_id: string | null;
+  task_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
 interface PlanPartRow {
   id: string;
   plan_id: string;
@@ -1329,6 +1406,18 @@ function rowToPlan(r: PlanRow): Plan {
     status: r.status as PlanStatus,
     reason: r.reason,
     statusCommentRef: r.status_comment_ref,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+function rowToIssueConclusion(r: IssueConclusionRow): IssueConclusion {
+  return {
+    originRef: r.origin_ref,
+    verdict: r.verdict as IssueConclusionVerdict,
+    note: r.note,
+    by: r.by as ConclusionAuthor,
+    agentId: r.agent_id,
+    taskId: r.task_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

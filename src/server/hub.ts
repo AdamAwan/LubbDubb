@@ -78,6 +78,10 @@ export class Hub {
     // delivery — unlike `agent:tail`, which exists only as a broadcast and has to
     // carry its own payload. Same treatment as `usage` for the same reason.
     agents.on('progress', () => this.broadcast({ type: 'dirty' }));
+    // An agent said whether its issue is finished. Same treatment and the same
+    // reason: the verdict is shipped per-issue inside /api/state, so the refetch
+    // a `dirty` triggers is the whole delivery.
+    agents.on('conclusion', () => this.broadcast({ type: 'dirty' }));
     // The file-events hook recorded a written file; a coarse dirty repaints the
     // drawer's "files changed" list via the /api/state refetch (report-like ones
     // also arrive as an agent:flag above).

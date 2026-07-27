@@ -6,7 +6,19 @@ import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
-import type { Agent, AgentAsk, AgentFlag, AgentStatus, AgentUsage, Finding, FindingInput, Task } from '../types.js';
+import type {
+  Agent,
+  AgentAsk,
+  AgentFlag,
+  AgentStatus,
+  AgentUsage,
+  Finding,
+  FindingInput,
+  IssueConclusion,
+  IssueConclusionVerdict,
+  Task,
+} from '../types.js';
+import { conclusionOrigin } from '../issueConclusion.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -125,6 +137,8 @@ interface AgentManagerEvents {
   finding: [{ agentId: string; taskId: string; finding: Finding; created: boolean }];
   /** The agent said what it is working on (already persisted onto its row, replacing the previous note). */
   progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
+  /** The agent said whether its issue is finished (already persisted against the issue origin). */
+  conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -425,6 +439,47 @@ export class AgentManager extends EventEmitter {
     const notedAt = this.store.recordAgentNote(agentId, note);
     this.emit('progress', { agentId, taskId: task.id, note, notedAt });
     return { ok: true, notedAt };
+  }
+
+  /**
+   * Record whether the issue an agent was dispatched for is finished (the
+   * `conclude_work` tool).
+   *
+   * The issue is reached from the credential — agent → task → its `issue:<n>`
+   * origin — so the tool takes no issue argument and an agent working anything
+   * else resolves to nothing it may conclude. That check is
+   * {@link conclusionOrigin}'s, and it is the structural half of "done means the
+   * issue is finished, not my bit of it": a part agent is *refused* rather than
+   * having its verdict quietly scoped to its part.
+   *
+   * Routed through the manager rather than straight to the store for the same
+   * reason as {@link recordFinding}: the `conclusion` event repaints the cockpit
+   * now rather than on the next pulse. Like a finding it needs no *live* session
+   * — a verdict cast on an agent's last breath is the one that matters most.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  recordConclusion(
+    agentId: string,
+    verdict: IssueConclusionVerdict,
+    note: string,
+  ): { ok: true; conclusion: IssueConclusion } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const origin = conclusionOrigin(task.originRef);
+    if (!origin.ok) return { ok: false, error: origin.error };
+    const conclusion = this.store.recordIssueConclusion({
+      originRef: origin.originRef,
+      verdict,
+      note,
+      by: 'agent',
+      agentId,
+      taskId: task.id,
+    });
+    this.emit('conclusion', { agentId, taskId: task.id, conclusion });
+    return { ok: true, conclusion };
   }
 
   /**

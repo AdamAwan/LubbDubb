@@ -136,6 +136,19 @@ Body `{watched: boolean}`. Writes the **pair** — sets `${prefix}-watch` to `wa
 `${prefix}-ignore` to `!watched` — so the two labels stay mutually exclusive. Broadcasts and runs a
 cycle. Same 400s.
 
+### `POST /api/issues/:number/conclusion`
+
+Body `{verdict: 'done' | 'more_work' | null, note?: string}`. The operator's override of whether an
+issue is finished — it wins over the agent's declaration and over the plan derivation (see
+[06](06-issue-pickup.md#concluding-an-issue)). `null` **clears** the row, returning the issue to
+whatever its plan derives or to `undeclared`.
+
+It writes the harness's own record and **does not touch the tracker**: concluding an issue here is
+what stops the re-pickup, while moving the work item to a done state stays a human act. Broadcasts
+`world:changed`, and runs a cycle only for `more_work`, so an operator's "there's more here" bounces
+the item back to pickup immediately rather than on the next heartbeat. 400 on a non-integer issue
+number or a verdict that is not one of the three.
+
 ### `POST /api/stories/:id/watch`
 
 The same, for a story id, routed to the fake backlog's `StoryLabelCapable`.
