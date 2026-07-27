@@ -438,18 +438,26 @@ export class AgentManager extends EventEmitter {
     if (!session) return false;
     const agent = this.store.getAgent(agentId);
     if (!agent) return false;
+    // Everything below names the agent by the id on the row we just loaded, never
+    // by the argument. They are equal by construction — the two lookups above both
+    // hit, and the session map is keyed on ids this class minted — so this is about
+    // provenance: `complete` is the one path here reached straight from a request
+    // parameter (`POST /api/agents/:id/complete`), and these ids go on to be written
+    // into an audit row and, on the failure arm downstream, a log line. Reading the
+    // canonical value back off the record keeps a caller's string out of both.
+    const id = agent.id;
     session.kill();
-    this.handleTerminal(agentId, agent.taskId, 'done', 'operator');
+    this.handleTerminal(id, agent.taskId, 'done', 'operator');
     // Audited under the cycle id the cockpit reads as yours, the way an act decided
     // outside a pulse already is. No proposal: there is nothing to authorize — the
     // act is the operator's own and already taken, where a proposal is a standing
     // verdict a rule re-reads every pulse.
     const task = this.store.getTask(agent.taskId);
     this.store.recordDecision({
-      cycleId: `human:${agentId}`,
+      cycleId: `human:${id}`,
       action: { type: 'no_op', reason: 'operator marked the work complete' },
       outcome: 'executed',
-      detail: `Marked agent ${agentId} done (task ${agent.taskId}${task?.originRef ? `, ${task.originRef}` : ''})`,
+      detail: `Marked agent ${id} done (task ${agent.taskId}${task?.originRef ? `, ${task.originRef}` : ''})`,
     });
     return true;
   }
