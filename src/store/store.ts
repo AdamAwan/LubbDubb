@@ -87,6 +87,9 @@ export class Store {
     this.ensureColumns('decisions', {
       rule: 'TEXT',
     });
+    this.ensureColumns('findings', {
+      ticket_ref: 'TEXT',
+    });
   }
 
   private ensureColumns(table: string, columns: Record<string, string>): void {
@@ -336,13 +339,14 @@ export class Store {
       summary: input.summary,
       status: 'open',
       jobId: null,
+      ticketRef: null,
       createdAt: ts,
       updatedAt: ts,
     };
     this.db
       .prepare(
-        `INSERT INTO findings (id, agent_id, task_id, origin_ref, kind, ref, summary, status, job_id, created_at, updated_at)
-         VALUES (@id, @agentId, @taskId, @originRef, @kind, @ref, @summary, @status, @jobId, @createdAt, @updatedAt)`,
+        `INSERT INTO findings (id, agent_id, task_id, origin_ref, kind, ref, summary, status, job_id, ticket_ref, created_at, updated_at)
+         VALUES (@id, @agentId, @taskId, @originRef, @kind, @ref, @summary, @status, @jobId, @ticketRef, @createdAt, @updatedAt)`,
       )
       .run(finding);
     return { finding, created: true };
@@ -362,11 +366,16 @@ export class Store {
   }
 
   /**
-   * Resolve an open finding: `promoted` (with the job it became) or `dismissed`.
-   * Only an open finding can be resolved, so a double-click can't queue a second
-   * job for one finding. Returns null when there was nothing open to resolve.
+   * Resolve an open finding: `promoted` or `filing` (with the job it became), or
+   * `dismissed`. Only an open finding can be resolved, so a double-click can't
+   * queue a second job for one finding. Returns null when there was nothing open
+   * to resolve.
    */
-  resolveFinding(id: string, status: Exclude<FindingStatus, 'open'>, jobId: string | null = null): Finding | null {
+  resolveFinding(
+    id: string,
+    status: Exclude<FindingStatus, 'open' | 'filed'>,
+    jobId: string | null = null,
+  ): Finding | null {
     const existing = this.getFinding(id);
     if (!existing || existing.status !== 'open') return null;
     const updatedAt = this.now();
@@ -374,6 +383,30 @@ export class Store {
       .prepare(`UPDATE findings SET status=?, job_id=?, updated_at=? WHERE id=?`)
       .run(status, jobId, updatedAt, id);
     return { ...existing, status, jobId, updatedAt };
+  }
+
+  /** The finding a job was created for, if it was created for one. */
+  findFindingByJobId(jobId: string): Finding | null {
+    const row = this.db.prepare(`SELECT * FROM findings WHERE job_id=?`).get(jobId) as FindingRow | undefined;
+    return row ? rowToFinding(row) : null;
+  }
+
+  /**
+   * Record the ticket a filing agent created: `filing` → `filed`.
+   *
+   * Guarded in the write (`WHERE id=? AND status='filing'`) rather than by a
+   * read-then-check, the same discipline `decideProposal` uses — an agent that
+   * calls `link_ticket` twice links once, with no caller obliged to remember to
+   * look first. Returns null when there was no filing finding to settle, which
+   * is what the tool turns into an error the agent can read.
+   */
+  linkFindingTicket(id: string, ticketRef: string): Finding | null {
+    const updatedAt = this.now();
+    const result = this.db
+      .prepare(`UPDATE findings SET status='filed', ticket_ref=?, updated_at=? WHERE id=? AND status='filing'`)
+      .run(ticketRef, updatedAt, id);
+    if (result.changes === 0) return null;
+    return this.getFinding(id);
   }
 
   // -- Plans (the multi-PR issue funnel) -----------------------------------
@@ -1130,6 +1163,8 @@ interface FindingRow {
   summary: string;
   status: string;
   job_id: string | null;
+  /** Nullable *and* possibly absent: added by `migrate()` on databases from an older build. */
+  ticket_ref: string | null | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -1281,6 +1316,7 @@ function rowToFinding(r: FindingRow): Finding {
     summary: r.summary,
     status: r.status as FindingStatus,
     jobId: r.job_id,
+    ticketRef: r.ticket_ref ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

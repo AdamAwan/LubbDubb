@@ -236,6 +236,25 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * File a finding as a ticket — the demo mirror of `POST /api/findings/:id/file`.
+   *
+   * It stops at `filing`, which is the honest demo: the real transition to
+   * `filed` is a desk agent creating the ticket and calling `link_ticket`, and
+   * the demo has no tracker to create one in.
+   */
+  async fileFinding(id: string): Promise<{ ok: true }> {
+    const finding = (this.state.findings ?? []).find((f) => f.id === id);
+    if (finding && finding.status === 'open') {
+      await this.launchJob({ prompt: `File this finding as a ticket:\n\n${finding.summary}`, title: 'File ticket' });
+      finding.status = 'filing';
+      finding.jobId = this.state.jobs[0]?.id ?? null;
+      finding.updatedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   /** Dismiss a finding (demo mirror of POST /api/findings/:id/dismiss). */
   async dismissFinding(id: string): Promise<{ ok: true }> {
     const finding = (this.state.findings ?? []).find((f) => f.id === id);
@@ -739,6 +758,7 @@ export const demoApi = {
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),
   promoteFinding: (id: string) => getServer().promoteFinding(id),
+  fileFinding: (id: string) => getServer().fileFinding(id),
   dismissFinding: (id: string) => getServer().dismissFinding(id),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),

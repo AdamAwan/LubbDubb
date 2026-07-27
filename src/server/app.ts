@@ -15,7 +15,7 @@ import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
-import { findingJobRequest } from '../mcp/findings.js';
+import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../mcp/findings.js';
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
@@ -473,6 +473,43 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, finding: resolved, job, report };
   });
 
+  // File a finding as a ticket in the tracker — the *defer* arm, next to promote's
+  // "do it now". Both are one operator click and both produce a job, and the split
+  // is what each job is for: promotion dispatches an agent at the problem, filing
+  // dispatches one at the tracker so the problem can wait its turn with everything
+  // else. Filing is asynchronous, so the finding lands on `filing` here and reaches
+  // `filed` only when the agent reports the ticket back through `link_ticket`.
+  app.post('/api/findings/:id/file', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const finding = store.getFinding(id);
+    if (!finding) return reply.code(404).send({ error: 'finding not found' });
+    if (finding.status !== 'open') return reply.code(409).send({ error: `finding is already ${finding.status}` });
+    // A desk agent runs in a scratch dir, so it has no remote to infer the target
+    // from; without coordinates there is nowhere to file. The cockpit hides the
+    // button in this case, so reaching here means a direct call.
+    const tracker = trackerCoordinates(system.config);
+    if (!tracker)
+      return reply
+        .code(409)
+        .send({ error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)' });
+    const derived = findingTicketFields(finding, tracker);
+    const title =
+      (typeof (req.body as { title?: unknown })?.title === 'string' &&
+        ((req.body as { title?: string }).title ?? '').trim()) ||
+      derived.title;
+    // Rendered from the operator's template book, not built here: how a ticket
+    // should be worded is exactly the sort of house style an override exists for.
+    const prompt = system.prompts.render('finding-ticket', derived.vars);
+    // Desk, not code: filing touches no repository, so a worktree and a branch
+    // would be cut for a task that never writes a file.
+    const job = store.createJob({ title, prompt, kind: 'desk' });
+    // Job first, then resolve — a failed create leaves the finding open.
+    const resolved = store.resolveFinding(id, 'filing', job.id);
+    hub.broadcast({ type: 'world:changed' });
+    const report = await harness.runCycle('manual');
+    return { ok: true, finding: resolved, job, report };
+  });
+
   // Dismiss a finding: the operator read it and it needs nothing. It stays in the
   // list (muted) rather than being deleted — "we looked at this" is information,
   // and a verbatim re-report is deduped onto the dismissed row rather than
@@ -873,7 +910,10 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? [])],
     issues: world.issues,
     taskBranches: tasks.map((t) => t.branch),
-    refs: [...findings.map((f) => f.ref), ...proposals.map((p) => p.ref)],
+    // A filed ticket is brand new, so it is usually *not* in the world lists the
+    // `#n` keys are built from — it needs resolving by its canonical ref or the
+    // chip the operator just created links nowhere.
+    refs: [...findings.map((f) => f.ref), ...findings.map((f) => f.ticketRef), ...proposals.map((p) => p.ref)],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
   return {
@@ -889,6 +929,11 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
       // Whether the inject panel should render: synthetic events only land on
       // the `fake` provider, so real-integration deployments hide it.
       injectable: isWorldInjectable(config.integrations),
+      // Whether a finding can be filed as a ticket at all — there is nowhere to
+      // file one under the `fake` provider. Shipped as a flag rather than left to
+      // the cockpit to infer from the provider name, so the one place that
+      // decides is the one the route asks.
+      canFileTickets: trackerCoordinates(config) !== null,
     },
     // When the world below was actually observed — null before the first cycle,
     // when there is no baseline and the lists are empty. Shipped because the

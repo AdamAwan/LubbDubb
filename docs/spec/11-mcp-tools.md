@@ -14,18 +14,19 @@ discover what a synchronous error would have said in one turn.
 
 `src/mcp/names.ts` lists them; `src/mcp/tools.ts` builds them.
 
-| Tool             | Purpose                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------ |
-| `plan_submit`    | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                   |
-| `escalate`       | Ask the human a question and park. The typed form of the WAITING sentinel.                |
-| `world_read`     | Read the harness's own view of a PR, issue or story.                                      |
-| `report_finding` | File something noticed outside the agent's own task.                                      |
-| `note_progress`  | Say in one line what the agent is working on right now.                                   |
+| Tool                 | Purpose                                                                                                                                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                   |
+| `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                |
+| `world_read`         | Read the harness's own view of a PR, issue or story.                                                                                                                                                                                      |
+| `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                      |
+| `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                   |
+| `link_ticket`        | Report the ticket a filing agent created, closing the loop on a filed finding.                                                                                                                                                            |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
 
 ### The `_status` envelope
 
-**Every** tool response carries `_status` — *except* `request_permission`, whose response is the bare
+**Every** tool response carries `_status` — _except_ `request_permission`, whose response is the bare
 `{behavior, …}` verdict Claude's permission parser expects. The envelope is what removes the need for
 a polling tool: an agent
 that calls anything at all learns its origin, whether a human is currently parked on it, and how its
@@ -88,7 +89,7 @@ a stacked PR's red CI belongs to the PR underneath it, a part's context is its s
 wants the issue it resolves. Fencing it would send an agent that was just told "CI failing on base PR
 #7" straight back to `gh`. What structural identity protects is **writes**; a read forges nothing and
 mutates nothing, and the cockpit already serves this same snapshot unauthenticated over HTTP while
-this path needs a 0600 bearer token. What *is* kept: an agent can only name items the harness already
+this path needs a 0600 bearer token. What _is_ kept: an agent can only name items the harness already
 holds, in the harness's own vocabulary — no query, no provider passthrough, no path or URL argument,
 so it cannot reach another repository or project.
 
@@ -113,7 +114,7 @@ Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope', summary, ref?}`. See
 Argument `{note}`. The agent's own answer to "what is it doing, and is it stuck?".
 
 It sits **beside** `agent:tail`, never replacing it. Same asymmetry as `@@LUBBDUBB_DONE@@` against the
-`result` event: a note an agent forgets to call is *silence*, and silence must not read as "no
+`result` event: a note an agent forgets to call is _silence_, and silence must not read as "no
 progress". An agent that never calls it leaves a card identical to the pre-tool one — there is no
 placeholder and nothing inferred from output. Where both exist the card shows both: the note is a
 claim (durable, attributed, as old as its timestamp), the tail is evidence the process is still
@@ -139,6 +140,27 @@ emitting.
 It routes through `AgentManager.recordProgress` for the `progress` event, which the `Hub` turns into a
 plain `dirty` (unlike `agent:tail`, the payload is already on the row the refetch brings).
 
+### `link_ticket`
+
+Argument `{ref}`. The other half of filing a finding as a ticket (see
+[13](13-jobs-and-findings.md)): the agent dispatched to file one reports back what it created.
+
+- **It is what completes the filing.** The route leaves the finding `filing`; this call is the only
+  thing that moves it to `filed` and gives the cockpit a ticket to link. An agent that never calls it
+  leaves a visible unfinished filing rather than a silent one, which is the point of the two statuses.
+- **The finding comes from the credential, never an argument.** `agent → task → its `job:<id>` origin
+→ the finding that job was created for`. So there is no id to point at another finding, and an agent
+  on any other kind of task simply resolves to none and is told so. Same discipline as
+  `report_finding`, and here it is the whole access check.
+- **`ref` is the same closed vocabulary**, parsed by the same `parseFindingRef`: `issue:314`,
+  suffix-tolerant, and a **bare number refused** for the same reason — nothing here says whether `314`
+  is an issue or a PR, and a ticket link pointing at the wrong one is worse than none.
+- **Idempotence is in the write.** `Store.linkFindingTicket` updates `WHERE id=? AND status='filing'`,
+  so a second call links nothing and is reported as an error rather than overwriting the first ticket.
+
+It routes through `AgentManager.linkTicket` for the `finding` event, so the cockpit repaints on the
+link rather than on the next pulse.
+
 ### `request_permission`
 
 The permission backstop (issue #130 phase B). Arguments `{tool_name, input, tool_use_id}` — but the
@@ -149,17 +171,17 @@ is not told about and does not call itself.
 - **It blocks.** The handler returns a Promise that resolves only when the operator decides. So a
   blocked agent holds its concurrency slot until answered (or killed) — deliberately, since the
   allow-list covers the mechanical happy path and the backstop fires only on genuinely unusual
-  commands, the ones that *should* wait for a human. There is no auto-timeout-deny: a silent timeout
+  commands, the ones that _should_ wait for a human. There is no auto-timeout-deny: a silent timeout
   would tell the agent a command is forbidden when the operator merely hadn't looked.
 - **`PermissionDesk` (`src/agents/permissionDesk.ts`), not a `Proposal`.** A permission request is
-  ephemeral and single-shot — the agent is blocked on an open socket *now*, and if the harness
+  ephemeral and single-shot — the agent is blocked on an open socket _now_, and if the harness
   restarts the blocked call dies with the process — the opposite of a durable re-read-every-pulse
   verdict with settle windows. The desk is a small in-memory `Map<escalationId, resolve>`. It reuses
   the **escalation inbox** purely as the visible "Needs you" surface (`context.permission` marks it),
   filing an `approve_change` escalation with the command as its prompt and `['Allow','Deny']` options.
 - **The verdict is bare.** The handler returns `toolJson({behavior:'allow', updatedInput})` /
   `{behavior:'deny', message}` directly — never `ok()` (its `_status` envelope breaks Claude's
-  permission parser) and never `toolError` (Claude reads an error as a tool *failure*, not a deny).
+  permission parser) and never `toolError` (Claude reads an error as a tool _failure_, not a deny).
 - **Settled out of band.** `POST /api/escalations/:id/permission {allow, note?}` → `PermissionDesk.decide`
   resolves the blocked call and settles the inbox item through `EscalationInbox.settleResolved`, which
   never types into the session — the agent is blocked in a tool call, not parked at a prompt, so the
@@ -209,13 +231,13 @@ tell a dead socket from a live one, and a live one means another harness owns th
 answer are implemented; anything else returns a proper `method not found` rather than silence, so a
 client mismatch shows up as an error instead of a hang.
 
-| Method                                            | Behaviour                                                    |
-| ------------------------------------------------- | -------------------------------------------------------------- |
-| `initialize`                                      | Echoes the version, `capabilities: {tools:{}}`, `serverInfo`. |
-| `notifications/initialized`, `notifications/cancelled` | Returns nothing (notifications take no frame).           |
-| `ping`                                            | `{}` for a request; nothing for a notification.              |
-| `tools/list`                                      | Name, description and input schema for each tool.            |
-| `tools/call`                                      | Runs the named tool.                                         |
+| Method                                                 | Behaviour                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------- |
+| `initialize`                                           | Echoes the version, `capabilities: {tools:{}}`, `serverInfo`. |
+| `notifications/initialized`, `notifications/cancelled` | Returns nothing (notifications take no frame).                |
+| `ping`                                                 | `{}` for a request; nothing for a notification.               |
+| `tools/list`                                           | Name, description and input schema for each tool.             |
+| `tools/call`                                           | Runs the named tool.                                          |
 
 `handleRequest` **never throws**: a handler that blows up becomes an `isError` tool result, so an agent
 gets a message it can act on instead of a dead channel. That is the whole point of the tool path over
@@ -233,10 +255,10 @@ Both verified empirically against `claude` 2.1.220 in headless `-p` mode, not as
   `mcp_servers: [{theirs}, {ours}]`. `--strict-mcp-config` is therefore deliberately **not** passed: it
   would suppress the user's own servers in the user's own checkout.
 - **`--allowedTools ALLOWED_MCP_TOOLS` is required, not defensive.** An `--mcp-config` server connects
-  with no approval step (a project `.mcp.json` server instead sits at `pending`), but its tool *calls*
+  with no approval step (a project `.mcp.json` server instead sits at `pending`), but its tool _calls_
   are still permission-gated, and `acceptEdits` — the default `agentPermissionMode` — does not cover
   them. Without the flag every call returns `"Claude requested permissions to use mcp__lubbdubb__…, but
-  you haven't granted it yet."` with no human at the prompt. The flag is **additive, not restrictive**:
+you haven't granted it yet."` with no human at the prompt. The flag is **additive, not restrictive**:
   an agent launched with it still uses Bash and Write normally.
 - **`--permission-prompt-tool <name>` wires the backstop** (issue #130). Passed only alongside
   `--mcp-config` (the tool lives on that server) and only when `mcp.permissionEscalation` is on. Its
@@ -245,16 +267,16 @@ Both verified empirically against `claude` 2.1.220 in headless `-p` mode, not as
 
 This is why `src/mcp/names.ts` exists. Three things must agree — the `mcpServers` key
 (`MCP_SERVER_ID = 'lubbdubb'`), the tool names, and the `mcp__<key>__<tool>` grants — and drift between
-them yields a *connected* server whose every call is refused, invisible until an agent needs it.
+them yields a _connected_ server whose every call is refused, invisible until an agent needs it.
 `test/mcpChannel.test.ts` asserts all three against each other. **Adding a tool to `buildTools` without
 adding its name to `MCP_TOOL_NAMES` is the sharp edge of the whole module.**
 
 ## Degradation
 
-The sentinels remain the floor everything degrades to. `MCP_PROTOCOL_ADDENDUM` states a *preference*,
+The sentinels remain the floor everything degrades to. `MCP_PROTOCOL_ADDENDUM` states a _preference_,
 never a replacement, and `@@LUBBDUBB_DONE@@` has **no tool at all**: MCP has no turn-boundary event, so
 a `finish()` the model forgets to call is silence, and silence is indistinguishable from thinking. The
-`result` event plus the sentinel is what disambiguates *finished* from *stopped mid-task*.
+`result` event plus the sentinel is what disambiguates _finished_ from _stopped mid-task_.
 
 Every one of these leaves behaviour byte-for-byte as it was without the channel, and
 `test/mcpChannel.test.ts` asserts that floor rather than merely intending it:
@@ -276,7 +298,7 @@ which is the half unit tests cannot cover.
 ## `claim(ref)` — investigated and closed
 
 Not an omission. **Origin and branch are 1:1 for every world-driven dispatch rule**, so the
-`activeOrigins` / `findActiveTaskByOrigin` gate already *is* a branch gate, and the existing gates leave
+`activeOrigins` / `findActiveTaskByOrigin` gate already _is_ a branch gate, and the existing gates leave
 no dispatch-time collision for a claim to prevent. What they cannot see is what an agent does once
 running — and a claim cannot fix that either: **advisory** makes it documentation an agent may forget,
 **enforcing** needs a lock that vanishes under `mcp.enabled: false` (a lock that silently is not one),

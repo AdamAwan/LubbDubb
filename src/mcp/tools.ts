@@ -6,7 +6,7 @@ import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
-import { FINDING_KIND_HELP, FINDING_KINDS, validateFinding } from './findings.js';
+import { FINDING_KIND_HELP, FINDING_KINDS, parseFindingRef, validateFinding } from './findings.js';
 import { MCP_TOOL_NAMES } from './names.js';
 import { normaliseNote } from './progress.js';
 import { type McpTool, toolError, toolJson, type ToolCallResult } from './protocol.js';
@@ -23,6 +23,7 @@ export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
   recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string };
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string };
+  linkTicket(agentId: string, ticketRef: string): { ok: true; finding: Finding } | { ok: false; error: string };
 }
 
 interface McpToolDeps {
@@ -391,6 +392,47 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
         // never an argument. The tool/input come from Claude's permission machinery.
         const verdict = await deps.permissions.request(agent, task, toolName, input);
         return toolJson(verdict);
+      },
+    },
+    {
+      name: MCP_TOOL_NAMES[6],
+      description:
+        'Report the ticket you just created for the finding you were dispatched to file. Only for a ' +
+        'filing job — if you were not dispatched to file a finding as a ticket, this is not your tool. ' +
+        'Calling it is what completes the filing: until you do, the operator sees a finding whose ' +
+        'ticket never appeared. Pass the ref of the item you created (or of the existing one you ' +
+        'decided it duplicates).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ref: {
+            type: 'string',
+            description:
+              'The ticket, in the ref shape used everywhere else: "issue:314" for a GitHub issue or an ' +
+              'Azure DevOps work item, "pr:42", "story:abc". A bare number is not accepted — say which.',
+          },
+        },
+        required: ['ref'],
+      },
+      handler: (args) => {
+        // The same parser `report_finding` uses for the item a finding is *about*,
+        // so the ref a ticket is recorded under and the ref a finding names are the
+        // same vocabulary — the cockpit links both through one `refUrls` lookup.
+        const parsed = parseFindingRef(args.ref);
+        if (!parsed.ok) return toolError(`Ticket rejected: ${parsed.error}`);
+        if (!parsed.ref) return toolError('link_ticket requires the ref of the ticket you created.');
+        // Structural identity again, and here it does the whole job: the finding is
+        // resolved from the credential (agent -> task -> its job -> the finding that
+        // job was created for), so there is no finding argument to point at someone
+        // else's, and an agent on any other kind of task simply has no finding to
+        // link.
+        const result = deps.agents.linkTicket(agent.id, parsed.ref);
+        if (!result.ok) return toolError(result.error);
+        return ok({
+          linked: true,
+          finding: { id: result.finding.id, status: result.finding.status, ticketRef: result.finding.ticketRef },
+          note: 'Recorded against the finding. Your filing task is done.',
+        });
       },
     },
   ];

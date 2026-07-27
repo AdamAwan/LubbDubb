@@ -10,12 +10,15 @@ spawns — a job persists **ahead of** dispatch, so it can sit in a queue when t
 
 ```ts
 interface Job {
-  id; title; prompt;
+  id;
+  title;
+  prompt;
   kind: 'code' | 'desk';
-  branch: string | null;              // code jobs; null => derived job/<id> at dispatch
+  branch: string | null; // code jobs; null => derived job/<id> at dispatch
   status: 'queued' | 'dispatched' | 'cancelled';
-  taskId: string | null;              // set once dispatched
-  createdAt; updatedAt;
+  taskId: string | null; // set once dispatched
+  createdAt;
+  updatedAt;
 }
 ```
 
@@ -29,7 +32,7 @@ For a **code** job naming a branch, `Store.findActiveTaskByBranch` is asked up f
 **409s** with the holding task's id and origin. The executor's identical check remains the real gate —
 a branch can go busy between queueing and dispatch, so this one cannot be the only one — but a 409 now
 is worth far more to the operator than a deferral they would have to read out of the decision log hours
-later. The two cannot drift apart because they ask the same predicate; they differ only in *when*,
+later. The two cannot drift apart because they ask the same predicate; they differ only in _when_,
 which is why this one rejects (nothing has been promised yet) and the executor's defers (a queued job
 the operator is entitled to have retried).
 
@@ -86,13 +89,17 @@ surfaced in the cockpit, and nothing could act on it later.
 ```ts
 interface Finding {
   id;
-  agentId; taskId; originRef;         // from the credential, never from an argument
+  agentId;
+  taskId;
+  originRef; // from the credential, never from an argument
   kind: 'duplicate' | 'blocked' | 'out_of_scope';
-  ref: string | null;                 // the world item it is about
+  ref: string | null; // the world item it is about
   summary;
-  status: 'open' | 'promoted' | 'dismissed';
-  jobId: string | null;               // the job it became, if promoted
-  createdAt; updatedAt;
+  status: 'open' | 'promoted' | 'dismissed' | 'filing' | 'filed';
+  jobId: string | null; // the job it became — working it, or filing it
+  ticketRef: string | null; // the ticket it was filed as ("issue:314")
+  createdAt;
+  updatedAt;
 }
 ```
 
@@ -101,11 +108,11 @@ interface Finding {
 Three, taken from three concrete gaps rather than invented as a taxonomy. What earns each a slot is
 that it implies a **different operator action** — that is the axis worth splitting on:
 
-| Kind           | Means                                                                                | The operator…                     |
-| -------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
-| `duplicate`    | This work item is the same work as another one.                                       | closes or links one of them.      |
-| `blocked`      | The fix needs a change outside what the agent can touch — another repo, a package it doesn't own. | unblocks it or parks it. |
-| `out_of_scope` | Something real, not the agent's task — an unrelated bug, a gap nobody has filed.      | decides whether it becomes a job. |
+| Kind           | Means                                                                                             | The operator…                     |
+| -------------- | ------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `duplicate`    | This work item is the same work as another one.                                                   | closes or links one of them.      |
+| `blocked`      | The fix needs a change outside what the agent can touch — another repo, a package it doesn't own. | unblocks it or parks it.          |
+| `out_of_scope` | Something real, not the agent's task — an unrelated bug, a gap nobody has filed.                  | decides whether it becomes a job. |
 
 There is deliberately **no catch-all fourth**: a bucket implying no action is where findings rot, and
 the summary is free text already.
@@ -146,8 +153,9 @@ would spend another agent's slot, budget and worktree with nothing in between sa
 capability escalation, not a convenience, and it is exactly the shape the auto-send seam exists to
 gate.
 
-So a finding is a **claim, not work**. The tool's description *and* its response say so outright, so an
-agent does not report a bug and then assume its fix is scheduled.
+So a finding is a **claim, not work**. The tool's description _and_ its response say so outright, so an
+agent does not report a bug and then assume its fix is scheduled. Filing is the same rule: it is an
+operator's click that dispatches the filing agent, and `report_finding` cannot file its own ticket.
 
 ### Promotion — `POST /api/findings/:id/promote`
 
@@ -165,6 +173,45 @@ The only path from a finding to an agent, and it starts with an operator's click
 - The job is created **first**, then the finding is resolved to `promoted` with the job id — so a
   failed create leaves the finding open.
 - A cycle is kicked.
+
+### Filing — `POST /api/findings/:id/file`
+
+The **defer** arm, beside promotion's "work it now". Promotion puts an agent on the problem; filing
+puts an agent on the **tracker**, so the problem waits its turn in the backlog with everything else.
+It is the one thing promotion could not express: a queued job either runs or is cancelled, and neither
+of those is "deal with this later".
+
+- **An agent files it, not a provider seam.** The _wording_ of a ticket is the part an operator has
+  opinions about, and a prompt is where those opinions already live — `finding-ticket` is an ordinary
+  overridable entry in the template book (`src/dispatcher/promptTemplates.ts`), so how tickets are
+  worded, labelled or typed is changed by dropping a file in `promptTemplatesDir`, not by patching a
+  route. Agents create issues with `gh` / `az` in their own shell already; adding an
+  `IssueCreateCapable` seam would have moved that judgement into the harness, where it cannot be
+  overridden. The template book is therefore no longer only the rule dispatcher's — `loadPromptTemplates`
+  is hoisted in `system.ts` and exposed as `System.prompts`, so this renders the same under either
+  dispatcher.
+- **What the harness must supply is the one thing an agent cannot infer: which tracker.**
+  `trackerCoordinates(config)` (pure, `src/mcp/findings.ts`) renders coordinates from the same config
+  block the **`issues` provider** is built from — so a ticket lands where the harness reads issues
+  from and nowhere else. It returns null for `fake`, or for a provider selected without its config;
+  the route then 409s and the snapshot ships `config.canFileTickets: false` so the cockpit hides the
+  button rather than offering a click that cannot work. One predicate, both surfaces.
+- **A desk job, not a code one.** Filing touches no repository, so cutting a worktree and a branch
+  would be pure cost. The consequence is that a desk agent runs in a scratch directory with no git
+  remote for `gh` to read the repo off — which is precisely why the coordinates are explicit.
+- **Two statuses, because filing is asynchronous.** The click queues a job; the ticket exists only
+  once an agent has created it. `filing` is the honest reading in between, and `filed` is the one that
+  carries `ticketRef`. Collapsing them would have the card claim a ticket that does not exist yet, and
+  leave nothing to show for a filing agent that died before making one — which is why the cockpit
+  draws a `filing` finding among the open ones rather than in the resolved tail.
+- **`link_ticket` closes it** — see [11](11-mcp-tools.md). The finding is resolved from the agent's
+  credential (`agent → task → its `job:<id>` origin → the finding that job was created for`), so the
+  tool takes only a ref, and idempotence lives in the write (`WHERE status='filing'`).
+- `job_id` is reused for the filing job: a finding is terminal either way, so only ever one job hangs
+  off it. `ticket_ref` is a **column on an existing table**, so it needs a `migrate()` entry — see
+  [14](14-persistence.md).
+
+Tests: `test/findingTickets.test.ts`.
 
 ### Dismissal — `POST /api/findings/:id/dismiss`
 

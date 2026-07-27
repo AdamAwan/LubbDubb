@@ -23,8 +23,11 @@ export function buildDemoState(): DemoSeed {
       steeringPriorities: ['unblock humans', 'keep CI green', 'ship reviewed work'],
       watchLabel: 'lubbdubb-watch',
       ignoreLabel: 'lubbdubb-ignore',
-      // The demo world is all-fake, so the inject panel stays available.
+      // The demo world is all-fake, so the inject panel stays available — and by
+      // the same token there is no tracker to file a ticket into, so that button
+      // is hidden exactly as it would be on a `fake` deployment.
       injectable: true,
+      canFileTickets: false,
     },
     control: { cap: 3, paused: false },
     worldObservedAt: ago(0),
@@ -326,6 +329,7 @@ export function buildDemoState(): DemoSeed {
           'The retry helper in src/net/backoff.ts squares the delay instead of doubling it, so the 5th retry waits ~17 minutes. Not what I was sent to fix, but it is why the flaky test times out.',
         status: 'open',
         jobId: null,
+        ticketRef: null,
         createdAt: ago(12),
         updatedAt: ago(12),
       },
@@ -339,6 +343,7 @@ export function buildDemoState(): DemoSeed {
         summary: 'This asks for the same provider seam as #118, which already has a merged design doc.',
         status: 'open',
         jobId: null,
+        ticketRef: null,
         createdAt: ago(20),
         updatedAt: ago(20),
       },
@@ -353,8 +358,26 @@ export function buildDemoState(): DemoSeed {
           'The real fix is in the upstream azure-devops-node-api types — the field exists on the wire but not in the published typings. Nothing I can change from this repo.',
         status: 'dismissed',
         jobId: null,
+        ticketRef: null,
         createdAt: ago(48),
         updatedAt: ago(30),
+      },
+      // The other resolution: filed in the tracker rather than worked now, so the
+      // panel shows what a deferred finding looks like once its ticket exists.
+      {
+        id: 'find-4',
+        agentId: 'agent-a1',
+        taskId: 'task-a1',
+        originRef: 'pr:142:ci',
+        kind: 'out_of_scope',
+        ref: null,
+        summary:
+          'The ingest API has no request-size limit, so a 200MB body is buffered before anything rejects it. Unrelated to the CI failure I was sent for.',
+        status: 'filed',
+        jobId: 'job-filed-1',
+        ticketRef: 'issue:214',
+        createdAt: ago(64),
+        updatedAt: ago(58),
       },
     ],
     agents: [

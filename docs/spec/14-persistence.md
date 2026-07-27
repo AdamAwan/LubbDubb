@@ -26,39 +26,41 @@ invisible on databases created by an older build. `migrate()` closes that gap wi
 
 Current entries:
 
-| Table       | Columns added                                                                    |
-| ----------- | -------------------------------------------------------------------------------- |
-| `tasks`     | `origin_title`, `origin_summary`, `dispatch_reason`                              |
+| Table       | Columns added                                                                                            |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| `tasks`     | `origin_title`, `origin_summary`, `dispatch_reason`                                                      |
 | `agents`    | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
-| `decisions` | `rule`                                                                           |
+| `decisions` | `rule`                                                                                                   |
+| `findings`  | `ticket_ref`                                                                                             |
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
 `agent_files` and `priority_overrides` were all introduced as new tables and therefore have no
-migration entry.
+migration entry — but `findings` has since gained `ticket_ref`, which is exactly the case the table
+above exists for.
 
 ## Tables
 
-| Table               | Holds                                                                                  | Key constraints                          |
-| ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `tasks`             | Units of work materialised at dispatch.                                                | —                                        |
-| `jobs`              | Operator-queued prompts awaiting a slot.                                               | —                                        |
-| `priority_overrides`| Operator "Up next" re-ordering, keyed on candidate origin.                             | `origin` is `PRIMARY KEY`                |
-| `agents`            | One row per launched agent, including usage and the progress note.                     | —                                        |
-| `usage_events`      | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`. | —                                       |
-| `agent_flags`       | Artifacts surfaced to the cockpit.                                                     | `UNIQUE (agent_id, ref)`                 |
-| `agent_files`       | Every file an agent wrote; `promoted` marks the ones also surfaced as chips.            | `UNIQUE (agent_id, path)`                |
-| `findings`          | Things agents noticed outside their own task.                                          | —                                        |
-| `plans`             | One delivery plan per issue.                                                           | `origin_ref` is `UNIQUE`                 |
-| `plan_parts`        | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                | `UNIQUE (plan_id, slug)`                 |
-| `agent_transcripts` | Chunked agent output.                                                                  | `PRIMARY KEY (agent_id, seq)`            |
-| `escalations`       | The human-in-the-loop inbox. `context` is JSON.                                        | —                                        |
-| `decisions`         | The audit log. `action` is JSON; `rule` is lifted off it at record time.                | —                                        |
-| `connector_state`   | The fake provider's editable world, so injected events survive restarts.                | —                                        |
-| `connector_events`  | Injected events, for diagnostics.                                                      | —                                        |
-| `world_events`      | Observed world transitions — the activity feed's backing store.                        | —                                        |
-| `world_baseline`    | The last snapshot the harness diffed against.                                          | Single row: `CHECK (id = 1)`             |
-| `error_events`      | Recorded failures — the Errors panel's backing store.                                  | —                                        |
+| Table                | Holds                                                                                    | Key constraints               |
+| -------------------- | ---------------------------------------------------------------------------------------- | ----------------------------- |
+| `tasks`              | Units of work materialised at dispatch.                                                  | —                             |
+| `jobs`               | Operator-queued prompts awaiting a slot.                                                 | —                             |
+| `priority_overrides` | Operator "Up next" re-ordering, keyed on candidate origin.                               | `origin` is `PRIMARY KEY`     |
+| `agents`             | One row per launched agent, including usage and the progress note.                       | —                             |
+| `usage_events`       | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`. | —                             |
+| `agent_flags`        | Artifacts surfaced to the cockpit.                                                       | `UNIQUE (agent_id, ref)`      |
+| `agent_files`        | Every file an agent wrote; `promoted` marks the ones also surfaced as chips.             | `UNIQUE (agent_id, path)`     |
+| `findings`           | Things agents noticed outside their own task.                                            | —                             |
+| `plans`              | One delivery plan per issue.                                                             | `origin_ref` is `UNIQUE`      |
+| `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                 | `UNIQUE (plan_id, slug)`      |
+| `agent_transcripts`  | Chunked agent output.                                                                    | `PRIMARY KEY (agent_id, seq)` |
+| `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                          | —                             |
+| `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                 | —                             |
+| `connector_state`    | The fake provider's editable world, so injected events survive restarts.                 | —                             |
+| `connector_events`   | Injected events, for diagnostics.                                                        | —                             |
+| `world_events`       | Observed world transitions — the activity feed's backing store.                          | —                             |
+| `world_baseline`     | The last snapshot the harness diffed against.                                            | Single row: `CHECK (id = 1)`  |
+| `error_events`       | Recorded failures — the Errors panel's backing store.                                    | —                             |
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
@@ -133,7 +135,7 @@ without resetting status. `getFinding`, `listFindings(limit=100)`,
 `markPartDispatched(id, taskId, branch)`.
 
 `plans.status` is `planning | single | awaiting_approval | active | complete | abandoned`. It is a
-*value*, not a column, so a database from an older build needs no migration: an existing row simply
+_value_, not a column, so a database from an older build needs no migration: an existing row simply
 never holds the new one. `awaiting_approval` is the approval gate itself — see
 [08](08-planning.md#the-approval-gate).
 
