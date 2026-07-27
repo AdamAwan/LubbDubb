@@ -642,6 +642,12 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.esc-agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .esc-open {
   padding-left: 0;
   margin: 4px 0;

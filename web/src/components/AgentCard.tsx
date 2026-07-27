@@ -13,6 +13,7 @@ export function AgentCard({
   artifactUrls,
   onOpen,
   onKill,
+  onComplete,
   past,
 }: {
   agent: Agent;
@@ -24,6 +25,8 @@ export function AgentCard({
   artifactUrls: Record<string, string>;
   onOpen: () => void;
   onKill?: () => Promise<unknown> | unknown;
+  /** Declare the work finished: the clean terminal an agent reaches with a done sentinel. */
+  onComplete?: () => Promise<unknown> | unknown;
   past?: boolean;
 }) {
   const active = agent.status === 'running' || agent.status === 'starting';
@@ -72,6 +75,21 @@ export function AgentCard({
         <button className="btn" onClick={onOpen}>
           Open
         </button>
+        {/*
+          Two ways to end an agent, and they say opposite things. Done is for an
+          agent that finished but never printed the sentinel: the task reads done
+          and the worktree is reclaimed. Kill is an abandonment — the task reads
+          interrupted and the checkout is kept for triage. Both are confirm-gated
+          because both stop a live process.
+        */}
+        {onComplete && agent.status !== 'done' && (
+          <ConfirmButton
+            label="Mark done"
+            confirmLabel="Confirm done"
+            pendingLabel="Finishing…"
+            onConfirm={onComplete}
+          />
+        )}
         {onKill && agent.status !== 'done' && (
           <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />
         )}

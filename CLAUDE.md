@@ -524,6 +524,15 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   swallowed `catch`es; route them here. The event is named `logged`, not `error` — an
   unlistened `error` event throws, and recording a failure must never throw. Tests silence
   the stderr mirror with `buildSystem(config, { errorMirror: () => {} })`.
+  **The stderr mirror sanitises, and only the mirror does.** It writes one line per entry, so
+  a newline in a value could end that line early and forge a second `[lubbdubb:error]` one —
+  and both halves of the header arrive from outside (an agent id off a request path, provider
+  and exception text off the world). `oneLine` flattens the header, which costs nothing since
+  a `message` is a sentence by contract; `detail` is deliberately multi-line, so it is
+  **indented** rather than flattened — keeping the shape it exists for while making a forged
+  header visibly a continuation. The **stored** entry keeps its exact text: the store is
+  structured rows, not a line-oriented stream, and the cockpit renders it as DOM text, where a
+  newline forges nothing.
 - **`src/git/` is the git-shell-out corner.** `gitCli.ts` holds the two primitives
   everything else uses: `runGit(repoRoot, args)` (one place where `cwd: repoRoot` lives) and
   `resolveCommit(repoRoot, ref)`, which resolves a branch name to a **SHA** preferring
@@ -1035,6 +1044,35 @@ has been decided. What carries it:
 - Stream-JSON resume is still out of scope (those agents get requeue/remove only).
   `spawn`/`resume` share their listener wiring — change one, change both. Tests:
   `test/crashRecovery.test.ts`, `test/resume.test.ts`.
+
+**Marking an agent done (`AgentManager.complete`).** The clean `done` terminal used to be
+reachable only by the _agent_, via the sentinel — and in stream mode a turn that ends without
+one doesn't fail, it parks `waiting` on "ended its turn without finishing". So an agent that
+did the work and forgot the sentinel could be ended only by `kill`, which records the
+opposite: task `interrupted`, worktree kept, an abandonment in the log. `complete` is the
+missing verdict. It stops the process and routes through the **same** `handleTerminal(…,
+'done')` the sentinel drives, so nothing about a completed agent differs from a finished one.
+Three things carry it:
+
+- **`session.kill()` marking the session `killed` is fine and load-bearing.** That flag exists
+  only to stop the _session_ reclassifying its own exit (`reportExit` / `onExit`); here the
+  **manager** decides the record, and it decides `done`.
+- **`exited` is left alone — the one line that is the inverse of `kill`**, which deletes it so a
+  killed agent is never reaped and keeps its worktree for triage. Both runtimes emit `exit`
+  _before_ their killed early-return, so the exit still lands, `maybeReap` finds a `done`
+  terminal, and the reap removes the worktree. That clean finish is the whole point of saying
+  done rather than killing.
+- **Liveness is the whole guard** (a non-live agent 409s): re-labelling a settled record is a
+  different question. The `done` event carries `by: 'agent' | 'operator'` so `system.ts` can
+  dismiss the escalation the agent was parked on — an answer would route into a session that no
+  longer exists. A _sentinel_ done with an open escalation is the same latent class and is
+  deliberately **not** swept with it. Audited under cycle id `human:<agentId>` with **no
+  proposal**: the act is the operator's own and already taken, where a proposal is a standing
+  verdict a rule re-reads. `DecisionLog` badges "you" off the `human:` prefix itself, the
+  proposal supplying only the note when there is one. Surfaced on the agent card, the drawer,
+  and the escalation card — the last beside the transcript link rather than among the quick
+  answers, since those route through `agents.respond`, which types text in and flips the agent
+  back to `running`. Tests: `test/agentComplete.test.ts`.
 
 Sharp edge in `PtySession.kill()`: it sets status `killed` **before** signalling the process,
 because a synchronously-delivered exit would otherwise be reclassified as `failed` (firing a

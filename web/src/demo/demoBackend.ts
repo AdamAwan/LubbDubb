@@ -296,6 +296,26 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * The operator declaring the work finished — the clean terminal, where
+   * {@link killAgent} records an abandonment. The task follows the agent to `done`
+   * rather than `interrupted`, and the open question goes with it.
+   */
+  async completeAgent(id: string): Promise<{ ok: true }> {
+    const agent = this.state.agents.find((a) => a.id === id);
+    if (agent && agent.status !== 'done') {
+      agent.status = 'done';
+      agent.endedAt = new Date().toISOString();
+      agent.waitingReason = null;
+      const task = this.state.tasks.find((t) => t.id === agent.taskId);
+      if (task && task.status === 'active') task.status = 'done';
+      for (const e of this.state.escalations) if (e.agentId === id && e.status === 'open') e.status = 'dismissed';
+      this.addDecision('no_op', 'ok', `marked ${id} done`);
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async interruptAgent(id: string): Promise<{ ok: true }> {
     this.append(id, '\n^C interrupt received');
     return { ok: true };
@@ -701,6 +721,7 @@ export const demoApi = {
   // interchangeable.
   decideRecovery: (_agentId: string, _verdict: string) => Promise.resolve({ ok: true as const, remaining: 0 }),
   killAgent: (id: string) => getServer().killAgent(id),
+  completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
 };
 

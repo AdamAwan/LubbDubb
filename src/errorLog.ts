@@ -28,7 +28,9 @@ export class ErrorLog extends EventEmitter implements ErrorRecorder {
   constructor(
     private readonly store: Store,
     private readonly mirror: (entry: ErrorLogEntry) => void = (e) =>
-      console.error(`[lubbdubb:error] ${e.source}: ${e.message}${e.detail ? `\n${e.detail}` : ''}`),
+      console.error(
+        `[lubbdubb:error] ${oneLine(e.source)}: ${oneLine(e.message)}${e.detail ? `\n${indented(e.detail)}` : ''}`,
+      ),
   ) {
     super();
   }
@@ -47,4 +49,42 @@ export class ErrorLog extends EventEmitter implements ErrorRecorder {
   override on<K extends keyof ErrorLogEvents>(event: K, listener: (...args: ErrorLogEvents[K]) => void): this {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
+}
+
+/**
+ * The mirror writes one line per entry, so a value carrying a newline could end
+ * that line early and forge a second `[lubbdubb:error]` one after it. Both halves
+ * of the header reach here from outside: an agent id arrives from a request path
+ * (`POST /api/agents/:id/complete`), and provider/exception text from the world.
+ * Neither is ever legitimately multi-line — a `message` is a sentence by
+ * contract — so flattening costs nothing and removes the forgery.
+ *
+ * Only the stderr mirror is treated this way. The stored entry keeps its exact
+ * text: the store is structured rows, not a line-oriented stream, and the cockpit
+ * renders it as DOM text, where a newline forges nothing.
+ */
+function oneLine(value: string): string {
+  return (
+    value
+      // One line terminator per call, each matching a constant string. That is
+      // the forgery dealt with, and it is also the shape a static analyser can
+      // recognise as removing it — a character class with a quantifier reads as
+      // opaque, so the taint appears to survive a call that in fact ends it.
+      .replace(/\n/g, ' ')
+      .replace(/\r/g, ' ')
+      // Then the remaining control characters, which a terminal would interpret
+      // rather than print.
+      // eslint-disable-next-line no-control-regex -- the rule guards against control characters reaching a regex by accident; matching them is this function’s entire job.
+      .replace(/[\u0000-\u001F\u007F]/g, '')
+  );
+}
+
+/**
+ * `detail` is deliberately multi-line — a stack, or an excerpt of an agent's own
+ * output — so flattening it would cost the readability it exists for. Indenting
+ * every line keeps that shape while making a forged header visibly a continuation
+ * of this entry rather than the start of a new one.
+ */
+function indented(value: string): string {
+  return value.replace(/^/gm, '  ');
 }

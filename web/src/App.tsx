@@ -264,6 +264,7 @@ export function App() {
               artifactUrls={state.artifactUrls ?? {}}
               onOpen={() => setSelected(a.id)}
               onKill={() => api.killAgent(a.id).then(refresh)}
+              onComplete={() => api.completeAgent(a.id).then(refresh)}
             />
           ))}
 
@@ -306,6 +307,7 @@ export function App() {
               }
               onPermission={(id, allow, note) => api.decidePermission(id, allow, note).then(refresh)}
               onOpenAgent={(id) => setSelected(id)}
+              onComplete={(id) => api.completeAgent(id).then(refresh)}
             />
           ))}
 
@@ -399,6 +401,7 @@ export function App() {
           onClose={() => setSelected(null)}
           onRespond={(text) => api.respondAgent(selectedAgent.id, text)}
           onKill={() => api.killAgent(selectedAgent.id).then(refresh)}
+          onComplete={() => api.completeAgent(selectedAgent.id).then(refresh)}
           onInterrupt={() => api.interruptAgent(selectedAgent.id)}
         />
       )}

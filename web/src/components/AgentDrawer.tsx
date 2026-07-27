@@ -55,6 +55,7 @@ export function AgentDrawer({
   onClose,
   onRespond,
   onKill,
+  onComplete,
   onInterrupt,
 }: {
   agent: Agent;
@@ -67,6 +68,8 @@ export function AgentDrawer({
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
   onKill: () => Promise<unknown> | unknown;
+  /** Declare the work finished: the clean terminal an agent reaches with a done sentinel. */
+  onComplete: () => Promise<unknown> | unknown;
   onInterrupt: () => Promise<unknown> | unknown;
 }) {
   const [seed, setSeed] = useState('');
@@ -159,6 +162,14 @@ export function AgentDrawer({
               >
                 Interrupt ⌃C
               </AsyncButton>
+            )}
+            {isLive && (
+              <ConfirmButton
+                label="Mark done"
+                confirmLabel="Confirm done"
+                pendingLabel="Finishing…"
+                onConfirm={onComplete}
+              />
             )}
             {agent.status !== 'done' && (
               <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />

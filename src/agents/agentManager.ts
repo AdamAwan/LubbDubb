@@ -102,7 +102,14 @@ interface AgentManagerEvents {
   /** `ask` is present only when the park came through the `escalate` tool, which can carry structure. */
   waiting: [{ agentId: string; taskId: string; reason: string; ask?: AgentAsk }];
   autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
-  done: [{ agentId: string; taskId: string; status: AgentStatus }];
+  /**
+   * `by` distinguishes the agent declaring itself finished (a sentinel, a clean
+   * exit) from an operator declaring it so through {@link AgentManager.complete}.
+   * The record is identical either way — that is the point — but only the second
+   * leaves an escalation nobody can answer, so the composition root needs to tell
+   * them apart to dismiss it.
+   */
+  done: [{ agentId: string; taskId: string; status: AgentStatus; by: 'agent' | 'operator' }];
   /**
    * The agent finished (done/failed) *and* its OS process has actually exited —
    * the two arrive in either order (PTY: sentinel first, exit later; stream:
@@ -397,6 +404,61 @@ export class AgentManager extends EventEmitter {
     this.exitCodes.delete(agentId); // a deliberate kill's exit code is not a failure cause
     this.exited.delete(agentId); // and a killed agent is never 'reaped' — its worktree stays
     if (agent) this.reflectStatus(agentId, agent.taskId, 'killed');
+    return true;
+  }
+
+  /**
+   * The operator declaring an agent finished — the sibling of {@link kill}, and
+   * its inverse in exactly one respect.
+   *
+   * The clean `done` terminal was reachable only by the *agent*, via the sentinel.
+   * An agent that does the work and never prints one (in stream mode a turn ending
+   * without it doesn't fail — it parks `waiting` awaiting direction) could then be
+   * ended only by `kill`, which records the opposite: task `interrupted`, worktree
+   * kept, and an abandonment in the log. This is the missing verdict.
+   *
+   * It stops the process and then routes through the *same* {@link handleTerminal}
+   * the sentinel drives, so nothing about a completed agent differs from a finished
+   * one. `session.kill()` marking the session `killed` internally is fine and
+   * load-bearing: that flag only stops the *session* reclassifying its own exit —
+   * here the manager decides the record, and it decides `done`.
+   *
+   * The one line that is the inverse of `kill`: `exited` is left alone rather than
+   * deleted. Both runtimes emit `exit` before their killed early-return, so the exit
+   * still lands, {@link maybeReap} finds a `done` terminal, and the reap removes the
+   * worktree — the clean finish, which is the whole point of saying done instead of
+   * killing. Credential revocation and spool disposal ride along there as usual.
+   *
+   * Liveness is the whole guard: an agent that has already ended is not a candidate,
+   * since re-labelling a settled record is a different question with a different
+   * answer. Returns false in that case, which the route turns into a 409.
+   */
+  complete(agentId: string): boolean {
+    const session = this.sessions.get(agentId);
+    if (!session) return false;
+    const agent = this.store.getAgent(agentId);
+    if (!agent) return false;
+    // Everything below names the agent by the id on the row we just loaded, never
+    // by the argument. They are equal by construction — the two lookups above both
+    // hit, and the session map is keyed on ids this class minted — so this is about
+    // provenance: `complete` is the one path here reached straight from a request
+    // parameter (`POST /api/agents/:id/complete`), and these ids go on to be written
+    // into an audit row and, on the failure arm downstream, a log line. Reading the
+    // canonical value back off the record keeps a caller's string out of both.
+    const id = agent.id;
+    session.kill();
+    this.handleTerminal(id, agent.taskId, 'done', 'operator');
+    // Audited under the cycle id the cockpit reads as yours, the way an act decided
+    // outside a pulse already is. No proposal: there is nothing to authorize — the
+    // act is the operator's own and already taken, where a proposal is a standing
+    // verdict a rule re-reads every pulse.
+    const task = this.store.getTask(agent.taskId);
+    this.store.recordDecision({
+      cycleId: `human:${id}`,
+      action: { type: 'no_op', reason: 'operator marked the work complete' },
+      outcome: 'executed',
+      detail: `Marked agent ${id} done (task ${agent.taskId}${task?.originRef ? `, ${task.originRef}` : ''})`,
+    });
     return true;
   }
 
@@ -695,7 +757,12 @@ export class AgentManager extends EventEmitter {
     this.reflectStatus(agentId, taskId, 'failed');
   }
 
-  private handleTerminal(agentId: string, taskId: string, status: 'done' | 'failed'): void {
+  private handleTerminal(
+    agentId: string,
+    taskId: string,
+    status: 'done' | 'failed',
+    by: 'agent' | 'operator' = 'agent',
+  ): void {
     this.drainFileEvents(agentId); // catch a report written just before finishing
     this.parked.delete(agentId);
     this.store.flushTranscript(agentId); // make the finished agent's transcript durable
@@ -715,7 +782,7 @@ export class AgentManager extends EventEmitter {
       });
     }
     this.reflectStatus(agentId, taskId, status);
-    this.emit('done', { agentId, taskId, status });
+    this.emit('done', { agentId, taskId, status, by });
     this.terminals.set(agentId, status);
     this.maybeReap(agentId, taskId);
   }

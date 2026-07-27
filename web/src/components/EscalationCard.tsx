@@ -12,6 +12,7 @@ export function EscalationCard({
   onDecide,
   onPermission,
   onOpenAgent,
+  onComplete,
 }: {
   escalation: Escalation;
   /** The act this item asks you to authorize, when it is a decision and not a question. */
@@ -24,6 +25,12 @@ export function EscalationCard({
   onPermission?: (id: string, allow: boolean, note?: string) => Promise<unknown> | unknown;
   /** Open the originating agent's drawer for the full transcript. */
   onOpenAgent?: (agentId: string) => void;
+  /**
+   * End the originating agent on the *done* terminal. The commonest item in this
+   * panel is an agent that ended its turn without a done sentinel and is asking
+   * for direction — and often the direction is "you're finished".
+   */
+  onComplete?: (agentId: string) => Promise<unknown> | unknown;
 }) {
   const [text, setText] = useState('');
   const send = useAsyncAction();
@@ -84,10 +91,31 @@ export function EscalationCard({
         </details>
       ) : null}
 
-      {escalation.agentId && onOpenAgent ? (
-        <button className="btn ghost small esc-open" onClick={() => onOpenAgent(escalation.agentId!)}>
-          Open agent transcript →
-        </button>
+      {/*
+        Both act on the *agent*, not on the question — which is why "Mark work
+        done" sits here beside the transcript link rather than among the quick
+        answers below. A quick answer routes through `answer` -> `agents.respond`,
+        which types text into the session and flips the agent back to running: the
+        opposite of finishing it. This ends the agent on the done terminal and
+        settles this item on the way out.
+      */}
+      {escalation.agentId ? (
+        <div className="esc-agent-actions">
+          {onOpenAgent ? (
+            <button className="btn ghost small esc-open" onClick={() => onOpenAgent(escalation.agentId!)}>
+              Open agent transcript →
+            </button>
+          ) : null}
+          {onComplete ? (
+            <AsyncButton
+              className="ghost small"
+              title="The agent is finished: record it done, reclaim its worktree, and close this out"
+              onClick={() => onComplete(escalation.agentId!)}
+            >
+              Mark work done
+            </AsyncButton>
+          ) : null}
+        </div>
       ) : null}
 
       {permission ? <pre className="esc-output">{permission.summary}</pre> : null}
