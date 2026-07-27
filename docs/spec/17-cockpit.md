@@ -85,6 +85,33 @@ for the world to change — chosen from `config.injectable`.
   toggle; issues with their state, linked PR and pickup chip, and a watch toggle; stories with a watch
   toggle; and a **Recently closed** section marking each PR merged vs closed-unmerged.
 
+  Rows are filed under three tabs — **Watched** / **Unwatched** / **Ignored** — by the pure
+  `watchBucket` (`web/src/worldBuckets.ts`) over each item's labels, with the server's precedence
+  (ignore wins, then watch, else the type default: PRs opt-out, issues and stories opt-in) and each
+  tab's count on its label. It is deliberately a _three_-way split where `resolveWatchState` is
+  binary: the gate only cares that an untagged issue won't be worked, while the panel has to tell
+  "you tagged this leave-alone" from "you haven't triaged this yet" — the same `ignored`/`unwatched`
+  distinction `issuePickupStatus` reports.
+
+  Three consequences. **The tab bar disappears when both labels are empty** (`labelPrefix: ''`, the
+  gates off): every item then sits on its type default, so two tabs could only ever be empty _and_
+  filtering to Watched would hide every issue — so nothing is filtered at all and the panel reads
+  exactly as it did before. **The chips a tab already states are dropped** — the pickup chip and the
+  `ignored`/`unwatched` chips render in the Watched tab only, which is what stops one identical
+  `no watch label "…"` chip repeating down every untriaged row. Dropping the pickup chip wholesale
+  is safe because the bucket reads _labels_ while the Azure state gate reports through _status_: a
+  watched issue parked by `pickupStates` is filed under Watched, where its `in review` reason still
+  shows. **"Recently closed" lives in the Watched tab alone**, since it exists so a PR you were
+  following doesn't silently vanish mid-session — a statement to someone monitoring — and bucketing
+  those rows by their own labels would scatter them. Tab counts cover live world items only, so the
+  Watched number doesn't climb as work finishes.
+
+  An issue's `→ PR #n` chip is dimmed and marked `(not open)` when `n` isn't in the open PR list the
+  snapshot ships — the same list `openPrForIssue` is given, so the chip and the harness's `has_pr`
+  reading can't disagree. `linkedPrNumber` is the last PR that ever referenced the issue and never
+  clears, so most of them point at long-closed PRs. It says only "not open", never merged or closed:
+  which of the two it was is not something the harness observed.
+
 ### Right column
 
 - **Up next** (`UpNext`) — the last cycle's ranked queue with the headroom cut drawn. Each row shows
@@ -142,7 +169,7 @@ disagree with what the dispatcher does:
 - **PR attention** — `prAttentionStatus(pr, ctx)`, attached per PR beside health and rendered by
   `attentionChip`. The chip names the **court** and nothing else — `your turn`, `harness on it`,
   `waiting on others`, `settled`, `stalled` — because scanning a list for "what is mine" is what it
-  exists for; the health chip beside it carries the visible detail of *why*, and the full reasons are
+  exists for; the health chip beside it carries the visible detail of _why_, and the full reasons are
   in the `title`. `done` and `ignored` render nothing: the row already draws a "merged" and an
   "ignored" chip, and one home per fact. Only `your turn` and `stalled` warn — the two arms actually
   asking for a person. An older server that ships no verdict renders nothing at all.

@@ -20,6 +20,7 @@ import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { AsyncButton } from './components/AsyncButton.js';
 import { statusDot, refLink } from './components/util.js';
+import { watchBucket, type WatchBucket } from './worldBuckets.js';
 import { useNow } from './hooks.js';
 
 /**
@@ -463,12 +464,18 @@ function attentionChip(attention: PullRequest['attention']) {
   );
 }
 
-/** Opt-in effective state for issues/stories: watched only with the watch tag and no ignore tag. */
-function isItemWatched(labels: string[] | undefined, watchLabel: string, ignoreLabel: string): boolean {
-  const set = labels ?? [];
-  if (set.includes(ignoreLabel)) return false;
-  return set.includes(watchLabel);
-}
+const TABS: WatchBucket[] = ['watched', 'unwatched', 'ignored'];
+const TAB_LABEL: Record<WatchBucket, string> = {
+  watched: 'Watched',
+  unwatched: 'Unwatched',
+  ignored: 'Ignored',
+};
+/** Why each tab exists, on the tab itself — the labels alone don't say what the harness does. */
+const TAB_TITLE: Record<WatchBucket, string> = {
+  watched: 'The harness works these',
+  unwatched: 'Not opted in — nothing will happen until you watch one',
+  ignored: 'You tagged these leave-alone',
+};
 
 function WorldSummary({
   state,
@@ -481,6 +488,7 @@ function WorldSummary({
   onToggleIssueWatch: (issueNumber: number, watched: boolean) => Promise<unknown> | unknown;
   onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
 }) {
+  const [tab, setTab] = useState<WatchBucket>('watched');
   const { pullRequests, issues, stories } = state.world;
   // Newest first: a PR you were watching disappears mid-session otherwise, with
   // nothing to say whether it landed or was abandoned.
@@ -490,13 +498,71 @@ function WorldSummary({
   const { refUrls } = state;
   const tag = state.config.ignoreLabel;
   const { watchLabel, ignoreLabel } = state.config;
+  // Both labels empty means the operator turned the gates off (`labelPrefix: ''`):
+  // every item then sits on its type default, so two of the three tabs could only
+  // ever be empty *and* filtering to `watched` would hide every issue. So the tab
+  // bar isn't just hidden — nothing is filtered at all, and the panel reads exactly
+  // as it did before.
+  const gated = Boolean(watchLabel || ignoreLabel);
+  const prBucket = (labels: string[] | undefined) =>
+    watchBucket(labels, { watchLabel, ignoreLabel, defaultWatched: true });
+  const itemBucket = (labels: string[] | undefined) =>
+    watchBucket(labels, { watchLabel, ignoreLabel, defaultWatched: false });
+  const inTab = (bucket: WatchBucket) => !gated || bucket === tab;
+
+  // The counts on the tabs are of live world items only — a recently-closed PR is
+  // news about work that has already ended, so counting it would have the Watched
+  // number climb as things finish.
+  const counts: Record<WatchBucket, number> = { watched: 0, unwatched: 0, ignored: 0 };
+  for (const pr of pullRequests) counts[prBucket(pr.labels)]++;
+  for (const i of issues) counts[itemBucket(i.labels)]++;
+  for (const s of stories) counts[itemBucket(s.labels)]++;
+
+  const visiblePrs = pullRequests.filter((pr) => inTab(prBucket(pr.labels)));
+  const visibleIssues = issues.filter((i) => inTab(itemBucket(i.labels)));
+  const visibleStories = stories.filter((s) => inTab(itemBucket(s.labels)));
+  // "Recently closed" lives in the Watched tab alone: it exists so a PR you were
+  // following doesn't silently vanish mid-session, which is a statement to someone
+  // monitoring. Bucketing those rows by their own labels would scatter them.
+  const showClosed = (!gated || tab === 'watched') && recentlyClosed.length > 0;
+  // Whatever tab a row is filed under already states its watch state, so the chips
+  // that only repeat it are dropped. The pickup chip is safe to drop wholesale
+  // here — its one arm carrying more than the tag (the Azure state gate, reported
+  // as `unwatched`) fires on *labels* the bucket reads as watched, so it lands in
+  // the Watched tab and renders in full.
+  const showPickupChip = !gated || tab === 'watched';
+  // A linked PR that isn't open is a closed one `linkedPrNumber` stayed pointing at
+  // — read off the same list `openPrForIssue` is given, so the two can't disagree.
+  const openPrNumbers = new Set(pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+
   return (
     <div className="world">
-      <div className="world-row">
-        <span>PRs</span>
-        <b>{pullRequests.length}</b>
-      </div>
-      {pullRequests.map((pr) => {
+      {gated && (
+        <div className="world-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={t === tab}
+              className={`world-tab${t === tab ? ' on' : ''}`}
+              onClick={() => setTab(t)}
+              title={TAB_TITLE[t]}
+            >
+              {TAB_LABEL[t]} <span className="count">{counts[t]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {counts[tab] === 0 && gated && (
+        <div className="world-empty">no {TAB_LABEL[tab].toLowerCase()} PRs, issues or stories</div>
+      )}
+      {visiblePrs.length > 0 && (
+        <div className="world-row">
+          <span>PRs</span>
+          <b>{visiblePrs.length}</b>
+        </div>
+      )}
+      {visiblePrs.map((pr) => {
         const isExcluded = (pr.labels ?? []).includes(tag);
         return (
           <div key={pr.id} className={`world-item${isExcluded ? ' excluded' : ''}`}>
@@ -506,9 +572,11 @@ function WorldSummary({
             )}
             {attentionChip(pr.attention)}
             {isExcluded ? (
-              <span className="chip small" title={`Tagged "${tag}" — the harness is leaving this PR alone`}>
-                ignored
-              </span>
+              showPickupChip && (
+                <span className="chip small" title={`Tagged "${tag}" — the harness is leaving this PR alone`}>
+                  ignored
+                </span>
+              )
             ) : pr.merged ? (
               <span className="chip small">merged</span>
             ) : pr.health?.blocked ? (
@@ -537,7 +605,7 @@ function WorldSummary({
           </div>
         );
       })}
-      {recentlyClosed.length > 0 && (
+      {showClosed && (
         <>
           <div className="world-row">
             <span>Recently closed</span>
@@ -556,25 +624,40 @@ function WorldSummary({
           ))}
         </>
       )}
-      <div className="world-row">
-        <span>Issues</span>
-        <b>{issues.length}</b>
-      </div>
-      {issues.map((i) => {
+      {visibleIssues.length > 0 && (
+        <div className="world-row">
+          <span>Issues</span>
+          <b>{visibleIssues.length}</b>
+        </div>
+      )}
+      {visibleIssues.map((i) => {
         const isIgnored = (i.labels ?? []).includes(ignoreLabel);
-        const watched = isItemWatched(i.labels, watchLabel, ignoreLabel);
+        const watched = itemBucket(i.labels) === 'watched';
         const resolved = i.state !== 'open' || i.linkedPrNumber !== null;
+        const linkLive = i.linkedPrNumber !== null && openPrNumbers.has(i.linkedPrNumber);
         return (
           <div key={i.id} className={`world-item${isIgnored ? ' excluded' : ''}`}>
             {refLink(`#${i.number}`, refUrls)} {i.title} <span className="chip small">{i.state}</span>
-            {isIgnored && (
+            {isIgnored && showPickupChip && (
               <span className="chip small" title={`Tagged "${ignoreLabel}" — the harness is leaving this issue alone`}>
                 ignored
               </span>
             )}
-            {pickupChip(i.pickup)}
+            {showPickupChip && pickupChip(i.pickup)}
             {i.linkedPrNumber !== null && (
-              <span className="chip small">→ PR {refLink(`#${i.linkedPrNumber}`, refUrls)}</span>
+              <span
+                className={`chip small${linkLive ? '' : ' stale'}`}
+                title={
+                  linkLive
+                    ? undefined
+                    : // Never "merged" or "closed": the PR left the open list, and which
+                      // of the two that was is not something the harness observed.
+                      'That PR is no longer open — the link is the last one that ever referenced this issue'
+                }
+              >
+                → PR {refLink(`#${i.linkedPrNumber}`, refUrls)}
+                {!linkLive && ' (not open)'}
+              </span>
             )}
             {!resolved && (
               <AsyncButton
@@ -592,22 +675,24 @@ function WorldSummary({
           </div>
         );
       })}
-      <div className="world-row">
-        <span>Stories</span>
-        <b>{stories.length}</b>
-      </div>
-      {stories.map((s) => {
+      {visibleStories.length > 0 && (
+        <div className="world-row">
+          <span>Stories</span>
+          <b>{visibleStories.length}</b>
+        </div>
+      )}
+      {visibleStories.map((s) => {
         const isIgnored = (s.labels ?? []).includes(ignoreLabel);
-        const watched = isItemWatched(s.labels, watchLabel, ignoreLabel);
+        const watched = itemBucket(s.labels) === 'watched';
         return (
           <div key={s.id} className={`world-item${isIgnored ? ' excluded' : ''}`}>
             {s.title} <span className="chip small">{s.state}</span>
-            {isIgnored && (
+            {isIgnored && showPickupChip && (
               <span className="chip small" title={`Tagged "${ignoreLabel}" — the harness is leaving this story alone`}>
                 ignored
               </span>
             )}
-            {!isIgnored && !watched && (
+            {!isIgnored && !watched && showPickupChip && (
               <span className="chip small" title={`No "${watchLabel}" tag — the harness isn't picking this story up`}>
                 unwatched
               </span>
