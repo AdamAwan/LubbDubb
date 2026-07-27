@@ -146,5 +146,45 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     });
   }
 
+  for (const job of input.jobs) {
+    out.push({
+      ref: `job:${job.id}`,
+      kind: 'job',
+      parentRef: null,
+      title: job.title,
+      status: job.status,
+      terminal: job.status === 'cancelled',
+    });
+  }
+
+  // Concerns, keyed on the **origin** rather than the task: two CI attempts on one
+  // PR are two `tasks` rows but one node, so the graph does not grow a node every
+  // time an agent restarts. The attempts stay reachable by `origin_ref`.
+  //
+  // A concern is never terminal. It is a step on the way to a merge, not a leaf —
+  // while one is live its PR simply is not terminal yet, and a PR that sits red
+  // forever correctly keeps its issue unfinished.
+  const concernTasks = new Map<string, Task[]>();
+  for (const task of input.tasks) {
+    if (task.originRef === null) continue;
+    if (!/^pr:\d+:.+$/.test(task.originRef)) continue;
+    const bucket = concernTasks.get(task.originRef);
+    if (bucket) bucket.push(task);
+    else concernTasks.set(task.originRef, [task]);
+  }
+  for (const [ref, attempts] of concernTasks) {
+    const prRef = ref.slice(0, ref.indexOf(':', 3));
+    if (!seen.has(prRef)) continue; // its PR is not in the graph, so neither is it
+    const live = attempts.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting');
+    out.push({
+      ref,
+      kind: 'concern',
+      parentRef: prRef,
+      title: attempts[0]?.title ?? ref,
+      status: live ? 'live' : 'done',
+      terminal: false,
+    });
+  }
+
   return out;
 }

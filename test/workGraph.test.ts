@@ -1,7 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
-import type { Issue, Plan, PlanPart, PullRequest, WorkNode, WorkNodeObservation, WorldSnapshot } from '../src/types.js';
+import type {
+  Issue,
+  Job,
+  Plan,
+  PlanPart,
+  PullRequest,
+  Task,
+  WorkNode,
+  WorkNodeObservation,
+  WorldSnapshot,
+} from '../src/types.js';
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
 
 function obs(over: Partial<WorkNodeObservation> & Pick<WorkNodeObservation, 'ref' | 'kind'>): WorkNodeObservation {
@@ -298,4 +308,83 @@ test('a stacked PR records its base as a cross-link, not as its parent', () => {
   );
   assert.equal(node(out, 'pr:42').baseRef, 'pr:41', 'stacking is its own relation');
   assert.equal(node(out, 'pr:42').parentRef, 'issue:12:part:api', 'and does not become the parent');
+});
+
+function task(over: Partial<Task> = {}): Task {
+  return {
+    id: 't1',
+    kind: 'code',
+    title: 'Fix CI on PR #40',
+    prompt: 'fix it',
+    branch: 'issue/12',
+    originRef: 'pr:40:ci',
+    originTitle: null,
+    originSummary: null,
+    dispatchReason: null,
+    status: 'running',
+    agentId: 'a1',
+    createdAt: '2026-07-28T09:00:00.000Z',
+    updatedAt: '2026-07-28T09:00:00.000Z',
+    ...over,
+  };
+}
+
+function job(over: Partial<Job> = {}): Job {
+  return {
+    id: 'j7',
+    title: 'Bump the linter',
+    prompt: 'bump it',
+    kind: 'code',
+    branch: 'chore/lint',
+    status: 'queued',
+    taskId: null,
+    createdAt: '2026-07-28T09:00:00.000Z',
+    updatedAt: '2026-07-28T09:00:00.000Z',
+    ...over,
+  };
+}
+
+test('a concern hangs off its PR and is live while a task is active', () => {
+  const out = foldWorkGraph(input({ world: world({ issues: [issue()], pullRequests: [pr()] }), tasks: [task()] }));
+  assert.equal(node(out, 'pr:40:ci').parentRef, 'pr:40');
+  assert.equal(node(out, 'pr:40:ci').kind, 'concern');
+  assert.equal(node(out, 'pr:40:ci').status, 'live');
+  assert.equal(node(out, 'pr:40:ci').terminal, false, 'a concern is never terminal — the PR is');
+});
+
+test('a concern whose attempts have all ended is done but stays in the graph', () => {
+  const out = foldWorkGraph(
+    input({ world: world({ issues: [issue()], pullRequests: [pr()] }), tasks: [task({ status: 'done' })] }),
+  );
+  assert.equal(node(out, 'pr:40:ci').status, 'done');
+  assert.equal(node(out, 'pr:40:ci').terminal, false);
+});
+
+test('two attempts on one concern are one node', () => {
+  const out = foldWorkGraph(
+    input({
+      world: world({ issues: [issue()], pullRequests: [pr()] }),
+      tasks: [task({ id: 't1', status: 'done' }), task({ id: 't2', status: 'running' })],
+    }),
+  );
+  assert.equal(out.filter((n) => n.ref === 'pr:40:ci').length, 1, 'keyed on the origin, not the task');
+  assert.equal(node(out, 'pr:40:ci').status, 'live', 'one live attempt makes the node live');
+});
+
+test('a task on an origin with no PR in the graph produces no orphan concern', () => {
+  const out = foldWorkGraph(input({ world: world({ issues: [issue()] }), tasks: [task()] }));
+  assert.equal(
+    out.find((n) => n.ref === 'pr:40:ci'),
+    undefined,
+  );
+});
+
+test('a job is its own root, and a cancelled one is terminal', () => {
+  const queued = foldWorkGraph(input({ jobs: [job()] }));
+  assert.equal(node(queued, 'job:j7').parentRef, null);
+  assert.equal(node(queued, 'job:j7').kind, 'job');
+  assert.equal(node(queued, 'job:j7').terminal, false);
+
+  const cancelled = foldWorkGraph(input({ jobs: [job({ status: 'cancelled' })] }));
+  assert.equal(node(cancelled, 'job:j7').terminal, true);
 });
