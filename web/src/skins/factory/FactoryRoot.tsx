@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import type { SkinProps } from '../types.js';
 import { AgentDrawer } from '../../components/AgentDrawer.js';
 import { EscalationCard } from '../../components/EscalationCard.js';
@@ -24,16 +23,6 @@ import { productionReading } from './production.js';
 import { clip } from './vocabulary.js';
 
 /**
- * MOCKUP ONLY — `?layout=a|b|c` picks a candidate wide-screen arrangement.
- * Default is the shipped single-ribbon layout. Delete with the mockup CSS once
- * one is chosen.
- */
-function mockLayout(): '' | 'a' | 'b' | 'c' {
-  const v = new URLSearchParams(window.location.search).get('layout');
-  return v === 'a' || v === 'b' || v === 'c' ? v : '';
-}
-
-/**
  * The cockpit as a production line.
  *
  * The layout is the argument: the queue, the fleet and the cap are one picture
@@ -42,6 +31,14 @@ function mockLayout(): '' | 'a' | 'b' | 'c' {
  * every time you look. Production sits directly under it because the floor plan
  * answers *what is happening* and only a rate answers *whether it is working*.
  * Everything below the two is the detail neither picture can hold.
+ *
+ * Every panel is bound to a `const` below and then *placed*, so what a panel
+ * contains and where it sits stop being the same edit. There is one DOM for
+ * every width: the three rails are always here, and below 1900px `.fx-rail`
+ * goes `display: contents` so its panels fall through into the page grid. The
+ * breakpoint is therefore stated once, in CSS — matching it in React as well
+ * would be a second definition to keep in step, bought with a resize listener.
+ * See `docs/spec/17-cockpit.md`.
  *
  * Where a panel carries a refusal rule or an async flow it is the *shared*
  * component, unchanged and tinted through the tokens: the escalation card,
@@ -59,7 +56,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     fiveHourCostUsd: state.usage.windows.fiveHourCostUsd,
     now,
   });
-  const layout = mockLayout();
 
   // Every panel is named once here so an arrangement below is only a question of
   // where it goes, never of what it contains.
@@ -364,73 +360,41 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     </section>
   );
 
-  // The shipped arrangement, and A/B, which differ from it in CSS alone.
-  const ribbon: ReactNode = (
-    <>
-      {recovery}
-      {alerts}
-      {line}
-      {productionPanel}
-      <div className="fx-cols">
-        <div className="fx-stack">
-          {bots}
-          {offBlueprint}
-        </div>
-        <div className="fx-stack">
-          {stamp}
-          {launches}
-          {workOrders}
-        </div>
-      </div>
-      {research}
-      {yard}
-      <div className="fx-cols">
-        {shiftLog}
-        <div className="fx-stack">
-          {signals}
-          {faults}
-        </div>
-      </div>
-    </>
-  );
-
-  // C — three rails that each scroll on their own, so the page never does.
-  const railed: ReactNode = (
-    <div className="fx-rails">
-      <div className="fx-rail fx-rail-act">
-        {recovery}
-        {alerts}
-        {stamp}
-        {workOrders}
-        {faults}
-      </div>
-      <div className="fx-rail fx-rail-floor">
-        {line}
-        {productionPanel}
-        {bots}
-        {research}
-        {yard}
-        {offBlueprint}
-      </div>
-      <div className="fx-rail fx-rail-world">
-        {launches}
-        {signals}
-        {shiftLog}
-      </div>
-    </div>
-  );
-
   return (
     // A brownout dims the machinery and nothing else — see the CSS. Reserve
     // running low is a real reading and worth showing on the floor itself, but
     // not at the cost of the text an operator needs in order to act on it.
-    <div className={`fx ${power.brownout ? 'fx-brownout' : ''} ${layout ? `fx-lay-${layout}` : ''}`}>
+    <div className={`fx ${power.brownout ? 'fx-brownout' : ''}`}>
       <SpriteSheet />
       <StatusBar view={view} actions={actions} />
 
-      {/* Nothing below this runs while it is up: an outstanding recovery decision
-          holds every pulse, so it goes above the floor, not on it. */}
-      {layout === 'c' ? railed : ribbon}
+      {/* Three rails split on *whose turn it is*: what you are the blocker for,
+          what the harness is doing, what the world is doing back. Below 1900px
+          they dissolve and `order` restores the reading order. Recovery leads
+          the act rail because nothing below it runs while it is up: an
+          outstanding recovery decision holds every pulse. */}
+      <div className="fx-rails">
+        <div className="fx-rail fx-rail-act">
+          {recovery}
+          {alerts}
+          {stamp}
+          {workOrders}
+          {faults}
+        </div>
+        <div className="fx-rail fx-rail-floor">
+          {line}
+          {productionPanel}
+          {bots}
+          {research}
+          {yard}
+          {offBlueprint}
+        </div>
+        <div className="fx-rail fx-rail-world">
+          {launches}
+          {signals}
+          {shiftLog}
+        </div>
+      </div>
 
       {view.selectedAgent && (
         <AgentDrawer

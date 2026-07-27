@@ -80,6 +80,14 @@
   font-size: 13.5px;
   line-height: 1.5;
 }
+/* The floor claims the display it is given — see "arrangements" below for the
+   two wide ones. Kept off the base rule so the narrow floor still centres. */
+@media (min-width: 1500px) {
+  .fx {
+    max-width: none;
+    padding: 14px 18px 20px;
+  }
+}
 .fx-sprites {
   position: absolute;
 }
@@ -707,25 +715,202 @@
   fill: var(--muted);
 }
 
-/* ============================ columns & cards ============================ */
+/* ============================ arrangements ============================
 
-.fx-cols {
+   One DOM, four widths. `FactoryRoot` always renders three rails; only the
+   widest arrangement keeps them, and below that `.fx-rail` goes
+   `display: contents` so its panels fall through and become tiles of the page
+   grid directly. The breakpoint therefore lives here and only here — matching
+   it in React as well would be a second definition to keep in step, bought
+   with a resize listener and a re-render on every drag.
+
+     < 940   one column
+     940+    two columns
+     1500+   tiled: one six-column page grid, each panel spanning what it needs
+     1900+   railed: three columns that scroll on their own, page fixed to the
+             viewport
+
+   The rails' document order is *act, floor, world*, which is not the order the
+   floor reads top-to-bottom in. So the two dissolved arrangements set `order`
+   per panel (below), restoring exactly the reading order the skin shipped
+   with: the line, then production, then the detail neither picture holds. */
+
+.fx-rails {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-  margin-bottom: 12px;
 }
-.fx-stack {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
+.fx-rail {
+  display: contents;
 }
-@media (max-width: 940px) {
-  .fx-cols {
-    grid-template-columns: minmax(0, 1fr);
+
+@media (min-width: 940px) {
+  .fx-rails {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* The two pictures stay whole across both tracks; everything else is detail
+     that reads fine in a half-width column. */
+  .fx-line-wrap,
+  [data-fx='production'],
+  [data-fx='research'],
+  [data-fx='yard'] {
+    grid-column: span 2;
   }
 }
+
+/* ---------------- 1500+ : tiled ---------------- */
+
+/* Four tracks, not six: this band tops out at 1899px, where six would leave a
+   span-1 tile ~250px wide — narrower than the same panel gets in the plain
+   two-column layout below it. */
+@media (min-width: 1500px) {
+  .fx-rails {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .fx-line-wrap {
+    grid-column: span 4;
+  }
+  [data-fx='production'],
+  [data-fx='bots'],
+  [data-fx='stamp'],
+  [data-fx='research'],
+  [data-fx='yard'],
+  [data-fx='shift-log'] {
+    grid-column: span 2;
+  }
+  [data-fx='launches'],
+  [data-fx='faults'],
+  [data-fx='work-orders'],
+  [data-fx='off-blueprint'],
+  [data-fx='signals'] {
+    grid-column: span 1;
+  }
+  /* A tile that would run away vertically scrolls inside itself, so one long
+     list cannot set the height of the row it happens to sit in. */
+  [data-fx='bots'] > .fx-body,
+  [data-fx='stamp'] > .fx-body,
+  [data-fx='faults'] > .fx-body {
+    max-height: 620px;
+    overflow-y: auto;
+  }
+}
+
+/* The banner and the alert bay are the operator's interrupt: full bleed at
+   every width at which the page is a grid at all. */
+.fx .recovery-banner,
+.fx-alerts {
+  grid-column: 1 / -1;
+}
+
+/* Document order is the rails' order; this is the floor's. Applies wherever
+   the rails are dissolved, and is reset inside a rail below. */
+.fx .recovery-banner {
+  order: 1;
+}
+.fx-alerts {
+  order: 2;
+}
+.fx-line-wrap {
+  order: 3;
+}
+[data-fx='production'] {
+  order: 4;
+}
+[data-fx='bots'] {
+  order: 5;
+}
+[data-fx='off-blueprint'] {
+  order: 6;
+}
+[data-fx='stamp'] {
+  order: 7;
+}
+[data-fx='launches'] {
+  order: 8;
+}
+[data-fx='work-orders'] {
+  order: 9;
+}
+[data-fx='research'] {
+  order: 10;
+}
+[data-fx='yard'] {
+  order: 11;
+}
+[data-fx='shift-log'] {
+  order: 12;
+}
+[data-fx='signals'] {
+  order: 13;
+}
+[data-fx='faults'] {
+  order: 14;
+}
+
+/* ---------------- 1900+ : railed ---------------- */
+
+@media (min-width: 1900px) {
+  .fx {
+    height: 100dvh;
+    padding-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  /* The shell's own gap spaces the bar now. */
+  .fx-status {
+    margin-bottom: 0;
+  }
+  .fx-rails {
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: 26rem minmax(0, 1fr) 24rem;
+    /* A rail must fill its row, not shrink to its content — `start` (right for
+       tiles, which must not stretch to the tallest in their row) would give the
+       rail its content height, and `overflow-y` on a box tall enough to hold
+       everything scrolls the page instead. */
+    align-items: stretch;
+  }
+  .fx-rail {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    /* A rail is its own reading surface: reaching its end must not start
+       scrolling another one. */
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+  /* The rail decides placement now, so the floor's order must not reshuffle
+     the panels within one. */
+  .fx-rail > * {
+    order: 0;
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 2000px) {
+  /* The floor rail is the one with room for two abreast. The line and the yard
+     are the two that are worse for being halved. */
+  .fx-rail-floor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fx-rail-floor > .fx-line-wrap,
+  .fx-rail-floor > [data-fx='yard'] {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 2400px) {
+  .fx-rails {
+    grid-template-columns: 30rem minmax(0, 1fr) 30rem;
+  }
+}
+
+/* ============================ cards ============================ */
 
 .fx-card {
   padding: 11px 14px 13px;

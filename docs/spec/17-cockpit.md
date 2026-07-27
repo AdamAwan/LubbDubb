@@ -91,6 +91,44 @@ it:
 
 Red means exactly one thing on that floor: an agent parked on a question only you can answer.
 
+#### The floor at width
+
+`FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
+it sits are separate edits. It renders **three rails** — `act` (recovery, alerts, awaiting your
+stamp, work orders, faults), `floor` (the line, production, bots, research, the yard, off-blueprint)
+and `world` (launches, signals, shift log) — split on _whose turn it is_ rather than on subject, so
+a glance answers "is anything waiting on me" without moving.
+
+There is **one DOM for every width**; the arrangement is chosen in CSS alone:
+
+| width     | arrangement                                                                         |
+| --------- | ----------------------------------------------------------------------------------- |
+| < 940     | one column                                                                          |
+| 940–1499  | two columns; the line, production, research and the yard span both                  |
+| 1500–1899 | tiled — one four-column page grid, each panel spanning what it needs                |
+| ≥ 1900    | railed — the three rails, each scrolling on its own, the page fixed to the viewport |
+
+Below 1900px `.fx-rail` is `display: contents`, so its panels fall through and become tiles of the
+page grid directly. **The breakpoint is therefore stated once.** Matching it in React as well —
+rendering a different tree per width — buys nothing and costs a resize listener, a re-render on
+every drag, and a second definition of the boundary that will disagree with this one the first time
+either moves.
+
+Three consequences to preserve:
+
+- **The rails' document order is not the floor's reading order**, so the two dissolved arrangements
+  set `order` per panel, restoring exactly the order the skin shipped with (the line, then
+  production, then the detail neither picture holds). `order` is reset to `0` inside a rail at
+  ≥1900, or those same values would reshuffle each rail internally.
+- **A rail must stretch to its row, not to its content.** `.fx-rails` carries `align-items: start`
+  for the tiled arrangement, which is right for a tile and wrong for a rail: a rail sized to its
+  content is tall enough to hold everything, so its `overflow-y` never engages and the _page_
+  scrolls instead. The railed block sets `align-items: stretch` back.
+- **The full-bleed pictures need a container that caps them.** The line and production scale with
+  their container; given the whole of a 3440px display, production alone becomes a ~500px-tall chart
+  that eats the first screen. Their spans are what stop that, which is why widening the old
+  centred ribbon without also tiling it made the skin worse rather than better.
+
 #### What the floor draws beyond the queue
 
 Each of these is a game mechanic kept only because a snapshot field already carried the reading; the
