@@ -47,6 +47,19 @@ from each. The SPA shell and its assets are deliberately unguarded: the token ar
 fragment the browser never sends, so the page has to load before it can authenticate, and it holds
 no world state of its own.
 
+**The first refusal of a run is recorded; the rest need `LUBBDUBB_DEBUG`.** A refusal that says
+nothing is indistinguishable, server-side, between a wrong token and a client sending none at all —
+and the second is the common one, because `web/dist` is gitignored, so a bundle built before the
+token guard existed attaches no header and no `?t=` and keeps doing so through every restart and hard
+refresh. So the entry names the path, the **channel** the credential arrived on (`bearer` / `query` /
+`malformed` / `none`) and the `Host`/`Origin`, never the credential itself; `credential=none` also
+carries the rebuild hint, and nothing else does — a refusal that did carry a token is a token
+problem, and pointing its operator at the bundle would send them where the fault is not. Only the
+first is recorded because a locked-out cockpit polls, which would bury it under copies of itself.
+The channel comes from the same `presentedToken` the verdict used, so the line cannot contradict the
+decision beside it, and it is `JSON.stringify`d before logging because every field in it is an
+attacker-controlled header — a newline in an `Origin` would otherwise forge a second, fake log line.
+
 A refused **upgrade** is answered with `Connection: close` and its socket destroyed. Without that the
 connection belongs to neither side's bookkeeping and `app.close()` waits on it forever, so anyone
 probing `/ws` would stop the harness shutting down.

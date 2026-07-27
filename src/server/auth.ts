@@ -205,6 +205,15 @@ function tokenMatches(expected: string, presented: string | undefined): boolean 
 }
 
 /**
+ * Where a presented credential came from — `none` and `malformed` carry no token.
+ * Reported alongside it so {@link describeAuthAttempt} can name the channel
+ * without re-parsing the header: two parsers disagreeing about what the client
+ * sent is the drift this codebase has paid for more than once, and here it would
+ * mean a log line contradicting the verdict beside it.
+ */
+type CredentialChannel = 'bearer' | 'query' | 'malformed' | 'none';
+
+/**
  * The presented credential: `Authorization: Bearer <token>`, or `?t=` for the
  * WebSocket.
  *
@@ -214,16 +223,69 @@ function tokenMatches(expected: string, presented: string | undefined): boolean 
  * header of nothing but spaces. The header is unauthenticated attacker input, so
  * it is the one string here worth not handing to a regex engine at all.
  */
-function presentedToken(req: AuthRequest): string | undefined {
+function presentedToken(req: AuthRequest): { token?: string; channel: CredentialChannel } {
   const header = req.authorization?.trim();
   if (header) {
     const space = header.indexOf(' ');
     if (space > 0 && header.slice(0, space).toLowerCase() === 'bearer') {
       const value = header.slice(space + 1).trim();
-      if (value) return value;
+      if (value) return { token: value, channel: 'bearer' };
     }
+    // A header that is present but unusable is its own diagnosis — a client
+    // sending the wrong scheme is a different bug from one sending nothing — so
+    // it is not folded into `none`. The query token is still honoured: the
+    // header being junk does not make a valid `?t=` invalid.
+    if (req.queryToken) return { token: req.queryToken, channel: 'query' };
+    return { channel: 'malformed' };
   }
-  return req.queryToken;
+  if (req.queryToken) return { token: req.queryToken, channel: 'query' };
+  return { channel: 'none' };
+}
+
+/**
+ * A refused request, described for the operator's log — with nothing secret in it.
+ *
+ * This exists for one failure in particular, because it costs an afternoon: every
+ * request 401ing and every WebSocket upgrade refused, on a machine where
+ * restarting the server and hard-refreshing the browser change nothing. That is
+ * what a stale `web/dist` looks like — a bundle built before the cockpit had
+ * token support attaches no header at all — and from the server side it is
+ * indistinguishable from a wrong token unless the log says *which*. So the fact
+ * worth printing is the presence and channel of the credential, never its value:
+ * `credential=none` on a guarded path names the client, while a mismatching
+ * `credential=bearer` names the token.
+ *
+ * Every value here is an attacker-controlled header, so the caller encodes the
+ * result before logging it — a newline in an `Origin` would otherwise forge a
+ * second, fake log line.
+ */
+export function describeAuthAttempt(req: AuthRequest): string {
+  const path = req.url.split('?')[0] ?? req.url;
+  return [
+    `path=${path}`,
+    `credential=${presentedToken(req).channel}`,
+    `host=${req.host ?? '(absent)'}`,
+    `origin=${req.origin ?? '(absent)'}`,
+  ].join(' ');
+}
+
+/**
+ * The next thing to try, when the refusal implies one — else null.
+ *
+ * Only `none` gets a hint, and that is the point: a refusal that *did* carry a
+ * credential is a token problem, and telling its operator to rebuild the cockpit
+ * would send them somewhere the fault is not. Derived from the same
+ * {@link presentedToken} the verdict used rather than by re-reading the string
+ * {@link describeAuthAttempt} produced, so the hint cannot contradict the line it
+ * is attached to.
+ */
+export function authRefusalHint(req: AuthRequest): string | null {
+  if (presentedToken(req).channel !== 'none') return null;
+  return (
+    'The client sent no credential at all, so the token is not the problem. ' +
+    'Most often that is a stale web/dist — a cockpit bundle built before the token guard existed ' +
+    'attaches no Authorization header and no ?t= to the socket. Rebuild it: npm run web:build.'
+  );
 }
 
 /** How many refusals from one source, within {@link FAILURE_WINDOW_MS}, before it is shut out. */
@@ -301,7 +363,7 @@ export function authorizeRequest(req: AuthRequest, policy: AuthPolicy): AuthVerd
   if (req.origin !== undefined && !isLoopbackOrigin(req.origin)) {
     return { ok: false, code: 403, error: 'cross-origin request refused' };
   }
-  if (!tokenMatches(policy.token, presentedToken(req))) {
+  if (!tokenMatches(policy.token, presentedToken(req).token)) {
     return { ok: false, code: 401, error: 'missing or invalid cockpit token' };
   }
   return { ok: true };

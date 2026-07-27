@@ -19,7 +19,14 @@ import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
-import { authorizeRequest, createAuthThrottle, resolveCockpitToken } from './auth.js';
+import {
+  authRefusalHint,
+  authorizeRequest,
+  createAuthThrottle,
+  describeAuthAttempt,
+  resolveCockpitToken,
+} from './auth.js';
+import { debugLog } from '../debug.js';
 import { mintArtifactCapability, verifyArtifactCapability } from './artifactCapability.js';
 import { randomBytes } from 'node:crypto';
 
@@ -68,23 +75,51 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // never throttle itself — the same reason rate limiting is registered
     // `global: false` below.
     const throttle = createAuthThrottle();
+    // The *first* refusal of a run is recorded, and every one after it goes to
+    // the opt-in debug log. A cockpit that cannot authenticate polls, so logging
+    // each one would bury the only one that matters under thousands of copies of
+    // itself — while logging none is how a stale bundle stays invisible through
+    // restarts and hard refreshes. The first line names the cause; the flag is
+    // there for when the cause changes between requests.
+    let refused = false;
     app.addHook('onRequest', async (req, reply) => {
       const now = Date.now();
-      const verdict = authorizeRequest(
-        {
-          url: req.url,
-          host: req.headers.host,
-          origin: req.headers.origin,
-          authorization: req.headers.authorization,
-          queryToken:
-            typeof (req.query as { t?: unknown } | undefined)?.t === 'string'
-              ? (req.query as { t: string }).t
-              : undefined,
-        },
-        { token: auth.token, requireLoopbackHost, throttled: throttle.blocked(req.ip, now) },
-      );
+      const attempt = {
+        url: req.url,
+        host: req.headers.host,
+        origin: req.headers.origin,
+        authorization: req.headers.authorization,
+        queryToken:
+          typeof (req.query as { t?: unknown } | undefined)?.t === 'string'
+            ? (req.query as { t: string }).t
+            : undefined,
+      };
+      const verdict = authorizeRequest(attempt, {
+        token: auth.token,
+        requireLoopbackHost,
+        throttled: throttle.blocked(req.ip, now),
+      });
       if (verdict.ok) return;
       throttle.fail(req.ip, now);
+      const summary = `${verdict.code} ${verdict.error} — ${describeAuthAttempt(attempt)}`;
+      if (refused) {
+        debugLog('auth', summary);
+      } else {
+        refused = true;
+        const hint = authRefusalHint(attempt);
+        system.errors.record({
+          source: 'server',
+          message: 'cockpit refused a request — the first of this run',
+          // JSON-encoded: every field in the summary is an attacker-controlled
+          // header, and a newline in an Origin would otherwise forge a second,
+          // fake log line. (`debugLog` does its own encoding.)
+          detail: [
+            JSON.stringify(summary),
+            ...(hint ? [hint] : []),
+            'Set LUBBDUBB_DEBUG=1 to log every refusal, not just the first.',
+          ].join('\n'),
+        });
+      }
       // A refused *upgrade* needs its connection torn down explicitly. The client
       // asked to switch protocols and got an ordinary response instead, which
       // leaves a socket that belongs to neither side's bookkeeping — the HTTP
