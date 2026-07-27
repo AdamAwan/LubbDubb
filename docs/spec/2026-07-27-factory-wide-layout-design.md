@@ -71,6 +71,12 @@ the tiled and railed arrangements they are constrained by their span, which is w
 problem does not arise there — but the cap is stated explicitly rather than left as a
 property of the current spans.
 
+The follow-up settled Production more firmly than a span: prominence, not just size, was
+the problem. It is the one panel read against time rather than reporting the moment — the
+one an operator _consults_ — so it draws as a **tile at the head of the world rail** and
+opens into a **modal** on a click. One set of plotting functions serves both sizes; the
+tile carries the shape and the churn number, the modal the axes, deltas and caveats.
+
 ## Rails: what goes where
 
 Three rails, split on **whose turn it is**, not on subject matter:
@@ -78,10 +84,10 @@ Three rails, split on **whose turn it is**, not on subject matter:
 - **Act** (left, fixed width): recovery, alerts, awaiting your stamp, work orders, faults.
   Everything the operator is the blocker for. A glance answers "is anything waiting on me"
   without moving.
-- **Floor** (centre, fluid): the line, production, bots, research, the yard, off-blueprint.
-  What the harness is doing. Widest because the line is the widest picture.
-- **World** (right, fixed width): launches, signals, shift log. What the outside is doing
-  back.
+- **Floor** (centre, fluid): the line, bots, research, the yard, off-blueprint. What the
+  harness is doing. Widest because the line is the widest picture.
+- **World** (right, fixed width): production, launches, signals, shift log. What the outside
+  is doing back — production included, because output is merges.
 
 Each rail is `overflow-y: auto` with `overscroll-behavior: contain`. At ≥2400px the act and
 world rails widen (26rem → 30rem); at ≥2000px the floor rail goes two-abreast, with the

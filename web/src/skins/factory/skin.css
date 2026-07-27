@@ -396,6 +396,11 @@
   height: 100%;
 }
 
+/* A transport belt: chevrons in the tier colour running along a dark rubber
+   body, with the guide rails sunk into either edge. The crossed diagonals this
+   replaced read as hazard tape — a warning, which is the one thing a belt is
+   not — and drew no direction at all, so the only thing saying which way the
+   queue moved was the animation. An arrow says it standing still. */
 .fx-belt {
   position: absolute;
   left: 0;
@@ -404,27 +409,40 @@
   height: 54px;
   overflow: hidden;
   background-color: var(--fx-belt-dark);
-  background-image: repeating-linear-gradient(-45deg, var(--fx-belt) 0 3px, transparent 3px 8px),
-    repeating-linear-gradient(45deg, var(--fx-belt) 0 3px, transparent 3px 8px);
-  background-size: 22px 12px;
-  background-position:
-    0 0,
-    0 12px;
   border-top: 2px solid var(--border-lo);
   border-bottom: 2px solid var(--border-lo);
+  box-shadow:
+    inset 0 3px 0 rgba(0, 0, 0, 0.34),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.34);
+}
+/* Masked rather than painted: an inline SVG background cannot read `--fx-belt`,
+   and the tier colour has to stay one token. The pseudo-element is the first
+   child, so the crates paint over it. */
+.fx-belt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--fx-belt);
+  opacity: 0.72;
+  /* The arrow stops short of both edges: the rubber either side of it is what
+     makes the rails read as rails rather than as a border. */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='54'%3E%3Cpath d='M20 12 L10 27 L20 42 L13 42 L3 27 L13 12 Z' fill='%23000'/%3E%3C/svg%3E");
+  mask-repeat: repeat-x;
+  mask-size: 26px 100%;
+  mask-position: 0 0;
   animation: fx-beltrun 0.8s linear infinite;
 }
+/* Chevrons point the way the queue moves — leftwards, into the bays — so the
+   pattern travels the same way. */
 @keyframes fx-beltrun {
   to {
-    background-position:
-      -22px 0,
-      -22px 12px;
+    mask-position: -26px 0;
   }
 }
 /* The belt is the harness running, so a paused or held harness stops it. Items
    sitting still on a moving belt is what a backed-up line looks like, and it is
    also exactly what a queue behind the cap is — the picture is honest either way. */
-.fx-belt.stopped {
+.fx-belt.stopped::before {
   animation-play-state: paused;
 }
 
@@ -726,14 +744,15 @@
 
      < 940   one column
      940+    two columns
-     1500+   tiled: one six-column page grid, each panel spanning what it needs
+     1500+   tiled: one four-column page grid, each panel spanning what it needs
      1900+   railed: three columns that scroll on their own, page fixed to the
              viewport
 
    The rails' document order is *act, floor, world*, which is not the order the
    floor reads top-to-bottom in. So the two dissolved arrangements set `order`
-   per panel (below), restoring exactly the reading order the skin shipped
-   with: the line, then production, then the detail neither picture holds. */
+   per panel (below): the line first, then the detail it cannot hold, and the
+   readings you consult rather than watch — production, the log, the signals —
+   after it. */
 
 .fx-rails {
   display: grid;
@@ -749,10 +768,9 @@
   .fx-rails {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  /* The two pictures stay whole across both tracks; everything else is detail
+  /* The big picture stays whole across both tracks; everything else is detail
      that reads fine in a half-width column. */
   .fx-line-wrap,
-  [data-fx='production'],
   [data-fx='research'],
   [data-fx='yard'] {
     grid-column: span 2;
@@ -771,7 +789,6 @@
   .fx-line-wrap {
     grid-column: span 4;
   }
-  [data-fx='production'],
   [data-fx='bots'],
   [data-fx='stamp'],
   [data-fx='research'],
@@ -779,6 +796,7 @@
   [data-fx='shift-log'] {
     grid-column: span 2;
   }
+  [data-fx='production'],
   [data-fx='launches'],
   [data-fx='faults'],
   [data-fx='work-orders'],
@@ -814,28 +832,30 @@
 .fx-line-wrap {
   order: 3;
 }
-[data-fx='production'] {
+[data-fx='bots'] {
   order: 4;
 }
-[data-fx='bots'] {
+[data-fx='off-blueprint'] {
   order: 5;
 }
-[data-fx='off-blueprint'] {
+[data-fx='stamp'] {
   order: 6;
 }
-[data-fx='stamp'] {
+[data-fx='launches'] {
   order: 7;
 }
-[data-fx='launches'] {
+[data-fx='work-orders'] {
   order: 8;
 }
-[data-fx='work-orders'] {
+[data-fx='research'] {
   order: 9;
 }
-[data-fx='research'] {
+[data-fx='yard'] {
   order: 10;
 }
-[data-fx='yard'] {
+/* Production is a reading you consult, not a picture you watch, so it sits with
+   the log rather than under the line. Same demotion the world rail makes. */
+[data-fx='production'] {
   order: 11;
 }
 [data-fx='shift-log'] {
@@ -1335,6 +1355,83 @@
   font-weight: 600;
 }
 
+/* The tile: the same three series at rail width, and the one number. A button,
+   because opening the full panel is the only thing on it to do. */
+.fx-prod-tile {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.fx-prod-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.fx-prod-spark {
+  padding: 6px;
+}
+.fx-prod-spark svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.fx-prod-tile:hover .fx-prod-spark {
+  border-color: var(--accent);
+}
+.fx-prod-rates {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.fx-krate {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.fx-krate .sw {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+}
+.fx-krate b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ============================ modal ============================ */
+
+/* A panel in front of the floor rather than a second surface: it is an
+   `.fx-card` like every other, and only the backdrop is new. */
+.fx-modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.fx-modal {
+  width: min(1040px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+}
+.fx-modal-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* ============================ research (the tech tree) ============================ */
 
 .fx-trees {
@@ -1535,7 +1632,7 @@
 /* Everything on this page that moves is ambience; none of it carries a reading
    the text does not also carry, so switching it all off costs nothing. */
 @media (prefers-reduced-motion: reduce) {
-  .fx-belt,
+  .fx-belt::before,
   .fx-spin,
   .fx-arm,
   .fx-held,

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { SkinProps } from '../types.js';
 import { AgentDrawer } from '../../components/AgentDrawer.js';
 import { EscalationCard } from '../../components/EscalationCard.js';
@@ -14,7 +15,8 @@ import { TheLine } from './components/TheLine.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
 import { Launches } from './components/Launches.js';
-import { Production } from './components/Production.js';
+import { Modal } from './components/Modal.js';
+import { Production, ProductionTile } from './components/Production.js';
 import { Signals } from './components/Signals.js';
 import { Silos } from './components/Silos.js';
 import { TechTree } from './components/TechTree.js';
@@ -28,9 +30,13 @@ import { clip } from './vocabulary.js';
  * The layout is the argument: the queue, the fleet and the cap are one picture
  * at the top rather than three panels you join by eye, because they are one
  * decision — the dispatcher's — and Classic's three columns make you rebuild it
- * every time you look. Production sits directly under it because the floor plan
- * answers *what is happening* and only a rate answers *whether it is working*.
- * Everything below the two is the detail neither picture can hold.
+ * every time you look. Everything else is the detail that picture cannot hold.
+ *
+ * Production reads against time rather than reporting the moment, so it is the
+ * one panel an operator consults rather than watches: it sits as a tile in the
+ * world rail and opens into a modal on a click. The tile carries the whole
+ * reading a glance wants — the shape of the three series and the churn number —
+ * and the axes, rates and caveats are behind the click.
  *
  * Every panel is bound to a `const` below and then *placed*, so what a panel
  * contains and where it sits stop being the same edit. There is one DOM for
@@ -47,6 +53,7 @@ import { clip } from './vocabulary.js';
  */
 export function FactoryRoot({ view, actions }: SkinProps) {
   const { state, now } = view;
+  const [graphOpen, setGraphOpen] = useState(false);
   const stopped = view.pulseHeld || state.control.paused;
   const overlaps = state.overlaps ?? [];
   const power = powerReading(state.usage);
@@ -98,9 +105,9 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           <Icon name="lamp" />
           <h2>Production</h2>
         </div>
-        <p className="fx-note">dispatches are effort · merges are output</p>
+        <p className="fx-note">{Math.round(production.windowMs / 3_600_000)}h · click to open</p>
       </div>
-      <Production reading={production} />
+      <ProductionTile reading={production} onOpen={() => setGraphOpen(true)} />
     </section>
   );
 
@@ -372,7 +379,9 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           what the harness is doing, what the world is doing back. Below 1900px
           they dissolve and `order` restores the reading order. Recovery leads
           the act rail because nothing below it runs while it is up: an
-          outstanding recovery decision holds every pulse. */}
+          outstanding recovery decision holds every pulse. Production heads the
+          world rail rather than the floor: its subject is output, which is
+          merges — the world's answer to the floor's effort. */}
       <div className="fx-rails">
         <div className="fx-rail fx-rail-act">
           {recovery}
@@ -383,18 +392,29 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         </div>
         <div className="fx-rail fx-rail-floor">
           {line}
-          {productionPanel}
           {bots}
           {research}
           {yard}
           {offBlueprint}
         </div>
         <div className="fx-rail fx-rail-world">
+          {productionPanel}
           {launches}
           {signals}
           {shiftLog}
         </div>
       </div>
+
+      {graphOpen && (
+        <Modal
+          title="Production"
+          icon="lamp"
+          note="dispatches are effort · merges are output"
+          onClose={() => setGraphOpen(false)}
+        >
+          <Production reading={production} />
+        </Modal>
+      )}
 
       {view.selectedAgent && (
         <AgentDrawer
