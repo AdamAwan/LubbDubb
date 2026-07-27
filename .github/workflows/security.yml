@@ -28,11 +28,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Advisory: current transitive advisories (via vite/fastify) require major,
-      # breaking upgrades, so this reports without failing the build. Tighten to a
-      # hard gate (drop continue-on-error) once those upgrades land.
-      - name: npm audit (high and above)
-        run: npm audit --audit-level=high
+      # Hard gate. Runtime dependencies are the ones an attacker can reach in a
+      # deployed harness, and they are clean — so a new high-severity advisory
+      # here fails the build rather than printing into a log nobody opens.
+      - name: npm audit — runtime dependencies (hard gate)
+        run: npm run audit
+
+      # Advisory. The dev toolchain ships to nobody, and the remaining advisories
+      # are eslint's bundled minimatch@3 -> brace-expansion, which is fixed only in
+      # brace-expansion@5 — an ESM-era rewrite whose CommonJS build exports
+      # `{ expand }` rather than a bare function, so an `overrides` pin to it makes
+      # `npm audit` read 0 while minimatch@3 throws at require time. eslint 10 drops
+      # the dependency, and eslint-plugin-react still peers on `^9.7`. Revisit when
+      # it supports eslint 10, then fold this into the gate above.
+      - name: npm audit — full tree (advisory)
+        run: npm run audit:all
         continue-on-error: true
 
   dependency-review:
