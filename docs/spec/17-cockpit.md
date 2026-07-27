@@ -91,6 +91,47 @@ it:
 
 Red means exactly one thing on that floor: an agent parked on a question only you can answer.
 
+#### The floor at width
+
+`FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
+it sits are separate edits. It renders **three rails** — `act` (recovery, alerts, awaiting your
+stamp, work orders, faults), `floor` (the line, bots, research, the yard, off-blueprint) and `world`
+(production, launches, signals, shift log) — split on _whose turn it is_ rather than on subject, so
+a glance answers "is anything waiting on me" without moving. Production heads the world rail rather
+than the floor because its subject is output, and output is merges — the world's answer to the
+floor's effort.
+
+There is **one DOM for every width**; the arrangement is chosen in CSS alone:
+
+| width     | arrangement                                                                         |
+| --------- | ----------------------------------------------------------------------------------- |
+| < 940     | one column                                                                          |
+| 940–1499  | two columns; the line, research and the yard span both                              |
+| 1500–1899 | tiled — one four-column page grid, each panel spanning what it needs                |
+| ≥ 1900    | railed — the three rails, each scrolling on its own, the page fixed to the viewport |
+
+Below 1900px `.fx-rail` is `display: contents`, so its panels fall through and become tiles of the
+page grid directly. **The breakpoint is therefore stated once.** Matching it in React as well —
+rendering a different tree per width — buys nothing and costs a resize listener, a re-render on
+every drag, and a second definition of the boundary that will disagree with this one the first time
+either moves.
+
+Three consequences to preserve:
+
+- **The rails' document order is not the floor's reading order**, so the two dissolved arrangements
+  set `order` per panel: the line, then the detail it cannot hold, then the readings you consult
+  rather than watch. `order` is reset to `0` inside a rail at ≥1900, or those same values would
+  reshuffle each rail internally.
+- **A rail must stretch to its row, not to its content.** `.fx-rails` carries `align-items: start`
+  for the tiled arrangement, which is right for a tile and wrong for a rail: a rail sized to its
+  content is tall enough to hold everything, so its `overflow-y` never engages and the _page_
+  scrolls instead. The railed block sets `align-items: stretch` back.
+- **The full-bleed pictures need a container that caps them.** The line and the production graph
+  scale with their container; given the whole of a 3440px display, the graph alone became a
+  ~500px-tall chart that ate the first screen. Their spans are what stop that, which is why widening
+  the old centred ribbon without also tiling it made the skin worse rather than better. The graph is
+  no longer on the floor at all (below), but the constraint is the line's too.
+
 #### What the floor draws beyond the queue
 
 Each of these is a game mechanic kept only because a snapshot field already carried the reading; the
@@ -107,6 +148,12 @@ argument for each is in its module's header, and the reason for the shape is wor
   array named the surplus in the header and cropped it off the picture, which made the one control
   an operator actually turns invisible in the panel that exists to show it. Pads shrink to fit the
   roboport's face so "one pad per slot" stays literally true.
+- **The belt is drawn as a belt**: chevrons in the tier colour running along a dark body, pointing
+  the way the queue moves. They are a mask rather than an inline SVG background, because the arrow
+  has to take `--fx-belt` and a data URI cannot read a custom property. The crossed diagonals this
+  replaced read as hazard tape — a warning, which is the one thing a belt is not — and drew no
+  direction at all, leaving the animation as the only thing that said which way the queue ran. An
+  arrow says it standing still, which matters because a stopped belt is a state this floor draws.
 - **The belt compresses behind the cut.** The boarding prefix keeps the crate pitch; everything
   behind butts together with no gap, because that is what a belt does when nothing is taking from
   it. Each run is omitted when empty — an empty flex child still takes the row's gap, and that gap
@@ -123,7 +170,15 @@ argument for each is in its module's header, and the reason for the shape is wor
   already on `decisions` and `worldEvents`; a held or skipped dispatch is not counted, because it
   produced no work. The churn ratio (dispatches per merge) is the point of the panel. When the
   decision log does not reach back to the window's start the panel **says so**: a rate that silently
-  under-reports is worse than no rate.
+  under-reports is worse than no rate. It is the one panel an operator _consults_ rather than
+  watches, so it draws at two sizes off one set of plotting functions: a **tile** at the head of the
+  world rail carrying the whole reading a glance wants (the shape of the three series, the three
+  rates, the churn number), and the **full panel** — axes, deltas, spend, the truncation caveat —
+  behind a click, in the skin's `Modal`. Two components drawing the same series independently would
+  be two things to keep in step for no gain; the only difference between them is the rectangle they
+  plot into and whether the axes are labelled. The modal is an `.fx-card` with a backdrop rather than
+  a second surface, and closes on the backdrop, the button _and_ Escape — a thing that covers the
+  floor must not have exactly one exit.
 - **Research** (`techTree.ts`) draws a plan as a tech tree. `dependsOn` holds at most one slug, so
   the graph is a forest of chains fanning out where parts share a prerequisite — and depth _is_ how
   many merges must land before a part can start, which a flat stack cannot show. Retired parts are

@@ -9,6 +9,13 @@ import { axisScale, type ProductionReading, type SeriesKey } from '../production
  * *producing* rather than merely busy. The churn ratio underneath is the point
  * of the whole panel: dispatches are effort and merges are output, and a rising
  * first line with a flat second one is a floor spinning.
+ *
+ * It draws at two sizes off one set of plotting functions. The tile is the
+ * reading an operator glances at — the shape of the lines and the churn number —
+ * and the full panel, which only opens on a click, is where the axes, the rates
+ * and the caveats live. Two components drawing the same series independently
+ * would be two things to keep in step for no gain; the only difference between
+ * them is the rectangle they plot into and whether the axes are labelled.
  */
 
 const SERIES_COLOR: Record<SeriesKey, string> = {
@@ -17,26 +24,114 @@ const SERIES_COLOR: Record<SeriesKey, string> = {
   escalations: 'var(--red)',
 };
 
-const PLOT = { left: 38, right: 608, top: 12, bottom: 176 };
+interface Plot {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
 
-function pointsPath(points: readonly number[], peak: number): string {
-  const span = points.length > 1 ? (PLOT.right - PLOT.left) / (points.length - 1) : 0;
-  const height = PLOT.bottom - PLOT.top;
+const FULL: Plot = { left: 38, right: 608, top: 12, bottom: 176 };
+/** No axis labels to leave room for, so the lines run the width of the box. */
+const SPARK: Plot = { left: 3, right: 245, top: 6, bottom: 62 };
+
+function pointsPath(points: readonly number[], peak: number, plot: Plot): string {
+  const span = points.length > 1 ? (plot.right - plot.left) / (points.length - 1) : 0;
+  const height = plot.bottom - plot.top;
   return points
     .map((v, i) => {
-      const x = PLOT.left + i * span;
-      const y = PLOT.bottom - (v / peak) * height;
+      const x = plot.left + i * span;
+      const y = plot.bottom - (v / peak) * height;
       return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(' ');
 }
 
-function endpoint(points: readonly number[], peak: number): { x: number; y: number } {
+function endpoint(points: readonly number[], peak: number, plot: Plot): { x: number; y: number } {
   const last = points[points.length - 1] ?? 0;
   return {
-    x: PLOT.right,
-    y: PLOT.bottom - (last / peak) * (PLOT.bottom - PLOT.top),
+    x: plot.right,
+    y: plot.bottom - (last / peak) * (plot.bottom - plot.top),
   };
+}
+
+/**
+ * The series themselves. Dispatches carry an area fill — it is the baseline
+ * every other series is read against, so it reads as the ground rather than a
+ * third equal line.
+ */
+function Lines({ reading, peak, plot }: { reading: ProductionReading; peak: number; plot: Plot }): JSX.Element {
+  return (
+    <>
+      {reading.series.map((s) => {
+        const path = pointsPath(s.points, peak, plot);
+        const end = endpoint(s.points, peak, plot);
+        return (
+          <g key={s.key}>
+            {s.key === 'dispatches' && (
+              <path
+                d={`${path} L${plot.right} ${plot.bottom} L${plot.left} ${plot.bottom} Z`}
+                fill={SERIES_COLOR[s.key]}
+                opacity=".13"
+              />
+            )}
+            <path
+              d={path}
+              fill="none"
+              stroke={SERIES_COLOR[s.key]}
+              strokeWidth={s.key === 'escalations' ? 1.8 : 2}
+              strokeDasharray={s.key === 'escalations' ? '4 3' : undefined}
+              strokeLinejoin="round"
+            />
+            <circle cx={end.x} cy={end.y} r="3.4" fill={SERIES_COLOR[s.key]} />
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
+function ariaLabel(reading: ProductionReading): string {
+  return reading.series.map((s) => `${s.label} ${s.perHour.toFixed(1)} per hour`).join('; ');
+}
+
+function churnLine(reading: ProductionReading): JSX.Element {
+  if (reading.churnRatio === null) {
+    return <>Nothing has merged in this window — every dispatch so far is effort without output.</>;
+  }
+  return (
+    <>
+      <b>{reading.churnRatio.toFixed(1)}</b> dispatches per merge — the number that separates producing from churning.
+    </>
+  );
+}
+
+/**
+ * The glance: the shape of the three series and the one number, sized to sit in
+ * a rail. It is a button because the full panel is a click away and nothing else
+ * on this tile is interactive.
+ */
+export function ProductionTile({ reading, onOpen }: { reading: ProductionReading; onOpen: () => void }): JSX.Element {
+  const { max: peak } = axisScale(reading.peak);
+
+  return (
+    <button type="button" className="fx-prod-tile" onClick={onOpen}>
+      <div className="fx-prod-spark fx-sunk">
+        <svg viewBox="0 0 248 68" role="img" aria-label={ariaLabel(reading)}>
+          <Lines reading={reading} peak={peak} plot={SPARK} />
+        </svg>
+      </div>
+      <div className="fx-prod-rates">
+        {reading.series.map((s) => (
+          <span key={s.key} className="fx-krate">
+            <span className="sw" style={{ background: SERIES_COLOR[s.key] }} />
+            <b>{s.perHour.toFixed(1)}</b>/h
+          </span>
+        ))}
+      </div>
+      <p className="fx-prod-note">{churnLine(reading)}</p>
+    </button>
+  );
 }
 
 function Delta({ pct }: { pct: number | null }): JSX.Element {
@@ -52,66 +147,35 @@ export function Production({ reading }: { reading: ProductionReading }): JSX.Ele
   return (
     <div className="fx-prod">
       <div className="fx-prod-graph fx-sunk">
-        <svg
-          viewBox="0 0 620 200"
-          role="img"
-          aria-label={reading.series.map((s) => `${s.label} ${s.perHour.toFixed(1)} per hour`).join('; ')}
-        >
+        <svg viewBox="0 0 620 200" role="img" aria-label={ariaLabel(reading)}>
           <g stroke="var(--border-lo)" strokeWidth="1">
             {gridLines.map((f) => {
-              const y = PLOT.top + f * (PLOT.bottom - PLOT.top);
-              return <path key={f} d={`M${PLOT.left} ${y}H${PLOT.right}`} />;
+              const y = FULL.top + f * (FULL.bottom - FULL.top);
+              return <path key={f} d={`M${FULL.left} ${y}H${FULL.right}`} />;
             })}
           </g>
           <g className="fx-mono" textAnchor="end">
             {gridLines.map((f) => {
-              const y = PLOT.top + f * (PLOT.bottom - PLOT.top);
+              const y = FULL.top + f * (FULL.bottom - FULL.top);
               return (
-                <text key={f} x={PLOT.left - 8} y={y + 3}>
+                <text key={f} x={FULL.left - 8} y={y + 3}>
                   {Math.round(peak * (1 - f))}
                 </text>
               );
             })}
           </g>
           <g className="fx-mono" textAnchor="middle">
-            <text x={PLOT.left} y="194">
+            <text x={FULL.left} y="194">
               {hours}h ago
             </text>
-            <text x={(PLOT.left + PLOT.right) / 2} y="194">
+            <text x={(FULL.left + FULL.right) / 2} y="194">
               {Math.round(hours / 2)}h
             </text>
-            <text x={PLOT.right} y="194">
+            <text x={FULL.right} y="194">
               now
             </text>
           </g>
-
-          {/* Dispatches carry an area fill — it is the baseline every other
-              series is read against, so it reads as the ground rather than a
-              third equal line. */}
-          {reading.series.map((s) => {
-            const path = pointsPath(s.points, peak);
-            const end = endpoint(s.points, peak);
-            return (
-              <g key={s.key}>
-                {s.key === 'dispatches' && (
-                  <path
-                    d={`${path} L${PLOT.right} ${PLOT.bottom} L${PLOT.left} ${PLOT.bottom} Z`}
-                    fill={SERIES_COLOR[s.key]}
-                    opacity=".13"
-                  />
-                )}
-                <path
-                  d={path}
-                  fill="none"
-                  stroke={SERIES_COLOR[s.key]}
-                  strokeWidth={s.key === 'escalations' ? 1.8 : 2}
-                  strokeDasharray={s.key === 'escalations' ? '4 3' : undefined}
-                  strokeLinejoin="round"
-                />
-                <circle cx={end.x} cy={end.y} r="3.4" fill={SERIES_COLOR[s.key]} />
-              </g>
-            );
-          })}
+          <Lines reading={reading} peak={peak} plot={FULL} />
         </svg>
       </div>
 
@@ -140,16 +204,7 @@ export function Production({ reading }: { reading: ProductionReading }): JSX.Ele
           </div>
         )}
 
-        <p className="fx-prod-note">
-          {reading.churnRatio === null ? (
-            <>Nothing has merged in this window — every dispatch so far is effort without output.</>
-          ) : (
-            <>
-              <b>{reading.churnRatio.toFixed(1)}</b> dispatches per merge — the number that separates producing from
-              churning.
-            </>
-          )}
-        </p>
+        <p className="fx-prod-note">{churnLine(reading)}</p>
         {reading.truncated && (
           <p className="fx-empty">
             The decision log does not reach back {hours}h, so dispatch and escalation rates are a floor.

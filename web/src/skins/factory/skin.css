@@ -80,6 +80,14 @@
   font-size: 13.5px;
   line-height: 1.5;
 }
+/* The floor claims the display it is given — see "arrangements" below for the
+   two wide ones. Kept off the base rule so the narrow floor still centres. */
+@media (min-width: 1500px) {
+  .fx {
+    max-width: none;
+    padding: 14px 18px 20px;
+  }
+}
 .fx-sprites {
   position: absolute;
 }
@@ -388,6 +396,11 @@
   height: 100%;
 }
 
+/* A transport belt: chevrons in the tier colour running along a dark rubber
+   body, with the guide rails sunk into either edge. The crossed diagonals this
+   replaced read as hazard tape — a warning, which is the one thing a belt is
+   not — and drew no direction at all, so the only thing saying which way the
+   queue moved was the animation. An arrow says it standing still. */
 .fx-belt {
   position: absolute;
   left: 0;
@@ -396,27 +409,40 @@
   height: 54px;
   overflow: hidden;
   background-color: var(--fx-belt-dark);
-  background-image: repeating-linear-gradient(-45deg, var(--fx-belt) 0 3px, transparent 3px 8px),
-    repeating-linear-gradient(45deg, var(--fx-belt) 0 3px, transparent 3px 8px);
-  background-size: 22px 12px;
-  background-position:
-    0 0,
-    0 12px;
   border-top: 2px solid var(--border-lo);
   border-bottom: 2px solid var(--border-lo);
+  box-shadow:
+    inset 0 3px 0 rgba(0, 0, 0, 0.34),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.34);
+}
+/* Masked rather than painted: an inline SVG background cannot read `--fx-belt`,
+   and the tier colour has to stay one token. The pseudo-element is the first
+   child, so the crates paint over it. */
+.fx-belt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--fx-belt);
+  opacity: 0.72;
+  /* The arrow stops short of both edges: the rubber either side of it is what
+     makes the rails read as rails rather than as a border. */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='54'%3E%3Cpath d='M20 12 L10 27 L20 42 L13 42 L3 27 L13 12 Z' fill='%23000'/%3E%3C/svg%3E");
+  mask-repeat: repeat-x;
+  mask-size: 26px 100%;
+  mask-position: 0 0;
   animation: fx-beltrun 0.8s linear infinite;
 }
+/* Chevrons point the way the queue moves — leftwards, into the bays — so the
+   pattern travels the same way. */
 @keyframes fx-beltrun {
   to {
-    background-position:
-      -22px 0,
-      -22px 12px;
+    mask-position: -26px 0;
   }
 }
 /* The belt is the harness running, so a paused or held harness stops it. Items
    sitting still on a moving belt is what a backed-up line looks like, and it is
    also exactly what a queue behind the cap is — the picture is honest either way. */
-.fx-belt.stopped {
+.fx-belt.stopped::before {
   animation-play-state: paused;
 }
 
@@ -707,25 +733,204 @@
   fill: var(--muted);
 }
 
-/* ============================ columns & cards ============================ */
+/* ============================ arrangements ============================
 
-.fx-cols {
+   One DOM, four widths. `FactoryRoot` always renders three rails; only the
+   widest arrangement keeps them, and below that `.fx-rail` goes
+   `display: contents` so its panels fall through and become tiles of the page
+   grid directly. The breakpoint therefore lives here and only here — matching
+   it in React as well would be a second definition to keep in step, bought
+   with a resize listener and a re-render on every drag.
+
+     < 940   one column
+     940+    two columns
+     1500+   tiled: one four-column page grid, each panel spanning what it needs
+     1900+   railed: three columns that scroll on their own, page fixed to the
+             viewport
+
+   The rails' document order is *act, floor, world*, which is not the order the
+   floor reads top-to-bottom in. So the two dissolved arrangements set `order`
+   per panel (below): the line first, then the detail it cannot hold, and the
+   readings you consult rather than watch — production, the log, the signals —
+   after it. */
+
+.fx-rails {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-  margin-bottom: 12px;
 }
-.fx-stack {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
+.fx-rail {
+  display: contents;
 }
-@media (max-width: 940px) {
-  .fx-cols {
-    grid-template-columns: minmax(0, 1fr);
+
+@media (min-width: 940px) {
+  .fx-rails {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* The big picture stays whole across both tracks; everything else is detail
+     that reads fine in a half-width column. */
+  .fx-line-wrap,
+  [data-fx='research'],
+  [data-fx='yard'] {
+    grid-column: span 2;
   }
 }
+
+/* ---------------- 1500+ : tiled ---------------- */
+
+/* Four tracks, not six: this band tops out at 1899px, where six would leave a
+   span-1 tile ~250px wide — narrower than the same panel gets in the plain
+   two-column layout below it. */
+@media (min-width: 1500px) {
+  .fx-rails {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .fx-line-wrap {
+    grid-column: span 4;
+  }
+  [data-fx='bots'],
+  [data-fx='stamp'],
+  [data-fx='research'],
+  [data-fx='yard'],
+  [data-fx='shift-log'] {
+    grid-column: span 2;
+  }
+  [data-fx='production'],
+  [data-fx='launches'],
+  [data-fx='faults'],
+  [data-fx='work-orders'],
+  [data-fx='off-blueprint'],
+  [data-fx='signals'] {
+    grid-column: span 1;
+  }
+  /* A tile that would run away vertically scrolls inside itself, so one long
+     list cannot set the height of the row it happens to sit in. */
+  [data-fx='bots'] > .fx-body,
+  [data-fx='stamp'] > .fx-body,
+  [data-fx='faults'] > .fx-body {
+    max-height: 620px;
+    overflow-y: auto;
+  }
+}
+
+/* The banner and the alert bay are the operator's interrupt: full bleed at
+   every width at which the page is a grid at all. */
+.fx .recovery-banner,
+.fx-alerts {
+  grid-column: 1 / -1;
+}
+
+/* Document order is the rails' order; this is the floor's. Applies wherever
+   the rails are dissolved, and is reset inside a rail below. */
+.fx .recovery-banner {
+  order: 1;
+}
+.fx-alerts {
+  order: 2;
+}
+.fx-line-wrap {
+  order: 3;
+}
+[data-fx='bots'] {
+  order: 4;
+}
+[data-fx='off-blueprint'] {
+  order: 5;
+}
+[data-fx='stamp'] {
+  order: 6;
+}
+[data-fx='launches'] {
+  order: 7;
+}
+[data-fx='work-orders'] {
+  order: 8;
+}
+[data-fx='research'] {
+  order: 9;
+}
+[data-fx='yard'] {
+  order: 10;
+}
+/* Production is a reading you consult, not a picture you watch, so it sits with
+   the log rather than under the line. Same demotion the world rail makes. */
+[data-fx='production'] {
+  order: 11;
+}
+[data-fx='shift-log'] {
+  order: 12;
+}
+[data-fx='signals'] {
+  order: 13;
+}
+[data-fx='faults'] {
+  order: 14;
+}
+
+/* ---------------- 1900+ : railed ---------------- */
+
+@media (min-width: 1900px) {
+  .fx {
+    height: 100dvh;
+    padding-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  /* The shell's own gap spaces the bar now. */
+  .fx-status {
+    margin-bottom: 0;
+  }
+  .fx-rails {
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: 26rem minmax(0, 1fr) 24rem;
+    /* A rail must fill its row, not shrink to its content — `start` (right for
+       tiles, which must not stretch to the tallest in their row) would give the
+       rail its content height, and `overflow-y` on a box tall enough to hold
+       everything scrolls the page instead. */
+    align-items: stretch;
+  }
+  .fx-rail {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    /* A rail is its own reading surface: reaching its end must not start
+       scrolling another one. */
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+  /* The rail decides placement now, so the floor's order must not reshuffle
+     the panels within one. */
+  .fx-rail > * {
+    order: 0;
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 2000px) {
+  /* The floor rail is the one with room for two abreast. The line and the yard
+     are the two that are worse for being halved. */
+  .fx-rail-floor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fx-rail-floor > .fx-line-wrap,
+  .fx-rail-floor > [data-fx='yard'] {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 2400px) {
+  .fx-rails {
+    grid-template-columns: 30rem minmax(0, 1fr) 30rem;
+  }
+}
+
+/* ============================ cards ============================ */
 
 .fx-card {
   padding: 11px 14px 13px;
@@ -1150,6 +1355,83 @@
   font-weight: 600;
 }
 
+/* The tile: the same three series at rail width, and the one number. A button,
+   because opening the full panel is the only thing on it to do. */
+.fx-prod-tile {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.fx-prod-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.fx-prod-spark {
+  padding: 6px;
+}
+.fx-prod-spark svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.fx-prod-tile:hover .fx-prod-spark {
+  border-color: var(--accent);
+}
+.fx-prod-rates {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.fx-krate {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.fx-krate .sw {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+}
+.fx-krate b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ============================ modal ============================ */
+
+/* A panel in front of the floor rather than a second surface: it is an
+   `.fx-card` like every other, and only the backdrop is new. */
+.fx-modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.fx-modal {
+  width: min(1040px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+}
+.fx-modal-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* ============================ research (the tech tree) ============================ */
 
 .fx-trees {
@@ -1350,7 +1632,7 @@
 /* Everything on this page that moves is ambience; none of it carries a reading
    the text does not also carry, so switching it all off costs nothing. */
 @media (prefers-reduced-motion: reduce) {
-  .fx-belt,
+  .fx-belt::before,
   .fx-spin,
   .fx-arm,
   .fx-held,
