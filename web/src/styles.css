@@ -681,6 +681,38 @@ body {
   border-radius: 10px;
   padding: 10px 12px;
 }
+.world-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin: -2px 0 2px;
+}
+.world-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.world-tab:hover {
+  color: var(--text);
+}
+.world-tab.on {
+  color: var(--text);
+  border-bottom-color: var(--blue);
+}
+.world-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px 0 2px;
+}
+/* A linked PR that has left the open list — dim, since it names no live work. */
+.chip.small.stale {
+  opacity: 0.6;
+}
 .world-row {
   display: flex;
   justify-content: space-between;
