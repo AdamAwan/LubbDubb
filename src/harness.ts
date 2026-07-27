@@ -154,6 +154,10 @@ export class Harness extends EventEmitter {
       // never re-runs and pickup only fires for the ones that resolved to `single`.
       const plans = store.listPlans();
       const planParts = store.listAllPlanParts();
+      // Who said an issue is finished. Small (one row per concluded issue) and
+      // unbounded in age on purpose: a verdict that aged out of a window would
+      // have the harness re-pick work someone already declared done.
+      const conclusions = store.listIssueConclusions();
       const recentDecisions = store.listDecisions(200);
       // Acts already put to a human: a rule that proposed one holds off while the
       // verdict stands, so one question is asked once (issue #109).
@@ -197,6 +201,7 @@ export class Harness extends EventEmitter {
         queuedJobs,
         plans,
         planParts,
+        conclusions,
         recentDecisions,
         proposals,
         rejectionSignals,

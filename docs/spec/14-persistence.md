@@ -35,7 +35,7 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files` and `priority_overrides` were all introduced as new tables and therefore have no
+`agent_files`, `issue_conclusions` and `priority_overrides` were all introduced as new tables and therefore have no
 migration entry — but `findings` has since gained `ticket_ref`, which is exactly the case the table
 above exists for.
 
@@ -51,6 +51,7 @@ above exists for.
 | `agent_flags`        | Artifacts surfaced to the cockpit.                                                       | `UNIQUE (agent_id, ref)`      |
 | `agent_files`        | Every file an agent wrote; `promoted` marks the ones also surfaced as chips.             | `UNIQUE (agent_id, path)`     |
 | `findings`           | Things agents noticed outside their own task.                                            | —                             |
+| `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.    | `origin_ref` is `PRIMARY KEY` |
 | `plans`              | One delivery plan per issue.                                                             | `origin_ref` is `UNIQUE`      |
 | `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                 | `UNIQUE (plan_id, slug)`      |
 | `agent_transcripts`  | Chunked agent output.                                                                    | `PRIMARY KEY (agent_id, seq)` |

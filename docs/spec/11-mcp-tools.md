@@ -10,7 +10,7 @@ never ask a question. `plan.json` is the proof: a structured payload smuggled th
 artifact-detection hook, whose validation failure the planner never hears, costing a whole agent to
 discover what a synchronous error would have said in one turn.
 
-## The five tools
+## The tools
 
 `src/mcp/names.ts` lists them; `src/mcp/tools.ts` builds them.
 
@@ -22,6 +22,7 @@ discover what a synchronous error would have said in one turn.
 | `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                      |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                   |
 | `link_ticket`        | Report the ticket a filing agent created, closing the loop on a filed finding.                                                                                                                                                            |
+| `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                         |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
 
 ### The `_status` envelope
@@ -160,6 +161,38 @@ Argument `{ref}`. The other half of filing a finding as a ticket (see
 
 It routes through `AgentManager.linkTicket` for the `finding` event, so the cockpit repaints on the
 link rather than on the next pulse.
+
+### `conclude_work`
+
+Arguments `{status, note}`, where `status` is `done` | `more_work`. It answers the one question a
+tracker state cannot: an item parked in a review state sits there both when work remains and when
+everything is delivered and it is waiting on test. See
+[06](06-issue-pickup.md#concluding-an-issue) for the verdict and its consumers.
+
+- **It is about the issue, not the turn.** `done` means everything the issue asked for is delivered,
+  which is why only a **whole-issue origin** may call it. A part agent, a planner, a PR-concern agent
+  and a job agent are each refused with their own reason — the part refusal explaining that the plan
+  roll-up already concludes a decomposed issue, so no part agent has to. Refusing beats silently
+  scoping the verdict to the part: an agent that got `{ok: true}` back would believe it had concluded
+  the issue.
+- **Silence is not "not done".** An agent that never calls this leaves the issue `undeclared`, which
+  parks the ticket and surfaces it rather than re-picking it. Same asymmetry as `@@LUBBDUBB_DONE@@`
+  against the `result` event: a verdict the model forgets is silence, and silence must not be read as
+  a verdict.
+- **The note is required and not trimmed** — the opposite of `note_progress`, and for the opposite
+  reason. A progress note is a cheap frequent status line, so trimming beats refusing; a conclusion is
+  a verdict an operator acts on and the next agent starts from, so an empty one is refused and an
+  over-long one (>2000 chars) is refused rather than silently cut.
+- **A `more_work` note reaches the next agent** for that issue, appended to its prompt, attributed and
+  quoted so it reads as a report rather than as the harness's instruction. Only an _agent's_ verdict
+  is carried; an operator's toggle is not, since the operator has the cockpit and the job queue to say
+  what they want done.
+- **It schedules nothing.** `more_work` returns the issue to pickup on a later cycle through rule 3b;
+  it does not dispatch. The response says so, so an agent does not assume a follow-up is queued — and
+  `done` does not close the ticket in the tracker, which the response also says.
+
+It routes through `AgentManager.recordConclusion` for the `conclusion` event, so the cockpit repaints
+on the verdict rather than on the next pulse.
 
 ### `request_permission`
 

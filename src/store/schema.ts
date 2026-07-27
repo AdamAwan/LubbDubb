@@ -133,6 +133,24 @@ CREATE TABLE IF NOT EXISTS findings (
   updated_at TEXT NOT NULL
 );
 
+-- Whether an issue is finished, as declared by the agent that worked it (the
+-- conclude_work tool) or toggled by an operator. Keyed on the issue origin, not
+-- on an agent: a conclusion belongs to the issue and outlives every agent that
+-- touched it, including across a replan. One row per issue, overwritten per
+-- declaration — the standing verdict is a lookup, not a fold over history. A
+-- missing row is 'undeclared', which is a distinct answer from 'more_work' and
+-- is why rule 3b stops bouncing a reviewed item back to pickup on silence.
+CREATE TABLE IF NOT EXISTS issue_conclusions (
+  origin_ref TEXT PRIMARY KEY,      -- "issue:12"
+  verdict    TEXT NOT NULL,         -- done | more_work
+  note       TEXT NOT NULL,
+  by         TEXT NOT NULL,         -- agent | operator
+  agent_id   TEXT,                  -- null for an operator toggle
+  task_id    TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- One delivery plan per issue — the planning agent's verdict. Written for *both*
 -- outcomes ('single' as much as a decomposition), so the planner never re-runs on
 -- the same issue. The graph lives here and nowhere else: it is scheduling intent,

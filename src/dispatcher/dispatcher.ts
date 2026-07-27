@@ -2,6 +2,7 @@ import type {
   Agent,
   Decision,
   Escalation,
+  IssueConclusion,
   Job,
   Plan,
   PlanPart,
@@ -56,6 +57,16 @@ export interface DispatchContext {
    * it (it materialises no ranked queue).
    */
   priorityOverrides?: PriorityOverride[];
+  /**
+   * Standing "is this issue finished" verdicts, keyed on the `issue:<n>` origin —
+   * declared by the agent that worked the issue (`conclude_work`) or toggled by
+   * an operator. Read by rule 3b, which returns a reviewed item to pickup only on
+   * an explicit `more_work`. Absent/empty resolves every issue to `undeclared`,
+   * which holds the item rather than releasing it: a review state does not say
+   * whether the work is done, so silence must not read as "not done" (see
+   * `src/issueConclusion.ts`).
+   */
+  conclusions?: IssueConclusion[];
   /** Optional operator hints, injected only as a corrective. */
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */
