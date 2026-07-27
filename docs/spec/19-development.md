@@ -48,8 +48,9 @@ CI additionally runs `npm run smoke` and coverage, and there are CodeQL and secu
 
 | Script                | Does                                                                          |
 | --------------------- | ------------------------------------------------------------------------------- |
-| `npm start`           | Runs the server via tsx.                                                      |
-| `npm run dev`         | The same, with `--watch`.                                                     |
+| `npm start`           | Builds the cockpit bundle, then runs the server via tsx.                      |
+| `npm run start:server`| The server alone, serving whatever `web/dist` already holds.                  |
+| `npm run dev`         | The server with `--watch`, no cockpit build (see below).                      |
 | `npm test`            | `node --import tsx --test test/**/*.test.ts`.                                 |
 | `npm run test:coverage` | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).           |
 | `npm run smoke`       | The real end-to-end run (see below).                                          |
@@ -59,6 +60,23 @@ CI additionally runs `npm run smoke` and coverage, and there are CodeQL and secu
 | `npm run web:build`   | Production bundle into `web/dist`.                                            |
 | `npm run web:build:demo` | The demo bundle for GitHub Pages.                                          |
 | `npm run audit`       | `npm audit --audit-level=high`.                                               |
+
+**`npm start` builds the cockpit first, and that is not a convenience.** The server needs no
+build step — tsx runs it from source — but the SPA does, and `web/dist` is gitignored, so it is
+whatever the last `web:build` on that machine produced. The server serves it on an `existsSync`
+check alone (`app.ts`): there is no version stamp and no comparison against `web/src`, so a
+bundle months out of date is indistinguishable from a fresh one and fails silently, at a distance,
+in the browser. That was not hypothetical — a `web/dist` predating the cockpit token guard has no
+`readToken`, so it attaches no `Authorization` header and no `?t=` to the socket, and the symptom
+is every request 401ing and every WebSocket upgrade refused, on a machine where restarts and hard
+refreshes change nothing. Building first removes the failure rather than documenting it; the build
+is well under a second, which is what makes paying it every start the right trade.
+
+`npm run dev` deliberately does **not** build: `--watch` restarts the server on every `src/` edit,
+and rebuilding the bundle on each of those would make the loop useless. Cockpit work belongs in
+`npm run web:dev`, where Vite compiles from source and no artifact can go stale. `start:server` is
+the escape hatch for the case where the build must not run — a checkout installed with
+`--omit=dev` has no vite.
 
 ## Conventions
 

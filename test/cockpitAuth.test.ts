@@ -7,7 +7,7 @@ import { request } from 'node:http';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig, type Config } from '../src/config.js';
-import { authorizeRequest, resolveCockpitToken } from '../src/server/auth.js';
+import { authorizeRequest, describeAuthAttempt, resolveCockpitToken } from '../src/server/auth.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
@@ -58,7 +58,7 @@ test('every API route declared in app.ts refuses an unauthenticated request', as
   assert.ok(routes.length >= 20, `expected to find the route table, found ${routes.length} routes`);
   assert.ok(routes.some((r) => r.url === '/api/jobs'));
 
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app } = await buildApp(system);
 
   for (const route of routes) {
@@ -90,7 +90,7 @@ test('every API route declared in app.ts refuses an unauthenticated request', as
 });
 
 test('the same routes answer normally once the token is presented', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -117,7 +117,7 @@ test('the same routes answer normally once the token is presented', async () => 
 });
 
 test('a wrong token is refused, and the comparison survives a length mismatch', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -134,7 +134,7 @@ test('a wrong token is refused, and the comparison survives a length mismatch', 
 });
 
 test('the SPA shell is deliberately not guarded — the token arrives in a fragment the browser never sends', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app } = await buildApp(system);
 
   // No `web/dist` in a test checkout, so the shell 404s rather than 200s. What
@@ -156,7 +156,7 @@ test('the SPA shell is deliberately not guarded — the token arrives in a fragm
 // ---------------------------------------------------------------------------
 
 test('a flagged artifact opens by navigation with only the capability the snapshot minted', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -190,7 +190,7 @@ test('a flagged artifact opens by navigation with only the capability the snapsh
 });
 
 test('an artifact capability is scoped to one flag and is not a cockpit credential', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -233,7 +233,7 @@ test('an artifact capability is scoped to one flag and is not a cockpit credenti
 // ---------------------------------------------------------------------------
 
 test('a non-loopback Host is refused even with a valid token (DNS rebinding)', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -260,7 +260,7 @@ test('a non-loopback Host is refused even with a valid token (DNS rebinding)', a
 });
 
 test('a cross-origin request is refused even with a valid token', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -286,7 +286,7 @@ test('a cross-origin request is refused even with a valid token', async () => {
 });
 
 test('a loopback origin on another port is allowed, so the Vite dev proxy keeps working', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -346,7 +346,7 @@ test('the Bearer header is parsed without a backtracking regex', () => {
 });
 
 test('a caller is shut out after repeated refusals, and successes never count toward it', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -375,7 +375,7 @@ test('a caller is shut out after repeated refusals, and successes never count to
 });
 
 test('a busy cockpit never throttles itself — successes are not counted', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -443,7 +443,7 @@ async function upgradeResult(port: number, query: string): Promise<'upgraded' | 
 }
 
 test('the WebSocket upgrade is refused without a token and accepted with one', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
   await app.listen({ port: 0, host: '127.0.0.1' });
@@ -540,4 +540,56 @@ test('auth.enabled survives a partial auth block in the config file', () => {
   const config = loadConfig({ auth: { tokenFile: 'somewhere/else' } as Config['auth'] });
   assert.equal(config.auth.enabled, true);
   assert.equal(config.auth.tokenFile, 'somewhere/else');
+});
+
+// ---------------------------------------------------------------------------
+// The diagnosis. A refusal that says nothing is what let a `web/dist` built
+// before the cockpit had token support 401 every request for an afternoon —
+// server-side it is indistinguishable from a wrong token, and restarting the
+// server and hard-refreshing the browser both leave it exactly as it was.
+// ---------------------------------------------------------------------------
+
+test('the first refusal of a run is recorded and names the credential channel', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const { app } = await buildApp(system);
+
+  await app.inject({ method: 'GET', url: '/api/state' });
+  const logged = system.store.listErrors().filter((e) => e.message.includes('cockpit refused'));
+  assert.equal(logged.length, 1);
+  // `none` is the whole diagnosis: the client sent nothing, so the token is not
+  // the problem and no amount of re-copying it will help.
+  assert.match(logged[0]?.detail ?? '', /credential=none/);
+  assert.match(logged[0]?.detail ?? '', /path=\/api\/state/);
+  await app.close();
+  system.store.close();
+});
+
+test('later refusals are not recorded, and no refusal ever logs the presented token', async () => {
+  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const { app } = await buildApp(system);
+
+  // A locked-out cockpit polls, so recording every refusal would bury the first
+  // under thousands of copies of itself.
+  await app.inject({ method: 'GET', url: '/api/state', headers: { authorization: 'Bearer hunter2' } });
+  for (let i = 0; i < 5; i++) await app.inject({ method: 'GET', url: '/api/state' });
+
+  const logged = system.store.listErrors().filter((e) => e.message.includes('cockpit refused'));
+  assert.equal(logged.length, 1, 'only the first');
+  assert.match(logged[0]?.detail ?? '', /credential=bearer/);
+  assert.doesNotMatch(logged[0]?.detail ?? '', /hunter2/, 'the credential is described, never quoted');
+  await app.close();
+  system.store.close();
+});
+
+test('a present-but-unusable Authorization header is its own diagnosis', () => {
+  // Folding this into `none` would send an operator hunting for a missing header
+  // that is in fact being sent, with the wrong scheme.
+  assert.match(describeAuthAttempt({ url: '/api/state', authorization: 'Token abc' }), /credential=malformed/);
+  assert.match(describeAuthAttempt({ url: '/api/state' }), /credential=none/);
+  assert.match(describeAuthAttempt({ url: '/ws?t=abc', queryToken: 'abc' }), /credential=query/);
+  // A junk header does not invalidate a good `?t=` — the WebSocket's only channel.
+  assert.match(
+    describeAuthAttempt({ url: '/ws?t=abc', authorization: 'Token x', queryToken: 'abc' }),
+    /credential=query/,
+  );
 });

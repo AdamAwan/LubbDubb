@@ -129,8 +129,7 @@ inject ─► Connector ◄── Heartbeat ──► Dispatcher ──► Actio
 ```bash
 npm install                                        # builds native deps (better-sqlite3, node-pty)
 cp lubbdubb.config.example.json lubbdubb.config.json # your local config (gitignored); the example runs the mock agent, so no model or provider credentials are needed
-npm run web:build                                  # build the cockpit SPA into web/dist
-npm start                                          # start the server (binds 127.0.0.1:4300)
+npm start                                          # build the cockpit SPA, then serve it (binds 127.0.0.1:4300)
 ```
 
 `npm start` prints the link to open:
