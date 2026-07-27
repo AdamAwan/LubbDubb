@@ -15,6 +15,7 @@ import { UpNext } from './components/UpNext.js';
 import { PlanPanel } from './components/PlanPanel.js';
 import { FindingsPanel } from './components/FindingsPanel.js';
 import { OverlapPanel } from './components/OverlapPanel.js';
+import { RecoveryPanel } from './components/RecoveryPanel.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { AsyncButton } from './components/AsyncButton.js';
@@ -131,6 +132,9 @@ export function App() {
   if (denied) return <LockedOut error={denied} />;
   if (!state) return <div className="loading">Connecting to the cockpit…</div>;
 
+  // Agents the previous run orphaned. Non-empty ⇒ the harness is holding every
+  // pulse, which is why this drives a banner and the heartbeat chip below.
+  const crashedAgents = state.recovery ?? [];
   const liveAgents = state.agents.filter((a) => ['starting', 'running', 'waiting'].includes(a.status));
   const pastAgents = state.agents.filter((a) => !['starting', 'running', 'waiting'].includes(a.status));
   const openEscalations = state.escalations.filter((e) => e.status === 'open');
@@ -187,11 +191,22 @@ export function App() {
           )}
         </div>
         <div className="topbar-meta">
-          <div className="heartbeat" title={`Next heartbeat in ~${nextIn}s`}>
+          {/* A countdown to a pulse that will not run is worse than no countdown:
+              it reads as a healthy harness that simply never does anything. */}
+          <div
+            className={`heartbeat ${crashedAgents.length > 0 ? 'held' : ''}`}
+            title={
+              crashedAgents.length > 0
+                ? 'Held: agents from the previous run need a recovery decision'
+                : `Next heartbeat in ~${nextIn}s`
+            }
+          >
             <div className="heartbeat-track">
-              <div className="heartbeat-fill" style={{ width: `${beatPct}%` }} />
+              <div className="heartbeat-fill" style={{ width: crashedAgents.length > 0 ? '100%' : `${beatPct}%` }} />
             </div>
-            <span className="heartbeat-label">next pulse ~{nextIn}s</span>
+            <span className="heartbeat-label">
+              {crashedAgents.length > 0 ? 'pulse held' : `next pulse ~${nextIn}s`}
+            </span>
           </div>
           <span className={`chip ${connected ? 'ok' : 'bad'}`}>
             <span className={`dot ${connected ? 'green' : 'red'}`} /> {connected ? 'live' : 'offline'}
@@ -205,6 +220,18 @@ export function App() {
           </AsyncButton>
         </div>
       </header>
+
+      {/* First thing under the topbar, above even the inject panel: while this is
+          up the harness runs no cycles, so anything an operator did on the panels
+          below would sit unread until these are answered. */}
+      {crashedAgents.length > 0 && (
+        <RecoveryPanel
+          crashed={crashedAgents}
+          now={now}
+          refUrls={state.refUrls}
+          onDecide={(agentId, verdict) => api.decideRecovery(agentId, verdict).then(refresh)}
+        />
+      )}
 
       {state.config.injectable && <InjectPanel onInjected={refresh} world={state.world} />}
       <LaunchPanel jobs={state.jobs} onChanged={refresh} />

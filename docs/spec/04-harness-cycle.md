@@ -20,6 +20,23 @@ route calling `harness.runCycle('manual')`.
 
 A cycle's `source` is `'timer'`, `'manual'` or `'boot'`.
 
+## The crash-recovery hold
+
+Before the coalescing guard, and **before the world is fetched**, `runCycle` asks
+`recovery.pendingCount()` (see [10](10-agent-runtimes.md#crash-recovery)). While any agent orphaned by
+the previous run is still awaiting an operator's restore / requeue / remove verdict, the call returns a
+report with `cycleId: 'held'`, a zeroed summary and a rationale naming the count — and nothing else
+happens: no snapshot, no reconciliation, no dispatch, no outbound act.
+
+It holds the whole pulse rather than dispatch alone because the harness's model of its own fleet is
+wrong while those rows are undecided — agent rows saying `running` with no process behind them — so
+every verdict a pulse would reach is reached against a fiction, not just the dispatch ones. Work already
+in flight gets its decision before anything new is queued in front of it.
+
+The hold is re-asked every beat, so it lifts by itself the moment the last decision lands; there is no
+un-hold call and no restart. It emits neither `cycle:start` nor `cycle:end`, for the same reason the
+coalesced return does not: no cycle ran.
+
 ## Ordering
 
 `runCycle` performs exactly this sequence. The order is load-bearing at three points, noted below.

@@ -33,6 +33,12 @@ interface HarnessDeps {
    * Absent = no plan tracking (and it no-ops anyway with the funnel off).
    */
   plans?: PlanReconciler;
+  /**
+   * The crash-recovery gate: how many agents orphaned by the previous run are
+   * still waiting on an operator's verdict. Any at all holds the pulse — see
+   * {@link Harness.runCycle}.
+   */
+  recovery?: { pendingCount(): number };
 }
 
 /**
@@ -97,6 +103,29 @@ export class Harness extends EventEmitter {
   }
 
   async runCycle(source: 'timer' | 'manual' | 'boot' = 'manual'): Promise<CycleReport> {
+    // The crash-recovery hold, asked before anything else — including the world
+    // fetch, which is the point: while agents orphaned by the last run are
+    // undecided, the harness's own model of its fleet is wrong (rows saying
+    // `running` with no process behind them), so *every* verdict a pulse would
+    // reach is reached against a fiction, not just the dispatch ones. Work already
+    // in flight gets its decision before anything new is queued in front of it.
+    //
+    // Held rather than stopped: the timer keeps ticking and this is re-asked each
+    // beat, so the pulse resumes on its own the moment the last decision lands —
+    // no restart, and no separate "un-hold" anyone has to remember to call. The
+    // shape mirrors the coalesced return below, and emits nothing for the same
+    // reason: no cycle ran.
+    const awaiting = this.deps.recovery?.pendingCount() ?? 0;
+    if (awaiting > 0) {
+      const rationale = `held: ${awaiting} agent(s) from the previous run await a recovery decision`;
+      return {
+        cycleId: 'held',
+        source,
+        rationale,
+        summary: { cycleId: 'held', executed: 0, deferred: 0, rejected: 0 },
+        at: new Date().toISOString(),
+      };
+    }
     if (this.cycleInFlight) {
       return {
         cycleId: 'coalesced',

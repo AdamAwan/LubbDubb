@@ -1443,3 +1443,85 @@ body {
   gap: 6px;
   flex-wrap: wrap;
 }
+
+/* -- Crash recovery ------------------------------------------------------- */
+/* Deliberately loud and full-width: while this is on screen the harness runs no
+   cycles at all, so it has to read as a stop sign rather than as one more panel
+   an operator can scroll past. */
+.recovery-banner {
+  margin: 0 16px 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--amber);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 176, 32, 0.09), transparent);
+}
+.recovery-banner header h2 {
+  margin: 0;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recovery-mark {
+  color: var(--amber);
+}
+.recovery-banner header p {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.card.crashed {
+  border-color: var(--border);
+  margin-bottom: 8px;
+}
+.crashed-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.crashed-title {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.crashed-meta {
+  font-size: 11px;
+  margin-top: 4px;
+}
+.crashed-note,
+.crashed-parked {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+.crashed-note {
+  color: var(--muted);
+}
+.crashed-parked {
+  color: var(--amber);
+}
+.crashed-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.restore-blocked {
+  font-size: 12px;
+}
+.badge.crashed {
+  background: rgba(255, 92, 92, 0.15);
+  color: var(--red);
+}
+.badge.interrupted {
+  background: rgba(123, 136, 161, 0.15);
+  color: var(--muted);
+}
+/* A countdown that will not fire reads as a healthy harness doing nothing. */
+.heartbeat.held .heartbeat-fill {
+  background: var(--amber);
+}
+.heartbeat.held .heartbeat-label {
+  color: var(--amber);
+}

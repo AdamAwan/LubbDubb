@@ -1,4 +1,4 @@
-import type { AppState } from './types.js';
+import type { AppState, RecoveryVerdict } from './types.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 /**
@@ -113,6 +113,11 @@ const realApi = {
   // an agent that could queue jobs could put agents on the fleet.
   promoteFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/promote`),
   dismissFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/dismiss`),
+  // Decide what happens to an agent the last run left orphaned. Until every one of
+  // these is answered the harness runs no cycles, so this is the one call that can
+  // un-stick a cockpit whose fleet looks frozen.
+  decideRecovery: (agentId: string, verdict: RecoveryVerdict) =>
+    post<{ ok: true; remaining: number }>(`/api/recovery/${agentId}`, { verdict }),
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),
 };

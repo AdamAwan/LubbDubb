@@ -696,6 +696,10 @@ export const demoApi = {
   dismissFinding: (id: string) => getServer().dismissFinding(id),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
+  // The demo has no previous run to have crashed, so there is never anything to
+  // decide — the panel is absent and this exists only to keep the two API shapes
+  // interchangeable.
+  decideRecovery: (_agentId: string, _verdict: string) => Promise.resolve({ ok: true as const, remaining: 0 }),
   killAgent: (id: string) => getServer().killAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
 };

@@ -32,7 +32,7 @@ and recording a failure must never throw.
 | `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices. |
 | `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; PTY sentinel-drift warnings; invalid or unreadable `plan.json`; an overridden `single` verdict; MCP channel/config/frame failures. |
 | `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                 |
-| `boot`     | A failed boot resume.                                                                        |
+| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.          |
 
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.

@@ -12,7 +12,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
-import { buildSystem, reconcileAndResumeOnBoot, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system.js';
 
 const scriptPath = join(process.cwd(), 'scripts/mock-agent.sh');
 
@@ -253,9 +253,9 @@ async function main(): Promise<void> {
   console.log('5. Drive one real tool call through the real bridge over the real socket.');
   await smokeToolCall(system);
 
-  console.log('6. Simulate a crash + restart: reconcile should be a no-op now (agent already done).');
-  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
-  log(`✓ boot reconcile: resumed ${resumed}, interrupted ${interrupted} (expected 0/0)`);
+  console.log('6. Simulate a crash + restart: boot detection should find nothing (the agent finished).');
+  const crashed = system.recovery.detect();
+  log(`✓ boot detection: ${crashed.length} agent(s) awaiting recovery (expected 0)`);
 
   console.log('\nSMOKE TEST PASSED ✅');
   system.store.close();

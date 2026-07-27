@@ -1,10 +1,10 @@
 import { loadConfig } from '../config.js';
-import { buildSystem, reconcileAndResumeOnBoot } from '../system.js';
+import { buildSystem } from '../system.js';
 import { buildApp } from './app.js';
 
 /**
- * Entry point. Wires the system, resumes/reconciles any agents orphaned by a
- * previous run *before* anything else reacts to the world, starts the
+ * Entry point. Wires the system, parks any agents orphaned by a previous run for
+ * an operator's decision *before* anything else reacts to the world, starts the
  * HTTP/WebSocket server, then starts the heartbeat and runs one boot cycle so
  * the harness reacts to whatever the world looks like on startup.
  */
@@ -12,22 +12,17 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const system = buildSystem(config);
 
-  // Before boot resume, so a resumed agent's relaunch already carries the tool
-  // channel. Best-effort by contract: a false return means agents run on the
-  // sentinels alone, which is a supported configuration, not a failed start.
+  // Before crash detection, so an agent the operator restores relaunches already
+  // carrying the tool channel. Best-effort by contract: a false return means agents
+  // run on the sentinels alone, which is a supported configuration, not a failed start.
   const mcpReady = config.mcp.enabled ? await system.mcp.listen() : false;
 
-  // Runs before the boot cycle so resumed agents occupy their concurrency slots
-  // before any new work is dispatched.
-  const { resumed, interrupted } = reconcileAndResumeOnBoot(
-    system.store,
-    system.agents,
-    system.escalations,
-    system.errors,
-  );
-  if (resumed > 0 || interrupted > 0) {
-    console.log(`[lubbdubb] boot: resumed ${resumed} agent(s), interrupted ${interrupted} from a previous run`);
-  }
+  // Runs before the boot cycle, though the hold does not depend on that: the
+  // harness re-asks every pulse, so what this ordering buys is only that the very
+  // first cycle already knows. Nothing is resumed or buried here — each orphan
+  // waits for the operator's restore / requeue / remove, and until they have all
+  // been answered the harness dispatches nothing.
+  const crashed = system.recovery.detect();
 
   const { app, cockpitUrl, tokenPath } = await buildApp(system);
   await app.listen({ port: config.port, host: config.host });
@@ -48,13 +43,26 @@ async function main(): Promise<void> {
     `[lubbdubb] agent tools: ${mcpReady ? 'on' : config.mcp.enabled ? 'unavailable — sentinels only' : 'disabled'}`,
   );
 
+  if (crashed.length > 0) {
+    // Loud, and printed after the cockpit URL so it is the last thing on screen:
+    // the harness will now do nothing at all until these are answered, and an
+    // operator who reads this as a warning rather than a stop sign will conclude
+    // the heartbeat is broken.
+    console.log(
+      `[lubbdubb] ${crashed.length} agent(s) did not survive the last run — the pulse is HELD until you ` +
+        'restore, requeue or remove each of them in the cockpit',
+    );
+    for (const c of crashed)
+      console.log(`[lubbdubb]   ${c.agentId} — ${c.title}${c.originRef ? ` (${c.originRef})` : ''}`);
+  }
+
   system.harness.start();
   await system.harness.runCycle('boot');
 
   const shutdown = async (): Promise<void> => {
     console.log('\n[lubbdubb] shutting down...');
     system.harness.stop();
-    // Interrupt (not kill) so the next boot can resume this in-flight work.
+    // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
     await system.mcp.close();
     await app.close();

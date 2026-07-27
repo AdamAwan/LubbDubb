@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Config } from './config.js';
@@ -30,6 +29,7 @@ import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
+import { RecoveryDesk } from './agents/recoveryDesk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates } from './dispatcher/promptTemplates.js';
@@ -58,6 +58,12 @@ export interface System {
    * the allow-list doesn't cover blocks until the operator allows or denies it.
    */
   permissions: PermissionDesk;
+  /**
+   * Where agents orphaned by a crash or a shutdown wait for an operator to choose
+   * restore / requeue / remove. Its pending set holds the harness's pulse, so no
+   * new work is queued in front of work that was already in flight.
+   */
+  recovery: RecoveryDesk;
   executor: ActionExecutor;
   dispatcher: Dispatcher;
   harness: Harness;
@@ -279,6 +285,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // tool call blocks until the operator allows or denies. Reaches the fleet via the
   // MCP server's `permissions` thunk above; resolved on agent death via its `release`.
   const permissions = new PermissionDesk(escalations);
+  // Where a restart's orphaned agents wait for a verdict. `resumable` is the same
+  // runtime fact `AgentManager` uses, threaded in so the desk can say *why* restore
+  // isn't on offer rather than the cockpit guessing from a missing session id.
+  const recovery = new RecoveryDesk({ store, agents, escalations, resumable: agentSetup.resumable, errors });
 
   // Live, in-memory dispatch controls both the harness and executor read by
   // reference each cycle. Ephemeral by design: a restart reverts to config.
@@ -351,6 +361,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     executor,
     plans,
+    // Holds the pulse while a previous run's agents await a verdict.
+    recovery,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,
@@ -389,8 +401,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // A dead agent can never receive an answer, so cascade-dismiss its open
   // escalations at every terminal-dead transition. Kill surfaces as a `killed`
-  // status; an unexpected exit / crash surfaces as a `failed` done. (Server-restart
-  // orphans are handled separately by reconcileAndResumeOnBoot, before the heartbeat runs.)
+  // status; an unexpected exit / crash surfaces as a `failed` done. (An agent
+  // orphaned by a *restart* is not dismissed here on purpose: it may be restored,
+  // and a restored agent must come back to the question it parked on — see
+  // `RecoveryDesk`, where the dismissal hangs off the requeue/remove verdicts.)
   agents.on('status', ({ agentId, status }) => {
     if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');
   });
@@ -423,6 +437,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     escalations,
     proposals,
     permissions,
+    recovery,
     executor,
     dispatcher,
     harness,
@@ -433,67 +448,4 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp,
     errors,
   };
-}
-
-/**
- * Restart reconciliation, run once on boot *before* the harness reacts to the
- * world. Any agent the store still thinks is live is really dead (its PTY died
- * with the old process). For each such orphan whose work is still in flight we
- * try to resume it — re-attaching to the same Claude session in the same
- * worktree — so a restart continues rather than discards work. Best-effort:
- * anything not resumable (no session id, missing worktree, non-PTY runtime)
- * falls back to today's `interrupted` behaviour; boot never blocks on a resume.
- *
- * Resumed agents re-enter the live set (keeping their pre-restart escalation, so
- * a queued answer still routes in) and count against `maxConcurrentAgents` before
- * the boot cycle dispatches anything new. An orphan that *can't* be resumed is
- * truly dead, so its now-orphaned open escalations are cascade-dismissed.
- *
- * Candidate set (orphans): agents in a live-ish state — `starting`/`running`/
- * `waiting` (crash) or `interrupted` (graceful shutdown) — whose task is still
- * active. A cockpit kill leaves the agent `killed` and its task `interrupted`,
- * so it is excluded on both counts and stays dead. A prior boot's give-up leaves
- * both agent and task `interrupted`, so it isn't resurrected on every restart.
- */
-export function reconcileAndResumeOnBoot(
-  store: Store,
-  agents: AgentManager,
-  escalations: EscalationInbox,
-  errors?: ErrorLog,
-): { resumed: number; interrupted: number } {
-  const isActive = (status: string): boolean => status === 'running' || status === 'waiting' || status === 'queued';
-  const orphans = store.listAgentsByStatus('starting', 'running', 'waiting', 'interrupted').filter((a) => {
-    const task = store.getTask(a.taskId);
-    return task != null && isActive(task.status);
-  });
-
-  const at = new Date().toISOString();
-  const result = { resumed: 0, interrupted: 0 };
-  for (const agent of orphans) {
-    const task = store.getTask(agent.taskId);
-    if (!task) continue;
-
-    let resumed = false;
-    if (agent.sessionId && existsSync(agent.cwd)) {
-      try {
-        resumed = agents.resume(agent, task);
-      } catch (err) {
-        resumed = false; // never let a bad resume block boot — but do record why it failed
-        errors?.record({ source: 'boot', message: `Boot resume failed: ${(err as Error).message}` });
-      }
-    }
-    if (resumed) {
-      result.resumed += 1;
-      continue;
-    }
-
-    // Fallback: agent can't be resumed, so it's truly dead. Mark agent and task
-    // interrupted (also stops it being retried next boot) and cascade-dismiss its
-    // now-orphaned open escalations (a fresh agent re-raises anything still needed).
-    store.updateAgent(agent.id, { status: 'interrupted', endedAt: at, pid: null });
-    store.updateTask(task.id, { status: 'interrupted' });
-    escalations.dismissEscalationsForAgent(agent.id, 'server restart');
-    result.interrupted += 1;
-  }
-  return result;
 }

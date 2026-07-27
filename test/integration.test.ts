@@ -5,7 +5,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
-import { buildSystem, reconcileAndResumeOnBoot, type System } from '../src/system.js';
+import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Escalation } from '../src/types.js';
 
@@ -170,18 +170,26 @@ test('executor concurrency cap defers dispatches beyond the limit', async () => 
   system.store.close();
 });
 
-test('reconcile on boot marks orphaned agents interrupted', async () => {
+test('boot detection parks an orphaned agent for a decision instead of burying it', async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
   system.connector.inject({ kind: 'new_story', title: 'Work', wafPillars: ['Security'] });
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
-  // Simulate a crash: the process is gone but the DB still says "running". The
-  // raw runtime isn't resumable, so reconciliation falls back to interrupting.
-  const { resumed, interrupted } = reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
-  assert.equal(resumed, 0);
-  assert.equal(interrupted, 1);
+  // Simulate a crash: the process is gone but the DB still says "running".
+  const crashed = system.recovery.detect();
+  assert.equal(crashed.length, 1);
+  assert.equal(crashed[0]!.agentId, agentId);
+  assert.equal(system.store.getAgent(agentId)!.status, 'crashed');
+  // The task is untouched — the work is still outstanding until someone says so.
+  assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'running');
+  // The raw runtime can't resume, so restore isn't on offer and says why.
+  assert.equal(crashed[0]!.restorable, false);
+  assert.match(crashed[0]!.restoreBlocked!, /cannot resume/);
+
+  const decided = system.recovery.decide(agentId, 'remove');
+  assert.equal(decided.ok, true);
   assert.equal(system.store.getAgent(agentId)!.status, 'interrupted');
   assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'interrupted');
   system.store.close();
@@ -226,18 +234,21 @@ test('an agent that fails auto-dismisses its open escalations', async () => {
   system.store.close();
 });
 
-test('reconcileAndResumeOnBoot auto-dismisses a non-resumable orphan open escalations', async () => {
+test("a crashed agent's open escalation survives detection and is dismissed only by the verdict", async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
-  const { escalationId } = await agentWithOpenEscalation(system, backend);
+  const { agentId, escalationId } = await agentWithOpenEscalation(system, backend);
 
-  // The raw runtime isn't resumable, so the orphan falls back to interrupted and
-  // its now-orphaned escalation is dismissed.
-  reconcileAndResumeOnBoot(system.store, system.agents, system.escalations);
+  // Detection decides nothing, so the question the agent asked is still open —
+  // it has to be, or a `restore` would come back to an agent parked on a question
+  // that no longer exists anywhere.
+  system.recovery.detect();
+  assert.equal(system.store.getEscalation(escalationId)!.status, 'open');
 
+  system.recovery.decide(agentId, 'remove');
   const after = system.store.getEscalation(escalationId)!;
   assert.equal(after.status, 'dismissed');
-  assert.equal((after.context.dismissal as { reason: string }).reason, 'server restart');
+  assert.equal((after.context.dismissal as { reason: string }).reason, 'agent crashed; work dropped');
   system.store.close();
 });
 

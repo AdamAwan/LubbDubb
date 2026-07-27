@@ -96,7 +96,9 @@ tracking is pruned rather than lingering forever (issue #128).
 `listAgentsByStatus(...statuses)`, `countLiveAgents()`, `recordAgentUsage(id, usage)`,
 `recordAgentNote(id, note)`, `sumUsageCostSince(iso)`.
 
-`countLiveAgents` is the liveness reading the cap arithmetic and file-overlap detection both use.
+`countLiveAgents` is the liveness reading the cap arithmetic and file-overlap detection both use: it
+counts `starting` / `running` / `waiting`. `crashed` is deliberately outside it — a row stamped by boot
+detection has no process behind it, so counting it would let dead agents eat the concurrency cap.
 
 `recordAgentUsage` writes the cumulative values onto the row **and** the cost delta into
 `usage_events`.
