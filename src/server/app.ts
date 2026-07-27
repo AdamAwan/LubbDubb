@@ -133,13 +133,16 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // An unanticipated throw in a route must not vanish into a silent 500: record
   // it to the error log (which also mirrors it to stderr and streams it to the
   // cockpit), then return a plain 500.
-  app.setErrorHandler((err, req, reply) => {
+  // fastify 5 types the handler's error as `unknown` — a route may throw a
+  // non-Error, and the recorded message must not read as "undefined".
+  app.setErrorHandler((err: unknown, req, reply) => {
+    const message = err instanceof Error ? err.message : String(err);
     errors.record({
       source: 'server',
-      message: `${req.method} ${req.url} failed: ${err.message}`,
-      detail: err.stack ?? null,
+      message: `${req.method} ${req.url} failed: ${message}`,
+      detail: err instanceof Error ? (err.stack ?? null) : null,
     });
-    return reply.code(500).send({ error: err.message });
+    return reply.code(500).send({ error: message });
   });
 
   // -- Live stream ---------------------------------------------------------
