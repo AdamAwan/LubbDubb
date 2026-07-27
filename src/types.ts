@@ -292,6 +292,53 @@ export interface Job {
   updatedAt: string;
 }
 
+/** What a work-graph node represents. `assess` is written only by stage 2. */
+export type WorkNodeKind = 'issue' | 'plan' | 'part' | 'pr' | 'concern' | 'job' | 'assess';
+
+/**
+ * How a PR node's terminal state was learned. `observed` means it was seen in
+ * `closedPullRequests`; `inferred` means it left the open set and the window never
+ * showed it. The distinction is kept because absence-means-merged is a deliberate
+ * fallback, and a durable record has no reason to forget that it *was* one.
+ */
+export type WorkNodeProvenance = 'observed' | 'inferred';
+
+/**
+ * One node of the durable work graph: what the harness did for a work item, and
+ * what it descended from. Keyed on the ref vocabulary that already exists
+ * (`issue:12`, `issue:12:part:schema`, `pr:41`, `pr:41:ci`) so it joins to every
+ * gate, override and proposal without a second naming scheme.
+ *
+ * `parentRef` follows *work lineage* — a PR's parent is the part that produced it.
+ * Stacking is a different relation and lives on `baseRef`, which keeps the graph a
+ * tree and stops it lying about what caused the work.
+ */
+export interface WorkNode {
+  ref: string;
+  kind: WorkNodeKind;
+  parentRef: string | null;
+  /** PR nodes only: the PR this one is based on, from `basePrOf`. */
+  baseRef: string | null;
+  title: string;
+  status: string;
+  terminal: boolean;
+  provenance: WorkNodeProvenance | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+/** One node as observed this pulse. Timestamps are the store's to stamp. */
+export interface WorkNodeObservation {
+  ref: string;
+  kind: WorkNodeKind;
+  parentRef?: string | null;
+  baseRef?: string | null;
+  title: string;
+  status: string;
+  terminal: boolean;
+  provenance?: WorkNodeProvenance | null;
+}
+
 /**
  * An operator priority override for the "Up next" queue (issue #128). Keyed on a
  * candidate's stable `origin` so it survives pulses and restarts while the queue

@@ -279,6 +279,24 @@ CREATE TABLE IF NOT EXISTS error_events (
   created_at TEXT NOT NULL
 );
 
+-- The durable work graph: every node the harness has observed for a work item and
+-- what it descended from. Written once per pulse from the world plus the store's
+-- own rows, and never deleted — that is the whole feature. A merged PR ages out of
+-- closedPullRequests after closedPrWindowMs, and without this the edge from an
+-- issue to the PR that delivered it is unrecoverable from that moment on.
+CREATE TABLE IF NOT EXISTS work_nodes (
+  ref           TEXT PRIMARY KEY,
+  kind          TEXT NOT NULL,
+  parent_ref    TEXT,
+  base_ref      TEXT,
+  title         TEXT NOT NULL,
+  status        TEXT NOT NULL,
+  terminal      INTEGER NOT NULL DEFAULT 0,
+  provenance    TEXT,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at  TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
@@ -292,4 +310,6 @@ CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_events_at ON usage_events(at);
 CREATE INDEX IF NOT EXISTS idx_error_events_created ON error_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_work_nodes_parent ON work_nodes(parent_ref);
+CREATE INDEX IF NOT EXISTS idx_tasks_origin ON tasks(origin_ref);
 `;

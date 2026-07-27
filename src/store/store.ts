@@ -31,6 +31,10 @@ import type {
   PriorityOverride,
   Proposal,
   Task,
+  WorkNode,
+  WorkNodeKind,
+  WorkNodeObservation,
+  WorkNodeProvenance,
   WorldEvent,
   WorldEventInput,
   WorldSnapshot,
@@ -1188,6 +1192,78 @@ export class Store {
       )
       .run(JSON.stringify(world));
   }
+
+  /**
+   * Write this pulse's observations. Upsert-only: a node not in `observations` is
+   * left exactly as it was, which is what makes the graph outlive the world's
+   * memory of a merged PR.
+   *
+   * `parent_ref` is write-once once non-null — work lineage does not change, and an
+   * immutable edge makes a cycle impossible rather than merely guarded, which
+   * matters because {@link listWorkSubtree} is recursive. A null parent may still be
+   * filled later, so a stray PR can be adopted when its issue link appears.
+   */
+  recordWorkGraph(observations: WorkNodeObservation[]): void {
+    const ts = this.now();
+    const stmt = this.db.prepare(`
+      INSERT INTO work_nodes
+        (ref, kind, parent_ref, base_ref, title, status, terminal, provenance, first_seen_at, last_seen_at)
+      VALUES
+        (@ref, @kind, @parentRef, @baseRef, @title, @status, @terminal, @provenance, @ts, @ts)
+      ON CONFLICT(ref) DO UPDATE SET
+        kind         = excluded.kind,
+        parent_ref   = COALESCE(work_nodes.parent_ref, excluded.parent_ref),
+        base_ref     = COALESCE(excluded.base_ref, work_nodes.base_ref),
+        title        = excluded.title,
+        status       = excluded.status,
+        terminal     = excluded.terminal,
+        provenance   = excluded.provenance,
+        last_seen_at = excluded.last_seen_at
+    `);
+    const write = this.db.transaction((rows: WorkNodeObservation[]) => {
+      for (const o of rows)
+        stmt.run({
+          ref: o.ref,
+          kind: o.kind,
+          parentRef: o.parentRef ?? null,
+          baseRef: o.baseRef ?? null,
+          title: o.title,
+          status: o.status,
+          terminal: o.terminal ? 1 : 0,
+          provenance: o.provenance ?? null,
+          ts,
+        });
+    });
+    write(observations);
+  }
+
+  /** Every node with no parent — one per work item the harness has ever touched. */
+  listWorkRoots(): WorkNode[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM work_nodes WHERE parent_ref IS NULL ORDER BY last_seen_at DESC`)
+      .all() as WorkNodeRow[];
+    return rows.map(rowToWorkNode);
+  }
+
+  /**
+   * One root and everything beneath it. `UNION` rather than `UNION ALL` so the walk
+   * terminates even if a cycle ever reached the table — belt to the write-once
+   * parent's braces.
+   */
+  listWorkSubtree(rootRef: string): WorkNode[] {
+    const rows = this.db
+      .prepare(
+        `WITH RECURSIVE sub(ref) AS (
+           SELECT ref FROM work_nodes WHERE ref = ?
+           UNION
+           SELECT n.ref FROM work_nodes n JOIN sub s ON n.parent_ref = s.ref
+         )
+         SELECT w.* FROM work_nodes w JOIN sub ON w.ref = sub.ref
+         ORDER BY w.first_seen_at ASC, w.ref ASC`,
+      )
+      .all(rootRef) as WorkNodeRow[];
+    return rows.map(rowToWorkNode);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1350,6 +1426,33 @@ interface ErrorEventRow {
   message: string;
   detail: string | null;
   created_at: string;
+}
+interface WorkNodeRow {
+  ref: string;
+  kind: string;
+  parent_ref: string | null;
+  base_ref: string | null;
+  title: string;
+  status: string;
+  terminal: number;
+  provenance: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+function rowToWorkNode(row: WorkNodeRow): WorkNode {
+  return {
+    ref: row.ref,
+    kind: row.kind as WorkNodeKind,
+    parentRef: row.parent_ref,
+    baseRef: row.base_ref,
+    title: row.title,
+    status: row.status,
+    terminal: row.terminal === 1,
+    provenance: row.provenance as WorkNodeProvenance | null,
+    firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
+  };
 }
 
 function rowToTask(r: TaskRow): Task {
