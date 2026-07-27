@@ -1,11 +1,12 @@
 import type { Skin } from './types.js';
 import { classicSkin } from './classic/index.js';
+import { factorySkin } from './factory/index.js';
 
 /**
  * Every skin the cockpit ships. This is also what makes a skin reachable to knip:
  * a directory nothing registers is correctly dead code.
  */
-export const SKINS: readonly Skin[] = [classicSkin];
+export const SKINS: readonly Skin[] = [classicSkin, factorySkin];
 
 /** The skin a fresh browser, or a stored id nobody recognises, lands on. */
 const DEFAULT_SKIN_ID = classicSkin.id;
