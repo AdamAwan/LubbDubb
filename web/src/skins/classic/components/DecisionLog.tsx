@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { Decision, DispatchRule, Proposal } from '../types.js';
-import { relTime, linkify } from './util.js';
+import type { Decision, DispatchRule, Proposal } from '../../../types.js';
+import { relTime, linkify } from '../../../components/util.js';
 
 /**
  * The audit trail. Every decision the harness made, newest first, each with its

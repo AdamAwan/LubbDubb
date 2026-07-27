@@ -15,7 +15,7 @@
     "declaration": false,
     "sourceMap": true,
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["node_modules", "dist", "web"]

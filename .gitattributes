@@ -1,0 +1,6 @@
+# The Classic markup golden is compared byte-for-byte against what React renders,
+# which always emits LF. Left to git's Windows default it is checked out with CRLF
+# and the test fails for a reason that has nothing to do with the cockpit. The
+# test normalises too — this just stops the working copy diverging in the first
+# place.
+test/fixtures/classic-markup.html text eol=lf

@@ -27,19 +27,26 @@ The cost of that freedom is duplication, bounded by the shared/skinned split bel
 
 ## Layers
 
-| Layer | Path | Job |
-|---|---|---|
-| Wiring | `web/src/cockpit/useCockpit.ts` | fetch, websocket, coalesced refresh, selection, auth refusal. Returns `{view, actions, status}`. No JSX. |
-| Derivation | `web/src/view/viewModel.ts` | pure `buildViewModel(...)` → `CockpitView`. No React. |
-| Presentation | `web/src/skins/<id>/` | one directory per skin, registered in `skins/registry.ts`. |
+| Layer        | Path                            | Job                                                                                                      |
+| ------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Wiring       | `web/src/cockpit/useCockpit.ts` | fetch, websocket, coalesced refresh, selection, auth refusal. Returns `{view, actions, status}`. No JSX. |
+| Derivation   | `web/src/view/viewModel.ts`     | pure `buildViewModel(...)` → `CockpitView`. No React.                                                    |
+| Presentation | `web/src/skins/<id>/`           | one directory per skin, registered in `skins/registry.ts`.                                               |
 
 `App.tsx` becomes ~20 lines: call the hook, look up the skin, render its root.
 
 ## The contract
 
 ```ts
-interface Skin { id: SkinId; label: string; Root: (p: SkinProps) => JSX.Element }
-interface SkinProps { view: CockpitView; actions: CockpitActions }
+interface Skin {
+  id: SkinId;
+  label: string;
+  Root: (p: SkinProps) => JSX.Element;
+}
+interface SkinProps {
+  view: CockpitView;
+  actions: CockpitActions;
+}
 ```
 
 `CockpitView` is plain data — no functions, no promises. `CockpitActions` is every mutation,
@@ -68,7 +75,7 @@ recovery verdicts get exactly one implementation, forever.
 the topbar.
 
 `UpNext` is the interesting one: it carries the reorder drag, which is a mutation, and it is
-also exactly what a Factory skin replaces with a belt. Resolved by putting the *call* in
+also exactly what a Factory skin replaces with a belt. Resolved by putting the _call_ in
 `CockpitActions` and leaving only the drag UI skin-side, so a skin can implement dragging
 differently, or not at all, without touching the priority-override write.
 
@@ -115,7 +122,7 @@ column and a migration for nothing.
   `test/ansi.test.ts` / `test/worldBuckets.test.ts` are precedent for testing web modules
   from the root suite, so this needs no jsdom and no new dependency.
 
-Stated limits of the golden: it proves the *static tree* is unchanged, not that effects and
+Stated limits of the golden: it proves the _static tree_ is unchanged, not that effects and
 handlers are, and it says nothing about CSS. The CSS half is covered by moving rules verbatim
 and only adding token indirection whose resolved values are identical. The golden's durable
 value is forward-looking — it fails on any later change that alters Classic's markup.
