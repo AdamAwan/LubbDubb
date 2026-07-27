@@ -6,11 +6,34 @@ import { FleetControl } from '../../../components/FleetControl.js';
 import { UsageChip } from '../../../components/UsageChip.js';
 import { relTime } from '../../../components/util.js';
 import { SkinPicker } from '../../SkinPicker.js';
+import { powerReading } from '../power.js';
 import { Icon } from './Sprite.js';
 
 /** One labelled gauge. */
 function Read({ children }: { children: React.ReactNode }): JSX.Element {
   return <div className="fx-read">{children}</div>;
+}
+
+/**
+ * The accumulator bank: the 7-day window as a reserve behind the 5-hour draw.
+ *
+ * Two gauges rather than one because they fail differently and an operator needs
+ * to tell the difference — satisfaction full with the bank draining is a week's
+ * budget going on a busy afternoon, which reads as healthy right up until it
+ * isn't. Absent when the subscriber limits were never captured: there is no
+ * denominator on an API key, and a bank drawn from nothing would be a decoration
+ * standing in for a number.
+ */
+function Accumulators({ cells }: { cells: number[] }): JSX.Element {
+  return (
+    <span className="fx-accs" aria-hidden="true">
+      {cells.map((fill, i) => (
+        <span key={i} className="fx-acc fx-sunk">
+          <i style={{ height: `${Math.round(fill * 100)}%` }} />
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /**
@@ -27,8 +50,7 @@ export function StatusBar({ view, actions }: { view: CockpitView; actions: Cockp
   // Power is the subscriber window when the status-line capture has seen one;
   // otherwise there is no percentage to draw and the shared cost chip says what
   // is actually known instead of a meter inventing a denominator.
-  const fiveHour = state.usage.rateLimits?.fiveHour ?? null;
-  const remaining = fiveHour ? Math.max(0, 100 - fiveHour.usedPercentage) : null;
+  const power = powerReading(state.usage);
 
   return (
     <div className="fx-status fx-bev">
@@ -72,21 +94,30 @@ export function StatusBar({ view, actions }: { view: CockpitView; actions: Cockp
         </span>
       </Read>
 
-      {remaining !== null ? (
+      {power.satisfaction !== null ? (
         <Read>
           <Icon name="battery" className="sm" />
           <span className="fx-lbl">Power</span>
           <span
-            className={`fx-meter fx-sunk ${remaining <= 15 ? 'low' : ''}`}
+            className={`fx-meter fx-sunk ${power.brownout ? 'low' : ''}`}
             role="img"
-            aria-label={`${remaining} percent of the 5-hour model window remaining`}
+            aria-label={`Satisfaction: ${power.satisfaction} percent of the 5-hour model window remaining`}
           >
-            <i style={{ width: `${remaining}%` }} />
+            <i style={{ width: `${power.satisfaction}%` }} />
           </span>
           <span className="fx-val">
-            {remaining}
+            {power.satisfaction}
             <small>%</small>
           </span>
+          {power.bank !== null && (
+            <span
+              className="fx-bank"
+              title={`Accumulator bank: ${power.bank}% of the 7-day window left · $${power.sevenDayCostUsd.toFixed(2)} spent`}
+            >
+              <Accumulators cells={power.cells} />
+              <span className="fx-lbl">Bank {power.bank}%</span>
+            </span>
+          )}
         </Read>
       ) : (
         <UsageChip usage={state.usage} now={view.now} />

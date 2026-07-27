@@ -372,9 +372,12 @@
   overflow-x: auto;
   overflow-y: hidden;
 }
+/* Width is set inline from the bay count — the floor grows with the cap, so the
+   plan's own coordinate system is the only thing that can size it. The belt and
+   the gate are positioned in the same units as the SVG viewBox, which is what
+   keeps the cut line over the gap it names. */
 .fx-line {
   position: relative;
-  width: 1120px;
   height: 236px;
   overflow: hidden;
 }
@@ -417,12 +420,28 @@
   animation-play-state: paused;
 }
 
+/* Two runs, and the gap between them is the gate's.
+   The boarding prefix keeps the crate pitch (128 + 12); everything behind the
+   cut butts together with no gap at all, because that is what a belt does when
+   the consumer stops taking from it. The compression *is* the diagnostic — a
+   backed-up queue and a flowing one used to draw identically. Each run is
+   omitted entirely when empty: an empty flex child still takes the row's gap,
+   and that gap is exactly where the gate has to land. */
 .fx-belt-row {
   position: absolute;
   left: 12px;
   top: 4px;
   display: flex;
   gap: 12px;
+}
+.fx-belt-run {
+  display: flex;
+}
+.fx-belt-run.moving {
+  gap: 12px;
+}
+.fx-belt-run.jam {
+  gap: 0;
 }
 .fx-item {
   width: 128px;
@@ -472,6 +491,67 @@
 }
 .fx-item.hot .fx-item-why {
   color: var(--accent);
+}
+/* Butted against its neighbour: one shared edge rather than two, so a compressed
+   run reads as a solid block of stock and not as separate crates that happen to
+   touch. */
+.fx-item.jam {
+  background: var(--panel-2);
+  border-style: solid;
+  border-color: var(--border-hi);
+  color: var(--muted);
+}
+.fx-item.jam + .fx-item.jam {
+  border-left-color: var(--border-lo);
+}
+/* Tone paints the status word only. The crate's own border still says whether it
+   is boarding, because that is the dispatcher's verdict and the tone is the
+   machine's — two facts, and a crate that is `capped` is not thereby boarding. */
+.fx-item.tone-warn .fx-item-why {
+  color: var(--amber);
+}
+.fx-item.tone-bad .fx-item-why {
+  color: var(--red);
+}
+.fx-item.tone-idle .fx-item-why {
+  color: var(--fx-ghost);
+}
+.fx-item.tone-off .fx-item-why {
+  color: var(--grey);
+}
+
+.fx-jam-tag {
+  align-self: center;
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  background: var(--red-fill);
+  border: 1px solid var(--red-line);
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The item in an inserter's hand, faded in with the swing that carries it. */
+.fx-held {
+  animation: fx-held 7s ease-in-out infinite;
+  transform-box: fill-box;
+}
+@keyframes fx-held {
+  0%,
+  30% {
+    opacity: 0;
+  }
+  42%,
+  58% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .fx-gate {
@@ -644,9 +724,6 @@
 @media (max-width: 940px) {
   .fx-cols {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .fx-line {
-    width: 1120px;
   }
 }
 
@@ -899,18 +976,392 @@
   color: var(--red);
 }
 
+/* ============================ silos on the pad ============================ */
+
+.fx-silos {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.fx-silo-card {
+  display: flex;
+  gap: 11px;
+  padding: 10px;
+  min-width: 0;
+}
+.fx-silo-tower {
+  flex: 0 0 62px;
+  width: 62px;
+  height: auto;
+  display: block;
+}
+.fx-silo-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fx-silo-meta .fx-job {
+  display: block;
+  margin: 2px 0 7px;
+}
+.fx-silo-ready {
+  animation: fx-charge 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+}
+.fx-gates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.fx-gates li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--grey);
+}
+.fx-gates li.ok {
+  color: var(--muted);
+}
+.fx-gates li.no {
+  color: var(--red);
+}
+.fx-gates .tick {
+  width: 11px;
+  text-align: center;
+  font-weight: 700;
+}
+.fx-gates li.ok .tick {
+  color: var(--green);
+}
+
+/* Whose court, in one chip. The tones are the machine-status tones, so a silo
+   and a bay cannot disagree about what "needs you" looks like. */
+.fx-court {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  color: var(--grey);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.fx-court.ok {
+  border-color: var(--green);
+  color: var(--green);
+}
+.fx-court.warn {
+  border-color: var(--amber-line);
+  color: var(--amber);
+}
+.fx-court.bad {
+  border-color: var(--red-line);
+  color: var(--red);
+}
+.fx-court.idle {
+  border-color: var(--blue-line);
+  color: var(--fx-ghost);
+}
+
+/* ============================ production ============================ */
+
+.fx-prod {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.fx-prod-graph {
+  flex: 1 1 480px;
+  min-width: 320px;
+  padding: 8px;
+}
+.fx-prod-graph svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.fx-prod-key {
+  flex: 0 0 228px;
+  padding: 8px 11px 11px;
+  min-width: 0;
+}
+.fx-prod-key .fx-sub {
+  margin-top: 2px;
+}
+.fx-krow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-lo);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.fx-krow:last-of-type {
+  border-bottom: 0;
+}
+.fx-krow .sw {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+}
+.fx-krow .nm {
+  flex: 1 1 auto;
+  color: var(--text);
+  min-width: 0;
+}
+.fx-krow .rt {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.fx-krow .rt b {
+  color: var(--text);
+  font-weight: 600;
+}
+.fx-krow .dl {
+  width: 44px;
+  text-align: right;
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+.fx-krow .dl.up {
+  color: var(--green);
+}
+.fx-krow .dl.dn {
+  color: var(--red);
+}
+.fx-krow .dl.flat {
+  color: var(--grey);
+}
+.fx-prod-note {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.fx-prod-note b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ============================ research (the tech tree) ============================ */
+
+.fx-trees {
+  display: grid;
+  gap: 14px;
+}
+.fx-tree-hd {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.fx-tech-chip {
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.fx-tree {
+  height: auto;
+  display: block;
+  padding: 2px 0 6px;
+}
+.fx-tree-pr {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--grey);
+}
+/* The part a PR is open on. One ring, because "being worked" is the only state
+   on this graph an operator cannot act on and should not be drawn to. */
+.fx-researching {
+  animation: fx-charge 2.2s ease-in-out infinite;
+}
+
+.fx-queue-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 9px;
+  margin-top: 8px;
+}
+.fx-queue-cap {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+.fx-qchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  background: var(--panel);
+  border-top: 1px solid var(--border-hi);
+  border-left: 1px solid var(--border-hi);
+  border-right: 1px solid var(--border-lo);
+  border-bottom: 1px solid var(--border-lo);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text);
+}
+.fx-qchip.now {
+  background: var(--blue-fill);
+  border-color: var(--blue-line);
+  color: var(--fx-ghost);
+}
+.fx-qchip .n {
+  color: var(--grey);
+}
+.fx-qchip.now .n {
+  color: var(--blue);
+}
+.fx-queue-age {
+  margin-left: auto;
+}
+
+/* ============================ circuit signals ============================ */
+
+.fx-signals {
+  display: grid;
+}
+.fx-signal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-lo);
+  min-width: 0;
+}
+.fx-signal:last-child {
+  border-bottom: 0;
+}
+.fx-wire {
+  width: 34px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+.fx-sig-tile {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+  border-top: 1px solid var(--border-hi);
+  border-left: 1px solid var(--border-hi);
+  border-right: 1px solid var(--border-lo);
+  border-bottom: 1px solid var(--border-lo);
+  color: var(--muted);
+}
+.fx-sig-tile.up {
+  color: var(--green);
+}
+.fx-sig-tile.down {
+  color: var(--red);
+}
+.fx-sig-tile .cnt {
+  position: absolute;
+  right: -1px;
+  bottom: -3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text);
+  text-shadow:
+    0 0 3px var(--panel),
+    0 0 3px var(--panel);
+}
+.fx-sig-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fx-sig-txt .r {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--grey);
+}
+.fx-sig-txt .s {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================ power ============================ */
+
+.fx-bank {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 9px;
+  margin-left: 3px;
+  border-left: 1px solid var(--border);
+}
+.fx-accs {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+.fx-acc {
+  position: relative;
+  width: 6px;
+  height: 16px;
+  overflow: hidden;
+  display: block;
+}
+.fx-acc i {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: block;
+  background: var(--green);
+  opacity: 0.6;
+}
+.fx-meter.low ~ .fx-bank .fx-acc i {
+  background: var(--amber);
+}
+
+/* A brownout dims the *machinery* and nothing else: the reserve running out is a
+   real reading and belongs on the floor, but it must not cost legibility of the
+   text an operator needs in order to do something about it. */
+.fx-brownout .fx-plan,
+.fx-brownout .fx-belt,
+.fx-brownout .fx-tree,
+.fx-brownout .fx-silo-tower {
+  opacity: 0.62;
+}
+
 /* Everything on this page that moves is ambience; none of it carries a reading
    the text does not also carry, so switching it all off costs nothing. */
 @media (prefers-reduced-motion: reduce) {
   .fx-belt,
   .fx-spin,
   .fx-arm,
+  .fx-held,
   .fx-puff,
   .fx-pad,
   .fx-flyer,
   .fx-sweep,
   .fx-rocket,
   .fx-exhaust,
+  .fx-researching,
+  .fx-silo-ready,
   .fx-alert.crit > .fx-ic {
     animation: none !important;
   }
