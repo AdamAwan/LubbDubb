@@ -38,17 +38,22 @@ const TOKEN_KEY = 'lubbdubb.cockpitToken';
  */
 function readToken(): string {
   try {
-    const match = /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash);
-    if (match) {
-      localStorage.setItem(TOKEN_KEY, match[1]);
+    const fromHash = /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
+    if (fromHash) {
+      localStorage.setItem(TOKEN_KEY, fromHash);
       history.replaceState(null, '', location.pathname + location.search);
-      return match[1];
+      return fromHash;
     }
     return localStorage.getItem(TOKEN_KEY) ?? '';
   } catch {
     // Storage can throw when cookies/site data are blocked. The in-memory token
     // from this page load still works; only persistence is lost.
-    return /[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1] ?? '';
+    //
+    // This also catches the no-browser case: `location` is simply undefined when
+    // the cockpit is imported under node, which is how the skin tests render a
+    // skin to static markup. There is no token to find there and nothing will be
+    // fetched, so an empty one is the right answer rather than a crash at import.
+    return typeof location === 'undefined' ? '' : (/[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1] ?? '');
   }
 }
 
@@ -257,7 +262,18 @@ function connectRealWs(onEvent: (ev: unknown) => void, onStatus?: (connected: bo
 // The Pages demo runs the SPA against an in-browser fake backend so there's no
 // server to talk to. `VITE_DEMO=1` (web/.env.demo) is baked in at build time and
 // statically dead-code-eliminates the demo path out of the production bundle.
-const DEMO = import.meta.env.VITE_DEMO === '1';
+//
+// The `typeof` guard is for node, not the browser: under `tsx` there is no
+// `import.meta.env` at all, so the bare access threw at import — which put the
+// whole cockpit out of reach of a test, and so out of reach of the skin tests
+// that render it to static markup.
+//
+// If you change the shape of this expression, check both build directions, and
+// grep for a *string literal* from the fixtures — `buildDemoState` is minified to
+// a single letter in both bundles, so its absence proves nothing:
+//   npm run web:build       → must NOT contain "Reworking the policy-evaluation"
+//   npm run web:build:demo  → must contain it
+const DEMO = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DEMO === '1';
 
 /** True when running against the fake backend (the GitHub Pages demo build). */
 export const isDemo = DEMO;

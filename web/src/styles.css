@@ -1,4 +1,16 @@
-:root {
+/*
+ * The token layer is the styling contract for *shared* components — the drawer,
+ * the escalation card, recovery — which have one implementation and must look
+ * native in every skin. A skin may write whatever CSS it likes for its own
+ * markup; what it may not do is restyle a shared component except through these.
+ *
+ * So: shared components style themselves only through tokens; skins define the
+ * tokens. Everything below is Classic's set, and every value is what it was
+ * before the tokens existed — the indirection resolves identically, which is why
+ * the golden-markup test in `test/cockpitSkins.test.ts` is a fair check.
+ */
+:root,
+:root[data-skin='classic'] {
   --bg: #0b0e14;
   --panel: #131722;
   --panel-2: #1a2030;
@@ -11,6 +23,40 @@
   --amber: #ffb020;
   --red: #ff5c5c;
   --grey: #6b7688;
+
+  /* Tints of the semantic colours above, previously written as literals at each
+     use site. Named so a skin can move them together with the hue they belong to. */
+  --amber-line: #4d3a12;
+  --amber-fill: #1e1809;
+  --red-line: #4d1e1e;
+  --accent-fill: #3a1420;
+  --blue-line: #1c3a5c;
+  --blue-line-2: #234a6e;
+  --blue-fill: #14243a;
+  --green-fill: #10241a;
+  --amber-fill-2: #241d0c;
+  --red-fill: #241010;
+  --on-light: #04121f;
+  --on-warm: #1a0606;
+  --well: #05070c;
+
+  /* Radius. The one non-colour token that genuinely blocks a treatment: a
+     square-cornered skin is unreachable by palette alone. */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-pill: 999px;
+
+  /* A skin with a display face points --font-display somewhere else; Classic has
+     none, so it resolves to the UI face and nothing changes. */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: var(--font-ui);
+
+  /* Two border colours so a skin can bevel — light top/left, dark bottom/right.
+     Classic points both at --border, so its panels stay flat. */
+  --border-hi: var(--border);
+  --border-lo: var(--border);
 }
 
 * {
@@ -48,7 +94,7 @@ body {
 .locked-out code {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   padding: 1px 5px;
 }
 
@@ -114,7 +160,7 @@ body {
 }
 .chip.bad {
   color: var(--red);
-  border-color: #4d1e1e;
+  border-color: var(--red-line);
 }
 .chip.small {
   padding: 1px 7px;
@@ -122,7 +168,7 @@ body {
 }
 .chip.warn {
   color: var(--amber);
-  border-color: #4d3a12;
+  border-color: var(--amber-line);
 }
 
 .btn {
@@ -140,22 +186,22 @@ body {
 .btn.primary {
   background: var(--blue);
   border-color: var(--blue);
-  color: #04121f;
+  color: var(--on-light);
   font-weight: 600;
 }
 .btn.danger {
-  border-color: #4d1e1e;
+  border-color: var(--red-line);
   color: var(--red);
 }
 .btn.danger:hover {
   background: var(--red);
-  color: #1a0606;
+  color: var(--on-warm);
 }
 /* Armed = one destructive click away; filled red + pulse to demand a deliberate confirm. */
 .btn.danger.armed,
 .btn.danger.armed:hover {
   background: var(--red);
-  color: #1a0606;
+  color: var(--on-warm);
   border-color: var(--red);
   font-weight: 600;
   animation: armed-pulse 1.2s ease-in-out infinite;
@@ -216,7 +262,7 @@ body {
   background: var(--panel-2);
 }
 .fleet-control.paused {
-  border-color: #4d3a12;
+  border-color: var(--amber-line);
 }
 .fc-label {
   color: var(--muted);
@@ -232,7 +278,7 @@ body {
 .fc-step {
   padding: 2px 8px;
   line-height: 1;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   font-size: 15px;
 }
 
@@ -273,7 +319,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   padding: 6px 10px;
 }
 
@@ -303,7 +349,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   padding: 8px 10px;
   font: inherit;
 }
@@ -316,7 +362,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   padding: 6px 8px;
   font: inherit;
 }
@@ -336,7 +382,7 @@ body {
   padding: 4px 8px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-md);
 }
 .launch-pos {
   flex: 0 0 auto;
@@ -405,7 +451,7 @@ body {
   font-size: 12px;
 }
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--muted);
 }
@@ -417,7 +463,7 @@ body {
   color: var(--muted);
 }
 .count.urgent {
-  background: #3a1420;
+  background: var(--accent-fill);
   color: var(--accent);
 }
 .empty {
@@ -429,15 +475,15 @@ body {
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 12px;
   margin-bottom: 10px;
 }
 .card.agent.waiting {
-  border-color: #4d3a12;
+  border-color: var(--amber-line);
 }
 .card.agent.running {
-  border-color: #1c3a5c;
+  border-color: var(--blue-line);
 }
 .card.past {
   opacity: 0.65;
@@ -470,8 +516,8 @@ body {
 .waiting-reason {
   margin-top: 8px;
   padding: 8px;
-  background: #1e1809;
-  border: 1px solid #4d3a12;
+  background: var(--amber-fill);
+  border: 1px solid var(--amber-line);
   border-radius: 7px;
   color: var(--amber);
   font-size: 13px;
@@ -490,7 +536,7 @@ body {
   gap: 5px;
   max-width: 100%;
   color: var(--blue);
-  border-color: #234a6e;
+  border-color: var(--blue-line-2);
   text-decoration: none;
   cursor: pointer;
   overflow: hidden;
@@ -530,7 +576,7 @@ body {
   list-style: none;
 }
 .file-row {
-  font-family: var(--mono, monospace);
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--muted);
   padding: 1px 0;
@@ -597,7 +643,7 @@ body {
 }
 
 .escalation {
-  border-color: #3a1420;
+  border-color: var(--accent-fill);
 }
 .escalation .card-head {
   cursor: default;
@@ -636,7 +682,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 7px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--muted);
   white-space: pre-wrap;
@@ -688,14 +734,14 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   padding: 6px 10px;
 }
 
 .world {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 10px 12px;
 }
 .world-tabs {
@@ -777,7 +823,7 @@ body {
   border-color: var(--red);
 }
 .audit-type {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   margin-left: 8px;
   color: var(--text);
 }
@@ -798,7 +844,7 @@ body {
   margin: 4px 0 0;
   padding: 6px 8px;
   background: var(--panel-2);
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   font-size: 11px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -844,12 +890,12 @@ body {
 .terminal {
   flex: 1;
   min-height: 0;
-  background: #05070c;
+  background: var(--well);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 14px;
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -880,9 +926,9 @@ body {
   bottom: 12px;
   transform: translateX(-50%);
   background: var(--blue);
-  color: #04121f;
+  color: var(--on-light);
   border: none;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 5px 13px;
   font-size: 12px;
   font-weight: 600;
@@ -924,9 +970,9 @@ body {
 .dispatch-reason {
   margin-top: 2px;
   padding: 6px 8px;
-  background: #1e1809;
-  border: 1px solid #4d3a12;
-  border-radius: 6px;
+  background: var(--amber-fill);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
   color: var(--amber);
   font-size: 12px;
 }
@@ -948,14 +994,14 @@ body {
   width: 84px;
   height: 6px;
   background: var(--panel-2);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   overflow: hidden;
   border: 1px solid var(--border);
 }
 .heartbeat-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--blue));
-  border-radius: 6px;
+  border-radius: var(--r-md);
   transition: width 0.9s linear;
 }
 .heartbeat-label {
@@ -984,7 +1030,7 @@ body {
 .vital {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -1033,7 +1079,7 @@ body {
 
 /* ── Agent card extras ───────────────────────────────────────────────── */
 .mono-time {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   margin-left: auto;
 }
 .spinner {
@@ -1078,9 +1124,9 @@ body {
 .last-line {
   margin-top: 8px;
   padding: 6px 8px;
-  background: #05070c;
+  background: var(--well);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-md);
   color: #8fa0bf;
   font-size: 11.5px;
   overflow: hidden;
@@ -1089,7 +1135,7 @@ body {
 }
 .card.agent.running {
   box-shadow:
-    0 0 0 1px #1c3a5c,
+    0 0 0 1px var(--blue-line),
     0 0 22px -14px var(--blue);
 }
 
@@ -1103,7 +1149,7 @@ body {
   padding: 24px 16px;
   background: var(--panel);
   border: 1px dashed var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   color: var(--muted);
 }
 .empty-panel p {
@@ -1143,20 +1189,20 @@ body {
 .filter-chip.active {
   color: var(--text);
   border-color: var(--blue);
-  background: #14243a;
+  background: var(--blue-fill);
 }
 .filter-chip.executed.active {
   border-color: var(--green);
-  background: #10241a;
+  background: var(--green-fill);
 }
 .filter-chip.deferred.active,
 .filter-chip.skipped.active {
   border-color: var(--amber);
-  background: #241d0c;
+  background: var(--amber-fill-2);
 }
 .filter-chip.rejected.active {
   border-color: var(--red);
-  background: #241010;
+  background: var(--red-fill);
 }
 .filter-count {
   opacity: 0.7;
@@ -1201,7 +1247,7 @@ body {
 .audit-rule {
   margin-top: 6px;
   padding: 7px 9px;
-  border-radius: 6px;
+  border-radius: var(--r-md);
   background: rgba(127, 127, 127, 0.08);
   font-style: normal;
 }
@@ -1262,22 +1308,22 @@ body {
 }
 .filter-chip.prs.active {
   border-color: var(--blue);
-  background: #14243a;
+  background: var(--blue-fill);
 }
 .filter-chip.issues.active {
   border-color: var(--accent);
-  background: #3a1420;
+  background: var(--accent-fill);
 }
 .filter-chip.stories.active {
   border-color: var(--green);
-  background: #10241a;
+  background: var(--green-fill);
 }
 
 /* "Up next" queue — the dispatcher's ranked pickup plan with the headroom cut. */
 .upnext {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 8px 12px 10px;
   font-size: 13px;
 }
@@ -1355,7 +1401,7 @@ body {
 .finding-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 8px 12px;
   font-size: 13px;
 }
@@ -1398,7 +1444,7 @@ body {
 .plan-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 8px 12px 6px;
   font-size: 13px;
 }
@@ -1446,7 +1492,7 @@ body {
 .plan-slug {
   color: var(--muted);
   font-size: 11px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   margin-left: auto;
 }
 
@@ -1459,7 +1505,7 @@ body {
 .overlap-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   padding: 8px 12px;
   font-size: 13px;
   opacity: 0.7;
@@ -1502,7 +1548,7 @@ body {
   padding: 14px 16px;
   border: 1px solid var(--amber);
   border-left-width: 4px;
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   background: linear-gradient(180deg, rgba(255, 176, 32, 0.09), transparent);
 }
 .recovery-banner header h2 {
@@ -1573,4 +1619,20 @@ body {
 }
 .heartbeat.held .heartbeat-label {
   color: var(--amber);
+}
+
+/* Skin picker. Shared rather than skin-owned, so a half-built skin is never the
+   one you cannot escape from. Hidden entirely while only one skin is registered. */
+.skin-picker select {
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

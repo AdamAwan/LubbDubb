@@ -1,4 +1,4 @@
-import type { AppState } from '../types.js';
+import type { AppState } from '../../../types.js';
 
 /**
  * The at-a-glance vitals strip: the handful of numbers that tell you whether the

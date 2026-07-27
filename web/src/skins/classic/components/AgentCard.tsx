@@ -1,7 +1,7 @@
-import type { Agent, AgentFlag, Task } from '../types.js';
-import { statusDot, elapsed, linkify, refLink, relTime, agentUsageLine } from './util.js';
-import { ConfirmButton } from './ConfirmButton.js';
-import { FlagChips } from './FlagChips.js';
+import type { Agent, AgentFlag, Task } from '../../../types.js';
+import { statusDot, elapsed, linkify, refLink, relTime, agentUsageLine } from '../../../components/util.js';
+import { ConfirmButton } from '../../../components/ConfirmButton.js';
+import { FlagChips } from '../../../components/FlagChips.js';
 
 export function AgentCard({
   agent,

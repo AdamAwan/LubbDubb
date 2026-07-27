@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { WorldEvent, WorldEventKind } from '../types.js';
-import { relTime } from './util.js';
+import type { WorldEvent, WorldEventKind } from '../../../types.js';
+import { relTime } from '../../../components/util.js';
 
 /**
  * The world's change history — the counterpart to the decision log, but for the

@@ -1,5 +1,5 @@
-import type { ErrorLogEntry } from '../types.js';
-import { relTime } from './util.js';
+import type { ErrorLogEntry } from '../../../types.js';
+import { relTime } from '../../../components/util.js';
 
 /**
  * The error log — recorded failures (cycle exceptions, provider outages, agent

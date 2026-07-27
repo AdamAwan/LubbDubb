@@ -6,6 +6,74 @@
 
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 
+## Layers, and what a skin is
+
+The cockpit is three layers, split so that how it _looks_ is replaceable without touching how it
+behaves:
+
+| Layer        | Path                        | Job                                                                                            |
+| ------------ | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| Wiring       | `web/src/cockpit/`          | fetch, websocket, coalesced refresh, which drawer is open, the bound `CockpitActions`. No JSX. |
+| Derivation   | `web/src/view/viewModel.ts` | the pure `buildViewModel` → `CockpitView`. No React.                                           |
+| Presentation | `web/src/skins/<id>/`       | one directory per skin, listed in `skins/registry.ts`.                                         |
+
+`App.tsx` is only the shell: acquire state, resolve the skin, render its root. The two screens it
+still owns — "Connecting…" and the locked-out page — stay there because neither has a view-model to
+draw, and a refused credential must read the same however the cockpit is themed.
+
+**A skin owns its whole layout.** It is handed a finished `CockpitView` and renders whatever tree it
+likes, rather than overriding slots in a shared page: the treatments worth having redraw the data
+(a dispatch queue as a belt feeding machines) rather than rearrange the panels, and a slot contract
+wide enough for that is no longer a contract.
+
+What stops that becoming N divergent cockpits is the split on **behaviour weight**:
+
+- **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold
+  semantics: `AgentDrawer`, `EscalationCard`, `RecoveryPanel`, `InjectPanel`, `LaunchPanel`,
+  `FindingsPanel`, `PlanPanel`, the buttons, and the leaf helpers. The escalation 409 rules and the
+  recovery verdicts get exactly one implementation.
+- **Skin-owned** (`web/src/skins/<id>/`) — anything that draws over data it was handed: the fleet
+  card, the queue, vitals, the feeds, the chips, the topbar.
+
+`UpNext` sits on the line: it carries the reorder drag, which is a mutation, and it is also exactly
+what another skin would replace wholesale. Resolved by putting the _call_ on `CockpitActions` and
+leaving only the drag UI skin-side.
+
+**Skins never import `api.js`.** Every mutation is enumerated on `CockpitActions`, pre-bound, so a
+skin cannot grow a capability another lacks — a difference that would surface only as a button
+existing in one theme. Asserted structurally in `test/cockpitSkins.test.ts`.
+
+### Tokens
+
+Tokens in `styles.css` are the styling contract **for shared components**, which is narrower than
+the usual meaning: a skin may write whatever CSS it likes for its own markup, but a shared component
+must be restyleable without being edited. So shared components style themselves only through tokens,
+and skins define the tokens. Beyond colour that means `--r-*` (radius — the one non-colour token
+that genuinely blocks a treatment, since a square-cornered skin is unreachable by palette alone),
+`--font-ui|mono|display`, and `--border-hi`/`--border-lo` so a bevel is expressible. Classic points
+both border tokens at `--border`, so its panels stay flat.
+
+### Choosing one
+
+`localStorage['lubbdubb.skin']`, stamped onto `<html data-skin>` by a small script in `index.html`
+**before first paint** — in the bundle it would run after the default had already painted, so
+switching would flash the old skin. An unrecognised or missing id falls back to Classic silently: a
+stale id is a normal thing to find after a skin is renamed, not an error. The picker is a _shared_
+component so a half-built skin is never the one you cannot escape from, and applying is a reload,
+since a skin owns the whole tree and switching unmounts everything anyway.
+
+The choice is deliberately **not** in `Config` or `/api/state`. It is a per-viewer preference;
+shipping it in the snapshot would make one operator's taste global to every cockpit.
+
+### Tests
+
+`test/cockpitViewModel.test.ts` covers the derivations (untestable while they lived inside a
+component). `test/cockpitSkins.test.ts` holds the structural no-`api` rule, a conformance render of
+every registered skin against the demo fixtures, the unknown-id fallback, and a byte-for-byte golden
+of Classic's markup (`test/fixtures/classic-markup.html`, regenerate with `UPDATE_GOLDEN=1`). The
+golden fixes the static tree only — not effects, not CSS — and its value is forward-looking: a
+change to Classic's DOM has to be deliberate enough to regenerate it.
+
 ## Data flow
 
 One state object, one socket.

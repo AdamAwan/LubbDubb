@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
-import type { FileOverlap } from '../types.js';
-import { refLink, relTime, statusDot } from './util.js';
+import type { FileOverlap } from '../../../types.js';
+import { refLink, relTime, statusDot } from '../../../components/util.js';
 
 /**
  * Paths two agents wrote while both were running.

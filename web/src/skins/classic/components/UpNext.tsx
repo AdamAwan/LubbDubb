@@ -1,5 +1,5 @@
-import type { DispatchRule, QueueItem, UpcomingPlan } from '../types.js';
-import { refLink, relTime } from './util.js';
+import type { DispatchRule, QueueItem, UpcomingPlan } from '../../../types.js';
+import { refLink, relTime } from '../../../components/util.js';
 
 /**
  * The "Up next" queue (issue #69): the dispatcher's ordered pickup plan from the
@@ -50,6 +50,7 @@ export function UpNext({
     if (!onReorder || to < 0 || to >= plan.items.length) return;
     const next = [...plan.items];
     const [item] = next.splice(from, 1);
+    if (!item) return; // `from` came from a rendered row, so this is unreachable
     next.splice(to, 0, item);
     onReorder(next.map((i) => i.origin));
   };
