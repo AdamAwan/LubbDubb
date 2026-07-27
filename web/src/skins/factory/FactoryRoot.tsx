@@ -4,7 +4,6 @@ import { EscalationCard } from '../../components/EscalationCard.js';
 import { FindingsPanel } from '../../components/FindingsPanel.js';
 import { InjectPanel } from '../../components/InjectPanel.js';
 import { LaunchPanel } from '../../components/LaunchPanel.js';
-import { PlanPanel } from '../../components/PlanPanel.js';
 import { RecoveryPanel } from '../../components/RecoveryPanel.js';
 import { WorldSummary } from '../../components/WorldSummary.js';
 import { relTime } from '../../components/util.js';
@@ -15,6 +14,12 @@ import { TheLine } from './components/TheLine.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
 import { Launches } from './components/Launches.js';
+import { Production } from './components/Production.js';
+import { Signals } from './components/Signals.js';
+import { Silos } from './components/Silos.js';
+import { TechTree } from './components/TechTree.js';
+import { powerReading } from './power.js';
+import { productionReading } from './production.js';
 import { clip } from './vocabulary.js';
 
 /**
@@ -23,21 +28,32 @@ import { clip } from './vocabulary.js';
  * The layout is the argument: the queue, the fleet and the cap are one picture
  * at the top rather than three panels you join by eye, because they are one
  * decision — the dispatcher's — and Classic's three columns make you rebuild it
- * every time you look. Everything below the line is the detail that picture
- * cannot hold.
+ * every time you look. Production sits directly under it because the floor plan
+ * answers *what is happening* and only a rate answers *whether it is working*.
+ * Everything below the two is the detail neither picture can hold.
  *
  * Where a panel carries a refusal rule or an async flow it is the *shared*
- * component, unchanged and tinted through the tokens: the escalation card, the
- * plan panel, findings, recovery, the drawer, the world. This skin owns what it
- * draws and decides nothing.
+ * component, unchanged and tinted through the tokens: the escalation card,
+ * findings, recovery, the drawer, the world. This skin owns what it draws and
+ * decides nothing.
  */
 export function FactoryRoot({ view, actions }: SkinProps) {
   const { state, now } = view;
   const stopped = view.pulseHeld || state.control.paused;
   const overlaps = state.overlaps ?? [];
+  const power = powerReading(state.usage);
+  const production = productionReading({
+    decisions: state.decisions,
+    worldEvents: state.worldEvents,
+    fiveHourCostUsd: state.usage.windows.fiveHourCostUsd,
+    now,
+  });
 
   return (
-    <div className="fx">
+    // A brownout dims the machinery and nothing else — see the CSS. Reserve
+    // running low is a real reading and worth showing on the floor itself, but
+    // not at the cost of the text an operator needs in order to act on it.
+    <div className={`fx ${power.brownout ? 'fx-brownout' : ''}`}>
       <SpriteSheet />
       <StatusBar view={view} actions={actions} />
 
@@ -66,9 +82,21 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         cap={state.control.cap}
         items={state.upcoming?.items ?? []}
         now={now}
+        intervalMs={state.config.heartbeatIntervalMs}
         stopped={stopped}
         onOpen={(id) => actions.select(id)}
       />
+
+      <section className="fx-card fx-bev" style={{ marginBottom: 12 }}>
+        <div className="fx-head">
+          <div>
+            <Icon name="lamp" />
+            <h2>Production</h2>
+          </div>
+          <p className="fx-note">dispatches are effort · merges are output</p>
+        </div>
+        <Production reading={production} />
+      </section>
 
       <div className="fx-cols">
         <div className="fx-stack">
@@ -197,20 +225,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
                 />
               ))}
             </div>
-
-            {(state.plans?.length ?? 0) > 0 && (
-              <>
-                <p className="fx-sub">Blueprints</p>
-                <PlanPanel
-                  plans={state.plans ?? []}
-                  parts={state.planParts ?? []}
-                  upcoming={state.upcoming?.items ?? []}
-                  now={now}
-                  refUrls={state.refUrls}
-                  onReplan={(planId) => actions.replan(planId)}
-                />
-              </>
-            )}
           </section>
 
           <section className="fx-card fx-bev">
@@ -221,6 +235,9 @@ export function FactoryRoot({ view, actions }: SkinProps) {
               </div>
               <p className="fx-note">a launch is a merge</p>
             </div>
+            <p className="fx-sub">On the pad</p>
+            <Silos prs={state.world.pullRequests} refUrls={state.refUrls} />
+            <p className="fx-sub">Left the pad</p>
             <Launches closed={state.world.closedPullRequests ?? []} now={now} refUrls={state.refUrls} />
           </section>
 
@@ -237,6 +254,25 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           </section>
         </div>
       </div>
+
+      <section className="fx-card fx-bev" style={{ marginBottom: 12 }}>
+        <div className="fx-head">
+          <div>
+            <Icon name="blueprint" />
+            <h2>Research</h2>
+          </div>
+          <p className="fx-note">depth is how many merges must land first</p>
+        </div>
+        <TechTree
+          plans={state.plans ?? []}
+          parts={state.planParts ?? []}
+          upcoming={state.upcoming?.items ?? []}
+          now={now}
+          refUrls={state.refUrls}
+          paused={stopped}
+          onReplan={(planId) => actions.replan(planId)}
+        />
+      </section>
 
       <section className="fx-card fx-bev" style={{ marginBottom: 12 }}>
         <div className="fx-head">
@@ -280,19 +316,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
               </div>
               <p className="fx-note">what changed out there</p>
             </div>
-            <div className="fx-body">
-              {state.worldEvents.length === 0 && <p className="fx-empty">The world has not moved.</p>}
-              {state.worldEvents.slice(0, 10).map((e) => (
-                <div key={e.id} className="fx-launch">
-                  <Icon name="lamp" className="sm" />
-                  <span className="fx-ref">{e.ref ?? e.kind}</span>
-                  <span className="t" title={e.summary}>
-                    {e.summary}
-                  </span>
-                  <span className="fx-ref">{relTime(e.createdAt, now)}</span>
-                </div>
-              ))}
-            </div>
+            <Signals events={state.worldEvents} now={now} />
           </section>
 
           <section className="fx-card fx-bev">

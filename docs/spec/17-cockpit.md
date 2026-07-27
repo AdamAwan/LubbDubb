@@ -91,6 +91,56 @@ it:
 
 Red means exactly one thing on that floor: an agent parked on a question only you can answer.
 
+#### What the floor draws beyond the queue
+
+Each of these is a game mechanic kept only because a snapshot field already carried the reading; the
+argument for each is in its module's header, and the reason for the shape is worth stating here:
+
+- **Machine status** (`bayMachineStatus` / `crateMachineStatus`) replaces the old two-word
+  `beltTag`. The game already has a word for each of these conditions — an assembler with nothing to
+  consume says _no ingredients_, one whose output nobody takes says _output full_ — and those carry
+  a diagnosis "Cooling down" does not. Both halves of the floor route through the one file so the
+  two `waiting`s stay apart: a **waiting agent** is parked on a human and is red, a **waiting item**
+  merely has no free bay and is not. A paused floor answers `No power` before anything else, since
+  nothing else explains every machine at once.
+- **The floor is laid out from the cap**, not from a fixed four slots, up to `MAX_BAYS`. The old
+  array named the surplus in the header and cropped it off the picture, which made the one control
+  an operator actually turns invisible in the panel that exists to show it. Pads shrink to fit the
+  roboport's face so "one pad per slot" stays literally true.
+- **The belt compresses behind the cut.** The boarding prefix keeps the crate pitch; everything
+  behind butts together with no gap, because that is what a belt does when nothing is taking from
+  it. Each run is omitted when empty — an empty flex child still takes the row's gap, and that gap
+  is exactly where the gate sits.
+- **Inserters swing on a transfer, not on occupancy** (`inserterPhase`). An arm that ran for the
+  life of an agent was the one moving thing on the floor carrying no information. A swing is one
+  heartbeat from the agent's `startedAt`, and it carries the item while it swings.
+- **Silos** (`silo.ts`) draw open PRs filling toward a launch, beside the Launches log of PRs that
+  already closed. The fill is a **fixed four gates** — `health.reasons` names only what is wrong, so
+  it is a numerator with no denominator — while `attention.status` names the court, read off the
+  server and never re-derived. `health.reasons` is quoted underneath, never parsed.
+- **Production** (`production.ts`) is the only panel that reads against time, which is the only way
+  to answer whether the floor is producing rather than merely busy. Rates come from the timestamps
+  already on `decisions` and `worldEvents`; a held or skipped dispatch is not counted, because it
+  produced no work. The churn ratio (dispatches per merge) is the point of the panel. When the
+  decision log does not reach back to the window's start the panel **says so**: a rate that silently
+  under-reports is worse than no rate.
+- **Research** (`techTree.ts`) draws a plan as a tech tree. `dependsOn` holds at most one slug, so
+  the graph is a forest of chains fanning out where parts share a prerequisite — and depth _is_ how
+  many merges must land before a part can start, which a flat stack cannot show. Retired parts are
+  excluded, matching `liveParts`. Replan stays a `CockpitActions` call with only the drawing
+  skin-side, which is the `UpNext` precedent, not a departure from it.
+- **Circuit signals** group `worldEvents` by `(kind, ref)` and carry a count — three comments on one
+  PR read as one signal, not three unrelated rows. Polarity comes from the **kind alone**
+  (`signalPolarity`); the summary is prose written for a human, and parsing it here would be a
+  second reader of a string nobody promised to keep stable, so `pr_ci` is neutral rather than
+  guessed.
+- **Power** (`power.ts`) pairs satisfaction (the 5h window) with an accumulator bank (the 7d one),
+  because they fail differently: full satisfaction over a draining bank is a week's budget going on
+  an afternoon. The bank is a **segmented gauge** filled from one number, not a staircase of
+  per-cell levels that do not exist. A brownout dims the machinery and nothing else — the reading
+  belongs on the floor, but not at the cost of the text needed to act on it. Both are absent
+  entirely when the subscriber limits were never captured; there is no denominator on an API key.
+
 The icons are original marks in `Sprite.tsx`. The game the treatment nods at owns its art outright
 and licenses none of it for redistribution, so none of it is used or traced; what carries the
 reference is the vocabulary — a bay, an inserter, a roboport — which is nobody's property. The
@@ -128,8 +178,13 @@ format an operator sees is correctly their machine's business; it is only the go
 be nobody's. An assertion beside the comparison fails if the pin ever stops taking effect.
 
 `test/factorySkin.test.ts` covers that skin's pure vocabulary exhaustively (every `QueueItem.status`
-has a crate label; only `waiting` reads as jammed) plus the two renders where being wrong would be
-worse than being absent: the belt stopping, and the gate tracking the cut.
+has a machine word; only `waiting` reads as jammed; the two `waiting`s do not read alike; a paused
+floor outranks every other diagnosis) plus each derivation added beside it: tech-tree depth,
+sibling rows, unlit edges, retired parts and a cycle that must not hang the cockpit; the silo's
+fixed denominator; production counting only what landed and admitting when the log is too short;
+the accumulator gauge clamping. It also pins the renders where being wrong would be worse than
+being absent: the belt stopping, the gate tracking the cut, the belt splitting into a moving and a
+compressed run, and the floor widening with the cap up to its bound.
 
 A skin registered but not otherwise tested still gets the conformance render for free, which is the
 point of driving it off `SKINS` — it is asserted on the day it is written rather than the day it
