@@ -504,9 +504,10 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → plan reconciliation → `Dispatcher.decide` → `ActionExecutor` →
   audit. Cycles are coalesced (one in flight at a time).
-- **`reconcileAndResumeOnBoot` in `src/system.ts`** runs once at boot, _before_
-  `harness.runCycle('boot')`, so resumed agents occupy their concurrency slots before new work
-  is dispatched. See "Resume on boot" below.
+- **`RecoveryDesk.detect()` runs once at boot**, _before_ `harness.runCycle('boot')`. It resumes
+  nothing: every agent the last run orphaned is parked for an operator's restore / requeue /
+  remove, and `runCycle` **holds every pulse** while any of those is outstanding. See "Crash
+  recovery" below — the hold is the first thing `runCycle` asks, ahead of even the world fetch.
 - **`src/runtimeControl.ts`** holds the live, in-memory dispatch controls (`cap` +
   `paused`), seeded from `maxConcurrentAgents`/`startPaused` at boot. Both the `Harness`
   (headroom) and `ActionExecutor` (the hard dispatch gate) read it **by reference** each
@@ -976,29 +977,64 @@ freshest one into the snapshot's `usage.rateLimits` (null when absent — the co
 then falls back to the cost windows). Parsing is pure (`parseStatusLinePayload`,
 `src/agents/statusLine.ts`); tests in `test/usage.test.ts`.
 
-### Resume on boot (PTY only)
+### Crash recovery — the harness stopped deciding this for you
 
-A restart (crash or graceful shutdown) kills every agent, but the PTY runtime **resumes** the
-in-flight ones rather than discarding them. The moving parts:
+A restart kills every agent. The old boot reconciler resumed whatever looked resumable and
+buried the rest as `interrupted`, and then the boot cycle dispatched new work over the top —
+three decisions an operator has an opinion about, none of which was ever put to anyone. Worse,
+it went on staffing the fleet while its own model of that fleet was a lie: rows saying `running`
+with no process behind them. So detection no longer decides, and the pulse **holds** until it
+has been decided. What carries it:
 
-- **Chosen session id.** `AgentManager.spawn` mints a UUID (only when `opts.resumable`, i.e.
-  PTY) and `buildArgs` passes it as `--session-id`; it's persisted on the `agents` row
-  (`session_id` column). Resume passes `--resume <id>` instead. `buildClaudeArgs` **re-appends**
-  the protocol system prompt on resume — `--resume` does _not_ retain it, so detection would
-  break otherwise.
-- **Shutdown ≠ kill.** `AgentManager.interruptAll()` (server shutdown) marks agents
-  `interrupted` (resumable) and leaves the task status alone; `kill()` (cockpit button) marks
-  `killed` and sets the task `interrupted`. `reconcileAndResumeOnBoot` treats an agent as a
-  resume candidate only if it's in `starting`/`running`/`waiting`/`interrupted` **and its task
-  is still active** — so a cockpit kill (agent `killed`) and a prior give-up (task
-  `interrupted`) both stay dead and aren't resurrected on every boot.
-- **`waitingReason` is the state signal.** `interruptAll` overwrites status to `interrupted`
-  but preserves `waitingReason`, so `resume()` knows whether the agent was parked on a human
-  (restore its escalation, no nudge) or mid-work (nudge it to continue). The pre-restart
-  escalation persists and, once the session is live again, an answer routes into it.
-- Best-effort: no session id or missing worktree → fall back to `interrupted`; boot never
-  blocks on a resume. Stream-JSON resume is out of scope. `spawn`/`resume` share their listener
-  wiring — change one, change both.
+- **The pending set is the rows, not a field.** `RecoveryDesk.detect()` (`recoveryDesk.ts`,
+  boot, before `runCycle('boot')`) stamps each orphan `crashed` — a new `AgentStatus` that is
+  neither live (`countLiveAgents` excludes it, so a dead row stops eating the cap and stops
+  reading as running) nor terminal (`restore` puts the same row back to `running`). Being
+  derived is what makes it survive a second restart with nothing to persist, makes `detect`
+  idempotent, and stops two cockpits disagreeing. Each verdict moves the row **out** of the
+  candidate set — restore makes it live, requeue and remove settle its task — so "already
+  decided" needs no separate record, which is the same property the old task check relied on
+  to keep a cockpit kill dead. An already-`interrupted` row is left **unstamped**: that is what
+  preserves crash-vs-clean-shutdown (`CrashedAgent.died`) with no column to hold it.
+- **The hold is the whole pulse, and it is asked before the world fetch.** Not dispatch alone:
+  with undecided orphans every verdict a cycle reaches — merges, replies, plan reconciliation —
+  is reached against a fiction, so fetching the world at all is wasted. `runCycle` returns
+  `cycleId: 'held'` and emits nothing (same shape as `coalesced`, same reason: no cycle ran).
+  Re-asked each beat, so it lifts by itself when the last decision lands — there is no un-hold
+  to call and no restart. `test/crashRecovery.test.ts` asserts the world is never fetched.
+- **Detection dismisses no escalations.** The old fallback cascade-dismissed them, which is
+  right for an agent that is definitely dead and wrong for one that may be restored in a
+  minute — a restored agent must come back to the question it parked on. So the dismissal moved
+  onto the two verdicts that actually end the agent, and `POST /api/escalations/:id/answer`
+  **409s** while its agent is pending (third arm, after proposals and permission requests, for
+  the same reason: there is nothing to type into).
+- **`requeue` files a job; it cannot reset the task.** A `queued` task with no agent is _active_
+  to `activeOrigins`, `findActiveTaskByOrigin` and `findActiveTaskByBranch` alike, so parking
+  the work there would wedge its origin and branch shut for good. The job (`requeueJobRequest`,
+  pure) carries the original prompt verbatim under a preamble naming the origin, the branch that
+  may already carry commits, and the crashed agent's last `note_progress`. Cost, stated: the
+  origin becomes `job:<id>`, so the link back to `pr:42:ci` is provenance in prose, not a ref a
+  gate keys on.
+- **A refused restore is not a decision.** `restorability` (pure) decides whether it is on offer
+  and carries _why not_ (no session id / worktree gone / runtime can't resume) so the cockpit
+  shows the reason instead of a missing button; a refusal or a `resume()` that returns false
+  leaves the row `crashed`, so requeue and remove stay available and the hold stands.
+- There is deliberately **no config knob to auto-restore**. It would be the old behaviour under
+  a new name, and the point of the feature is that this is always asked.
+- **Chosen session id** (unchanged). `AgentManager.spawn` mints a UUID (only when
+  `opts.resumable`, i.e. PTY) and `buildArgs` passes it as `--session-id`; it's persisted on the
+  `agents` row (`session_id` column). Restore passes `--resume <id>` instead. `buildClaudeArgs`
+  **re-appends** the protocol system prompt on resume — `--resume` does _not_ retain it, so
+  detection would break otherwise.
+- **Shutdown ≠ kill** (unchanged). `AgentManager.interruptAll()` (server shutdown) marks agents
+  `interrupted` and leaves the task status alone; `kill()` (cockpit button) marks `killed` and
+  sets the task `interrupted` — excluded on both counts, so it stays dead.
+- **`waitingReason` is the state signal.** `interruptAll` overwrites status to `interrupted` but
+  preserves `waitingReason`, so `resume()` knows whether the agent was parked on a human
+  (restore its escalation, no nudge) or mid-work (nudge it to continue).
+- Stream-JSON resume is still out of scope (those agents get requeue/remove only).
+  `spawn`/`resume` share their listener wiring — change one, change both. Tests:
+  `test/crashRecovery.test.ts`, `test/resume.test.ts`.
 
 Sharp edge in `PtySession.kill()`: it sets status `killed` **before** signalling the process,
 because a synchronously-delivered exit would otherwise be reclassified as `failed` (firing a

@@ -26,7 +26,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 | Component            | Module                              | Responsibility                                                        |
 | -------------------- | ----------------------------------- | --------------------------------------------------------------------- |
 | Composition root     | `src/system.ts`                     | Wires every module through its interface; the only place they meet     |
-| Entry point          | `src/server/main.ts`                | Loads config, boots, resumes orphans, serves, shuts down cleanly       |
+| Entry point          | `src/server/main.ts`                | Loads config, boots, parks orphaned agents, serves, shuts down cleanly |
 | Config               | `src/config.ts`                     | Defaults, file overrides, env overrides, path resolution               |
 | Store                | `src/store/store.ts`                | The only module that touches SQLite                                    |
 | Connector (read)     | `src/connector/connector.ts`        | The seam the world is read through                                     |
@@ -41,6 +41,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 | Plans                | `src/plans/`                        | The multi-PR planning funnel and its reconciliation                    |
 | Worktrees / git      | `src/worktree/`, `src/git/`         | Per-branch checkouts, and the read-only git observer                   |
 | Escalations          | `src/escalation/`                   | The human-in-the-loop inbox                                            |
+| Crash recovery       | `src/agents/recoveryDesk.ts`        | Parks agents orphaned by a restart, and holds the pulse until decided  |
 | Error log            | `src/errorLog.ts`                   | The one path every caught failure funnels through                      |
 | Server               | `src/server/`                       | Fastify REST + `/ws`, and the state snapshot the cockpit reads         |
 | Cockpit              | `web/`                              | The React SPA                                                          |
@@ -122,10 +123,13 @@ owns it.
 2. `buildSystem(config)` — wires everything; opens the database and applies the schema + migrations.
 3. `system.mcp.listen()` when `mcp.enabled`. A false return is a supported outcome: agents then run
    on the sentinels alone.
-4. `reconcileAndResumeOnBoot(...)` — resumes or interrupts agents orphaned by the previous run,
-   **before** anything new is dispatched, so resumed agents occupy their concurrency slots first.
+4. `system.recovery.detect()` — parks every agent orphaned by the previous run for an operator's
+   restore / requeue / remove verdict. It resumes nothing and discards nothing, and while any verdict
+   is outstanding the harness holds every pulse, so nothing new is queued in front of work that was
+   already in flight. See [10](10-agent-runtimes.md#crash-recovery).
 5. `buildApp(system)` and `app.listen({ port, host: '0.0.0.0' })`.
 6. `harness.start()` (the heartbeat) and one immediate `harness.runCycle('boot')`.
 
 Shutdown on `SIGINT`/`SIGTERM`: stop the heartbeat, `agents.interruptAll()` (interrupt, not kill, so
-the next boot can resume), close the MCP server, close the HTTP server, close the store, exit 0.
+the next boot can offer those agents for restore), close the MCP server, close the HTTP server, close
+the store, exit 0.

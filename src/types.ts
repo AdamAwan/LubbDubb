@@ -304,7 +304,16 @@ export interface PriorityOverride {
   rank: number;
 }
 
-export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed';
+/**
+ * `crashed` is the one status no agent transition writes: it is stamped at boot on
+ * a row that still claimed to be live when its process died, and it means only
+ * that an operator's recovery verdict is outstanding (see
+ * {@link file://./agents/recoveryDesk.ts}). It is deliberately *not* live — a
+ * crashed agent stops counting toward the concurrency cap and stops reading as
+ * running in the cockpit — and it is not terminal either, since `restore` puts the
+ * same row back to `running`.
+ */
+export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed' | 'crashed';
 
 export interface Agent {
   id: string;

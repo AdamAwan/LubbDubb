@@ -336,34 +336,81 @@ exited marker, so a killed agent is never `reaped` and its worktree stays.
 `interruptAll` is used on **server shutdown**: agents are left in the resumable `interrupted` state and
 `waitingReason` and the task status are **preserved** as the signal for how to resume.
 
-## Resume on boot (PTY only)
+## Crash recovery
 
-`reconcileAndResumeOnBoot(store, agents, escalations, errors)` runs once at boot, before
-`harness.runCycle('boot')`, so resumed agents occupy their concurrency slots before new work is
-dispatched.
+A restart kills every agent. What happens to those agents is **an operator's decision, not the
+harness's**, and until each one is made the harness runs no cycles at all.
 
-**Candidate set:** agents in `starting` / `running` / `waiting` (a crash) or `interrupted` (a graceful
-shutdown) **whose task is still active**. A cockpit kill leaves the agent `killed` and its task
-`interrupted`, so it is excluded on both counts and stays dead. A prior boot's give-up leaves both
-`interrupted`, so it is not resurrected on every restart.
+### Detection
 
-For each candidate with a `sessionId` and an existing `cwd`, `agents.resume(agent, task)` re-attaches
-to the same Claude session in the same worktree, reusing the existing agent row, id and cwd. It mints
-a **fresh** spool key and a **fresh** MCP credential (the old ones died with the process), sheds the
-death markers from the row, and re-wires the same listeners `spawn` uses.
+`RecoveryDesk.detect()` (`src/agents/recoveryDesk.ts`) runs once at boot, before
+`harness.runCycle('boot')`. It resumes nothing and buries nothing: it finds the orphans and parks them.
 
-`waitingReason` is the state signal:
+**Candidate set** (`isRecoveryCandidate`, pure, `src/agents/crashRecovery.ts`): an agent in
+`starting` / `running` / `waiting` (a crash — the row still claimed to be live because nothing got the
+chance to write an ending), `interrupted` (a graceful `interruptAll` shutdown) or `crashed` (an earlier
+boot already parked it), **whose task is still outstanding** (`queued` / `running` / `waiting`). A
+cockpit kill leaves the agent `killed` and its task `interrupted`, so it is excluded on both counts and
+stays dead; a previous recovery's `requeue` or `remove` settles the task, so its agent is history rather
+than a question that reappears every boot.
 
-- **Was waiting** → `restoreWaiting`: the park is re-latched, the row and task go back to `waiting`,
-  and a `waiting` event is emitted only if no open escalation survives. The pre-restart escalation
-  persists, so a queued answer routes straight in once the session is live.
+Detection restamps only a row that still claimed to be live: status **`crashed`**, `pid` null, `endedAt`
+stamped. That status is deliberately neither live nor terminal — `countLiveAgents()` excludes it, so a
+dead row stops eating headroom and stops reading as running in the cockpit, while `restore` puts the
+same row back to `running`. An already-`interrupted` row is left alone, which is what preserves the
+crash / clean-shutdown distinction (`CrashedAgent.died`) without a column to hold it. A genuine crash is
+recorded to the error log under source `boot`; a clean shutdown is not, because nothing failed.
+
+The pending set is therefore the rows themselves, not state held in the desk: it survives a second
+restart, two cockpits cannot disagree about it, and `detect()` is idempotent.
+
+### The hold
+
+`Harness.runCycle` asks `recovery.pendingCount()` **before anything else, including the world fetch**,
+and returns a report with `cycleId: 'held'` while it is non-zero. The reason it holds the whole pulse
+rather than dispatch alone: with undecided orphans the harness's model of its own fleet is wrong, so
+every verdict a pulse would reach — merges, replies, plan reconciliation — is reached against a fiction.
+The timer keeps running and the question is re-asked each beat, so the pulse resumes on its own the
+moment the last decision lands; there is no un-hold to remember.
+
+### The three verdicts
+
+`RecoveryDesk.decide(agentId, verdict)`, reached from `POST /api/recovery/:agentId`.
+
+| Verdict   | Effect                                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `restore` | `agents.resume(agent, task)` — re-attach to the same session in the same worktree. Offered only when `restorable`.        |
+| `requeue` | Retire agent (`interrupted`) and task (`interrupted`), dismiss its escalations, and file a **job** carrying the work.     |
+| `remove`  | Retire agent and task, dismiss its escalations. Nothing is queued; the branch and worktree are kept.                      |
+
+`restorability` (pure) decides whether restore is on offer and carries the reason when it is not — a
+runtime that cannot resume (anything but PTY; stream-JSON resume does not exist), a row with no
+`sessionId`, or a worktree no longer on disk. The cockpit shows that reason rather than hiding the
+button. A refused or failed restore is **not** a decision: the row stays `crashed`, so requeue and remove
+remain available and the hold stands.
+
+A `restore` re-attaches exactly as before: the same agent row, id and cwd, a **fresh** spool key and MCP
+credential (the old ones died with the process), the death markers shed, and the same listeners `spawn`
+wires. `waitingReason` is the state signal:
+
+- **Was waiting** → `restoreWaiting`: the park is re-latched, the row and task go back to `waiting`, and
+  a `waiting` event is emitted only if no open escalation survives. The pre-restart escalation persists —
+  which is why detection dismisses nothing — so a queued answer routes straight in once the session is
+  live.
 - **Was mid-work** → the `buildResumeMessage()` nudge is delivered after the boot delay.
 
-Best-effort by contract: no session id, a missing worktree, a non-PTY runtime, or a throw all fall back
-to marking agent and task `interrupted` and cascade-dismissing the now-orphaned escalations. A resume
-failure is recorded but never blocks boot. Stream-JSON resume is out of scope.
+`requeue` files a job rather than resetting the task, and that is forced rather than chosen: a `queued`
+task with no agent is *active* to `activeOrigins`, `findActiveTaskByOrigin` and `findActiveTaskByBranch`
+alike, so parking the work there would wedge its origin and branch shut for good. The job
+(`requeueJobRequest`, pure) carries the original prompt verbatim, plus a preamble naming the origin, the
+branch that may already carry commits, and the crashed agent's last `note_progress` line. Its origin is
+`job:<id>`, so the link back to the original origin is provenance in the prompt, not a ref the gates key
+on.
 
-`spawn` and `resume` share their listener wiring — change one, change both. Tests: `test/resume.test.ts`.
+Every verdict, and the hold itself, is recorded in the decision log under cycle id `crash-recovery`.
+
+`spawn` and `resume` share their listener wiring — change one, change both. Tests:
+`test/crashRecovery.test.ts`, `test/resume.test.ts`.
 
 ## Usage capture
 

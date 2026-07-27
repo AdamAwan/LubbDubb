@@ -363,6 +363,31 @@ export interface ErrorLogEntry {
   createdAt: string;
 }
 
+/** What an operator can do with an agent that did not survive the last run. */
+export type RecoveryVerdict = 'restore' | 'requeue' | 'remove';
+
+/** One agent orphaned by a crash or a shutdown, awaiting a verdict. */
+export interface CrashedAgent {
+  agentId: string;
+  taskId: string;
+  title: string;
+  kind: string;
+  originRef: string | null;
+  branch: string | null;
+  cwd: string;
+  /** `crashed` — the process fell over; `interrupted` — it was shut down cleanly. */
+  died: 'crashed' | 'interrupted';
+  /** The question it was parked on when it went, if it was parked on one. */
+  waitingReason: string | null;
+  /** Its last `note_progress` line — the best account there is of how far it got. */
+  note: string | null;
+  startedAt: string;
+  detectedAt: string | null;
+  restorable: boolean;
+  /** Why restore is not on offer, in the operator's terms. Null when it is. */
+  restoreBlocked: string | null;
+}
+
 export interface AppState {
   config: {
     heartbeatIntervalMs: number;
@@ -402,6 +427,13 @@ export interface AppState {
   /** What agents noticed outside their own tasks, newest first. Optional for older servers. */
   findings?: Finding[];
   escalations: Escalation[];
+  /**
+   * Agents the previous run left orphaned, each awaiting a restore / requeue /
+   * remove. **A non-empty list means the harness is running no cycles at all**, so
+   * the cockpit draws it as a blocking banner rather than one more panel. Optional
+   * so an older server simply shows none.
+   */
+  recovery?: CrashedAgent[];
   /** Acts put to a human, newest first. Optional so an older server degrades to plain escalations. */
   proposals?: Proposal[];
   decisions: Decision[];

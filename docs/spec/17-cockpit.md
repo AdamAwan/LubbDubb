@@ -38,6 +38,13 @@ elapsed since the last pulse), a live/offline connection chip, the usage chip, t
 
 ### Above the grid
 
+- **`RecoveryPanel`** — rendered above everything else when `state.recovery` is non-empty: one card per
+  agent the previous run orphaned, with **Restore** / **Requeue** / **Remove**. A banner rather than a
+  panel because while it is up the harness runs **no cycles at all**, so every other surface on the page
+  is stale for the same one reason — and the heartbeat countdown in the top bar reads `pulse held`
+  instead of counting down to a pulse that will not fire. Restore is replaced by the reason it cannot be
+  offered (`restoreBlocked`) rather than hidden. Each card shows how the run ended (crashed vs shut
+  down), the agent's last progress note, and the question it was parked on if it was parked on one.
 - **`InjectPanel`** — rendered **only** when `state.config.injectable`, i.e. some capability uses the
   `fake` provider. A real-integration deployment does not see it, and the route refuses anyway.
 - **`LaunchPanel`** — queue an operator job (prompt, optional title, code/desk, optional branch) and

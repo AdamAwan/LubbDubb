@@ -15,6 +15,7 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { findingJobRequest } from '../mcp/findings.js';
+import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { watchLabelsFor } from '../watchLabels.js';
@@ -106,7 +107,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // artifact route opts in because it reads files off disk.
   await app.register(rateLimit, { global: false });
 
-  const { store, connector, harness, agents, escalations, proposals, permissions, config, errors } = system;
+  const { store, connector, harness, agents, escalations, proposals, permissions, recovery, config, errors } = system;
   // The watch/ignore label pair the cockpit's toggles write and the gates read.
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
 
@@ -461,10 +462,20 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // A permission request is the same shape of problem: the agent is blocked inside
     // a tool call, so free text can't be branched on and answering here would type
     // into a session that isn't at a prompt. Name the route that does settle it.
-    const perm = store.getEscalation(id);
-    if (perm?.context?.permission)
+    const item = store.getEscalation(id);
+    if (item?.context?.permission)
       return reply.code(409).send({
         error: `this item is a permission request — allow or deny it via /api/escalations/${id}/permission`,
+      });
+    // Third arm, same shape: the agent that asked this is dead and awaiting a
+    // recovery verdict, so there is nothing to type into. Answering would route
+    // nowhere and settle the item, losing the question — which the operator would
+    // want back if they choose to restore.
+    if (item?.agentId && recovery.isPending(item.agentId))
+      return reply.code(409).send({
+        error:
+          `the agent that asked this crashed — decide its recovery via ` +
+          `/api/recovery/${item.agentId} first (restore keeps this question open)`,
       });
     try {
       const result = escalations.answer(id, response);
@@ -513,6 +524,29 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
     hub.broadcast({ type: 'dirty' });
     return { ok: true, ...result };
+  });
+
+  // Decide what happens to an agent the previous run left orphaned. **Until every
+  // one of these is answered the harness runs no cycles at all**, so this route is
+  // the only thing that can un-stick a booted-after-a-crash harness — which is why
+  // it settles the verdict inline (like a proposal accept) rather than emitting an
+  // action for a pulse that cannot run to pick up.
+  //
+  // A refusal is a 409 with the reason, and leaves the item pending: a restore the
+  // runtime declines is not a decision, and the operator still has requeue and
+  // remove. The cycle is kicked only once the *last* decision lands, since one
+  // kicked while others are outstanding would just return the hold.
+  app.post('/api/recovery/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { verdict } = (req.body ?? {}) as { verdict?: unknown };
+    if (!isRecoveryVerdict(verdict))
+      return reply.code(400).send({ error: "verdict must be 'restore', 'requeue' or 'remove'" });
+    const result = recovery.decide(id, verdict);
+    if (!result.ok) return reply.code(409).send({ error: result.error });
+    hub.broadcast({ type: 'world:changed' });
+    const remaining = recovery.pendingCount();
+    const report = remaining === 0 ? await harness.runCycle('manual') : undefined;
+    return { ok: true, ...result.outcome, remaining, report };
   });
 
   app.post('/api/agents/:id/respond', async (req, reply) => {
@@ -649,7 +683,7 @@ function artifactMime(file: string): string {
 }
 
 export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (flagId: string) => string }) {
-  const { store, connector, config, runtimeControl, harness } = system;
+  const { store, connector, config, runtimeControl, harness, recovery } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
   // getState is async on the interface, but FakeConnector is synchronous under
   // the hood; read the same persisted world directly for a snapshot.
@@ -742,6 +776,12 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
       // Live, mutable dispatch controls — the cockpit reads these (not the frozen
       // config block above) for the current cap and pause state.
       control,
+      // Agents the previous run left orphaned, each awaiting restore / requeue /
+      // remove. A non-empty list means the harness is running **no cycles**, which
+      // is why the cockpit draws it as a blocking banner rather than one more
+      // panel: the absence of activity everywhere else has exactly one cause, and
+      // it is this.
+      recovery: recovery.pending(),
       // Fold each PR's signals into a health verdict, and each issue's gates into
       // a pickup verdict, so the cockpit can show *why* an item is stuck or
       // untouched rather than leaving it implied by the absence of activity.

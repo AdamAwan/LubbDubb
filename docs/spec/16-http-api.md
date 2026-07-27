@@ -158,7 +158,9 @@ Returns `{ ok: true, escalation, routing }`, where `routing` is `typed_into_agen
 tied to a live agent, and the answer went straight into its session) or `queued_for_dispatch` (the
 answer is recorded and the next cycle acts on it). **Also 409 when the item is a permission request**
 (`context.permission`, issue #130) — the agent is blocked in a tool call, not at a prompt, so the
-error names the permission route below.
+error names the permission route below. **Also 409 when the agent that asked it is awaiting a crash
+recovery decision** — it is dead, so there is nothing to type into, and answering would settle a
+question a `restore` is about to hand back to the same agent. The error names the recovery route.
 
 ### `POST /api/escalations/:id/permission`
 
@@ -167,6 +169,21 @@ Resolves the blocked `--permission-prompt-tool` call with the operator's verdict
 item; the same live agent then continues (allow) or reads the denial (deny). 400 when `allow` is not a
 boolean; **409 when no pending permission request is attached** (already decided, or the agent died
 first). Returns `{ ok: true, allowed }`.
+
+### `POST /api/recovery/:agentId`
+
+Body `{verdict}`, one of `restore` / `requeue` / `remove` — what happens to an agent the previous run
+left orphaned (see [10](10-agent-runtimes.md#crash-recovery)). **While any of these is outstanding the
+harness runs no cycles at all**, so this route is the only thing that can un-hold a booted-after-a-crash
+harness; it therefore applies the verdict inline rather than emitting an action for a pulse that cannot
+run to pick it up.
+
+400 on an unknown verdict. **409 when the agent is not awaiting a decision** (already decided, or never
+a candidate), and **409 when the verdict cannot be applied** — a `restore` for an agent with no session
+id, no worktree, or on a runtime that cannot resume. A refusal is not a decision: the item stays
+pending, so `requeue` and `remove` are still available. Returns
+`{ ok: true, verdict, agentId, taskId, detail, job?, remaining, report? }`, where `job` is the job a
+`requeue` filed and `report` is the cycle run when `remaining` reaches 0.
 
 ### `POST /api/agents/:id/respond`
 
@@ -206,6 +223,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `overlaps`      | Paths two concurrently-live code agents wrote.                                                             |
 | `findings`      | Every finding.                                                                                             |
 | `escalations`   | Every escalation.                                                                                          |
+| `recovery`      | Agents the previous run orphaned, each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**. |
 | `decisions`     | The last 100 decisions.                                                                                    |
 | `upcoming`      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher. |
 | `worldEvents`   | The last 100 world events.                                                                                 |
