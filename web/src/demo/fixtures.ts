@@ -27,6 +27,7 @@ export function buildDemoState(): DemoSeed {
       injectable: true,
     },
     control: { cap: 3, paused: false },
+    worldObservedAt: ago(0),
     world: {
       takenAt: ago(0),
       pullRequests: [

@@ -369,6 +369,9 @@ class DemoServer {
 
   private dirty(): void {
     this.state.world.takenAt = new Date().toISOString();
+    // The real snapshot's world is whatever the last pulse observed, so the demo
+    // moves its observation stamp with the world it is pretending to re-read.
+    this.state.worldObservedAt = this.state.world.takenAt;
     this.emit({ type: 'dirty' });
   }
 
@@ -686,6 +689,8 @@ class DemoServer {
     if (!this.beatTimer) {
       const beat = this.state.config.heartbeatIntervalMs;
       this.beatTimer = setInterval(() => {
+        // A pulse is what observes the world, so the stamp moves with the beat.
+        this.state.worldObservedAt = new Date().toISOString();
         this.emit({ type: 'cycle:end', cycleId: this.id('cycle'), rationale: 'heartbeat' });
       }, beat);
     }

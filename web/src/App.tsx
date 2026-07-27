@@ -19,9 +19,16 @@ import { RecoveryPanel } from './components/RecoveryPanel.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
 import { AsyncButton } from './components/AsyncButton.js';
-import { statusDot, refLink } from './components/util.js';
+import { statusDot, refLink, relTime } from './components/util.js';
 import { watchBucket, type WatchBucket } from './worldBuckets.js';
 import { useNow } from './hooks.js';
+
+/**
+ * How long a refetch waits so a burst of live signals collapses into one request.
+ * Short enough to read as immediate, long enough to swallow the four signals one
+ * pulse emits and the per-file ones an agent's writes emit.
+ */
+const REFRESH_COALESCE_MS = 200;
 
 /**
  * What the cockpit shows when the harness refuses its credential. Worth a screen
@@ -74,6 +81,12 @@ export function App() {
   const lastPulse = useRef<number>(Date.now());
   const now = useNow(1000);
 
+  // Coalescing state for `scheduleRefresh`: the pending trailing timer, whether a
+  // fetch is in flight, and whether a signal arrived while one was.
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshing = useRef(false);
+  const refreshQueued = useRef(false);
+
   const refresh = useCallback(async () => {
     try {
       setState(await api.getState());
@@ -86,6 +99,37 @@ export function App() {
     }
   }, []);
 
+  /**
+   * Refetch the whole snapshot, coalescing bursts into one request. Every live
+   * signal lands here, and the server pairs a coarse `dirty` with almost every
+   * specific frame — so one pulse alone is four signals, and `agents.on('files')`
+   * fires once *per file an agent writes*. Fetching per signal made the request
+   * rate a function of agent tool-call volume.
+   *
+   * At most one request in flight and at most one queued behind it, plus a short
+   * trailing window so a burst collapses. The queued one always runs: coalescing
+   * may merge the signals in between but must never drop the last, or the cockpit
+   * settles on a state older than what it was told about.
+   */
+  const scheduleRefresh = useCallback(() => {
+    if (refreshing.current) {
+      refreshQueued.current = true;
+      return;
+    }
+    if (refreshTimer.current) return; // a trailing fetch is already pending
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null;
+      refreshing.current = true;
+      void refresh().finally(() => {
+        refreshing.current = false;
+        if (refreshQueued.current) {
+          refreshQueued.current = false;
+          scheduleRefresh();
+        }
+      });
+    }, REFRESH_COALESCE_MS);
+  }, [refresh]);
+
   useEffect(() => {
     void refresh();
     const ws = connectWs(
@@ -97,7 +141,7 @@ export function App() {
           e.type === 'control:changed' ||
           e.type === 'world:events'
         )
-          void refresh();
+          scheduleRefresh();
         else if (e.type === 'agent:output' && e.agentId && e.delta) {
           const cur = liveOutput.current.get(e.agentId) ?? '';
           // Full output now only arrives for the subscribed (open) agent, so we
@@ -110,7 +154,7 @@ export function App() {
           forceRender((n) => n + 1);
         } else if (e.type === 'cycle:end') {
           lastPulse.current = Date.now();
-          void refresh();
+          scheduleRefresh();
         }
       },
       (isConnected) => setConnected(isConnected),
@@ -119,8 +163,9 @@ export function App() {
     return () => {
       ws.close();
       wsRef.current = null;
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
-  }, [refresh]);
+  }, [refresh, scheduleRefresh]);
 
   // Subscribe to full output only while a drawer is open; unsubscribe on close/switch.
   useEffect(() => {
@@ -212,6 +257,16 @@ export function App() {
               {crashedAgents.length > 0 ? 'pulse held' : `next pulse ~${nextIn}s`}
             </span>
           </div>
+          {/* The world here is the baseline the last pulse persisted, not a live
+              provider read — so its age is stated rather than implied. A reading
+              that keeps ageing past an interval is the visible symptom of pulses
+              failing, which no countdown can show. */}
+          <span
+            className="chip"
+            title="The world as the last pulse observed it — the cockpit itself never polls the provider"
+          >
+            world {state.worldObservedAt ? relTime(state.worldObservedAt, now) : 'not yet observed'}
+          </span>
           <span className={`chip ${connected ? 'ok' : 'bad'}`}>
             <span className={`dot ${connected ? 'green' : 'red'}`} /> {connected ? 'live' : 'offline'}
           </span>

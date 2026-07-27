@@ -413,6 +413,13 @@ export interface AppState {
     cap: number;
     paused: boolean;
   };
+  /**
+   * When `world` was observed. The cockpit's world is the baseline the last pulse
+   * persisted — not a live provider read, which would put a provider fan-out
+   * behind every refetch — so its age is shown rather than implied. Null before
+   * the first cycle, when the world is empty.
+   */
+  worldObservedAt: string | null;
   world: WorldSnapshot;
   tasks: Task[];
   /**
