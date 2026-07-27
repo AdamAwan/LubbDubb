@@ -8,6 +8,7 @@ import { UsageChip } from '../../components/UsageChip.js';
 import { PlanPanel } from '../../components/PlanPanel.js';
 import { FindingsPanel } from '../../components/FindingsPanel.js';
 import { RecoveryPanel } from '../../components/RecoveryPanel.js';
+import { WorldSummary } from '../../components/WorldSummary.js';
 import { AsyncButton } from '../../components/AsyncButton.js';
 import { relTime } from '../../components/util.js';
 import { SkinPicker } from '../SkinPicker.js';
@@ -18,7 +19,6 @@ import { UpNext } from './components/UpNext.js';
 import { OverlapPanel } from './components/OverlapPanel.js';
 import { ActivityFeed } from './components/ActivityFeed.js';
 import { ErrorsPanel } from './components/ErrorsPanel.js';
-import { WorldSummary } from './components/WorldSummary.js';
 
 /**
  * The cockpit as it has always looked: three columns, fleet on the left, your

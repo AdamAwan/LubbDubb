@@ -39,6 +39,12 @@ What stops that becoming N divergent cockpits is the split on **behaviour weight
 what another skin would replace wholesale. Resolved by putting the _call_ on `CockpitActions` and
 leaving only the drag UI skin-side.
 
+`WorldSummary` moved the other way — out of Classic and into `components/` when the second skin
+arrived. Most of it is drawing, but the watch/ignore toggles and the conclusion verdict are operator
+controls with refusal rules behind them, which is the side of the split they belong on. A skin
+reimplementing it would sooner or later ship a world view missing a toggle, and switching skins would
+silently take a capability away.
+
 **Skins never import `api.js`.** Every mutation is enumerated on `CockpitActions`, pre-bound, so a
 skin cannot grow a capability another lacks — a difference that would surface only as a button
 existing in one theme. Asserted structurally in `test/cockpitSkins.test.ts`.
@@ -52,6 +58,44 @@ and skins define the tokens. Beyond colour that means `--r-*` (radius — the on
 that genuinely blocks a treatment, since a square-cornered skin is unreachable by palette alone),
 `--font-ui|mono|display`, and `--border-hi`/`--border-lo` so a bevel is expressible. Classic points
 both border tokens at `--border`, so its panels stay flat.
+
+A skin's stylesheet is imported from `main.tsx`, not from the skin's own module. A `.css` import
+inside a skin would be invisible to `tsx`, which has no CSS loader and would throw when
+`test/cockpitSkins.test.ts` pulls the skin modules in. Each sheet is scoped to its own `[data-skin]`
+selector, so loading all of them costs a few kilobytes and collides with nothing.
+
+### The skins
+
+**Classic** — three columns: fleet, your inbox, the queue and the feeds. Rounded, cool, flat.
+
+**Factory Floor** (`skins/factory/`) — the dispatcher's decision drawn as a production line. The
+fleet cap is a roboport with a pad per slot, each slot is a machine bay, the "Up next" queue is a
+belt of crates, and the headroom cut is a hazard-striped gate the belt backs up behind. It exists to
+make one claim visible that Classic makes you assemble from three panels: **a bay runs only when it
+has both an item and a bot**.
+
+Three properties keep it a view rather than a costume, and they are what to preserve when changing
+it:
+
+- **Nothing is drawn that isn't in the snapshot.** Every bay is a live agent, every crate is a
+  `QueueItem`, every launch is a row in `closedPullRequests`. There is no progress bar, because
+  nothing reports progress — a bay shows elapsed time instead. The rocket fires only when the
+  retained window actually contains a merge.
+- **The belt is the harness running, so it stops when the harness does** (paused, or held on
+  recovery), as does the radar sweep. A belt still moving while no cycle will run is the one
+  genuinely misleading thing this layout could draw, so `test/factorySkin.test.ts` asserts it rather
+  than trusting the CSS. The same test pins the gate to the dispatching prefix — a gate that drifted
+  off the cut would be confidently wrong, which is worse than no picture.
+- **The vocabulary is stated once**, in the pure `factory/vocabulary.ts`, so the belt and the bay
+  cannot disagree about what a plan part looks like.
+
+Red means exactly one thing on that floor: an agent parked on a question only you can answer.
+
+The icons are original marks in `Sprite.tsx`. The game the treatment nods at owns its art outright
+and licenses none of it for redistribution, so none of it is used or traced; what carries the
+reference is the vocabulary — a bay, an inserter, a roboport — which is nobody's property. The
+display face is Bahnschrift/DIN Alternate, already present on Windows and macOS respectively, rather
+than a bundled webfont.
 
 ### Choosing one
 
@@ -73,6 +117,23 @@ every registered skin against the demo fixtures, the unknown-id fallback, and a 
 of Classic's markup (`test/fixtures/classic-markup.html`, regenerate with `UPDATE_GOLDEN=1`). The
 golden fixes the static tree only — not effects, not CSS — and its value is forward-looking: a
 change to Classic's DOM has to be deliberate enough to regenerate it.
+
+The golden render is wrapped in a **clock, locale and timezone pin**. The clock is obvious
+(`buildDemoState` stamps relative to `Date.now()`), the other two less so: `UsageChip` formats the
+rate-limit reset with `toLocaleTimeString([])`, i.e. the _runtime's_ locale and zone, so the same
+instant is `14:20` on one machine and `02:20 PM` on another and the golden silently records whichever
+laptop generated it. It did — the test was red on the Linux runner from the day it landed while
+passing locally. The formatters are pinned rather than the component changed, because which clock
+format an operator sees is correctly their machine's business; it is only the golden that needs it to
+be nobody's. An assertion beside the comparison fails if the pin ever stops taking effect.
+
+`test/factorySkin.test.ts` covers that skin's pure vocabulary exhaustively (every `QueueItem.status`
+has a crate label; only `waiting` reads as jammed) plus the two renders where being wrong would be
+worse than being absent: the belt stopping, and the gate tracking the cut.
+
+A skin registered but not otherwise tested still gets the conformance render for free, which is the
+point of driving it off `SKINS` — it is asserted on the day it is written rather than the day it
+breaks.
 
 ## Data flow
 

@@ -1,8 +1,19 @@
+/*
+ * Shared, not skin-owned — the one panel that moved back across the line when a
+ * second skin arrived.
+ *
+ * It looks like drawing, and most of it is; but the watch/ignore toggles and the
+ * conclusion verdict are operator controls with refusal rules behind them, and
+ * those are what the shared/skinned split is drawn on. A skin that reimplemented
+ * this would sooner or later ship a world view missing a toggle, and flipping
+ * skins would silently take a capability away. Tinting it through the tokens is
+ * the cost of not having that happen.
+ */
 import { useState } from 'react';
-import type { AppState, Issue, PullRequest } from '../../../types.js';
-import { watchBucket, type WatchBucket } from '../../../worldBuckets.js';
-import { statusDot, refLink } from '../../../components/util.js';
-import { AsyncButton } from '../../../components/AsyncButton.js';
+import type { AppState, Issue, PullRequest } from '../types.js';
+import { watchBucket, type WatchBucket } from '../worldBuckets.js';
+import { statusDot, refLink } from './util.js';
+import { AsyncButton } from './AsyncButton.js';
 
 /**
  * The per-issue pickup chip (mirrors the PR health chip): what the harness is

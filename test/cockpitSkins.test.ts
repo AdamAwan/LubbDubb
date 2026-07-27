@@ -28,29 +28,60 @@ function walk(dir: string): string[] {
   });
 }
 
+const NOW = Date.parse('2026-01-01T12:00:00.000Z');
+
+type LocaleFormatter = (locale?: Intl.LocalesArgument, opts?: Intl.DateTimeFormatOptions) => string;
+
 /**
- * Fixture state with the clock pinned. `buildDemoState` stamps every timestamp
- * relative to `Date.now()`, so without this the rendered relative times ("4m
- * ago") drift between runs and no golden could exist.
+ * Run `fn` against a pinned clock, locale and timezone.
+ *
+ * Two separate machine dependencies, both of which the golden would otherwise
+ * bake in:
+ *
+ *  - `buildDemoState` stamps every timestamp relative to `Date.now()`, so the
+ *    rendered relative times ("4m ago") drift between runs.
+ *  - `UsageChip` formats the rate-limit reset with `toLocaleTimeString([])` —
+ *    the *runtime's* locale and zone. The same instant renders `14:20` on a
+ *    24-hour machine and `02:20 PM` on an en-US one, so a golden generated on
+ *    one developer's laptop fails on CI for a reason that has nothing to do with
+ *    the DOM. (It did: this test was red on the Linux runner from the day it
+ *    landed, while passing locally.)
+ *
+ * The formatters are pinned rather than the component changed, because which
+ * clock format an operator sees is correctly their machine's business — it is
+ * only the *golden* that needs it to be nobody's.
  */
-function frozenView(now = Date.parse('2026-01-01T12:00:00.000Z')) {
+function pinned<T>(fn: () => T): T {
   const realNow = Date.now;
-  Date.now = () => now;
+  const proto = Date.prototype as unknown as Record<string, LocaleFormatter>;
+  const real: Record<string, LocaleFormatter> = {};
+  Date.now = () => NOW;
+  for (const name of ['toLocaleTimeString', 'toLocaleDateString', 'toLocaleString']) {
+    real[name] = proto[name]!;
+    proto[name] = function (this: Date, _locale, opts) {
+      return real[name]!.call(this, 'en-GB', { timeZone: 'UTC', ...opts });
+    };
+  }
   try {
-    const { state } = buildDemoState();
-    return buildViewModel({
-      state,
-      now,
-      connected: true,
-      demo: true,
-      selected: null,
-      liveOutput: new Map(),
-      tails: new Map(),
-      lastPulseAt: now,
-    });
+    return fn();
   } finally {
     Date.now = realNow;
+    for (const name of Object.keys(real)) proto[name] = real[name]!;
   }
+}
+
+function frozenView() {
+  const { state } = buildDemoState();
+  return buildViewModel({
+    state,
+    now: NOW,
+    connected: true,
+    demo: true,
+    selected: null,
+    liveOutput: new Map(),
+    tails: new Map(),
+    lastPulseAt: NOW,
+  });
 }
 
 /** Every action a no-op: rendering must never need one, and a call would be a bug. */
@@ -79,11 +110,13 @@ test('no skin imports the api client', () => {
  */
 test('every registered skin renders the demo world', () => {
   assert.ok(SKINS.length > 0, 'at least one skin must be registered');
-  const view = frozenView();
-  for (const skin of SKINS) {
-    const markup = renderToStaticMarkup(createElement(skin.Root, { view, actions: INERT }));
-    assert.ok(markup.length > 1000, `${skin.id} rendered almost nothing`);
-  }
+  pinned(() => {
+    const view = frozenView();
+    for (const skin of SKINS) {
+      const markup = renderToStaticMarkup(createElement(skin.Root, { view, actions: INERT }));
+      assert.ok(markup.length > 1000, `${skin.id} rendered almost nothing`);
+    }
+  });
 });
 
 /** A stored id nobody recognises is a normal thing to find, not an error. */
@@ -104,8 +137,13 @@ test('an unknown stored skin id falls back instead of failing', () => {
  * Regenerate with `UPDATE_GOLDEN=1 npm test`.
  */
 test('classic renders its golden markup', () => {
-  const view = frozenView();
-  const markup = renderToStaticMarkup(createElement(resolveSkin('classic').Root, { view, actions: INERT }));
+  const markup = pinned(() =>
+    renderToStaticMarkup(createElement(resolveSkin('classic').Root, { view: frozenView(), actions: INERT })),
+  );
+
+  // The pin above is what makes the bytes portable; assert it took, so a future
+  // refactor that drops it fails here rather than eight hours later on CI.
+  assert.doesNotMatch(markup, /\d\d:\d\d\s?(AM|PM)/i, 'a 12-hour clock leaked in — the locale pin is not in effect');
 
   if (process.env.UPDATE_GOLDEN === '1' || !existsSync(GOLDEN)) {
     writeFileSync(GOLDEN, markup, 'utf8');
