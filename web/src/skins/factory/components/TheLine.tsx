@@ -20,9 +20,18 @@ const BAY_W = 172;
 const BAY_H = 106;
 const BAY_Y = 20;
 const BAY_X = [238, 460, 682, 904];
-/** Item width plus the flex gap — the belt's pitch, shared with the CSS. */
+/** Crate width, and crate width plus the flex gap — the belt's pitch, shared with the CSS. */
+const ITEM_W = 128;
 const PITCH = 140;
 const BELT_LEFT = 12;
+/**
+ * The gate fills the gap _between_ two crates, so it is exactly that gap wide.
+ * Centring a wider bar on the boundary is what put it over the first waiting
+ * crate's edge; a bar the width of the gap can only ever sit in it.
+ */
+const GATE_W = PITCH - ITEM_W;
+/** Fixed so the label can be centred on the gate and clamped to the stage. */
+const GATE_LBL_W = 76;
 
 interface LineProps {
   live: Agent[];
@@ -84,7 +93,12 @@ export function TheLine({ live, taskFor, cap, items, now, stopped, onOpen }: Lin
   const overflow = Math.max(0, live.length - slots);
 
   const dispatching = items.filter((i) => i.status === 'dispatching').length;
-  const gateX = BELT_LEFT + dispatching * PITCH - 7;
+  // The left edge of the first crate that is *not* boarding, backed off by the
+  // gate's own width: the gate lands in the gap ahead of it rather than on it.
+  const gateX = BELT_LEFT + dispatching * PITCH - GATE_W;
+  // Centred on the bar, but clamped to the stage — `.fx-line` clips, so an
+  // unclamped label loses its first word whenever the gate is hard left.
+  const gateLblX = Math.min(Math.max(gateX + GATE_W / 2 - GATE_LBL_W / 2, 2), 1120 - GATE_LBL_W - 2);
 
   return (
     <section className="fx-line-wrap fx-bev">
@@ -128,10 +142,12 @@ export function TheLine({ live, taskFor, cap, items, now, stopped, onOpen }: Lin
                   );
                 })}
               </g>
-              <text className="fx-hud" x="96" y="148" textAnchor="middle">
+              {/* Pulled up off the belt: the gate label shares this band, and at a
+                  low cut it lands right here. */}
+              <text className="fx-hud" x="96" y="144" textAnchor="middle">
                 Roboport
               </text>
-              <text className="fx-mono on" x="96" y="162" textAnchor="middle">
+              <text className="fx-mono on" x="96" y="158" textAnchor="middle">
                 {live.length} out · {Math.max(0, cap - live.length)} pad
                 {cap - live.length === 1 ? '' : 's'} free
               </text>
@@ -289,11 +305,11 @@ export function TheLine({ live, taskFor, cap, items, now, stopped, onOpen }: Lin
 
           {items.length > 0 && (
             <>
-              <div className="fx-gate" style={{ left: gateX }} aria-hidden="true" />
-              <p className="fx-gate-lbl" style={{ left: gateX - 26 }}>
-                Gate
-                <br />
-                {cap} max
+              {/* `${}px` rather than a bare number: React drops the unit on 0,
+                  and a gate with nothing boarding sits at exactly 0. */}
+              <div className="fx-gate" style={{ left: `${gateX}px` }} aria-hidden="true" />
+              <p className="fx-gate-lbl" style={{ left: `${gateLblX}px` }}>
+                Gate · {cap} max
               </p>
             </>
           )}

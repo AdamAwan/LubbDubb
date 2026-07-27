@@ -797,6 +797,13 @@ body {
   padding: 1px 8px;
   font-size: 11px;
 }
+/* Only the first control claims the free space. Flexbox splits it between every
+   `auto` margin in a row, so a row with three of them (an issue: watch, finished,
+   more work) staggered them across the row instead of grouping them at the right,
+   landing each button somewhere different depending on how long the title was. */
+.world-toggle ~ .world-toggle {
+  margin-left: 0;
+}
 
 .auditlog {
   max-height: 75vh;

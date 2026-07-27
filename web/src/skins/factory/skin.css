@@ -477,20 +477,26 @@
 .fx-gate {
   position: absolute;
   bottom: 0;
-  width: 14px;
+  /* The gap between two crates, so the bar can only sit in it. Shared with
+     `GATE_W` in TheLine.tsx, which positions it. */
+  width: 12px;
   height: 54px;
   background: repeating-linear-gradient(45deg, var(--accent) 0 5px, var(--border-lo) 5px 10px);
   border-left: 1px solid var(--border-hi);
   border-right: 1px solid var(--border-lo);
 }
+/* One line, in the lane between the roboport's caption and the inserter plates.
+   Two lines did not fit that lane, which is why the label used to overprint the
+   caption whenever the cut was far enough left to reach it. */
 .fx-gate-lbl {
   position: absolute;
-  bottom: 58px;
-  width: 66px;
+  bottom: 64px;
+  width: 76px;
   margin: 0;
   font-family: var(--font-mono);
   font-size: 8.5px;
-  line-height: 1.25;
+  line-height: 1;
+  white-space: nowrap;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent);
@@ -749,7 +755,11 @@
   padding: 8px 6px 6px;
   text-align: center;
 }
-.fx-silo svg {
+/* Child, not descendant: as a descendant selector this also matched the nested
+   `<svg>` the rocket is drawn in, overriding its width/height attributes with
+   the silo's full viewport — which rescaled the rocket 2.5x, pushed it off
+   centre and out through the frame. */
+.fx-silo > svg {
   width: 100%;
   height: auto;
   display: block;
