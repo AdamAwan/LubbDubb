@@ -825,8 +825,8 @@ preserve:
       (a finding is terminal either way, so only one job ever hangs off it); `ticket_ref` is a column
       on an **existing** table and therefore needs its `ensureColumns('findings', …)` entry.
     - **`link_ticket(ref)` closes the loop**, and identity is structural exactly as for
-      `report_finding`: the finding is resolved from the credential (`agent → task → its `job:<id>`
-origin → the finding that job was created for`), so the tool takes only a ref and an agent on any
+      `report_finding`: the finding is resolved from the credential (agent → task → its `job:<id>`
+      origin → the finding that job was created for), so the tool takes only a ref and an agent on any
       other task resolves to none. Same `parseFindingRef` as the finding's own ref (bare number
       refused — nothing here says whether `314` is an issue or a PR), and idempotence is in the write
       (`WHERE id=? AND status='filing'`), not in a read-then-check. Tests: `test/findingTickets.test.ts`.
