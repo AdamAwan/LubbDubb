@@ -1,4 +1,5 @@
-import type { Decision, Issue, Plan, PlanPart, PullRequest, Task } from '../types.js';
+import type { Decision, Issue, IssueDelivery, Plan, PlanPart, PullRequest, Task, WorldEvent } from '../types.js';
+import { deliveryHold } from '../delivery/delivery.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import {
   DEFAULT_PLANNING,
@@ -184,6 +185,7 @@ type IssuePickupStatusKind =
   | 'ignored' // carries the ignore tag — the operator said leave it alone
   | 'unwatched' // not opted in (no watch tag) or parked by a state gate
   | 'planning' // in the plan funnel — a verdict is owed, or it split into parts
+  | 'delivered' // assessed as delivered — parked until the world or the operator says otherwise
   | 'cooldown' // attempted recently; waiting out the re-dispatch gap
   | 'escalated' // attempt cap spent; parked on a human
   | 'blocked' // eligible, but no capacity (paused or cap reached)
@@ -219,6 +221,13 @@ export interface IssuePickupContext {
   /** Every plan's parts, so a `parts` verdict can report progress rather than a flat string. */
   planParts?: PlanPart[];
   planning?: PlanningPolicy;
+  /**
+   * Standing `delivered` verdicts and the world transitions that may have ended
+   * one — the same two lists rule 4 gates on, so the chip predicts it. Absent =
+   * nothing parked, which is every deployment until an issue is assessed.
+   */
+  deliveries?: IssueDelivery[];
+  deliverySignals?: WorldEvent[];
   /** Remaining dispatch slots this cycle (0 while paused). */
   headroom: number;
   paused: boolean;
@@ -291,6 +300,16 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
           : 'agent waiting on you';
     return { eligible: false, status: 'active', reasons: [reason] };
   }
+
+  // The harness's own park, asked *after* `has_pr` and `active`: a delivered issue
+  // that somehow has an open PR is honestly `has_pr` — the PR rules own it — and
+  // one with a live agent is honestly `active`. Same predicate rule 4 gates on, so
+  // the chip cannot promise what the next cycle refuses.
+  const held = deliveryHold(ctx.deliveries?.find((d) => d.originRef === origin) ?? null, issue, {
+    pickupStates: ctx.policy.pickupStates,
+    signals: ctx.deliverySignals,
+  });
+  if (held) return { eligible: false, status: 'delivered', reasons: [held] };
 
   const intrinsic = isIssuePickupEligible(issue, ctx.policy);
   if (!intrinsic.eligible) {

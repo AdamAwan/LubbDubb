@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { deliveryHold, deliverySignalQuery } from '../src/delivery/delivery.js';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import { issuePickupStatus } from '../src/dispatcher/issuePickup.js';
+import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { Issue, IssueDelivery, WorldEvent } from '../src/types.js';
 
 // The pure hold predicate: what a `delivered` verdict holds, and what ends it.
@@ -129,4 +132,93 @@ test('an off-vocabulary origin is never expired by a signal it cannot be matched
     deliveryHold(delivery({ originRef: 'job:7' }), issue(), { signals: [event({ ref: 'job:7' })] }),
     'the ask and the match narrow identically, which is why one private mapping owns both',
   );
+});
+
+// -- the gate, asked in both places off the one predicate ---------------------
+
+test('a standing verdict stops rule 4, and lifting it lets pickup through', async () => {
+  const world = {
+    takenAt: '2026-07-28T12:00:00.000Z',
+    pullRequests: [],
+    issues: [issue()],
+    stories: [],
+  };
+  const d = new RuleDispatcher();
+
+  const parked = await d.decide({
+    world,
+    tasks: [],
+    agents: [],
+    openEscalations: [],
+    queuedJobs: [],
+    recentDecisions: [],
+    steeringPriorities: [],
+    agentHeadroom: 3,
+    deliveries: [delivery()],
+  });
+  // Idleness is still a decision, so the cycle records a no_op — what must not be
+  // there is a dispatch.
+  assert.deepEqual(
+    parked.actions.map((a) => a.type),
+    ['no_op'],
+    'the issue is parked, so no pickup agent',
+  );
+
+  // The same world with a transition after the verdict: the park is over.
+  const released = await d.decide({
+    world,
+    tasks: [],
+    agents: [],
+    openEscalations: [],
+    queuedJobs: [],
+    recentDecisions: [],
+    steeringPriorities: [],
+    agentHeadroom: 3,
+    deliveries: [delivery()],
+    deliverySignals: [event()],
+  });
+  assert.equal(released.actions[0]?.type, 'dispatch_code_agent');
+  assert.equal((released.actions[0] as { originRef: string }).originRef, 'issue:12');
+});
+
+test('the chip and the rule answer the same question', () => {
+  const base = {
+    policy: { priorityLabels: {}, defaultPriority: 0 },
+    cooldown: DEFAULT_COOLDOWN,
+    now: '2026-07-28T12:00:00.000Z',
+    tasks: [],
+    recentDecisions: [],
+    openPrs: [],
+    headroom: 3,
+    paused: false,
+  };
+
+  const parked = issuePickupStatus(issue(), { ...base, deliveries: [delivery()] });
+  assert.equal(parked.eligible, false);
+  assert.equal(parked.status, 'delivered');
+  assert.match(parked.reasons[0] ?? '', /the assessor marked it delivered/);
+
+  const released = issuePickupStatus(issue(), { ...base, deliveries: [delivery()], deliverySignals: [event()] });
+  assert.equal(released.eligible, true, 'the same signal that un-holds the rule un-holds the chip');
+});
+
+test('an open PR or a live agent outranks the park — the honest reason wins', () => {
+  const base = {
+    policy: { priorityLabels: {}, defaultPriority: 0 },
+    cooldown: DEFAULT_COOLDOWN,
+    now: '2026-07-28T12:00:00.000Z',
+    tasks: [],
+    recentDecisions: [],
+    headroom: 3,
+    paused: false,
+    deliveries: [delivery()],
+  };
+
+  // A delivered issue that somehow has an open PR belongs to the PR rules, and
+  // saying "delivered" would send the operator looking in the wrong place.
+  const withPr = issuePickupStatus(issue(), {
+    ...base,
+    openPrs: [{ id: 'p', number: 40, title: 'X', branch: 'issue/12', ciStatus: 'passing', unresolvedComments: [] }],
+  });
+  assert.equal(withPr.status, 'has_pr');
 });

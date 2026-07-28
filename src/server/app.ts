@@ -20,6 +20,7 @@ import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../m
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
+import { deliverySignalQuery } from '../delivery/delivery.js';
 import { watchLabelsFor } from '../watchLabels.js';
 import {
   authRefusalHint,
@@ -940,6 +941,8 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
   // same rows rule 3b reads, so the chip and the rule can't disagree.
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
+  const deliveries = store.listDeliveries();
+  const deliveryWindow = deliverySignalQuery(deliveries);
   // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
   // below predicts what actually happens next cycle. The decision window (200)
   // and the headroom arithmetic mirror `Harness.runCycle`.
@@ -957,6 +960,10 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     plans,
     planParts,
     planning: config.planning,
+    // The harness's own park, read the same way `Harness.runCycle` reads it — the
+    // event query is null (and no read happens) until an issue has been assessed.
+    deliveries,
+    deliverySignals: deliveryWindow ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
     headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
     paused: control.paused,
   };

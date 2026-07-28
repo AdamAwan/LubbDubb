@@ -2,7 +2,7 @@ import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './d
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import { inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../prHealth.js';
-import type { Agent, Decision, Plan, PlanPart, PullRequest, Task } from '../types.js';
+import type { Agent, Decision, Issue, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import {
   isIssuePickupEligible,
   issueBranch,
@@ -17,6 +17,7 @@ import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } fro
 import type { DispatchRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { resolveIssueConclusion } from '../issueConclusion.js';
+import { deliveryHold } from '../delivery/delivery.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { PLAN_FILE } from '../plans/planDocument.js';
 import {
@@ -490,10 +491,24 @@ export class RuleDispatcher implements Dispatcher {
     // these, leave the rest" — untagged issues stay visible in the world, just
     // unacted-on — and order by label-encoded priority so the important ones claim
     // limited headroom first (tie-break by issue number for determinism).
+    // Standing `delivered` verdicts, keyed on the same `issue:<n>` origin. Unlike a
+    // conclusion this one gates: an assessed issue is parked until the world moves
+    // or the operator says otherwise. Asked through the same pure `deliveryHold`
+    // the cockpit chip asks, so the two can never disagree about an issue.
+    const deliveries = new Map((ctx.deliveries ?? []).map((d) => [d.originRef, d]));
+    const deliveryParked = (issue: Issue): boolean =>
+      deliveryHold(deliveries.get(issueOrigin(issue.number)) ?? null, issue, {
+        pickupStates: this.pickup.pickupStates,
+        signals: ctx.deliverySignals,
+      }) !== null;
+
     const eligibleIssues = ctx.world.issues
       .filter(
         (i) =>
-          i.state === 'open' && openPrForIssue(i, openPrs) === null && isIssuePickupEligible(i, this.pickup).eligible,
+          i.state === 'open' &&
+          openPrForIssue(i, openPrs) === null &&
+          !deliveryParked(i) &&
+          isIssuePickupEligible(i, this.pickup).eligible,
       )
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);

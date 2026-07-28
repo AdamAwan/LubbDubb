@@ -3,6 +3,7 @@ import type {
   Decision,
   Escalation,
   IssueConclusion,
+  IssueDelivery,
   Job,
   Plan,
   PlanPart,
@@ -67,6 +68,21 @@ export interface DispatchContext {
    * `src/issueConclusion.ts`).
    */
   conclusions?: IssueConclusion[];
+  /**
+   * Standing `delivered` verdicts, keyed on the same `issue:<n>` origin — the
+   * harness's own park, written by the assessor or the operator. Unlike a
+   * conclusion this **gates pickup**: rule 4 skips an issue whose verdict still
+   * stands. Absent/empty means nothing is parked, which is every deployment until
+   * an issue is assessed (see `src/delivery/delivery.ts`).
+   */
+  deliveries?: IssueDelivery[];
+  /**
+   * World transitions on the issues carrying a standing delivery verdict, since
+   * the oldest of them. What ends a park on a provider with no work-item states,
+   * narrowed by `deliverySignalQuery` so it is empty until an issue is assessed.
+   * Absent = nothing observed, which holds every verdict.
+   */
+  deliverySignals?: WorldEvent[];
   /** Optional operator hints, injected only as a corrective. */
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */
