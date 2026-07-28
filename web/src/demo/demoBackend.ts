@@ -9,6 +9,7 @@
 import type {
   AppState,
   Decision,
+  PromptTemplateView,
   Proposal,
   UnrecordedWorkView,
   WorkNodeView,
@@ -813,9 +814,15 @@ export const demoApi = {
   // keep the two API shapes interchangeable.
   getWorkRoots: () => Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[] }),
   getWorkSubtree: (_ref: string) => Promise.resolve({ nodes: [] as WorkNodeView[], refUrls: {} }),
+  // The prompt book lives in the server's template registry, and the web bundle
+  // deliberately imports no server code. Shipping a copy of eighteen prompts here
+  // to fill the demo panel would be a duplicate free to drift from the originals
+  // with nothing to catch it, so the demo shows an empty book and says so.
+  getPrompts: () => Promise.resolve({ dir: null, dispatcher: 'rule', templates: [] as PromptTemplateView[] }),
   // Nothing to file into either: the demo has no tracker, which is the same
   // reason the real route refuses when the issues provider is `fake`.
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
+  setWorkItemIgnored: (_ref: string, _ignored: boolean) => Promise.resolve({ ok: true as const }),
   pulse: () => getServer().pulse(),
   clearErrors: () => getServer().clearErrors(),
   inject: (event: unknown) => getServer().inject(event),

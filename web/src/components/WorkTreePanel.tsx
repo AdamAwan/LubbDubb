@@ -22,6 +22,7 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
   const [roots, setRoots] = useState<WorkNodeView[]>([]);
   const [unrecorded, setUnrecorded] = useState<UnrecordedWorkView[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const [showIgnored, setShowIgnored] = useState(false);
   const [subtree, setSubtree] = useState<{ nodes: WorkNodeView[]; refUrls: Record<string, string> } | null>(null);
 
   const load = () =>
@@ -53,6 +54,55 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
   if (roots.length === 0 && unrecorded.length === 0) {
     return <p className="empty">Nothing recorded yet — the graph fills in from the next pulse.</p>;
   }
+  // Split here rather than at the source: the server carries `ignored` so the panel
+  // and the file route read one verdict, and keeping the row means its title is
+  // still there to offer back under the tail.
+  const live = unrecorded.filter((u) => !u.ignored);
+  const ignored = unrecorded.filter((u) => u.ignored);
+  const row = (item: UnrecordedWorkView) => (
+    <div className="work-unrecorded-row" key={item.ref}>
+      <span className="work-title">{item.title}</span>
+      <span className="muted mono">{item.ref}</span>
+      <span className="muted work-seen">
+        {item.prCount === 1 ? '1 pull request' : `${item.prCount} pull requests`} · started{' '}
+        {relTime(item.firstSeenAt, now)}
+      </span>
+      <span className="work-unrecorded-actions">
+        {item.ignored ? (
+          <AsyncButton
+            className="ghost"
+            onClick={() => api.setWorkItemIgnored(item.ref, false).then(() => load())}
+            title="Put this back in the list"
+          >
+            Un-ignore
+          </AsyncButton>
+        ) : (
+          <>
+            {item.filing !== null ? (
+              <span className="chip small">filing…</span>
+            ) : (
+              canFileTickets && (
+                <AsyncButton
+                  className="ghost"
+                  onClick={() => api.fileWorkItem(item.ref).then(() => load())}
+                  title="Ask an agent to create a tracker item recording this work"
+                >
+                  File a work item
+                </AsyncButton>
+              )
+            )}
+            <AsyncButton
+              className="ghost"
+              onClick={() => api.setWorkItemIgnored(item.ref, true).then(() => load())}
+              title="No tracker item is wanted for this — clear it from the list"
+            >
+              Ignore
+            </AsyncButton>
+          </>
+        )}
+      </span>
+    </div>
+  );
   return (
     <div className="work-roots">
       {unrecorded.length > 0 && (
@@ -61,36 +111,28 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
           <p className="muted">
             The harness did this, and nothing in the tracker accounts for it — so nobody outside can ever mark it done.
           </p>
-          {unrecorded.map((item) => (
-            <div className="work-unrecorded-row" key={item.ref}>
-              <span className="work-title">{item.title}</span>
-              <span className="muted mono">{item.ref}</span>
-              <span className="muted">
-                {item.prCount === 1 ? '1 pull request' : `${item.prCount} pull requests`} · started{' '}
-                {relTime(item.firstSeenAt, now)}
-              </span>
-              {item.filing !== null ? (
-                <span className="chip small">filing…</span>
-              ) : (
-                canFileTickets && (
-                  <AsyncButton
-                    className="ghost"
-                    onClick={() => api.fileWorkItem(item.ref).then(() => load())}
-                    title="Ask an agent to create a tracker item recording this work"
-                  >
-                    File a work item
-                  </AsyncButton>
-                )
-              )}
+          {live.map(row)}
+          {live.length === 0 && <p className="muted">Nothing outstanding — every item here has been dealt with.</p>}
+          {ignored.length > 0 && (
+            <div className="work-ignored">
+              <button
+                type="button"
+                className="btn ghost work-ignored-head"
+                onClick={() => setShowIgnored(!showIgnored)}
+              >
+                <span className="work-caret">{showIgnored ? '▾' : '▸'}</span>
+                {ignored.length} ignored
+              </button>
+              {showIgnored && ignored.map(row)}
             </div>
-          ))}
+          )}
         </div>
       )}
       {roots.map((root) => (
         <div className="work-root" key={root.ref}>
           <button
             type="button"
-            className="ghost work-root-head"
+            className="btn ghost work-root-head"
             onClick={() => setOpen(open === root.ref ? null : root.ref)}
           >
             <span className="work-caret">{open === root.ref ? '▾' : '▸'}</span>

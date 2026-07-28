@@ -325,6 +325,19 @@ export function sampleTemplateFile(id: PromptId): string {
   return `<!--\n  ${REGISTRY[id].doc}\n-->\n\n${REGISTRY[id].template}\n`;
 }
 
+/** One template as the cockpit shows it: what it is, and what it says. */
+interface PromptTemplateDescription {
+  readonly id: PromptId;
+  /** What the prompt is for and when it fires — the registry's own note. */
+  readonly doc: string;
+  /** The `{token}`s this id may reference, i.e. what an override may use. */
+  readonly placeholders: readonly string[];
+  /** The **effective** text: the override where there is one, else the default. */
+  readonly template: string;
+  /** Whether an operator override replaced the built-in. */
+  readonly overridden: boolean;
+}
+
 /**
  * The resolved template book handed to the dispatcher: defaults overlaid with
  * any operator overrides. Construct via {@link loadPromptTemplates} (reads the
@@ -332,13 +345,31 @@ export function sampleTemplateFile(id: PromptId): string {
  */
 export class PromptTemplates {
   private readonly templates: Record<PromptId, string>;
+  private readonly overridden: Set<PromptId>;
   constructor(overrides: Partial<Record<PromptId, string>> = {}) {
     this.templates = {} as Record<PromptId, string>;
     for (const id of KNOWN_IDS) this.templates[id] = overrides[id] ?? REGISTRY[id].template;
+    // Held rather than re-derived: the book is the one thing that knows an
+    // override happened, and a consumer comparing the text back against
+    // REGISTRY would be a second opinion able to disagree with it.
+    this.overridden = new Set(KNOWN_IDS.filter((id) => overrides[id] !== undefined));
   }
   /** Render prompt `id` with `vars`. */
   render(id: PromptId, vars: Record<string, string | number | undefined>): string {
     return renderTemplate(this.templates[id], vars);
+  }
+  /**
+   * The whole book, for `GET /api/prompts`. The effective text, so the cockpit
+   * shows what the dispatcher actually sends rather than what ships in the box.
+   */
+  describe(): PromptTemplateDescription[] {
+    return KNOWN_IDS.map((id) => ({
+      id,
+      doc: REGISTRY[id].doc,
+      placeholders: REGISTRY[id].placeholders,
+      template: this.templates[id],
+      overridden: this.overridden.has(id),
+    }));
   }
 }
 

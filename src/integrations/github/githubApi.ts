@@ -125,9 +125,17 @@ export interface GhCombinedStatus {
   state: string;
   /** How many statuses rolled into `state`. Zero means "no signal". */
   totalCount: number;
+  /**
+   * The individual statuses behind `state`, named by their context. Carried so
+   * per-check CI policy can act on *which* one failed; `state` stays the fold
+   * every existing gate reads. Absent on a fixture that predates it.
+   */
+  statuses?: Array<{ context: string; state: string }>;
 }
 
 export interface GhCheckRun {
+  /** The check's display name, e.g. "lint", "test (18)". */
+  name: string;
   /** queued | in_progress | completed */
   status: string;
   /** success | failure | neutral | cancelled | timed_out | action_required | skipped | stale | null */

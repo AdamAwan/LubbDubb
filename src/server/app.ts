@@ -899,8 +899,30 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // is already reading. It is a lens — nothing in the dispatcher consults it.
   app.get('/api/work', WORK_RATE_LIMIT, async () => ({
     roots: store.listWorkRoots(),
-    unrecorded: unrecordedWork(store.listWorkNodes(), store.listJobs(), store.listWorkItemFilings()),
+    unrecorded: unrecordedWork(
+      store.listWorkNodes(),
+      store.listJobs(),
+      store.listWorkItemFilings(),
+      store.listWorkItemIgnores(),
+    ),
   }));
+
+  // The other verdict on the same row: no tracker item is wanted for this work.
+  // A delete undoes it, so the panel can offer it back — an ignore that could only
+  // be set would make an accidental click permanent, which is the wrong shape for
+  // a lens whose whole content is the harness's own guess about what matters.
+  app.post('/api/work/:ref/ignore', WORK_RATE_LIMIT, async (req, reply) => {
+    const { ref } = req.params as { ref: string };
+    if (!store.listWorkNodes().some((n) => n.ref === ref)) return reply.code(404).send({ error: 'no such work item' });
+    store.ignoreWorkItem(ref);
+    return { ok: true };
+  });
+
+  app.delete('/api/work/:ref/ignore', WORK_RATE_LIMIT, async (req) => {
+    const { ref } = req.params as { ref: string };
+    store.unignoreWorkItem(ref);
+    return { ok: true };
+  });
 
   // File a work item for work the harness did that nothing external accounts for
   // — an operator job that produced commits with no issue anywhere behind it. The
@@ -924,9 +946,11 @@ export async function buildApp(system: System): Promise<BuiltApp> {
             : `already filed as ${standing.ticketRef}`,
       });
     // Asked of the same predicate the panel draws from, so the route can never
-    // refuse what the button offered.
-    if (!unrecordedWork([node], store.listJobs(), filings).length)
-      return reply.code(409).send({ error: `${ref} is not unrecorded work — it has a work item already` });
+    // refuse what the button offered — including the ignore, which the predicate
+    // carries rather than filters precisely so both surfaces read one verdict.
+    const [entry] = unrecordedWork([node], store.listJobs(), filings, store.listWorkItemIgnores());
+    if (!entry) return reply.code(409).send({ error: `${ref} is not unrecorded work — it has a work item already` });
+    if (entry.ignored) return reply.code(409).send({ error: `${ref} is ignored — un-ignore it before filing` });
 
     // A desk agent runs in a scratch dir with no remote to infer the target from;
     // without coordinates there is nowhere to file. The cockpit hides the button
@@ -969,6 +993,27 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     }
     return { nodes, refUrls };
   });
+
+  // The prompt book the rule dispatcher renders from — what the harness says to
+  // its agents, and which of those wordings the operator has replaced.
+  //
+  // Its own route, fetched on open rather than shipped on `/api/state`, for the
+  // work graph's reason inverted: the graph is too big to poll, this is too
+  // *static* to. `loadPromptTemplates` reads the override directory once at boot,
+  // so the book cannot change while the process is up and re-sending it every
+  // couple of seconds would be paying for a constant.
+  //
+  // Read-only on purpose. Editing stays a file drop into `promptTemplatesDir`:
+  // a write route would have to answer "when does this take effect", and the
+  // honest answer — at the next restart — is worse than not offering it. `dir`
+  // is what makes the panel actionable without one.
+  app.get('/api/prompts', async () => ({
+    dir: config.promptTemplatesDir ?? null,
+    // The `claude` dispatcher composes its prompts via the LLM and reads none of
+    // this. The cockpit says so rather than drawing a book that never fires.
+    dispatcher: config.dispatcher,
+    templates: system.prompts.describe(),
+  }));
 
   app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
 

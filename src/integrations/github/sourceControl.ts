@@ -1,7 +1,7 @@
 import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
-import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
   Capability,
   Integration,
@@ -80,6 +80,7 @@ export class GitHubSourceControlIntegration
             branch: p.branch,
             baseBranch: p.baseBranch,
             ciStatus: aggregateCiStatus(checks, status),
+            ciChecks: listCiChecks(checks, status),
             unresolvedComments: buildUnresolvedComments(comments, viewer),
             approved: computeApproved(reviews),
             mergeableState: normalizeMergeState(detail.mergeableState),
@@ -218,6 +219,31 @@ export function aggregateCiStatus(checkRuns: GhCheckRun[], status: GhCombinedSta
   if (pending) return 'pending';
   if (success) return 'passing';
   return 'unknown';
+}
+
+/**
+ * The same signals {@link aggregateCiStatus} folds, kept individually so
+ * per-check policy can act on *which* check failed.
+ *
+ * Deliberately a second pass over the same inputs rather than a richer return
+ * from the fold: every existing caller wants the one-word verdict, and a check
+ * list threaded through them would be carried nowhere and dropped everywhere.
+ * The two agree by construction — same inputs, same failing/pending rules.
+ */
+export function listCiChecks(checkRuns: GhCheckRun[], status: GhCombinedStatus): CiCheck[] {
+  const checks: CiCheck[] = [];
+  for (const run of checkRuns) {
+    if (run.status !== 'completed') checks.push({ name: run.name, status: 'pending' });
+    else if (run.conclusion && FAILING_CONCLUSIONS.has(run.conclusion))
+      checks.push({ name: run.name, status: 'failing' });
+    else checks.push({ name: run.name, status: 'passing' });
+  }
+  for (const s of status.statuses ?? []) {
+    if (s.state === 'failure' || s.state === 'error') checks.push({ name: s.context, status: 'failing' });
+    else if (s.state === 'pending') checks.push({ name: s.context, status: 'pending' });
+    else checks.push({ name: s.context, status: 'passing' });
+  }
+  return checks;
 }
 
 /** Approved iff at least one reviewer's latest review is APPROVED and none is CHANGES_REQUESTED. */

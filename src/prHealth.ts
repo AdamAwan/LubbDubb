@@ -39,7 +39,7 @@ export function prHealth(pr: PullRequest, openPrs: PullRequest[] = []): PrHealth
 
   if (pr.ciStatus === 'failing') {
     const from = inheritedCiFailure(pr, openPrs);
-    reasons.push(from ? `CI failing on base PR #${from.number}` : 'CI failing');
+    reasons.push(from ? `CI failing on base PR #${from.number}` : `CI failing${failingCheckSuffix(pr)}`);
   }
 
   if (isConflicted(pr)) reasons.push('merge conflicts');
@@ -51,6 +51,26 @@ export function prHealth(pr: PullRequest, openPrs: PullRequest[] = []): PrHealth
 
   return { blocked: reasons.length > 0, reasons };
 }
+
+/**
+ * Name the failing checks after "CI failing" when the provider reported them.
+ *
+ * Deliberately the raw names and no policy verdict: this is the *health*
+ * question ("can this merge"), and a check the operator has told the harness to
+ * leave alone still blocks the merge. Whose turn it is belongs to
+ * `prAttentionStatus`, and what the harness will do about it to `ciPolicy`.
+ * Capped so a matrix build of thirty jobs doesn't fill the cockpit row.
+ */
+function failingCheckSuffix(pr: PullRequest): string {
+  const failing = (pr.ciChecks ?? []).filter((c) => c.status === 'failing').map((c) => c.name);
+  if (failing.length === 0) return '';
+  const shown = failing.slice(0, MAX_NAMED_CHECKS);
+  const rest = failing.length - shown.length;
+  return `: ${shown.join(', ')}${rest > 0 ? ` +${rest} more` : ''}`;
+}
+
+/** How many failing check names a health reason names before summarising the rest. */
+const MAX_NAMED_CHECKS = 3;
 
 /**
  * A real merge conflict: GitHub says 'dirty', or — when it hasn't reported a

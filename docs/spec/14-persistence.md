@@ -37,13 +37,14 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides`, `work_nodes` and
-`work_item_filings` were all introduced as new tables and therefore needed no migration entry **at
-the time** — but a table being new once is not a table staying exempt: `findings` has since gained
-`ticket_ref`, and `plans`/`plan_parts` have since gained the five fields above, which is exactly the
-case this table exists for. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a column
-added without an `ensureColumns` entry is invisible on every database from before that column existed
-— "this table is fresh, so it needs no entry" is only ever true on the day the table is introduced.
+`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides`, `work_nodes`,
+`work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
+migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
+has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the six fields above, which
+is exactly the case this table exists for. `CREATE TABLE IF NOT EXISTS` never alters an existing table,
+so a column added without an `ensureColumns` entry is invisible on every database from before that
+column existed — "this table is fresh, so it needs no entry" is only ever true on the day the table is
+introduced.
 
 ## Tables
 
@@ -63,6 +64,7 @@ added without an `ensureColumns` entry is invisible on every database from befor
 | `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.       | `ref` is `PRIMARY KEY`        |
 | `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                  | `target_ref` is `PRIMARY KEY` |
+| `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.      | `target_ref` is `PRIMARY KEY` |
 | `agent_transcripts`  | Chunked agent output.                                                                          | `PRIMARY KEY (agent_id, seq)` |
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                | —                             |
 | `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                       | —                             |

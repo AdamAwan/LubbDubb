@@ -175,7 +175,21 @@ interface RawPolicyEvaluation {
     isBlocking?: boolean;
     isEnabled?: boolean;
     type?: { id?: string };
+    /**
+     * Policy-type-specific settings. A build-validation policy names itself with
+     * `displayName`; a status policy is identified by its `statusGenre`/
+     * `statusName` pair, which is what shows on the PR.
+     */
+    settings?: { displayName?: string; statusName?: string; statusGenre?: string };
   };
+}
+
+/** The operator-facing name of a policy, however its type happens to carry one. */
+function policyDisplayName(e: RawPolicyEvaluation): string {
+  const s = e.configuration?.settings;
+  if (s?.displayName) return s.displayName;
+  if (s?.statusName) return s.statusGenre ? `${s.statusGenre}/${s.statusName}` : s.statusName;
+  return '';
 }
 
 /** Extra attempts after the first for a *transient* failure (sign-in HTML, 429, 5xx, network). */
@@ -431,6 +445,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     );
     return data.value.map((e) => ({
       typeId: e.configuration?.type?.id ?? '',
+      displayName: policyDisplayName(e),
       status: e.status ?? null,
       isBlocking: e.configuration?.isBlocking ?? false,
       isEnabled: e.configuration?.isEnabled ?? false,

@@ -1,4 +1,4 @@
-import type { AppState, RecoveryVerdict, UnrecordedWorkView, WorkNodeView } from './types.js';
+import type { AppState, PromptTemplateView, RecoveryVerdict, UnrecordedWorkView, WorkNodeView } from './types.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 /**
@@ -94,9 +94,23 @@ const realApi = {
     authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) =>
       json<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }>(r),
     ),
+  // The prompt book, fetched on open for the opposite reason to the work graph:
+  // it is read once at boot, so polling it would be paying for a constant.
+  getPrompts: () =>
+    authFetch('/api/prompts').then((r) =>
+      json<{ dir: string | null; dispatcher: string; templates: PromptTemplateView[] }>(r),
+    ),
   // Ask an agent to create a tracker item for work nothing external accounts for.
   // An operator's click, never a rule: see src/graph/unrecorded.ts.
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),
+  // The other verdict: no ticket is wanted. `ignored: false` is a DELETE because
+  // the store's undo is a delete — one representation of "not ignored".
+  setWorkItemIgnored: (ref: string, ignored: boolean) =>
+    ignored
+      ? post(`/api/work/${encodeURIComponent(ref)}/ignore`)
+      : authFetch(`/api/work/${encodeURIComponent(ref)}/ignore`, { method: 'DELETE' }).then((r) =>
+          json<{ ok: true }>(r),
+        ),
   pulse: () => post('/api/pulse'),
   // Clears the fault log for every cockpit, not just this one: the rows go.
   clearErrors: () => post<{ ok: true; cleared: number }>('/api/errors/clear'),

@@ -250,6 +250,24 @@ export interface UnrecordedWorkView {
   firstSeenAt: string;
   /** A filing already in flight, if one is. Null means the button is live. */
   filing: 'filing' | 'filed' | null;
+  /** The operator cleared this row: no tracker item is wanted for it. */
+  ignored: boolean;
+}
+/**
+ * One entry in the rule dispatcher's prompt book. Like {@link WorkNodeView} this
+ * does not ride `/api/state` — it arrives from `/api/prompts`, fetched when the
+ * panel is opened, because the book is read once at boot and cannot change while
+ * the harness is up.
+ */
+export interface PromptTemplateView {
+  id: string;
+  /** What the prompt is for and when it fires. */
+  doc: string;
+  /** The `{token}`s this id may reference — i.e. what an override may use. */
+  placeholders: string[];
+  /** The **effective** text: the operator's override where there is one. */
+  template: string;
+  overridden: boolean;
 }
 export interface Job {
   id: string;

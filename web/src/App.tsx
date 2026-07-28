@@ -3,6 +3,7 @@ import { useCockpit } from './cockpit/useCockpit.js';
 import { readStoredSkinId, resolveSkin } from './skins/registry.js';
 import { PlanModal } from './components/PlanModal.js';
 import { WorkTreePanel } from './components/WorkTreePanel.js';
+import { PromptsPanel } from './components/PromptsPanel.js';
 
 /**
  * What the cockpit shows when the harness refuses its credential. Worth a screen
@@ -47,6 +48,11 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
  * every poll — so a skin drawing it would have to reach `api.js` directly, which
  * is exactly what the skin seam forbids (and `test/cockpitSkins.test.ts` asserts).
  * Below the skin, so it is the same record whichever theme is on.
+ *
+ * The prompt book sits beside it on the same argument, reached from the other
+ * direction: it is fetched rather than polled because it is read once at boot and
+ * cannot change while the harness is up, so it has its own route and no place in
+ * the view-model either.
  */
 export function App() {
   const status = useCockpit();
@@ -91,6 +97,7 @@ export function App() {
       <section className="work-panel">
         <h2>Work</h2>
         <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />
+        <PromptsPanel />
       </section>
     </>
   );

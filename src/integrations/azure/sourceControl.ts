@@ -1,7 +1,7 @@
 import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { MergeMethod, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
-import type { CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
   Capability,
   Integration,
@@ -75,6 +75,7 @@ export class AzureDevOpsSourceControlIntegration
             branch: p.branch,
             baseBranch: p.baseBranch,
             ciStatus: aggregatePolicyCiStatus(policyEvals),
+            ciChecks: listPolicyCiChecks(policyEvals),
             unresolvedComments: buildUnresolvedComments(threads, viewer),
             approved: computeApproved(p.reviewerVotes),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
@@ -257,6 +258,25 @@ export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
   if (pending) return 'pending';
   if (passing) return 'passing';
   return 'unknown';
+}
+
+/**
+ * The same enabled, blocking CI policies {@link aggregatePolicyCiStatus} folds,
+ * kept individually so per-check policy can act on *which* one failed. A policy
+ * whose type carries no name is skipped: an unnameable check cannot be matched
+ * by a glob, and emitting it nameless would let one empty pattern claim several
+ * unrelated checks at once.
+ */
+export function listPolicyCiChecks(evals: AzPolicyEvaluation[]): CiCheck[] {
+  const checks: CiCheck[] = [];
+  for (const e of evals) {
+    if (!e.isEnabled || !e.isBlocking || !CI_POLICY_TYPES.has(e.typeId) || !e.displayName) continue;
+    if (e.status === 'rejected' || e.status === 'broken') checks.push({ name: e.displayName, status: 'failing' });
+    else if (e.status === 'queued' || e.status === 'running') checks.push({ name: e.displayName, status: 'pending' });
+    else if (e.status === 'approved') checks.push({ name: e.displayName, status: 'passing' });
+    // 'notApplicable' / null contribute no signal, exactly as in the fold.
+  }
+  return checks;
 }
 
 /**
