@@ -193,7 +193,7 @@ const STATUS_TYPE = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
 const REVIEWERS_TYPE = 'fa4e907d-c16b-4a4c-9dfa-4906e5d171dd';
 
 function evalRec(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation {
-  return { typeId: BUILD_TYPE, status: 'approved', isBlocking: true, isEnabled: true, ...over };
+  return { typeId: BUILD_TYPE, displayName: 'build', status: 'approved', isBlocking: true, isEnabled: true, ...over };
 }
 
 test('aggregatePolicyCiStatus: a rejected required build policy is failing', () => {

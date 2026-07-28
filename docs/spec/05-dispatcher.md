@@ -43,26 +43,27 @@ keeps its raw value and a joined zod error path/message). Absent `confidence` is
 `decisions.rule` column; and `/api/state` ships the whole registry so the cockpit's Decision log can
 expand a row into the rule that fired and why that rule exists.
 
-| Id                         | №    | Name                     | Fires when                                                                                               |
-| -------------------------- | ---- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `manual-job`               | 0    | Operator-launched job    | A queued job exists. Drained ahead of every world-driven rule.                                           |
-| `pr-ci-failing`            | 1    | Failing CI               | An open PR has failing CI that is not inherited from its base, and no agent is on its branch.            |
-| `pr-base-update`           | 2    | Base out of date         | A PR is `behind` its base or conflicts with it.                                                          |
-| `pr-review-comment`        | 2b   | Unhandled review comment | A PR carries an unhandled review comment.                                                                |
-| `branch-notify`            | 1–2b | One agent per branch     | A fresh PR signal lands on a branch whose agent is already **running**.                                  |
-| `pr-merge-ready`           | 3    | Merge-ready PR           | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                           |
-| `work-item-in-review`      | 3b   | Back off to review state | A work item in a pickup state has an open PR (or is decomposed).                                         |
-| `work-item-back-to-pickup` | 3b   | Return from review state | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion. |
-| `issue-plan`               | 3c   | Issue needs a plan       | With planning on, a watched open issue has no plan yet — or an operator asked for a replan.              |
-| `plan-approval`            | 3d   | Plan needs your approval | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.    |
-| `issue-assess`             | 3e   | Issue may be finished    | With assessment on, a watched open issue has had work, has nothing in flight and no open PR.             |
-| `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                       |
-| `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                |
-| `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                  |
-| `story-groom`              | 5    | Story grooming           | A ready story lacks a description or acceptance criteria.                                                |
-| `story-waf`                | 6    | Missing WAF pillars      | A ready story has no WAF pillars.                                                                        |
-| `story-pickup`             | 7    | Idle capacity pickup     | Headroom remains and a groomed ready story is the highest priority.                                      |
-| `idle`                     | 8    | Nothing actionable       | No rule matched — recorded as a `no_op`, so idleness stays auditable.                                    |
+| Id                         | №    | Name                     | Fires when                                                                                                                                                |
+| -------------------------- | ---- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `manual-job`               | 0    | Operator-launched job    | A queued job exists. Drained ahead of every world-driven rule.                                                                                            |
+| `pr-ci-failing`            | 1    | Failing CI               | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch. |
+| `pr-ci-blocked`            | 1b   | CI blocked elsewhere     | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                         |
+| `pr-base-update`           | 2    | Base out of date         | A PR is `behind` its base or conflicts with it.                                                                                                           |
+| `pr-review-comment`        | 2b   | Unhandled review comment | A PR carries an unhandled review comment.                                                                                                                 |
+| `branch-notify`            | 1–2b | One agent per branch     | A fresh PR signal lands on a branch whose agent is already **running**.                                                                                   |
+| `pr-merge-ready`           | 3    | Merge-ready PR           | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                            |
+| `work-item-in-review`      | 3b   | Back off to review state | A work item in a pickup state has an open PR (or is decomposed).                                                                                          |
+| `work-item-back-to-pickup` | 3b   | Return from review state | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                  |
+| `issue-plan`               | 3c   | Issue needs a plan       | With planning on, a watched open issue has no plan yet — or an operator asked for a replan.                                                               |
+| `plan-approval`            | 3d   | Plan needs your approval | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.                                                     |
+| `issue-assess`             | 3e   | Issue may be finished    | With assessment on, a watched open issue has had work, has nothing in flight and no open PR.                                                              |
+| `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                                                                        |
+| `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                                                                 |
+| `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                                                                   |
+| `story-groom`              | 5    | Story grooming           | A ready story lacks a description or acceptance criteria.                                                                                                 |
+| `story-waf`                | 6    | Missing WAF pillars      | A ready story has no WAF pillars.                                                                                                                         |
+| `story-pickup`             | 7    | Idle capacity pickup     | Headroom remains and a groomed ready story is the highest priority.                                                                                       |
+| `idle`                     | 8    | Nothing actionable       | No rule matched — recorded as a `no_op`, so idleness stays auditable.                                                                                     |
 
 ## Rank-then-slice
 
