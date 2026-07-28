@@ -264,6 +264,23 @@ reports the ticket through `link_ticket` — see [11](11-mcp-tools.md).
 reader never saw), broadcasts, runs a cycle. **Tears nothing down** — see [08](08-planning.md).
 Returns `{ ok: true, plan }`.
 
+### `POST /api/plans/:id/discuss`
+
+No body. 404 when the plan is unknown. **Discuss is a replan with a conversational planner** — same
+mechanism as `/replan` (flips the plan to `planning`, withdraws any pending plan proposal for the same
+reason), plus sets `plans.discussing`, which is the one thing that tells rule 3c to render the
+`discuss-plan` template instead of `issue-replan`. Broadcasts, runs a cycle. See
+[08](08-planning.md#discussing-a-plan). Returns `{ ok: true, plan }`.
+
+### `POST /api/plans/:id/discuss/end`
+
+No body. 404 when the plan is unknown. **409 when the plan is not currently being discussed**
+(`plan.discussing` is false) — the same compare-and-set discipline `accept`/`reject` apply to
+`awaiting_approval`, since an unguarded call would force any plan back to `awaiting_approval` on a
+stale or duplicate request. Otherwise restores the plan to `awaiting_approval`, clears `discussing`,
+broadcasts, runs a cycle — so the pending question is re-asked rather than left open on a
+conversation that stopped. Does not touch the discussion agent itself. Returns `{ ok: true, plan }`.
+
 ### `POST /api/escalations/:id/answer`
 
 Body `{response}`. 400 when the response is missing, the escalation is unknown, or it is not `open`.
