@@ -17,7 +17,18 @@ import type {
   IssueConclusion,
   IssueConclusionVerdict,
   Task,
+  WorkItemFiling,
 } from '../types.js';
+
+/**
+ * What `link_ticket` settled. A filing job is created for a finding *or* for a
+ * work item, never both, so the arms are exclusive — kept as a union rather than
+ * two nullable fields so a caller cannot read the one that was not filled.
+ */
+type LinkTicketResult =
+  | { ok: true; finding: Finding; filing?: undefined }
+  | { ok: true; filing: WorkItemFiling; finding?: undefined }
+  | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
 import type { ParsedFlag } from './sentinels.js';
@@ -393,26 +404,58 @@ export class AgentManager extends EventEmitter {
    * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
-  linkTicket(agentId: string, ticketRef: string): { ok: true; finding: Finding } | { ok: false; error: string } {
+  linkTicket(agentId: string, ticketRef: string): LinkTicketResult {
     const agent = this.store.getAgent(agentId);
     const task = agent ? this.store.getTask(agent.taskId) : null;
     if (!agent || !task) return { ok: false, error: 'agent has no task' };
     const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
     const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
-    if (!finding) {
+    // A job is created for at most one of the two, so there is nothing to
+    // disambiguate — the credential resolves to a finding, a work-item filing, or
+    // neither, and neither is the whole access check.
+    const filing = jobId && !finding ? this.store.findWorkItemFilingByJobId(jobId) : null;
+    if (!finding && !filing) {
       return {
         ok: false,
         error:
-          `link_ticket is only for a job dispatched to file a finding as a ticket. This task's origin ` +
-          `is ${task.originRef ?? '(none)'}, which was not created from a finding.`,
+          `link_ticket is only for a job dispatched to file a finding as a ticket, or to file a work ` +
+          `item for unrecorded work. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
+          `created from neither.`,
       };
     }
+
+    if (filing) {
+      // A work item is an issue in both trackers the harness reads (a GitHub issue,
+      // an Azure work item), and the graph stands a placeholder node up under that
+      // ref when the world never lists it — so guessing a node kind off `pr:`/
+      // `story:` is a case worth removing rather than answering.
+      if (!ticketRef.startsWith('issue:')) {
+        return {
+          ok: false,
+          error:
+            `A work item must be an issue ref like "issue:314"; got "${ticketRef}". If you filed ` +
+            'something else, file the work item too and link that.',
+        };
+      }
+      // Idempotence in the write, as below.
+      const linked = this.store.linkWorkItemFiling(filing.jobId, ticketRef);
+      if (!linked) {
+        return {
+          ok: false,
+          error: `the work item for ${filing.targetRef} is ${filing.status}, not awaiting a ticket — nothing to link.`,
+        };
+      }
+      // No bespoke event: the Work panel is fetch-on-open, and the parent edge it
+      // draws is written by the next pulse's fold, not from here.
+      return { ok: true, filing: linked };
+    }
+
     // Idempotence lives in the write, not in a read-then-check here.
-    const linked = this.store.linkFindingTicket(finding.id, ticketRef);
+    const linked = this.store.linkFindingTicket(finding!.id, ticketRef);
     if (!linked) {
       return {
         ok: false,
-        error: `finding ${finding.id} is ${finding.status}, not awaiting a ticket — nothing to link.`,
+        error: `finding ${finding!.id} is ${finding!.status}, not awaiting a ticket — nothing to link.`,
       };
     }
     this.emit('finding', { agentId, taskId: task.id, finding: linked, created: false });

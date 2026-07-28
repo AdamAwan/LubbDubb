@@ -18,6 +18,9 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildApp } from '../src/server/app.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Stage 3: the roots that had no work item behind them. Adoption first (this
 // file's opening block) — the two arms that make "unparented PR" name one
@@ -526,6 +529,92 @@ test('the route refuses an unknown ref, work that is already recorded, and a mis
   assert.equal(res.statusCode, 409);
   assert.match((res.json() as { error: string }).error, /no issue tracker is configured/);
   await app.close();
+  system.store.close();
+});
+
+// ---------------------------------------------------------------------------
+// link_ticket's second arm
+// ---------------------------------------------------------------------------
+
+test('a filing agent links its work item, and the next pulse parents the work to it', async () => {
+  await withGithubToken(async () => {
+    const system = buildServed({
+      integrations: { source: 'fake', issues: 'github', backlog: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    });
+    const worked = await dispatchedJob(system);
+    const { app } = await buildApp(system);
+    const filed = await app.inject({ method: 'POST', url: `/api/work/job:${worked.id}/file` });
+    const filingJob = (filed.json() as { job: { id: string; title: string; prompt: string } }).job;
+
+    // The filing agent, on the filing job's own origin.
+    const task = system.store.createTask({
+      kind: 'desk',
+      title: filingJob.title,
+      prompt: filingJob.prompt,
+      branch: null,
+      originRef: `job:${filingJob.id}`,
+    });
+    const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+
+    const res = system.agents.linkTicket(agent.id, 'issue:314');
+    assert.equal(res.ok, true);
+    assert.equal(system.store.findWorkItemFilingByJobId(filingJob.id)?.ticketRef, 'issue:314');
+
+    await system.harness.runCycle('manual');
+    assert.equal(
+      system.store.listWorkNodes().find((n) => n.ref === `job:${worked.id}`)?.parentRef,
+      'issue:314',
+      'the fold writes the edge, not the tool',
+    );
+    await app.close();
+    system.store.close();
+  });
+});
+
+test('a work item must be an issue ref — there is no node kind to guess at', async () => {
+  await withGithubToken(async () => {
+    const system = buildServed({
+      integrations: { source: 'fake', issues: 'github', backlog: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    });
+    const worked = await dispatchedJob(system);
+    const { app } = await buildApp(system);
+    const filed = await app.inject({ method: 'POST', url: `/api/work/job:${worked.id}/file` });
+    const filingJob = (filed.json() as { job: { id: string } }).job;
+    const task = system.store.createTask({
+      kind: 'desk',
+      title: 'file it',
+      prompt: 'file it',
+      branch: null,
+      originRef: `job:${filingJob.id}`,
+    });
+    const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+
+    const res = system.agents.linkTicket(agent.id, 'pr:42');
+    assert.equal(res.ok, false);
+    assert.equal(system.store.findWorkItemFilingByJobId(filingJob.id)?.status, 'filing', 'left awaiting a real item');
+    await app.close();
+    system.store.close();
+  });
+});
+
+test('an agent on an unrelated job can link nothing, and is told both reasons', () => {
+  const system = buildServed();
+  const task = system.store.createTask({
+    kind: 'code',
+    title: 'Something else',
+    prompt: 'do it',
+    branch: 'issue/12',
+    originRef: 'issue:12',
+  });
+  const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+
+  const res = system.agents.linkTicket(agent.id, 'issue:314');
+  assert.equal(res.ok, false);
+  // Identity is the whole access check: there is no argument naming what to link.
+  assert.match(res.ok === false ? res.error : '', /file a finding/);
+  assert.match(res.ok === false ? res.error : '', /work item/);
   system.store.close();
 });
 
