@@ -149,6 +149,51 @@ what stops the re-pickup, while moving the work item to a done state stays a hum
 the item back to pickup immediately rather than on the next heartbeat. 400 on a non-integer issue
 number or a verdict that is not one of the three.
 
+### `POST /api/issues/:number/delivered`
+
+Body `{delivered: boolean, summary?: string}`. The operator's arm of the delivery verdict — the
+harness's own park, which gates pickup and nothing else (see
+[06](06-issue-pickup.md)). `false` **clears** the row, which is a delete so that "no verdict" has
+exactly one representation. Like the conclusion route it writes the harness's own record and **never
+touches the tracker**: `closed` stays the human's.
+
+### `GET /api/work`
+
+The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did
+that nothing in the tracker accounts for. Rate-limited rather than polled; the cockpit's Work panel
+fetches it on open, because `/api/state` comes round every couple of seconds and the graph only ever
+grows. Returns `{ roots, unrecorded }`.
+
+### `GET /api/work/:ref`
+
+One subtree, walked from the given root by `parent_ref`. 404 when the ref names no node. Refs carry
+colons (`issue:12`, `pr:41:ci`), so the route has to survive one in a path segment. Each node's URL is
+resolved through the connector's own `resolveRefUrl` rather than read off the snapshot's `refUrls` —
+that map is built from the world, and a PR the graph remembers merging left the world hours ago.
+Returns `{ nodes, refUrls }`.
+
+### `POST /api/work/:ref/file`
+
+Ask an agent to create a tracker item for unrecorded work. The mirror of
+`POST /api/findings/:id/file`, and an **operator click** for that route's reason: creating tracker
+items on the harness's own initiative would be a new outbound capability on the world, and the
+condition would be permanent until acted on, so a throttle would only set the rate at which a backlog
+fills.
+
+404 when the ref names no node; 409 when a filing already stands for it (naming whether one is in
+flight or already filed); 409 when the node is not unrecorded work; 409 when no tracker is configured,
+the same `config.canFileTickets` predicate the cockpit hides the button on. The not-unrecorded check is
+asked of the very predicate the panel draws from, so the route can never refuse what the button
+offered, and it is asked **before** the tracker check, so a deployment with nowhere to file still gives
+the honest answer about a node that was never eligible.
+
+Body may override `title`. Renders the `work-item-ticket` prompt template, creates a **desk** job —
+filing touches no repository, and it is also what stops this recursing, since a desk job is never
+itself unrecorded work — then opens the filing row, broadcasts and runs a cycle. Returns
+`{ ok: true, filing, job, report }`. The node is parented to the new item only once the filing agent
+reports it through `link_ticket`, and then by the **fold**, not by the tool — see
+[11](11-mcp-tools.md) and [14](14-persistence.md#work-item-filings).
+
 ### `POST /api/stories/:id/watch`
 
 The same, for a story id, routed to the fake backlog's `StoryLabelCapable`.

@@ -504,3 +504,14 @@ test('stage 1 is a lens: nothing in the dispatcher reads the graph', () => {
     'only the pulse and the composition root may reach the graph in stage 1',
   );
 });
+
+test('and nothing in the dispatcher reaches any part of the graph', () => {
+  // The sibling of the assertion above, and strictly stronger: that one names one
+  // module, so a *second* file under src/graph/ would sit outside it. Stage 3 added
+  // `unrecorded.ts`, and whatever comes next is covered by this the day it is
+  // written. The property is unchanged — a rule consulting the graph is a second
+  // opinion about a gate living nowhere near the gate it duplicates, and lets an
+  // agent's own record suppress another's dispatch.
+  const readers = srcFiles('src/dispatcher').filter((f) => readFileSync(f, 'utf8').includes('graph/'));
+  assert.deepEqual(readers, [], 'the dispatcher decides from the world and the store, never from the record');
+});

@@ -536,8 +536,8 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   git failure per dispatch. `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
   for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
   get none). Tests: `test/planReconcile.test.ts`.
-- **`src/graph/` is the durable work graph (stage 1 of 3) — the only thing here that outlives the
-  world.** `closedPrWindowMs` bounds how long the _world snapshot_ remembers a merge (6h); every
+- **`src/graph/` is the durable work graph (stages 1 and 3 of 3) — the only thing here that outlives
+  the world.** `closedPrWindowMs` bounds how long the _world snapshot_ remembers a merge (6h); every
   panel and predicate reading that snapshot forgets with it, and the edge from an issue to the PR
   that delivered it was then unrecoverable. It bounds nothing about the graph: `work_nodes` is
   upsert-only, never pruned, and a node the fold does not observe this pulse is left exactly as it
@@ -550,17 +550,62 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   `base_ref`, which keeps it a tree. **Nothing in the dispatcher reads any of it** — stage 1 is a
   lens, the way `findings` and `prAttention` shipped, because a rule consulting the graph is a second
   opinion about a gate living nowhere near the gate it duplicates, and lets an agent's own record
-  suppress another's dispatch. `test/workGraph.test.ts` asserts that **structurally** (the only
-  files under `src/` naming `graph/workGraph` are `harness.ts` and `system.ts`); if it ever fails,
-  fix the file it names rather than the assertion. Served on its own routes (`GET /api/work`,
-  `/api/work/:ref`) and never on `/api/state`, which is polled — `web/src/components/WorkTreePanel.tsx`
+  suppress another's dispatch. `test/workGraph.test.ts` asserts that **structurally**, now in two
+  assertions: the original (the only files under `src/` naming `graph/workGraph` are `harness.ts` and
+  `system.ts`) plus a **stronger sibling** stage 3 added — no file under `src/dispatcher/` names
+  `graph/` at all, which covers every module the directory will ever hold. If either fails, fix the
+  file it names rather than the assertion. Served on its own routes (`GET /api/work`, `/api/work/:ref`)
+  and never on `/api/state`, which is polled — `web/src/components/WorkTreePanel.tsx`
   fetches on open, and hangs off the shell rather than a skin because a skin may not reach `api.js`.
   - **The one known gap, ruled on and left**: `record` reads `existing` as
     `listWorkRoots().flatMap(listWorkSubtree)`, which reaches a node only if its whole ancestor chain
     has rows — so on a backfill a plan/part whose issue is already closed (providers list open issues
     only) is invisible to the fold. Conservative in consequence (the node stays stale at `open` rather
     than being falsely marked merged) and closing it costs a fourth store method where the spec argued
-    for three. Written up in `docs/spec/14-persistence.md` rather than only in a PR body.
+    for three. Written up in `docs/spec/14-persistence.md` rather than only in a PR body. **Stage 3
+    added `listWorkNodes()` for the detector and deliberately did not wire it into the recorder** —
+    the method now exists, so closing the gap is cheap, but it stays the operator's call.
+  - **Stage 3 — "nothing gets done without a recorded work item; if one is missing we create it."**
+    Operator jobs rooted their own trees with nothing in the tracker behind them, and because
+    completion is _read_ from the tracker and never computed, an item the tracker has never heard of
+    has no terminal state available to it at all. Four decisions carry it, and `src/graph/unrecorded.ts`
+    is where the argument lives:
+    - **An unparented PR is not a defect.** A hand-made PR with no ticket is normal, and noise in a
+      tracker is worse than a gap in a graph. The category was only ever in doubt because it named two
+      populations: a job agent's PR was unparented for the same reason a stranger's drive-by is. Two
+      adoption arms in the fold split them — **arm A**, a job owns the PR on its own branch (`jobBranch`
+      in `src/jobs.ts`, shared with rule 0 so the two cannot disagree about where a job's work lands),
+      and **arm B**, a job is adopted by the issue its own PR's `linkedPrNumber` names, which is the
+      write-once parent's intended case one level up and means **no ticket is filed when one already
+      exists**. Arm A runs before the issue arm because `parent_ref` is work _lineage_ — a branch match
+      says what caused the PR, `linkedPrNumber` says what it is about — and nothing is lost, because
+      arm B recovers the aboutness as `issue → job → pr`. After both, an unparented PR can only be a
+      human's.
+    - **Filing is an operator click, never a rule.** A rule that created tracker items would be a new
+      outbound capability on the world, larger than anything stages 1–2 took, and the condition it
+      fires on is _permanent until acted on_, so a throttle would only set the rate at which somebody's
+      backlog fills — and a filed ticket has no undo. The mechanism being reused
+      (`POST /api/findings/:id/file`) is defined by a human starting it. `unrecordedWork` narrows hard
+      so the click stays rare: **code jobs only** (`detectFileOverlaps`' narrowing, and what stops the
+      recursion by construction since a filing job is itself a _desk_ job), **dispatched only**, and
+      **parentless**. Deliberately _not_ "produced a PR" — that would only ever record work already
+      visible — so `prCount` rides beside the verdict as evidence instead.
+    - **A filing is not a `findings` row.** A `Finding` is testimony, `agent_id`/`task_id` `NOT NULL`
+      with attribution taken structurally from a credential; a harness-authored row has neither, so
+      reusing the table means forging the two columns that carry the guarantee. Fresh
+      `work_item_filings`, keyed on `target_ref` so a second click is refused by the primary key.
+    - **The fold writes the parent, not the route and not `link_ticket`.** The filing row is _intent_,
+      the relationship `plans`/`plan_parts` already have to the fold, so `workGraphRecorder` stays the
+      graph's only writer. A linked filing also emits a **placeholder issue node** when the world has
+      not — a ticket closed at once, or filed into another project, is never fetched, and the adopted
+      job would be reachable from nowhere. `link_ticket` gained a second resolution arm (finding _or_
+      filing, never both) and requires an `issue:` ref, since both trackers make a work item an issue
+      and guessing a node kind off `pr:`/`story:` is a case worth removing.
+    - Consequence, stated rather than mechanised: a filed ticket is a fresh open issue, and the issue
+      watch gate is **opt-in** (`labelPrefix` defaults to `lubbdubb`), so nothing picks it up. Under
+      `labelPrefix: ''` — the documented "act on everything" escape hatch — it **is** immediately
+      eligible, and an agent may redo the work. Suppressing that would be a gate keyed on provenance
+      sitting nowhere near the rule it modifies. Tests: `test/workGraphRoots.test.ts`.
 - **`src/delivery/` is stage 2 — the assessor, and the first thing to read the graph.** It reads it
   as an **agent**, not as a rule: `world_read`'s issue payload gained the work subtree (via
   `Store.listWorkSubtree`, so nothing new imports the fold and the lens assertion above is untouched).
