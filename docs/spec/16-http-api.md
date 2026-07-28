@@ -229,6 +229,21 @@ from, so the route cannot file a ticket for work the operator has dismissed. It 
 rather than a third `work_item_filings` status because that row's `job_id` is `NOT NULL` — a filing is
 an agent doing something, and an ignore is the operator saying nothing should be.
 
+### `GET /api/prompts`
+
+The rule dispatcher's prompt book: `{ dir, dispatcher, templates }`, where each template carries its
+id, doc, declared placeholders, **effective** text (the override where one exists) and `overridden`.
+`dir` is `promptTemplatesDir` — the path an operator would drop `<id>.md` into — which is what makes a
+read-only view actionable.
+
+Fetched on open rather than shipped on `/api/state`, the inverse of `/api/work`'s reason: the graph is
+fetched because it only ever grows, this because it never changes at all — the override directory is
+read once at boot, so re-sending the book every couple of seconds would be paying for a constant.
+
+**Read-only.** Overriding stays a file drop: a write route would have to answer "when does this take
+effect", and the honest answer is "at the next restart". `dispatcher` rides along so the panel can say
+that under `dispatcher: 'claude'` the LLM composes its own prompts and none of this book fires.
+
 ### `POST /api/stories/:id/watch`
 
 The same, for a story id, routed to the fake backlog's `StoryLabelCapable`.

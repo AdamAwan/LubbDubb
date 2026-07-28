@@ -39,6 +39,22 @@ What stops that becoming N divergent cockpits is the split on **behaviour weight
 what another skin would replace wholesale. Resolved by putting the _call_ on `CockpitActions` and
 leaving only the drag UI skin-side.
 
+**Two panels hang off the shell rather than off a skin**, below it, so they read the same whichever
+theme is on: the work graph (`WorkTreePanel`) and the prompt book (`PromptsPanel`). Both are absent
+from the view-model because both ride their own routes, **fetched on open, never polled** — the graph
+because it only ever grows, the book because it never changes at all. A skin drawing either would have
+to reach `api.js` directly, which is exactly what the skin seam forbids and `test/cockpitSkins.test.ts`
+asserts.
+
+The Prompts panel is a collapsed button that opens the list of ids (each with the opening sentence of
+its doc and an `overridden` badge), and a row opens a modal carrying the doc in full, the placeholders
+an override may use, the path of the override file, and the effective template text. It is read-only:
+the path is what makes it actionable, since overriding is a file drop
+([16](16-http-api.md#get-apiprompts)). Under `dispatcher: 'claude'` it says so — that dispatcher
+composes its own prompts and none of the book fires. The demo build serves an empty book: the web
+bundle imports no server code, and a copy of eighteen prompts shipped to fill the panel would be free
+to drift from the originals with nothing to catch it.
+
 `WorldSummary` moved the other way — out of Classic and into `components/` when the second skin
 arrived. Most of it is drawing, but the watch/ignore toggles and the conclusion verdict are operator
 controls with refusal rules behind them, which is the side of the split they belong on. A skin

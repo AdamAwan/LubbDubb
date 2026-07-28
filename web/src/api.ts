@@ -1,4 +1,4 @@
-import type { AppState, RecoveryVerdict, UnrecordedWorkView, WorkNodeView } from './types.js';
+import type { AppState, PromptTemplateView, RecoveryVerdict, UnrecordedWorkView, WorkNodeView } from './types.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 /**
@@ -93,6 +93,12 @@ const realApi = {
   getWorkSubtree: (ref: string) =>
     authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) =>
       json<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }>(r),
+    ),
+  // The prompt book, fetched on open for the opposite reason to the work graph:
+  // it is read once at boot, so polling it would be paying for a constant.
+  getPrompts: () =>
+    authFetch('/api/prompts').then((r) =>
+      json<{ dir: string | null; dispatcher: string; templates: PromptTemplateView[] }>(r),
     ),
   // Ask an agent to create a tracker item for work nothing external accounts for.
   // An operator's click, never a rule: see src/graph/unrecorded.ts.
