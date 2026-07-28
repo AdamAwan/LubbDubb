@@ -372,7 +372,7 @@ const DEFAULTS: Config = {
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
-  planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: false, gitFetchIntervalMs: 60_000 },
+  planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: true, gitFetchIntervalMs: 60_000 },
   assessment: { enabled: false },
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,

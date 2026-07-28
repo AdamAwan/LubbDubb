@@ -52,15 +52,18 @@ test('the planning funnel is off by default and deep-merged when overridden', ()
   assert.deepEqual(loadConfig().planning, {
     enabled: false,
     maxConcurrentPartsPerIssue: 2,
-    // Off within an *already-on* funnel too: turning planning on must not also
-    // change how a verdict lands (issue #109 phase 3).
-    requireApproval: false,
+    // On by default (issue #109 phase 3): a deployment that never turns the
+    // funnel on sees no difference, since `enabled` gates the whole thing —
+    // but the moment it is turned on, a decomposition is put to a human first.
+    requireApproval: true,
     gitFetchIntervalMs: 60_000,
   });
   const cfg = loadConfig({ planning: { enabled: true } as never });
   assert.equal(cfg.planning.enabled, true);
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 2, 'untouched fields keep their defaults');
-  assert.equal(cfg.planning.requireApproval, false);
+  // Turning the funnel on must not also change how a verdict lands: this default
+  // is carried over unmerged, the same as the other untouched fields above.
+  assert.equal(cfg.planning.requireApproval, true);
   assert.equal(cfg.planning.gitFetchIntervalMs, 60_000);
 });
 

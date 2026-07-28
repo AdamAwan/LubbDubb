@@ -484,7 +484,10 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 }
 
 test('plan_submit persists the verdict and hands the agent its status back', async () => {
-  const system = build();
+  // Pinned off: this test is about the tool's persistence mechanics, not the
+  // approval gate (which now defaults on and would land the verdict
+  // `awaiting_approval` instead — covered by `planApproval.test.ts`).
+  const system = build({ planning: { requireApproval: false } });
   const agent = spawnAgent(system, 'issue:12:plan');
 
   const res = await callTool(system, agent, 'plan_submit', {
@@ -717,7 +720,10 @@ test('world_read answers out of the harness view, with the status envelope on it
 });
 
 test('reading an issue carries the plan graph, which lives only in the store', async () => {
-  const system = build();
+  // Pinned off: this test is about `world_read` exposing the plan graph, not
+  // the approval gate (which now defaults on and would leave the plan
+  // `awaiting_approval` instead — covered by `planApproval.test.ts`).
+  const system = build({ planning: { requireApproval: false } });
   system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12, { body: 'Split me.' })] }));
   const planner = spawnAgent(system, 'issue:12:plan');
   await callTool(system, planner, 'plan_submit', {

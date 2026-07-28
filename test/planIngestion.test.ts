@@ -127,6 +127,10 @@ function planningConfig() {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
+    // Pinned off: `requireApproval` now defaults on, and this test is about
+    // ingestion (the plan.json transport persisting a verdict), not the
+    // approval gate — covered separately in `planApproval.test.ts`.
+    planning: { requireApproval: false } as never,
   });
 }
 
@@ -180,8 +184,8 @@ test('a planner writing plan.json persists the verdict at drain time, for both o
   );
   const plan = system.store.getPlanByOrigin('issue:12');
   assert.ok(plan, 'the plan was ingested from the worktree');
-  // `active`, not `awaiting_approval`: `planning.requireApproval` is off by
-  // default, so the file transport commits a decomposition exactly as it always
+  // `active`, not `awaiting_approval`: `planning.requireApproval` is pinned off
+  // above, so the file transport commits a decomposition exactly as it always
   // has (issue #109 phase 3 changes only where an *opted-in* verdict lands).
   assert.equal(plan!.status, 'active');
   assert.equal(plan!.reason, 'Schema first.');
