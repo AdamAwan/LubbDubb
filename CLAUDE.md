@@ -418,7 +418,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   table, so a column without an `ensureColumns` entry is invisible on every older database.
   `.lubbdubb/` is gitignored, so the graph genuinely lives only in the store.
   Tests: `test/issuePlan.test.ts`, `test/planIngestion.test.ts`.
-  - **Approval on by default, a plan modal, and discussing a plan (2026-07-28).**
+  - **Approval on by default, a plan modal, and discussing a plan.**
     `planning.requireApproval` now defaults `true` (only matters once `planning.enabled` is), and a
     plan gained five optional narrative fields (`risks`, `outOfScope`, `document` at plan level;
     `rationale`, `acceptance` per part) that `upsertPlan` preserves on absence rather than clearing.

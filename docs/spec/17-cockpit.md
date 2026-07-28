@@ -450,7 +450,7 @@ open a shared modal.
 - **Plan** — the planner's reason in full; **Risks** and **Deliberately out of scope** side by side
   when present; every part in dispatch order with its scope, `rationale` (why its own PR),
   `acceptance` (done when), the stack edge spelled out as a sentence rather than the terse `on <slug>`
-  chip, its status, its PR/branch when it has one, and its "Up next" queue state
+  chip, its status, its PR when it has one, and its "Up next" queue state
   (`unapproved` / `capped` / `▶ now`). The same amber cut line the Up-next queue and Plans panel
   already draw.
 - **Full write-up** — `plan.document`, rendered. Absent renders "This planner wrote no write-up",
@@ -463,11 +463,13 @@ settle nothing. While a plan is being discussed the modal shows the conversation
 agent's status and last note, and a reply box that posts through `POST /api/agents/:id/respond` — and
 offers **End discussion** instead of a verdict.
 
-**Markdown rendering is a new pure `web/src/components/markdown.ts`**: a subset (headings, lists,
-fenced and inline code, emphasis, blockquotes, links through the existing `linkify`) returning React
-nodes, **never `dangerouslySetInnerHTML`**. The same precedent as `ansi.ts` being hand-written rather
-than pulling in a library, and for a sharper reason here: `document` is agent-authored text, so a
-renderer that never interprets HTML has no injection surface to reason about at all.
+**Markdown rendering is a new pure `web/src/components/markdown.ts`**: a subset — ATX headings,
+unordered and ordered lists, fenced and inline code, blockquotes, paragraphs, and inline `code`,
+`**strong**` and `*emphasis*` — returning React nodes, **never `dangerouslySetInnerHTML`**. It does
+**not** render links: there is no `linkify` call in it, so a URL in a write-up appears as literal
+text. The same precedent as `ansi.ts` being hand-written rather than pulling in a library, and for a
+sharper reason here: `document` is agent-authored text, so a renderer that never interprets HTML has
+no injection surface to reason about at all.
 
 **Entry points** — the button or chip appears wherever a plan is mentioned:
 
