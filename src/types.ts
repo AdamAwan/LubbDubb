@@ -12,6 +12,21 @@
 
 export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 
+/**
+ * One CI check as its provider names it — a GitHub check-run or commit status
+ * context, an Azure blocking policy.
+ *
+ * {@link CiStatus} is the fold of these and stays the field every gate reads;
+ * this is the detail the fold used to discard, kept so per-check policy can act
+ * on *which* check went red (`src/ci/ciPolicy.ts`). Never `unknown`: a check
+ * that has not reported is `pending`, and a check with no signal at all is not
+ * in the list.
+ */
+export interface CiCheck {
+  name: string;
+  status: Exclude<CiStatus, 'unknown'>;
+}
+
 /** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */
 export type MergeableState = 'dirty' | 'behind' | 'blocked' | 'clean' | 'unknown';
 
@@ -30,6 +45,13 @@ export interface PullRequest {
   title: string;
   branch: string;
   ciStatus: CiStatus;
+  /**
+   * The individual checks {@link ciStatus} folds. Optional: a provider that
+   * doesn't report per-check detail (and every PR persisted before it did)
+   * leaves it unset, which the CI policy reads as "no detail" and therefore as
+   * the pre-policy behaviour — act on the failure generically.
+   */
+  ciChecks?: CiCheck[];
   /** Unresolved review comments waiting on the author. */
   unresolvedComments: PrComment[];
   /**

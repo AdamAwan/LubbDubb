@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
 import type { PlanningPolicy } from './plans/planning.js';
 import type { AssessmentPolicy } from './delivery/assessment.js';
+import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 
 /** Operator control over the MCP tool channel. See {@link Config.mcp}. */
 interface McpPolicy {
@@ -156,6 +157,18 @@ export interface Config {
    * every consumer falls back to the older "absence means merged" reading.
    */
   closedPrWindowMs: number;
+  /**
+   * Per-check CI policy: what the harness does about *which* check went red
+   * (`src/ci/ciPolicy.ts`). Rules are ordered and matched by glob against the
+   * check name; the first match wins.
+   *
+   * Empty by default, and empty means today's behaviour — any failing check gets
+   * a code agent with the generic fix prompt. A check matching no rule keeps that
+   * behaviour too, so this is purely a way to carve exceptions: a check somebody
+   * else owns (`onFailure: 'ignore'`), one worth a human's eye rather than an
+   * agent's (`'escalate'`), or one whose fix has a house recipe (`guidance`).
+   */
+  ci: CiPolicy;
   /**
    * How long an operator "Up next" priority override (issue #128) survives after
    * the harness stops tracking its origin. The override's `last_seen_at` is
@@ -376,6 +389,7 @@ const DEFAULTS: Config = {
   assessment: { enabled: false },
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
+  ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   dispatcher: 'rule',
   agentMode: 'stream',
@@ -469,6 +483,12 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
 
   // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.
   merged.auth = { ...DEFAULTS.auth, ...fromFile.auth, ...overrides.auth };
+
+  // The CI check rules are an ordered list, so this is a replace and not a merge:
+  // there is no sensible way to deep-merge two orderings, and a caller that sets
+  // `ci` means the list it wrote.
+  merged.ci = { checks: overrides.ci?.checks ?? fromFile.ci?.checks ?? DEFAULTS.ci.checks };
+  validateCiPolicy(merged.ci);
 
   // The one configuration that is never what anyone means. Turning auth off is a
   // supported local choice (it is how the test suite runs); binding a routable

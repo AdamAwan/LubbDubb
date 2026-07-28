@@ -174,6 +174,12 @@ function prView(pr: PullRequest, world: WorldSnapshot): Record<string, unknown> 
     state: prState(pr),
     closedAt: pr.closedAt ?? null,
     ciStatus: pr.ciStatus,
+    /**
+     * The individual checks behind `ciStatus`. An agent sent to fix CI otherwise
+     * has to shell out to `gh` to find out *which* check went red — the exact
+     * provider coupling this tool exists to remove.
+     */
+    ciChecks: pr.ciChecks ?? [],
     approved: pr.approved ?? false,
     mergeable: pr.mergeable ?? null,
     mergeableState: pr.mergeableState ?? 'unknown',

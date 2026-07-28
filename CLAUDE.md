@@ -1339,6 +1339,36 @@ so the executor runs it directly.
   `basePrOf` / `inheritedCiFailure` (see "Stack safety" above). Keep these pure and unit-tested
   (`test/prHealth.test.ts` / `test/prExclusion.test.ts` / `test/stackedPrs.test.ts`); don't inline
   the logic.
+- **`src/ci/ciPolicy.ts` decides rule 1 per failing check, and it exists because `ciStatus` is a fold.**
+  One aggregate verdict meant one response to every failure. That is right for a broken build and wrong
+  three ways: a lint failure has a house fix, a flaky suite wants latitude, and a red check another team
+  owns is not fixable by an agent at all — dispatching into that last case burns the origin's attempt cap
+  and ends in a cooldown escalation blaming the agent for a wall it was never getting through. So
+  `PullRequest.ciChecks` carries the names the fold used to discard (GitHub check-runs + commit statuses,
+  Azure blocking policy evaluations), and `classifyCiFailures(checks, policy)` says what to do. Five things
+  carry it:
+  - **Two silences are deliberately different.** A provider reporting **no checks** is missing detail, not
+    reporting health, so the verdict is `actionable` with empty lists — today's behaviour, which is what
+    keeps the `fake` provider and every persisted pre-feature row working unchanged. A check matching **no
+    rule** is actionable _and named_, so a CI job added next week gets fixed rather than silently parking
+    every red PR forever. Config is purely additive; the escape hatches are opt-in per check.
+  - **The verdict is per PR, not per check**, because one agent works a branch: all its failures are one
+    job. Distinct origins per check (`pr:42:ci:lint`) would buy nothing — the branch gate collapses the
+    second into a `respond_to_agent` note anyway — so the guidance from every matched rule is **appended**
+    to one prompt. Appended, not interpolated: `pr-ci-fix` is operator-overridable and `loadPromptTemplates`
+    rejects only _unknown_ placeholders, so a `{checks}` token would be silently dropped by exactly the
+    overrides that customised most. Same reason the rejection note and the outstanding-work note append.
+  - **Held checks are named to the agent, not hidden from it.** An agent that cannot see them watches CI
+    stay red after a correct fix and starts chasing a failure that was never its own.
+  - **Escalate fires only when nothing is dispatchable** (rule `pr-ci-blocked`, 1b). An escalation
+    alongside a dispatch asks a human to look at a PR an agent is already working. Asked **once**, deduped
+    on both an open escalation for `pr:<n>:ci` _and_ a recent executed one in the audit log — each covers
+    the other's blind spot (an inbox item outliving the decision window, a decision outliving the item).
+  - **`urgent` is a boolean, not a rank.** The harness already has one numeric priority axis
+    (`priority_overrides` / `rankByPriorityOverride`); a second claiming to order the same queue is two
+    answers to one question. `loadConfig` **throws** on `guidance`/`urgent` attached to a rule that never
+    dispatches — both are written for an agent that would never be sent, and dropping them silently is the
+    3am failure. Tests: `test/ciPolicy.test.ts`.
 - **`src/prAttention.ts` is the second PR verdict, and it answers a different question (#123).**
   `prHealth` answers _can this merge_; `prAttentionStatus(pr, ctx)` answers **whose turn is it** —
   `{status, reasons}` over `done` / `ignored` / `you` / `harness` / `elsewhere` / `settled` /

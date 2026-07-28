@@ -359,6 +359,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           // Likewise rule-dispatcher only: the assessor is a rule, and the LLM
           // dispatcher reasons in prose with no equivalent branch.
           config.assessment,
+          // Per-check CI policy narrows rule 1. The LLM dispatcher composes its
+          // own prompts from the world and has no rule to narrow.
+          config.ci,
         );
 
   // The store holds scheduling intent; this folds git + provider reality back onto

@@ -141,22 +141,22 @@ function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
 
 test('aggregateCiStatus: any failing check wins', () => {
   const runs: GhCheckRun[] = [
-    { status: 'completed', conclusion: 'success' },
-    { status: 'completed', conclusion: 'failure' },
+    { name: 'build', status: 'completed', conclusion: 'success' },
+    { name: 'lint', status: 'completed', conclusion: 'failure' },
   ];
   assert.equal(aggregateCiStatus(runs, { state: 'success', totalCount: 1 }), 'failing');
 });
 
 test('aggregateCiStatus: pending when a run is in progress and none failed', () => {
   const runs: GhCheckRun[] = [
-    { status: 'completed', conclusion: 'success' },
-    { status: 'in_progress', conclusion: null },
+    { name: 'build', status: 'completed', conclusion: 'success' },
+    { name: 'e2e', status: 'in_progress', conclusion: null },
   ];
   assert.equal(aggregateCiStatus(runs, { state: '', totalCount: 0 }), 'pending');
 });
 
 test('aggregateCiStatus: passing when all signals succeed', () => {
-  const runs: GhCheckRun[] = [{ status: 'completed', conclusion: 'success' }];
+  const runs: GhCheckRun[] = [{ name: 'build', status: 'completed', conclusion: 'success' }];
   assert.equal(aggregateCiStatus(runs, { state: 'success', totalCount: 2 }), 'passing');
 });
 
@@ -246,7 +246,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
     reviews: { 7: [{ reviewerLogin: 'bob', state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' }] },
     reviewComments: { 7: [{ id: 100, authorLogin: 'bob', body: 'why?', inReplyToId: null }] },
     combinedStatus: { sha7: { state: 'success', totalCount: 1 } },
-    checkRuns: { sha7: [{ status: 'completed', conclusion: 'success' }] },
+    checkRuns: { sha7: [{ name: 'build', status: 'completed', conclusion: 'success' }] },
   });
   const store = new Store(':memory:');
   const sc = new GitHubSourceControlIntegration({ api, store });

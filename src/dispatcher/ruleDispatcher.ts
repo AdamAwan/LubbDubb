@@ -13,6 +13,7 @@ import {
   type IssuePickupPolicy,
 } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
+import { ciFailureNote, ciNeedsHuman, classifyCiFailures, type CiPolicy, type CiVerdict } from '../ci/ciPolicy.js';
 import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } from '../proposals/proposals.js';
 import type { DispatchRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
@@ -88,6 +89,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly defaultBranch: string;
   private readonly planning: PlanningPolicy;
   private readonly assessment: AssessmentPolicy;
+  private readonly ci: CiPolicy;
 
   /**
    * `pickup` gates and orders issue pickup (rule 4). Omitted/partial => no gate
@@ -102,7 +104,9 @@ export class RuleDispatcher implements Dispatcher {
    * the plan funnel (rule 3c) on; omitted/disabled leaves rule 4 un-narrowed and
    * behaviour exactly as it is without plans. `assessment` turns rule 3e on;
    * omitted/disabled means no assessor fires and no issue is ever parked as
-   * delivered, so pickup behaves exactly as it does today.
+   * delivered, so pickup behaves exactly as it does today. `ci` decides rule 1
+   * per failing check; omitted/empty means every failure is acted on generically,
+   * which is what the rule did before per-check policy existed.
    */
   constructor(
     pickup: Partial<IssuePickupPolicy> = {},
@@ -111,8 +115,10 @@ export class RuleDispatcher implements Dispatcher {
     defaultBranch = 'main',
     planning: Partial<PlanningPolicy> = {},
     assessment: Partial<AssessmentPolicy> = {},
+    ci: Partial<CiPolicy> = {},
   ) {
     this.defaultBranch = defaultBranch;
+    this.ci = { checks: ci.checks ?? [] };
     this.planning = {
       enabled: planning.enabled ?? DEFAULT_PLANNING.enabled,
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
@@ -251,17 +257,59 @@ export class RuleDispatcher implements Dispatcher {
       // push down. Only the CI rule is suppressed — the base-update rule below still
       // fires, which is what keeps a stack restacking when its parent pushes.
       const inheritedFailure = inheritedCiFailure(pr, openPrs);
-      if (pr.ciStatus === 'failing' && inheritedFailure === null) {
+      // Which checks failed decides what happens, not merely that CI is red. An
+      // unconfigured harness — and a provider that reports no per-check detail —
+      // yields `actionable` with empty lists, i.e. exactly the behaviour above.
+      const ciVerdict = classifyCiFailures(pr.ciChecks, this.ci);
+      const ciFailing = pr.ciStatus === 'failing' && inheritedFailure === null;
+      if (ciFailing && ciVerdict.actionable) {
+        const ciOrigin = `pr:${pr.number}:ci`;
         concerns.push({
           rule: 'pr-ci-failing',
-          origin: `pr:${pr.number}:ci`,
+          origin: ciOrigin,
           title: `Fix failing CI on PR #${pr.number}`,
-          prompt: this.templates.render('pr-ci-fix', { number: pr.number, title: pr.title, branch: pr.branch }),
-          dispatchReason: `PR #${pr.number} has failing CI and no agent is on it.`,
-          note: `CI is now failing on PR #${pr.number} — investigate and push a fix.`,
+          // Appended, never interpolated: `pr-ci-fix` is operator-overridable and
+          // an override written before this existed would silently drop every
+          // word of the operator's own per-check guidance (see `ciFailureNote`).
+          prompt:
+            this.templates.render('pr-ci-fix', { number: pr.number, title: pr.title, branch: pr.branch }) +
+            ciFailureNote(ciVerdict),
+          dispatchReason: ciDispatchReason(pr.number, ciVerdict),
+          note: `CI is now failing on PR #${pr.number} — investigate and push a fix.${ciFailureNote(ciVerdict)}`,
           originTitle: pr.title,
           originSummary: `PR #${pr.number} on branch ${pr.branch} · CI ${pr.ciStatus}${pr.approved ? ' · approved' : ''}`,
+          urgent: ciVerdict.urgent,
         });
+      } else if (ciFailing && ciNeedsHuman(ciVerdict)) {
+        // Nothing an agent can fix, and the operator asked to be told. Put it to
+        // a human once: an open item on the same origin *is* the visible state,
+        // and a recent one in the audit log covers the case where it has since
+        // been answered but the world has not moved. Both, because each covers
+        // the other's blind spot — an inbox that outlives the decision window,
+        // and a decision that outlives the inbox item.
+        const ciOrigin = `pr:${pr.number}:ci`;
+        const alreadyAsked =
+          ctx.openEscalations.some((e) => e.context.originRef === ciOrigin) ||
+          ctx.recentDecisions.some(
+            (d) =>
+              d.outcome === 'executed' &&
+              d.action.type === 'escalate_to_human' &&
+              (d.action.context as { originRef?: unknown } | undefined)?.originRef === ciOrigin,
+          );
+        if (!alreadyAsked) {
+          const names = ciVerdict.escalate.map((m) => m.name).join(', ');
+          raw.push({
+            type: 'escalate_to_human',
+            escalationType: 'resolve_ambiguity',
+            prompt:
+              `CI is failing on PR #${pr.number} ("${pr.title}"), and every failing check is one you have told ` +
+              `the harness not to act on: ${names}. No agent has been dispatched. This needs someone who can ` +
+              `reach whoever owns those checks.`,
+            context: { originRef: ciOrigin, prNumber: pr.number, taskTitle: pr.title },
+            rule: 'pr-ci-blocked',
+            reason: `PR #${pr.number} is red only on checks configured to escalate (${names}).`,
+          } satisfies RawAction);
+        }
       }
       if (needsBaseUpdate(pr)) {
         const base = pr.baseBranch ?? this.defaultBranch;
@@ -380,9 +428,15 @@ export class RuleDispatcher implements Dispatcher {
       }
     }
 
-    // Cross-PR ranking: the most urgent concern class first (CI > base-update >
-    // review comment), tie-break by PR number for determinism.
-    prCandidates.sort((a, b) => concernUrgency(a.top.rule) - concernUrgency(b.top.rule) || a.pr.number - b.pr.number);
+    // Cross-PR ranking: an operator-flagged urgent check first, then the most
+    // urgent concern class (CI > base-update > review comment), tie-break by PR
+    // number for determinism.
+    prCandidates.sort(
+      (a, b) =>
+        Number(b.top.urgent ?? false) - Number(a.top.urgent ?? false) ||
+        concernUrgency(a.top.rule) - concernUrgency(b.top.rule) ||
+        a.pr.number - b.pr.number,
+    );
     for (const { pr, top } of prCandidates) {
       consider(
         {
@@ -1099,6 +1153,23 @@ interface PrConcern {
   // the cockpit can explain a running agent at a glance (issue #17).
   originTitle: string;
   originSummary: string;
+  /**
+   * Sort this PR ahead of every other PR concern. Set only by a CI check rule
+   * carrying `urgent` — the operator saying a red security scan outranks a
+   * behind-base branch elsewhere. Never re-orders past a held verdict or the
+   * headroom cut; it decides position in the queue and nothing else.
+   */
+  urgent?: boolean;
+}
+
+/**
+ * Name the failing checks in the audit line when the provider reported them, so
+ * the decision log says *why* an agent went out rather than only that CI was red.
+ */
+function ciDispatchReason(prNumber: number, verdict: CiVerdict): string {
+  const names = verdict.dispatch.map((m) => m.name);
+  if (names.length === 0) return `PR #${prNumber} has failing CI and no agent is on it.`;
+  return `PR #${prNumber} has failing CI (${names.join(', ')}) and no agent is on it.`;
 }
 
 /** A ranked agent-dispatch candidate awaiting the headroom cut. */

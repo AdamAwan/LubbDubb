@@ -173,7 +173,11 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async getCombinedStatus(sha: string): Promise<GhCombinedStatus> {
     const { data } = await this.octokit.repos.getCombinedStatusForRef({ ...this.base, ref: sha });
-    return { state: data.state, totalCount: data.total_count };
+    return {
+      state: data.state,
+      totalCount: data.total_count,
+      statuses: data.statuses.map((s) => ({ context: s.context, state: s.state })),
+    };
   }
 
   async listCheckRuns(sha: string): Promise<GhCheckRun[]> {
@@ -182,7 +186,7 @@ export class OctokitGitHubApi implements GitHubApi {
       ref: sha,
       per_page: 100,
     });
-    return runs.map((run) => ({ status: run.status, conclusion: run.conclusion }));
+    return runs.map((run) => ({ name: run.name, status: run.status, conclusion: run.conclusion }));
   }
 
   async listOpenIssues(label?: string): Promise<GhIssue[]> {

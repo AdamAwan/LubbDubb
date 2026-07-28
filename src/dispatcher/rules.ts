@@ -26,6 +26,12 @@ export const DISPATCH_RULES = {
     description:
       'A PR with failing CI gets a code agent on its branch to investigate and push a fix — broken builds block everything downstream, so this outranks all other work.',
   },
+  'pr-ci-blocked': {
+    number: '1b',
+    name: 'CI blocked elsewhere',
+    description:
+      'Every failing check on this PR is one the operator configured as somebody else’s to fix, and at least one asked to be escalated rather than ignored. No agent is dispatched — a human is asked once, since nothing an agent can do would turn the PR green.',
+  },
   'pr-base-update': {
     number: '2',
     name: 'Base out of date',
