@@ -15,6 +15,7 @@ export function EscalationCard({
   onDismiss,
   onOpenAgent,
   onComplete,
+  onViewPlan,
 }: {
   escalation: Escalation;
   /** The act this item asks you to authorize, when it is a decision and not a question. */
@@ -43,6 +44,8 @@ export function EscalationCard({
    * for direction — and often the direction is "you're finished".
    */
   onComplete?: (agentId: string) => Promise<unknown> | unknown;
+  /** Open the full plan behind a `plan` proposal — the card carries a summary, not the decomposition. */
+  onViewPlan?: (planId: string) => void;
 }) {
   const [text, setText] = useState('');
   const send = useAsyncAction();
@@ -138,6 +141,17 @@ export function EscalationCard({
               Mark work done
             </AsyncButton>
           ) : null}
+          {proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? (
+            <button className="btn ghost small" onClick={() => onViewPlan(context.planId as string)}>
+              View the full plan →
+            </button>
+          ) : null}
+        </div>
+      ) : proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? (
+        <div className="esc-agent-actions">
+          <button className="btn ghost small" onClick={() => onViewPlan(context.planId as string)}>
+            View the full plan →
+          </button>
         </div>
       ) : null}
 

@@ -236,6 +236,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
             onDismiss={(id, note) => actions.dismissEscalation(id, note)}
             onOpenAgent={(id) => actions.select(id)}
             onComplete={(id) => actions.completeAgent(id)}
+            onViewPlan={(id) => actions.viewPlan(id)}
           />
         ))}
       </div>
@@ -293,6 +294,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         refUrls={state.refUrls}
         paused={stopped}
         onReplan={(planId) => actions.replan(planId)}
+        onViewPlan={(id) => actions.viewPlan(id)}
       />
     </section>
   );
@@ -314,6 +316,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         onToggleIssueWatch={(issueNumber, watched) => actions.setIssueWatched(issueNumber, watched)}
         onToggleStoryWatch={(storyId, watched) => actions.setStoryWatched(storyId, watched)}
         onSetConclusion={(issueNumber, verdict) => actions.setIssueConclusion(issueNumber, verdict)}
+        onViewPlan={(id) => actions.viewPlan(id)}
       />
     </section>
   );

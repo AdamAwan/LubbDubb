@@ -24,6 +24,7 @@ export function PlanPanel({
   now,
   refUrls,
   onReplan,
+  onViewPlan,
 }: {
   plans: Plan[];
   parts: PlanPart[];
@@ -32,6 +33,8 @@ export function PlanPanel({
   now: number;
   refUrls: Record<string, string>;
   onReplan: (planId: string) => Promise<unknown> | unknown;
+  /** Open the full plan modal — the parts, their scopes, and the planner's write-up. */
+  onViewPlan: (planId: string) => void;
 }) {
   if (plans.length === 0) {
     return <p className="empty">No plans — the planning funnel is off, or no issue has been planned yet.</p>;
@@ -48,6 +51,7 @@ export function PlanPanel({
           now={now}
           refUrls={refUrls}
           onReplan={onReplan}
+          onViewPlan={onViewPlan}
         />
       ))}
     </div>
@@ -61,6 +65,7 @@ function PlanCard({
   now,
   refUrls,
   onReplan,
+  onViewPlan,
 }: {
   plan: Plan;
   parts: PlanPart[];
@@ -68,6 +73,7 @@ function PlanCard({
   now: number;
   refUrls: Record<string, string>;
   onReplan: (planId: string) => Promise<unknown> | unknown;
+  onViewPlan: (planId: string) => void;
 }) {
   const issueNumber = issueOf(plan.originRef);
   const live = parts.filter((p) => p.status !== 'retired');
@@ -93,6 +99,13 @@ function PlanCard({
             {merged}/{live.length} merged
           </span>
         )}
+        <button
+          className="btn ghost world-toggle"
+          onClick={() => onViewPlan(plan.id)}
+          title="The whole plan: every part's scope, why it is its own PR, and the planner's write-up"
+        >
+          view
+        </button>
         <AsyncButton
           className="ghost world-toggle"
           onClick={() => onReplan(plan.id)}

@@ -135,12 +135,15 @@ export function WorldSummary({
   onToggleIssueWatch,
   onToggleStoryWatch,
   onSetConclusion,
+  onViewPlan,
 }: {
   state: AppState;
   onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
   onToggleIssueWatch: (issueNumber: number, watched: boolean) => Promise<unknown> | unknown;
   onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
   onSetConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) => Promise<unknown> | unknown;
+  /** Open the full plan for an issue's decomposition, when it has one. */
+  onViewPlan: (planId: string) => void;
 }) {
   const [tab, setTab] = useState<WatchBucket>('watched');
   const { pullRequests, issues, stories } = state.world;
@@ -297,7 +300,23 @@ export function WorldSummary({
                 ignored
               </span>
             )}
-            {showPickupChip && pickupChip(i.pickup)}
+            {showPickupChip &&
+              (() => {
+                const chip = pickupChip(i.pickup);
+                if (!chip) return null;
+                const plan = (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`);
+                return plan ? (
+                  <button
+                    className="btn ghost small chip-button"
+                    onClick={() => onViewPlan(plan.id)}
+                    title="Open the plan for this issue"
+                  >
+                    {chip}
+                  </button>
+                ) : (
+                  chip
+                );
+              })()}
             {conclusionChip(i.conclusion)}
             {i.linkedPrNumber !== null && (
               <span

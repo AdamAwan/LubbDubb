@@ -814,6 +814,15 @@ body {
 .world-toggle ~ .world-toggle {
   margin-left: 0;
 }
+/* The pickup chip becomes clickable when its issue has a plan — strip every bit
+   of button chrome so it reads as the same chip, not a chip inside a button. */
+.chip-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
 
 .auditlog {
   max-height: 75vh;
