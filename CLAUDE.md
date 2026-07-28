@@ -555,6 +555,49 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   fix the file it names rather than the assertion. Served on its own routes (`GET /api/work`,
   `/api/work/:ref`) and never on `/api/state`, which is polled — `web/src/components/WorkTreePanel.tsx`
   fetches on open, and hangs off the shell rather than a skin because a skin may not reach `api.js`.
+  - **The one known gap, ruled on and left**: `record` reads `existing` as
+    `listWorkRoots().flatMap(listWorkSubtree)`, which reaches a node only if its whole ancestor chain
+    has rows — so on a backfill a plan/part whose issue is already closed (providers list open issues
+    only) is invisible to the fold. Conservative in consequence (the node stays stale at `open` rather
+    than being falsely marked merged) and closing it costs a fourth store method where the spec argued
+    for three. Written up in `docs/spec/14-persistence.md` rather than only in a PR body.
+- **`src/delivery/` is stage 2 — the assessor, and the first thing to read the graph.** It reads it
+  as an **agent**, not as a rule: `world_read`'s issue payload gained the work subtree (via
+  `Store.listWorkSubtree`, so nothing new imports the fold and the lens assertion above is untouched).
+  `delivered` is the harness's own park — rule 3b's review-state hold generalised off the tracker,
+  because that hold is a _tracker state_ and GitHub has none, which is why `openPrForIssue` reading
+  only the open list lets a merged PR's issue back into rule 4 every pulse. It is deliberately weaker
+  than the tracker's `closed`: reversible, gates pickup and nothing else, and never closes a ticket.
+  What carries it:
+  - **A fresh `issue_deliveries` table, not a third `IssueConclusionVerdict`** — the proposals-vs-
+    escalations argument again. A conclusion is declared once by the agent that did the work and
+    gates nothing; a delivery verdict is re-read by a gate every pulse and expires on world signal.
+    The two are mutually exclusive and each write clears the other **in the store**, because a caller
+    that remembered one and forgot the other would have rule 3b return an item to pickup while this
+    gate held it.
+  - **`deliveryHold` has two arms and no timer**, asked in two places off the one predicate (rule 4's
+    filter and `issuePickupStatus`). The **tracker move** is arm 1 and reads the issue's _current_
+    pickup state rather than a transition, because `worldDiff` emits nothing for a `workItemState`
+    change — and state survives a restart where an event between two pulses does not; adding an
+    `issue_state` event was refused as reintroducing exactly that fragility. Arm 2 is phase 4's
+    rejection expiry (any transition on `issue:<n>` after the verdict), which covers the providers
+    where arm 1 cannot fire. **No timer arm**: an accepted proposal waits on the world to _reflect_
+    something done (a duration), a delivered issue waits on it to _become_ something else (an event).
+    The operator's clear is a delete, which is why it is not an arm.
+  - **Rule `issue-assess` (3e) is not driven off `eligibleIssues`**, for rule 4a's reason: that list
+    applies the workflow-state gate and the Azure case this covers is precisely an item parked in the
+    review state. **`hasPriorWork` does two jobs** — it stops every fresh issue getting an assessor
+    that reports nothing was done, _and_ it is the discriminator that lets assess and pickup coexist
+    on an issue both would claim (nothing started → pickup, something finished → ask). It is answered
+    from `ctx.tasks`, **never the graph**, even though `issue:<n>`/`issue:<n>:*` is the subtree's own
+    vocabulary. An assessed issue is **suppressed** from rule 4 that cycle or two agents land on it,
+    and the rule **fails open** like the planner (spent cap → ordinary pickup, no escalation), since
+    narrowing rule 4 without that turns an assessor crash into a permanently parked issue.
+  - **`assess_issue` refuses every agent that is doing the work** — `conclusionOrigin`'s discipline
+    pointed the other way, because judging your own delivery is not an assessment. Off by default
+    (`assessment.enabled`), like `planning` and unlike `mcp`: it gates pickup and spends an agent, so
+    it is not purely additive. Tests: `test/delivery.test.ts`, `test/issueAssess.test.ts`,
+    `test/issueDelivery.test.ts`.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → plan reconciliation → work-graph record → `Dispatcher.decide` →

@@ -55,6 +55,7 @@ expand a row into the rule that fired and why that rule exists.
 | `work-item-back-to-pickup` | 3b   | Return from review state | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion. |
 | `issue-plan`               | 3c   | Issue needs a plan       | With planning on, a watched open issue has no plan yet — or an operator asked for a replan.              |
 | `plan-approval`            | 3d   | Plan needs your approval | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.    |
+| `issue-assess`             | 3e   | Issue may be finished    | With assessment on, a watched open issue has had work, has nothing in flight and no open PR.             |
 | `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                       |
 | `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                |
 | `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                  |
@@ -92,11 +93,14 @@ Candidates are appended in this order, and the order _is_ the priority:
    comment) then by PR number. World order is arbitrary and must not decide who wins scarce headroom.
    Only the single most urgent concern per PR becomes a candidate.
 3. **Planners** (rule 3c) — a planner unblocks work, so it wins a slot before the work it unblocks.
-4. **Plan parts** (rule 4a), ranked by dependency depth, then issue number, then part sequence, so
+4. **Assessors** (rule 3e) — an assessment decides whether an issue needs work at all, so it is
+   asked before the work is scheduled. An assessed issue is **suppressed** from rule 4 that cycle;
+   see below.
+5. **Plan parts** (rule 4a), ranked by dependency depth, then issue number, then part sequence, so
    the bottom of a stack is cut before the branch its dependents will base on is needed.
-5. **Issue pickups** (rule 4), ordered by label-encoded priority then issue number.
-6. **Story grooming and WAF** (rules 5/6).
-7. **Story pickup** (rule 7) — ranked last, so at zero headroom it queues as `waiting` rather than
+6. **Issue pickups** (rule 4), ordered by label-encoded priority then issue number.
+7. **Story grooming and WAF** (rules 5/6).
+8. **Story pickup** (rule 7) — ranked last, so at zero headroom it queues as `waiting` rather than
    silently vanishing.
 
 Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `escalate_to_human`,
@@ -198,6 +202,54 @@ A decomposed item needs no special case here: an in-flight plan resolves to `mor
 roll-up and a `complete` one to `done`, which is exactly what the old explicit `decomposed` check
 gave it — the item stays in the review state for the whole life of its plan rather than bouncing back
 to "Ready" in every gap between parts.
+
+## Rule 3e — the assessor
+
+`assessment.enabled` (**off by default**) puts an assessing agent in front of re-pickup. It exists
+because rule 3b's park is a **tracker state**, so it only protects providers that have one: on
+GitHub there is no review state, `openPrForIssue` reads only the open list, and the moment a
+delivering PR merges the issue is again "open, watched, no open PR" — rule 4's entire precondition.
+A fresh agent is then put on work already sitting on the default branch, bounded only by the attempt
+cap. `delivered` is the same park, generalised off the tracker onto a row the harness owns.
+
+The rule dispatches a **code** agent — it needs a worktree to read what was delivered — on branch
+`assess/issue/<n>`, origin `issue:<n>:assess`, based on `defaultBranch` (merged work is _on_ it, so
+it is the only checkout in which the question can be answered). The branch namespace is not
+cosmetic, for `plan/issue/<n>`'s reason: git stores refs as files, so `refs/heads/issue/12` and
+`refs/heads/issue/12/assess` cannot coexist.
+
+It fires for issue N when all of:
+
+- N is open and passes `issueWatchGateReason`. Deliberately **not** driven off `eligibleIssues`, for
+  rule 4a's reason — that list applies the workflow-state gate, and the Azure case this must cover
+  is precisely an item rule 3b parked in the review state.
+- No `delivered` verdict stands, no open PR, and no plan still scheduling something
+  (`planning`/`active`/`awaiting_approval`).
+- Nothing live on `issue:N` or any `issue:N:*` origin.
+- **At least one task has ever existed** on `issue:N` or a descendant origin (`hasPriorWork`).
+- `dispatchVerdict('issue:N:assess')` says dispatch.
+
+The prior-work condition does two jobs. It stops the assessor being noise — without it a brand-new
+issue satisfies every other precondition trivially, since nothing is in flight because nothing ever
+started. It is also the **discriminator that lets assess and pickup coexist** on an issue both would
+otherwise claim: no prior tasks means the work has not started, so rule 4 picks it up; prior tasks
+with nothing in flight means it may be finished, so the assessor asks. An issue the assessor claims
+this cycle is **suppressed** from rule 4, or two agents land on it — one judging, one redoing.
+
+It is answered from `ctx.tasks`, **never from the work graph**. `issue:<n>` and `issue:<n>:*` is
+exactly the subtree's origin vocabulary, which is why it reads like a graph query; it is the same
+question asked of the source the dispatcher already holds. Nothing in `src/dispatcher/` reads the
+graph — see [`14-persistence.md`](14-persistence.md).
+
+**It fails open**, exactly as the planner does: a spent attempt cap returns the issue to ordinary
+pickup with **no escalation**, because narrowing rule 4 without that turns any assessor crash into a
+permanently parked issue. A cooling assessor suppresses pickup for that cycle only and stays visible
+in the queue as `cooldown`.
+
+The agent casts its verdict with the `assess_issue` tool ([`11-mcp-tools.md`](11-mcp-tools.md)):
+`delivered` writes the park, `more_work` writes the `issue_conclusions` row rule 3b's inverse arm
+already reads. See [`06-issue-pickup.md`](06-issue-pickup.md) for what the park holds and what ends
+it.
 
 ## Rule 3 — the merge gate
 
