@@ -273,7 +273,13 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // matching HTTP's. The `dirty` is what empties the panel in every open cockpit —
   // this is a delete, so a second one watching must not go on showing rows that
   // are gone.
-  app.post('/api/errors/clear', async () => {
+  //
+  // It opts into rate limiting for the same reason the artifact and work routes do
+  // and `/api/state` does not: it writes the store on demand rather than on the
+  // cockpit's poll, and a `DELETE` over a table with no bound on its row count is
+  // unbounded work behind a fixed-size request. A clear is one deliberate two-step
+  // click, so the ceiling sits far above any real interaction.
+  app.post('/api/errors/clear', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async () => {
     const cleared = store.clearErrors();
     hub.broadcast({ type: 'dirty' });
     return { ok: true, cleared };

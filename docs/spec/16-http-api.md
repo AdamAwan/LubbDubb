@@ -125,6 +125,11 @@ A `POST` rather than a `DELETE`: the auth hook and the structural route-table te
 key on the `/api` prefix, and one verb for one meaning on this surface is worth more than matching
 HTTP's.
 
+**Rate-limited to 60/minute**, for the reason the artifact and `/api/work` routes are and `/api/state`
+is not: it writes the store on demand rather than on the cockpit's poll, and a delete over a table with
+no bound on its row count is unbounded work behind a fixed-size request. One deliberate two-step click
+never approaches the ceiling.
+
 ### `POST /api/inject`
 
 **403 unless a `fake` provider is configured** — defence in depth, since the cockpit also hides the
