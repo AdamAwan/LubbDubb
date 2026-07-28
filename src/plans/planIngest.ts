@@ -66,7 +66,15 @@ export function ingestPlanDocument(
   const surviving = existing.filter((p) => !retiring.has(p.id));
   const status = amendedPlanStatus(doc.verdict, surviving, input.requireApproval ?? false);
 
-  const plan = store.upsertPlan({ originRef, title, status, reason: doc.reason });
+  const plan = store.upsertPlan({
+    originRef,
+    title,
+    status,
+    reason: doc.reason,
+    risks: doc.risks ?? null,
+    outOfScope: doc.outOfScope ?? null,
+    document: doc.document ?? null,
+  });
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
   if (declared.length > 0) store.upsertPlanParts(plan.id, declared);
 

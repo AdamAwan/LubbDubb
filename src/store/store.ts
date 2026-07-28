@@ -101,6 +101,20 @@ export class Store {
     this.ensureColumns('findings', {
       ticket_ref: 'TEXT',
     });
+    // `plans`/`plan_parts` were introduced as fresh `CREATE TABLE`s and needed no
+    // entry here. Columns added to them *now* do: `CREATE TABLE IF NOT EXISTS`
+    // never alters an existing table, so without these the fields are invisible
+    // on every database that predates them.
+    this.ensureColumns('plans', {
+      risks: 'TEXT',
+      out_of_scope: 'TEXT',
+      document: 'TEXT',
+      discussing: 'INTEGER NOT NULL DEFAULT 0',
+    });
+    this.ensureColumns('plan_parts', {
+      rationale: 'TEXT',
+      acceptance: 'TEXT',
+    });
   }
 
   private ensureColumns(table: string, columns: Record<string, string>): void {
@@ -432,6 +446,9 @@ export class Store {
     title: string;
     status: PlanStatus;
     reason?: string | null;
+    risks?: string | null;
+    outOfScope?: string | null;
+    document?: string | null;
     statusCommentRef?: string | null;
   }): Plan {
     const existing = this.getPlanByOrigin(input.originRef);
@@ -442,6 +459,14 @@ export class Store {
       title: input.title,
       status: input.status,
       reason: input.reason ?? null,
+      // Preserved on absence for the same reason `statusCommentRef` is: a caller
+      // that writes a status without re-stating the narrative must not erase it.
+      risks: input.risks ?? existing?.risks ?? null,
+      outOfScope: input.outOfScope ?? existing?.outOfScope ?? null,
+      document: input.document ?? existing?.document ?? null,
+      // Not settable here: discussion is its own one-way transition (`setPlanDiscussing`),
+      // so an ingestion cannot accidentally re-open one it is meant to be closing.
+      discussing: existing?.discussing ?? false,
       // Preserve a comment ref an earlier write established unless one is given —
       // the plan's status comment is edited in place, so losing the id orphans it.
       statusCommentRef: input.statusCommentRef ?? existing?.statusCommentRef ?? null,
@@ -450,12 +475,13 @@ export class Store {
     };
     this.db
       .prepare(
-        `INSERT INTO plans (id, origin_ref, title, status, reason, status_comment_ref, created_at, updated_at)
-         VALUES (@id, @originRef, @title, @status, @reason, @statusCommentRef, @createdAt, @updatedAt)
+        `INSERT INTO plans (id, origin_ref, title, status, reason, risks, out_of_scope, document, discussing, status_comment_ref, created_at, updated_at)
+         VALUES (@id, @originRef, @title, @status, @reason, @risks, @outOfScope, @document, @discussing, @statusCommentRef, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET title=excluded.title, status=excluded.status,
-           reason=excluded.reason, status_comment_ref=excluded.status_comment_ref, updated_at=excluded.updated_at`,
+           reason=excluded.reason, risks=excluded.risks, out_of_scope=excluded.out_of_scope,
+           document=excluded.document, status_comment_ref=excluded.status_comment_ref, updated_at=excluded.updated_at`,
       )
-      .run(plan);
+      .run({ ...plan, discussing: plan.discussing ? 1 : 0 });
     return plan;
   }
 
@@ -644,6 +670,8 @@ export class Store {
         seq: input.seq,
         title: input.title,
         scope: input.scope,
+        rationale: input.rationale,
+        acceptance: input.acceptance,
         dependsOn: input.dependsOn,
         branch: prev?.branch ?? null,
         prNumber: prev?.prNumber ?? null,
@@ -655,9 +683,10 @@ export class Store {
       return part;
     });
     const stmt = this.db.prepare(
-      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, depends_on, branch, pr_number, status, task_id, created_at, updated_at)
-       VALUES (@id, @planId, @slug, @seq, @title, @scope, @dependsOn, @branch, @prNumber, @status, @taskId, @createdAt, @updatedAt)
+      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, rationale, acceptance, depends_on, branch, pr_number, status, task_id, created_at, updated_at)
+       VALUES (@id, @planId, @slug, @seq, @title, @scope, @rationale, @acceptance, @dependsOn, @branch, @prNumber, @status, @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
+         rationale=excluded.rationale, acceptance=excluded.acceptance,
          depends_on=excluded.depends_on, updated_at=excluded.updated_at`,
     );
     const insertAll = this.db.transaction((all: PlanPart[]) => {
@@ -1509,6 +1538,11 @@ interface PlanRow {
   title: string;
   status: string;
   reason: string | null;
+  /** Nullable *and* possibly absent: added by `migrate()` on databases from an older build. */
+  risks: string | null | undefined;
+  out_of_scope: string | null | undefined;
+  document: string | null | undefined;
+  discussing: number;
   status_comment_ref: string | null;
   created_at: string;
   updated_at: string;
@@ -1539,6 +1573,9 @@ interface PlanPartRow {
   seq: number;
   title: string;
   scope: string;
+  /** Nullable *and* possibly absent: added by `migrate()` on databases from an older build. */
+  rationale: string | null | undefined;
+  acceptance: string | null | undefined;
   depends_on: string;
   branch: string | null;
   pr_number: number | null;
@@ -1729,6 +1766,10 @@ function rowToPlan(r: PlanRow): Plan {
     title: r.title,
     status: r.status as PlanStatus,
     reason: r.reason,
+    risks: r.risks ?? null,
+    outOfScope: r.out_of_scope ?? null,
+    document: r.document ?? null,
+    discussing: r.discussing === 1,
     statusCommentRef: r.status_comment_ref,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -1765,6 +1806,8 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     seq: r.seq,
     title: r.title,
     scope: r.scope,
+    rationale: r.rationale ?? null,
+    acceptance: r.acceptance ?? null,
     // Written as JSON by upsertPlanParts; a corrupt value degrades to "no deps"
     // rather than throwing the whole snapshot away.
     dependsOn: parseDependsOn(r.depends_on),

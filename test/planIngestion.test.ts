@@ -3,11 +3,18 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { PLAN_FILE, isPlanFile, parsePlanDocument, planPartInputs } from '../src/plans/planDocument.js';
+import {
+  MAX_PLAN_DOCUMENT_CHARS,
+  PLAN_FILE,
+  isPlanFile,
+  parsePlanDocument,
+  planPartInputs,
+} from '../src/plans/planDocument.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store/store.js';
+import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import type { Agent } from '../src/types.js';
 
 // -- the reserved filename ---------------------------------------------------
@@ -41,8 +48,24 @@ test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
   );
   assert.equal(parts.ok, true);
   assert.deepEqual(parts.ok ? planPartInputs(parts.document) : null, [
-    { slug: 'schema', seq: 1, title: 'Add the table', scope: 'src/store', dependsOn: [] },
-    { slug: 'reader', seq: 2, title: 'Read it', scope: 'src/dispatcher', dependsOn: ['schema'] },
+    {
+      slug: 'schema',
+      seq: 1,
+      title: 'Add the table',
+      scope: 'src/store',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+    },
+    {
+      slug: 'reader',
+      seq: 2,
+      title: 'Read it',
+      scope: 'src/dispatcher',
+      dependsOn: ['schema'],
+      rationale: null,
+      acceptance: null,
+    },
   ]);
 });
 
@@ -78,8 +101,16 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
   const store = new Store(':memory:');
   const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: 'Two PRs.' });
   store.upsertPlanParts(plan.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store', dependsOn: [] },
-    { slug: 'reader', seq: 2, title: 'Reader', scope: 'src/dispatcher', dependsOn: ['schema'] },
+    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'reader',
+      seq: 2,
+      title: 'Reader',
+      scope: 'src/dispatcher',
+      dependsOn: ['schema'],
+      rationale: null,
+      acceptance: null,
+    },
   ]);
 
   // A part that has since gone into flight keeps its progress across a replan.
@@ -95,8 +126,24 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
   assert.equal(replanned.id, plan.id, 'the plan id is stable across a replan');
   assert.equal(replanned.createdAt, plan.createdAt);
   store.upsertPlanParts(plan.id, [
-    { slug: 'schema', seq: 1, title: 'Schema (revised)', scope: 'src/store', dependsOn: [] },
-    { slug: 'extra', seq: 2, title: 'Extra', scope: 'src/server', dependsOn: ['schema'] },
+    {
+      slug: 'schema',
+      seq: 1,
+      title: 'Schema (revised)',
+      scope: 'src/store',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+    },
+    {
+      slug: 'extra',
+      seq: 2,
+      title: 'Extra',
+      scope: 'src/server',
+      dependsOn: ['schema'],
+      rationale: null,
+      acceptance: null,
+    },
   ]);
   const after = store.listPlanParts(plan.id);
   assert.deepEqual(
@@ -262,4 +309,82 @@ test('a part may declare at most one dependency, and the graph must be acyclic',
 
   // A chain is fine — that is exactly what a stack is.
   assert.equal(parsePlanDocument(doc([part('a', []), part('b', ['a']), part('c', ['b'])].join(','))).ok, true);
+});
+
+// -- the widened document (risks/outOfScope/document, per-part rationale/acceptance) --
+
+test('the widened plan document round-trips through ingestion', () => {
+  const store = new Store(':memory:');
+  const parsed = parsePlanDocument(
+    JSON.stringify({
+      version: 1,
+      verdict: 'parts',
+      reason: 'the signer must exist before the route verifies one',
+      risks: 'part 2 briefly serves artifacts with no guard',
+      outOfScope: 'capability revocation',
+      document: '# Why\n\nBecause the guard is a prefix, not a per-route opt-in.',
+      parts: [
+        {
+          slug: 'signer',
+          title: 'Add the signer',
+          scope: 'src/server/artifactCapability.ts',
+          dependsOn: [],
+          rationale: 'a pure predicate with no callers',
+          acceptance: 'mint/verify round-trip, tampered and expired both refused',
+        },
+      ],
+    }),
+  );
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  const { plan } = ingestPlanDocument(store, {
+    doc: parsed.document,
+    originRef: 'issue:231',
+    title: 'Serve artifacts outside /api',
+  });
+
+  assert.equal(plan.risks, 'part 2 briefly serves artifacts with no guard');
+  assert.equal(plan.outOfScope, 'capability revocation');
+  assert.match(plan.document!, /^# Why/);
+  const part = store.listPlanParts(plan.id)[0]!;
+  assert.equal(part.rationale, 'a pure predicate with no callers');
+  assert.equal(part.acceptance, 'mint/verify round-trip, tampered and expired both refused');
+  store.close();
+});
+
+test('a document from an older planner still validates, and reads as absent', () => {
+  // The five fields are optional precisely so a planner that has never heard of
+  // them — or an operator-overridden prompt that does not mention them — keeps
+  // working. Absent must read as null, never as an empty string, or the cockpit
+  // cannot tell "wrote nothing" from "wrote ''".
+  const parsed = parsePlanDocument(
+    JSON.stringify({
+      version: 1,
+      verdict: 'parts',
+      reason: 'unchanged',
+      parts: [{ slug: 'only', title: 'One', scope: 'src/', dependsOn: [] }],
+    }),
+  );
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  const store = new Store(':memory:');
+  const { plan } = ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:9', title: 'Old' });
+  assert.equal(plan.risks, null);
+  assert.equal(plan.document, null);
+  assert.equal(store.listPlanParts(plan.id)[0]!.rationale, null);
+  store.close();
+});
+
+test('an over-long write-up is trimmed and stored, never refused', () => {
+  // The opposite of `report_finding`, and deliberately: a finding is testimony an
+  // operator acts on, so it is refused when it cannot be trusted; a write-up is
+  // prose, and refusing it would reject the whole plan submission over its length.
+  const parsed = parsePlanDocument(
+    JSON.stringify({
+      version: 1,
+      verdict: 'single',
+      reason: 'one PR',
+      document: 'x'.repeat(MAX_PLAN_DOCUMENT_CHARS + 500),
+    }),
+  );
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  assert.equal(parsed.document.document!.length, MAX_PLAN_DOCUMENT_CHARS);
 });

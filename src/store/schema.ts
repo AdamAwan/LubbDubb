@@ -180,6 +180,10 @@ CREATE TABLE IF NOT EXISTS plans (
   title       TEXT NOT NULL,
   status      TEXT NOT NULL,          -- planning | single | active | complete | abandoned
   reason      TEXT,                   -- the planner's justification for its verdict
+  risks       TEXT,                   -- what could go wrong with this split
+  out_of_scope TEXT,                  -- what the planner deliberately left out
+  document    TEXT,                   -- the full narrative, markdown
+  discussing  INTEGER NOT NULL DEFAULT 0,  -- an operator is arguing with a planner about it
   status_comment_ref TEXT,            -- provider comment id, edited in place
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL
@@ -195,6 +199,8 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   seq         INTEGER NOT NULL,
   title       TEXT NOT NULL,
   scope       TEXT NOT NULL,          -- files/areas this part owns, for the prompt
+  rationale   TEXT,                   -- why this is its own PR
+  acceptance  TEXT,                   -- what makes this part done
   depends_on  TEXT NOT NULL,          -- JSON array of sibling slugs
   branch      TEXT,
   pr_number   INTEGER,
