@@ -59,7 +59,7 @@ export function App() {
       <Root view={status.view} actions={status.actions} />
       <section className="work-panel">
         <h2>Work</h2>
-        <WorkTreePanel now={status.view.now} />
+        <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />
       </section>
     </>
   );

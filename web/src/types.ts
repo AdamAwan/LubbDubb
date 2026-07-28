@@ -221,6 +221,24 @@ export interface WorkNodeView {
   firstSeenAt: string;
   lastSeenAt: string;
 }
+
+/**
+ * Work the harness did that nothing external accounts for — an operator job that
+ * produced commits with no issue anywhere behind it. Because completion is read
+ * from the tracker and never computed, an item the tracker has never heard of has
+ * no terminal state available to it at all.
+ *
+ * `prCount` is evidence beside the verdict, never part of it: requiring a PR
+ * would mean only ever recording work already visible.
+ */
+export interface UnrecordedWorkView {
+  ref: string;
+  title: string;
+  prCount: number;
+  firstSeenAt: string;
+  /** A filing already in flight, if one is. Null means the button is live. */
+  filing: 'filing' | 'filed' | null;
+}
 export interface Job {
   id: string;
   title: string;
@@ -444,7 +462,11 @@ export interface AppState {
     ignoreLabel: string;
     /** Whether the world accepts injected events (a `fake` provider is configured) — gates the inject panel. */
     injectable: boolean;
-    /** Whether a real tracker is configured to file findings into — gates the "File ticket" button. */
+    /**
+     * Whether a real tracker is configured to file into — gates the "File ticket"
+     * button on a finding and "File a work item" on unrecorded work alike, off the
+     * same predicate both routes refuse on.
+     */
     canFileTickets: boolean;
   };
   /** Live, mutable dispatch controls — the current cap and pause state. */
