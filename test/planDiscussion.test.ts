@@ -84,6 +84,31 @@ test('/discuss/end refuses a plan that is not being discussed, and leaves it unt
   system.store.close();
 });
 
+test('a discussed plan gets a conversational planner, not a fresh one', async () => {
+  const { system, app } = await buildTestApp();
+  const plan = seedAwaitingApprovalPlan(system);
+  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
+
+  const task = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
+  assert.ok(task, 'rule 3c dispatched on the planner origin');
+  // Same origin and branch as any planner — that is what makes the origin gate,
+  // the cooldown and the attempt cap apply without a line of new code.
+  assert.equal(task!.branch, 'plan/issue/231');
+  // ...but the conversation prompt, not the replan one.
+  assert.match(task!.prompt, /conversation/i);
+  assert.match(task!.prompt, /escalate/);
+  assert.doesNotMatch(task!.prompt, /an operator has asked for it to be replanned/);
+});
+
+test('an ordinary replan is untouched by the discussion arm', async () => {
+  const { system, app } = await buildTestApp();
+  const plan = seedAwaitingApprovalPlan(system);
+  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/replan` });
+  const task = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
+  assert.ok(task);
+  assert.match(task!.prompt, /an operator has asked for it to be replanned/);
+});
+
 // -- fixtures ----------------------------------------------------------------
 
 /** A `System` + Fastify app wired the way route-driving tests need: no auth, a

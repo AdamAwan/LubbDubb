@@ -39,6 +39,7 @@ import {
   type PlanRouteVerdict,
 } from '../plans/planning.js';
 import { describeProposedParts } from '../plans/planApproval.js';
+import { isPlanInDiscussion } from '../plans/planDiscussion.js';
 import {
   bySlug,
   currentPlanSummary,
@@ -569,10 +570,20 @@ export class RuleDispatcher implements Dispatcher {
       // what would strand the in-flight ones.
       const existing = plansByOrigin.get(issueOrigin(issue.number)) ?? null;
       const replan = existing !== null && existing.status === 'planning';
-      const title = replan ? `Replan issue #${issue.number}` : `Plan issue #${issue.number}`;
-      const reason = replan
-        ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
-        : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
+      // A discussion is a replan whose planner talks first. Same status, same
+      // origin, same branch — only the prompt differs, which is why it needs no
+      // gate of its own (see `isPlanInDiscussion`).
+      const discussing = isPlanInDiscussion(existing);
+      const title = discussing
+        ? `Discuss the plan for issue #${issue.number}`
+        : replan
+          ? `Replan issue #${issue.number}`
+          : `Plan issue #${issue.number}`;
+      const reason = discussing
+        ? `An operator is discussing the plan for issue #${issue.number} before approving it.`
+        : replan
+          ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
+          : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
       candidates.push({
         origin,
         rule: 'issue-plan',
@@ -586,25 +597,26 @@ export class RuleDispatcher implements Dispatcher {
           type: 'dispatch_code_agent',
           branch,
           title,
-          prompt: replan
-            ? this.templates.render('issue-replan', {
-                number: issue.number,
-                title: issue.title,
-                body: issue.body,
-                branch,
-                planFile: PLAN_FILE,
-                current: currentPlanSummary(
-                  existing,
-                  (ctx.planParts ?? []).filter((p) => p.planId === existing.id),
-                ),
-              })
-            : this.templates.render('issue-plan', {
-                number: issue.number,
-                title: issue.title,
-                body: issue.body,
-                branch,
-                planFile: PLAN_FILE,
-              }),
+          prompt:
+            discussing || replan
+              ? this.templates.render(discussing ? 'discuss-plan' : 'issue-replan', {
+                  number: issue.number,
+                  title: issue.title,
+                  body: issue.body,
+                  branch,
+                  planFile: PLAN_FILE,
+                  current: currentPlanSummary(
+                    existing!,
+                    (ctx.planParts ?? []).filter((p) => p.planId === existing!.id),
+                  ),
+                })
+              : this.templates.render('issue-plan', {
+                  number: issue.number,
+                  title: issue.title,
+                  body: issue.body,
+                  branch,
+                  planFile: PLAN_FILE,
+                }),
           originRef: origin,
           originTitle: issue.title,
           originSummary: issue.body,

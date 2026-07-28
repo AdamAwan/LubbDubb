@@ -24,6 +24,7 @@ import { basename, extname, join } from 'node:path';
 type PromptId =
   | 'issue-plan'
   | 'issue-replan'
+  | 'discuss-plan'
   | 'plan-part'
   | 'plan-approval'
   | 'plan-part-escalation'
@@ -118,6 +119,29 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
       'branch {branch} only so you have the repository to read.',
     doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule 3c, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the write-up (`document`/`risks`/`outOfScope`) is replaced rather than merged. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+  },
+  'discuss-plan': {
+    placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
+    template:
+      'An operator wants to talk through the delivery plan for issue #{number} ("{title}") before approving it. ' +
+      'This is a conversation, not a planning run: nothing is scheduled while you are talking, and your job is to ' +
+      'answer them well and amend the plan if they ask.\n\n{body}\n\n{current}\n\n' +
+      'How this works:\n\n' +
+      '- Read the repository and the plan above, then use the escalate tool to open the conversation — say what ' +
+      'you understand the plan to be and what you think is most worth questioning about it. Escalating parks you ' +
+      'until they reply; their reply arrives as your next turn.\n' +
+      '- Answer honestly. If they are right that a split is wrong, say so. If they are wrong, say that too and ' +
+      'explain why — you have read the code and they may not have.\n' +
+      '- Escalate again each time you need them, and keep going until they are satisfied.\n' +
+      '- When they are, submit the amended plan with the plan_submit tool (or write it to {planFile}), exactly as ' +
+      'a replan would: slugs are the merge key, re-declare every part that is already merged, dispatched or in ' +
+      'review, and a part you leave out is retired only if nothing was started for it. Re-state "document", ' +
+      '"risks" and "outOfScope" — they are replaced by what you submit, not merged.\n' +
+      '- If they end up wanting no change at all, submit the plan unchanged. Submitting is what ends the ' +
+      'conversation and puts the plan back in front of them for approval.\n\n' +
+      'Do not implement anything and do not open a pull request. You are on branch {branch} only so you have the ' +
+      'repository to read.',
+    doc: 'Sent to a code agent when an operator hits Discuss on a plan (rule 3c, with the plan row in `planning` and `discussing` set). Unlike {issue-replan} it is a dialogue: the agent escalates to talk, and submitting the amended plan is what ends it. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'plan-part': {
     placeholders: ['number', 'title', 'part', 'scope', 'branch', 'base', 'plan', 'done', 'remaining'],
