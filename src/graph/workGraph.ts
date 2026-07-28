@@ -157,6 +157,38 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     });
   }
 
+  // Assessments — the `assess` kind stage 1 reserved in the schema and left
+  // unwritten. Keyed on the origin like a concern, so repeated attempts on one
+  // issue are one node, and parented to the issue rather than to whatever
+  // delivered it: an assessment is about the issue as a whole, which is the same
+  // reason `assessmentOrigin` refuses every working agent.
+  //
+  // **Never terminal**, for a concern's reason. An assessment is a step toward a
+  // verdict, not a leaf — an issue with a live assessor is not finished, and the
+  // verdict it produces lives in `issue_deliveries`, which the tracker's `closed`
+  // still outranks. Terminality on this node would be the graph starting to hold
+  // an opinion about completion, which is exactly what it must not do.
+  const assessTasks = new Map<string, Task[]>();
+  for (const task of input.tasks) {
+    if (task.originRef === null) continue;
+    if (!/^issue:\d+:assess$/.test(task.originRef)) continue;
+    const bucket = assessTasks.get(task.originRef);
+    if (bucket) bucket.push(task);
+    else assessTasks.set(task.originRef, [task]);
+  }
+  for (const [ref, attempts] of assessTasks) {
+    const issueRef = ref.slice(0, ref.lastIndexOf(':'));
+    const live = attempts.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting');
+    out.push({
+      ref,
+      kind: 'assess',
+      parentRef: issueRef,
+      title: attempts[0]?.title ?? ref,
+      status: live ? 'live' : 'done',
+      terminal: false,
+    });
+  }
+
   // Concerns, keyed on the **origin** rather than the task: two CI attempts on one
   // PR are two `tasks` rows but one node, so the graph does not grow a node every
   // time an agent restarts. The attempts stay reachable by `origin_ref`.

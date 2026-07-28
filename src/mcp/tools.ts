@@ -636,6 +636,32 @@ function readWorld(
         })),
       };
     }
+    // The durable record of what was actually done for this issue — stage 1's
+    // work graph. This is what the world cannot supply: `closedPullRequests` is
+    // bounded by `closedPrWindowMs` (6h), so a PR that delivered the issue last
+    // week is simply absent from the snapshot, and the edge to it is here or
+    // nowhere. `provenance` rides along because the assessor must weigh "the
+    // harness watched this merge" differently from "it left the open list and
+    // the merge was assumed" — stage 1 recorded that distinction for this reader.
+    //
+    // Reading it here rather than in the pure `worldRead.ts` keeps that file's
+    // line: it maps a snapshot, and the store lookups live in the tool layer.
+    // Nothing about stage 1's structural property changes — that is about no
+    // *rule* consulting the graph, and an agent reading its own history is the
+    // consumer it was built for.
+    const work = store.listWorkSubtree(target.target.canonical);
+    if (work.length > 0) {
+      item.work = work.map((n) => ({
+        ref: n.ref,
+        kind: n.kind,
+        parentRef: n.parentRef,
+        baseRef: n.baseRef,
+        title: n.title,
+        status: n.status,
+        terminal: n.terminal,
+        provenance: n.provenance,
+      }));
+    }
   }
   // The snapshot's age, because it is a pulse-old reading rather than a live fetch
   // and an agent deciding whether to wait needs to know which.

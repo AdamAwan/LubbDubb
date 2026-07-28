@@ -10,6 +10,7 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
+import { foldWorkGraph } from '../src/graph/workGraph.js';
 import type { Agent, Decision, Issue, IssueDelivery, Plan, Task } from '../src/types.js';
 
 // Rule 3e — the assessor. What makes it fire, what makes it stand down, and the
@@ -382,5 +383,65 @@ test('a rejected assessment writes nothing', async () => {
 
   assert.equal(system.store.getDelivery('issue:12'), null);
   assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  system.store.close?.();
+});
+
+// -- the graph reaches the agent ---------------------------------------------
+
+test('world_read carries the work subtree, including a PR the world has forgotten', async () => {
+  const system = build();
+  // A merged PR that has aged out of `closedPullRequests` entirely — the case the
+  // durable record exists for, and the one the assessor most needs.
+  system.store.recordWorkGraph([
+    { ref: 'issue:12', kind: 'issue', parentRef: null, title: 'Add the thing', status: 'open', terminal: false },
+    {
+      ref: 'pr:40',
+      kind: 'pr',
+      parentRef: 'issue:12',
+      title: 'Add the thing',
+      status: 'merged',
+      terminal: true,
+      provenance: 'observed',
+    },
+  ]);
+  system.store.setWorldBaseline({
+    takenAt: NOW,
+    pullRequests: [],
+    issues: [issue()],
+    stories: [],
+  });
+
+  const agent = spawnAgent(system, 'issue:12:assess');
+  // The origin ref passes back verbatim: `world_read` is suffix-tolerant.
+  const res = await callTool(system, agent, 'world_read', { kind: 'issue', ref: 'issue:12:assess' });
+  assert.equal(res.isError, false);
+
+  const payload = JSON.parse(res.text) as { item: { work?: { ref: string; provenance: string | null }[] } };
+  const work = payload.item.work ?? [];
+  const pr = work.find((n) => n.ref === 'pr:40');
+  assert.ok(pr, 'the PR that delivered the issue is reachable even though the world has forgotten it');
+  assert.equal(pr.provenance, 'observed', 'the assessor must be able to weigh watched against assumed');
+  system.store.close?.();
+});
+
+test('an assessment appears in the graph under its issue, and is never terminal', () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:assess');
+  const t = system.store.getTask(system.store.getAgent(agent.id)!.taskId)!;
+
+  const nodes = foldWorkGraph({
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    tasks: [t],
+    plans: [],
+    parts: [],
+    jobs: [],
+    existing: [],
+  });
+
+  const node = nodes.find((n) => n.ref === 'issue:12:assess');
+  assert.ok(node, 'the `assess` kind stage 1 reserved is now written');
+  assert.equal(node.kind, 'assess');
+  assert.equal(node.parentRef, 'issue:12', 'an assessment is about the issue, not about what delivered it');
+  assert.equal(node.terminal, false, 'terminality here would be the graph holding an opinion about completion');
   system.store.close?.();
 });
