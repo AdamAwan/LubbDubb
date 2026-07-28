@@ -1,4 +1,4 @@
-import type { AppState, RecoveryVerdict, WorkNodeView } from './types.js';
+import type { AppState, RecoveryVerdict, UnrecordedWorkView, WorkNodeView } from './types.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 /**
@@ -88,11 +88,15 @@ const realApi = {
   // The work graph is fetched, never polled: `/api/state` comes round every couple
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.
-  getWorkRoots: () => authFetch('/api/work').then((r) => json<{ roots: WorkNodeView[] }>(r)),
+  getWorkRoots: () =>
+    authFetch('/api/work').then((r) => json<{ roots: WorkNodeView[]; unrecorded: UnrecordedWorkView[] }>(r)),
   getWorkSubtree: (ref: string) =>
     authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) =>
       json<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }>(r),
     ),
+  // Ask an agent to create a tracker item for work nothing external accounts for.
+  // An operator's click, never a rule: see src/graph/unrecorded.ts.
+  fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),
   pulse: () => post('/api/pulse'),
   inject: (event: unknown) => post('/api/inject', event),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),

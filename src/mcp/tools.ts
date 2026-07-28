@@ -9,6 +9,7 @@ import type {
   IssueConclusion,
   IssueConclusionVerdict,
   Task,
+  WorkItemFiling,
 } from '../types.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest.js';
@@ -38,7 +39,13 @@ export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
   recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string };
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string };
-  linkTicket(agentId: string, ticketRef: string): { ok: true; finding: Finding } | { ok: false; error: string };
+  linkTicket(
+    agentId: string,
+    ticketRef: string,
+  ):
+    | { ok: true; finding: Finding; filing?: undefined }
+    | { ok: true; filing: WorkItemFiling; finding?: undefined }
+    | { ok: false; error: string };
   recordConclusion(
     agentId: string,
     verdict: IssueConclusionVerdict,
@@ -422,11 +429,12 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
     {
       name: MCP_TOOL_NAMES[6],
       description:
-        'Report the ticket you just created for the finding you were dispatched to file. Only for a ' +
-        'filing job — if you were not dispatched to file a finding as a ticket, this is not your tool. ' +
-        'Calling it is what completes the filing: until you do, the operator sees a finding whose ' +
-        'ticket never appeared. Pass the ref of the item you created (or of the existing one you ' +
-        'decided it duplicates).',
+        'Report the tracker item you just created for the thing you were dispatched to file — a ' +
+        'finding, or a work item for work the harness did that nothing accounted for. Only for a ' +
+        'filing job: if you were not dispatched to file something, this is not your tool. Calling it ' +
+        'is what completes the filing: until you do, the operator sees a filing whose item never ' +
+        'appeared. Pass the ref of the item you created (or of the existing one you decided it ' +
+        'duplicates).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -453,6 +461,20 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
         // link.
         const result = deps.agents.linkTicket(agent.id, parsed.ref);
         if (!result.ok) return toolError(result.error);
+        // Two things a filing job can be for, resolved from the credential the same
+        // way: a finding an agent reported, or a work item for work the harness did
+        // that nothing external accounted for.
+        if (result.filing) {
+          return ok({
+            linked: true,
+            workItem: {
+              targetRef: result.filing.targetRef,
+              status: result.filing.status,
+              ticketRef: result.filing.ticketRef,
+            },
+            note: 'Recorded against the work. It will hang off this item in the graph from the next pulse.',
+          });
+        }
         return ok({
           linked: true,
           finding: { id: result.finding.id, status: result.finding.status, ticketRef: result.finding.ticketRef },

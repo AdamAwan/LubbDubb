@@ -17,6 +17,7 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../mcp/findings.js';
+import { unrecordedWork, workItemTicketFields } from '../graph/unrecorded.js';
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
@@ -788,7 +789,66 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // above any real interaction.
   const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
 
-  app.get('/api/work', WORK_RATE_LIMIT, async () => ({ roots: store.listWorkRoots() }));
+  // `unrecorded` rides on the roots read rather than taking a route of its own:
+  // it is the same fetch-on-open the panel already makes, computed from rows it
+  // is already reading. It is a lens — nothing in the dispatcher consults it.
+  app.get('/api/work', WORK_RATE_LIMIT, async () => ({
+    roots: store.listWorkRoots(),
+    unrecorded: unrecordedWork(store.listWorkNodes(), store.listJobs(), store.listWorkItemFilings()),
+  }));
+
+  // File a work item for work the harness did that nothing external accounts for
+  // — an operator job that produced commits with no issue anywhere behind it. The
+  // mirror of `/api/findings/:id/file`, and an **operator click** for that route's
+  // reason: creating tracker items on the harness's own initiative would be a new
+  // outbound capability on the world, and the condition it fires on is permanent
+  // until acted on, so a throttle would only set the rate at which a backlog
+  // fills. See src/graph/unrecorded.ts for the full argument.
+  app.post('/api/work/:ref/file', WORK_RATE_LIMIT, async (req, reply) => {
+    const { ref } = req.params as { ref: string };
+    const node = store.listWorkNodes().find((n) => n.ref === ref);
+    if (!node) return reply.code(404).send({ error: 'no such work item' });
+
+    const filings = store.listWorkItemFilings();
+    const standing = filings.find((f) => f.targetRef === ref);
+    if (standing)
+      return reply.code(409).send({
+        error:
+          standing.status === 'filing'
+            ? 'an agent is already filing a work item for this'
+            : `already filed as ${standing.ticketRef}`,
+      });
+    // Asked of the same predicate the panel draws from, so the route can never
+    // refuse what the button offered.
+    if (!unrecordedWork([node], store.listJobs(), filings).length)
+      return reply.code(409).send({ error: `${ref} is not unrecorded work — it has a work item already` });
+
+    // A desk agent runs in a scratch dir with no remote to infer the target from;
+    // without coordinates there is nowhere to file. The cockpit hides the button
+    // in this case, so reaching here means a direct call.
+    const tracker = trackerCoordinates(system.config);
+    if (!tracker)
+      return reply
+        .code(409)
+        .send({ error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)' });
+
+    const derived = workItemTicketFields(node, store.listWorkSubtree(ref), tracker);
+    const title =
+      (typeof (req.body as { title?: unknown })?.title === 'string' &&
+        ((req.body as { title?: string }).title ?? '').trim()) ||
+      derived.title;
+    // Rendered from the operator's template book, not built here: how a work item
+    // should be worded is exactly the sort of house style an override exists for.
+    const prompt = system.prompts.render('work-item-ticket', derived.vars);
+    // Desk, not code: filing touches no repository. It is also what stops this
+    // recursing — a desk job is never itself unrecorded work.
+    const job = store.createJob({ title, prompt, kind: 'desk' });
+    // Job first, then the filing row — a failed create leaves the node unfiled.
+    const filing = store.createWorkItemFiling({ targetRef: ref, jobId: job.id });
+    hub.broadcast({ type: 'world:changed' });
+    const report = await harness.runCycle('manual');
+    return { ok: true, filing, job, report };
+  });
 
   app.get('/api/work/:ref', WORK_RATE_LIMIT, async (req, reply) => {
     const { ref } = req.params as { ref: string };

@@ -31,6 +31,7 @@ export class WorkGraphRecorder {
           plans: store.listPlans(),
           parts: store.listAllPlanParts(),
           jobs: store.listJobs(),
+          filings: store.listWorkItemFilings(),
           // The graph as it stands, which is what "observed beats inferred" reads.
           // Rows still on disk from before the graph existed (tasks, plans, parts)
           // seed it on the first pass through the ordinary upsert — a wider input,

@@ -327,6 +327,39 @@ export interface WorkNode {
   lastSeenAt: string;
 }
 
+/**
+ * Where a work-item filing sits. Two statuses rather than one because filing is
+ * *asynchronous*, the same reason {@link FindingStatus} splits them: the click
+ * queues a desk job, and the ticket exists only once that job's agent has created
+ * it and called `link_ticket`. `filing` is the honest reading in between, and
+ * `filed` is the one that carries {@link WorkItemFiling.ticketRef}.
+ */
+export type WorkItemFilingStatus = 'filing' | 'filed';
+
+/**
+ * A tracker item the operator asked an agent to create for work the harness did
+ * that nothing external accounts for — an operator job that produced commits and
+ * a PR with no issue anywhere behind it (stage 3 of the work graph).
+ *
+ * Keyed on the node it is *for*, so one node has at most one filing. Once the ref
+ * comes back it becomes that node's `parentRef` — written by the fold, never from
+ * here, so the recorder stays the graph's only writer.
+ *
+ * Deliberately not a {@link Finding}: a finding is an agent's testimony with
+ * structural attribution, and this row has no agent behind it to attribute to.
+ */
+export interface WorkItemFiling {
+  /** The unrecorded node this is filing a work item for (`job:job_abc`). */
+  targetRef: string;
+  /** The desk job doing the filing — how `link_ticket` finds its way back here. */
+  jobId: string;
+  status: WorkItemFilingStatus;
+  /** The tracker item it was filed as (`issue:314`), once the agent reports it. */
+  ticketRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** One node as observed this pulse. Timestamps are the store's to stamp. */
 export interface WorkNodeObservation {
   ref: string;

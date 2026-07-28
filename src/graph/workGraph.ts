@@ -1,8 +1,18 @@
-import type { Job, Plan, PlanPart, Task, WorkNode, WorkNodeObservation, WorldSnapshot } from '../types.js';
+import type {
+  Job,
+  Plan,
+  PlanPart,
+  Task,
+  WorkItemFiling,
+  WorkNode,
+  WorkNodeObservation,
+  WorldSnapshot,
+} from '../types.js';
 import { planIssueNumber, partOrigin } from '../plans/parts.js';
 import { issueOrigin, planOrigin } from '../plans/planning.js';
 import { basePrOf, prState } from '../prHealth.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
+import { jobBranch } from '../jobs.js';
 
 /**
  * Everything the fold reads: this pulse's world, the store rows that hold intent,
@@ -15,6 +25,8 @@ export interface WorkGraphInput {
   plans: Plan[];
   parts: PlanPart[];
   jobs: Job[];
+  /** Work items an operator had filed for work nothing external accounted for. */
+  filings: WorkItemFiling[];
   existing: WorkNode[];
 }
 
@@ -84,12 +96,43 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     if (n === undefined) continue;
     if (part.prNumber !== null) prParent.set(part.prNumber, partOrigin(n, part.slug));
   }
+  // **Arm A — a job owns the PR its own branch carries.** Before the issue loop,
+  // because `parentRef` follows work lineage and a branch match is a statement
+  // about what *caused* the PR, where an issue's `linkedPrNumber` is a statement
+  // about what it is *about*. The aboutness is not lost: arm B recovers it one
+  // level up, giving `issue:12 -> job:7 -> pr:41` rather than either edge alone.
+  // An issue's own branch match (`issue/<n>`) can never collide with `job/<id>`,
+  // so only the fuzzy arm is ever displaced by this.
+  const jobOfBranch = new Map<string, string>();
+  for (const job of input.jobs) {
+    const branch = jobBranch(job);
+    if (branch !== null) jobOfBranch.set(branch, `job:${job.id}`);
+  }
+  for (const pr of input.world.pullRequests) {
+    const owner = jobOfBranch.get(pr.branch);
+    if (owner !== undefined && !prParent.has(pr.number)) prParent.set(pr.number, owner);
+  }
+
   for (const issue of input.world.issues) {
     const branch = issueBranch(issue.number);
     for (const pr of input.world.pullRequests) {
       const mine = pr.branch === branch || issue.linkedPrNumber === pr.number;
       if (mine && !prParent.has(pr.number)) prParent.set(pr.number, issueOrigin(issue.number));
     }
+  }
+
+  // **Arm B — a job is adopted by the issue its own PR names.** When the job's PR
+  // links back to an issue, a work item for this work already exists and somebody
+  // already said so, so there is nothing for stage 3 to file. This is the
+  // write-once parent's own intended case one level up: null is adopted when
+  // `linkedPrNumber` appears, and never re-parented afterwards.
+  const jobParent = new Map<string, string>();
+  for (const issue of input.world.issues) {
+    if (issue.linkedPrNumber === null || issue.linkedPrNumber === undefined) continue;
+    const pr = input.world.pullRequests.find((p) => p.number === issue.linkedPrNumber);
+    if (!pr) continue;
+    const owner = jobOfBranch.get(pr.branch);
+    if (owner !== undefined && !jobParent.has(owner)) jobParent.set(owner, issueOrigin(issue.number));
   }
 
   const priorPr = new Map(input.existing.filter((n) => n.kind === 'pr').map((n) => [n.ref, n]));
@@ -147,10 +190,14 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   }
 
   for (const job of input.jobs) {
+    const ref = `job:${job.id}`;
     out.push({
-      ref: `job:${job.id}`,
+      ref,
       kind: 'job',
-      parentRef: null,
+      // Null unless arm B found the issue this job's PR names. A null here never
+      // undoes an adoption — `recordWorkGraph` coalesces onto the stored parent —
+      // so the fold may go on emitting one forever.
+      parentRef: jobParent.get(ref) ?? null,
       title: job.title,
       status: job.status,
       terminal: job.status === 'cancelled',
@@ -216,6 +263,47 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       status: live ? 'live' : 'done',
       terminal: false,
     });
+  }
+
+  // Work items an operator had filed for work nothing external accounted for
+  // (stage 3). The filing row is *intent*, the same relationship `plans` and
+  // `plan_parts` have to this fold — the parent edge is derived here rather than
+  // written by the route or by `link_ticket`, so the recorder stays the graph's
+  // only writer.
+  const emitted = new Map(out.map((o) => [o.ref, o]));
+  for (const filing of input.filings) {
+    if (filing.ticketRef === null) continue; // still filing: nothing to attach to yet
+
+    const target = emitted.get(filing.targetRef);
+    if (target) target.parentRef = filing.ticketRef;
+    else {
+      // Its job has aged out of `listJobs`' window, so nothing emitted it this
+      // pulse. Re-emit it from `existing` verbatim rather than losing the
+      // adoption — `existing` is already here for "observed beats inferred".
+      const prior = input.existing.find((n) => n.ref === filing.targetRef);
+      if (!prior) continue;
+      out.push({ ...prior, parentRef: filing.ticketRef });
+    }
+
+    // A filed ticket does not necessarily appear in the world: the issue provider
+    // lists open items in one repository, and a ticket closed straight away — or
+    // filed into another project — is never fetched. Without a node for it the
+    // adopted job becomes *unreachable*: `listWorkRoots` filters on a null parent
+    // and `listWorkSubtree` seeds from a row that does not exist. So stand one up,
+    // but only when the world has not already spoken this pulse, or the
+    // placeholder's empty title would clobber the real one.
+    if (filing.ticketRef.startsWith('issue:') && !emitted.has(filing.ticketRef)) {
+      const placeholder: WorkNodeObservation = {
+        ref: filing.ticketRef,
+        kind: 'issue',
+        parentRef: null,
+        title: filing.ticketRef,
+        status: 'open',
+        terminal: false,
+      };
+      out.push(placeholder);
+      emitted.set(placeholder.ref, placeholder);
+    }
   }
 
   return out;

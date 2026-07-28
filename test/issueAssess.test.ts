@@ -436,6 +436,7 @@ test('an assessment appears in the graph under its issue, and is never terminal'
     plans: [],
     parts: [],
     jobs: [],
+    filings: [],
     existing: [],
   });
 

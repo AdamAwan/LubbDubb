@@ -38,7 +38,8 @@ type PromptId =
   | 'story-groom'
   | 'story-waf'
   | 'story-pickup'
-  | 'finding-ticket';
+  | 'finding-ticket'
+  | 'work-item-ticket';
 
 interface TemplateDef {
   /** The placeholder names this template may reference (validated on override). */
@@ -222,6 +223,33 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'GitHub/Azure DevOps and report the ref back via link_ticket. Override this to control how ' +
       'tickets are worded, labelled, or typed in your tracker. Placeholders: {kind} {kindHelp} {ref} ' +
       '{summary} {originRef} {tracker}.',
+  },
+  'work-item-ticket': {
+    placeholders: ['ref', 'workTitle', 'produced', 'tracker'],
+    template:
+      'An operator wants a work item filed for work the harness has already done. **Record it — do not ' +
+      'do it again.** The work is finished or under way; what is missing is a tracker item accounting ' +
+      'for it, so that someone reading the board can see it happened and close it when they are ' +
+      'satisfied.\n\n' +
+      'It ran as {ref}: "{workTitle}".\n\n' +
+      'What it produced, as the harness recorded it:\n\n{produced}\n\n' +
+      'File it in {tracker}\n\n' +
+      'Before you create anything, search the existing items for one that already covers this work. If ' +
+      'one does, do not file a second — link the existing one instead. Write the ticket for someone who ' +
+      'was not there: a title naming the change, and a body saying what was done, which pull requests ' +
+      'carried it, and what state they are in. Where the list above says a merge was "inferred", the ' +
+      'harness assumed it from the pull request disappearing rather than watching it merge — say so ' +
+      'rather than asserting it as fact. Do not describe work as complete if you cannot confirm it.\n\n' +
+      'When the item exists, call the link_ticket tool with its ref ("issue:314"). That call is what ' +
+      'finishes this task and what attaches the work to the item in the record: without it the operator ' +
+      'sees a filing that never completed. If you decided not to file because a suitable item already ' +
+      'exists, call link_ticket with that item’s ref.',
+    doc:
+      'Sent to a desk agent when an operator clicks "File a work item" on unrecorded work in the Work ' +
+      'panel — an operator job that produced commits with no issue behind it. Creates the item in ' +
+      'GitHub/Azure DevOps and reports the ref back via link_ticket. Override this to control how such ' +
+      'items are worded, labelled, or typed in your tracker. Placeholders: {ref} {workTitle} {produced} ' +
+      '{tracker}.',
   },
 };
 

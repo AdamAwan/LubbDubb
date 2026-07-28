@@ -21,7 +21,7 @@ discover what a synchronous error would have said in one turn.
 | `world_read`         | Read the harness's own view of a PR, issue or story.                                                                                                                                                                                      |
 | `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                      |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                   |
-| `link_ticket`        | Report the ticket a filing agent created, closing the loop on a filed finding.                                                                                                                                                            |
+| `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                 |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                         |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                   |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
@@ -152,24 +152,35 @@ plain `dirty` (unlike `agent:tail`, the payload is already on the row the refetc
 
 ### `link_ticket`
 
-Argument `{ref}`. The other half of filing a finding as a ticket (see
-[13](13-jobs-and-findings.md)): the agent dispatched to file one reports back what it created.
+Argument `{ref}`. The other half of filing something as a tracker item: the agent dispatched to file
+one reports back what it created. **Two things can be filed**, resolved the same way and never both at
+once — a finding an agent reported (see [13](13-jobs-and-findings.md)), or a **work item** for work the
+harness did that nothing external accounted for (see
+[14](14-persistence.md#work-item-filings)).
 
 - **It is what completes the filing.** The route leaves the finding `filing`; this call is the only
   thing that moves it to `filed` and gives the cockpit a ticket to link. An agent that never calls it
   leaves a visible unfinished filing rather than a silent one, which is the point of the two statuses.
-- **The finding comes from the credential, never an argument.** `agent → task → its `job:<id>` origin
-→ the finding that job was created for`. So there is no id to point at another finding, and an agent
-  on any other kind of task simply resolves to none and is told so. Same discipline as
+- **The target comes from the credential, never an argument.** `agent → task → its `job:<id>` origin
+→ the finding, or the work-item filing, that job was created for`. A job is created for at most one of
+  the two, so there is nothing to disambiguate; and there is no id to point at somebody else's, so an
+  agent on any other kind of task resolves to neither and is told so. Same discipline as
   `report_finding`, and here it is the whole access check.
 - **`ref` is the same closed vocabulary**, parsed by the same `parseFindingRef`: `issue:314`,
   suffix-tolerant, and a **bare number refused** for the same reason — nothing here says whether `314`
   is an issue or a PR, and a ticket link pointing at the wrong one is worse than none.
-- **Idempotence is in the write.** `Store.linkFindingTicket` updates `WHERE id=? AND status='filing'`,
-  so a second call links nothing and is reported as an error rather than overwriting the first ticket.
+- **A work item must be an `issue:` ref**, unlike a finding's ticket. Both trackers the harness reads
+  make a work item an issue — a GitHub issue, an Azure work item — and the fold stands a placeholder
+  node up under that ref when the world never lists the ticket, so accepting `pr:` or `story:` would
+  mean guessing a node kind. The case is removed rather than answered.
+- **Idempotence is in the write.** `linkFindingTicket` updates `WHERE id=? AND status='filing'` and
+  `linkWorkItemFiling` updates `WHERE job_id=? AND status='filing'`, so a second call links nothing and
+  is reported as an error rather than overwriting the first item.
 
-It routes through `AgentManager.linkTicket` for the `finding` event, so the cockpit repaints on the
-link rather than on the next pulse.
+It routes through `AgentManager.linkTicket`, which emits the `finding` event on the finding arm so the
+cockpit repaints on the link rather than on the next pulse. The work-item arm emits none: the Work
+panel is fetch-on-open, and the parent edge it draws is written by the next pulse's **fold**, not from
+the tool — the recorder stays the graph's only writer.
 
 ### `conclude_work`
 

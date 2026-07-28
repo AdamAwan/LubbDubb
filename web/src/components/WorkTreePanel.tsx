@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import type { WorkNodeView } from '../types.js';
+import type { UnrecordedWorkView, WorkNodeView } from '../types.js';
 import { refLink, relTime } from './util.js';
+import { AsyncButton } from './AsyncButton.js';
 
 /**
  * The durable record of what the harness did for a work item — the one surface
@@ -17,13 +18,22 @@ import { refLink, relTime } from './util.js';
  * It is a lens: nothing here (and nothing in the dispatcher) decides anything from
  * what it draws.
  */
-export function WorkTreePanel({ now }: { now: number }) {
+export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTickets: boolean }) {
   const [roots, setRoots] = useState<WorkNodeView[]>([]);
+  const [unrecorded, setUnrecorded] = useState<UnrecordedWorkView[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [subtree, setSubtree] = useState<{ nodes: WorkNodeView[]; refUrls: Record<string, string> } | null>(null);
 
+  const load = () =>
+    api.getWorkRoots().then((r) => {
+      setRoots(r.roots);
+      setUnrecorded(r.unrecorded);
+    });
+
   useEffect(() => {
-    void api.getWorkRoots().then((r) => setRoots(r.roots));
+    void load();
+    // Read once on mount, like the roots — the panel is fetched, never polled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -40,11 +50,42 @@ export function WorkTreePanel({ now }: { now: number }) {
     };
   }, [open]);
 
-  if (roots.length === 0) {
+  if (roots.length === 0 && unrecorded.length === 0) {
     return <p className="empty">Nothing recorded yet — the graph fills in from the next pulse.</p>;
   }
   return (
     <div className="work-roots">
+      {unrecorded.length > 0 && (
+        <div className="work-unrecorded">
+          <h3>Unrecorded work</h3>
+          <p className="muted">
+            The harness did this, and nothing in the tracker accounts for it — so nobody outside can ever mark it done.
+          </p>
+          {unrecorded.map((item) => (
+            <div className="work-unrecorded-row" key={item.ref}>
+              <span className="work-title">{item.title}</span>
+              <span className="muted mono">{item.ref}</span>
+              <span className="muted">
+                {item.prCount === 1 ? '1 pull request' : `${item.prCount} pull requests`} · started{' '}
+                {relTime(item.firstSeenAt, now)}
+              </span>
+              {item.filing !== null ? (
+                <span className="chip small">filing…</span>
+              ) : (
+                canFileTickets && (
+                  <AsyncButton
+                    className="ghost"
+                    onClick={() => api.fileWorkItem(item.ref).then(() => load())}
+                    title="Ask an agent to create a tracker item recording this work"
+                  >
+                    File a work item
+                  </AsyncButton>
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {roots.map((root) => (
         <div className="work-root" key={root.ref}>
           <button

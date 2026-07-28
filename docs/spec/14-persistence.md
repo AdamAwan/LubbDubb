@@ -35,7 +35,8 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides` and `work_nodes` were all introduced as new tables and therefore have no
+`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides`, `work_nodes` and
+`work_item_filings` were all introduced as new tables and therefore have no
 migration entry — but `findings` has since gained `ticket_ref`, which is exactly the case the table
 above exists for.
 
@@ -56,6 +57,7 @@ above exists for.
 | `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                 | `UNIQUE (plan_id, slug)`      |
 | `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from. | `ref` is `PRIMARY KEY`        |
+| `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.            | `target_ref` is `PRIMARY KEY` |
 | `agent_transcripts`  | Chunked agent output.                                                                    | `PRIMARY KEY (agent_id, seq)` |
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                          | —                             |
 | `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                 | —                             |
@@ -68,7 +70,7 @@ above exists for.
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
 `decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`,
-`work_nodes(parent_ref)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
+`work_nodes(parent_ref)`, `work_item_filings(job_id)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
 attempts are the `tasks` rows carrying its origin, so no separate attempts table exists — `tasks` only
 lacked the index.
 
@@ -149,7 +151,13 @@ never holds the new one. `awaiting_approval` is the approval gate itself — see
 
 `recordWorkGraph(observations)`, `listWorkRoots()` (nodes with no parent, most recently seen first),
 `listWorkSubtree(rootRef)` (one recursive CTE bounded to the requested root, `UNION` rather than
-`UNION ALL` so the walk terminates whatever reaches the table).
+`UNION ALL` so the walk terminates whatever reaches the table), `listWorkNodes()` (every row, flat).
+
+`listWorkNodes` exists for the unrecorded-work detector, whose verdict is per-node but whose evidence
+beside it is what ran underneath — rebuilding the table from roots plus a subtree each is N+1 queries
+for something one `SELECT` answers. Note what it is deliberately **not** wired into: the recorder still
+builds its `existing` set the roots-then-subtrees way, so the backfill-reach limitation below stands
+unchanged. Closing that is a separate decision, not a side effect of this method existing.
 
 A node is keyed on the ref vocabulary that already exists — `issue:12`, `issue:12:plan`,
 `issue:12:part:schema`, `pr:41`, `pr:41:ci`, `job:7` — so it joins to every gate, override and proposal
@@ -175,6 +183,33 @@ discipline.
 because an override for work nobody is doing is stale. Nothing about a work node goes stale: it is a
 record of what happened, and its value is precisely that it is still there when every other surface has
 forgotten. The only writer is the `WorkGraphRecorder` in the pulse — see [04](04-harness-cycle.md).
+
+### Work-item filings
+
+`createWorkItemFiling({targetRef, jobId})`, `listWorkItemFilings()`, `findWorkItemFilingByJobId(jobId)`,
+`linkWorkItemFiling(jobId, ticketRef)`.
+
+A filing records that an operator asked an agent to create a tracker item for work the harness did that
+nothing external accounts for — an operator job that produced commits with no issue behind it. It matters
+because **completion is read from the tracker and never computed**, so an item the tracker has never heard
+of has no terminal state available to it at all.
+
+Keyed on `target_ref`, so one node has at most one filing and a second click is refused by the primary key
+rather than by a caller remembering to look first. `create` returns null in that case; `linkWorkItemFiling`
+is guarded `WHERE job_id = ? AND status = 'filing'` and returns null when nothing changed, so an agent that
+calls `link_ticket` twice links once — idempotence in the write, the `linkFindingTicket` and `decideProposal`
+discipline. `listWorkItemFilings` is unbounded on purpose, as `listProposals` is: a linked filing is what
+parents its node, and one that aged out of a window would have the fold quietly un-record filed work.
+
+It is **not** a `findings` row. A finding is an agent's testimony, with `agent_id`/`task_id` `NOT NULL` and
+attribution taken structurally from a credential; a harness-authored row has neither, so reusing the table
+would mean forging the two columns that carry the guarantee. The filing *mechanism* is reused in full — a
+desk job, `trackerCoordinates`, an overridable prompt, `link_ticket` — and only the row differs.
+
+The parent edge it produces is written by the **fold**, never from the route or the tool: the filing row is
+intent, the relationship `plans` and `plan_parts` already have to the recorder, which stays the graph's only
+writer. Setting it is legal because `parent_ref` is write-once *once non-null*, which is equally what stops
+it ever being redone.
 
 ### Escalations
 
