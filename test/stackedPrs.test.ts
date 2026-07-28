@@ -342,6 +342,30 @@ test('a replan is not throttled by the planner that produced the plan it is amen
   assert.equal(plannerVerdict(12, null, now, [attempt], DEFAULT_COOLDOWN).kind, 'cooldown');
 });
 
+test('an attempt stamped in the same millisecond as the replan request is the *previous* planner’s', () => {
+  // The two writes are ordered by construction: the dispatch decision is recorded
+  // by the cycle that ran *before* the operator asked, and `/replan` moves the plan
+  // afterwards. A millisecond clock can still stamp them identically, and reading
+  // that tie as "this replan already had an attempt" throttles the button for
+  // fifteen minutes — the exact failure the narrowed window exists to prevent.
+  const at = '2026-07-25T11:59:00.000Z';
+  const attempt: Decision = {
+    id: 'd1',
+    cycleId: 'c1',
+    action: {
+      type: 'dispatch_code_agent',
+      originRef: 'issue:12:plan',
+      reason: 'plan it',
+    } as unknown as Decision['action'],
+    outcome: 'executed',
+    detail: '',
+    rule: 'issue-plan',
+    createdAt: at,
+  };
+  const requested = plan({ status: 'planning', updatedAt: at });
+  assert.equal(plannerVerdict(12, requested, at, [attempt], DEFAULT_COOLDOWN).kind, 'dispatch');
+});
+
 test('a replan that spends its attempts falls back to the existing parts, never to `single`', () => {
   const spent = { kind: 'hold' } as const;
   // Failing open to `single` here would point rule 4 at the flat `issue/12`
