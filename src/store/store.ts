@@ -759,6 +759,19 @@ export class Store {
     return { ...rowToPlan(row), status, updatedAt };
   }
 
+  /**
+   * Mark a plan as being discussed with an agent, or not. Its own transition
+   * rather than a field on `upsertPlan`, because ingestion is what *ends* a
+   * discussion — folding it in would let an amendment silently re-open one.
+   */
+  setPlanDiscussing(id: string, discussing: boolean): Plan | null {
+    const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
+    if (!row) return null;
+    const updatedAt = this.now();
+    this.db.prepare(`UPDATE plans SET discussing=?, updated_at=? WHERE id=?`).run(discussing ? 1 : 0, updatedAt, id);
+    return { ...rowToPlan(row), discussing, updatedAt };
+  }
+
   /** Remember the provider comment id so the plan's status comment is edited, never re-posted. */
   setPlanStatusComment(id: string, ref: string): Plan | null {
     const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;

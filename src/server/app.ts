@@ -475,6 +475,52 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, plan: next };
   });
 
+  // Discuss a plan with an agent instead of accepting, rejecting or replanning it.
+  //
+  // Deliberately *a replan with a different prompt*, not a new mechanism: the plan
+  // goes to `planning`, which is the status rule 3c already dispatches a planner
+  // from, so the discussion agent inherits the origin gate (`issue:<n>:plan`, so no
+  // second planner), the cooldown, the attempt cap and the fail-open — none of which
+  // a bespoke path would have. `discussing` only picks the prompt.
+  //
+  // Nothing is scheduled while you talk: rule 4a schedules parts for `active` and
+  // `awaiting_approval` plans only, and rule 3d proposes for `awaiting_approval`
+  // only, so no fresh card appears mid-conversation either.
+  app.post('/api/plans/:id/discuss', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = store.getPlan(id);
+    if (!plan) return reply.code(404).send({ error: 'plan not found' });
+    // Order matters exactly as it does for a replan: the status write is what
+    // makes the withdrawal safe, because `refusePlan` refuses to settle a plan
+    // that is no longer `awaiting_approval` — so the reject below closes the inbox
+    // item without retiring a single part.
+    store.setPlanStatus(id, 'planning');
+    const next = store.setPlanDiscussing(id, true);
+    const ref = planProposalRef(plan.originRef);
+    const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
+    if (pending) proposals.reject(pending.id, 'superseded by a discussion');
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, plan: next };
+  });
+
+  // End a discussion the operator no longer wants — the escape hatch, since the
+  // agent ends itself when it submits an amended plan.
+  //
+  // Restoring the status is half the job and not an afterthought: clearing the
+  // flag alone leaves the plan in `planning`, which is precisely what rule 3c
+  // dispatches from, so the next pulse would start another planner.
+  app.post('/api/plans/:id/discuss/end', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = store.getPlan(id);
+    if (!plan) return reply.code(404).send({ error: 'plan not found' });
+    store.setPlanStatus(id, 'awaiting_approval');
+    const next = store.setPlanDiscussing(id, false);
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, plan: next };
+  });
+
   // Queue an operator-launched job. It persists as `queued` and is drained by
   // the dispatcher ahead of world-driven work — taking the next free slot, or
   // waiting in the queue when the fleet is at capacity. A cycle is kicked so a

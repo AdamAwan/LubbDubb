@@ -78,6 +78,12 @@ export function ingestPlanDocument(
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
   if (declared.length > 0) store.upsertPlanParts(plan.id, declared);
 
+  // An amended plan is what *ends* a discussion — the agent has said its piece and
+  // submitted. Cleared here rather than in the route so it holds for both
+  // transports, and so an agent that finishes without anyone pressing a button
+  // still leaves the plan in a state rule 3c will not re-dispatch from.
+  if (plan.discussing) store.setPlanDiscussing(plan.id, false);
+
   return {
     plan,
     status,
