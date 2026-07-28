@@ -1,6 +1,7 @@
 import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
 import { readStoredSkinId, resolveSkin } from './skins/registry.js';
+import { PlanModal } from './components/PlanModal.js';
 import { WorkTreePanel } from './components/WorkTreePanel.js';
 
 /**
@@ -54,9 +55,36 @@ export function App() {
   if (status.kind === 'loading') return <div className="loading">Connecting to the cockpit…</div>;
 
   const { Root } = resolveSkin(readStoredSkinId());
+
+  // The modal hangs off the shell for the same reason `WorkTreePanel` does — it is
+  // shared, and the skin seam forbids a skin reaching `api.js` to open it another way.
+  const state = status.view.state;
+  const viewedPlan = (state.plans ?? []).find((p) => p.id === status.view.viewingPlan) ?? null;
+  const planModal = viewedPlan ? (
+    <PlanModal
+      plan={viewedPlan}
+      parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
+      upcoming={state.upcoming?.items ?? []}
+      proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
+      agent={state.agents.find(
+        (a) => status.view.taskFor(a)?.originRef === `${viewedPlan.originRef}:plan` && a.status !== 'done',
+      )}
+      now={status.view.now}
+      refUrls={state.refUrls}
+      onClose={() => status.actions.viewPlan(null)}
+      onReplan={(id) => status.actions.replan(id)}
+      onDiscuss={(id) => status.actions.discussPlan(id)}
+      onEndDiscussion={(id) => status.actions.endPlanDiscussion(id)}
+      onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}
+      onOpenAgent={(id) => status.actions.select(id)}
+      onRespond={(id, text) => status.actions.respondAgent(id, text)}
+    />
+  ) : null;
+
   return (
     <>
       <Root view={status.view} actions={status.actions} />
+      {planModal}
       <section className="work-panel">
         <h2>Work</h2>
         <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />

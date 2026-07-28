@@ -311,6 +311,8 @@ test('the tech tree lays parts out by dependency depth', () => {
     title: slug,
     scope: 'src/',
     dependsOn,
+    rationale: null,
+    acceptance: null,
     branch: null,
     prNumber: null,
     status,

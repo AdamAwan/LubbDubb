@@ -233,6 +233,19 @@ export function buildDemoState(): DemoSeed {
         title: 'Move the store behind a repository interface',
         status: 'active',
         reason: 'The schema move has to merge before anything reads through the new interface.',
+        risks:
+          'The repository interface has to cover every query the harness makes today, or a missed one surfaces as a runtime error instead of a compile error.',
+        outOfScope: 'Swapping the underlying engine off SQLite — this only adds the seam, it does not use it.',
+        document:
+          '# Move the store behind a repository interface\n\n' +
+          'Three parts, stacked: the schema migration has to land before anything can read through the new ' +
+          'interface, and the read path has to land before the write path so there is never a window where ' +
+          'both paths disagree about what a query returns.\n\n' +
+          '## Why three PRs\n\n' +
+          'Each part is independently reviewable and each one leaves the harness in a working state — the ' +
+          'schema part alone is a no-op migration; the reads part alone changes what code reads but not what ' +
+          'it means.',
+        discussing: false,
         createdAt: ago(90),
         updatedAt: ago(6),
       },
@@ -246,6 +259,9 @@ export function buildDemoState(): DemoSeed {
         title: 'Add the repository tables and migration',
         scope: 'src/store/',
         dependsOn: [],
+        rationale:
+          'The migration has to be reviewable on its own — it changes nothing behaviourally until the reads part lands.',
+        acceptance: 'The new tables exist and the migration runs clean on a copy of the production database.',
         branch: 'issue/212/schema',
         prNumber: 140,
         status: 'merged',
@@ -261,6 +277,9 @@ export function buildDemoState(): DemoSeed {
         title: 'Route reads through the interface',
         scope: 'src/harness.ts, src/dispatcher/',
         dependsOn: ['schema'],
+        rationale: 'Reads are safe to move first — nothing downstream depends on the write path also having moved.',
+        acceptance:
+          'Every dispatcher/harness read goes through the interface; no direct SQL remains outside the store.',
         branch: 'issue/212/reads',
         prNumber: 143,
         status: 'in_review',
@@ -276,6 +295,9 @@ export function buildDemoState(): DemoSeed {
         title: 'Route writes through the interface',
         scope: 'src/executor/, src/agents/',
         dependsOn: ['reads'],
+        rationale:
+          'Writes go last — the read path has to be proven out first, or a write bug is indistinguishable from a read bug.',
+        acceptance: 'Every executor/agent write goes through the interface; direct SQLite access is gone from both.',
         branch: null,
         prNumber: null,
         status: 'ready',

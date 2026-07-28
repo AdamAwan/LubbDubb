@@ -179,6 +179,14 @@ export interface Plan {
   /** 'planning' | 'single' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned'. */
   status: string;
   reason: string | null;
+  /** What could go wrong with this decomposition, in the planner's own words. */
+  risks: string | null;
+  /** What the planner deliberately left out of every part. */
+  outOfScope: string | null;
+  /** The planner's full write-up, rendered as markdown in the modal's second tab. */
+  document: string | null;
+  /** True while a discussion agent is conversing about this plan — nothing is scheduled meanwhile. */
+  discussing: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -192,6 +200,10 @@ export interface PlanPart {
   scope: string;
   /** Sibling slugs this part stacks on (at most one). */
   dependsOn: string[];
+  /** Why this is its own PR rather than folded into a sibling. */
+  rationale: string | null;
+  /** What "done" looks like for this part, in the planner's own words. */
+  acceptance: string | null;
   branch: string | null;
   prNumber: number | null;
   /** 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked' | 'retired'. */
