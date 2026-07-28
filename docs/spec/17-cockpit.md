@@ -95,7 +95,7 @@ Red means exactly one thing on that floor: an agent parked on a question only yo
 
 `FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
 it sits are separate edits. It renders **three rails** — `act` (recovery, alerts, awaiting your
-stamp, work orders, faults), `floor` (the line, bots, research, the yard, off-blueprint) and `world`
+stamp, blueprints, faults), `floor` (the line, bots, research, the yard, off-blueprint) and `world`
 (production, launches, signals, shift log) — split on _whose turn it is_ rather than on subject, so
 a glance answers "is anything waiting on me" without moving. Production heads the world rail rather
 than the floor because its subject is output, and output is merges — the world's answer to the
@@ -154,6 +154,14 @@ argument for each is in its module's header, and the reason for the shape is wor
   replaced read as hazard tape — a warning, which is the one thing a belt is not — and drew no
   direction at all, leaving the animation as the only thing that said which way the queue ran. An
   arrow says it standing still, which matters because a stopped belt is a state this floor draws.
+- **The floor fills the panel; the plan does not stretch to it.** The bay count sets the plan's own
+  width, which at one or two bays is narrower than any screen — so the width goes in as an inline
+  `--fx-plan-w` and `.fx-line` takes it as a **`min-width`** with `width: 100%`. The sunk floor and
+  the belt then reach the panel's edge at any cap, because a belt that stops where the bays stop is
+  the one thing a line never does; above the panel's width the scroller takes over as before. The SVG
+  is pinned to `--fx-plan-w` rather than to the floor: stretched, it rescales and centres its viewBox,
+  and the crates — laid out in the same px units as the bays — would stop lining up with the
+  inserters they feed.
 - **The belt compresses behind the cut.** The boarding prefix keeps the crate pitch; everything
   behind butts together with no gap, because that is what a belt does when nothing is taking from
   it. Each run is omitted when empty — an empty flex child still takes the row's gap, and that gap
@@ -195,6 +203,19 @@ argument for each is in its module's header, and the reason for the shape is wor
   per-cell levels that do not exist. A brownout dims the machinery and nothing else — the reading
   belongs on the floor, but not at the cost of the text needed to act on it. Both are absent
   entirely when the subscriber limits were never captured; there is no denominator on an API key.
+
+Two panels on the act rail carry a rule of their own:
+
+- **Blueprints** (`data-fx="blueprints"`) is the `LaunchPanel`, and on this skin the `InjectPanel`
+  hangs off **`view.demo`** — the static Pages build — rather than off `config.injectable`. Injection
+  fakes a world change, which is only ever something the demo needs: a real run against a fake
+  provider is still a real run, and a panel that lies to the harness there is a way to lie to yourself
+  about what it is reacting to. The empty-floor line reads from the same predicate, so it never offers
+  an injection there is no panel for. Classic keeps `config.injectable`.
+- **Faults** offers a two-step **clear** in its head whenever it has any, posting
+  `POST /api/errors/clear`. Two-step because the rows go: nothing in the harness reads the fault log
+  back, so a clear costs nothing anything decides on — but it costs the only copy, and for every
+  cockpit rather than this one.
 
 The icons are original marks in `Sprite.tsx`. The game the treatment nods at owns its art outright
 and licenses none of it for redistribution, so none of it is used or traced; what carries the
@@ -297,9 +318,13 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
   offered (`restoreBlocked`) rather than hidden. Each card shows how the run ended (crashed vs shut
   down), the agent's last progress note, and the question it was parked on if it was parked on one.
 - **`InjectPanel`** — rendered **only** when `state.config.injectable`, i.e. some capability uses the
-  `fake` provider. A real-integration deployment does not see it, and the route refuses anyway.
-- **`LaunchPanel`** — queue an operator job (prompt, optional title, code/desk, optional branch) and
-  see the queue, including cancel.
+  `fake` provider. A real-integration deployment does not see it, and the route refuses anyway. (The
+  factory skin narrows this further to the demo build — see below.)
+- **`LaunchPanel`** — stamp a blueprint: an operator job (prompt, optional title, code/desk, optional
+  branch) and the queue, including cancel. The button is `+ New blueprint` behind a blue blueprint
+  plate — drawn inline in the component rather than added to a skin's sprite sheet, because the panel
+  is shared and the sprites are not. It is the one glyph in the cockpit that is not `currentColor`: a
+  blueprint is blue the way a warning is amber, so the colour is the noun.
 - **`Vitals`** — fleet-level counts.
 
 ### Left column — Fleet

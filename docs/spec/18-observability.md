@@ -2,12 +2,12 @@
 
 Four durable records answer four different questions, plus one live tail and one debug channel.
 
-| Record          | Answers                                              | Table          | Panel          |
-| --------------- | ------------------------------------------------------ | -------------- | -------------- |
-| Decision log    | What did the harness decide, and why?                 | `decisions`    | Decision log   |
-| Activity feed   | What did the *world* do?                              | `world_events` | Activity       |
-| Error log       | What failed?                                          | `error_events` | Errors         |
-| Usage           | What did it cost?                                     | `usage_events` + the `agents` row | Usage chip |
+| Record        | Answers                               | Table                             | Panel        |
+| ------------- | ------------------------------------- | --------------------------------- | ------------ |
+| Decision log  | What did the harness decide, and why? | `decisions`                       | Decision log |
+| Activity feed | What did the _world_ do?              | `world_events`                    | Activity     |
+| Error log     | What failed?                          | `error_events`                    | Errors       |
+| Usage         | What did it cost?                     | `usage_events` + the `agents` row | Usage chip   |
 
 ## The error log
 
@@ -21,18 +21,24 @@ Four durable records answer four different questions, plus one live tail and one
 `ErrorRecorder` is the narrow `{record}` seam handed to consumers, so they stay decoupled from the
 emitter and tests can pass a plain capture object.
 
+The log is the one record an operator can **clear** (`POST /api/errors/clear`, the factory skin's
+Faults head): it is a list read and cleared rather than a record anything decides on — nothing in the
+harness reads `error_events` back — so the only thing a clear can lose is a row nobody had read. The
+other three tables have no such button, because every one of them is read back by something. Clearing
+stops nothing: the next failure records as usual.
+
 The event is named **`logged`, not `error`**: an unlistened `error` event throws on an EventEmitter,
 and recording a failure must never throw.
 
 ### Who records what
 
-| `source`   | Recorded by                                                                                  |
-| ---------- | ---------------------------------------------------------------------------------------------- |
-| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard. |
-| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices. |
+| `source`   | Recorded by                                                                                                                                                                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                                                             |
+| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices.                                                                                                                                  |
 | `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; PTY sentinel-drift warnings; invalid or unreadable `plan.json`; an overridden `single` verdict; MCP channel/config/frame failures. |
-| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                 |
-| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.          |
+| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                                                    |
+| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                                                            |
 
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.
@@ -42,11 +48,11 @@ and recording a failure must never throw.
 Every action outcome is written by `Store.recordDecision`, which **lifts `action.rule` into the `rule`
 column** so the audit log can answer "which rule fired" first-class rather than only "what did it say".
 
-| Outcome    | Written when                                                     |
-| ---------- | ------------------------------------------------------------------ |
+| Outcome    | Written when                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------ |
 | `executed` | The effect happened (including a no-op, and an escalation raised because auto-send was blocked). |
-| `deferred` | Held by the branch gate, the pause gate or the cap gate.         |
-| `rejected` | Malformed action, or the effect failed.                          |
+| `deferred` | Held by the branch gate, the pause gate or the cap gate.                                         |
+| `rejected` | Malformed action, or the effect failed.                                                          |
 | `skipped`  | The origin already has an active task, the target agent is not live, or the cycle rationale row. |
 
 Each cycle also records its dispatcher rationale as a `no_op`/`skipped` row detailed

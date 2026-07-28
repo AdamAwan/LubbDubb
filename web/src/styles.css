@@ -333,6 +333,16 @@ body {
   align-items: center;
   gap: 8px;
 }
+/* The plate sits on the text baseline of the button it labels, so the two read as
+   one mark rather than as an icon with a caption. */
+.launch-head .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.launch-bp {
+  flex: none;
+}
 .launch-form {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import type { CSSProperties, JSX } from 'react';
 import type { Agent, QueueItem, Task } from '../../../types.js';
 import { elapsed } from '../../../components/util.js';
 import { Icon } from './Sprite.js';
@@ -255,7 +255,13 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
       </div>
 
       <div className="fx-scroller">
-        <div className="fx-line fx-sunk" style={{ width: `${planW}px` }}>
+        {/* The plan's own width goes in as a custom property rather than as the
+            element's width: the floor and the belt fill the panel at any cap
+            (a one-bay plan is narrower than any screen, and a floor that stopped
+            at the last bay left the belt hanging in mid-air), while the SVG keeps
+            its intrinsic width so its 1:1 viewBox scale — and therefore the crate
+            pitch the gate is measured in — survives. See the CSS. */}
+        <div className="fx-line fx-sunk" style={{ '--fx-plan-w': `${planW}px` } as CSSProperties}>
           <svg className="fx-plan" viewBox={`0 0 ${planW} ${PLAN_H}`}>
             {/* ---- roboport: one pad per slot, lit when the slot is free ---- */}
             <g>
