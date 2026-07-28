@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
+import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { foldWorkGraph } from '../src/graph/workGraph.js';
@@ -443,5 +444,50 @@ test('an assessment appears in the graph under its issue, and is never terminal'
   assert.equal(node.kind, 'assess');
   assert.equal(node.parentRef, 'issue:12', 'an assessment is about the issue, not about what delivered it');
   assert.equal(node.terminal, false, 'terminality here would be the graph holding an opinion about completion');
+  system.store.close?.();
+});
+
+// -- the operator's arm ------------------------------------------------------
+
+test('the operator can park an issue and release it again', async () => {
+  const system = build();
+  const app = await buildApp(system);
+
+  const parked = await app.app.inject({
+    method: 'POST',
+    url: '/api/issues/12/delivered',
+    payload: { delivered: true, summary: 'checked it myself' },
+  });
+  assert.equal(parked.statusCode, 200);
+  const row = system.store.getDelivery('issue:12');
+  assert.equal(row?.by, 'operator');
+  assert.equal(row?.summary, 'checked it myself');
+
+  const released = await app.app.inject({
+    method: 'POST',
+    url: '/api/issues/12/delivered',
+    payload: { delivered: false },
+  });
+  assert.equal(released.statusCode, 200);
+  assert.equal(system.store.getDelivery('issue:12'), null, 'clearing is a delete, not a stored "not delivered"');
+
+  await app.app.close();
+  system.store.close?.();
+});
+
+test('the route refuses a body it cannot act on', async () => {
+  const system = build();
+  const app = await buildApp(system);
+
+  const bad = await app.app.inject({ method: 'POST', url: '/api/issues/12/delivered', payload: {} });
+  assert.equal(bad.statusCode, 400);
+  const badNumber = await app.app.inject({
+    method: 'POST',
+    url: '/api/issues/abc/delivered',
+    payload: { delivered: true },
+  });
+  assert.equal(badNumber.statusCode, 400);
+
+  await app.app.close();
   system.store.close?.();
 });

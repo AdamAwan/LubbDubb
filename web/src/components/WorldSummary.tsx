@@ -30,7 +30,10 @@ function pickupChip(pickup: Issue['pickup']) {
       </span>
     );
   }
-  const calm = pickup.status === 'active'; // an agent on it is progress, not a warning
+  // An agent on it is progress, and a delivered issue is parked on purpose — the
+  // assessor's verdict, or the operator's. Neither is a warning; the reason string
+  // already says who decided and what they saw, so it needs no colour to be read.
+  const calm = pickup.status === 'active' || pickup.status === 'delivered';
   return (
     <span className={`chip small${calm ? '' : ' warn'}`} title={pickup.reasons.join(', ')}>
       {pickup.reasons[0] ?? pickup.status}
