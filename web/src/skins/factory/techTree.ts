@@ -54,7 +54,10 @@ function isLive(part: PlanPart): boolean {
 
 function stateOf(part: PlanPart): PartState {
   switch (part.status) {
+    // Both terminals read as finished: a concluded part produced a write-up or a
+    // determination rather than a merge, but there is nothing left to wait for.
     case 'merged':
+    case 'concluded':
       return 'researched';
     case 'in_review':
     case 'dispatched':

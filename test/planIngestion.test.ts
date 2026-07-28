@@ -9,6 +9,7 @@ import {
   isPlanFile,
   parsePlanDocument,
   planPartInputs,
+  validatePlanDocument,
 } from '../src/plans/planDocument.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
@@ -401,4 +402,49 @@ test('an over-long write-up is trimmed and stored, never refused', () => {
   );
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   assert.equal(parsed.document.document!.length, MAX_PLAN_DOCUMENT_CHARS);
+});
+
+test('a part may declare an expected outcome kind, and a bad one is refused at the boundary', () => {
+  const ok = validatePlanDocument({
+    version: 1,
+    verdict: 'parts',
+    reason: 'investigate, then fix',
+    parts: [{ slug: 'probe', title: 'Investigate', scope: 'src/', expectedKind: 'report' }],
+  });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.ok && planPartInputs(ok.document)[0]?.expectedKind, 'report');
+
+  // Synchronously, through plan_submit, rather than a pulse later.
+  const bad = validatePlanDocument({
+    version: 1,
+    verdict: 'parts',
+    reason: 'x',
+    parts: [{ slug: 'probe', title: 'Investigate', scope: 'src/', expectedKind: 'writeup' }],
+  });
+  assert.equal(bad.ok, false);
+
+  // Optional, so a plan written before the field existed still validates and reads
+  // as unstated — which everything downstream treats as `code`.
+  const older = validatePlanDocument({
+    version: 1,
+    verdict: 'parts',
+    reason: 'x',
+    parts: [{ slug: 'probe', title: 'Investigate', scope: 'src/' }],
+  });
+  assert.equal(older.ok && planPartInputs(older.document)[0]?.expectedKind, null);
+});
+
+test('a parts verdict may be entirely non-code', () => {
+  // The case the feature exists for: "investigate why deploys are slow" decomposes
+  // honestly instead of the planner inventing pull requests it can never merge.
+  const result = validatePlanDocument({
+    version: 1,
+    verdict: 'parts',
+    reason: 'this is an investigation, not a build',
+    parts: [
+      { slug: 'measure', title: 'Measure', scope: 'ci/', expectedKind: 'report' },
+      { slug: 'decide', title: 'Decide', scope: 'docs/', dependsOn: ['measure'], expectedKind: 'determination' },
+    ],
+  });
+  assert.equal(result.ok, true);
 });

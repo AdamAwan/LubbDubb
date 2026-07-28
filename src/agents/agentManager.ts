@@ -16,6 +16,8 @@ import type {
   FindingInput,
   IssueConclusion,
   IssueConclusionVerdict,
+  PartOutcomeKind,
+  PlanPart,
   Task,
   WorkItemFiling,
 } from '../types.js';
@@ -31,6 +33,7 @@ type LinkTicketResult =
   | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
+import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -152,6 +155,8 @@ interface AgentManagerEvents {
   /** The agent said whether its issue is finished (already persisted against the issue origin). */
   conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
   assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
+  /** The agent closed its plan part without a pull request (already persisted on the part row). */
+  partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -575,6 +580,50 @@ export class AgentManager extends EventEmitter {
     }
     this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
     return { ok: true, issueOrigin: origin.issueOrigin, verdict };
+  }
+
+  /**
+   * Record what a plan part produced, for a part that finished without a pull
+   * request — a write-up, or the determination that nothing needed building.
+   *
+   * Routed through the manager rather than straight to the store for
+   * {@link recordConclusion}'s reason: the event repaints the cockpit now rather
+   * than on the next pulse. Identity is structural — the part is resolved from the
+   * credential's task origin, so an agent cannot conclude a sibling's work, and
+   * {@link partConclusionOrigin} refuses every other kind of caller by name.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  recordPartOutcome(
+    agentId: string,
+    kind: PartOutcomeKind,
+    summary: string,
+    ref: string | null,
+  ): { ok: true; part: PlanPart } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const origin = partConclusionOrigin(task.originRef);
+    if (!origin.ok) return { ok: false, error: origin.error };
+    const plan = this.store.getPlanByOrigin(issueOrigin(origin.issueNumber));
+    const part = plan ? this.store.listPlanParts(plan.id).find((p) => p.slug === origin.slug) : undefined;
+    if (!part) {
+      return { ok: false, error: `no part "${origin.slug}" is recorded for issue #${origin.issueNumber}.` };
+    }
+    // The store's guard does the work: only a part still being worked moves, so a
+    // second call merges nothing and a merged or retired part cannot be re-labelled.
+    const concluded = this.store.concludePlanPart(part.id, { kind, ref, summary });
+    if (!concluded) {
+      return {
+        ok: false,
+        error:
+          `part "${origin.slug}" is "${part.status}", and only a part being worked can be concluded. ` +
+          `A merged part already finished; a retired one was dropped by a replan.`,
+      };
+    }
+    this.emit('partOutcome', { agentId, taskId: task.id, part: concluded });
+    return { ok: true, part: concluded };
   }
 
   /**

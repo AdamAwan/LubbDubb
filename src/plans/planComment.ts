@@ -33,10 +33,10 @@ const MARKER = '<!-- lubbdubb:plan -->\n_LubbDubb delivery plan_';
 
 function statusMark(part: PlanPart): string {
   switch (part.status) {
-    case 'merged':
     // A concluded part is finished, so it ticks like a merged one. *What kind* of
     // finish it was is carried by `where`, not by a second mark a reader of the
     // thread would have no way to interpret.
+    case 'merged':
     case 'concluded':
       return '[x]';
     // Shown, not hidden: a reader of the thread should see that a part was dropped

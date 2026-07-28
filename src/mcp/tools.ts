@@ -8,6 +8,8 @@ import type {
   FindingInput,
   IssueConclusion,
   IssueConclusionVerdict,
+  PartOutcomeKind,
+  PlanPart,
   Task,
   WorkItemFiling,
 } from '../types.js';
@@ -23,6 +25,7 @@ import {
   type AssessmentVerdict,
 } from './assessment.js';
 import { FINDING_KIND_HELP, FINDING_KINDS, parseFindingRef, validateFinding } from './findings.js';
+import { PART_OUTCOME_KIND_HELP, PART_OUTCOME_KINDS, validatePartConclusion } from './partOutcome.js';
 import { MCP_TOOL_NAMES } from './names.js';
 import { normaliseNote } from './progress.js';
 import { type McpTool, toolError, toolJson, type ToolCallResult } from './protocol.js';
@@ -56,6 +59,12 @@ export interface AgentToolTarget {
     verdict: AssessmentVerdict,
     summary: string,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
+  recordPartOutcome(
+    agentId: string,
+    kind: PartOutcomeKind,
+    summary: string,
+    ref: string | null,
+  ): { ok: true; part: PlanPart } | { ok: false; error: string };
 }
 
 interface McpToolDeps {
@@ -596,6 +605,59 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
                 'stays a human decision.'
               : 'Recorded. The issue is back in the queue and your summary goes to whoever picks it up. ' +
                 'Nothing is dispatched right now.',
+        });
+      },
+    },
+    {
+      name: MCP_TOOL_NAMES[9],
+      description:
+        'Close YOUR PART of a decomposed issue when it finished without a pull request. Most parts end in ' +
+        'a merged PR and need nothing from you — the harness sees the merge itself. Call this only when ' +
+        'there is no PR to open: the part was a write-up or a measurement ("report"), or you established ' +
+        'that nothing needs building at all ("determination" — it is already done, it duplicates other ' +
+        'work, or the premise was wrong). Without it a part like that stays open forever and holds the ' +
+        'whole plan, and its issue, open with it. This says nothing about the other parts or about ' +
+        'whether the issue as a whole is finished.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            enum: [...PART_OUTCOME_KINDS],
+            description: PART_OUTCOME_KINDS.map((k) => `${k}: ${PART_OUTCOME_KIND_HELP[k]}`).join('. '),
+          },
+          summary: {
+            type: 'string',
+            description:
+              'What you produced or found. An operator reads this to decide what the plan achieved, and ' +
+              'for a determination it is the entire record of why no code was written — so give the ' +
+              'evidence, not just the conclusion.',
+          },
+          evidenceRef: {
+            type: 'string',
+            description:
+              'Optional: "flag:<id>" for an artifact you surfaced, or "finding:<id>" for something you ' +
+              'reported with report_finding. Omit it if you have neither.',
+          },
+        },
+        required: ['kind', 'summary'],
+      },
+      handler: (args) => {
+        const parsed = validatePartConclusion(args);
+        if (!parsed.ok) return toolError(`Part conclusion rejected: ${parsed.error}`);
+        // Structural identity, carrying more than attribution again: the origin
+        // decides *which* part this is, so an agent cannot conclude a sibling's.
+        const result = deps.agents.recordPartOutcome(agent.id, parsed.kind, parsed.summary, parsed.ref);
+        if (!result.ok) return toolError(result.error);
+        return ok({
+          concluded: true,
+          part: result.part.slug,
+          outcome: result.part.outcomeKind,
+          // Said in the response as well as the description, for `conclude_work`'s
+          // reason: an agent that believed this settled the issue would stop.
+          note:
+            'Recorded. This part is finished and nothing further is dispatched for it. The rest of the ' +
+            'plan is unaffected, and whether the issue itself is done is decided by the plan as a whole.',
         });
       },
     },

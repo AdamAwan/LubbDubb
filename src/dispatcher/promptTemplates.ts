@@ -81,6 +81,10 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Slugs are short, lowercase, kebab-case and unique; "scope" names the files or areas that part owns, ' +
       'so parts running at the same time do not collide; "dependsOn" names **at most one** sibling slug — a part ' +
       'stacks on a single branch, so two dependencies is not expressible and the plan will be rejected.\n\n' +
+      '"expectedKind" is optional and defaults to "code" — a part that ends in a merged pull request. Use ' +
+      '"report" when the deliverable is a write-up or a measurement, and "determination" when the part ' +
+      'decides whether anything needs building at all. They exist so investigative work can be decomposed ' +
+      'honestly instead of inventing pull requests for it; do not reach for them when the work is code.\n\n' +
       '"document" is not optional in practice: a human reads it and decides whether this work happens. ' +
       'Write it for them, in markdown — why the work is shaped this way, what you considered and rejected, ' +
       'and a section naming whatever you are least sure about. A plan with no write-up is one they have to ' +
@@ -154,6 +158,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '{done}\n\n' +
       'Other parts still to come. These are explicitly NOT yours — leave them alone:\n' +
       '{remaining}\n\n' +
+      'If you find there is nothing to build here — it is already done, it duplicates other work, or the ' +
+      'premise is wrong — do not open an empty pull request and do not simply stop. Call conclude_part ' +
+      'with kind "determination" and say what you found, and the part closes cleanly.\n\n' +
       'Work on branch {branch}, which is cut from {base}. Open a pull request from {branch} **into {base}** — if ' +
       'that is not the default branch, this PR is stacked on another part and must target it, not the default. ' +
       'Say in the PR body which part of #{number} this is and what it stacks on. Reference the issue as ' +

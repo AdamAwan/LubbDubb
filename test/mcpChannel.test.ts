@@ -1449,3 +1449,81 @@ function roundTrip(socketPath: string, lines: string[]): Promise<{ id: unknown; 
     setTimeout(settle, 250).unref();
   });
 }
+
+// -- conclude_part (issue #160) ---------------------------------------------
+
+test('conclude_part closes a part that produced no PR, and the plan rolls up complete', async () => {
+  const system = build();
+  const plan = system.store.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Investigate',
+    status: 'active',
+    reason: 'Measure before building.',
+  });
+  system.store.upsertPlanParts(plan.id, [
+    {
+      slug: 'probe',
+      seq: 1,
+      title: 'Investigate',
+      scope: 'src/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: 'report',
+    },
+  ]);
+  const part = system.store.listPlanParts(plan.id)[0]!;
+  system.store.updatePlanPart(part.id, { status: 'dispatched' });
+
+  const agent = spawnAgent(system, 'issue:12:part:probe');
+  const res = await callTool(system, agent, 'conclude_part', {
+    kind: 'determination',
+    summary: 'Already fixed by #98 — nothing to build.',
+    evidenceRef: 'finding:f_1',
+  });
+  assert.equal(res.isError, false);
+
+  const after = system.store.listPlanParts(plan.id)[0]!;
+  assert.equal(after.status, 'concluded');
+  assert.equal(after.outcomeKind, 'determination');
+  assert.equal(after.outcomeRef, 'finding:f_1');
+  // The bug this closes: the one part that found nothing to build no longer holds
+  // the whole decomposition — and its issue — open forever.
+  assert.equal(system.store.rollUpPlanStatus(plan.id)?.status, 'complete');
+
+  // Idempotent through the tool as well as the store: a second call is refused.
+  const again = await callTool(system, agent, 'conclude_part', { kind: 'report', summary: 'again' });
+  assert.equal(again.isError, true);
+  system.store.close();
+});
+
+test('conclude_part refuses every caller that is not a part agent, naming the right tool', async () => {
+  const system = build();
+  for (const [origin, expected] of [
+    ['issue:12', 'conclude_work'],
+    ['issue:12:plan', 'plan_submit'],
+    ['issue:12:assess', 'assess_issue'],
+    ['pr:42:ci', 'not a part'],
+  ] as const) {
+    const agent = spawnAgent(system, origin);
+    const res = await callTool(system, agent, 'conclude_part', { kind: 'report', summary: 'x' });
+    assert.equal(res.isError, true, `${origin} is refused`);
+    assert.match(res.text, new RegExp(expected), `${origin} is pointed at ${expected}`);
+  }
+  system.store.close();
+});
+
+test('conclude_part refuses "code": a merge is observed, never declared', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:part:probe');
+  // Accepting `code` would let an agent mark its own work finished with no pull
+  // request behind it — the false terminal that ruled derivation out entirely.
+  const res = await callTool(system, agent, 'conclude_part', { kind: 'code', summary: 'done' });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /pull request/);
+  // And it is not on offer in the first place: the advertised enum is the two
+  // outcomes that have no outside world to observe them.
+  const kind = advertisedSchema(system, agent, 'conclude_part').properties.kind as { enum: string[] };
+  assert.deepEqual(kind.enum, ['report', 'determination']);
+  system.store.close();
+});

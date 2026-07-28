@@ -312,3 +312,43 @@ test('the rendered comment reports progress and the PR numbers', () => {
   assert.match(body, /\[ \] \*\*API\*\*/);
   store.close();
 });
+
+test('a concluded part is finished, and the fold never brings it back', async () => {
+  const h = setup();
+  const parts = h.store.listPlanParts(h.planId);
+  const schema = parts.find((p) => p.slug === 'schema')!;
+  h.store.updatePlanPart(schema.id, { status: 'dispatched', branch: 'issue/12/schema' });
+  h.store.concludePlanPart(schema.id, { kind: 'report', ref: null, summary: 'Findings in docs/perf.md' });
+
+  // For a report or a determination there is no outside world to observe: the
+  // record was durable the moment the agent wrote it, so the only thing this fold
+  // could do is undo it. A PR appearing on the branch must not resurrect the part.
+  await h.reconciler.reconcile(world([pr(40, 'issue/12/schema')]));
+  const after = h.store.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
+  assert.equal(after.status, 'concluded');
+  assert.equal(after.outcomeKind, 'report');
+  assert.equal(after.prNumber, null);
+
+  // And it satisfies its dependent, which bases on the default branch because a
+  // concluded part may never have pushed a branch worth stacking on.
+  assert.equal(h.store.listPlanParts(h.planId).find((p) => p.slug === 'api')?.status, 'ready');
+  h.store.close();
+});
+
+test('a plan finishing on a mix of terminals completes and says so without claiming a merge', async () => {
+  const h = setup();
+  const parts = h.store.listPlanParts(h.planId);
+  const schema = parts.find((p) => p.slug === 'schema')!;
+  const api = parts.find((p) => p.slug === 'api')!;
+  h.store.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
+  h.store.updatePlanPart(api.id, { status: 'dispatched', branch: 'issue/12/api' });
+  h.store.concludePlanPart(api.id, { kind: 'determination', ref: null, summary: 'Already covered by #98' });
+
+  await h.reconciler.reconcile(world());
+  assert.equal(h.store.getPlan(h.planId)?.status, 'complete');
+  const body = h.comments.at(-1)?.body ?? '';
+  assert.match(body, /all 2 parts finished/);
+  assert.match(body, /determination.*Already covered by #98/);
+  assert.doesNotMatch(body, /API.*merged/);
+  h.store.close();
+});

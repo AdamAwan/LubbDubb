@@ -204,9 +204,21 @@ export interface PlanPart {
   rationale: string | null;
   /** What "done" looks like for this part, in the planner's own words. */
   acceptance: string | null;
+  /**
+   * 'code' | 'report' | 'determination' — what the planner expected this part to
+   * produce. Null means unstated, which reads as code. Optional so an older server
+   * degrades gracefully.
+   */
+  expectedKind?: string | null;
+  /** What it actually produced, once concluded. Null until then; a merged part is code. */
+  outcomeKind?: string | null;
+  /** Optional evidence for a concluded part — 'flag:<id>' or 'finding:<id>'. */
+  outcomeRef?: string | null;
+  /** What the concluding agent found. Present on a concluded part. */
+  outcomeSummary?: string | null;
   branch: string | null;
   prNumber: number | null;
-  /** 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked' | 'retired'. */
+  /** 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'concluded' | 'blocked' | 'retired'. */
   status: string;
   taskId: string | null;
   createdAt: string;
