@@ -200,6 +200,27 @@ export interface PlanPart {
   createdAt: string;
   updatedAt: string;
 }
+/**
+ * One node of the durable work graph (mirrors the server's `WorkNode`). Unlike
+ * everything else here it does not ride `/api/state` — the graph never forgets, so
+ * shipping the forest on every poll would be the wrong shape. It arrives from
+ * `/api/work` and `/api/work/:ref` instead, which is why no `AppState` key names it.
+ */
+export interface WorkNodeView {
+  ref: string;
+  kind: 'issue' | 'plan' | 'part' | 'pr' | 'concern' | 'job' | 'assess';
+  /** Work lineage: a PR's parent is the part that produced it. Null on a root. */
+  parentRef: string | null;
+  /** PR nodes only: the PR this one is stacked on. A cross-link, never the parent. */
+  baseRef: string | null;
+  title: string;
+  status: string;
+  terminal: boolean;
+  /** How a terminal PR state was learned — `inferred` means absence was read as a merge. */
+  provenance: 'observed' | 'inferred' | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
 export interface Job {
   id: string;
   title: string;

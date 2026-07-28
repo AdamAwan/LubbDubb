@@ -1639,3 +1639,55 @@ body {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ── Work graph ──────────────────────────────────────────────────────────
+   Shell-level rather than skin-owned: the graph is the one surface that
+   outlives the world snapshot, so it is drawn the same under every skin and
+   styled only through the tokens above. */
+.work-panel {
+  padding: 0 16px 24px;
+}
+.work-panel h2 {
+  font-size: 14px;
+  color: var(--muted);
+}
+.work-root {
+  border-bottom: 1px solid var(--border);
+}
+.work-root-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.work-caret {
+  color: var(--muted);
+}
+.work-tree {
+  padding: 4px 0 8px 18px;
+}
+.work-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.work-mark {
+  color: var(--muted);
+  width: 12px;
+}
+.work-title {
+  color: var(--text);
+}
+.work-seen {
+  font-size: 11px;
+}
+.work-loading {
+  padding: 4px 0 8px 18px;
+}

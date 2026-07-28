@@ -6,7 +6,7 @@
 //
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
-import type { AppState, Decision, Proposal, WorldEvent, WorldEventKind } from '../types.js';
+import type { AppState, Decision, Proposal, WorkNodeView, WorldEvent, WorldEventKind } from '../types.js';
 import type { WsClient } from '../api.js';
 import { buildDemoState } from './fixtures.js';
 
@@ -760,6 +760,11 @@ function getServer(): DemoServer {
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
+  // The demo's world is built fresh in the browser each load, so nothing has ever
+  // been recorded for it — an empty graph is the honest answer, and these exist to
+  // keep the two API shapes interchangeable.
+  getWorkRoots: () => Promise.resolve({ roots: [] as WorkNodeView[] }),
+  getWorkSubtree: (_ref: string) => Promise.resolve({ nodes: [] as WorkNodeView[], refUrls: {} }),
   pulse: () => getServer().pulse(),
   inject: (event: unknown) => getServer().inject(event),
   answerEscalation: (id: string, response: string) => getServer().answerEscalation(id, response),

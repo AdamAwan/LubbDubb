@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
 import { Store } from '../src/store/store.js';
 import type {
   Issue,
@@ -478,4 +479,28 @@ test('the routes serve roots and one subtree, and refuse an unknown root', async
 
   await app.close();
   system.store.close();
+});
+
+function srcFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...srcFiles(path));
+    else if (entry.name.endsWith('.ts')) out.push(path);
+  }
+  return out.sort();
+}
+
+test('stage 1 is a lens: nothing in the dispatcher reads the graph', () => {
+  // Structural, the way prAttention's single-importer property is kept. The moment
+  // a rule consults the graph, an agent can suppress another's dispatch and a
+  // second opinion about a gate starts living nowhere near the gate it duplicates.
+  const readers = srcFiles('src')
+    .filter((f) => !f.startsWith('src/graph/'))
+    .filter((f) => readFileSync(f, 'utf8').includes('graph/workGraph'));
+  assert.deepEqual(
+    readers,
+    ['src/harness.ts', 'src/system.ts'],
+    'only the pulse and the composition root may reach the graph in stage 1',
+  );
 });

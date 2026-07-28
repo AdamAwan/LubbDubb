@@ -39,7 +39,7 @@ coalesced return does not: no cycle ran.
 
 ## Ordering
 
-`runCycle` performs exactly this sequence. The order is load-bearing at three points, noted below.
+`runCycle` performs exactly this sequence. The order is load-bearing at four points, noted below.
 
 1. **Emit `cycle:start`** with the new `cyc_*` id and the source.
 2. **Snapshot the world** — `connector.getState()`.
@@ -47,22 +47,28 @@ coalesced return does not: no cycle ran.
    `world:events`. See below.
 4. **Reconcile plans** — `plans.reconcile(world)`. This runs **before** `decide`, so a part it moves
    to `ready` is dispatchable in the same cycle. Safe because every fold is idempotent.
-5. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
+5. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
+   node observations and upserts them (see [14](14-persistence.md#work-graph)). Positioned here for
+   both neighbours: **after** the reconciler, so the part→PR observations it just made are the ones
+   recorded, and **before** `decide`, which is where a later stage would read the graph from. A failure
+   is recorded through `errors.record` and never fails the cycle — nothing reads the graph for a
+   decision, so it must not be able to break the pulse.
+6. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
    and the most recent 200 decisions.
-6. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
+7. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
    **by reference** from `RuntimeControl` (never a copy taken at wiring time).
-7. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
-8. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
-9. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
-   and the world's `takenAt`. Null when the dispatcher returns no plan (the `claude` dispatcher
-   returns none). The operator priority overrides (issue #128) are then reconciled:
-   `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
-   active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
-   lingers forever.
-10. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
+8. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
+9. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
+10. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
+    and the world's `takenAt`. Null when the dispatcher returns no plan (the `claude` dispatcher
+    returns none). The operator priority overrides (issue #128) are then reconciled:
+    `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
+    active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
+    lingers forever.
+11. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
-11. **`executor.execute(cycleId, plan)`**.
-12. **Emit `cycle:end`** with the report.
+12. **`executor.execute(cycleId, plan)`**.
+13. **Emit `cycle:end`** with the report.
 
 ## Failure handling
 
