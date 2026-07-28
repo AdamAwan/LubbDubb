@@ -742,7 +742,8 @@ export function buildDemoState(): DemoSeed {
           kind: 'code',
           branch: 'issue/231/signer',
           status: 'unapproved',
-          reason: 'Part "signer" of issue #231 is ready. Held: the plan is awaiting approval.',
+          reason:
+            'Part "signer" of issue #231 is ready and has no agent. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.',
         },
         {
           origin: 'issue:231:part:route',
@@ -751,7 +752,8 @@ export function buildDemoState(): DemoSeed {
           kind: 'code',
           branch: 'issue/231/route',
           status: 'unapproved',
-          reason: 'Part "route" of issue #231 is ready. Held: the plan is awaiting approval.',
+          reason:
+            'Part "route" of issue #231 is ready and stacks on issue/231/signer. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.',
         },
       ],
     },
