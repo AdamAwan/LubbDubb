@@ -33,6 +33,8 @@ type LinkTicketResult =
   | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
+import { assayerOrigin, type GoalAssayVerdictName } from '../mcp/goalAssay.js';
+import { goalFingerprint } from '../intake/assay.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
@@ -155,6 +157,8 @@ interface AgentManagerEvents {
   /** The agent said whether its issue is finished (already persisted against the issue origin). */
   conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
   assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
+  /** The assayer said whether its issue's goal can be worked from (already persisted against the issue origin). */
+  assay: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAssayVerdictName }];
   /** The agent closed its plan part without a pull request (already persisted on the part row). */
   partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
@@ -579,6 +583,49 @@ export class AgentManager extends EventEmitter {
       });
     }
     this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+    return { ok: true, issueOrigin: origin.issueOrigin, verdict };
+  }
+
+  /**
+   * Record an assayer's verdict on the goal it was dispatched to judge.
+   *
+   * Routed through the manager rather than straight to the store for
+   * {@link recordConclusion}'s reason: the event repaints the cockpit now rather
+   * than on the next pulse.
+   *
+   * **The fingerprint is taken from the task, not from the world**, and that is
+   * the load-bearing line. `originTitle`/`originSummary` are the issue's title and
+   * body captured at dispatch — the exact text this agent was handed and therefore
+   * the exact text it judged. Re-reading the issue here would stamp the verdict
+   * with whatever the ticket says *now*, so an edit made while the assayer was
+   * running would be silently swallowed: the verdict would claim to be about text
+   * nobody assayed, and `assayHold`'s first arm — the one that re-opens the
+   * question when the ticket changes — could never fire for it.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  recordAssay(
+    agentId: string,
+    verdict: GoalAssayVerdictName,
+    summary: string,
+  ): { ok: true; issueOrigin: string; verdict: GoalAssayVerdictName } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const origin = assayerOrigin(task.originRef);
+    if (!origin.ok) return { ok: false, error: origin.error };
+
+    this.store.recordAssay({
+      originRef: origin.issueOrigin,
+      verdict,
+      summary,
+      goalRef: goalFingerprint(task.originTitle, task.originSummary),
+      by: 'assayer',
+      agentId,
+      taskId: task.id,
+    });
+    this.emit('assay', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
     return { ok: true, issueOrigin: origin.issueOrigin, verdict };
   }
 

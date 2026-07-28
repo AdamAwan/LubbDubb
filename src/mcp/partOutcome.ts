@@ -80,6 +80,15 @@ export function partConclusionOrigin(
         `#${assessor[1]} rather than to deliver any of it. Cast your verdict with assess_issue instead.`,
     };
   }
+  const assayer = /^issue:(\d+):assay$/.exec(ref);
+  if (assayer) {
+    return {
+      ok: false,
+      error:
+        `conclude_part closes a part you worked, and you were dispatched to judge whether issue ` +
+        `#${assayer[1]}'s goal can be worked from at all. Cast your verdict with assay_issue instead.`,
+    };
+  }
   return {
     ok: false,
     error:

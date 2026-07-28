@@ -178,6 +178,17 @@ harness's own park, which gates pickup and nothing else (see
 exactly one representation. Like the conclusion route it writes the harness's own record and **never
 touches the tracker**: `closed` stays the human's.
 
+### `POST /api/issues/:number/assay`
+
+Body `{verdict: 'workable'|'unclear'|null, summary?: string}`. The operator's arm of the goal assay,
+and the escape hatch a blocking gate has to have: `workable` releases an issue the assayer refused,
+`unclear` parks one without waiting for an agent to agree, and `null` **clears** the row — a delete,
+so "not assayed" has exactly one representation (which is also what a crashed assayer leaves, i.e.
+the fail-open). An operator verdict is fingerprinted against the issue as the last world snapshot saw
+it, so it expires on the next edit exactly as an agent's does; an issue absent from that snapshot is
+a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
+no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict.
+
 ### `GET /api/work`
 
 The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did

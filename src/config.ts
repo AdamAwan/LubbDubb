@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
 import type { PlanningPolicy } from './plans/planning.js';
 import type { AssessmentPolicy } from './delivery/assessment.js';
+import type { AssayPolicy } from './intake/assay.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 
 /** Operator control over the MCP tool channel. See {@link Config.mcp}. */
@@ -132,6 +133,16 @@ export interface Config {
    * as it does today. Deep-merged. Only the `rule` dispatcher implements it.
    */
   assessment: AssessmentPolicy;
+  /**
+   * The goal assay (rule 3f) — the harness asking whether a fresh issue's *text*
+   * can be worked from at all, before anything is dispatched against it (issue
+   * #158). **Off by default**, for `assessment`'s reason and with a cost worth
+   * naming: with `planning`, `assessment` and this all on, one issue can spend
+   * three agents before a line of its work is written. Off, no assayer is
+   * dispatched, no verdict is written, and every gate in front of an issue behaves
+   * exactly as it does today. Deep-merged. Only the `rule` dispatcher implements it.
+   */
+  assay: AssayPolicy;
   /**
    * The typed tool channel back to the harness — the `lubbdubb` MCP server every
    * spawned agent is wired to (issue #108).
@@ -387,6 +398,7 @@ const DEFAULTS: Config = {
   issueDefaultPriority: 2,
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: true, gitFetchIntervalMs: 60_000 },
   assessment: { enabled: false },
+  assay: { enabled: false },
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
@@ -476,6 +488,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // default part-concurrency cap instead of leaving it undefined.
   merged.planning = { ...DEFAULTS.planning, ...fromFile.planning, ...overrides.planning };
   merged.assessment = { ...DEFAULTS.assessment, ...fromFile.assessment, ...overrides.assessment };
+  merged.assay = { ...DEFAULTS.assay, ...fromFile.assay, ...overrides.assay };
 
   // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
   // than an accidental off.

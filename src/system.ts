@@ -11,6 +11,7 @@ import { WorktreeManager } from './worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { PlanReconciler } from './plans/planReconciler.js';
+import { AssayDesk } from './intake/assayDesk.js';
 import { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import { AgentManager } from './agents/agentManager.js';
 import {
@@ -362,6 +363,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           // Per-check CI policy narrows rule 1. The LLM dispatcher composes its
           // own prompts from the world and has no rule to narrow.
           config.ci,
+          // Same again: the goal assay is a rule in front of the funnel, and the
+          // LLM dispatcher has no branch it narrows.
+          config.assay,
         );
 
   // The store holds scheduling intent; this folds git + provider reality back onto
@@ -378,6 +382,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  // The goal assay's outbound half: one living comment per refused goal, on the
+  // ticket. Beside the plan reconciler because it is the same act — mechanical
+  // bookkeeping through the same seam, not an action the executor gates.
+  const assays = new AssayDesk({ store, sink: opts.sink ?? connector, assay: config.assay, errors });
+
   const graph = new WorkGraphRecorder({ store, errors });
 
   const harness = new Harness({
@@ -386,6 +395,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     executor,
     plans,
+    assays,
     graph,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,

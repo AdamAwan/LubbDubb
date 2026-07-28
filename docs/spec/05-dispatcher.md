@@ -57,6 +57,7 @@ expand a row into the rule that fired and why that rule exists.
 | `issue-plan`               | 3c   | Issue needs a plan       | With planning on, a watched open issue has no plan yet — or an operator asked for a replan.                                                               |
 | `plan-approval`            | 3d   | Plan needs your approval | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.                                                     |
 | `issue-assess`             | 3e   | Issue may be finished    | With assessment on, a watched open issue has had work, has nothing in flight and no open PR.                                                              |
+| `issue-assay`              | 3f   | Issue goal needs checking | With the assay on, a watched open issue nothing has been started for has no verdict on its goal text.                                                    |
 | `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                                                                        |
 | `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                                                                 |
 | `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                                                                   |
@@ -93,15 +94,18 @@ Candidates are appended in this order, and the order _is_ the priority:
 2. **PR concerns** (rules 1/2/2b), ranked **cross-PR** by concern class (CI > base-update > review
    comment) then by PR number. World order is arbitrary and must not decide who wins scarce headroom.
    Only the single most urgent concern per PR becomes a candidate.
-3. **Planners** (rule 3c) — a planner unblocks work, so it wins a slot before the work it unblocks.
-4. **Assessors** (rule 3e) — an assessment decides whether an issue needs work at all, so it is
+3. **Goal assays** (rule 3f) — asking whether a goal can be worked from comes before deciding *how*
+   to work it, so an assay ranks ahead of the planner and **suppresses both** the planner and the
+   pickup for that issue this cycle; see below.
+4. **Planners** (rule 3c) — a planner unblocks work, so it wins a slot before the work it unblocks.
+5. **Assessors** (rule 3e) — an assessment decides whether an issue needs work at all, so it is
    asked before the work is scheduled. An assessed issue is **suppressed** from rule 4 that cycle;
    see below.
-5. **Plan parts** (rule 4a), ranked by dependency depth, then issue number, then part sequence, so
+6. **Plan parts** (rule 4a), ranked by dependency depth, then issue number, then part sequence, so
    the bottom of a stack is cut before the branch its dependents will base on is needed.
-6. **Issue pickups** (rule 4), ordered by label-encoded priority then issue number.
-7. **Story grooming and WAF** (rules 5/6).
-8. **Story pickup** (rule 7) — ranked last, so at zero headroom it queues as `waiting` rather than
+7. **Issue pickups** (rule 4), ordered by label-encoded priority then issue number.
+8. **Story grooming and WAF** (rules 5/6).
+9. **Story pickup** (rule 7) — ranked last, so at zero headroom it queues as `waiting` rather than
    silently vanishing.
 
 Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `escalate_to_human`,
@@ -204,6 +208,31 @@ roll-up and a `complete` one to `done`, which is exactly what the old explicit `
 gave it — the item stays in the review state for the whole life of its plan rather than bouncing back
 to "Ready" in every gap between parts.
 
+## Rule 3f — the goal assay
+
+`assay.enabled` (**off by default**) puts an assaying agent in front of the whole funnel. Every other
+gate an issue passes asks whether the harness is *allowed* to act; this is the only one that asks
+whether the ticket says anything to act on. Full argument, the verdict's lifetime and what ends a
+hold are in [06](06-issue-pickup.md); the dispatcher's half is:
+
+- A **code** agent — the judgement needs the repository — on branch `assay/issue/<n>`, origin
+  `issue:<n>:assay`, based on `defaultBranch`. Its own branch namespace for `plan/issue/<n>`'s hard
+  reason: git cannot put `refs/heads/issue/12/assay` beside `refs/heads/issue/12`.
+- Driven off `eligibleIssues` (unlike rules 3e and 4a), because an issue the state gate or the watch
+  gate excludes is not going to be worked and so has nothing to assay.
+- Fires only when nothing has been started: no verdict against the issue's *current* text, no prior
+  work (`hasWorkStarted` — `hasPriorWork` with the assay's own tasks excluded, or a crashed assayer
+  would retire its own retry), no plan row, and nothing live on `issue:N` or any `issue:N:*`.
+- **Suppresses rule 3c and rule 4 for that issue this cycle**, from a set built once, so the three
+  rules cannot hold different opinions about which issues are in it.
+- **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation, exactly as
+  the planner and the assessor do, because narrowing pickup without that would make the assay the
+  most effective way to stop the harness working.
+
+`dispatchReason` and the prompt carry the issue's title and body, and the dispatch's `originTitle` /
+`originSummary` are what the verdict is later fingerprinted against — dropping them would stamp every
+verdict with the fingerprint of an empty goal.
+
 ## Rule 3e — the assessor
 
 `assessment.enabled` (**off by default**) puts an assessing agent in front of re-pickup. It exists
@@ -303,7 +332,7 @@ dispatcher emits, each under a stable `PromptId`, each with a built-in default, 
 list, and a doc string.
 
 Ids: `issue-plan`, `issue-replan`, `plan-part`, `plan-approval`, `plan-part-escalation`, `issue-pickup`,
-`issue-pickup-escalation`, `issue-assess`, `pr-ci-fix`, `pr-base-update-behind`,
+`issue-pickup-escalation`, `issue-assess`, `issue-assay`, `pr-ci-fix`, `pr-base-update-behind`,
 `pr-base-update-conflict`, `pr-review-comment`, `pr-concern-escalation`, `story-groom`, `story-waf`,
 `story-pickup`, `finding-ticket`, `work-item-ticket`. The last two are route-driven rather than
 dispatcher-driven — they are here because _how a ticket should be worded_ is the operator's opinion,

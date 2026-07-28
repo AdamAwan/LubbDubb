@@ -586,6 +586,54 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   git failure per dispatch. `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
   for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
   get none). Tests: `test/planReconcile.test.ts`.
+- **The goal assay (`src/intake/`, the `issue_assays` table, the `assay_issue` tool, issue #158).**
+  Every gate in front of a fresh issue asks about **policy** — the watch tag, the workflow state, the
+  cooldown, the attempt cap, headroom, `resolvePlanRoute`. None asks whether the ticket says anything
+  an agent could act on, so a vague or already-obsolete goal goes straight into the funnel and the
+  first sign anything was wrong is an agent spending its attempt cap and escalating in a way that reads
+  as its own failure — `ciPolicy`'s wall, one stage earlier. Rule `issue-assay` (3f, off by default)
+  puts a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`, cut from the default branch) for a
+  watched open issue nothing has been started for. It is the **assessor's mirror**: `hasPriorWork` is
+  the discriminator for both, one taking each arm — nothing started means the goal is all there is to
+  judge, something started means the question was answered by someone acting on it. What carries it:
+  - **It blocks, and silence is what makes blocking safe.** Only an explicit `unclear` holds; a
+    missing row holds nothing, so an assayer that crashed, was killed or spent its cap leaves the
+    issue to ordinary pickup with **no escalation** (the planner's fail-open, for its reason). That is
+    `undeclared`-vs-`more_work` again: act on what was said, never on silence. `workable` is stored
+    too — without a row for the affirmative the assayer re-runs every cycle, exactly as a `single`
+    plan verdict must be persisted.
+  - **The hold expires on the ticket's own text, not on a timer or only on an event.** The row stores
+    `goal_ref`, a NUL-joined fingerprint of the title and body judged (`goalFingerprint`), and the
+    hold ends the moment the issue fingerprints differently. It **could not** be an event: `worldDiff`
+    emits nothing at all for an edit, and adding one would make the verdict depend on the harness
+    having witnessed the moment — a ticket rewritten while it was down would stay parked forever,
+    which is `deliveryHold`'s argument for reading current state, with more force. Phase 4's
+    signal-expiry arm rides alongside (any transition on `issue:<n>` after the verdict) and is what
+    covers a human who answers in a **comment** rather than by editing. No timer arm, for
+    `deliveryHold`'s reason. The fingerprint is taken from the **task** (`originTitle`/`originSummary`)
+    in `AgentManager.recordAssay`, never re-read from the world — re-reading would swallow an edit
+    made while the assayer was running and stamp the verdict with text nobody assayed.
+  - **`hasWorkStarted` is `hasPriorWork` minus the assay's own tasks**, and the exclusion is
+    load-bearing rather than tidy: `issue:<n>:assay` is inside the subtree that predicate matches, so
+    without it one crashed assayer would retire the cooldown, the attempt cap and the assessor's arm
+    of the same discriminator in a single stroke.
+  - **A comment on the ticket is the third decision, and it is what makes a blocking gate fair.**
+    `AssayDesk` (pulse, beside the plan reconciler) keeps **one living comment** per refused goal
+    through `IssueCommentCapable.upsertIssueComment` — mechanical bookkeeping like the plan status
+    comment, so not auto-send gated, with the one-comment rule the thing that stops it being noise.
+    Written only when the body changes; the comment ref is dropped when the goal text changes (a new
+    question gets a new comment rather than overwriting the record of the old one); a hold that has
+    **ended is retracted** on the thread, because leaving the question standing is what makes people
+    distrust a bot's comments. It is the assay's only outbound act — nothing is closed, rejected,
+    labelled or edited.
+  - **It second-guesses the watch tag, deliberately and only there.** It never filters an untagged
+    backlog; it applies to issues the operator asked for, and its answer is not _no_ but _with what?_.
+    The operator's own arm and escape hatch is `POST /api/issues/:number/assay`
+    (`workable`/`unclear`/`null`). Cost, named rather than discovered: with `planning`, `assessment`
+    and `assay` all on, one issue can spend **three agents** before a line of its work is written —
+    which is why all three are off by default. `QueueItem`/`issuePickupStatus` gained the `assay`
+    status for `capped`'s reason (an issue waiting a cycle for a verdict must not look like an idle
+    fleet). Tests: `test/goalAssay.test.ts`.
 - **`src/graph/` is the durable work graph (stages 1 and 3 of 3) — the only thing here that outlives
   the world.** `closedPrWindowMs` bounds how long the _world snapshot_ remembers a merge (6h); every
   panel and predicate reading that snapshot forgets with it, and the edge from an issue to the PR
