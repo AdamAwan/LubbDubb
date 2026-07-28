@@ -736,6 +736,29 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
+  // -- Work graph ----------------------------------------------------------
+  // Deliberately *not* folded into `/api/state`: that endpoint is polled
+  // continuously, so shipping the whole forest on every poll is the wrong shape.
+  // Roots are cheap; a subtree is fetched when a panel is opened. Both sit under
+  // the `/api` prefix, so the `onRequest` guard above covers them with no
+  // per-route opt-in.
+  app.get('/api/work', async () => ({ roots: store.listWorkRoots() }));
+
+  app.get('/api/work/:ref', async (req, reply) => {
+    const { ref } = req.params as { ref: string };
+    const nodes = store.listWorkSubtree(ref);
+    if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
+    // Resolved here rather than read off the snapshot's `refUrls`: that map is
+    // built from the world, and a PR the graph remembers merging left the world
+    // hours ago — the connector can still name its URL.
+    const refUrls: Record<string, string> = {};
+    for (const node of nodes) {
+      const url = connector.resolveRefUrl(node.ref);
+      if (url) refUrls[node.ref] = url;
+    }
+    return { nodes, refUrls };
+  });
+
   app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
 
   // -- Static SPA (production build) --------------------------------------

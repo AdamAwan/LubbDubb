@@ -17,6 +17,7 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
+import { buildApp } from '../src/server/app.js';
 
 function obs(over: Partial<WorkNodeObservation> & Pick<WorkNodeObservation, 'ref' | 'kind'>): WorkNodeObservation {
   return { title: over.ref, status: 'open', terminal: false, parentRef: null, ...over };
@@ -441,5 +442,40 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
   // absence-means-merged would have rewritten this to `inferred`.
   assert.equal(after?.provenance, 'observed', 'the record was kept, not re-guessed');
   assert.equal(after?.parentRef, 'issue:12', 'and still knows which issue it delivered');
+  system.store.close();
+});
+
+test('the routes serve roots and one subtree, and refuse an unknown root', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: '',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+  });
+  const system = buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Widget' });
+  system.connector.inject({ kind: 'new_pr', number: 40, title: 'Add the widget', branch: 'issue/12' });
+  await system.harness.runCycle('manual');
+
+  const { app } = await buildApp(system);
+  const roots = await app.inject({ method: 'GET', url: '/api/work' });
+  assert.equal(roots.statusCode, 200);
+  assert.ok(
+    (roots.json() as { roots: { ref: string }[] }).roots.some((r) => r.ref === 'issue:12'),
+    'the issue is a root',
+  );
+
+  // A ref carries colons (`issue:12`, `pr:41:ci`), so the route has to survive one
+  // in a path segment — the whole vocabulary is unusable otherwise.
+  const sub = await app.inject({ method: 'GET', url: '/api/work/issue:12' });
+  assert.equal(sub.statusCode, 200);
+  assert.deepEqual((sub.json() as { nodes: { ref: string }[] }).nodes.map((n) => n.ref).sort(), ['issue:12', 'pr:40']);
+
+  const missing = await app.inject({ method: 'GET', url: '/api/work/issue:999' });
+  assert.equal(missing.statusCode, 404);
+
+  await app.close();
   system.store.close();
 });
