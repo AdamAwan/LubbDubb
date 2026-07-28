@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Issue, Job, PullRequest, WorkNode, WorkNodeObservation, WorldSnapshot } from '../src/types.js';
+import type {
+  Issue,
+  Job,
+  PullRequest,
+  WorkItemFiling,
+  WorkNode,
+  WorkNodeObservation,
+  WorldSnapshot,
+} from '../src/types.js';
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
 import { unrecordedWork, workItemTicketFields } from '../src/graph/unrecorded.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
@@ -55,7 +63,7 @@ function job(over: Partial<Job> = {}): Job {
 }
 
 function input(over: Partial<WorkGraphInput> = {}): WorkGraphInput {
-  return { world: world(), tasks: [], plans: [], parts: [], jobs: [], existing: [], ...over };
+  return { world: world(), tasks: [], plans: [], parts: [], jobs: [], filings: [], existing: [], ...over };
 }
 
 function node(out: WorkNodeObservation[], ref: string): WorkNodeObservation {
@@ -303,6 +311,102 @@ test('a job that produced nothing says so in the prompt rather than leaving a bl
   assert.ok(node);
   const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'), 'somewhere');
   assert.match(fields.vars.produced ?? '', /no pull request/i);
+  store.close();
+});
+
+// ---------------------------------------------------------------------------
+// The fold learns the parent from a linked filing
+// ---------------------------------------------------------------------------
+
+/** A filing row as the store hands one back, without needing a store. */
+function filing(over: Partial<WorkItemFiling> = {}): WorkItemFiling {
+  return {
+    targetRef: 'job:j7',
+    jobId: 'job_file1',
+    status: 'filed',
+    ticketRef: 'issue:314',
+    createdAt: '2026-07-28T09:00:00.000Z',
+    updatedAt: '2026-07-28T09:00:00.000Z',
+    ...over,
+  };
+}
+
+test('a linked filing parents its node to the ticket', () => {
+  const out = foldWorkGraph(input({ jobs: [job()], filings: [filing()] }));
+  assert.equal(node(out, 'job:j7').parentRef, 'issue:314');
+});
+
+test('a filing still in flight attaches nothing', () => {
+  const out = foldWorkGraph(input({ jobs: [job()], filings: [filing({ status: 'filing', ticketRef: null })] }));
+  assert.equal(node(out, 'job:j7').parentRef, null, 'the ticket does not exist yet');
+});
+
+test('a ticket the world never lists still leaves its work reachable', () => {
+  // The issue provider lists open items in one repository; a ticket closed
+  // straight away, or filed into another project, is never fetched. Without a
+  // placeholder the adopted job would be reachable from nowhere at all.
+  const store = new Store(':memory:');
+  store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
+
+  assert.deepEqual(
+    store
+      .listWorkRoots()
+      .map((n) => n.ref)
+      .sort(),
+    ['issue:314'],
+    'the ticket is the root, and the job is no longer one',
+  );
+  assert.deepEqual(
+    store.listWorkSubtree('issue:314').map((n) => n.ref),
+    ['issue:314', 'job:j7'],
+    'the whole tree hangs off the filed work item',
+  );
+  store.close();
+});
+
+test("the world's own issue row wins the title over a placeholder", () => {
+  const out = foldWorkGraph(
+    input({
+      world: world({ issues: [issue({ id: 'i314', number: 314, title: 'Bump the linter' })] }),
+      jobs: [job()],
+      filings: [filing()],
+    }),
+  );
+  assert.equal(node(out, 'issue:314').title, 'Bump the linter', 'a placeholder must never clobber the real reading');
+  assert.equal(out.filter((n) => n.ref === 'issue:314').length, 1, 'and only one node is emitted for it');
+});
+
+test('a linked filing re-emits a node whose job has aged out of the fold', () => {
+  // `listJobs` is windowed, so an old job emits nothing this pulse. The adoption
+  // must not be lost with it — `existing` is already in the input and carries it.
+  const prior: WorkNode = {
+    ref: 'job:j7',
+    kind: 'job',
+    parentRef: null,
+    baseRef: null,
+    title: 'Bump the linter',
+    status: 'dispatched',
+    terminal: false,
+    provenance: null,
+    firstSeenAt: '2026-07-28T09:00:00.000Z',
+    lastSeenAt: '2026-07-28T09:00:00.000Z',
+  };
+  const out = foldWorkGraph(input({ jobs: [], filings: [filing()], existing: [prior] }));
+  assert.equal(node(out, 'job:j7').parentRef, 'issue:314');
+  assert.equal(node(out, 'job:j7').title, 'Bump the linter', 're-emitted verbatim, not invented');
+});
+
+test('the fold is the only writer: a second filing cannot re-parent an adopted node', () => {
+  const store = new Store(':memory:');
+  store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
+  store.recordWorkGraph(
+    foldWorkGraph(input({ jobs: [job()], filings: [filing({ jobId: 'job_file2', ticketRef: 'issue:999' })] })),
+  );
+  assert.equal(
+    store.listWorkNodes().find((n) => n.ref === 'job:j7')?.parentRef,
+    'issue:314',
+    'parent_ref is write-once once non-null, which is what stops this ever being redone',
+  );
   store.close();
 });
 

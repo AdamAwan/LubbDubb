@@ -120,7 +120,7 @@ function part(over: Partial<PlanPart> = {}): PlanPart {
 }
 
 function input(over: Partial<WorkGraphInput> = {}): WorkGraphInput {
-  return { world: world(), tasks: [], plans: [], parts: [], jobs: [], existing: [], ...over };
+  return { world: world(), tasks: [], plans: [], parts: [], jobs: [], filings: [], existing: [], ...over };
 }
 
 /** The observation for `ref`, or a failed assertion naming what was produced. */

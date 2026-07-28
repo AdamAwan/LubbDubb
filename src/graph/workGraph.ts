@@ -1,4 +1,13 @@
-import type { Job, Plan, PlanPart, Task, WorkNode, WorkNodeObservation, WorldSnapshot } from '../types.js';
+import type {
+  Job,
+  Plan,
+  PlanPart,
+  Task,
+  WorkItemFiling,
+  WorkNode,
+  WorkNodeObservation,
+  WorldSnapshot,
+} from '../types.js';
 import { planIssueNumber, partOrigin } from '../plans/parts.js';
 import { issueOrigin, planOrigin } from '../plans/planning.js';
 import { basePrOf, prState } from '../prHealth.js';
@@ -16,6 +25,8 @@ export interface WorkGraphInput {
   plans: Plan[];
   parts: PlanPart[];
   jobs: Job[];
+  /** Work items an operator had filed for work nothing external accounted for. */
+  filings: WorkItemFiling[];
   existing: WorkNode[];
 }
 
@@ -252,6 +263,47 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       status: live ? 'live' : 'done',
       terminal: false,
     });
+  }
+
+  // Work items an operator had filed for work nothing external accounted for
+  // (stage 3). The filing row is *intent*, the same relationship `plans` and
+  // `plan_parts` have to this fold — the parent edge is derived here rather than
+  // written by the route or by `link_ticket`, so the recorder stays the graph's
+  // only writer.
+  const emitted = new Map(out.map((o) => [o.ref, o]));
+  for (const filing of input.filings) {
+    if (filing.ticketRef === null) continue; // still filing: nothing to attach to yet
+
+    const target = emitted.get(filing.targetRef);
+    if (target) target.parentRef = filing.ticketRef;
+    else {
+      // Its job has aged out of `listJobs`' window, so nothing emitted it this
+      // pulse. Re-emit it from `existing` verbatim rather than losing the
+      // adoption — `existing` is already here for "observed beats inferred".
+      const prior = input.existing.find((n) => n.ref === filing.targetRef);
+      if (!prior) continue;
+      out.push({ ...prior, parentRef: filing.ticketRef });
+    }
+
+    // A filed ticket does not necessarily appear in the world: the issue provider
+    // lists open items in one repository, and a ticket closed straight away — or
+    // filed into another project — is never fetched. Without a node for it the
+    // adopted job becomes *unreachable*: `listWorkRoots` filters on a null parent
+    // and `listWorkSubtree` seeds from a row that does not exist. So stand one up,
+    // but only when the world has not already spoken this pulse, or the
+    // placeholder's empty title would clobber the real one.
+    if (filing.ticketRef.startsWith('issue:') && !emitted.has(filing.ticketRef)) {
+      const placeholder: WorkNodeObservation = {
+        ref: filing.ticketRef,
+        kind: 'issue',
+        parentRef: null,
+        title: filing.ticketRef,
+        status: 'open',
+        terminal: false,
+      };
+      out.push(placeholder);
+      emitted.set(placeholder.ref, placeholder);
+    }
   }
 
   return out;
