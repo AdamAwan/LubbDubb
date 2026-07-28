@@ -42,6 +42,8 @@ interface UnrecordedWork {
   firstSeenAt: string;
   /** A filing already in flight, if one is. Null means the button is live. */
   filing: WorkItemFilingStatus | null;
+  /** The operator said no ticket is wanted. Carried, not filtered — see below. */
+  ignored: boolean;
 }
 
 /**
@@ -70,15 +72,29 @@ interface UnrecordedWork {
  * *linked* leaves on its own and needs no special case — the link set its parent,
  * and a parented node is not unrecorded.
  *
+ * An **ignored** node stays in the set too, carrying `ignored`, for the same
+ * reason: the predicate is what the panel draws *and* what the file route refuses
+ * on, so filtering here would leave the two disagreeing about whether the node
+ * exists — the drift class this codebase pays for by asking one predicate twice.
+ * Hiding an ignored row is a display decision and is made in the panel, which is
+ * also what keeps the un-ignore reachable: a row filtered out at the source has no
+ * title left to offer back.
+ *
  * `jobs` is a parameter rather than something read off the node because the fold
  * records a job's `status` and not its `kind`, and smuggling code-vs-desk through
  * a display field to save a join would make the node lie about what `status`
  * means. Consequence, stated: `Store.listJobs()` is capped, so a job older than
  * that window drops out — the same window the fold itself already lives in.
  */
-export function unrecordedWork(nodes: WorkNode[], jobs: Job[], filings: WorkItemFiling[]): UnrecordedWork[] {
+export function unrecordedWork(
+  nodes: WorkNode[],
+  jobs: Job[],
+  filings: WorkItemFiling[],
+  ignoredRefs: string[] = [],
+): UnrecordedWork[] {
   const jobById = new Map(jobs.map((j) => [j.id, j]));
   const filingFor = new Map(filings.map((f) => [f.targetRef, f]));
+  const ignored = new Set(ignoredRefs);
 
   const prsUnder = new Map<string, number>();
   for (const n of nodes) {
@@ -97,6 +113,7 @@ export function unrecordedWork(nodes: WorkNode[], jobs: Job[], filings: WorkItem
       prCount: prsUnder.get(n.ref) ?? 0,
       firstSeenAt: n.firstSeenAt,
       filing: filingFor.get(n.ref)?.status ?? null,
+      ignored: ignored.has(n.ref),
     });
   }
   return out;

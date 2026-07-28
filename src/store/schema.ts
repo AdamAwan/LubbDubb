@@ -334,6 +334,17 @@ CREATE TABLE IF NOT EXISTS work_item_filings (
   updated_at TEXT NOT NULL
 );
 
+-- The other answer to the same question, and the reason it is a table of its own
+-- rather than a third work_item_filings status: that row's job_id is NOT NULL
+-- because a filing *is* an agent doing something, and an ignore is the operator
+-- saying nothing should be. Keyed on the node, so ignoring twice is one row and
+-- un-ignoring is a delete — which is what leaves the verdict exactly one
+-- representation, the way clearing an issue conclusion does.
+CREATE TABLE IF NOT EXISTS work_item_ignores (
+  target_ref TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);

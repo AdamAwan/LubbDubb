@@ -183,7 +183,9 @@ touches the tracker**: `closed` stays the human's.
 The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did
 that nothing in the tracker accounts for. Rate-limited rather than polled; the cockpit's Work panel
 fetches it on open, because `/api/state` comes round every couple of seconds and the graph only ever
-grows. Returns `{ roots, unrecorded }`.
+grows. Returns `{ roots, unrecorded }`. Each unrecorded entry carries `ignored` — an item the operator
+cleared is still reported, because the panel is what hides it and a row filtered out at the source has
+no title left to offer back under the un-ignore.
 
 ### `GET /api/work/:ref`
 
@@ -214,6 +216,18 @@ itself unrecorded work — then opens the filing row, broadcasts and runs a cycl
 `{ ok: true, filing, job, report }`. The node is parented to the new item only once the filing agent
 reports it through `link_ticket`, and then by the **fold**, not by the tool — see
 [11](11-mcp-tools.md) and [14](14-persistence.md#work-item-filings).
+
+### `POST /api/work/:ref/ignore`, `DELETE /api/work/:ref/ignore`
+
+The other verdict on the same row: **no** tracker item is wanted for this work. 404 when the ref names
+no node; otherwise idempotent — the refusal of a second click lives in the write, `target_ref` being the
+primary key. The `DELETE` undoes it and is silent when nothing stood, so "not ignored" has exactly one
+representation.
+
+A standing ignore makes `POST /api/work/:ref/file` **409**, asked of the same predicate the panel draws
+from, so the route cannot file a ticket for work the operator has dismissed. It is a table of its own
+rather than a third `work_item_filings` status because that row's `job_id` is `NOT NULL` — a filing is
+an agent doing something, and an ignore is the operator saying nothing should be.
 
 ### `POST /api/stories/:id/watch`
 
