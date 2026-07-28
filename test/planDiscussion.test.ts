@@ -109,6 +109,68 @@ test('an ordinary replan is untouched by the discussion arm', async () => {
   assert.match(task!.prompt, /an operator has asked for it to be replanned/);
 });
 
+test('an amended plan ends the discussion and comes back as a fresh proposal', async () => {
+  const { system, app } = await buildTestApp();
+  const plan = seedAwaitingApprovalPlan(system);
+  await system.harness.runCycle('manual');
+  const first = system.store.listProposals().find((p) => p.kind === 'plan')!;
+
+  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
+  assert.equal(system.store.listProposals().find((p) => p.id === first.id)!.status, 'rejected');
+
+  // The discussion agent submits an amended decomposition — the same ingestion
+  // both transports share.
+  const parsed = parsePlanDocument(
+    JSON.stringify({
+      version: 1,
+      verdict: 'parts',
+      reason: 'amended after discussion',
+      document: '# Amended\n\nmint no longer stacks on route.',
+      parts: [
+        { slug: 'signer', title: 'Signer', scope: 'src/', dependsOn: [] },
+        { slug: 'mint', title: 'Mint', scope: 'web/', dependsOn: ['signer'] },
+      ],
+    }),
+  );
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  ingestPlanDocument(system.store, {
+    doc: parsed.document,
+    originRef: 'issue:231',
+    title: 'Serve artifacts outside /api',
+    requireApproval: true,
+  });
+
+  const amended = system.store.getPlan(plan.id)!;
+  assert.equal(amended.discussing, false, 'submitting is what ends the discussion');
+  assert.equal(amended.status, 'awaiting_approval');
+
+  // A *fresh* proposal, not the withdrawn one: the withdrawal at discuss time is
+  // what unblocks rule 3d, which would otherwise be held by a pending verdict.
+  await system.harness.runCycle('manual');
+  const pending = system.store.listProposals().filter((p) => p.kind === 'plan' && p.status === 'pending');
+  assert.equal(pending.length, 1);
+  assert.notEqual(pending[0]!.id, first.id);
+});
+
+test('nothing is scheduled from a plan while it is being discussed', async () => {
+  const { system, app } = await buildTestApp();
+  const plan = seedAwaitingApprovalPlan(system);
+  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
+  // Run several pulses — "exactly one planner, however many pulses run" is only
+  // a meaningful assertion once more than one pulse has actually happened.
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+
+  // Rule 4a schedules parts for `active`/`awaiting_approval` only, so a plan in
+  // `planning` yields no part dispatch — and rule 3c cannot start a second
+  // planner because the discussion agent holds `issue:231:plan`.
+  const partTasks = system.store.listTasks().filter((t) => (t.originRef ?? '').includes(':part:'));
+  assert.deepEqual(partTasks, []);
+  const planners = system.store.listTasks().filter((t) => t.originRef === 'issue:231:plan');
+  assert.equal(planners.length, 1, 'exactly one planner, however many pulses run');
+});
+
 // -- fixtures ----------------------------------------------------------------
 
 /** A `System` + Fastify app wired the way route-driving tests need: no auth, a
