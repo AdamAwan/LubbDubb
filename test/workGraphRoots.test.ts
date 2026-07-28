@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Issue, Job, PullRequest, WorkNodeObservation, WorldSnapshot } from '../src/types.js';
+import type { Issue, Job, PullRequest, WorkNode, WorkNodeObservation, WorldSnapshot } from '../src/types.js';
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
+import { unrecordedWork, workItemTicketFields } from '../src/graph/unrecorded.js';
+import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { jobBranch } from '../src/jobs.js';
 import { Store } from '../src/store/store.js';
 
@@ -201,6 +203,106 @@ test('listWorkNodes reads the whole table, roots and descendants alike', () => {
     ['issue:12', 'job:j7', 'pr:41'],
     'the detector needs descendants, which listWorkRoots cannot give it',
   );
+  store.close();
+});
+
+// ---------------------------------------------------------------------------
+// The detector
+// ---------------------------------------------------------------------------
+
+/** Record a fold and read the whole table back — what the route hands the detector. */
+function recorded(over: Partial<WorkGraphInput> = {}): { store: Store; nodes: WorkNode[] } {
+  const store = new Store(':memory:');
+  store.recordWorkGraph(foldWorkGraph(input(over)));
+  return { store, nodes: store.listWorkNodes() };
+}
+
+test('a dispatched code job with no work item behind it is unrecorded', () => {
+  const { store, nodes } = recorded({ world: world({ pullRequests: [pr()] }), jobs: [job()] });
+  const found = unrecordedWork(nodes, [job()], []);
+  assert.deepEqual(
+    found.map((u) => u.ref),
+    ['job:j7'],
+  );
+  assert.equal(found[0]?.prCount, 1, 'the evidence rides beside the verdict');
+  assert.equal(found[0]?.filing, null, 'nothing in flight, so the button is live');
+  store.close();
+});
+
+test('a job that produced no PR is still unrecorded — the evidence is not the predicate', () => {
+  const { store, nodes } = recorded({ jobs: [job()] });
+  const found = unrecordedWork(nodes, [job()], []);
+  assert.deepEqual(
+    found.map((u) => u.ref),
+    ['job:j7'],
+    'requiring a PR would only ever record work already visible',
+  );
+  assert.equal(found[0]?.prCount, 0);
+  store.close();
+});
+
+test('the narrowings: desk, queued, cancelled and adopted jobs are not unrecorded', () => {
+  for (const [label, j] of [
+    ['a desk job touches no repository', job({ kind: 'desk' })],
+    ['a queued job has done nothing yet', job({ status: 'queued' })],
+    ['a cancelled job never will', job({ status: 'cancelled' })],
+  ] as const) {
+    const { store, nodes } = recorded({ jobs: [j] });
+    assert.deepEqual(unrecordedWork(nodes, [j], []), [], label);
+    store.close();
+  }
+
+  // Adopted by arm B: a work item for this work already exists.
+  const { store, nodes } = recorded({
+    world: world({ issues: [issue({ linkedPrNumber: 41 })], pullRequests: [pr()] }),
+    jobs: [job()],
+  });
+  assert.deepEqual(unrecordedWork(nodes, [job()], []), [], 'a parented job has a work item already');
+  store.close();
+});
+
+test('a filing in flight keeps the node listed, carrying its status', () => {
+  const { store, nodes } = recorded({ jobs: [job()] });
+  const filing = store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file1' });
+  assert.ok(filing);
+  const found = unrecordedWork(nodes, [job()], store.listWorkItemFilings());
+  assert.equal(found[0]?.filing, 'filing', 'dropping it would make the click look like it did nothing');
+  store.close();
+});
+
+test('the ticket prompt names the tracker, the ref and what the work produced', () => {
+  // Open first, then merged — a PR is parented while it is in the open list, and
+  // the write-once parent is what carries the edge past the merge.
+  const { store } = recorded({ world: world({ pullRequests: [pr()] }), jobs: [job()] });
+  store.recordWorkGraph(
+    foldWorkGraph(
+      input({
+        world: world({ closedPullRequests: [pr({ merged: true, state: 'merged' })] }),
+        jobs: [job()],
+        existing: store.listWorkNodes(),
+      }),
+    ),
+  );
+  const node = store.listWorkNodes().find((n) => n.ref === 'job:j7');
+  assert.ok(node);
+  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'), 'the GitHub repository a/b');
+  assert.match(fields.title, /Bump the linter/);
+  assert.equal(fields.vars.ref, 'job:j7');
+  assert.match(fields.vars.produced ?? '', /pr:41/, 'the PR it produced is in the body');
+  assert.match(fields.vars.tracker ?? '', /the GitHub repository a\/b/);
+
+  const rendered = defaultPromptTemplates().render('work-item-ticket', fields.vars);
+  assert.match(rendered, /do not\s+do it again/i, 'the agent must record the work, not redo it');
+  assert.match(rendered, /link_ticket/, 'and must close the loop');
+  store.close();
+});
+
+test('a job that produced nothing says so in the prompt rather than leaving a blank', () => {
+  const { store, nodes } = recorded({ jobs: [job()] });
+  const node = nodes.find((n) => n.ref === 'job:j7');
+  assert.ok(node);
+  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'), 'somewhere');
+  assert.match(fields.vars.produced ?? '', /no pull request/i);
   store.close();
 });
 
