@@ -17,6 +17,7 @@ import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } fro
 import type { DispatchRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { resolveIssueConclusion } from '../issueConclusion.js';
+import { jobBranch } from '../jobs.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import {
   DEFAULT_ASSESSMENT,
@@ -177,7 +178,8 @@ export class RuleDispatcher implements Dispatcher {
     for (const job of ctx.queuedJobs) {
       const origin = `job:${job.id}`;
       if (activeOrigins.has(origin)) continue;
-      const branch = job.kind === 'code' ? (job.branch ?? `job/${job.id}`) : null;
+      // Shared with the work graph's fold, which recognises this job's PR by it.
+      const branch = jobBranch(job);
       const reason = `Operator-launched job "${job.title}" takes priority for the next free slot.`;
       const action: RawAction =
         job.kind === 'code'
