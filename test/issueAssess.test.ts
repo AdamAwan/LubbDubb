@@ -1,0 +1,252 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
+import { hasPriorWork } from '../src/delivery/assessment.js';
+import type { Decision, Issue, IssueDelivery, Plan, Task } from '../src/types.js';
+
+// Rule 3e — the assessor. What makes it fire, what makes it stand down, and the
+// one thing it must never do: let a second agent onto an issue it is judging.
+
+const NOW = '2026-07-28T12:00:00.000Z';
+
+function issue(over: Partial<Issue> = {}): Issue {
+  return {
+    id: 'i12',
+    number: 12,
+    title: 'Add the thing',
+    body: 'please add the thing',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+    ...over,
+  };
+}
+
+function task(over: Partial<Task> = {}): Task {
+  return {
+    id: 't1',
+    kind: 'code',
+    title: 'Resolve issue #12',
+    prompt: 'do it',
+    branch: 'issue/12',
+    originRef: 'issue:12',
+    originTitle: null,
+    originSummary: null,
+    dispatchReason: null,
+    status: 'done',
+    agentId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...over,
+  };
+}
+
+function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
+  return {
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    tasks: [task()],
+    agents: [],
+    openEscalations: [],
+    queuedJobs: [],
+    recentDecisions: [],
+    steeringPriorities: [],
+    agentHeadroom: 3,
+    ...over,
+  };
+}
+
+/** The dispatcher with the assessor on — everything else default. */
+function assessor(): RuleDispatcher {
+  return new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true });
+}
+
+function origins(actions: { type: string; originRef?: string | null }[]): string[] {
+  return actions.filter((a) => a.type.startsWith('dispatch_')).map((a) => a.originRef ?? '');
+}
+
+// -- the headline: what the bug was ------------------------------------------
+
+test('an issue whose delivering PR has merged and left the world is assessed, not re-picked', async () => {
+  // The world after a merge: the issue is still open (waiting on sign-off) and
+  // `openPrForIssue` reads only the open list, so this is byte-for-byte rule 4's
+  // precondition. Before the assessor, a second agent was dispatched here to redo
+  // work already sitting on the default branch.
+  const { actions } = await assessor().decide(ctx());
+
+  assert.deepEqual(origins(actions), ['issue:12:assess']);
+  const dispatch = actions.find((a) => a.type === 'dispatch_code_agent') as {
+    branch: string;
+    base?: string;
+    rule: string;
+  };
+  assert.equal(
+    dispatch.branch,
+    'assess/issue/12',
+    'its own namespace — git cannot put issue/12/assess beside issue/12',
+  );
+  assert.equal(dispatch.base, 'main', 'cut from the default branch, where the merged work actually is');
+  assert.equal(dispatch.rule, 'issue-assess');
+});
+
+test('with the flag off nothing changes — the issue is picked up exactly as today', async () => {
+  const { actions } = await new RuleDispatcher().decide(ctx());
+  assert.deepEqual(origins(actions), ['issue:12'], 'off by default, so rule 4 is un-narrowed');
+});
+
+// -- the prior-work condition ------------------------------------------------
+
+test('a fresh issue is picked up, not assessed', async () => {
+  // Without this the assessor fires on every new issue: nothing is in flight
+  // because nothing ever started, which satisfies every other precondition.
+  const { actions } = await assessor().decide(ctx({ tasks: [] }));
+  assert.deepEqual(origins(actions), ['issue:12']);
+});
+
+test('prior work is any origin in the issue subtree, and nothing outside it', () => {
+  assert.equal(hasPriorWork(12, []), false);
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12' })]), true);
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:plan' })]), true);
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:part:schema' })]), true);
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:120' })]), false, 'a prefix match must not span numbers');
+  assert.equal(hasPriorWork(12, [task({ originRef: 'pr:40:ci' })]), false);
+  assert.equal(hasPriorWork(12, [task({ originRef: null })]), false);
+});
+
+// -- suppression -------------------------------------------------------------
+
+test('assess and pickup never both fire for one issue', async () => {
+  const { actions } = await assessor().decide(ctx());
+  const dispatched = origins(actions);
+  assert.equal(dispatched.filter((o) => o.startsWith('issue:12')).length, 1, 'one agent on the issue, not two');
+  assert.ok(!dispatched.includes('issue:12'), 'the assessor suppresses the pickup it ranks ahead of');
+});
+
+// -- standing down -----------------------------------------------------------
+
+test('an open PR means the answer is not yet knowable', async () => {
+  const world = {
+    takenAt: NOW,
+    pullRequests: [
+      { id: 'p', number: 40, title: 'X', branch: 'issue/12', ciStatus: 'passing' as const, unresolvedComments: [] },
+    ],
+    issues: [issue()],
+    stories: [],
+  };
+  const { actions } = await assessor().decide(ctx({ world }));
+  assert.ok(!origins(actions).includes('issue:12:assess'));
+});
+
+test('anything live under the issue stands the assessor down', async () => {
+  for (const live of ['issue:12', 'issue:12:plan', 'issue:12:part:schema']) {
+    const { actions } = await assessor().decide(
+      ctx({ tasks: [task(), task({ id: 't2', originRef: live, status: 'running' })] }),
+    );
+    assert.ok(!origins(actions).includes('issue:12:assess'), `${live} is in flight, so nothing is settled`);
+  }
+});
+
+test('a plan that still schedules something owns the issue', async () => {
+  const plan = (status: Plan['status']): Plan => ({
+    id: 'pl1',
+    originRef: 'issue:12',
+    title: 'Split it',
+    status,
+    reason: 'because',
+    statusCommentRef: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  });
+
+  for (const status of ['planning', 'active', 'awaiting_approval'] as const) {
+    const { actions } = await assessor().decide(ctx({ plans: [plan(status)] }));
+    assert.ok(!origins(actions).includes('issue:12:assess'), `a ${status} plan is not a finished one`);
+  }
+  // A complete plan schedules nothing further, so the issue is assessable.
+  const done = await assessor().decide(ctx({ plans: [plan('complete')] }));
+  assert.ok(origins(done.actions).includes('issue:12:assess'));
+});
+
+test('a standing verdict is not re-assessed', async () => {
+  const delivery: IssueDelivery = {
+    originRef: 'issue:12',
+    summary: 'PR #40 delivered it',
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+    decidedAt: '2026-07-28T10:00:00.000Z',
+    updatedAt: '2026-07-28T10:00:00.000Z',
+  };
+  const { actions } = await assessor().decide(ctx({ deliveries: [delivery] }));
+  assert.deepEqual(origins(actions), [], 'parked, and not re-asked either');
+});
+
+test('the watch gate applies, evaluated once on the issue', async () => {
+  const d = new RuleDispatcher({ watchLabel: 'agent-ready' }, {}, undefined, 'main', {}, { enabled: true });
+
+  const unwatched = await d.decide(ctx());
+  assert.deepEqual(origins(unwatched.actions), [], 'opt-in: an untagged issue is left alone');
+
+  const watched = await d.decide(
+    ctx({ world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['agent-ready'] })], stories: [] } }),
+  );
+  assert.deepEqual(origins(watched.actions), ['issue:12:assess']);
+});
+
+// -- failing open ------------------------------------------------------------
+
+test('a spent attempt cap returns the issue to ordinary pickup, with no escalation', async () => {
+  // Narrowing rule 4 without this turns any assessor crash into a permanently
+  // parked issue — the planner's fail-open, for the planner's reason.
+  const attempt = (i: number): Decision => ({
+    id: `d${i}`,
+    cycleId: `c${i}`,
+    action: {
+      type: 'dispatch_code_agent',
+      branch: 'assess/issue/12',
+      title: 'Assess issue #12',
+      prompt: 'x',
+      originRef: 'issue:12:assess',
+      reason: 'assessing',
+    },
+    outcome: 'executed',
+    rule: 'issue-assess',
+    detail: '',
+    createdAt: '2026-07-27T00:00:00.000Z',
+  });
+  const spent = [attempt(1), attempt(2), attempt(3)];
+
+  const { actions } = await assessor().decide(ctx({ recentDecisions: spent }));
+  assert.deepEqual(origins(actions), ['issue:12'], 'the issue falls back to pickup');
+  assert.ok(
+    !actions.some((a) => a.type === 'escalate_to_human'),
+    'no escalation: there is nothing a human can do about an assessment that did not happen',
+  );
+});
+
+test('a cooling assessor still suppresses pickup for that cycle, and stays visible', async () => {
+  const recent: Decision[] = [
+    {
+      id: 'd1',
+      cycleId: 'c1',
+      action: {
+        type: 'dispatch_code_agent',
+        branch: 'assess/issue/12',
+        title: 'Assess issue #12',
+        prompt: 'x',
+        originRef: 'issue:12:assess',
+        reason: 'assessing',
+      },
+      outcome: 'executed',
+      rule: 'issue-assess',
+      detail: '',
+      // Inside the 15-minute cooldown window.
+      createdAt: '2026-07-28T11:55:00.000Z',
+    },
+  ];
+  const { actions, upcoming } = await assessor().decide(ctx({ recentDecisions: recent }));
+
+  assert.deepEqual(origins(actions), [], 'cooling, so nothing is dispatched');
+  const queued = upcoming?.find((i) => i.origin === 'issue:12:assess');
+  assert.equal(queued?.status, 'cooldown', 'kept visible rather than silently skipped');
+});

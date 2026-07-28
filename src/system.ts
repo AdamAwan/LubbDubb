@@ -356,6 +356,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           // The plan funnel is a rule-dispatcher feature; the LLM dispatcher
           // composes its own prompts and has no equivalent (see the README).
           config.planning,
+          // Likewise rule-dispatcher only: the assessor is a rule, and the LLM
+          // dispatcher reasons in prose with no equivalent branch.
+          config.assessment,
         );
 
   // The store holds scheduling intent; this folds git + provider reality back onto

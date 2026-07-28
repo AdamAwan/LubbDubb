@@ -2,6 +2,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
 import type { PlanningPolicy } from './plans/planning.js';
+import type { AssessmentPolicy } from './delivery/assessment.js';
 
 /** Operator control over the MCP tool channel. See {@link Config.mcp}. */
 interface McpPolicy {
@@ -121,6 +122,15 @@ export interface Config {
    * Only the `rule` dispatcher implements the funnel.
    */
   planning: PlanningPolicy;
+  /**
+   * The assessor (rule 3e) — the harness asking whether an issue that has had work
+   * and has nothing in flight is actually finished, and parking it as `delivered`
+   * if so. **Off by default**, like `planning` and unlike `mcp`: it is not purely
+   * additive, since it gates pickup and spends an agent per assessed issue. Off,
+   * no assessor is dispatched, no verdict is written, and rule 4 behaves exactly
+   * as it does today. Deep-merged. Only the `rule` dispatcher implements it.
+   */
+  assessment: AssessmentPolicy;
   /**
    * The typed tool channel back to the harness — the `lubbdubb` MCP server every
    * spawned agent is wired to (issue #108).
@@ -363,6 +373,7 @@ const DEFAULTS: Config = {
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: false, gitFetchIntervalMs: 60_000 },
+  assessment: { enabled: false },
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
@@ -450,6 +461,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // planning is nested too — deep-merge so `{"enabled": true}` alone keeps the
   // default part-concurrency cap instead of leaving it undefined.
   merged.planning = { ...DEFAULTS.planning, ...fromFile.planning, ...overrides.planning };
+  merged.assessment = { ...DEFAULTS.assessment, ...fromFile.assessment, ...overrides.assessment };
 
   // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
   // than an accidental off.
