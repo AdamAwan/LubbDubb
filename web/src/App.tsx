@@ -1,6 +1,7 @@
 import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
 import { readStoredSkinId, resolveSkin } from './skins/registry.js';
+import { WorkTreePanel } from './components/WorkTreePanel.js';
 
 /**
  * What the cockpit shows when the harness refuses its credential. Worth a screen
@@ -39,6 +40,12 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
  * The two screens below stay here rather than moving into a skin because neither
  * has a view-model to draw — a skin cannot render a cockpit whose state never
  * arrived, and a locked-out cockpit must look the same however it was themed.
+ *
+ * The work graph hangs off the shell for the same class of reason. It is not in
+ * the view-model at all — it has its own routes, fetched on open rather than on
+ * every poll — so a skin drawing it would have to reach `api.js` directly, which
+ * is exactly what the skin seam forbids (and `test/cockpitSkins.test.ts` asserts).
+ * Below the skin, so it is the same record whichever theme is on.
  */
 export function App() {
   const status = useCockpit();
@@ -47,5 +54,13 @@ export function App() {
   if (status.kind === 'loading') return <div className="loading">Connecting to the cockpit…</div>;
 
   const { Root } = resolveSkin(readStoredSkinId());
-  return <Root view={status.view} actions={status.actions} />;
+  return (
+    <>
+      <Root view={status.view} actions={status.actions} />
+      <section className="work-panel">
+        <h2>Work</h2>
+        <WorkTreePanel now={status.view.now} />
+      </section>
+    </>
+  );
 }

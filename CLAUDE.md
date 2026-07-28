@@ -536,10 +536,29 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   git failure per dispatch. `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
   for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
   get none). Tests: `test/planReconcile.test.ts`.
+- **`src/graph/` is the durable work graph (stage 1 of 3) — the only thing here that outlives the
+  world.** `closedPrWindowMs` bounds how long the _world snapshot_ remembers a merge (6h); every
+  panel and predicate reading that snapshot forgets with it, and the edge from an issue to the PR
+  that delivered it was then unrecoverable. It bounds nothing about the graph: `work_nodes` is
+  upsert-only, never pruned, and a node the fold does not observe this pulse is left exactly as it
+  was. `workGraph.ts` is the pure fold (every edge it records was already computed somewhere in the
+  pulse — `observePartPr`, `openPrForIssue`, `basePrOf` — this is where they stop being thrown away),
+  `workGraphRecorder.ts` its **only** writer, called once per pulse from `harness.ts` after the plan
+  reconciler and before `decide`; a throw there records an error and never fails the cycle. Keyed on
+  the ref vocabulary that already exists (`issue:12`, `pr:41:ci`) and on the **origin, not the task**,
+  so two CI attempts are one node. `parent_ref` is work lineage and write-once; stacking is
+  `base_ref`, which keeps it a tree. **Nothing in the dispatcher reads any of it** — stage 1 is a
+  lens, the way `findings` and `prAttention` shipped, because a rule consulting the graph is a second
+  opinion about a gate living nowhere near the gate it duplicates, and lets an agent's own record
+  suppress another's dispatch. `test/workGraph.test.ts` asserts that **structurally** (the only
+  files under `src/` naming `graph/workGraph` are `harness.ts` and `system.ts`); if it ever fails,
+  fix the file it names rather than the assertion. Served on its own routes (`GET /api/work`,
+  `/api/work/:ref`) and never on `/api/state`, which is polled — `web/src/components/WorkTreePanel.tsx`
+  fetches on open, and hangs off the shell rather than a skin because a skin may not reach `api.js`.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
-  cockpit's Activity feed) → plan reconciliation → `Dispatcher.decide` → `ActionExecutor` →
-  audit. Cycles are coalesced (one in flight at a time).
+  cockpit's Activity feed) → plan reconciliation → work-graph record → `Dispatcher.decide` →
+  `ActionExecutor` → audit. Cycles are coalesced (one in flight at a time).
 - **`RecoveryDesk.detect()` runs once at boot**, _before_ `harness.runCycle('boot')`. It resumes
   nothing: every agent the last run orphaned is parked for an operator's restore / requeue /
   remove, and `runCycle` **holds every pulse** while any of those is outstanding. See "Crash

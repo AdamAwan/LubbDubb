@@ -35,7 +35,7 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions` and `priority_overrides` were all introduced as new tables and therefore have no
+`agent_files`, `issue_conclusions`, `priority_overrides` and `work_nodes` were all introduced as new tables and therefore have no
 migration entry — but `findings` has since gained `ticket_ref`, which is exactly the case the table
 above exists for.
 
@@ -54,6 +54,7 @@ above exists for.
 | `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.    | `origin_ref` is `PRIMARY KEY` |
 | `plans`              | One delivery plan per issue.                                                             | `origin_ref` is `UNIQUE`      |
 | `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                 | `UNIQUE (plan_id, slug)`      |
+| `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from. | `ref` is `PRIMARY KEY`        |
 | `agent_transcripts`  | Chunked agent output.                                                                    | `PRIMARY KEY (agent_id, seq)` |
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                          | —                             |
 | `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                 | —                             |
@@ -65,7 +66,10 @@ above exists for.
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
-`decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`.
+`decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`,
+`work_nodes(parent_ref)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
+attempts are the `tasks` rows carrying its origin, so no separate attempts table exists — `tasks` only
+lacked the index.
 
 ## The Store API
 
@@ -140,6 +144,37 @@ _value_, not a column, so a database from an older build needs no migration: an 
 never holds the new one. `awaiting_approval` is the approval gate itself — see
 [08](08-planning.md#the-approval-gate).
 
+### Work graph
+
+`recordWorkGraph(observations)`, `listWorkRoots()` (nodes with no parent, most recently seen first),
+`listWorkSubtree(rootRef)` (one recursive CTE bounded to the requested root, `UNION` rather than
+`UNION ALL` so the walk terminates whatever reaches the table).
+
+A node is keyed on the ref vocabulary that already exists — `issue:12`, `issue:12:plan`,
+`issue:12:part:schema`, `pr:41`, `pr:41:ci`, `job:7` — so it joins to every gate, override and proposal
+without a second naming scheme, and on the **origin** rather than the task: two CI attempts on one PR
+are two `tasks` rows and one node. `parent_ref` follows work lineage (a PR's parent is the part that
+produced it); stacking is a different relation and lives on `base_ref`, which keeps the table a tree.
+`terminal` is stored rather than derived because terminality depends on kind as well as status — a
+`merged` PR is terminal, a `closed` issue is terminal, a concern node never is — and deriving it at read
+time would put that judgement in both the CTE and the panel, where the two can disagree. `provenance`
+records how a terminal PR state was learned: `observed` (seen in `closedPullRequests`) or `inferred`
+(it left the open set and the window never showed it).
+
+`recordWorkGraph` is **upsert-only**: a node absent from this pulse's observations is left exactly as it
+was. That is the whole feature — the world snapshot remembers a merge for `closedPrWindowMs` and then
+forgets it, and the graph must not. `parent_ref` is **write-once once non-null**: work lineage does not
+change, and an immutable edge makes a cycle impossible rather than merely guarded, which matters because
+`listWorkSubtree` is recursive. The "once non-null" wrinkle is deliberate — a stray PR can be recorded
+parentless and adopted when its issue link appears, but nothing is ever _re_-parented. Every other column
+is recomputed from the observation and never toggled against its previous value, the `PlanReconciler`
+discipline.
+
+**There is no TTL and no pruning**, unlike `priority_overrides`, which is reconciled away each pulse
+because an override for work nobody is doing is stale. Nothing about a work node goes stale: it is a
+record of what happened, and its value is precisely that it is still there when every other surface has
+forgotten. The only writer is the `WorkGraphRecorder` in the pulse — see [04](04-harness-cycle.md).
+
 ### Escalations
 
 `createEscalation`, `answerEscalation(id, response)`, `dismissEscalation(id, context)`,
@@ -168,5 +203,7 @@ by the fake providers so an injected world survives a restart.
 - **Nothing is deleted on a status change.** Cancelled jobs, dismissed findings, retired parts and
   dismissed escalations all keep their rows; the status carries the meaning. "We looked at this" is
   information.
+- **A work node is never deleted at all**, not even on a status change — nothing observes it away, and
+  no pass prunes it.
 - **The runtime cap and pause flag are not persisted.** They live in `RuntimeControl` and a restart
   reverts to config.

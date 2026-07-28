@@ -1,4 +1,4 @@
-import type { AppState, RecoveryVerdict } from './types.js';
+import type { AppState, RecoveryVerdict, WorkNodeView } from './types.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 /**
@@ -85,6 +85,14 @@ const realApi = {
   getState: () => authFetch('/api/state').then((r) => json<AppState>(r)),
   getTranscript: (agentId: string) =>
     authFetch(`/api/agents/${agentId}/transcript`).then((r) => json<{ transcript: string }>(r)),
+  // The work graph is fetched, never polled: `/api/state` comes round every couple
+  // of seconds and the graph only ever grows, so the roots are read once on mount
+  // and a subtree when one is opened.
+  getWorkRoots: () => authFetch('/api/work').then((r) => json<{ roots: WorkNodeView[] }>(r)),
+  getWorkSubtree: (ref: string) =>
+    authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) =>
+      json<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }>(r),
+    ),
   pulse: () => post('/api/pulse'),
   inject: (event: unknown) => post('/api/inject', event),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),

@@ -736,6 +736,38 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
+  // -- Work graph ----------------------------------------------------------
+  // Deliberately *not* folded into `/api/state`: that endpoint is polled
+  // continuously, so shipping the whole forest on every poll is the wrong shape.
+  // Roots are cheap; a subtree is fetched when a panel is opened. Both sit under
+  // the `/api` prefix, so the `onRequest` guard above covers them with no
+  // per-route opt-in.
+  //
+  // They *do* opt into rate limiting, for the same reason the artifact route does
+  // and `/api/state` does not: both read the store on demand rather than on the
+  // cockpit's poll, and the subtree walks a recursive CTE and resolves a URL per
+  // node, so the cost is unbounded in the graph's size while the request is a
+  // fixed-size string. Opening a panel spends one call, so the ceiling is far
+  // above any real interaction.
+  const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
+
+  app.get('/api/work', WORK_RATE_LIMIT, async () => ({ roots: store.listWorkRoots() }));
+
+  app.get('/api/work/:ref', WORK_RATE_LIMIT, async (req, reply) => {
+    const { ref } = req.params as { ref: string };
+    const nodes = store.listWorkSubtree(ref);
+    if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
+    // Resolved here rather than read off the snapshot's `refUrls`: that map is
+    // built from the world, and a PR the graph remembers merging left the world
+    // hours ago — the connector can still name its URL.
+    const refUrls: Record<string, string> = {};
+    for (const node of nodes) {
+      const url = connector.resolveRefUrl(node.ref);
+      if (url) refUrls[node.ref] = url;
+    }
+    return { nodes, refUrls };
+  });
+
   app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
 
   // -- Static SPA (production build) --------------------------------------
