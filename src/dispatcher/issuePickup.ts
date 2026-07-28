@@ -269,17 +269,20 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   }
 
   if (planVerdict.route === 'parts' && plan) {
-    const { merged, total } = planProgress(parts);
+    const { settled, total } = planProgress(parts);
     // A `complete` plan is the one arm that never moves again on its own: rule 4a
     // schedules nothing and pickup stays narrowed off, which is correct while a
-    // human decides whether the issue is done — but "3/3 parts merged" reads like
+    // human decides whether the issue is done — but "3/3 parts done" reads like
     // a plan still in flight. Say what the two ways out are instead.
+    //
+    // "done" rather than "merged": a part can finish as a report or a
+    // determination, and counting only merges would understate a finished plan.
     const reason =
       total === 0
         ? 'plan split this into parts'
         : plan.status === 'complete'
-          ? `plan complete — all ${total} part${total === 1 ? '' : 's'} merged; close the issue or replan`
-          : `${merged}/${total} parts merged`;
+          ? `plan complete — all ${total} part${total === 1 ? '' : 's'} finished; close the issue or replan`
+          : `${settled}/${total} parts done`;
     return { eligible: false, status: 'planning', reasons: [reason] };
   }
 

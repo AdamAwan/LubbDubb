@@ -56,6 +56,7 @@ test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
     {
       slug: 'reader',
@@ -65,6 +66,7 @@ test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
   ]);
 });
@@ -101,7 +103,16 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
   const store = new Store(':memory:');
   const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: 'Two PRs.' });
   store.upsertPlanParts(plan.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'schema',
+      seq: 1,
+      title: 'Schema',
+      scope: 'src/store',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
     {
       slug: 'reader',
       seq: 2,
@@ -110,6 +121,7 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
   ]);
 
@@ -134,6 +146,7 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
     {
       slug: 'extra',
@@ -143,6 +156,7 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
   ]);
   const after = store.listPlanParts(plan.id);

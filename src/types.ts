@@ -722,11 +722,26 @@ export interface Plan {
 /**
  * Where one part of a multi-PR plan sits: `pending` (dependencies outstanding),
  * `ready` (dispatchable), `dispatched` (an agent is on it), `in_review` (its PR
- * is open), `merged`, `blocked`, or `retired` — a part an amended plan no longer
+ * is open), `merged`, `concluded` (it finished without a pull request — a report
+ * or a determination), `blocked`, or `retired` — a part an amended plan no longer
  * declares. Retiring is a *status transition, not a disappearance*: the row stays
  * so the graph remains readable after a replan, and nothing schedules it again.
+ *
+ * `merged` and `concluded` are both terminals, and `concluded` is not a kind of
+ * retirement: retired means "dropped before anything was started", which
+ * `partHasWork` enforces, whereas a concluded part did its work and found there
+ * was nothing to build. Ask `partSettled` rather than comparing to `merged`, so
+ * the sites that mean "finished" cannot drift apart.
  */
-type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'blocked' | 'retired';
+type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'concluded' | 'blocked' | 'retired';
+
+/**
+ * What a part produces. `code` ends in a merged pull request, which the world
+ * observes; the other two end in a record already durable in the store the moment
+ * the agent writes it — which is why the plan reconciler's fold differs by kind,
+ * and why only these two are declarable through `conclude_part`.
+ */
+export type PartOutcomeKind = 'code' | 'report' | 'determination';
 
 /** One part of a multi-PR plan — a single reviewable PR's worth of work. */
 export interface PlanPart {
@@ -743,6 +758,14 @@ export interface PlanPart {
   rationale: string | null;
   /** What makes this part done. */
   acceptance: string | null;
+  /** What the planner expected this part to produce. Null means unstated, which reads as `code`. */
+  expectedKind: PartOutcomeKind | null;
+  /** What it actually produced, written when it concludes. Null until then; a merged part derives `code`. */
+  outcomeKind: PartOutcomeKind | null;
+  /** Optional evidence for a concluded part — `flag:<id>` or `finding:<id>`. */
+  outcomeRef: string | null;
+  /** What the concluding agent said it found. Required at close, so never empty on a concluded part. */
+  outcomeSummary: string | null;
   /** Sibling slugs this part stacks on. */
   dependsOn: string[];
   branch: string | null;
@@ -756,7 +779,7 @@ export interface PlanPart {
 /** A part as the planner declared it, before the store assigns identity or progress. */
 export type PlanPartInput = Pick<
   PlanPart,
-  'slug' | 'seq' | 'title' | 'scope' | 'dependsOn' | 'rationale' | 'acceptance'
+  'slug' | 'seq' | 'title' | 'scope' | 'dependsOn' | 'rationale' | 'acceptance' | 'expectedKind'
 >;
 
 /** One cumulative usage report from a session's turn-end `result` event. */

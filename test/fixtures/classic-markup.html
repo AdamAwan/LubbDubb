@@ -1,5 +1,1137 @@
-<div class="app"><header class="topbar"><div class="brand"><span class="pulse-mark">♥</span> LubbDubb<span class="tagline">autonomous engineering cockpit</span><span class="chip warn" title="Simulated data — no server or real integrations">demo</span></div><div class="topbar-meta"><div class="heartbeat " title="Next heartbeat in ~15s"><div class="heartbeat-track"><div class="heartbeat-fill" style="width:0%"></div></div><span class="heartbeat-label">next pulse ~15s</span></div><span class="chip" title="The world as the last pulse observed it — the cockpit itself never polls the provider">world 0s ago</span><span class="chip ok"><span class="dot green"></span> live</span><span class="chip" title="5h window resets 14:20 · weekly window resets 12:00 · captured 1m ago">claude 5h 62% · wk 30%</span><span class="chip">dispatcher: rule</span><div class="fleet-control "><span class="fc-label">cap</span><button type="button" title="Lower the cap" class="btn ghost fc-step" aria-busy="false">−</button><span class="fc-count" title="2 of 3 slots in use">2/3</span><button type="button" title="Raise the cap" class="btn ghost fc-step" aria-busy="false">+</button><button type="button" title="Pause new dispatch (live agents keep running)" class="btn ghost" aria-busy="false">⏸ Pause</button></div><label class="skin-picker" title="Change how the cockpit looks"><span class="visually-hidden">Skin</span><select class="chip"><option value="classic" title="The original three-column cockpit" selected="">Classic</option><option value="factory" title="The queue as a belt, the fleet as machine bays, the cap as a gate">Factory Floor</option></select></label><button type="button" class="btn primary" aria-busy="false">Pulse now</button></div></header><div class="inject"><span class="inject-label">Inject event:</span><button type="button" class="btn" aria-busy="false">+ PR #140</button><button type="button" class="btn" aria-busy="false">CI failed on #142</button><button type="button" class="btn" aria-busy="false">Comment on #142</button><button type="button" class="btn" aria-busy="false">+ Issue #232</button><button type="button" class="btn" aria-busy="false">Approve #142</button><button type="button" class="btn" aria-busy="false">Mergeable #142</button><button type="button" class="btn" aria-busy="false">Conflict #142</button><button type="button" class="btn" aria-busy="false">+ Story</button><button class="btn ghost">Raw JSON</button></div><div class="launch"><div class="launch-head"><button class="btn ghost"><svg class="launch-bp" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="14" height="12" rx="1" fill="var(--blue-fill)" stroke="var(--blue)" stroke-width="1.4"></rect><path d="M5.5 2v12M10.5 2v12M1 6h14M1 10h14" fill="none" stroke="var(--blue)" stroke-width="0.8" opacity=".7"></path></svg>+ New blueprint</button></div></div><div class="vitals"><div class="vital ok" title="2 of 3 slots"><span class="vital-value">2</span><span class="vital-label">Running</span></div><div class="vital urgent" title="open escalations"><span class="vital-value">3</span><span class="vital-label">Needs you</span></div><div class="vital warn" title="agents awaiting input"><span class="vital-value">1</span><span class="vital-label">Parked</span></div><div class="vital urgent" title="PRs with failing CI"><span class="vital-value">1</span><span class="vital-label">CI red</span></div><div class="vital urgent" title="PRs behind / conflicting with base"><span class="vital-value">1</span><span class="vital-label">Conflicts</span></div><div class="vital warn" title="unhandled review comments"><span class="vital-value">2</span><span class="vital-label">Comments</span></div><div class="vital warn" title="stories missing detail"><span class="vital-value">1</span><span class="vital-label">Grooming</span></div></div><main class="grid"><section class="col"><h2>Fleet <span class="count">2</span></h2><div class="card agent running "><div class="card-head"><span class="dot blue" title="running"></span><span class="card-title">Fix failing CI on PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/142" target="_blank" rel="noopener noreferrer">#142</a></span></span><span class="chip small">fix_ci</span></div><div class="card-meta"><span class="badge running"><span class="spinner" aria-hidden="true"></span>running</span><span class="mono">feature/rate-limit</span><span class="muted mono-time">8:00</span><span class="muted mono-time" title="Claude cost · input→output tokens · turns (cumulative)">$0.84 · 412.0k→18.4k tok · 3 turns</span></div><div class="progress-note"><span class="progress-note-text">Reworking the policy-evaluation fold so a superseded push stops poisoning CI status</span><span class="progress-note-age">3m ago</span></div><div class="card-actions"><button class="btn">Open</button><button class="btn danger" aria-busy="false" aria-label="Mark done">Mark done</button><button class="btn danger" aria-busy="false" aria-label="Kill">Kill</button></div></div><div class="card agent waiting "><div class="card-head"><span class="dot amber" title="waiting"></span><span class="card-title">Rebase PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/139" target="_blank" rel="noopener noreferrer">#139</a></span> on main</span><span class="chip small">address_review</span></div><div class="card-meta"><span class="badge waiting">waiting</span><span class="mono">feature/azure-approval</span><span class="muted mono-time">4:00</span><span class="muted mono-time" title="Claude cost · input→output tokens · turns (cumulative)">$0.31 · 168.0k→6.2k tok · 2 turns</span></div><div class="waiting-reason">⏳ Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?<span class="chip small ok" title="Last tool call 2m ago">working anyway</span></div><div class="progress-note"><span class="progress-note-text">Rebasing onto main — three files conflict, working through them in order</span><span class="progress-note-age">9m ago</span></div><div class="card-actions"><button class="btn">Open</button><button class="btn danger" aria-busy="false" aria-label="Mark done">Mark done</button><button class="btn danger" aria-busy="false" aria-label="Kill">Kill</button></div></div><h3 class="muted">History</h3><div class="card agent done past"><div class="card-head"><span class="dot green" title="done"></span><span class="card-title">Document sentinel protocol (<span><a class="ext-ref" href="https://github.com/example/lubbdubb/issues/205" target="_blank" rel="noopener noreferrer">#205</a></span>)</span><span class="chip small">implement_issue</span></div><div class="card-meta"><span class="badge done">done</span><span class="mono">feature/merge-cache</span><span class="muted mono-time">18:00</span><span class="muted mono-time" title="Claude cost · input→output tokens · turns (cumulative)">$2.17 · 1.2M→54.0k tok · 9 turns</span></div><div class="progress-note"><span class="progress-note-text">Suite green, PR opened</span><span class="progress-note-age">22m ago</span></div><div class="card-actions"><button class="btn">Open</button></div></div></section><section class="col"><h2>Needs you <span class="count urgent">3</span></h2><div class="card escalation"><div class="card-head"><span class="badge escalate">review reply</span><span class="chip small warn" title="Accepting performs this act; nothing happens until you do">needs your decision</span><span class="chip small">PR #142</span><span class="muted small esc-time">1m ago</span></div><div class="escalation-prompt">Draft reply for PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/142" target="_blank" rel="noopener noreferrer">#142</a></span>:
-
-Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.</div><div class="muted small">re: Fix failing CI on PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/142" target="_blank" rel="noopener noreferrer">#142</a></span></div><details class="esc-context"><summary class="muted small">Draft reply</summary><pre class="esc-output">Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.</pre></details><div class="esc-agent-actions"><button class="btn ghost small esc-open">Open agent transcript →</button><button type="button" title="The agent is finished: record it done, reclaim its worktree, and close this out" class="btn ghost small" aria-busy="false">Mark work done</button></div><div class="esc-decide"><input placeholder="Why (optional) — recorded either way" value=""/><button type="button" title="Send this reply now" class="btn primary" aria-busy="false">Approve &amp; send</button><button type="button" title="Nothing goes out, and the harness won&#x27;t ask again" class="btn ghost" aria-busy="false">Reject</button></div><div class="esc-dismiss"><button type="button" title="Clear this by rejecting the proposal — nothing goes out" class="btn ghost small" aria-busy="false">Dismiss (rejects)</button></div></div><div class="card escalation"><div class="card-head"><span class="badge escalate">approve change</span><span class="chip small warn" title="Accepting performs this act; nothing happens until you do">needs your decision</span><span class="chip small">Issue #231</span><span class="muted small esc-time">12m ago</span></div><div class="escalation-prompt">Issue <span><a class="ext-ref" href="https://github.com/example/lubbdubb/issues/231" target="_blank" rel="noopener noreferrer">#231</a></span> was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it as one PR.</div><div class="esc-agent-actions"><button class="btn ghost small">View the full plan →</button></div><div class="esc-decide"><input placeholder="Why (optional) — recorded either way" value=""/><button type="button" title="Release the plan — each part gets its own agent, branch and PR" class="btn primary" aria-busy="false">Approve plan</button><button type="button" title="Retires the parts nothing has started for and works the issue as a single PR instead" class="btn ghost" aria-busy="false">Reject</button></div><div class="esc-dismiss"><button type="button" title="Clear this by rejecting the proposal — nothing goes out" class="btn ghost small" aria-busy="false">Dismiss (rejects)</button></div></div><div class="card escalation"><div class="card-head"><span class="badge escalate">agent waiting</span><span class="chip small">PR #139</span><span class="muted small esc-time">2m ago</span></div><div class="escalation-prompt">Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?</div><div class="muted small">re: Rebase PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/139" target="_blank" rel="noopener noreferrer">#139</a></span> on main</div><details class="esc-context" open=""><summary class="muted small">What the agent was doing</summary><pre class="esc-output">CONFLICT (content): Merge conflict in src/integrations/azure/restAzureDevOpsApi.ts</pre></details><div class="esc-agent-actions"><button class="btn ghost small esc-open">Open agent transcript →</button><button type="button" title="The agent is finished: record it done, reclaim its worktree, and close this out" class="btn ghost small" aria-busy="false">Mark work done</button></div><form class="reply"><input placeholder="Your answer…" value=""/><button type="submit" class="btn primary" aria-busy="false">Send</button></form><div class="esc-dismiss"><button type="button" title="Clear this from &quot;Needs you&quot; without sending the agent anything" class="btn ghost small" aria-busy="false">Dismiss</button></div></div><h3 class="muted">Plans</h3><div class="plans"><div class="plan-card"><div class="plan-head"><a class="ext-ref" href="https://github.com/example/lubbdubb/issues/212" target="_blank" rel="noopener noreferrer">#212</a> <span class="plan-title">Move the store behind a repository interface</span><span class="chip small">active</span><span class="chip small" title="Parts merged out of the parts this plan still declares">1/3 merged</span><button class="btn ghost world-toggle" title="The whole plan: every part&#x27;s scope, why it is its own PR, and the planner&#x27;s write-up">view</button><button type="button" title="Dispatch a planning agent primed with this plan and its part states. Nothing is torn down: agents keep running and open PRs stay open, and a part the amended plan drops is retired only if nothing was started for it." class="btn ghost world-toggle" aria-busy="false">replan</button></div><div class="plan-reason">The schema move has to merge before anything reads through the new interface.</div><div><div class="plan-part merged" title="src/store/"><span class="plan-mark">✓</span><span class="plan-part-title">Add the repository tables and migration</span><span class="chip small">merged</span><span class="chip small"><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/140" target="_blank" rel="noopener noreferrer">#140</a></span><span class="plan-slug">schema</span></div></div><div><div class="plan-part in_review" title="src/harness.ts, src/dispatcher/"><span class="plan-mark">◐</span><span class="plan-part-title">Route reads through the interface</span><span class="chip small">in review</span><span class="chip small"><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/143" target="_blank" rel="noopener noreferrer">#143</a></span><span class="chip small" title="Stacks on the &quot;schema&quot; part — its branch is this one&#x27;s base">on schema</span><span class="plan-slug">reads</span></div></div><div><div class="upnext-cut" title="Everything below is ranked but not started this cycle"><span>not started this cycle</span></div><div class="plan-part ready" title="src/executor/, src/agents/"><span class="plan-mark">·</span><span class="plan-part-title">Route writes through the interface</span><span class="chip small">ready</span><span class="chip small" title="Stacks on the &quot;reads&quot; part — its branch is this one&#x27;s base">on reads</span><span class="chip small warn" title="Part &quot;writes&quot; of issue #212 is ready and stacks on issue/212/reads. Held: issue #212 is already at its 2-part concurrency cap.">capped</span><span class="plan-slug">writes</span></div></div><div class="plan-foot">updated 6m ago</div></div><div class="plan-card"><div class="plan-head"><a class="ext-ref" href="https://github.com/example/lubbdubb/issues/231" target="_blank" rel="noopener noreferrer">#231</a> <span class="plan-title">Split the cockpit auth guard from the artifact route</span><span class="chip small warn">awaiting approval</span><span class="chip small" title="Parts merged out of the parts this plan still declares">0/3 merged</span><button class="btn ghost world-toggle" title="The whole plan: every part&#x27;s scope, why it is its own PR, and the planner&#x27;s write-up">view</button><button type="button" title="Dispatch a planning agent primed with this plan and its part states. Nothing is torn down: agents keep running and open PRs stay open, and a part the amended plan drops is retired only if nothing was started for it." class="btn ghost world-toggle" aria-busy="false">replan</button></div><div class="plan-reason">Nothing below is scheduled until you approve this decomposition — the proposal is in “Needs you”. Rejecting it works the issue as a single pull request instead.</div><div class="plan-reason">The capability signer has to exist before the route can verify one, and the guard change touches every route.</div><div><div class="upnext-cut" title="Everything below is ranked but not started this cycle"><span>not started this cycle</span></div><div class="plan-part ready" title="src/server/artifactCapability.ts"><span class="plan-mark">·</span><span class="plan-part-title">Add the capability signer</span><span class="chip small">ready</span><span class="chip small warn" title="Part &quot;signer&quot; of issue #231 is ready and has no agent. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.">unapproved</span><span class="plan-slug">signer</span></div></div><div><div class="plan-part ready" title="src/server/app.ts"><span class="plan-mark">·</span><span class="plan-part-title">Move the artifact route outside /api and require the capability</span><span class="chip small">ready</span><span class="chip small" title="Stacks on the &quot;signer&quot; part — its branch is this one&#x27;s base">on signer</span><span class="chip small warn" title="Part &quot;route&quot; of issue #231 is ready and stacks on issue/231/signer. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.">unapproved</span><span class="plan-slug">route</span></div></div><div><div class="plan-part ready" title="src/server/app.ts, web/src/api.ts"><span class="plan-mark">·</span><span class="plan-part-title">Mint capabilities into the snapshot</span><span class="chip small">ready</span><span class="chip small" title="Stacks on the &quot;route&quot; part — its branch is this one&#x27;s base">on route</span><span class="plan-slug">mint</span></div></div><div class="plan-foot">updated 12m ago</div></div></div><h3 class="muted">Findings<span class="count">2</span></h3><div class="findings"><div class="finding-card"><div class="finding-head"><span class="chip small warn" title="Something real the agent found that was not its task">out of scope</span><span class="muted finding-time">12m ago</span></div><div class="finding-summary">The retry helper in src/net/backoff.ts squares the delay instead of doubling it, so the 5th retry waits ~17 minutes. Not what I was sent to fix, but it is why the flaky test times out.</div><div class="finding-foot"><span class="muted">found while working pr:142:ci</span><span class="finding-actions"><button type="button" title="Queue this as a job — an agent works it now" class="btn ghost" aria-busy="false">Queue job</button><button type="button" title="Read it; nothing to do" class="btn ghost" aria-busy="false">Dismiss</button></span></div></div><div class="finding-card"><div class="finding-head"><span class="chip small warn" title="The reporting agent believes this is the same work as another item">duplicate</span><span class="chip small mono">issue:118</span><span class="muted finding-time">20m ago</span></div><div class="finding-summary">This asks for the same provider seam as #118, which already has a merged design doc.</div><div class="finding-foot"><span class="muted">found while working issue:139</span><span class="finding-actions"><button type="button" title="Queue this as a job — an agent works it now" class="btn ghost" aria-busy="false">Queue job</button><button type="button" title="Read it; nothing to do" class="btn ghost" aria-busy="false">Dismiss</button></span></div></div><div class="finding-card resolved"><div class="finding-head"><span class="chip small warn" title="The fix needs a change outside what the agent could touch">blocked</span><span class="chip small mono">issue:205</span><span class="chip small">dismissed</span><span class="muted finding-time">48m ago</span></div><div class="finding-summary">The real fix is in the upstream azure-devops-node-api types — the field exists on the wire but not in the published typings. Nothing I can change from this repo.</div><div class="finding-foot"><span class="muted">found while working issue:205</span></div></div><div class="finding-card resolved"><div class="finding-head"><span class="chip small warn" title="Something real the agent found that was not its task">out of scope</span><span class="chip small">filed</span><span class="chip small mono">issue:214</span><span class="muted finding-time">1h ago</span></div><div class="finding-summary">The ingest API has no request-size limit, so a 200MB body is buffered before anything rejects it. Unrelated to the CI failure I was sent for.</div><div class="finding-foot"><span class="muted">found while working pr:142:ci</span></div></div></div><h3 class="muted">File overlaps<span class="count">1</span></h3><div class="overlaps"><div class="overlap-card live"><div class="overlap-head"><span class="mono overlap-path">src/integrations/azure/restAzureDevOpsApi.ts</span><span class="chip small warn" title="Separate worktrees; the conflict surfaces at merge, if the hunks collide">2 agents</span><span class="chip small">in flight</span></div><ul class="overlap-writers"><li><span class="dot amber" title="waiting"></span><span class="mono">feature/azure-approval</span><span class="muted"> — pr:139, wrote it 2m ago</span></li><li><span class="dot blue" title="running"></span><span class="mono">feature/rate-limit</span><span class="muted"> — pr:142, wrote it 6m ago</span></li></ul></div></div><h3 class="muted">World</h3><div class="world"><div class="world-tabs" role="tablist"><button role="tab" aria-selected="true" class="world-tab on" title="The harness works these">Watched <span class="count">7</span></button><button role="tab" aria-selected="false" class="world-tab" title="Not opted in — nothing will happen until you watch one">Unwatched <span class="count">3</span></button><button role="tab" aria-selected="false" class="world-tab" title="You tagged these leave-alone">Ignored <span class="count">0</span></button></div><div class="world-row"><span>PRs</span><b>3</b></div><div class="world-item"><span class="dot red" title="failing"></span> <a class="ext-ref" href="https://github.com/example/lubbdubb/pull/142" target="_blank" rel="noopener noreferrer">#142</a> Add rate limiting to the ingest API<span class="chip small">1 comments</span><span class="chip small warn" title="CI failing, 1 unresolved comment">CI failing +1</span><button type="button" title="Tag this PR &quot;lubbdubb-ignore&quot; so the harness leaves it alone (for a PR blocked on something it can&#x27;t fix)" class="btn ghost world-toggle" aria-busy="false">ignore</button></div><div class="world-item"><span class="dot green" title="passing"></span> <a class="ext-ref" href="https://github.com/example/lubbdubb/pull/141" target="_blank" rel="noopener noreferrer">#141</a> Cache PR merge commits between cycles<span class="chip small warn">merge-ready</span><button type="button" title="Tag this PR &quot;lubbdubb-ignore&quot; so the harness leaves it alone (for a PR blocked on something it can&#x27;t fix)" class="btn ghost world-toggle" aria-busy="false">ignore</button></div><div class="world-item"><span class="dot green" title="passing"></span> <a class="ext-ref" href="https://github.com/example/lubbdubb/pull/139" target="_blank" rel="noopener noreferrer">#139</a> Azure DevOps connector: reviewer votes → approval<span class="chip small">1 comments</span><span class="chip small warn" title="behind base branch">behind base branch</span><button type="button" title="Tag this PR &quot;lubbdubb-ignore&quot; so the harness leaves it alone (for a PR blocked on something it can&#x27;t fix)" class="btn ghost world-toggle" aria-busy="false">ignore</button></div><div class="world-row"><span>Recently closed</span><b>2</b></div><div class="world-item excluded"><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/140" target="_blank" rel="noopener noreferrer">#140</a> Fold check-runs and combined status into one CI verdict<span class="chip small" title="Merged 2026-01-01T11:08:00.000Z">merged</span></div><div class="world-item excluded">#138 Screen-scrape the PTY transcript<span class="chip small warn" title="Closed 2026-01-01T10:24:00.000Z">closed unmerged</span></div><div class="world-row"><span>Issues</span><b>3</b></div><div class="world-item"><a class="ext-ref" href="https://github.com/example/lubbdubb/issues/208" target="_blank" rel="noopener noreferrer">#208</a> Retry transient GitHub 502s in the snapshotter <span class="chip small">open</span><span class="chip small" title="Would be picked up next cycle">eligible</span><button type="button" title="Remove &quot;lubbdubb-watch&quot; so the harness leaves this issue alone" class="btn ghost world-toggle" aria-busy="false">ignore</button><button type="button" title="Mark this issue finished, so the harness schedules nothing more for it" class="btn ghost world-toggle" aria-busy="false">finished</button><button type="button" title="Say there is work left here, so the harness picks it up again once no PR is open" class="btn ghost world-toggle" aria-busy="false">more work</button></div><div class="world-item"><a class="ext-ref" href="https://github.com/example/lubbdubb/issues/212" target="_blank" rel="noopener noreferrer">#212</a> Move the store behind a repository interface <span class="chip small">open</span><button class="btn ghost small chip-button" title="Open the plan for this issue"><span class="chip small warn" title="1/3 parts merged">1/3 parts merged</span></button><span class="chip small stale" title="That PR is no longer open — the link is the last one that ever referenced this issue">→ PR <a class="ext-ref" href="https://github.com/example/lubbdubb/pull/143" target="_blank" rel="noopener noreferrer">#143</a> (not open)</span><button type="button" title="Mark this issue finished, so the harness schedules nothing more for it" class="btn ghost world-toggle" aria-busy="false">finished</button><button type="button" title="Say there is work left here, so the harness picks it up again once no PR is open" class="btn ghost world-toggle" aria-busy="false">more work</button></div><div class="world-item"><a class="ext-ref" href="https://github.com/example/lubbdubb/issues/231" target="_blank" rel="noopener noreferrer">#231</a> Split the cockpit auth guard from the artifact route <span class="chip small">open</span><button class="btn ghost small chip-button" title="Open the plan for this issue"><span class="chip small warn" title="0/3 parts merged">0/3 parts merged</span></button><button type="button" title="Remove &quot;lubbdubb-watch&quot; so the harness leaves this issue alone" class="btn ghost world-toggle" aria-busy="false">ignore</button><button type="button" title="Mark this issue finished, so the harness schedules nothing more for it" class="btn ghost world-toggle" aria-busy="false">finished</button><button type="button" title="Say there is work left here, so the harness picks it up again once no PR is open" class="btn ghost world-toggle" aria-busy="false">more work</button></div><div class="world-row"><span>Stories</span><b>1</b></div><div class="world-item">Per-agent cost accounting in the cockpit <span class="chip small">ready</span><button type="button" title="Remove &quot;lubbdubb-watch&quot; so the harness leaves this story alone" class="btn ghost world-toggle" aria-busy="false">ignore</button></div></div></section><section class="col"><h2>Up next<span class="count">5</span></h2><div class="upnext"><div class="upnext-asof" title="Recomputed from the world every cycle — not a committed queue">as of the pulse 0s ago</div><div><div class="upnext-item dispatching" title="Open issue #208 has no linked PR and no agent is on it."><span class="chip small ok">▶ now</span><span class="chip small" title="Rule 4: Open issue without a PR — An open, pickup-eligible issue with no linked PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority.">4</span><span class="upnext-title">Resolve issue <a class="ext-ref" href="https://github.com/example/lubbdubb/issues/208" target="_blank" rel="noopener noreferrer">#208</a></span><span class="upnext-reorder"><button class="reorder-btn" disabled="" title="Move up (higher priority)">▲</button><button class="reorder-btn" title="Move down (lower priority)">▼</button></span></div></div><div><div class="upnext-item capped" title="Part &quot;writes&quot; of issue #212 is ready and stacks on issue/212/reads. Held: issue #212 is already at its 2-part concurrency cap."><span class="chip small">capped</span><span class="chip small" title="Rule 4a: Plan part ready — One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/&lt;n&gt;/&lt;slug&gt;` — based on that dependency&#x27;s branch while it is still open, on the default branch once it merged. A part held by the plan&#x27;s concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.">4a</span><span class="upnext-title">Issue <a class="ext-ref" href="https://github.com/example/lubbdubb/issues/212" target="_blank" rel="noopener noreferrer">#212</a> part: Route writes through the interface</span><span class="upnext-reorder"><button class="reorder-btn" title="Move up (higher priority)">▲</button><button class="reorder-btn" title="Move down (lower priority)">▼</button></span></div></div><div><div class="upnext-cut" title="Everything below waits for a free agent slot"><span>waiting for a slot</span></div><div class="upnext-item waiting" title="Idle capacity; &quot;Per-agent cost accounting in the cockpit&quot; is the highest-priority ready story."><span class="chip small">waiting</span><span class="chip small" title="Rule 7: Idle capacity pickup — With headroom left and nothing urgent, the highest-priority ready story (already groomed) is picked up by a code agent — idle capacity should always pull work.">7</span><span class="upnext-title">Implement &quot;Per-agent cost accounting in the cockpit&quot;</span><span class="upnext-reorder"><button class="reorder-btn" title="Move up (higher priority)">▲</button><button class="reorder-btn" title="Move down (lower priority)">▼</button></span></div></div><div><div class="upnext-item unapproved" title="Part &quot;signer&quot; of issue #231 is ready and has no agent. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it."><span class="chip small">unapproved</span><span class="chip small" title="Rule 4a: Plan part ready — One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/&lt;n&gt;/&lt;slug&gt;` — based on that dependency&#x27;s branch while it is still open, on the default branch once it merged. A part held by the plan&#x27;s concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.">4a</span><span class="upnext-title">Issue <a class="ext-ref" href="https://github.com/example/lubbdubb/issues/231" target="_blank" rel="noopener noreferrer">#231</a> part: Add the capability signer</span><span class="upnext-reorder"><button class="reorder-btn" title="Move up (higher priority)">▲</button><button class="reorder-btn" title="Move down (lower priority)">▼</button></span></div></div><div><div class="upnext-item unapproved" title="Part &quot;route&quot; of issue #231 is ready and stacks on issue/231/signer. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it."><span class="chip small">unapproved</span><span class="chip small" title="Rule 4a: Plan part ready — One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/&lt;n&gt;/&lt;slug&gt;` — based on that dependency&#x27;s branch while it is still open, on the default branch once it merged. A part held by the plan&#x27;s concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.">4a</span><span class="upnext-title">Issue <a class="ext-ref" href="https://github.com/example/lubbdubb/issues/231" target="_blank" rel="noopener noreferrer">#231</a> part: Move the artifact route outside /api and require the capability</span><span class="upnext-reorder"><button class="reorder-btn" title="Move up (higher priority)">▲</button><button class="reorder-btn" disabled="" title="Move down (lower priority)">▼</button></span></div></div></div><h2 class="feed-heading">Decision log</h2><div class="log-filters"><button class="filter-chip all active">all <span class="filter-count">4</span></button><button class="filter-chip executed ">executed <span class="filter-count">1</span></button></div><div class="auditlog"><div class="audit clickable executed" role="button" tabindex="0" title="Show dispatch rule"><div class="audit-top"><span class="badge executed">executed</span><span class="audit-type">reply_on_pr</span><span class="muted audit-time">1m ago</span><span class="audit-chevron ">▸</span></div><div class="audit-reason">“reviewer asked for a config change on <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/142" target="_blank" rel="noopener noreferrer">#142</a></span>”</div><div class="audit-detail">Drafted a reply and escalated for approval (confidence 0.62 below threshold)</div></div><div class="audit clickable ok" role="button" tabindex="0" title="Show dispatch rule"><div class="audit-top"><span class="badge ok">ok</span><span class="audit-type">dispatch_fix_ci</span><span class="muted audit-time">8m ago</span><span class="audit-chevron ">▸</span></div><div class="audit-reason">“PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/142" target="_blank" rel="noopener noreferrer">#142</a></span> CI is failing”</div><div class="audit-detail">Dispatched agent onto feature/rate-limit</div></div><div class="audit clickable ok" role="button" tabindex="0" title="Show dispatch rule"><div class="audit-top"><span class="badge ok">ok</span><span class="audit-type">escalate</span><span class="muted audit-time">2m ago</span><span class="audit-chevron ">▸</span></div><div class="audit-reason">“agent parked on a human”</div><div class="audit-detail">Rebase conflict on PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/139" target="_blank" rel="noopener noreferrer">#139</a></span> needs a call</div></div><div class="audit clickable held" role="button" tabindex="0" title="Show dispatch rule"><div class="audit-top"><span class="badge held">held</span><span class="audit-type">merge_pr</span><span class="muted audit-time">12m ago</span><span class="audit-chevron ">▸</span></div><div class="audit-reason">“PR <span><a class="ext-ref" href="https://github.com/example/lubbdubb/pull/141" target="_blank" rel="noopener noreferrer">#141</a></span> is merge-ready”</div><div class="audit-detail">auto-merge disabled — leaving for a human</div></div></div><h2 class="feed-heading">Activity</h2><div class="log-filters"><button class="filter-chip all active">all <span class="filter-count">5</span></button><button class="filter-chip prs ">prs <span class="filter-count">4</span></button><button class="filter-chip issues ">issues <span class="filter-count">1</span></button></div><div class="auditlog"><div class="audit activity prs"><div class="audit-top"><span class="badge prs">CI</span><span class="muted audit-time">8m ago</span></div><div class="audit-reason">CI failing on PR #142</div></div><div class="audit activity prs"><div class="audit-top"><span class="badge prs">comment</span><span class="muted audit-time">7m ago</span></div><div class="audit-reason">reviewer commented on PR #142</div></div><div class="audit activity prs"><div class="audit-top"><span class="badge prs">approved</span><span class="muted audit-time">9m ago</span></div><div class="audit-reason">PR #141 approved</div></div><div class="audit activity issues"><div class="audit-top"><span class="badge issues">issue opened</span><span class="muted audit-time">15m ago</span></div><div class="audit-reason">Issue #208 opened</div></div><div class="audit activity prs"><div class="audit-top"><span class="badge prs">merged</span><span class="muted audit-time">30m ago</span></div><div class="audit-reason">PR #138 merged</div></div></div><h2 class="feed-heading">Errors <span class="count urgent">2</span></h2><div class="auditlog"><div class="audit error-entry"><div class="audit-top"><span class="badge failed">agent</span><span class="muted audit-time">11m ago</span></div><div class="audit-reason">Agent agent-a0 failed (task task-a0), exit code 1</div><details class="error-detail"><summary>detail</summary><pre>npm test
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="pulse-mark">♥</span> LubbDubb<span class="tagline">autonomous engineering cockpit</span
+      ><span class="chip warn" title="Simulated data — no server or real integrations">demo</span>
+    </div>
+    <div class="topbar-meta">
+      <div class="heartbeat" title="Next heartbeat in ~15s">
+        <div class="heartbeat-track"><div class="heartbeat-fill" style="width: 0%"></div></div>
+        <span class="heartbeat-label">next pulse ~15s</span>
+      </div>
+      <span class="chip" title="The world as the last pulse observed it — the cockpit itself never polls the provider"
+        >world 0s ago</span
+      ><span class="chip ok"><span class="dot green"></span> live</span
+      ><span class="chip" title="5h window resets 14:20 · weekly window resets 12:00 · captured 1m ago"
+        >claude 5h 62% · wk 30%</span
+      ><span class="chip">dispatcher: rule</span>
+      <div class="fleet-control">
+        <span class="fc-label">cap</span
+        ><button type="button" title="Lower the cap" class="btn ghost fc-step" aria-busy="false">−</button
+        ><span class="fc-count" title="2 of 3 slots in use">2/3</span
+        ><button type="button" title="Raise the cap" class="btn ghost fc-step" aria-busy="false">+</button
+        ><button
+          type="button"
+          title="Pause new dispatch (live agents keep running)"
+          class="btn ghost"
+          aria-busy="false"
+        >
+          ⏸ Pause
+        </button>
+      </div>
+      <label class="skin-picker" title="Change how the cockpit looks"
+        ><span class="visually-hidden">Skin</span
+        ><select class="chip">
+          <option value="classic" title="The original three-column cockpit" selected="">Classic</option>
+          <option value="factory" title="The queue as a belt, the fleet as machine bays, the cap as a gate">
+            Factory Floor
+          </option>
+        </select></label
+      ><button type="button" class="btn primary" aria-busy="false">Pulse now</button>
+    </div>
+  </header>
+  <div class="inject">
+    <span class="inject-label">Inject event:</span><button type="button" class="btn" aria-busy="false">+ PR #140</button
+    ><button type="button" class="btn" aria-busy="false">CI failed on #142</button
+    ><button type="button" class="btn" aria-busy="false">Comment on #142</button
+    ><button type="button" class="btn" aria-busy="false">+ Issue #232</button
+    ><button type="button" class="btn" aria-busy="false">Approve #142</button
+    ><button type="button" class="btn" aria-busy="false">Mergeable #142</button
+    ><button type="button" class="btn" aria-busy="false">Conflict #142</button
+    ><button type="button" class="btn" aria-busy="false">+ Story</button><button class="btn ghost">Raw JSON</button>
+  </div>
+  <div class="launch">
+    <div class="launch-head">
+      <button class="btn ghost">
+        <svg class="launch-bp" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+          <rect
+            x="1"
+            y="2"
+            width="14"
+            height="12"
+            rx="1"
+            fill="var(--blue-fill)"
+            stroke="var(--blue)"
+            stroke-width="1.4"
+          ></rect>
+          <path
+            d="M5.5 2v12M10.5 2v12M1 6h14M1 10h14"
+            fill="none"
+            stroke="var(--blue)"
+            stroke-width="0.8"
+            opacity=".7"
+          ></path></svg
+        >+ New blueprint
+      </button>
+    </div>
+  </div>
+  <div class="vitals">
+    <div class="vital ok" title="2 of 3 slots">
+      <span class="vital-value">2</span><span class="vital-label">Running</span>
+    </div>
+    <div class="vital urgent" title="open escalations">
+      <span class="vital-value">3</span><span class="vital-label">Needs you</span>
+    </div>
+    <div class="vital warn" title="agents awaiting input">
+      <span class="vital-value">1</span><span class="vital-label">Parked</span>
+    </div>
+    <div class="vital urgent" title="PRs with failing CI">
+      <span class="vital-value">1</span><span class="vital-label">CI red</span>
+    </div>
+    <div class="vital urgent" title="PRs behind / conflicting with base">
+      <span class="vital-value">1</span><span class="vital-label">Conflicts</span>
+    </div>
+    <div class="vital warn" title="unhandled review comments">
+      <span class="vital-value">2</span><span class="vital-label">Comments</span>
+    </div>
+    <div class="vital warn" title="stories missing detail">
+      <span class="vital-value">1</span><span class="vital-label">Grooming</span>
+    </div>
+  </div>
+  <main class="grid">
+    <section class="col">
+      <h2>Fleet <span class="count">2</span></h2>
+      <div class="card agent running">
+        <div class="card-head">
+          <span class="dot blue" title="running"></span
+          ><span class="card-title"
+            >Fix failing CI on PR
+            <span
+              ><a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/pull/142"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#142</a
+              ></span
+            ></span
+          ><span class="chip small">fix_ci</span>
+        </div>
+        <div class="card-meta">
+          <span class="badge running"><span class="spinner" aria-hidden="true"></span>running</span
+          ><span class="mono">feature/rate-limit</span><span class="muted mono-time">8:00</span
+          ><span class="muted mono-time" title="Claude cost · input→output tokens · turns (cumulative)"
+            >$0.84 · 412.0k→18.4k tok · 3 turns</span
+          >
+        </div>
+        <div class="progress-note">
+          <span class="progress-note-text"
+            >Reworking the policy-evaluation fold so a superseded push stops poisoning CI status</span
+          ><span class="progress-note-age">3m ago</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn">Open</button
+          ><button class="btn danger" aria-busy="false" aria-label="Mark done">Mark done</button
+          ><button class="btn danger" aria-busy="false" aria-label="Kill">Kill</button>
+        </div>
+      </div>
+      <div class="card agent waiting">
+        <div class="card-head">
+          <span class="dot amber" title="waiting"></span
+          ><span class="card-title"
+            >Rebase PR
+            <span
+              ><a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/pull/139"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#139</a
+              ></span
+            >
+            on main</span
+          ><span class="chip small">address_review</span>
+        </div>
+        <div class="card-meta">
+          <span class="badge waiting">waiting</span><span class="mono">feature/azure-approval</span
+          ><span class="muted mono-time">4:00</span
+          ><span class="muted mono-time" title="Claude cost · input→output tokens · turns (cumulative)"
+            >$0.31 · 168.0k→6.2k tok · 2 turns</span
+          >
+        </div>
+        <div class="waiting-reason">
+          ⏳ Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?<span
+            class="chip small ok"
+            title="Last tool call 2m ago"
+            >working anyway</span
+          >
+        </div>
+        <div class="progress-note">
+          <span class="progress-note-text"
+            >Rebasing onto main — three files conflict, working through them in order</span
+          ><span class="progress-note-age">9m ago</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn">Open</button
+          ><button class="btn danger" aria-busy="false" aria-label="Mark done">Mark done</button
+          ><button class="btn danger" aria-busy="false" aria-label="Kill">Kill</button>
+        </div>
+      </div>
+      <h3 class="muted">History</h3>
+      <div class="card agent done past">
+        <div class="card-head">
+          <span class="dot green" title="done"></span
+          ><span class="card-title"
+            >Document sentinel protocol (<span
+              ><a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/issues/205"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#205</a
+              ></span
+            >)</span
+          ><span class="chip small">implement_issue</span>
+        </div>
+        <div class="card-meta">
+          <span class="badge done">done</span><span class="mono">feature/merge-cache</span
+          ><span class="muted mono-time">18:00</span
+          ><span class="muted mono-time" title="Claude cost · input→output tokens · turns (cumulative)"
+            >$2.17 · 1.2M→54.0k tok · 9 turns</span
+          >
+        </div>
+        <div class="progress-note">
+          <span class="progress-note-text">Suite green, PR opened</span><span class="progress-note-age">22m ago</span>
+        </div>
+        <div class="card-actions"><button class="btn">Open</button></div>
+      </div>
+    </section>
+    <section class="col">
+      <h2>Needs you <span class="count urgent">3</span></h2>
+      <div class="card escalation">
+        <div class="card-head">
+          <span class="badge escalate">review reply</span
+          ><span class="chip small warn" title="Accepting performs this act; nothing happens until you do"
+            >needs your decision</span
+          ><span class="chip small">PR #142</span><span class="muted small esc-time">1m ago</span>
+        </div>
+        <div class="escalation-prompt">
+          Draft reply for PR
+          <span
+            ><a
+              class="ext-ref"
+              href="https://github.com/example/lubbdubb/pull/142"
+              target="_blank"
+              rel="noopener noreferrer"
+              >#142</a
+            ></span
+          >: Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and
+          wired it through. Pushed as a fixup.
+        </div>
+        <div class="muted small">
+          re: Fix failing CI on PR
+          <span
+            ><a
+              class="ext-ref"
+              href="https://github.com/example/lubbdubb/pull/142"
+              target="_blank"
+              rel="noopener noreferrer"
+              >#142</a
+            ></span
+          >
+        </div>
+        <details class="esc-context">
+          <summary class="muted small">Draft reply</summary>
+          <pre class="esc-output">
+Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.</pre
+          >
+        </details>
+        <div class="esc-agent-actions">
+          <button class="btn ghost small esc-open">Open agent transcript →</button
+          ><button
+            type="button"
+            title="The agent is finished: record it done, reclaim its worktree, and close this out"
+            class="btn ghost small"
+            aria-busy="false"
+          >
+            Mark work done
+          </button>
+        </div>
+        <div class="esc-decide">
+          <input placeholder="Why (optional) — recorded either way" value="" /><button
+            type="button"
+            title="Send this reply now"
+            class="btn primary"
+            aria-busy="false"
+          >
+            Approve &amp; send</button
+          ><button
+            type="button"
+            title="Nothing goes out, and the harness won&#x27;t ask again"
+            class="btn ghost"
+            aria-busy="false"
+          >
+            Reject
+          </button>
+        </div>
+        <div class="esc-dismiss">
+          <button
+            type="button"
+            title="Clear this by rejecting the proposal — nothing goes out"
+            class="btn ghost small"
+            aria-busy="false"
+          >
+            Dismiss (rejects)
+          </button>
+        </div>
+      </div>
+      <div class="card escalation">
+        <div class="card-head">
+          <span class="badge escalate">approve change</span
+          ><span class="chip small warn" title="Accepting performs this act; nothing happens until you do"
+            >needs your decision</span
+          ><span class="chip small">Issue #231</span><span class="muted small esc-time">12m ago</span>
+        </div>
+        <div class="escalation-prompt">
+          Issue
+          <span
+            ><a
+              class="ext-ref"
+              href="https://github.com/example/lubbdubb/issues/231"
+              target="_blank"
+              rel="noopener noreferrer"
+              >#231</a
+            ></span
+          >
+          was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it as one PR.
+        </div>
+        <div class="esc-agent-actions"><button class="btn ghost small">View the full plan →</button></div>
+        <div class="esc-decide">
+          <input placeholder="Why (optional) — recorded either way" value="" /><button
+            type="button"
+            title="Release the plan — each part gets its own agent, branch and PR"
+            class="btn primary"
+            aria-busy="false"
+          >
+            Approve plan</button
+          ><button
+            type="button"
+            title="Retires the parts nothing has started for and works the issue as a single PR instead"
+            class="btn ghost"
+            aria-busy="false"
+          >
+            Reject
+          </button>
+        </div>
+        <div class="esc-dismiss">
+          <button
+            type="button"
+            title="Clear this by rejecting the proposal — nothing goes out"
+            class="btn ghost small"
+            aria-busy="false"
+          >
+            Dismiss (rejects)
+          </button>
+        </div>
+      </div>
+      <div class="card escalation">
+        <div class="card-head">
+          <span class="badge escalate">agent waiting</span><span class="chip small">PR #139</span
+          ><span class="muted small esc-time">2m ago</span>
+        </div>
+        <div class="escalation-prompt">Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?</div>
+        <div class="muted small">
+          re: Rebase PR
+          <span
+            ><a
+              class="ext-ref"
+              href="https://github.com/example/lubbdubb/pull/139"
+              target="_blank"
+              rel="noopener noreferrer"
+              >#139</a
+            ></span
+          >
+          on main
+        </div>
+        <details class="esc-context" open="">
+          <summary class="muted small">What the agent was doing</summary>
+          <pre class="esc-output">
+CONFLICT (content): Merge conflict in src/integrations/azure/restAzureDevOpsApi.ts</pre
+          >
+        </details>
+        <div class="esc-agent-actions">
+          <button class="btn ghost small esc-open">Open agent transcript →</button
+          ><button
+            type="button"
+            title="The agent is finished: record it done, reclaim its worktree, and close this out"
+            class="btn ghost small"
+            aria-busy="false"
+          >
+            Mark work done
+          </button>
+        </div>
+        <form class="reply">
+          <input placeholder="Your answer…" value="" /><button type="submit" class="btn primary" aria-busy="false">
+            Send
+          </button>
+        </form>
+        <div class="esc-dismiss">
+          <button
+            type="button"
+            title='Clear this from "Needs you" without sending the agent anything'
+            class="btn ghost small"
+            aria-busy="false"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+      <h3 class="muted">Plans</h3>
+      <div class="plans">
+        <div class="plan-card">
+          <div class="plan-head">
+            <a
+              class="ext-ref"
+              href="https://github.com/example/lubbdubb/issues/212"
+              target="_blank"
+              rel="noopener noreferrer"
+              >#212</a
+            >
+            <span class="plan-title">Move the store behind a repository interface</span
+            ><span class="chip small">active</span
+            ><span class="chip small" title="Parts merged out of the parts this plan still declares">1/3 merged</span
+            ><button
+              class="btn ghost world-toggle"
+              title="The whole plan: every part&#x27;s scope, why it is its own PR, and the planner&#x27;s write-up"
+            >
+              view</button
+            ><button
+              type="button"
+              title="Dispatch a planning agent primed with this plan and its part states. Nothing is torn down: agents keep running and open PRs stay open, and a part the amended plan drops is retired only if nothing was started for it."
+              class="btn ghost world-toggle"
+              aria-busy="false"
+            >
+              replan
+            </button>
+          </div>
+          <div class="plan-reason">The schema move has to merge before anything reads through the new interface.</div>
+          <div>
+            <div class="plan-part merged" title="src/store/">
+              <span class="plan-mark">✓</span
+              ><span class="plan-part-title">Add the repository tables and migration</span
+              ><span class="chip small">merged</span
+              ><span class="chip small"
+                ><a
+                  class="ext-ref"
+                  href="https://github.com/example/lubbdubb/pull/140"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >#140</a
+                ></span
+              ><span class="plan-slug">schema</span>
+            </div>
+          </div>
+          <div>
+            <div class="plan-part in_review" title="src/harness.ts, src/dispatcher/">
+              <span class="plan-mark">◐</span><span class="plan-part-title">Route reads through the interface</span
+              ><span class="chip small">in review</span
+              ><span class="chip small"
+                ><a
+                  class="ext-ref"
+                  href="https://github.com/example/lubbdubb/pull/143"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >#143</a
+                ></span
+              ><span class="chip small" title='Stacks on the "schema" part — its branch is this one&#x27;s base'
+                >on schema</span
+              ><span class="plan-slug">reads</span>
+            </div>
+          </div>
+          <div>
+            <div class="upnext-cut" title="Everything below is ranked but not started this cycle">
+              <span>not started this cycle</span>
+            </div>
+            <div class="plan-part ready" title="src/executor/, src/agents/">
+              <span class="plan-mark">·</span><span class="plan-part-title">Route writes through the interface</span
+              ><span class="chip small">ready</span
+              ><span class="chip small" title='Stacks on the "reads" part — its branch is this one&#x27;s base'
+                >on reads</span
+              ><span
+                class="chip small warn"
+                title='Part "writes" of issue #212 is ready and stacks on issue/212/reads. Held: issue #212 is already at its 2-part concurrency cap.'
+                >capped</span
+              ><span class="plan-slug">writes</span>
+            </div>
+          </div>
+          <div class="plan-foot">updated 6m ago</div>
+        </div>
+        <div class="plan-card">
+          <div class="plan-head">
+            <a
+              class="ext-ref"
+              href="https://github.com/example/lubbdubb/issues/231"
+              target="_blank"
+              rel="noopener noreferrer"
+              >#231</a
+            >
+            <span class="plan-title">Split the cockpit auth guard from the artifact route</span
+            ><span class="chip small warn">awaiting approval</span
+            ><span class="chip small" title="Parts merged out of the parts this plan still declares">0/3 merged</span
+            ><button
+              class="btn ghost world-toggle"
+              title="The whole plan: every part&#x27;s scope, why it is its own PR, and the planner&#x27;s write-up"
+            >
+              view</button
+            ><button
+              type="button"
+              title="Dispatch a planning agent primed with this plan and its part states. Nothing is torn down: agents keep running and open PRs stay open, and a part the amended plan drops is retired only if nothing was started for it."
+              class="btn ghost world-toggle"
+              aria-busy="false"
+            >
+              replan
+            </button>
+          </div>
+          <div class="plan-reason">
+            Nothing below is scheduled until you approve this decomposition — the proposal is in “Needs you”. Rejecting
+            it works the issue as a single pull request instead.
+          </div>
+          <div class="plan-reason">
+            The capability signer has to exist before the route can verify one, and the guard change touches every
+            route.
+          </div>
+          <div>
+            <div class="upnext-cut" title="Everything below is ranked but not started this cycle">
+              <span>not started this cycle</span>
+            </div>
+            <div class="plan-part ready" title="src/server/artifactCapability.ts">
+              <span class="plan-mark">·</span><span class="plan-part-title">Add the capability signer</span
+              ><span class="chip small">ready</span
+              ><span
+                class="chip small warn"
+                title='Part "signer" of issue #231 is ready and has no agent. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.'
+                >unapproved</span
+              ><span class="plan-slug">signer</span>
+            </div>
+          </div>
+          <div>
+            <div class="plan-part ready" title="src/server/app.ts">
+              <span class="plan-mark">·</span
+              ><span class="plan-part-title">Move the artifact route outside /api and require the capability</span
+              ><span class="chip small">ready</span
+              ><span class="chip small" title='Stacks on the "signer" part — its branch is this one&#x27;s base'
+                >on signer</span
+              ><span
+                class="chip small warn"
+                title='Part "route" of issue #231 is ready and stacks on issue/231/signer. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.'
+                >unapproved</span
+              ><span class="plan-slug">route</span>
+            </div>
+          </div>
+          <div>
+            <div class="plan-part ready" title="src/server/app.ts, web/src/api.ts">
+              <span class="plan-mark">·</span><span class="plan-part-title">Mint capabilities into the snapshot</span
+              ><span class="chip small">ready</span
+              ><span class="chip small" title='Stacks on the "route" part — its branch is this one&#x27;s base'
+                >on route</span
+              ><span class="plan-slug">mint</span>
+            </div>
+          </div>
+          <div class="plan-foot">updated 12m ago</div>
+        </div>
+      </div>
+      <h3 class="muted">Findings<span class="count">2</span></h3>
+      <div class="findings">
+        <div class="finding-card">
+          <div class="finding-head">
+            <span class="chip small warn" title="Something real the agent found that was not its task"
+              >out of scope</span
+            ><span class="muted finding-time">12m ago</span>
+          </div>
+          <div class="finding-summary">
+            The retry helper in src/net/backoff.ts squares the delay instead of doubling it, so the 5th retry waits ~17
+            minutes. Not what I was sent to fix, but it is why the flaky test times out.
+          </div>
+          <div class="finding-foot">
+            <span class="muted">found while working pr:142:ci</span
+            ><span class="finding-actions"
+              ><button
+                type="button"
+                title="Queue this as a job — an agent works it now"
+                class="btn ghost"
+                aria-busy="false"
+              >
+                Queue job</button
+              ><button type="button" title="Read it; nothing to do" class="btn ghost" aria-busy="false">
+                Dismiss
+              </button></span
+            >
+          </div>
+        </div>
+        <div class="finding-card">
+          <div class="finding-head">
+            <span class="chip small warn" title="The reporting agent believes this is the same work as another item"
+              >duplicate</span
+            ><span class="chip small mono">issue:118</span><span class="muted finding-time">20m ago</span>
+          </div>
+          <div class="finding-summary">
+            This asks for the same provider seam as #118, which already has a merged design doc.
+          </div>
+          <div class="finding-foot">
+            <span class="muted">found while working issue:139</span
+            ><span class="finding-actions"
+              ><button
+                type="button"
+                title="Queue this as a job — an agent works it now"
+                class="btn ghost"
+                aria-busy="false"
+              >
+                Queue job</button
+              ><button type="button" title="Read it; nothing to do" class="btn ghost" aria-busy="false">
+                Dismiss
+              </button></span
+            >
+          </div>
+        </div>
+        <div class="finding-card resolved">
+          <div class="finding-head">
+            <span class="chip small warn" title="The fix needs a change outside what the agent could touch"
+              >blocked</span
+            ><span class="chip small mono">issue:205</span><span class="chip small">dismissed</span
+            ><span class="muted finding-time">48m ago</span>
+          </div>
+          <div class="finding-summary">
+            The real fix is in the upstream azure-devops-node-api types — the field exists on the wire but not in the
+            published typings. Nothing I can change from this repo.
+          </div>
+          <div class="finding-foot"><span class="muted">found while working issue:205</span></div>
+        </div>
+        <div class="finding-card resolved">
+          <div class="finding-head">
+            <span class="chip small warn" title="Something real the agent found that was not its task"
+              >out of scope</span
+            ><span class="chip small">filed</span><span class="chip small mono">issue:214</span
+            ><span class="muted finding-time">1h ago</span>
+          </div>
+          <div class="finding-summary">
+            The ingest API has no request-size limit, so a 200MB body is buffered before anything rejects it. Unrelated
+            to the CI failure I was sent for.
+          </div>
+          <div class="finding-foot"><span class="muted">found while working pr:142:ci</span></div>
+        </div>
+      </div>
+      <h3 class="muted">File overlaps<span class="count">1</span></h3>
+      <div class="overlaps">
+        <div class="overlap-card live">
+          <div class="overlap-head">
+            <span class="mono overlap-path">src/integrations/azure/restAzureDevOpsApi.ts</span
+            ><span
+              class="chip small warn"
+              title="Separate worktrees; the conflict surfaces at merge, if the hunks collide"
+              >2 agents</span
+            ><span class="chip small">in flight</span>
+          </div>
+          <ul class="overlap-writers">
+            <li>
+              <span class="dot amber" title="waiting"></span><span class="mono">feature/azure-approval</span
+              ><span class="muted"> — pr:139, wrote it 2m ago</span>
+            </li>
+            <li>
+              <span class="dot blue" title="running"></span><span class="mono">feature/rate-limit</span
+              ><span class="muted"> — pr:142, wrote it 6m ago</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <h3 class="muted">World</h3>
+      <div class="world">
+        <div class="world-tabs" role="tablist">
+          <button role="tab" aria-selected="true" class="world-tab on" title="The harness works these">
+            Watched <span class="count">7</span></button
+          ><button
+            role="tab"
+            aria-selected="false"
+            class="world-tab"
+            title="Not opted in — nothing will happen until you watch one"
+          >
+            Unwatched <span class="count">3</span></button
+          ><button role="tab" aria-selected="false" class="world-tab" title="You tagged these leave-alone">
+            Ignored <span class="count">0</span>
+          </button>
+        </div>
+        <div class="world-row"><span>PRs</span><b>3</b></div>
+        <div class="world-item">
+          <span class="dot red" title="failing"></span>
+          <a
+            class="ext-ref"
+            href="https://github.com/example/lubbdubb/pull/142"
+            target="_blank"
+            rel="noopener noreferrer"
+            >#142</a
+          >
+          Add rate limiting to the ingest API<span class="chip small">1 comments</span
+          ><span class="chip small warn" title="CI failing, 1 unresolved comment">CI failing +1</span
+          ><button
+            type="button"
+            title='Tag this PR "lubbdubb-ignore" so the harness leaves it alone (for a PR blocked on something it can&#x27;t fix)'
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            ignore
+          </button>
+        </div>
+        <div class="world-item">
+          <span class="dot green" title="passing"></span>
+          <a
+            class="ext-ref"
+            href="https://github.com/example/lubbdubb/pull/141"
+            target="_blank"
+            rel="noopener noreferrer"
+            >#141</a
+          >
+          Cache PR merge commits between cycles<span class="chip small warn">merge-ready</span
+          ><button
+            type="button"
+            title='Tag this PR "lubbdubb-ignore" so the harness leaves it alone (for a PR blocked on something it can&#x27;t fix)'
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            ignore
+          </button>
+        </div>
+        <div class="world-item">
+          <span class="dot green" title="passing"></span>
+          <a
+            class="ext-ref"
+            href="https://github.com/example/lubbdubb/pull/139"
+            target="_blank"
+            rel="noopener noreferrer"
+            >#139</a
+          >
+          Azure DevOps connector: reviewer votes → approval<span class="chip small">1 comments</span
+          ><span class="chip small warn" title="behind base branch">behind base branch</span
+          ><button
+            type="button"
+            title='Tag this PR "lubbdubb-ignore" so the harness leaves it alone (for a PR blocked on something it can&#x27;t fix)'
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            ignore
+          </button>
+        </div>
+        <div class="world-row"><span>Recently closed</span><b>2</b></div>
+        <div class="world-item excluded">
+          <a
+            class="ext-ref"
+            href="https://github.com/example/lubbdubb/pull/140"
+            target="_blank"
+            rel="noopener noreferrer"
+            >#140</a
+          >
+          Fold check-runs and combined status into one CI verdict<span
+            class="chip small"
+            title="Merged 2026-01-01T11:08:00.000Z"
+            >merged</span
+          >
+        </div>
+        <div class="world-item excluded">
+          #138 Screen-scrape the PTY transcript<span class="chip small warn" title="Closed 2026-01-01T10:24:00.000Z"
+            >closed unmerged</span
+          >
+        </div>
+        <div class="world-row"><span>Issues</span><b>3</b></div>
+        <div class="world-item">
+          <a
+            class="ext-ref"
+            href="https://github.com/example/lubbdubb/issues/208"
+            target="_blank"
+            rel="noopener noreferrer"
+            >#208</a
+          >
+          Retry transient GitHub 502s in the snapshotter <span class="chip small">open</span
+          ><span class="chip small" title="Would be picked up next cycle">eligible</span
+          ><button
+            type="button"
+            title='Remove "lubbdubb-watch" so the harness leaves this issue alone'
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            ignore</button
+          ><button
+            type="button"
+            title="Mark this issue finished, so the harness schedules nothing more for it"
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            finished</button
+          ><button
+            type="button"
+            title="Say there is work left here, so the harness picks it up again once no PR is open"
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            more work
+          </button>
+        </div>
+        <div class="world-item">
+          <a
+            class="ext-ref"
+            href="https://github.com/example/lubbdubb/issues/212"
+            target="_blank"
+            rel="noopener noreferrer"
+            >#212</a
+          >
+          Move the store behind a repository interface <span class="chip small">open</span
+          ><button class="btn ghost small chip-button" title="Open the plan for this issue">
+            <span class="chip small warn" title="1/3 parts merged">1/3 parts merged</span></button
+          ><span
+            class="chip small stale"
+            title="That PR is no longer open — the link is the last one that ever referenced this issue"
+            >→ PR
+            <a
+              class="ext-ref"
+              href="https://github.com/example/lubbdubb/pull/143"
+              target="_blank"
+              rel="noopener noreferrer"
+              >#143</a
+            >
+            (not open)</span
+          ><button
+            type="button"
+            title="Mark this issue finished, so the harness schedules nothing more for it"
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            finished</button
+          ><button
+            type="button"
+            title="Say there is work left here, so the harness picks it up again once no PR is open"
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            more work
+          </button>
+        </div>
+        <div class="world-item">
+          <a
+            class="ext-ref"
+            href="https://github.com/example/lubbdubb/issues/231"
+            target="_blank"
+            rel="noopener noreferrer"
+            >#231</a
+          >
+          Split the cockpit auth guard from the artifact route <span class="chip small">open</span
+          ><button class="btn ghost small chip-button" title="Open the plan for this issue">
+            <span class="chip small warn" title="0/3 parts merged">0/3 parts merged</span></button
+          ><button
+            type="button"
+            title='Remove "lubbdubb-watch" so the harness leaves this issue alone'
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            ignore</button
+          ><button
+            type="button"
+            title="Mark this issue finished, so the harness schedules nothing more for it"
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            finished</button
+          ><button
+            type="button"
+            title="Say there is work left here, so the harness picks it up again once no PR is open"
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            more work
+          </button>
+        </div>
+        <div class="world-row"><span>Stories</span><b>1</b></div>
+        <div class="world-item">
+          Per-agent cost accounting in the cockpit <span class="chip small">ready</span
+          ><button
+            type="button"
+            title='Remove "lubbdubb-watch" so the harness leaves this story alone'
+            class="btn ghost world-toggle"
+            aria-busy="false"
+          >
+            ignore
+          </button>
+        </div>
+      </div>
+    </section>
+    <section class="col">
+      <h2>Up next<span class="count">5</span></h2>
+      <div class="upnext">
+        <div class="upnext-asof" title="Recomputed from the world every cycle — not a committed queue">
+          as of the pulse 0s ago
+        </div>
+        <div>
+          <div class="upnext-item dispatching" title="Open issue #208 has no linked PR and no agent is on it.">
+            <span class="chip small ok">▶ now</span
+            ><span
+              class="chip small"
+              title="Rule 4: Open issue without a PR — An open, pickup-eligible issue with no linked PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority."
+              >4</span
+            ><span class="upnext-title"
+              >Resolve issue
+              <a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/issues/208"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#208</a
+              ></span
+            ><span class="upnext-reorder"
+              ><button class="reorder-btn" disabled="" title="Move up (higher priority)">▲</button
+              ><button class="reorder-btn" title="Move down (lower priority)">▼</button></span
+            >
+          </div>
+        </div>
+        <div>
+          <div
+            class="upnext-item capped"
+            title='Part "writes" of issue #212 is ready and stacks on issue/212/reads. Held: issue #212 is already at its 2-part concurrency cap.'
+          >
+            <span class="chip small">capped</span
+            ><span
+              class="chip small"
+              title="Rule 4a: Plan part ready — One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/&lt;n&gt;/&lt;slug&gt;` — based on that dependency&#x27;s branch while it is still open, on the default branch once it merged. A part held by the plan&#x27;s concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened."
+              >4a</span
+            ><span class="upnext-title"
+              >Issue
+              <a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/issues/212"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#212</a
+              >
+              part: Route writes through the interface</span
+            ><span class="upnext-reorder"
+              ><button class="reorder-btn" title="Move up (higher priority)">▲</button
+              ><button class="reorder-btn" title="Move down (lower priority)">▼</button></span
+            >
+          </div>
+        </div>
+        <div>
+          <div class="upnext-cut" title="Everything below waits for a free agent slot">
+            <span>waiting for a slot</span>
+          </div>
+          <div
+            class="upnext-item waiting"
+            title='Idle capacity; "Per-agent cost accounting in the cockpit" is the highest-priority ready story.'
+          >
+            <span class="chip small">waiting</span
+            ><span
+              class="chip small"
+              title="Rule 7: Idle capacity pickup — With headroom left and nothing urgent, the highest-priority ready story (already groomed) is picked up by a code agent — idle capacity should always pull work."
+              >7</span
+            ><span class="upnext-title">Implement &quot;Per-agent cost accounting in the cockpit&quot;</span
+            ><span class="upnext-reorder"
+              ><button class="reorder-btn" title="Move up (higher priority)">▲</button
+              ><button class="reorder-btn" title="Move down (lower priority)">▼</button></span
+            >
+          </div>
+        </div>
+        <div>
+          <div
+            class="upnext-item unapproved"
+            title='Part "signer" of issue #231 is ready and has no agent. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.'
+          >
+            <span class="chip small">unapproved</span
+            ><span
+              class="chip small"
+              title="Rule 4a: Plan part ready — One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/&lt;n&gt;/&lt;slug&gt;` — based on that dependency&#x27;s branch while it is still open, on the default branch once it merged. A part held by the plan&#x27;s concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened."
+              >4a</span
+            ><span class="upnext-title"
+              >Issue
+              <a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/issues/231"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#231</a
+              >
+              part: Add the capability signer</span
+            ><span class="upnext-reorder"
+              ><button class="reorder-btn" title="Move up (higher priority)">▲</button
+              ><button class="reorder-btn" title="Move down (lower priority)">▼</button></span
+            >
+          </div>
+        </div>
+        <div>
+          <div
+            class="upnext-item unapproved"
+            title='Part "route" of issue #231 is ready and stacks on issue/231/signer. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.'
+          >
+            <span class="chip small">unapproved</span
+            ><span
+              class="chip small"
+              title="Rule 4a: Plan part ready — One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/&lt;n&gt;/&lt;slug&gt;` — based on that dependency&#x27;s branch while it is still open, on the default branch once it merged. A part held by the plan&#x27;s concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened."
+              >4a</span
+            ><span class="upnext-title"
+              >Issue
+              <a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/issues/231"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#231</a
+              >
+              part: Move the artifact route outside /api and require the capability</span
+            ><span class="upnext-reorder"
+              ><button class="reorder-btn" title="Move up (higher priority)">▲</button
+              ><button class="reorder-btn" disabled="" title="Move down (lower priority)">▼</button></span
+            >
+          </div>
+        </div>
+      </div>
+      <h2 class="feed-heading">Decision log</h2>
+      <div class="log-filters">
+        <button class="filter-chip all active">all <span class="filter-count">4</span></button
+        ><button class="filter-chip executed">executed <span class="filter-count">1</span></button>
+      </div>
+      <div class="auditlog">
+        <div class="audit clickable executed" role="button" tabindex="0" title="Show dispatch rule">
+          <div class="audit-top">
+            <span class="badge executed">executed</span><span class="audit-type">reply_on_pr</span
+            ><span class="muted audit-time">1m ago</span><span class="audit-chevron">▸</span>
+          </div>
+          <div class="audit-reason">
+            “reviewer asked for a config change on
+            <span
+              ><a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/pull/142"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#142</a
+              ></span
+            >”
+          </div>
+          <div class="audit-detail">Drafted a reply and escalated for approval (confidence 0.62 below threshold)</div>
+        </div>
+        <div class="audit clickable ok" role="button" tabindex="0" title="Show dispatch rule">
+          <div class="audit-top">
+            <span class="badge ok">ok</span><span class="audit-type">dispatch_fix_ci</span
+            ><span class="muted audit-time">8m ago</span><span class="audit-chevron">▸</span>
+          </div>
+          <div class="audit-reason">
+            “PR
+            <span
+              ><a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/pull/142"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#142</a
+              ></span
+            >
+            CI is failing”
+          </div>
+          <div class="audit-detail">Dispatched agent onto feature/rate-limit</div>
+        </div>
+        <div class="audit clickable ok" role="button" tabindex="0" title="Show dispatch rule">
+          <div class="audit-top">
+            <span class="badge ok">ok</span><span class="audit-type">escalate</span
+            ><span class="muted audit-time">2m ago</span><span class="audit-chevron">▸</span>
+          </div>
+          <div class="audit-reason">“agent parked on a human”</div>
+          <div class="audit-detail">
+            Rebase conflict on PR
+            <span
+              ><a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/pull/139"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#139</a
+              ></span
+            >
+            needs a call
+          </div>
+        </div>
+        <div class="audit clickable held" role="button" tabindex="0" title="Show dispatch rule">
+          <div class="audit-top">
+            <span class="badge held">held</span><span class="audit-type">merge_pr</span
+            ><span class="muted audit-time">12m ago</span><span class="audit-chevron">▸</span>
+          </div>
+          <div class="audit-reason">
+            “PR
+            <span
+              ><a
+                class="ext-ref"
+                href="https://github.com/example/lubbdubb/pull/141"
+                target="_blank"
+                rel="noopener noreferrer"
+                >#141</a
+              ></span
+            >
+            is merge-ready”
+          </div>
+          <div class="audit-detail">auto-merge disabled — leaving for a human</div>
+        </div>
+      </div>
+      <h2 class="feed-heading">Activity</h2>
+      <div class="log-filters">
+        <button class="filter-chip all active">all <span class="filter-count">5</span></button
+        ><button class="filter-chip prs">prs <span class="filter-count">4</span></button
+        ><button class="filter-chip issues">issues <span class="filter-count">1</span></button>
+      </div>
+      <div class="auditlog">
+        <div class="audit activity prs">
+          <div class="audit-top"><span class="badge prs">CI</span><span class="muted audit-time">8m ago</span></div>
+          <div class="audit-reason">CI failing on PR #142</div>
+        </div>
+        <div class="audit activity prs">
+          <div class="audit-top">
+            <span class="badge prs">comment</span><span class="muted audit-time">7m ago</span>
+          </div>
+          <div class="audit-reason">reviewer commented on PR #142</div>
+        </div>
+        <div class="audit activity prs">
+          <div class="audit-top">
+            <span class="badge prs">approved</span><span class="muted audit-time">9m ago</span>
+          </div>
+          <div class="audit-reason">PR #141 approved</div>
+        </div>
+        <div class="audit activity issues">
+          <div class="audit-top">
+            <span class="badge issues">issue opened</span><span class="muted audit-time">15m ago</span>
+          </div>
+          <div class="audit-reason">Issue #208 opened</div>
+        </div>
+        <div class="audit activity prs">
+          <div class="audit-top">
+            <span class="badge prs">merged</span><span class="muted audit-time">30m ago</span>
+          </div>
+          <div class="audit-reason">PR #138 merged</div>
+        </div>
+      </div>
+      <h2 class="feed-heading">Errors <span class="count urgent">2</span></h2>
+      <div class="auditlog">
+        <div class="audit error-entry">
+          <div class="audit-top">
+            <span class="badge failed">agent</span><span class="muted audit-time">11m ago</span>
+          </div>
+          <div class="audit-reason">Agent agent-a0 failed (task task-a0), exit code 1</div>
+          <details class="error-detail">
+            <summary>detail</summary>
+            <pre>
+npm test
 ✗ rate-limit window resets on rollover
-Process exited with code 1</pre></details></div><div class="audit error-entry"><div class="audit-top"><span class="badge failed">provider</span><span class="muted audit-time">25m ago</span></div><div class="audit-reason">sourceControl:github snapshot failed: request to api.github.com timed out</div></div></div></section></main></div>
+Process exited with code 1</pre
+            >
+          </details>
+        </div>
+        <div class="audit error-entry">
+          <div class="audit-top">
+            <span class="badge failed">provider</span><span class="muted audit-time">25m ago</span>
+          </div>
+          <div class="audit-reason">sourceControl:github snapshot failed: request to api.github.com timed out</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>

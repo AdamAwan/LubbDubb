@@ -111,7 +111,14 @@ export class PlanReconciler {
       // A retired part is out of the plan: an amendment dropped it before anything
       // was started for it, so there is no reality to fold on and nothing that
       // should quietly bring it back.
-      if (part.status === 'retired') continue;
+      //
+      // A concluded one is out for the opposite reason — it *finished*. And this is
+      // where the fold genuinely differs by kind: for a report or a determination
+      // there is no outside world to be the source of truth, because the record was
+      // durable in the store the moment the agent wrote it. The only thing this loop
+      // could do to such a part is undo it, which is exactly what a stray push or a
+      // PR opened on its branch would otherwise achieve.
+      if (part.status === 'retired' || part.status === 'concluded') continue;
       const patch = this.foldPr(part, issueNumber, prs, closedPrs) ?? this.foldStalled(part, tasks);
       if (patch) next.set(part.slug, patch);
     }

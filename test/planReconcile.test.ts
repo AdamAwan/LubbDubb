@@ -70,7 +70,16 @@ function setup(): Harness {
     reason: 'Schema first.',
   });
   store.upsertPlanParts(plan.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'schema',
+      seq: 1,
+      title: 'Schema',
+      scope: 'src/store/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
     {
       slug: 'api',
       seq: 2,
@@ -79,6 +88,7 @@ function setup(): Harness {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
   ]);
   const reconciler = new PlanReconciler({
@@ -240,7 +250,16 @@ test('reconciliation is inert with the funnel off', async () => {
   const { sink, comments } = recordingSink();
   const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: null });
   store.upsertPlanParts(plan.id, [
-    { slug: 'a', seq: 1, title: 'A', scope: 'src/', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'a',
+      seq: 1,
+      title: 'A',
+      scope: 'src/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
   ]);
   const reconciler = new PlanReconciler({
     store,
@@ -264,7 +283,16 @@ test('the rendered comment reports progress and the PR numbers', () => {
     reason: 'Schema first.',
   });
   const parts = store.upsertPlanParts(plan.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'schema',
+      seq: 1,
+      title: 'Schema',
+      scope: 'src/store/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
     {
       slug: 'api',
       seq: 2,
@@ -273,11 +301,12 @@ test('the rendered comment reports progress and the PR numbers', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
   ]);
   store.updatePlanPart(parts[0]!.id, { status: 'merged', prNumber: 40 });
   const body = renderPlanComment(plan, store.listPlanParts(plan.id));
-  assert.match(body, /1\/2 parts merged/);
+  assert.match(body, /1\/2 parts done/);
   assert.match(body, /Schema first\./);
   assert.match(body, /\[x\] \*\*Schema\*\* \(`schema`\) — merged · PR #40/);
   assert.match(body, /\[ \] \*\*API\*\*/);
