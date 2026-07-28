@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -241,6 +242,13 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
+    // A throwaway repo, not the ambient `cwd` default: rule 3c dispatches a *code*
+    // agent, so `WorktreeManager.ensure` really cuts `plan/issue/231` from
+    // `defaultBranch`. Against the checkout the suite runs in that both pollutes it
+    // with a branch and a worktree, and fails outright wherever `main` is not
+    // resolvable — a CI checkout is detached and shallow, so `resolveCommit` throws,
+    // the dispatch is audited as rejected, and the planner task never gets an agent.
+    repoRoot: gitRepo(),
     planning: { enabled: true, requireApproval: true } as never,
     heartbeatIntervalMs: 999_999,
   });
@@ -251,6 +259,16 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
   });
   const { app } = await buildApp(system);
   return { system, app };
+}
+
+function gitRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
+  git(['init', '-q', '-b', 'main']);
+  git(['config', 'user.email', 'test@example.com']);
+  git(['config', 'user.name', 'Test']);
+  git(['commit', '-q', '--allow-empty', '-m', 'root']);
+  return dir;
 }
 
 /** An issue already decomposed into two parts, parked `awaiting_approval`. */
