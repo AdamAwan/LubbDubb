@@ -37,7 +37,7 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides`, `work_nodes`,
+`agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_assays`, `priority_overrides`, `work_nodes`,
 `work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
 migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
 has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the six fields above, which
@@ -62,6 +62,7 @@ introduced.
 | `plans`              | One delivery plan per issue.                                                                   | `origin_ref` is `UNIQUE`      |
 | `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                       | `UNIQUE (plan_id, slug)`      |
 | `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
+| `issue_assays`       | Whether an issue's goal text can be worked from at all, judged before anything is dispatched. Gates the funnel; expires when the text changes or the world moves. | `origin_ref` is `PRIMARY KEY`; `goal_ref` fingerprints the text judged |
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.       | `ref` is `PRIMARY KEY`        |
 | `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                  | `target_ref` is `PRIMARY KEY` |
 | `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.      | `target_ref` is `PRIMARY KEY` |

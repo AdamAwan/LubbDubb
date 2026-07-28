@@ -11,8 +11,11 @@ import type {
   AgentFlag,
   AgentFlagInput,
   AgentUsage,
+  AssayAuthor,
   ConclusionAuthor,
   Decision,
+  GoalAssayVerdict,
+  IssueAssay,
   ErrorLogEntry,
   ErrorLogInput,
   Escalation,
@@ -654,6 +657,95 @@ export class Store {
    */
   clearDelivery(originRef: string): boolean {
     return this.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(originRef).changes > 0;
+  }
+
+  /**
+   * Record whether an issue's goal text can be worked from — the assayer's
+   * verdict, or the operator's.
+   *
+   * `decided_at` is preserved across an overwrite for {@link recordDelivery}'s
+   * reason: it is the instant `assayHold` measures world signal against, and
+   * refreshing it on a re-assay would keep moving the goalposts a transition has
+   * to clear. `comment_ref` is preserved on absence, so the one living comment on
+   * the ticket is edited rather than duplicated when a verdict is restated.
+   *
+   * Unlike {@link recordDelivery} this clears **nothing**. A delivery and a
+   * conclusion are two answers to one question, so one must win; an assay answers
+   * a different question — whether the goal could be started from, not whether the
+   * work is finished — and an issue may honestly carry both.
+   */
+  recordAssay(input: {
+    originRef: string;
+    verdict: GoalAssayVerdict;
+    summary: string;
+    goalRef: string;
+    by: AssayAuthor;
+    agentId?: string | null;
+    taskId?: string | null;
+  }): IssueAssay {
+    const ts = this.now();
+    const prev = this.getAssay(input.originRef);
+    const row: IssueAssay = {
+      originRef: input.originRef,
+      verdict: input.verdict,
+      summary: input.summary,
+      goalRef: input.goalRef,
+      by: input.by,
+      agentId: input.agentId ?? null,
+      taskId: input.taskId ?? null,
+      // Kept only while the verdict is about the same text: a comment written for
+      // a superseded goal is not this verdict's comment, and editing it in place
+      // would rewrite the answer to a question nobody asked any more.
+      commentRef: prev && prev.goalRef === input.goalRef ? prev.commentRef : null,
+      decidedAt: prev?.decidedAt ?? ts,
+      updatedAt: ts,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, agent_id, task_id, comment_ref, decided_at, updated_at)
+         VALUES (@originRef, @verdict, @summary, @goalRef, @by, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
+         ON CONFLICT(origin_ref) DO UPDATE SET
+           verdict=excluded.verdict, summary=excluded.summary, goal_ref=excluded.goal_ref,
+           by=excluded.by, agent_id=excluded.agent_id, task_id=excluded.task_id,
+           comment_ref=excluded.comment_ref, updated_at=excluded.updated_at`,
+      )
+      .run(row);
+    return row;
+  }
+
+  getAssay(originRef: string): IssueAssay | null {
+    const row = this.db.prepare(`SELECT * FROM issue_assays WHERE origin_ref=?`).get(originRef) as
+      | IssueAssayRow
+      | undefined;
+    return row ? rowToAssay(row) : null;
+  }
+
+  /**
+   * Every standing assay. **Unbounded on purpose**, as `listDeliveries` is: an
+   * `unclear` verdict that aged out of a window would let the harness dispatch
+   * against a goal it has already found unworkable, and a `workable` one aging out
+   * would re-assay every issue on a clock. One row per assayed issue, and the
+   * event read it feeds is bounded by time and item (`assaySignalQuery`).
+   */
+  listAssays(): IssueAssay[] {
+    const rows = this.db.prepare(`SELECT * FROM issue_assays`).all() as IssueAssayRow[];
+    return rows.map(rowToAssay);
+  }
+
+  /** Remember the comment this verdict maintains on the ticket, so the next write edits it. */
+  setAssayComment(originRef: string, commentRef: string): void {
+    this.db
+      .prepare(`UPDATE issue_assays SET comment_ref=?, updated_at=? WHERE origin_ref=?`)
+      .run(commentRef, this.now(), originRef);
+  }
+
+  /**
+   * Drop an issue's assay — the operator's "work it anyway", and the escape hatch
+   * a blocking gate has to have. A delete rather than a stored third verdict, for
+   * {@link clearIssueConclusion}'s reason.
+   */
+  clearAssay(originRef: string): boolean {
+    return this.db.prepare(`DELETE FROM issue_assays WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
   /**
@@ -1653,6 +1745,18 @@ interface IssueDeliveryRow {
   decided_at: string;
   updated_at: string;
 }
+interface IssueAssayRow {
+  origin_ref: string;
+  verdict: string;
+  summary: string;
+  goal_ref: string;
+  by: string;
+  agent_id: string | null;
+  task_id: string | null;
+  comment_ref: string | null;
+  decided_at: string;
+  updated_at: string;
+}
 interface PlanPartRow {
   id: string;
   plan_id: string;
@@ -1885,6 +1989,20 @@ function rowToDelivery(r: IssueDeliveryRow): IssueDelivery {
     by: r.by as DeliveryAuthor,
     agentId: r.agent_id,
     taskId: r.task_id,
+    decidedAt: r.decided_at,
+    updatedAt: r.updated_at,
+  };
+}
+function rowToAssay(r: IssueAssayRow): IssueAssay {
+  return {
+    originRef: r.origin_ref,
+    verdict: r.verdict as GoalAssayVerdict,
+    summary: r.summary,
+    goalRef: r.goal_ref,
+    by: r.by as AssayAuthor,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    commentRef: r.comment_ref,
     decidedAt: r.decided_at,
     updatedAt: r.updated_at,
   };

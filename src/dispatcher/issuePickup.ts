@@ -1,5 +1,16 @@
-import type { Decision, Issue, IssueDelivery, Plan, PlanPart, PullRequest, Task, WorldEvent } from '../types.js';
+import type {
+  Decision,
+  Issue,
+  IssueAssay,
+  IssueDelivery,
+  Plan,
+  PlanPart,
+  PullRequest,
+  Task,
+  WorldEvent,
+} from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
+import { assayHold, assayOrigin, hasWorkStarted, isAssayed, type AssayPolicy } from '../intake/assay.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import {
   DEFAULT_PLANNING,
@@ -186,6 +197,7 @@ type IssuePickupStatusKind =
   | 'unwatched' // not opted in (no watch tag) or parked by a state gate
   | 'planning' // in the plan funnel — a verdict is owed, or it split into parts
   | 'delivered' // assessed as delivered — parked until the world or the operator says otherwise
+  | 'assay' // its goal is being checked, or was found unworkable — nothing is dispatched for it
   | 'cooldown' // attempted recently; waiting out the re-dispatch gap
   | 'escalated' // attempt cap spent; parked on a human
   | 'blocked' // eligible, but no capacity (paused or cap reached)
@@ -228,6 +240,19 @@ export interface IssuePickupContext {
    */
   deliveries?: IssueDelivery[];
   deliverySignals?: WorldEvent[];
+  /**
+   * Standing goal-assay verdicts and the transitions that may have ended one —
+   * the same two lists rule 3f and the `eligibleIssues` filter gate on, so the chip
+   * predicts them. Absent = nothing assayed, which holds nothing.
+   */
+  assays?: IssueAssay[];
+  assaySignals?: WorldEvent[];
+  /**
+   * Whether the goal assay is on. Needed as well as the verdicts because the chip
+   * reports the *pending* case too — an issue rule 3f will assay next cycle is not
+   * eligible, and saying so is the difference between a queue and a silence.
+   */
+  assay?: AssayPolicy;
   /** Remaining dispatch slots this cycle (0 while paused). */
   headroom: number;
   paused: boolean;
@@ -322,6 +347,14 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     return { eligible: false, status: ignored ? 'ignored' : 'unwatched', reasons: intrinsic.reasons };
   }
 
+  // The content gate (issue #158), asked *after* the intrinsic policy gates and
+  // *before* the plan funnel — which is exactly where rule 3f sits. After, because
+  // an unwatched or state-parked issue is never assayed, so reporting an assay for
+  // one would promise something that cannot happen; before, because an assay that
+  // refused the goal is the reason no planner and no pickup agent is coming.
+  const assay = assayFor(issue, ctx);
+  if (assay) return { eligible: false, status: 'assay', reasons: [assay] };
+
   // The rest of the funnel sits between eligibility and pickup: narrowing rule 4
   // without reporting it here would leave the chip saying "eligible" for an issue
   // that is actually waiting on a planner. (The `parts` arm is answered above,
@@ -362,6 +395,40 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   if (ctx.headroom <= 0) return { eligible: false, status: 'blocked', reasons: ['no agent capacity'] };
 
   return { eligible: true, status: 'eligible', reasons: [] };
+}
+
+/**
+ * Why the goal assay is the reason nothing is happening to this issue, or null
+ * when it isn't.
+ *
+ * Two arms, in the order rule 3f resolves them. A **standing** `unclear` verdict
+ * first — asked through the same pure `assayHold` the dispatcher asks, so the chip
+ * cannot say "parked" for an issue the next cycle dispatches, nor the reverse.
+ * Then the **pending** case: an issue rule 3f would assay, or is assaying now.
+ * Reporting that matters as much as the hold — an issue silently waiting a cycle
+ * for a verdict looks exactly like an idle fleet, which is the invisibility
+ * `capped` and `unapproved` were added to `QueueItem` to fix.
+ *
+ * A `workable` verdict returns null from both arms: it releases the issue to
+ * whatever the funnel says next, which is the whole of its effect.
+ */
+function assayFor(issue: Issue, ctx: IssuePickupContext): string | null {
+  const origin = `issue:${issue.number}`;
+  const stored = ctx.assays?.find((a) => a.originRef === origin) ?? null;
+  const held = assayHold(stored, issue, { signals: ctx.assaySignals });
+  if (held) return held;
+  if (!ctx.assay?.enabled) return null;
+  // Same preconditions rule 3f applies, in its order.
+  if (isAssayed(stored, issue)) return null;
+  if (hasWorkStarted(issue.number, ctx.tasks)) return null;
+  if (ctx.plans?.some((p) => p.originRef === origin)) return null;
+  const running = ctx.tasks.find((t) => t.originRef === assayOrigin(issue.number) && isActiveTask(t));
+  if (running) return running.status === 'waiting' ? 'goal assay waiting on you' : 'a goal assay is running';
+  const verdict = dispatchVerdict(assayOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown);
+  // A spent cap is the fail-open: the issue carries on into the funnel, so this
+  // says nothing about it and lets the arms below explain what happens instead.
+  if (verdict.kind === 'escalate' || verdict.kind === 'hold') return null;
+  return verdict.kind === 'cooldown' ? 'goal assay on cooldown' : 'awaiting a goal assay';
 }
 
 function isActiveTask(t: Task): boolean {

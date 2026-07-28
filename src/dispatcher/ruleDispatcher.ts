@@ -2,7 +2,7 @@ import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './d
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import { inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../prHealth.js';
-import type { Agent, Decision, Issue, Plan, PlanPart, PullRequest, Task } from '../types.js';
+import type { Agent, Decision, Issue, IssueAssay, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import {
   isIssuePickupEligible,
   issueBranch,
@@ -20,6 +20,15 @@ import { rankByPriorityOverride } from './priorityOverride.js';
 import { resolveIssueConclusion } from '../issueConclusion.js';
 import { jobBranch } from '../jobs.js';
 import { deliveryHold } from '../delivery/delivery.js';
+import {
+  DEFAULT_ASSAY,
+  assayBranch,
+  assayHold,
+  assayOrigin,
+  hasWorkStarted,
+  isAssayed,
+  type AssayPolicy,
+} from '../intake/assay.js';
 import {
   DEFAULT_ASSESSMENT,
   assessBranch,
@@ -67,6 +76,7 @@ import {
  *   3c. A watched open issue has no plan -> planning agent (funnel, off by default)
  *   3d. A decomposition awaits approval  -> put it to a human (opt-in, off by default)
  *   3e. An issue has had work and nothing is in flight -> assessor (off by default)
+ *   3f. A fresh issue's goal has never been checked -> goal assay (off by default)
  *   4. An open issue has no open PR   -> code agent to resolve it into a PR
  *
  * At most one code agent works a given PR branch: when a fresh signal lands on a
@@ -91,6 +101,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly defaultBranch: string;
   private readonly planning: PlanningPolicy;
   private readonly assessment: AssessmentPolicy;
+  private readonly assay: AssayPolicy;
   private readonly ci: CiPolicy;
 
   /**
@@ -108,7 +119,9 @@ export class RuleDispatcher implements Dispatcher {
    * omitted/disabled means no assessor fires and no issue is ever parked as
    * delivered, so pickup behaves exactly as it does today. `ci` decides rule 1
    * per failing check; omitted/empty means every failure is acted on generically,
-   * which is what the rule did before per-check policy existed.
+   * which is what the rule did before per-check policy existed. `assay` turns the
+   * goal assay (rule 3f) on; omitted/disabled means no assayer fires, no verdict is
+   * written, and nothing in front of an issue changes.
    */
   constructor(
     pickup: Partial<IssuePickupPolicy> = {},
@@ -118,7 +131,9 @@ export class RuleDispatcher implements Dispatcher {
     planning: Partial<PlanningPolicy> = {},
     assessment: Partial<AssessmentPolicy> = {},
     ci: Partial<CiPolicy> = {},
+    assay: Partial<AssayPolicy> = {},
   ) {
+    this.assay = { enabled: assay.enabled ?? DEFAULT_ASSAY.enabled };
     this.defaultBranch = defaultBranch;
     this.ci = { checks: ci.checks ?? [] };
     this.planning = {
@@ -573,16 +588,110 @@ export class RuleDispatcher implements Dispatcher {
         signals: ctx.deliverySignals,
       }) !== null;
 
+    // Standing goal assays, on the same origin again (issue #158). Where a delivery
+    // verdict parks an issue that is *finished*, this parks one that could never be
+    // started: only an explicit `unclear` holds, and a missing verdict holds nothing,
+    // which is what makes an assayer that crashed or spent its cap fail the issue
+    // open to ordinary pickup. Asked through the same pure `assayHold` the cockpit
+    // chip asks, so the two can never disagree about an issue.
+    const assays = new Map((ctx.assays ?? []).map((a) => [a.originRef, a]));
+    const assayFor = (issue: Issue): IssueAssay | null => assays.get(issueOrigin(issue.number)) ?? null;
+    const assayParked = (issue: Issue): boolean =>
+      assayHold(assayFor(issue), issue, { signals: ctx.assaySignals }) !== null;
+
     const eligibleIssues = ctx.world.issues
       .filter(
         (i) =>
           i.state === 'open' &&
           openPrForIssue(i, openPrs) === null &&
           !deliveryParked(i) &&
+          // The content gate, in front of both the planner and pickup: an issue
+          // whose goal the assay could not work from is not eligible for either,
+          // which is what stops a decomposition of a question nobody could answer.
+          !assayParked(i) &&
           isIssuePickupEligible(i, this.pickup).eligible,
       )
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
+
+    // 3f: Check the goal before anything is dispatched against it (issue #158).
+    //
+    // The gap this closes: every gate an issue passes on its way to an agent asks
+    // about policy — the watch tag, the workflow state, the cooldown, the attempt
+    // cap, headroom, `resolvePlanRoute` — and none of them asks whether the ticket
+    // says anything an agent could act on. So a vague or already-obsolete issue goes
+    // straight into the funnel, and the first sign anything was wrong is an agent
+    // spending its attempt cap and escalating in a way that reads as its own failure.
+    //
+    // Ranked ahead of the planner and suppressing it for the same issue, for rule
+    // 3c's own reason pointed one stage earlier: a planner *unblocks* work, and
+    // decomposing a goal nobody could answer is the specific waste this exists to
+    // stop — the operator would be asked to approve a decomposition of a question.
+    //
+    // Fires only for an issue nothing has been started for. `hasPriorWork` is the
+    // same discriminator rule 3e uses, taking the other arm: nothing started means
+    // the goal is still the only thing there is to judge, something started means
+    // the question has been answered by someone acting on it (and, once it finishes,
+    // it is the assessor's). An issue that already has a plan is likewise past this
+    // gate — the funnel has read it — so a plan row skips it whatever its status.
+    const assaying = new Set<number>();
+    if (this.assay.enabled) {
+      for (const { issue } of eligibleIssues) {
+        // Already judged, and judged against *this* text — an edited ticket
+        // fingerprints differently and is assayed again, which is the same
+        // comparison that ends a hold (see `assayHold`).
+        if (isAssayed(assayFor(issue), issue)) continue;
+        if (hasWorkStarted(issue.number, ctx.tasks)) continue;
+        if (plansByOrigin.has(issueOrigin(issue.number))) continue;
+        const root = issueOrigin(issue.number);
+        if ([...activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
+
+        const origin = assayOrigin(issue.number);
+        const verdict = dispatchVerdict(origin, now, ctx.recentDecisions, this.cooldown);
+        // Fails open, exactly as the planner and the assessor do: a spent cap
+        // returns the issue to the funnel it would have entered anyway, with no
+        // escalation. Without it, every assayer crash is a permanently parked
+        // issue — which would make this gate the most effective way to stop the
+        // harness working, the failure issue #158 names in its first decision.
+        if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
+
+        assaying.add(issue.number);
+        const branch = assayBranch(issue.number);
+        const title = `Assay issue #${issue.number}`;
+        const reason = `Nothing has been started for issue #${issue.number}; check the goal can be worked from before dispatching against it.`;
+        candidates.push({
+          origin,
+          rule: 'issue-assay',
+          title,
+          kind: 'code',
+          branch,
+          reason,
+          held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
+          action: {
+            type: 'dispatch_code_agent',
+            branch,
+            // Cut from the default branch: the question is whether this goal makes
+            // sense against the repository as it stands.
+            base: this.defaultBranch,
+            title,
+            prompt: this.templates.render('issue-assay', {
+              number: issue.number,
+              title: issue.title,
+              body: issue.body,
+              branch,
+            }),
+            originRef: origin,
+            // The exact text the verdict will be fingerprinted against — see
+            // `AgentManager.recordAssay`, which reads these two fields back off
+            // the task rather than re-reading the issue.
+            originTitle: issue.title,
+            originSummary: issue.body,
+            rule: 'issue-assay',
+            reason,
+          } satisfies RawAction,
+        });
+      }
+    }
 
     // Which arm of the plan funnel each eligible issue is on. Resolved once, from
     // the persisted plan plus the plan origin's own cooldown verdict, and shared by
@@ -614,6 +723,10 @@ export class RuleDispatcher implements Dispatcher {
     for (const { issue } of eligibleIssues) {
       const route = routes.get(issue.number);
       if (route?.route !== 'planning') continue;
+      // Rule 3f is deciding whether this goal can be worked from at all. Planning it
+      // in the same cycle is the exact waste the assay exists to prevent — and would
+      // put the decomposition of an unanswerable question in front of an operator.
+      if (assaying.has(issue.number)) continue;
       const origin = planOrigin(issue.number);
       if (activeOrigins.has(origin)) continue; // a planner is already on it
       const branch = planBranch(issue.number);
@@ -895,6 +1008,10 @@ export class RuleDispatcher implements Dispatcher {
       // still judging. The set is built once, above, so the two rules cannot hold
       // different opinions about which issues are in it.
       if (assessing.has(issue.number)) continue;
+      // Rule 3f is asking whether this issue's goal can be worked from. Picking it
+      // up in the same cycle would answer the question by ignoring it. The set is
+      // built once, above, so the two rules cannot hold different opinions.
+      if (assaying.has(issue.number)) continue;
       const origin = `issue:${issue.number}`;
       // An agent already on this issue owns it — don't throttle/escalate over a
       // live attempt; the active-task de-dup handles it.

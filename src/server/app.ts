@@ -24,6 +24,7 @@ import { planOrigin } from '../plans/planning.js';
 import { planIssueNumber } from '../plans/parts.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { deliverySignalQuery } from '../delivery/delivery.js';
+import { assaySignalQuery, goalFingerprint } from '../intake/assay.js';
 import { watchLabelsFor } from '../watchLabels.js';
 import {
   authRefusalHint,
@@ -390,6 +391,56 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     hub.broadcast({ type: 'world:changed' });
     if (verdict === 'more_work') await harness.runCycle('manual');
     return { ok: true, conclusion };
+  });
+
+  // Override a goal assay — the escape hatch a blocking gate has to have.
+  //
+  // `unclear` is the only verdict that stops anything, and it stops it for an issue
+  // the operator has explicitly tagged for the harness. So the operator must be able
+  // to say "work it anyway" without editing the ticket to say something they do not
+  // mean, and must be able to say "no, this really is unworkable" without waiting for
+  // an agent to agree. Both arms are here.
+  //
+  // Clearing is a delete rather than a stored third verdict, for `clearDelivery`'s
+  // reason: the absence of an assay keeps exactly one representation, and it is
+  // also the state a crashed assayer leaves behind — the fail-open. The goal
+  // fingerprint of an operator's verdict is taken from the issue as the harness
+  // currently sees it, so it expires on the next edit exactly as an agent's does.
+  app.post('/api/issues/:number/assay', async (req, reply) => {
+    const { number } = req.params as { number: string };
+    const issueNumber = Number(number);
+    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
+    const { verdict, summary } = (req.body ?? {}) as { verdict?: unknown; summary?: unknown };
+    if (verdict !== null && verdict !== 'workable' && verdict !== 'unclear') {
+      return reply.code(400).send({ error: 'verdict must be "workable", "unclear" or null' });
+    }
+    const originRef = issueConclusionOrigin(issueNumber);
+    if (verdict === null) {
+      store.clearAssay(originRef);
+      hub.broadcast({ type: 'world:changed' });
+      // Clearing a hold is a request to reconsider the issue now, not next beat.
+      await harness.runCycle('manual');
+      return { ok: true, assay: null };
+    }
+    // The text the verdict is about, from the world the cockpit is showing. Absent
+    // (an issue the last snapshot did not carry) is refused rather than guessed: a
+    // verdict fingerprinted against an empty goal would expire the instant the
+    // issue was next fetched, which is a silent no-op dressed as an override.
+    const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
+    if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
+    const assay = store.recordAssay({
+      originRef,
+      verdict,
+      // As on the conclusion and delivery routes, an operator has the item in front
+      // of them, so the summary is optional and the default says who decided.
+      summary: typeof summary === 'string' && summary.trim() ? summary.trim() : 'Set by the operator from the cockpit.',
+      goalRef: goalFingerprint(issue.title, issue.body),
+      by: 'operator',
+    });
+    hub.broadcast({ type: 'world:changed' });
+    // A `workable` override releases the issue into the funnel — act on it now.
+    if (verdict === 'workable') await harness.runCycle('manual');
+    return { ok: true, assay };
   });
 
   // Park an issue as delivered by hand, or release one the assessor parked.
@@ -1189,6 +1240,8 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
   const deliveries = store.listDeliveries();
   const deliveryWindow = deliverySignalQuery(deliveries);
+  const assays = store.listAssays();
+  const assayWindow = assaySignalQuery(assays);
   // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
   // below predicts what actually happens next cycle. The decision window (200)
   // and the headroom arithmetic mirror `Harness.runCycle`.
@@ -1210,6 +1263,12 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     // event query is null (and no read happens) until an issue has been assessed.
     deliveries,
     deliverySignals: deliveryWindow ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
+    // The content gate in front of the funnel, read exactly as `Harness.runCycle`
+    // reads it — including the policy, so the chip reports an issue *awaiting* an
+    // assay rather than calling it eligible for a pickup that will not fire.
+    assays,
+    assaySignals: assayWindow ? store.listWorldEventsSince(assayWindow.since, assayWindow.refs) : [],
+    assay: config.assay,
     headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
     paused: control.paused,
   };

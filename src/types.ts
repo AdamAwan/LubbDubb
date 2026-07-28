@@ -673,6 +673,60 @@ export interface IssueDelivery {
   updatedAt: string;
 }
 
+/**
+ * What a goal assay may conclude about an issue's text (issue #158).
+ *
+ * `workable` is stored as much as `unclear` is, for the reason the planner
+ * persists a `single` verdict: without a row for the affirmative the assayer
+ * re-runs on the same issue every cycle. Only `unclear` holds anything.
+ *
+ * There is deliberately no third "not assayed" member — that is the absence of a
+ * row, which is what makes a crashed assayer fail open (see `src/intake/assay.ts`).
+ */
+export type GoalAssayVerdict = 'workable' | 'unclear';
+
+/** Who judged an issue's goal text: the assaying agent, or the operator directly. */
+export type AssayAuthor = 'assayer' | 'operator';
+
+/**
+ * One issue's standing goal assay — the answer to "is this ticket workable", cast
+ * *before* anything is dispatched against it.
+ *
+ * Sibling of {@link IssueDelivery} and split from it for the reason that one is
+ * split from {@link IssueConclusion}: the two verdicts are about opposite ends of
+ * the same issue. A delivery says the work is *finished*; an assay says the goal
+ * could not be *started* from. They can be true at different times about one
+ * issue, so they are two rows, and neither clears the other.
+ *
+ * The distinguishing field is {@link goalRef}: an assay judges a *text*, not a
+ * state of the world, so the verdict is bound to the exact text it judged. Change
+ * the title or the body and the verdict no longer describes the ticket in front of
+ * you, which is what makes "re-assay when it is edited" a lookup rather than an
+ * event the harness has to have witnessed.
+ */
+export interface IssueAssay {
+  /** The issue, as `issue:<n>` — the same origin every gate keys on. */
+  originRef: string;
+  verdict: GoalAssayVerdict;
+  /** What is missing, or why the goal is actionable. Required: a bare verdict is not reviewable. */
+  summary: string;
+  /**
+   * A fingerprint of the goal text this verdict was cast against (see
+   * `goalFingerprint`). The hold ends the instant the issue's current text
+   * fingerprints differently — no timer, and no world event to have missed.
+   */
+  goalRef: string;
+  by: AssayAuthor;
+  /** The assaying agent and its task, from the credential. Null for an operator verdict. */
+  agentId: string | null;
+  taskId: string | null;
+  /** The provider's id for the one comment this verdict maintains on the ticket, once written. */
+  commentRef: string | null;
+  /** When the verdict was first cast — the instant world signal is measured against. */
+  decidedAt: string;
+  updatedAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Plans (the multi-PR issue funnel)
 // ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ discover what a synchronous error would have said in one turn.
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                   |
 | `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                 |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                         |
+| `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                          |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                   |
 | `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                     |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
@@ -238,6 +239,25 @@ the credential.
 
 It routes through `AgentManager.recordAssessment` for the `assessment` event, so the cockpit
 repaints on the verdict rather than on the next pulse.
+
+### `assay_issue`
+
+Arguments `{status: 'workable'|'unclear', summary}`. Rule 3f's assayer casts its verdict here, with
+identity structural as everywhere else — no issue argument, the origin resolved from the credential.
+
+- **`assayerOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,
+  each by name and pointed at the tool that is theirs. An agent already at work has answered the
+  question by starting, and an `unclear` from it would park an issue it is mid-way through — so the
+  refusal tells it to **escalate** instead, which reaches a human who can actually answer.
+- **The verdict is stored for both outcomes.** `workable` gates nothing; it exists so the assay is
+  not asked again for the same text — the planner's reason for persisting a `single` verdict.
+- **`unclear` is a question, not a rejection**, and the tool description and response both say so:
+  nothing is closed, and the hold ends by itself when the ticket is edited or anything happens on it.
+- The verdict is fingerprinted against the title and body **the agent was dispatched with**, read off
+  its task, so an edit made mid-run is not silently swallowed.
+
+It routes through `AgentManager.recordAssay` for the `assay` event, so the cockpit repaints on the
+verdict rather than on the next pulse.
 
 ### `conclude_part`
 

@@ -170,6 +170,29 @@ CREATE TABLE IF NOT EXISTS issue_deliveries (
   updated_at TEXT NOT NULL
 );
 
+-- Whether an issue's goal text can be acted on at all — the goal assay's verdict,
+-- cast before anything is dispatched against it (issue #158). Written for BOTH
+-- outcomes, or the assayer re-runs on the same issue every cycle; only 'unclear'
+-- holds pickup.
+--
+-- goal_ref fingerprints the text that was judged. An assay is a verdict about a
+-- *text*, so it stops standing the moment the text differs — which is how a ticket
+-- edited after a failed assay is re-assayed without the harness having to have
+-- witnessed the edit. A missing row is 'not assayed', which holds nothing: that is
+-- what makes a crashed or capped assayer fail open to ordinary pickup.
+CREATE TABLE IF NOT EXISTS issue_assays (
+  origin_ref  TEXT PRIMARY KEY,     -- "issue:12"
+  verdict     TEXT NOT NULL,        -- workable | unclear
+  summary     TEXT NOT NULL,
+  goal_ref    TEXT NOT NULL,        -- fingerprint of the title+body judged
+  by          TEXT NOT NULL,        -- assayer | operator
+  agent_id    TEXT,                 -- null for an operator verdict
+  task_id     TEXT,
+  comment_ref TEXT,                 -- the one living comment on the ticket, edited in place
+  decided_at  TEXT NOT NULL,        -- what world signal is measured against
+  updated_at  TEXT NOT NULL
+);
+
 -- One delivery plan per issue — the planning agent's verdict. Written for *both*
 -- outcomes ('single' as much as a decomposition), so the planner never re-runs on
 -- the same issue. The graph lives here and nowhere else: it is scheduling intent,

@@ -3,6 +3,7 @@ import type {
   Decision,
   Escalation,
   IssueConclusion,
+  IssueAssay,
   IssueDelivery,
   Job,
   Plan,
@@ -83,6 +84,21 @@ export interface DispatchContext {
    * Absent = nothing observed, which holds every verdict.
    */
   deliverySignals?: WorldEvent[];
+  /**
+   * Standing goal-assay verdicts, keyed on the same `issue:<n>` origin — whether an
+   * issue's text can be worked from at all (issue #158). An `unclear` verdict gates
+   * the funnel in front of the issue: rules 3c and 4 skip it while the verdict
+   * stands. Absent/empty means nothing has been assayed, which holds nothing — the
+   * fail-open that makes the gate safe (see `src/intake/assay.ts`).
+   */
+  assays?: IssueAssay[];
+  /**
+   * World transitions on the issues carrying a standing `unclear` verdict, since
+   * the oldest of them. One of the two things that ends such a hold (the other is
+   * the ticket's own text changing, which needs no read). Narrowed by
+   * `assaySignalQuery`, so it is empty until an issue is actually refused.
+   */
+  assaySignals?: WorldEvent[];
   /** Optional operator hints, injected only as a corrective. */
   steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */

@@ -11,7 +11,9 @@ import { diffWorlds } from './world/worldDiff.js';
 import { isPrExcluded } from './prHealth.js';
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
+import { assaySignalQuery } from './intake/assay.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
+import type { AssayDesk } from './intake/assayDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, Task, WorldEvent, WorldSnapshot } from './types.js';
 
@@ -35,6 +37,11 @@ interface HarnessDeps {
    * Absent = no plan tracking (and it no-ops anyway with the funnel off).
    */
   plans?: PlanReconciler;
+  /**
+   * Asks the goal assay's question on the ticket itself. Absent = no comment (and
+   * it no-ops anyway with the assay off).
+   */
+  assays?: AssayDesk;
   /**
    * Writes the durable work graph each pulse. Absent = no graph (tests that do not
    * care). Stage 1 is a lens: nothing reads what it writes.
@@ -179,6 +186,18 @@ export class Harness extends EventEmitter {
       const deliverySignals = deliveryWindow
         ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
         : [];
+      // The content gate in front of the funnel: which issues have had their goal
+      // judged, and what was said. Unbounded in age for the reason deliveries are,
+      // and the read that can end an `unclear` verdict is derived from the verdicts
+      // themselves — so a deployment that has never refused a goal does no read.
+      const assays = store.listAssays();
+      const assayWindow = assaySignalQuery(assays);
+      const assaySignals = assayWindow ? store.listWorldEventsSince(assayWindow.since, assayWindow.refs) : [];
+      // Put the assay's question where the person who wrote the ticket will see it.
+      // After the read above so it judges the same verdicts the dispatcher will, and
+      // before `decide` only because everything else on the pulse is — it changes no
+      // decision, and a failure is recorded rather than thrown.
+      await this.deps.assays?.announce(world, assaySignals);
       const recentDecisions = store.listDecisions(200);
       // Acts already put to a human: a rule that proposed one holds off while the
       // verdict stands, so one question is asked once (issue #109).
@@ -225,6 +244,8 @@ export class Harness extends EventEmitter {
         conclusions,
         deliveries,
         deliverySignals,
+        assays,
+        assaySignals,
         recentDecisions,
         proposals,
         rejectionSignals,

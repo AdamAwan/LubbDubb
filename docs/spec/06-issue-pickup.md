@@ -122,6 +122,7 @@ chip.
 | `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                   |
 | `escalated` | Attempt cap spent; parked on a human.                                  |
 | `delivered` | Assessed as delivered — parked until the world or the operator says otherwise. |
+| `assay`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it. |
 | `blocked`   | Eligible, but dispatch is paused or the cap is reached.                |
 | `eligible`  | Would be picked up next cycle.                                         |
 
@@ -134,12 +135,21 @@ never moves again on its own — `"plan complete — all N parts merged; close t
 `IssuePickupContext` carries the same inputs rule 4 consults: the policy, `DEFAULT_COOLDOWN`, the
 world's `takenAt` as "now", tasks, the last 200 decisions, the **unfiltered** open PR list, the plan
 graph, the planning policy, the standing delivery verdicts with the world transitions that may have
-ended one, and the current headroom / paused flag.
+ended one, the standing goal assays with the same, the assay policy, and the current headroom /
+paused flag.
 
 The `delivered` arm is asked **after** `has_pr` and `active`, and that order is deliberate: a
 delivered issue that somehow has an open PR is honestly `has_pr` — the PR rules own it — and one
 with a live agent is honestly `active`. Saying "delivered" in either case would send the operator
 looking in the wrong place.
+
+The `assay` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
+exactly where rule 3f sits: an unwatched or state-parked issue is never assayed, so reporting an
+assay for one would promise something that cannot happen, while an assay that refused the goal is
+the reason no planner and no pickup agent is coming. It covers both the standing hold (the
+assayer's own words, quoted) and the pending case — `awaiting a goal assay`, `a goal assay is
+running`, `goal assay on cooldown` — because an issue silently waiting a cycle for a verdict looks
+exactly like an idle fleet.
 
 ## Rule 4 in full
 
@@ -147,7 +157,8 @@ An issue is picked up when:
 
 1. `issue.state === 'open'`, and
 2. `openPrForIssue(issue, allOpenPrs) === null`, and
-3. `isIssuePickupEligible(issue, policy).eligible`, and
+3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal assay holds it
+   (see below), and
 4. its plan route resolves to `single` (always true with planning off), and
 5. no active task holds `issue:<n>`, and
 6. `dispatchVerdict` says `dispatch`.
@@ -263,3 +274,91 @@ argument [proposals](../../CLAUDE.md) made for a fresh table over columns on `es
 The two are **mutually exclusive**: writing either clears the other, enforced in the store rather
 than in a caller, because a caller that remembered one and forgot the other would leave rule 3b
 returning an item to pickup while this gate held it.
+
+## The goal assay (`unclear`)
+
+Every gate above asks about **policy**: the watch tag, the workflow state, the cooldown, the attempt
+cap, headroom, `resolvePlanRoute`. None of them asks whether the ticket says anything an agent could
+act on. So a vague, self-contradictory or already-obsolete issue goes straight into the funnel — with
+`planning.enabled` the planner decomposes the vagueness and an operator is asked to approve the
+decomposition of a question nobody could answer; with it off, rule 4 puts an agent on it directly —
+and the first signal that anything was wrong is an agent spending its attempt cap and escalating in a
+way that reads as its own failure.
+
+The goal assay (issue #158, `src/intake/assay.ts`, config `assay.enabled`, **off by default**) is
+that missing gate. Rule 3f dispatches a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`,
+cut from the default branch) for a watched open issue nothing has been started for, and the agent
+casts a verdict with the `assay_issue` tool. It is the mirror of the assessor: `hasPriorWork` is the
+discriminator for both, one taking each arm — nothing started means the goal is all there is to
+judge, something started means the question was answered by someone acting on it.
+
+| Verdict    | Effect                                                                              |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `workable` | None on scheduling. Stored so the assay is not asked again for this text.            |
+| `unclear`  | Holds the issue out of **both** rule 3c and rule 4 while it stands.                  |
+| _no row_   | Holds nothing. This is what a crashed, killed or capped assayer leaves behind.       |
+
+### Block or inform, and why blocking is safe
+
+It blocks — informing is what the cockpit already does for every other verdict, and would leave the
+dispatch this exists to prevent happening anyway. Three things stop that becoming the most effective
+way to stop the harness working:
+
+- **Silence holds nothing.** Only an explicit `unclear` gates. An assayer that crashes or spends its
+  attempt cap writes no row and the issue falls through to ordinary pickup, with **no escalation** —
+  the planner's fail-open and the assessor's, for their reason. This is also
+  `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence.
+- **The hold expires on its own** (below).
+- **The operator can clear or override it** (`POST /api/issues/:number/assay`).
+
+### What ends a hold
+
+`assayHold(assay, issue, ctx)` (pure) is asked in **two places off the one predicate** — rule 4's
+eligibility filter and `issuePickupStatus` — so the chip can never promise what the next cycle
+refuses. Two arms, plus a clearer that is deliberately not an arm:
+
+1. **The goal text changed.** The row stores `goal_ref`, a NUL-joined fingerprint of the title and
+   body the verdict was cast against (`goalFingerprint`), taken from the *task* rather than re-read
+   from the world — so an edit made while the assayer was running is not silently swallowed. A
+   different fingerprint means the verdict describes a ticket that no longer exists: the hold ends
+   and the issue is assayed again. This is #158's fourth requirement, and it could not be an event:
+   `worldDiff` emits nothing at all for an edit, and adding one would make the verdict depend on the
+   harness having witnessed the moment — so a ticket rewritten while it was down would stay parked
+   forever.
+2. **Any world transition on `issue:<n>` strictly after the verdict.** Issue #109 phase 4's
+   rejection-expiry pattern again, and here it is what covers a human who answers the question in a
+   **comment** rather than by editing the body.
+3. **The operator clears it** (`{verdict: null}`) — a delete, which is why it is not an arm.
+
+**There is no timer arm**, for `deliveryHold`'s reason: a refused goal waits on the world to *become*
+something else, which is an event, not a duration. A clock expiry would re-ask a question whose
+answer has not changed, at the price of an agent each time.
+
+### The comment on the ticket
+
+An `unclear` verdict is also asked as a question **on the item itself** — one living comment,
+written through `IssueCommentCapable.upsertIssueComment` and edited in place, by `AssayDesk` on the
+pulse beside the plan reconciler (issue #158's third decision). Without it a blocking gate would
+refuse a ticket and tell only the cockpit, while the person who can end the hold in one edit is
+usually not looking at it.
+
+It is mechanical bookkeeping in the sense `set_work_item_state` and the plan status comment are — so
+it is not auto-send gated and does not go through the proposal machinery, and what keeps that from
+being a licence to chatter is the one-comment rule. It is written only when the body changes, the
+comment ref is dropped when the ticket's text changes (a genuinely new question gets a new comment
+rather than overwriting the record of the old one), and a hold that has ended is **retracted** on the
+thread rather than left standing. It is the assay's only outbound act: nothing is closed, rejected,
+labelled or edited.
+
+### The watch gate
+
+The assay applies only to issues that already pass the watch gate — it never filters an untagged
+backlog. So it does second-guess an explicit operator signal, and is argued for on that basis: the
+tag says *work this*, and the assay's answer is not *no* but *with what?*. A question, asked once,
+that the operator ends by editing the ticket, replying to it, or clearing the verdict.
+
+### Cost
+
+With `planning`, `assessment` and `assay` all on, one issue can spend **three agents** before a line
+of its work is written. That is the reason all three are off by default, and it is named here rather
+than discovered.

@@ -169,6 +169,16 @@ export function conclusionOrigin(
         `agent finished a turn on it.`,
     };
   }
+  const assayer = /^issue:(\d+):assay$/.exec(ref);
+  if (assayer) {
+    return {
+      ok: false,
+      error:
+        `conclude_work is for an agent that did the work, and you were dispatched to judge whether issue ` +
+        `#${assayer[1]}'s goal can be worked from at all — before anything was started. Cast your verdict ` +
+        `with assay_issue instead.`,
+    };
+  }
   return {
     ok: false,
     error:
