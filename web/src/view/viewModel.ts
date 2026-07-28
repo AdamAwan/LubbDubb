@@ -74,8 +74,8 @@ interface ViewInputs {
   tails: ReadonlyMap<string, string>;
   /** When the last pulse landed — the anchor the countdown is measured from. */
   lastPulseAt: number;
-  /** Which plan's modal is open, or null when none is. Optional so callers that predate the modal still compile. */
-  viewingPlan?: string | null;
+  /** Which plan's modal is open, or null when none is. */
+  viewingPlan: string | null;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -129,6 +129,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     tailByAgent: input.tails,
 
     taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,
-    viewingPlan: input.viewingPlan ?? null,
+    viewingPlan: input.viewingPlan,
   };
 }

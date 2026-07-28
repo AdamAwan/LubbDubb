@@ -39,6 +39,7 @@ function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void
       liveOutput: new Map(),
       tails: new Map(),
       lastPulseAt: now,
+      viewingPlan: null,
     });
     return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
   } finally {

@@ -37,7 +37,10 @@ export function renderMarkdown(source: string): ReactNode[] {
       flushParagraph();
       const body: string[] = [];
       i++;
-      while (i < lines.length && !/^```/.test(lines[i]!)) body.push(lines[i]!), i++;
+      while (i < lines.length && !/^```/.test(lines[i]!)) {
+        body.push(lines[i]!);
+        i++;
+      }
       out.push(createElement('pre', { key: k() }, createElement('code', null, body.join('\n'))));
       continue;
     }
@@ -52,7 +55,10 @@ export function renderMarkdown(source: string): ReactNode[] {
     if (/^>\s?/.test(line)) {
       flushParagraph();
       const body: string[] = [];
-      while (i < lines.length && /^>\s?/.test(lines[i]!)) body.push(lines[i]!.replace(/^>\s?/, '')), i++;
+      while (i < lines.length && /^>\s?/.test(lines[i]!)) {
+        body.push(lines[i]!.replace(/^>\s?/, ''));
+        i++;
+      }
       i--;
       out.push(createElement('blockquote', { key: k() }, ...inline(body.join(' '), k)));
       continue;

@@ -62,6 +62,7 @@ export function App() {
   const viewedPlan = (state.plans ?? []).find((p) => p.id === status.view.viewingPlan) ?? null;
   const planModal = viewedPlan ? (
     <PlanModal
+      key={viewedPlan.id}
       plan={viewedPlan}
       parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
       upcoming={state.upcoming?.items ?? []}
