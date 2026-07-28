@@ -742,9 +742,18 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Roots are cheap; a subtree is fetched when a panel is opened. Both sit under
   // the `/api` prefix, so the `onRequest` guard above covers them with no
   // per-route opt-in.
-  app.get('/api/work', async () => ({ roots: store.listWorkRoots() }));
+  //
+  // They *do* opt into rate limiting, for the same reason the artifact route does
+  // and `/api/state` does not: both read the store on demand rather than on the
+  // cockpit's poll, and the subtree walks a recursive CTE and resolves a URL per
+  // node, so the cost is unbounded in the graph's size while the request is a
+  // fixed-size string. Opening a panel spends one call, so the ceiling is far
+  // above any real interaction.
+  const WORK_RATE_LIMIT = { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } };
 
-  app.get('/api/work/:ref', async (req, reply) => {
+  app.get('/api/work', WORK_RATE_LIMIT, async () => ({ roots: store.listWorkRoots() }));
+
+  app.get('/api/work/:ref', WORK_RATE_LIMIT, async (req, reply) => {
     const { ref } = req.params as { ref: string };
     const nodes = store.listWorkSubtree(ref);
     if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
