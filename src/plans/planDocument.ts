@@ -20,6 +20,13 @@ export function isPlanFile(path: string): boolean {
   return path.replace(/\\/g, '/') === PLAN_FILE;
 }
 
+/**
+ * How much narrative is kept. Trimmed rather than refused (see the test): the
+ * write-up rides along with a verdict, so rejecting it for length would throw
+ * away the decomposition too.
+ */
+export const MAX_PLAN_DOCUMENT_CHARS = 60_000;
+
 const PartSchema = z.object({
   /** Stable and author-chosen: an amended plan merges on it, so it must survive a replan. */
   slug: z
@@ -30,6 +37,10 @@ const PartSchema = z.object({
   /** Files/areas this part owns — what substitutes for a human holding the split in their head. */
   scope: z.string().min(1),
   dependsOn: z.array(z.string().min(1)).default([]),
+  /** Why this is its *own* PR rather than folded into a sibling. */
+  rationale: z.string().min(1).optional(),
+  /** What makes this part done. */
+  acceptance: z.string().min(1).optional(),
 });
 
 /**
@@ -44,6 +55,23 @@ const PlanDocumentSchema = z
     version: z.literal(1),
     verdict: z.enum(['single', 'parts']),
     reason: z.string().min(1),
+    /** What could go wrong with this split. */
+    risks: z.string().min(1).optional(),
+    /** What the planner deliberately left out. */
+    outOfScope: z.string().min(1).optional(),
+    /**
+     * The full narrative, markdown. Stored on the plan row rather than surfaced
+     * as an artifact chip: `GET /artifacts/:id` serves out of the agent's
+     * worktree, and `system.ts` removes that worktree on a `done` reap — so a
+     * write-up surfaced that way 404s exactly when the plan is ready to approve.
+     * Trimmed rather than refused for the same reason `MAX_PLAN_DOCUMENT_CHARS`
+     * exists at all — an over-long write-up must not sink the whole submission.
+     */
+    document: z
+      .string()
+      .min(1)
+      .transform((s) => (s.length > MAX_PLAN_DOCUMENT_CHARS ? s.slice(0, MAX_PLAN_DOCUMENT_CHARS) : s))
+      .optional(),
     parts: z.array(PartSchema).default([]),
   })
   .superRefine((doc, ctx) => {
@@ -159,5 +187,7 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
     title: part.title,
     scope: part.scope,
     dependsOn: part.dependsOn,
+    rationale: part.rationale ?? null,
+    acceptance: part.acceptance ?? null,
   }));
 }

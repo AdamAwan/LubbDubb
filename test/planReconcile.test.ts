@@ -70,8 +70,16 @@ function setup(): Harness {
     reason: 'Schema first.',
   });
   store.upsertPlanParts(plan.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [] },
-    { slug: 'api', seq: 2, title: 'API', scope: 'src/server/', dependsOn: ['schema'] },
+    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'api',
+      seq: 2,
+      title: 'API',
+      scope: 'src/server/',
+      dependsOn: ['schema'],
+      rationale: null,
+      acceptance: null,
+    },
   ]);
   const reconciler = new PlanReconciler({
     store,
@@ -231,7 +239,9 @@ test('reconciliation is inert with the funnel off', async () => {
   const store = new Store(':memory:');
   const { sink, comments } = recordingSink();
   const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: null });
-  store.upsertPlanParts(plan.id, [{ slug: 'a', seq: 1, title: 'A', scope: 'src/', dependsOn: [] }]);
+  store.upsertPlanParts(plan.id, [
+    { slug: 'a', seq: 1, title: 'A', scope: 'src/', dependsOn: [], rationale: null, acceptance: null },
+  ]);
   const reconciler = new PlanReconciler({
     store,
     git: new FakeGitObserver(),
@@ -254,8 +264,16 @@ test('the rendered comment reports progress and the PR numbers', () => {
     reason: 'Schema first.',
   });
   const parts = store.upsertPlanParts(plan.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [] },
-    { slug: 'api', seq: 2, title: 'API', scope: 'src/server/', dependsOn: ['schema'] },
+    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'api',
+      seq: 2,
+      title: 'API',
+      scope: 'src/server/',
+      dependsOn: ['schema'],
+      rationale: null,
+      acceptance: null,
+    },
   ]);
   store.updatePlanPart(parts[0]!.id, { status: 'merged', prNumber: 40 });
   const body = renderPlanComment(plan, store.listPlanParts(plan.id));

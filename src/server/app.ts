@@ -20,6 +20,8 @@ import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../m
 import { unrecordedWork, workItemTicketFields } from '../graph/unrecorded.js';
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
+import { planOrigin } from '../plans/planning.js';
+import { planIssueNumber } from '../plans/parts.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { deliverySignalQuery } from '../delivery/delivery.js';
 import { watchLabelsFor } from '../watchLabels.js';
@@ -459,7 +461,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     const { id } = req.params as { id: string };
     const plan = store.getPlan(id);
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
-    const next = store.setPlanStatus(id, 'planning');
+    let next = store.setPlanStatus(id, 'planning');
+    // A replan also supersedes a running discussion — leaving `discussing` set
+    // would have rule 3c render the `discuss-plan` template on its next dispatch
+    // instead of the `issue-replan` one this call actually asked for, so the two
+    // routes must agree about what plain `planning` means.
+    if (next?.discussing) next = store.setPlanDiscussing(id, false);
     // A replan supersedes an approval that was still being asked for. Withdrawing
     // it is not optional: a pending proposal holds rule 3d off this plan, so the
     // amended verdict would never be put to anyone — and the stale card, if
@@ -470,6 +477,86 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     const ref = planProposalRef(plan.originRef);
     const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
     if (pending) proposals.reject(pending.id, 'superseded by a replan');
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, plan: next };
+  });
+
+  // Discuss a plan with an agent instead of accepting, rejecting or replanning it.
+  //
+  // Deliberately *a replan with a different prompt*, not a new mechanism: the plan
+  // goes to `planning`, which is the status rule 3c already dispatches a planner
+  // from, so the discussion agent inherits the origin gate (`issue:<n>:plan`, so no
+  // second planner), the cooldown, the attempt cap and the fail-open — none of which
+  // a bespoke path would have. `discussing` only picks the prompt.
+  //
+  // Nothing is scheduled while you talk: rule 4a schedules parts for `active` and
+  // `awaiting_approval` plans only, and rule 3d proposes for `awaiting_approval`
+  // only, so no fresh card appears mid-conversation either.
+  //
+  // **409 unless the plan is `awaiting_approval`.** Every framing of Discuss — the
+  // design, this spec, the `discuss-plan` prompt itself ("before approving it") —
+  // only ever contemplates talking through a decomposition that is still a pending
+  // question. Starting from anywhere else manufactures an approval gate the plan
+  // never had: a `single` verdict has no parts to approve, so ending an unguarded
+  // discussion on one writes `awaiting_approval` over zero parts — rule 3d proposes
+  // it, an operator approves an empty plan, `resolvePlanRoute` now returns `parts`
+  // instead of `single`, and the issue is parked with no ready part, no agent and no
+  // chip explaining why. Discussing an already-`active` plan is the milder version
+  // of the same mistake: it reopens the gate rule 4a already cleared and stops
+  // scheduling the remaining parts, which is exactly what `/discuss/end`'s own 409
+  // exists to prevent on the way back out.
+  app.post('/api/plans/:id/discuss', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = store.getPlan(id);
+    if (!plan) return reply.code(404).send({ error: 'plan not found' });
+    if (plan.status !== 'awaiting_approval')
+      return reply.code(409).send({ error: `plan ${id} is not awaiting approval (status: ${plan.status})` });
+    // Order matters exactly as it does for a replan: the status write is what
+    // makes the withdrawal safe, because `refusePlan` refuses to settle a plan
+    // that is no longer `awaiting_approval` — so the reject below closes the inbox
+    // item without retiring a single part.
+    store.setPlanStatus(id, 'planning');
+    const next = store.setPlanDiscussing(id, true);
+    const ref = planProposalRef(plan.originRef);
+    const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
+    if (pending) proposals.reject(pending.id, 'superseded by a discussion');
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, plan: next };
+  });
+
+  // End a discussion the operator no longer wants — the escape hatch, since the
+  // agent ends itself when it submits an amended plan.
+  //
+  // Restoring the status is half the job and not an afterthought: clearing the
+  // flag alone leaves the plan in `planning`, which is precisely what rule 3c
+  // dispatches from, so the next pulse would start another planner.
+  app.post('/api/plans/:id/discuss/end', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = store.getPlan(id);
+    if (!plan) return reply.code(404).send({ error: 'plan not found' });
+    // Compare-and-set against `discussing`, the same discipline `releasePlan` and
+    // `refusePlan` apply to `awaiting_approval`: an unguarded restore would force
+    // *any* plan back to `awaiting_approval` on a stale or duplicate call — a plan
+    // already `active`, with parts dispatched and agents on branches, would have
+    // its approval gate reopened and rule 4a would stop scheduling its parts. The
+    // flag is exactly what says whether this call still names a live discussion.
+    if (!plan.discussing) return reply.code(409).send({ error: `plan ${id} is not being discussed` });
+    store.setPlanStatus(id, 'awaiting_approval');
+    const next = store.setPlanDiscussing(id, false);
+    // The plan restore is the important half and must not be undone by a completion
+    // failure below — so a missing agent (already gone) or a `complete` that 409s
+    // (already settled) is a no-op here, not a route failure. Left alive, the
+    // planner keeps a fleet slot and a worktree with nothing to talk to (the
+    // modal's discussion pane is gated on `plan.discussing`, so the reply box is
+    // already gone), and a late `plan_submit` from that stale agent would revert
+    // this very approval back to `awaiting_approval` a second time via ingestion.
+    const issueNumber = planIssueNumber(plan.originRef);
+    if (issueNumber !== null) {
+      const task = store.findActiveTaskByOrigin(planOrigin(issueNumber));
+      if (task?.agentId) agents.complete(task.agentId);
+    }
     hub.broadcast({ type: 'world:changed' });
     await harness.runCycle('manual');
     return { ok: true, plan: next };

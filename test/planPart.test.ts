@@ -26,6 +26,10 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     title: 'Big thing',
     status: 'active',
     reason: 'Schema must land before the code that reads it.',
+    risks: null,
+    outOfScope: null,
+    document: null,
+    discussing: false,
     statusCommentRef: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
@@ -41,6 +45,8 @@ function part(slug: string, seq: number, overrides: Partial<PlanPart> = {}): Pla
     seq,
     title: `The ${slug} part`,
     scope: `src/${slug}/`,
+    rationale: null,
+    acceptance: null,
     dependsOn: [],
     branch: null,
     prNumber: null,
@@ -369,7 +375,9 @@ function systemWithParts(): { system: System; repoRoot: string } {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot,
-    planning: { enabled: true } as never,
+    // Pinned off: `requireApproval` now defaults on, and this test asserts the
+    // ungated path (an `active` plan releases work with no proposal written).
+    planning: { enabled: true, requireApproval: false } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
@@ -393,8 +401,8 @@ test('a persisted plan turns into real part branches, and the rows record it', a
     reason: 'Schema first.',
   });
   system.store.upsertPlanParts(stored.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [] },
-    { slug: 'api', seq: 2, title: 'API', scope: 'src/server/', dependsOn: [] },
+    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [], rationale: null, acceptance: null },
+    { slug: 'api', seq: 2, title: 'API', scope: 'src/server/', dependsOn: [], rationale: null, acceptance: null },
   ]);
   // Reconciliation promotes both from `pending` to `ready` (no dependencies), and
   // the same cycle dispatches them — that same-pulse handover is intended.
@@ -415,9 +423,11 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   const branches = execFileSync('git', ['branch', '--format=%(refname:short)'], { cwd: repoRoot, encoding: 'utf8' });
   assert.match(branches, /issue\/12\/schema/);
   assert.match(branches, /issue\/12\/api/);
-  // `planning.requireApproval` is off here, which is its default: an `active`
-  // plan is released work, so the approval gate writes nothing at all (issue #109
-  // phase 3). Asserted on the *existing* path, not only on the new one.
+  // `requireApproval` is pinned off above, which is *not* the default any more:
+  // this is the ungated path, where an `active` plan is released work and the
+  // approval gate writes nothing at all (issue #109 phase 3). The default's
+  // behaviour is asserted in `planApproval.test.ts`; asserted here on the
+  // existing path so the two arms are covered separately.
   assert.deepEqual(system.store.listProposals(), []);
   assert.deepEqual(system.store.listOpenEscalations(), []);
   system.store.close();

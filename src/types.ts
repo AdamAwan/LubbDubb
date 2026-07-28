@@ -705,6 +705,14 @@ export interface Plan {
   status: PlanStatus;
   /** The planner's own justification for its verdict. Null when it gave none. */
   reason: string | null;
+  /** What could go wrong with this split, as the planner saw it. Null when it said nothing. */
+  risks: string | null;
+  /** What the planner deliberately left out. */
+  outOfScope: string | null;
+  /** The full narrative, markdown — the read-in-depth version of this plan. */
+  document: string | null;
+  /** True while an operator is discussing this plan with an agent (see rule 3c). */
+  discussing: boolean;
   /** Provider comment id for the plan's status comment, edited in place (stage 3). */
   statusCommentRef: string | null;
   createdAt: string;
@@ -731,6 +739,10 @@ export interface PlanPart {
   title: string;
   /** Files/areas this part owns, so concurrent parts don't collide. */
   scope: string;
+  /** Why this is its own PR rather than folded into a sibling. */
+  rationale: string | null;
+  /** What makes this part done. */
+  acceptance: string | null;
   /** Sibling slugs this part stacks on. */
   dependsOn: string[];
   branch: string | null;
@@ -742,7 +754,10 @@ export interface PlanPart {
 }
 
 /** A part as the planner declared it, before the store assigns identity or progress. */
-export type PlanPartInput = Pick<PlanPart, 'slug' | 'seq' | 'title' | 'scope' | 'dependsOn'>;
+export type PlanPartInput = Pick<
+  PlanPart,
+  'slug' | 'seq' | 'title' | 'scope' | 'dependsOn' | 'rationale' | 'acceptance'
+>;
 
 /** One cumulative usage report from a session's turn-end `result` event. */
 export interface AgentUsage {

@@ -53,6 +53,8 @@ function part(over: Partial<PlanPart> = {}): PlanPart {
     seq: 1,
     title: 'API',
     scope: 'src/server/',
+    rationale: null,
+    acceptance: null,
     dependsOn: [],
     branch: 'issue/12/api',
     prNumber: null,

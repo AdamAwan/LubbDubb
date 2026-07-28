@@ -39,6 +39,7 @@ function build(state: AppState, over: Partial<Parameters<typeof buildViewModel>[
     liveOutput: new Map(),
     tails: new Map(),
     lastPulseAt: 1_000_000,
+    viewingPlan: null,
     ...over,
   });
 }

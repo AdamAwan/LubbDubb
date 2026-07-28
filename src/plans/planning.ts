@@ -20,8 +20,10 @@ export interface PlanningPolicy {
   maxConcurrentPartsPerIssue: number;
   /**
    * Put a `parts` verdict to a human before anything is scheduled from it
-   * (issue #109 phase 3). Off by default, so a configured funnel behaves exactly
-   * as it did: a decomposition commits the moment the planner writes it.
+   * (issue #109 phase 3). **On by default** — which changes nothing for a
+   * deployment that has not enabled the funnel, because `enabled` is still off.
+   * It only decides what happens once they do, and the thing being defaulted is
+   * whether a decomposition into N branches and N agents starts itself.
    *
    * On, ingestion persists a `parts` verdict as `awaiting_approval` instead of
    * `active`, rule `plan-approval` puts it to the operator once, and rule 4a
@@ -47,7 +49,7 @@ export interface PlanningPolicy {
 export const DEFAULT_PLANNING: PlanningPolicy = {
   enabled: false,
   maxConcurrentPartsPerIssue: 2,
-  requireApproval: false,
+  requireApproval: true,
   gitFetchIntervalMs: 60_000,
 };
 

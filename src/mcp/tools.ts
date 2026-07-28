@@ -138,6 +138,15 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
         properties: {
           verdict: { type: 'string', enum: ['single', 'parts'], description: 'One PR, or several.' },
           reason: { type: 'string', description: 'Why this shape — one or two sentences.' },
+          risks: { type: 'string', description: 'What could go wrong with this split.' },
+          outOfScope: { type: 'string', description: 'What you deliberately left out, and why.' },
+          document: {
+            type: 'string',
+            description:
+              'The full write-up in markdown — the version a human reads before approving. ' +
+              'Cover why the work is shaped this way, what you considered and rejected, and ' +
+              'anything you are unsure about. This is what the operator reads; write it for them.',
+          },
           parts: {
             type: 'array',
             description: 'Required when verdict is "parts"; ignored otherwise.',
@@ -155,6 +164,8 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
                   items: { type: 'string' },
                   description: 'At most one slug: the part this one stacks on.',
                 },
+                rationale: { type: 'string', description: 'Why this is its own PR rather than folded into a sibling.' },
+                acceptance: { type: 'string', description: 'What makes this part done.' },
               },
               required: ['slug', 'title', 'scope'],
             },
@@ -177,6 +188,9 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
           version: 1,
           verdict: args.verdict,
           reason: args.reason,
+          risks: args.risks,
+          outOfScope: args.outOfScope,
+          document: args.document,
           parts: args.parts ?? [],
         });
         if (!parsed.ok) {

@@ -152,6 +152,16 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
         },
+        {
+          id: 'iss-231',
+          number: 231,
+          title: 'Split the cockpit auth guard from the artifact route',
+          body: 'Artifact chips 401 unauthenticated — the fix touches the guard, the route, and the snapshot.',
+          labels: ['refactor', 'lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'planning', reasons: ['0/3 parts merged'] },
+        },
       ],
       stories: [
         {
@@ -233,8 +243,54 @@ export function buildDemoState(): DemoSeed {
         title: 'Move the store behind a repository interface',
         status: 'active',
         reason: 'The schema move has to merge before anything reads through the new interface.',
+        risks:
+          'The repository interface has to cover every query the harness makes today, or a missed one surfaces as a runtime error instead of a compile error.',
+        outOfScope: 'Swapping the underlying engine off SQLite — this only adds the seam, it does not use it.',
+        document:
+          '# Move the store behind a repository interface\n\n' +
+          'Three parts, stacked: the schema migration has to land before anything can read through the new ' +
+          'interface, and the read path has to land before the write path so there is never a window where ' +
+          'both paths disagree about what a query returns.\n\n' +
+          '## Why three PRs\n\n' +
+          'Each part is independently reviewable and each one leaves the harness in a working state — the ' +
+          'schema part alone is a no-op migration; the reads part alone changes what code reads but not what ' +
+          'it means.',
+        discussing: false,
         createdAt: ago(90),
         updatedAt: ago(6),
+      },
+      // A decomposition still waiting on a human: the approval escalation below
+      // and the plan card's Approve/Reject footer are the whole point of this entry.
+      {
+        id: 'plan-231',
+        originRef: 'issue:231',
+        title: 'Split the cockpit auth guard from the artifact route',
+        status: 'awaiting_approval',
+        reason:
+          'The capability signer has to exist before the route can verify one, and the guard change touches every route.',
+        risks:
+          'Moving /artifacts outside the /api prefix means part 2 briefly serves artifacts with no guard at all — the capability check has to land in the same PR, not a later one.',
+        outOfScope:
+          'Capability revocation, and any change to the cockpit bearer token. Artifact TTL stays at 5 minutes.',
+        document:
+          '# Serving artifacts outside the authenticated /api prefix\n\n' +
+          'Every artifact chip in the cockpit currently 401s. This is not a bug in the guard — it is a structural ' +
+          'consequence of where the route lives.\n\n' +
+          '## Why it is broken\n\n' +
+          'Opening a chip is a top-level browser navigation, and a navigation cannot carry the `Authorization` ' +
+          'header the cockpit attaches to every `fetch`.\n\n' +
+          '> Allow-listing the route inside the prefix guard is the tempting fix and the one to avoid. One ' +
+          'exception is one line; the second one is a policy.\n\n' +
+          '## Why three pull requests\n\n' +
+          '1. The signer is a pure predicate with no callers.\n' +
+          '2. The route change is the only part that alters who can reach what.\n' +
+          '3. The snapshot change touches the cockpit as well as the server.\n\n' +
+          '## The one thing I am unsure about\n\n' +
+          'With `auth.enabled` off there is no signing key, so the route must serve with no capability at all. ' +
+          'That means two modes and only one of them is covered by the capability tests.',
+        discussing: false,
+        createdAt: ago(12),
+        updatedAt: ago(12),
       },
     ],
     planParts: [
@@ -246,6 +302,9 @@ export function buildDemoState(): DemoSeed {
         title: 'Add the repository tables and migration',
         scope: 'src/store/',
         dependsOn: [],
+        rationale:
+          'The migration has to be reviewable on its own — it changes nothing behaviourally until the reads part lands.',
+        acceptance: 'The new tables exist and the migration runs clean on a copy of the production database.',
         branch: 'issue/212/schema',
         prNumber: 140,
         status: 'merged',
@@ -261,6 +320,9 @@ export function buildDemoState(): DemoSeed {
         title: 'Route reads through the interface',
         scope: 'src/harness.ts, src/dispatcher/',
         dependsOn: ['schema'],
+        rationale: 'Reads are safe to move first — nothing downstream depends on the write path also having moved.',
+        acceptance:
+          'Every dispatcher/harness read goes through the interface; no direct SQL remains outside the store.',
         branch: 'issue/212/reads',
         prNumber: 143,
         status: 'in_review',
@@ -276,12 +338,69 @@ export function buildDemoState(): DemoSeed {
         title: 'Route writes through the interface',
         scope: 'src/executor/, src/agents/',
         dependsOn: ['reads'],
+        rationale:
+          'Writes go last — the read path has to be proven out first, or a write bug is indistinguishable from a read bug.',
+        acceptance: 'Every executor/agent write goes through the interface; direct SQLite access is gone from both.',
         branch: null,
         prNumber: null,
         status: 'ready',
         taskId: null,
         createdAt: ago(90),
         updatedAt: ago(6),
+      },
+      // plan-231's three parts — all `ready`, none dispatched, because the plan
+      // itself is still awaiting approval (rule 4a queues them `unapproved`).
+      {
+        id: 'plan-231:signer',
+        planId: 'plan-231',
+        slug: 'signer',
+        seq: 1,
+        title: 'Add the capability signer',
+        scope: 'src/server/artifactCapability.ts',
+        dependsOn: [],
+        rationale: 'A pure sign/verify predicate with no callers yet — reviewable in isolation from the route change.',
+        acceptance: 'mint/verify round-trip on a flag id, with expiry and tamper cases unit-tested.',
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(12),
+        updatedAt: ago(12),
+      },
+      {
+        id: 'plan-231:route',
+        planId: 'plan-231',
+        slug: 'route',
+        seq: 2,
+        title: 'Move the artifact route outside /api and require the capability',
+        scope: 'src/server/app.ts',
+        dependsOn: ['signer'],
+        rationale: 'This is the only part that changes who can reach what, so it stays separate from the pure signer.',
+        acceptance: '/artifacts/:id serves only with a valid capability; every existing route still 401s without one.',
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(12),
+        updatedAt: ago(12),
+      },
+      {
+        id: 'plan-231:mint',
+        planId: 'plan-231',
+        slug: 'mint',
+        seq: 3,
+        title: 'Mint capabilities into the snapshot',
+        scope: 'src/server/app.ts, web/src/api.ts',
+        dependsOn: ['route'],
+        rationale:
+          'Touches the cockpit as well as the server, so it waits until the route it points at actually exists.',
+        acceptance: 'Every artifact chip in the cockpit opens without a 401.',
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(12),
+        updatedAt: ago(12),
       },
     ],
     jobs: [],
@@ -459,6 +578,24 @@ export function buildDemoState(): DemoSeed {
         escalationId: 'esc-2',
         createdAt: ago(1),
       },
+      // The plan decomposition itself, held for a human before any part is scheduled.
+      {
+        id: 'prop-2',
+        kind: 'plan',
+        ref: 'issue:231:plan',
+        status: 'pending',
+        action: {
+          type: 'propose_plan',
+          reason: 'Issue #231 was decomposed into 3 part(s) and approval is required before any is scheduled.',
+          planId: 'plan-231',
+          originRef: 'issue:231',
+        },
+        note: null,
+        decidedBy: null,
+        decidedAt: null,
+        escalationId: 'esc-3',
+        createdAt: ago(12),
+      },
     ],
     escalations: [
       {
@@ -484,6 +621,22 @@ export function buildDemoState(): DemoSeed {
         taskId: 'task-a1',
         response: null,
         createdAt: ago(1),
+        answeredAt: null,
+      },
+      {
+        // The plan-approval ask: "Needs you" gets a card with a link into the same
+        // plan modal rather than a free-text prompt, since a decomposition is
+        // approved or rejected, never typed into.
+        id: 'esc-3',
+        type: 'approve_change',
+        status: 'open',
+        prompt:
+          'Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it as one PR.',
+        context: { originRef: 'issue:231', planId: 'plan-231' },
+        agentId: null,
+        taskId: null,
+        response: null,
+        createdAt: ago(12),
         answeredAt: null,
       },
       {
@@ -580,6 +733,28 @@ export function buildDemoState(): DemoSeed {
           status: 'waiting',
           reason: 'Idle capacity; "Per-agent cost accounting in the cockpit" is the highest-priority ready story.',
         },
+        {
+          // Queued but held, same as `writes` above — this time by the plan's own
+          // awaiting_approval status rather than a concurrency cap.
+          origin: 'issue:231:part:signer',
+          rule: 'plan-part',
+          title: 'Issue #231 part: Add the capability signer',
+          kind: 'code',
+          branch: 'issue/231/signer',
+          status: 'unapproved',
+          reason:
+            'Part "signer" of issue #231 is ready and has no agent. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.',
+        },
+        {
+          origin: 'issue:231:part:route',
+          rule: 'plan-part',
+          title: 'Issue #231 part: Move the artifact route outside /api and require the capability',
+          kind: 'code',
+          branch: 'issue/231/route',
+          status: 'unapproved',
+          reason:
+            'Part "route" of issue #231 is ready and stacks on issue/231/signer. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.',
+        },
       ],
     },
     errors: [
@@ -617,6 +792,7 @@ export function buildDemoState(): DemoSeed {
       '#212': 'https://github.com/example/lubbdubb/issues/212',
       '#143': 'https://github.com/example/lubbdubb/pull/143',
       '#140': 'https://github.com/example/lubbdubb/pull/140',
+      '#231': 'https://github.com/example/lubbdubb/issues/231',
     },
     // The rule book the server ships in /api/state (src/dispatcher/rules.ts) —
     // canned to just the rules the demo's decisions reference.

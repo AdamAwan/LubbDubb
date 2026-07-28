@@ -29,6 +29,7 @@ export function useCockpit(): CockpitStatus {
   const [denied, setDenied] = useState<UnauthorizedError | null>(null);
   const [connected, setConnected] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [viewingPlan, setViewingPlan] = useState<string | null>(null);
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
   // Last output line per agent, fed by compact `agent:tail` frames — used for
@@ -158,6 +159,9 @@ export function useCockpit(): CockpitStatus {
       decideRecovery: (agentId, verdict) => then(api.decideRecovery(agentId, verdict)),
 
       replan: (planId) => then(api.replan(planId)),
+      viewPlan: (planId) => setViewingPlan(planId),
+      discussPlan: (planId) => then(api.discussPlan(planId)),
+      endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
 
       promoteFinding: (id) => then(api.promoteFinding(id)),
@@ -186,6 +190,7 @@ export function useCockpit(): CockpitStatus {
       liveOutput: liveOutput.current,
       tails: tails.current,
       lastPulseAt: lastPulse.current,
+      viewingPlan,
     }),
   };
 }

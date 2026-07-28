@@ -170,6 +170,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
               onDismiss={(id, note) => actions.dismissEscalation(id, note)}
               onOpenAgent={(id) => actions.select(id)}
               onComplete={(id) => actions.completeAgent(id)}
+              onViewPlan={(id) => actions.viewPlan(id)}
             />
           ))}
 
@@ -183,6 +184,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
                 now={now}
                 refUrls={state.refUrls}
                 onReplan={(planId) => actions.replan(planId)}
+                onViewPlan={(id) => actions.viewPlan(id)}
               />
             </>
           )}
@@ -222,6 +224,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
             onToggleIssueWatch={(issueNumber, watched) => actions.setIssueWatched(issueNumber, watched)}
             onToggleStoryWatch={(storyId, watched) => actions.setStoryWatched(storyId, watched)}
             onSetConclusion={(issueNumber, verdict) => actions.setIssueConclusion(issueNumber, verdict)}
+            onViewPlan={(id) => actions.viewPlan(id)}
           />
         </section>
 

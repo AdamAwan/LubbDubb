@@ -30,6 +30,14 @@ export interface CockpitActions {
   decideRecovery(agentId: string, verdict: RecoveryVerdict): Promise<void>;
 
   replan(planId: string): Promise<void>;
+  /**
+   * Which plan's modal is open. UI state, on the seam for the same reason
+   * `select` is: a skin cannot own it (the modal is shared and the triggers are
+   * skin-side), and a skin may not reach `api.js` to open it another way.
+   */
+  viewPlan(planId: string | null): void;
+  discussPlan(planId: string): Promise<void>;
+  endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;
 
   promoteFinding(id: string): Promise<void>;

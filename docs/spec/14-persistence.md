@@ -26,19 +26,25 @@ invisible on databases created by an older build. `migrate()` closes that gap wi
 
 Current entries:
 
-| Table       | Columns added                                                                                            |
-| ----------- | -------------------------------------------------------------------------------------------------------- |
-| `tasks`     | `origin_title`, `origin_summary`, `dispatch_reason`                                                      |
-| `agents`    | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
-| `decisions` | `rule`                                                                                                   |
-| `findings`  | `ticket_ref`                                                                                             |
+| Table        | Columns added                                                                                            |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| `tasks`      | `origin_title`, `origin_summary`, `dispatch_reason`                                                      |
+| `agents`     | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
+| `decisions`  | `rule`                                                                                                   |
+| `findings`   | `ticket_ref`                                                                                             |
+| `plans`      | `risks`, `out_of_scope`, `document`, `discussing`                                                        |
+| `plan_parts` | `rationale`, `acceptance`                                                                                |
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
 `agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides`, `work_nodes`,
-`work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore have no
-migration entry — but `findings` has since gained `ticket_ref`, which is exactly the case the table
-above exists for.
+`work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
+migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
+has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the six fields above, which
+is exactly the case this table exists for. `CREATE TABLE IF NOT EXISTS` never alters an existing table,
+so a column added without an `ensureColumns` entry is invisible on every database from before that
+column existed — "this table is fresh, so it needs no entry" is only ever true on the day the table is
+introduced.
 
 ## Tables
 
@@ -138,15 +144,21 @@ without resetting status. `getFinding`, `listFindings(limit=100)`,
 
 ### Plans
 
-`upsertPlan`, `getPlan`, `getPlanByOrigin`, `listPlans`, `setPlanStatus`, `setPlanStatusComment`,
-`rollUpPlanStatus(planId)`, `upsertPlanParts(planId, parts)` (merges on slug, **never deletes**),
-`listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
+`upsertPlan`, `getPlan`, `getPlanByOrigin`, `listPlans`, `setPlanStatus`, `setPlanDiscussing(id,
+discussing)`, `setPlanStatusComment`, `rollUpPlanStatus(planId)`, `upsertPlanParts(planId, parts)`
+(merges on slug, **never deletes**), `listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
 `markPartDispatched(id, taskId, branch)`.
 
 `plans.status` is `planning | single | awaiting_approval | active | complete | abandoned`. It is a
 _value_, not a column, so a database from an older build needs no migration: an existing row simply
 never holds the new one. `awaiting_approval` is the approval gate itself — see
 [08](08-planning.md#the-approval-gate).
+
+`upsertPlan` **preserves `risks`/`outOfScope`/`document` on absence** rather than clearing them, the
+same discipline it already applies to `statusCommentRef`: a caller that writes a status without
+re-stating the narrative must not erase it. `discussing` is deliberately **not** settable through
+`upsertPlan` at all — it is its own one-way transition via `setPlanDiscussing`, so an ingestion can
+end a discussion (see [08](08-planning.md#discussing-a-plan)) but never accidentally re-open one.
 
 ### Work graph
 

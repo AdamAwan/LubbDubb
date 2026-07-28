@@ -365,7 +365,7 @@ for the world to change — chosen from `config.injectable`.
 - **Plans** (`PlanPanel`, rendered only when plans exist) — each plan's parts drawn as a stack, joined
   to `upcoming` **by origin** (`issue:<n>:part:<slug>`) so the dispatch cut is visible, with a
   **Replan** button. A plan `awaiting_approval` says so on the card and states that nothing below is
-  scheduled until you accept the proposal in "Needs you".
+  scheduled until you accept the proposal in "Needs you". Each row also opens the plan modal (below).
 - **Findings** (`FindingsPanel`, when any exist) — the open count in the heading, since a finding
   never expires into work on its own and this is the only nudge there is. Each has **Queue job**
   (work it now), **File ticket** (defer it — hidden unless `config.canFileTickets`) and **Dismiss**. A
@@ -445,6 +445,58 @@ the five codes `renderBlocks` emits and threads the active style across streamed
 
 The drawer also shows the artifact chips, the **files changed** list from `files`, and offers respond,
 interrupt and kill.
+
+## The plan modal
+
+`PlanModal` (`web/src/components/`) is the whole decomposition, on demand — the record of what was
+agreed, not just the question that was asked. Before it, a plan was legible only while it was a
+pending proposal: the approval card rendered a template string and vanished on the click, and the
+Plans panel drew rows whose `scope` was a tooltip. There was no way to say "show me the plan for
+#231" from anywhere, at any time, once or after it was answered.
+
+**It is shell-owned**, opened through `viewPlan(planId: string | null)` on `CockpitActions` — the same
+seam `select(agentId)` already uses for "which drawer is open is cockpit state, not skin state", and
+for the same reason: one implementation of the modal across both skins, while each skin keeps its own
+drawing of a plan elsewhere (Classic's `PlanPanel` rows, the factory tech tree's nodes). A skin must
+not reach `api.js` (`test/cockpitSkins.test.ts`), so the seam is the only way a skin-side button can
+open a shared modal.
+
+**Two tabs**, because the decision view has to stay short enough to hold in your head:
+
+- **Plan** — the planner's reason in full; **Risks** and **Deliberately out of scope** side by side
+  when present; every part in dispatch order with its scope, `rationale` (why its own PR),
+  `acceptance` (done when), the stack edge spelled out as a sentence rather than the terse `on <slug>`
+  chip, its status, its PR when it has one, and its "Up next" queue state
+  (`unapproved` / `capped` / `▶ now`). The same amber cut line the Up-next queue and Plans panel
+  already draw.
+- **Full write-up** — `plan.document`, rendered. Absent renders "This planner wrote no write-up",
+  never a hidden tab (see [08](08-planning.md)).
+
+Approve / Reject appear only while the plan is `awaiting_approval`, and route through the same
+`decideProposal` the escalation card uses — one verdict, one implementation, so the "Needs you" card
+clears either way whichever surface you decided from. Replan and Discuss sit apart, because they
+settle nothing. While a plan is being discussed the modal shows the conversation instead — the
+agent's status and last note, and a reply box that posts through `POST /api/agents/:id/respond` — and
+offers **End discussion** instead of a verdict.
+
+**Markdown rendering is a new pure `web/src/components/markdown.ts`**: a subset — ATX headings,
+unordered and ordered lists, fenced and inline code, blockquotes, paragraphs, and inline `code`,
+`**strong**` and `*emphasis*` — returning React nodes, **never `dangerouslySetInnerHTML`**. It does
+**not** render links: there is no `linkify` call in it, so a URL in a write-up appears as literal
+text. The same precedent as `ansi.ts` being hand-written rather than pulling in a library, and for a
+sharper reason here: `document` is agent-authored text, so a renderer that never interprets HTML has
+no injection surface to reason about at all.
+
+**Entry points** — the button or chip appears wherever a plan is mentioned:
+
+- the approval card in "Needs you" (`EscalationCard`), when `proposal.kind === 'plan'`;
+- each row of the classic `PlanPanel` and each node of the factory tech tree (`TechTree.tsx`);
+- the issue's pickup chip in the **shared** `WorldSummary` — the chip that already reads
+  `2/5 parts merged` becomes the button, so both skins get it for free.
+
+The modal is useful **after** approval too, as the record of what was agreed — which is most of why it
+is a modal reachable from anywhere rather than a section of the approval card that disappears once
+answered.
 
 ## Links
 

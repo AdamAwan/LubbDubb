@@ -81,6 +81,7 @@ function frozenView() {
     liveOutput: new Map(),
     tails: new Map(),
     lastPulseAt: NOW,
+    viewingPlan: null,
   });
 }
 

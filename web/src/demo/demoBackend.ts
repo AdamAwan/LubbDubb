@@ -250,6 +250,39 @@ class DemoServer {
   }
 
   /**
+   * Talk it through with an agent instead of accepting or rejecting — the demo
+   * mirror of `POST /api/plans/:id/discuss`. Marks the plan `discussing` (nothing
+   * is scheduled while that's true) and spawns the same discussion agent a real
+   * planner-origin dispatch would be, so the modal's live discussion pane has
+   * something to show.
+   */
+  async discussPlan(planId: string): Promise<{ ok: true }> {
+    const plan = (this.state.plans ?? []).find((p) => p.id === planId);
+    if (plan && !plan.discussing) {
+      plan.discussing = true;
+      plan.updatedAt = new Date().toISOString();
+      this.trySpawn('discuss_plan', `Discuss ${plan.title}`, null, `${plan.originRef}:plan`);
+      this.addDecision('dispatch_desk', 'ok', `discussing ${plan.title}`, 'issue-plan');
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Stop the conversation and put the plan back up for approval unchanged — the
+   * demo mirror of `POST /api/plans/:id/discuss/end`.
+   */
+  async endPlanDiscussion(planId: string): Promise<{ ok: true }> {
+    const plan = (this.state.plans ?? []).find((p) => p.id === planId);
+    if (plan) {
+      plan.discussing = false;
+      plan.updatedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
    * Promote a finding into a queued job — the demo mirror of
    * `POST /api/findings/:id/promote`, and the only path from a finding to work in
    * either backend: the operator's click is the gate.
@@ -804,6 +837,8 @@ export const demoApi = {
     getServer().setIssueConclusion(issueNumber, verdict),
   setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
   replan: (planId: string) => getServer().replan(planId),
+  discussPlan: (planId: string) => getServer().discussPlan(planId),
+  endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),
   reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),

@@ -39,6 +39,7 @@ function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void
       liveOutput: new Map(),
       tails: new Map(),
       lastPulseAt: now,
+      viewingPlan: null,
     });
     return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
   } finally {
@@ -311,6 +312,8 @@ test('the tech tree lays parts out by dependency depth', () => {
     title: slug,
     scope: 'src/',
     dependsOn,
+    rationale: null,
+    acceptance: null,
     branch: null,
     prNumber: null,
     status,

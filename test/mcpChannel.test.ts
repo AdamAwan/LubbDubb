@@ -484,7 +484,10 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 }
 
 test('plan_submit persists the verdict and hands the agent its status back', async () => {
-  const system = build();
+  // Pinned off: this test is about the tool's persistence mechanics, not the
+  // approval gate (which now defaults on and would land the verdict
+  // `awaiting_approval` instead — covered by `planApproval.test.ts`).
+  const system = build({ planning: { requireApproval: false } });
   const agent = spawnAgent(system, 'issue:12:plan');
 
   const res = await callTool(system, agent, 'plan_submit', {
@@ -549,6 +552,36 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
   });
   assert.equal(fixed.isError, false);
   assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'single');
+  system.store.close();
+});
+
+test('plan_submit accepts and persists the widened document', async () => {
+  const system = build({ planning: { requireApproval: false } });
+  const agent = spawnAgent(system, 'issue:231:plan');
+
+  const res = await callTool(system, agent, 'plan_submit', {
+    verdict: 'parts',
+    reason: 'the signer must exist first',
+    risks: 'part 2 briefly serves artifacts unguarded',
+    outOfScope: 'capability revocation',
+    document: '# Serving artifacts\n\nThe guard is a prefix, not a per-route opt-in.',
+    parts: [
+      {
+        slug: 'signer',
+        title: 'Add the signer',
+        scope: 'src/server/artifactCapability.ts',
+        dependsOn: [],
+        rationale: 'a pure predicate with no callers',
+        acceptance: 'round-trips; tampered and expired refused',
+      },
+    ],
+  });
+  assert.equal(res.isError, false);
+
+  const plan = system.store.getPlanByOrigin('issue:231')!;
+  assert.equal(plan.risks, 'part 2 briefly serves artifacts unguarded');
+  assert.match(plan.document!, /^# Serving artifacts/);
+  assert.equal(system.store.listPlanParts(plan.id)[0]!.acceptance, 'round-trips; tampered and expired refused');
   system.store.close();
 });
 
@@ -717,7 +750,10 @@ test('world_read answers out of the harness view, with the status envelope on it
 });
 
 test('reading an issue carries the plan graph, which lives only in the store', async () => {
-  const system = build();
+  // Pinned off: this test is about `world_read` exposing the plan graph, not
+  // the approval gate (which now defaults on and would leave the plan
+  // `awaiting_approval` instead — covered by `planApproval.test.ts`).
+  const system = build({ planning: { requireApproval: false } });
   system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12, { body: 'Split me.' })] }));
   const planner = spawnAgent(system, 'issue:12:plan');
   await callTool(system, planner, 'plan_submit', {

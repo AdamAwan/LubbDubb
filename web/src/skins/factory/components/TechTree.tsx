@@ -155,6 +155,7 @@ function PlanTree({
   refUrls,
   paused,
   onReplan,
+  onViewPlan,
 }: {
   plan: Plan;
   parts: PlanPart[];
@@ -163,6 +164,7 @@ function PlanTree({
   refUrls: Record<string, string>;
   paused: boolean;
   onReplan: (planId: string) => Promise<unknown> | unknown;
+  onViewPlan: (planId: string) => void;
 }): JSX.Element {
   const layout = layoutTechTree(parts);
   const researched = layout.nodes.filter((n) => n.state === 'researched').length;
@@ -179,6 +181,13 @@ function PlanTree({
           {researched}/{layout.nodes.length} researched
         </span>
         <span className="fx-ref">{plan.status.replace('_', ' ')}</span>
+        <button
+          className="fx-btn"
+          onClick={() => onViewPlan(plan.id)}
+          title="The whole plan: every part's scope, why it is its own PR, and the planner's write-up"
+        >
+          View
+        </button>
         <AsyncButton
           className="fx-btn"
           onClick={() => onReplan(plan.id)}
@@ -228,6 +237,7 @@ export function TechTree({
   refUrls,
   paused,
   onReplan,
+  onViewPlan,
 }: {
   plans: Plan[];
   parts: PlanPart[];
@@ -236,6 +246,7 @@ export function TechTree({
   refUrls: Record<string, string>;
   paused: boolean;
   onReplan: (planId: string) => Promise<unknown> | unknown;
+  onViewPlan: (planId: string) => void;
 }): JSX.Element {
   if (plans.length === 0) {
     return <p className="fx-empty">No blueprints — the planning funnel is off, or no issue has been decomposed.</p>;
@@ -253,6 +264,7 @@ export function TechTree({
           refUrls={refUrls}
           paused={paused}
           onReplan={onReplan}
+          onViewPlan={onViewPlan}
         />
       ))}
     </div>

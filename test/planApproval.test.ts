@@ -32,6 +32,17 @@ test('requireApproval only changes where a parts verdict lands', () => {
   assert.equal(amendedPlanStatus('single', [], true), 'single');
 });
 
+test('approval is on by default, in both places that default it', () => {
+  // Two sites default this and they must agree: the config loader is what a
+  // deployment gets, `DEFAULT_PLANNING` is what a `RuleDispatcher` constructed
+  // without one gets. A drift between them is a gate that is on for the harness
+  // and off for the dispatcher, which reads as "the rule never fires".
+  assert.equal(DEFAULT_PLANNING.requireApproval, true);
+  assert.equal(loadConfig().planning.requireApproval, true);
+  // Off is still reachable and still means what it meant.
+  assert.equal(loadConfig({ planning: { requireApproval: false } as never }).planning.requireApproval, false);
+});
+
 test('the funnel names the awaiting arm, so the chip and the rules read one verdict', () => {
   const route = (status: Plan['status']): string =>
     resolvePlanRoute({
@@ -393,6 +404,10 @@ function planRow(): Plan {
     title: 'Big thing',
     status: 'awaiting_approval',
     reason: 'Schema must land first.',
+    risks: null,
+    outOfScope: null,
+    document: null,
+    discussing: false,
     statusCommentRef: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
@@ -407,6 +422,8 @@ function partRow(slug: string, seq: number): PlanPart {
     seq,
     title: `The ${slug} part`,
     scope: `src/${slug}/`,
+    rationale: null,
+    acceptance: null,
     dependsOn: [],
     branch: null,
     prNumber: null,

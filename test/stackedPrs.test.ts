@@ -54,6 +54,10 @@ function plan(over: Partial<Plan> = {}): Plan {
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
+    risks: null,
+    outOfScope: null,
+    document: null,
+    discussing: false,
     statusCommentRef: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
@@ -69,6 +73,8 @@ function part(slug: string, seq: number, over: Partial<PlanPart> = {}): PlanPart
     seq,
     title: `The ${slug} part`,
     scope: `src/${slug}/`,
+    rationale: null,
+    acceptance: null,
     dependsOn: [],
     branch: null,
     prNumber: null,
@@ -444,8 +450,16 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
     reason: 'Schema first.',
   });
   system.store.upsertPlanParts(stored.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [] },
-    { slug: 'api', seq: 2, title: 'API', scope: 'src/server/', dependsOn: ['schema'] },
+    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'api',
+      seq: 2,
+      title: 'API',
+      scope: 'src/server/',
+      dependsOn: ['schema'],
+      rationale: null,
+      acceptance: null,
+    },
   ]);
 
   // The graph is in the snapshot — until now it existed only in the database, and

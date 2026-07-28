@@ -411,9 +411,23 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   properties to preserve: the verdict is persisted for **both** outcomes (without a `single` row
   the planner re-runs every cycle), and a planner that spends its `dispatchVerdict` attempt cap
   **fails open** to `single` with no escalation — narrowing rule 4 without that turns any planner
-  crash into a permanently parked issue. `plans`/`plan_parts` are fresh `CREATE TABLE`s, so no
-  `migrate()` entry. `.lubbdubb/` is gitignored, so the graph genuinely lives only in the store.
+  crash into a permanently parked issue.
+  `plans`/`plan_parts` were fresh `CREATE TABLE`s when introduced, so they needed no `migrate()`
+  entry — but columns added to them **since** do, and have them (`risks`/`out_of_scope`/`document`/
+  `discussing`, `rationale`/`acceptance`). `CREATE TABLE IF NOT EXISTS` never alters an existing
+  table, so a column without an `ensureColumns` entry is invisible on every older database.
+  `.lubbdubb/` is gitignored, so the graph genuinely lives only in the store.
   Tests: `test/issuePlan.test.ts`, `test/planIngestion.test.ts`.
+  - **Approval on by default, a plan modal, and discussing a plan.**
+    `planning.requireApproval` now defaults `true` (only matters once `planning.enabled` is), and a
+    plan gained five optional narrative fields (`risks`, `outOfScope`, `document` at plan level;
+    `rationale`, `acceptance` per part) that `upsertPlan` preserves on absence rather than clearing.
+    A shared `PlanModal`, opened via `viewPlan` on `CockpitActions`, renders the whole decomposition
+    plus the markdown write-up from anywhere the plan is mentioned. `POST /api/plans/:id/discuss` /
+    `.../discuss/end` let an operator talk to the planner before deciding — a replan with a
+    conversational prompt (`discuss-plan`), inheriting rule 3c's origin gate, cooldown, attempt cap
+    and fail-open rather than earning new ones. See [08](docs/spec/08-planning.md) and
+    [17](docs/spec/17-cockpit.md).
 - **Plan parts (stage 3 of the multi-PR design).** What makes a `parts` verdict mean something.
   Scheduling is pure in `src/plans/parts.ts` (origin `issue:<n>:part:<slug>`, branch
   `issue/<n>/<slug>`, dependency depth, base selection, the sibling context the prompt carries),
