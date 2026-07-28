@@ -22,6 +22,8 @@ import type {
   FindingKind,
   FindingStatus,
   IssueConclusion,
+  IssueDelivery,
+  DeliveryAuthor,
   IssueConclusionVerdict,
   Job,
   Plan,
@@ -499,15 +501,20 @@ export class Store {
       createdAt: prev?.createdAt ?? ts,
       updatedAt: ts,
     };
-    this.db
-      .prepare(
-        `INSERT INTO issue_conclusions (origin_ref, verdict, note, by, agent_id, task_id, created_at, updated_at)
-         VALUES (@originRef, @verdict, @note, @by, @agentId, @taskId, @createdAt, @updatedAt)
-         ON CONFLICT(origin_ref) DO UPDATE SET
-           verdict=excluded.verdict, note=excluded.note, by=excluded.by,
-           agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
-      )
-      .run(row);
+    const write = this.db.transaction((c: IssueConclusion) => {
+      this.db
+        .prepare(
+          `INSERT INTO issue_conclusions (origin_ref, verdict, note, by, agent_id, task_id, created_at, updated_at)
+           VALUES (@originRef, @verdict, @note, @by, @agentId, @taskId, @createdAt, @updatedAt)
+           ON CONFLICT(origin_ref) DO UPDATE SET
+             verdict=excluded.verdict, note=excluded.note, by=excluded.by,
+             agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
+        )
+        .run(c);
+      // The other half of "an issue never carries both". See `recordDelivery`.
+      this.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(c.originRef);
+    });
+    write(row);
     return row;
   }
 
@@ -532,6 +539,88 @@ export class Store {
    */
   clearIssueConclusion(originRef: string): boolean {
     return this.db.prepare(`DELETE FROM issue_conclusions WHERE origin_ref=?`).run(originRef).changes > 0;
+  }
+
+  /**
+   * Record that an issue is delivered — the assessor's verdict, or the operator's.
+   *
+   * `decided_at` is preserved across an overwrite, so the row still dates the
+   * moment the issue was *first* judged delivered. That is not cosmetic here the
+   * way `created_at` is on a conclusion: it is the instant `deliveryHold` measures
+   * world signal against, and refreshing it on every re-assessment would keep
+   * moving the goalposts a transition has to clear.
+   *
+   * **Writing this clears any standing conclusion**, in the same transaction. The
+   * assessor is later and better informed than the agent that declared its own
+   * run, and leaving both would have rule 3b return the item to pickup while this
+   * gate blocked it. The mirror lives in {@link recordIssueConclusion}; both are
+   * here because this is the only file that touches SQLite, and a caller that
+   * remembered one and forgot the other would leave the two contradicting.
+   */
+  recordDelivery(input: {
+    originRef: string;
+    summary: string;
+    by: DeliveryAuthor;
+    agentId?: string | null;
+    taskId?: string | null;
+  }): IssueDelivery {
+    const ts = this.now();
+    const prev = this.getDelivery(input.originRef);
+    const row: IssueDelivery = {
+      originRef: input.originRef,
+      summary: input.summary,
+      by: input.by,
+      agentId: input.agentId ?? null,
+      taskId: input.taskId ?? null,
+      decidedAt: prev?.decidedAt ?? ts,
+      updatedAt: ts,
+    };
+    const write = this.db.transaction((d: IssueDelivery) => {
+      this.db
+        .prepare(
+          `INSERT INTO issue_deliveries (origin_ref, summary, by, agent_id, task_id, decided_at, updated_at)
+           VALUES (@originRef, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
+           ON CONFLICT(origin_ref) DO UPDATE SET
+             summary=excluded.summary, by=excluded.by, agent_id=excluded.agent_id,
+             task_id=excluded.task_id, updated_at=excluded.updated_at`,
+        )
+        .run(d);
+      this.db.prepare(`DELETE FROM issue_conclusions WHERE origin_ref=?`).run(d.originRef);
+    });
+    write(row);
+    return row;
+  }
+
+  getDelivery(originRef: string): IssueDelivery | null {
+    const row = this.db.prepare(`SELECT * FROM issue_deliveries WHERE origin_ref=?`).get(originRef) as
+      | IssueDeliveryRow
+      | undefined;
+    return row ? rowToDelivery(row) : null;
+  }
+
+  /**
+   * Every standing delivery verdict.
+   *
+   * **Unbounded on purpose**, exactly as `listProposals` is: a verdict that aged
+   * out of a window would silently re-open pickup on work already delivered, which
+   * is the failure this table exists to prevent. It stays small — one row per
+   * assessed issue — and what bounds the *event* read it feeds is time and item
+   * (`deliverySignalQuery`), never a row count.
+   */
+  listDeliveries(): IssueDelivery[] {
+    const rows = this.db.prepare(`SELECT * FROM issue_deliveries`).all() as IssueDeliveryRow[];
+    return rows.map(rowToDelivery);
+  }
+
+  /**
+   * Drop an issue's delivery verdict — the operator's "no, there is more here".
+   *
+   * A delete rather than a stored `not_delivered`, for {@link clearIssueConclusion}'s
+   * reason: the absence of a verdict is precisely one state, and storing it would
+   * give the gate two ways to express it.
+   */
+  clearDelivery(originRef: string): boolean {
+    return this.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
   /**
@@ -1331,6 +1420,15 @@ interface IssueConclusionRow {
   created_at: string;
   updated_at: string;
 }
+interface IssueDeliveryRow {
+  origin_ref: string;
+  summary: string;
+  by: string;
+  agent_id: string | null;
+  task_id: string | null;
+  decided_at: string;
+  updated_at: string;
+}
 interface PlanPartRow {
   id: string;
   plan_id: string;
@@ -1522,6 +1620,17 @@ function rowToIssueConclusion(r: IssueConclusionRow): IssueConclusion {
     agentId: r.agent_id,
     taskId: r.task_id,
     createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+function rowToDelivery(r: IssueDeliveryRow): IssueDelivery {
+  return {
+    originRef: r.origin_ref,
+    summary: r.summary,
+    by: r.by as DeliveryAuthor,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    decidedAt: r.decided_at,
     updatedAt: r.updated_at,
   };
 }

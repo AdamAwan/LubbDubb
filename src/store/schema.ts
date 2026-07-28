@@ -144,10 +144,29 @@ CREATE TABLE IF NOT EXISTS issue_conclusions (
   origin_ref TEXT PRIMARY KEY,      -- "issue:12"
   verdict    TEXT NOT NULL,         -- done | more_work
   note       TEXT NOT NULL,
-  by         TEXT NOT NULL,         -- agent | operator
+  by         TEXT NOT NULL,         -- agent | assessor | operator
   agent_id   TEXT,                  -- null for an operator toggle
   task_id    TEXT,
   created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- The harness's own park: an issue the assessor judged delivered, or the operator
+-- marked so directly. Weaker than the tracker's 'closed' and reversible — its only
+-- effect is to stop pickup, filling the gap where rule 3b's review-state hold
+-- cannot reach because the provider has no review state (GitHub).
+--
+-- A separate table from issue_conclusions rather than a third verdict on it: a
+-- conclusion is declared once and gates nothing, while this is re-read by the
+-- pickup gate every pulse and stops standing when the world moves. The two are
+-- mutually exclusive — writing either clears the other.
+CREATE TABLE IF NOT EXISTS issue_deliveries (
+  origin_ref TEXT PRIMARY KEY,      -- "issue:12"
+  summary    TEXT NOT NULL,
+  by         TEXT NOT NULL,         -- assessor | operator
+  agent_id   TEXT,                  -- null for an operator verdict
+  task_id    TEXT,
+  decided_at TEXT NOT NULL,         -- what world signal is measured against
   updated_at TEXT NOT NULL
 );
 
