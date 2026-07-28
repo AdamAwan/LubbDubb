@@ -19,6 +19,7 @@ import type {
   Task,
 } from '../types.js';
 import { conclusionOrigin } from '../issueConclusion.js';
+import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -139,6 +140,7 @@ interface AgentManagerEvents {
   progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
   /** The agent said whether its issue is finished (already persisted against the issue origin). */
   conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
+  assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -480,6 +482,56 @@ export class AgentManager extends EventEmitter {
     });
     this.emit('conclusion', { agentId, taskId: task.id, conclusion });
     return { ok: true, conclusion };
+  }
+
+  /**
+   * Record an assessor's verdict on the issue it was dispatched to judge.
+   *
+   * Routed through the manager rather than straight to the store for
+   * {@link recordConclusion}'s reason: the event repaints the cockpit now rather
+   * than on the next pulse.
+   *
+   * The two verdicts land in two different places, because they are two
+   * statements that already exist. `more_work` *is* what `issue_conclusions`
+   * means and what rule 3b's inverse arm already reads — a second source for one
+   * statement would be the duplicate-opinion bug. `delivered` is the park, and
+   * gates pickup, which no conclusion does. Their mutual exclusion is enforced in
+   * the store, so it is not re-implemented here.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  recordAssessment(
+    agentId: string,
+    verdict: AssessmentVerdict,
+    summary: string,
+  ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const origin = assessmentOrigin(task.originRef);
+    if (!origin.ok) return { ok: false, error: origin.error };
+
+    if (verdict === 'delivered') {
+      this.store.recordDelivery({
+        originRef: origin.issueOrigin,
+        summary,
+        by: 'assessor',
+        agentId,
+        taskId: task.id,
+      });
+    } else {
+      this.store.recordIssueConclusion({
+        originRef: origin.issueOrigin,
+        verdict: 'more_work',
+        note: summary,
+        by: 'assessor',
+        agentId,
+        taskId: task.id,
+      });
+    }
+    this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+    return { ok: true, issueOrigin: origin.issueOrigin, verdict };
   }
 
   /**

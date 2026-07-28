@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { hasPriorWork } from '../src/delivery/assessment.js';
-import type { Decision, Issue, IssueDelivery, Plan, Task } from '../src/types.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { loadConfig } from '../src/config.js';
+import { buildSystem, type System } from '../src/system.js';
+import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
+import type { Agent, Decision, Issue, IssueDelivery, Plan, Task } from '../src/types.js';
 
 // Rule 3e — the assessor. What makes it fire, what makes it stand down, and the
 // one thing it must never do: let a second agent onto an issue it is judging.
@@ -249,4 +256,131 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
   assert.deepEqual(origins(actions), [], 'cooling, so nothing is dispatched');
   const queued = upcoming?.find((i) => i.origin === 'issue:12:assess');
   assert.equal(queued?.status, 'cooldown', 'kept visible rather than silently skipped');
+});
+
+// -- the tool, through the same dispatch an agent's bridge reaches ------------
+
+function testConfig(): ReturnType<typeof loadConfig> {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-assess-'));
+  return loadConfig({
+    auth: { enabled: false } as never,
+    labelPrefix: '',
+    dbPath: ':memory:',
+    dispatcher: 'rule',
+    agentMode: 'raw',
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    heartbeatIntervalMs: 999_999,
+  });
+}
+
+function build(): System {
+  return buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+}
+
+function spawnAgent(system: System, originRef: string): Agent {
+  const t = system.store.createTask({
+    kind: 'code',
+    title: `Work ${originRef}`,
+    prompt: 'do it',
+    branch: 'assess/issue/12',
+    originRef,
+  });
+  return system.agents.spawn(t, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+}
+
+async function callTool(system: System, agent: Agent, name: string, args: Record<string, unknown>) {
+  const session = system.mcp.session(agent.id);
+  assert.ok(session, 'a spawned agent has a live MCP credential');
+  const result = (await session!.call(name, args)) as { content: { text: string }[]; isError?: boolean };
+  return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
+}
+
+test('assess_issue is advertised under its name in the allow-list', () => {
+  assert.ok(MCP_TOOL_NAMES.includes('assess_issue'), 'a tool missing from names.ts connects but is never callable');
+});
+
+test('a delivered verdict parks the issue, attributed from the credential', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:assess');
+  const res = await callTool(system, agent, 'assess_issue', {
+    status: 'delivered',
+    summary: 'PR #40 (observed merged) adds the endpoint and its tests; nothing in the issue is missing',
+  });
+  assert.equal(res.isError, false);
+
+  const delivery = system.store.getDelivery('issue:12');
+  assert.equal(delivery?.by, 'assessor');
+  assert.equal(delivery?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
+  assert.match(res.text, /not closed|stays a human decision/, 'the agent must not believe it closed the ticket');
+  system.store.close?.();
+});
+
+test('a more_work verdict lands as the conclusion rule 3b already reads', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:assess');
+  const res = await callTool(system, agent, 'assess_issue', {
+    status: 'more_work',
+    summary: 'the migration the issue asks for is not in the repository',
+  });
+  assert.equal(res.isError, false);
+
+  // Not a second source for one statement: `more_work` *is* what issue_conclusions
+  // means, and what rule 3b's inverse arm already acts on.
+  const conclusion = system.store.getIssueConclusion('issue:12');
+  assert.equal(conclusion?.verdict, 'more_work');
+  assert.equal(conclusion?.by, 'assessor');
+  assert.equal(system.store.getDelivery('issue:12'), null, 'and the park is not written');
+  system.store.close?.();
+});
+
+test('the two verdicts clear each other, so an issue never carries both', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:assess');
+
+  await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'all present' });
+  await callTool(system, agent, 'assess_issue', { status: 'more_work', summary: 'actually the CLI half is missing' });
+  assert.equal(system.store.getDelivery('issue:12'), null);
+  assert.equal(system.store.getIssueConclusion('issue:12')?.verdict, 'more_work');
+
+  await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'the CLI half landed in PR #41' });
+  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  assert.ok(system.store.getDelivery('issue:12'));
+  system.store.close?.();
+});
+
+test('an agent that did the work cannot assess it, and is told which tool is its own', async () => {
+  const system = build();
+  for (const origin of ['issue:12', 'issue:12:plan', 'issue:12:part:schema']) {
+    const agent = spawnAgent(system, origin);
+    const res = await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'looks fine to me' });
+    assert.equal(res.isError, true, `${origin} is doing the work, so judging it is not an assessment`);
+    assert.match(res.text, /conclude_work/, 'refusals name the tool that is theirs');
+  }
+  assert.equal(system.store.getDelivery('issue:12'), null, 'and nothing is written');
+  system.store.close?.();
+});
+
+test('an assessor is pointed at assess_issue when it reaches for conclude_work', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:assess');
+  const res = await callTool(system, agent, 'conclude_work', { status: 'done', note: 'it is finished' });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /assess_issue/);
+  system.store.close?.();
+});
+
+test('a rejected assessment writes nothing', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:assess');
+
+  const noSummary = await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: '  ' });
+  assert.equal(noSummary.isError, true, 'a bare verdict is not reviewable');
+
+  const badVerdict = await callTool(system, agent, 'assess_issue', { status: 'done', summary: 'x' });
+  assert.equal(badVerdict.isError, true, '"done" is conclude_work\'s word, not this one');
+
+  assert.equal(system.store.getDelivery('issue:12'), null);
+  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  system.store.close?.();
 });
