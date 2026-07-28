@@ -6,3 +6,6 @@ package-lock.json
 *.sqlite
 *.db
 .lubbdubb
+
+# Byte-exact golden fixtures — reformatting them breaks the assertions that compare against them
+test/fixtures/

@@ -36,7 +36,11 @@ AgentSession`), or by tagging the member `@public` with a note naming the seam w
   `web/tsconfig.json`) are separate passes. A change spanning `src/` and `web/` must satisfy
   both.
 - **format:check** is Prettier in check mode — run `npm run format` (or
-  `npx prettier --write <files>`) to fix, don't hand-format.
+  `npx prettier --write <files>`) to fix, don't hand-format. `test/fixtures/` is in
+  `.prettierignore`: those files are **byte-exact goldens** an assertion compares against
+  (`test/cockpitSkins.test.ts` vs `classic-markup.html`), so formatting one breaks a test with a
+  diff that looks nothing like its cause. The `format` script's globs are `.ts`/`.tsx` only, which
+  is why the ignore has to carry it — a bare `npx prettier --write test/` reaches further.
 
 Tests are `node:test` run through `tsx` (`npm test`). `npm run smoke` is a real end-to-end
 run (real `node-pty` + a git worktree); the unit/integration suite does **not** need native
