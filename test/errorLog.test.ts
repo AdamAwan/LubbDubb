@@ -151,6 +151,31 @@ test('a route 500 is recorded and returned as a plain error', async () => {
   system.store.close();
 });
 
+test('POST /api/errors/clear empties the log and the snapshot with it', async () => {
+  const system = quietSystem();
+  const { app } = await buildApp(system);
+  system.errors.record({ source: 'boot', message: 'resume went sideways' });
+  system.errors.record({ source: 'cycle', message: 'and again' });
+
+  const res = await app.inject({ method: 'POST', url: '/api/errors/clear' });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json(), { ok: true, cleared: 2 });
+  assert.deepEqual(system.store.listErrors(), []);
+  assert.deepEqual((await buildStateSnapshot(system)).errors, []);
+
+  // Idempotent, and a fault recorded *after* a clear still lands: the clear is a
+  // delete, not a switch that stops the log recording.
+  assert.deepEqual((await app.inject({ method: 'POST', url: '/api/errors/clear' })).json(), {
+    ok: true,
+    cleared: 0,
+  });
+  system.errors.record({ source: 'agent', message: 'fresh fault' });
+  assert.equal(system.store.listErrors().length, 1);
+
+  await app.close();
+  system.store.close();
+});
+
 test('the /api/state snapshot carries the error log', async () => {
   const system = quietSystem();
   system.errors.record({ source: 'boot', message: 'resume went sideways' });

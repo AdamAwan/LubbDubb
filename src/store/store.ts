@@ -1223,6 +1223,20 @@ export class Store {
     return rows.map(rowToErrorEntry);
   }
 
+  /**
+   * Drop the whole error log, returning how many rows went.
+   *
+   * A delete rather than an acknowledged-up-to watermark: the log is a list an
+   * operator reads and clears, not a record anything decides on — nothing in the
+   * harness reads `error_events` back, so a row nobody has read is the only thing
+   * it can lose. All of it, never a slice: "clear the faults I can see" is a
+   * different sentence on a list the server truncates at 100, and the second
+   * cockpit watching would disagree with the first about which those were.
+   */
+  clearErrors(): number {
+    return this.db.prepare(`DELETE FROM error_events`).run().changes;
+  }
+
   // -- World change history ------------------------------------------------
 
   /** Stamp each diffed transition with an id + timestamp, persist, return rows. */

@@ -267,6 +267,18 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, report };
   });
 
+  // Clear the fault log. A POST like every other mutation on this surface, not a
+  // DELETE: the auth hook and the structural route-table test that walks it both
+  // key on the `/api` prefix, and one verb for one meaning is worth more here than
+  // matching HTTP's. The `dirty` is what empties the panel in every open cockpit —
+  // this is a delete, so a second one watching must not go on showing rows that
+  // are gone.
+  app.post('/api/errors/clear', async () => {
+    const cleared = store.clearErrors();
+    hub.broadcast({ type: 'dirty' });
+    return { ok: true, cleared };
+  });
+
   // Live dispatch controls (cap + pause). Changes are in-memory and ephemeral;
   // on success we broadcast so every open cockpit updates without a refetch.
   app.post('/api/control', async (req, reply) => {

@@ -42,30 +42,30 @@ above exists for.
 
 ## Tables
 
-| Table                | Holds                                                                                    | Key constraints               |
-| -------------------- | ---------------------------------------------------------------------------------------- | ----------------------------- |
-| `tasks`              | Units of work materialised at dispatch.                                                  | —                             |
-| `jobs`               | Operator-queued prompts awaiting a slot.                                                 | —                             |
-| `priority_overrides` | Operator "Up next" re-ordering, keyed on candidate origin.                               | `origin` is `PRIMARY KEY`     |
-| `agents`             | One row per launched agent, including usage and the progress note.                       | —                             |
-| `usage_events`       | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`. | —                             |
-| `agent_flags`        | Artifacts surfaced to the cockpit.                                                       | `UNIQUE (agent_id, ref)`      |
-| `agent_files`        | Every file an agent wrote; `promoted` marks the ones also surfaced as chips.             | `UNIQUE (agent_id, path)`     |
-| `findings`           | Things agents noticed outside their own task.                                            | —                             |
-| `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.    | `origin_ref` is `PRIMARY KEY` |
-| `plans`              | One delivery plan per issue.                                                             | `origin_ref` is `UNIQUE`      |
-| `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                 | `UNIQUE (plan_id, slug)`      |
+| Table                | Holds                                                                                          | Key constraints               |
+| -------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------- |
+| `tasks`              | Units of work materialised at dispatch.                                                        | —                             |
+| `jobs`               | Operator-queued prompts awaiting a slot.                                                       | —                             |
+| `priority_overrides` | Operator "Up next" re-ordering, keyed on candidate origin.                                     | `origin` is `PRIMARY KEY`     |
+| `agents`             | One row per launched agent, including usage and the progress note.                             | —                             |
+| `usage_events`       | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`.       | —                             |
+| `agent_flags`        | Artifacts surfaced to the cockpit.                                                             | `UNIQUE (agent_id, ref)`      |
+| `agent_files`        | Every file an agent wrote; `promoted` marks the ones also surfaced as chips.                   | `UNIQUE (agent_id, path)`     |
+| `findings`           | Things agents noticed outside their own task.                                                  | —                             |
+| `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.          | `origin_ref` is `PRIMARY KEY` |
+| `plans`              | One delivery plan per issue.                                                                   | `origin_ref` is `UNIQUE`      |
+| `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                       | `UNIQUE (plan_id, slug)`      |
 | `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
-| `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from. | `ref` is `PRIMARY KEY`        |
-| `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.            | `target_ref` is `PRIMARY KEY` |
-| `agent_transcripts`  | Chunked agent output.                                                                    | `PRIMARY KEY (agent_id, seq)` |
-| `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                          | —                             |
-| `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                 | —                             |
-| `connector_state`    | The fake provider's editable world, so injected events survive restarts.                 | —                             |
-| `connector_events`   | Injected events, for diagnostics.                                                        | —                             |
-| `world_events`       | Observed world transitions — the activity feed's backing store.                          | —                             |
-| `world_baseline`     | The last snapshot the harness diffed against.                                            | Single row: `CHECK (id = 1)`  |
-| `error_events`       | Recorded failures — the Errors panel's backing store.                                    | —                             |
+| `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.       | `ref` is `PRIMARY KEY`        |
+| `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                  | `target_ref` is `PRIMARY KEY` |
+| `agent_transcripts`  | Chunked agent output.                                                                          | `PRIMARY KEY (agent_id, seq)` |
+| `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                | —                             |
+| `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                       | —                             |
+| `connector_state`    | The fake provider's editable world, so injected events survive restarts.                       | —                             |
+| `connector_events`   | Injected events, for diagnostics.                                                              | —                             |
+| `world_events`       | Observed world transitions — the activity feed's backing store.                                | —                             |
+| `world_baseline`     | The last snapshot the harness diffed against.                                                  | Single row: `CHECK (id = 1)`  |
+| `error_events`       | Recorded failures — the Errors panel's backing store.                                          | —                             |
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
@@ -203,12 +203,12 @@ parents its node, and one that aged out of a window would have the fold quietly 
 
 It is **not** a `findings` row. A finding is an agent's testimony, with `agent_id`/`task_id` `NOT NULL` and
 attribution taken structurally from a credential; a harness-authored row has neither, so reusing the table
-would mean forging the two columns that carry the guarantee. The filing *mechanism* is reused in full — a
+would mean forging the two columns that carry the guarantee. The filing _mechanism_ is reused in full — a
 desk job, `trackerCoordinates`, an overridable prompt, `link_ticket` — and only the row differs.
 
 The parent edge it produces is written by the **fold**, never from the route or the tool: the filing row is
 intent, the relationship `plans` and `plan_parts` already have to the recorder, which stays the graph's only
-writer. Setting it is legal because `parent_ref` is write-once *once non-null*, which is equally what stops
+writer. Setting it is legal because `parent_ref` is write-once _once non-null_, which is equally what stops
 it ever being redone.
 
 ### Escalations
@@ -224,7 +224,7 @@ log can answer "which rule fired" first-class. `listDecisions(limit=200)`.
 ### World and errors
 
 `recordWorldEvents(inputs)` (stamps id and timestamp), `listWorldEvents(limit=200)`,
-`getWorldBaseline()`, `setWorldBaseline(world)`, `recordError(input)`, `listErrors(limit=100)`.
+`getWorldBaseline()`, `setWorldBaseline(world)`, `recordError(input)`, `listErrors(limit=100)`, `clearErrors()` (deletes the whole log, returns the row count).
 
 ### Connector state
 

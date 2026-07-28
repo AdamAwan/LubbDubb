@@ -23,7 +23,7 @@ const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
 
 const INERT = new Proxy({} as CockpitActions, { get: () => () => Promise.resolve() });
 
-function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void): string {
+function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void, demo = true): string {
   const now = Date.parse('2026-01-01T12:00:00.000Z');
   const realNow = Date.now;
   Date.now = () => now;
@@ -34,7 +34,7 @@ function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void
       state,
       now,
       connected: true,
-      demo: true,
+      demo,
       selected: null,
       liveOutput: new Map(),
       tails: new Map(),
@@ -242,8 +242,12 @@ test('the belt compresses behind the cut', () => {
  */
 test('raising the cap widens the floor', () => {
   const widthOf = (markup: string) => {
-    const m = /class="fx-line fx-sunk" style="width:(\d+)px"/.exec(markup);
-    assert.ok(m, 'the floor rendered no width');
+    // The plan's width is a custom property the CSS takes as a *minimum*, so the
+    // floor and the belt still fill a panel wider than the plan. Pinned as the
+    // element's `width`, a one-bay plan ended mid-panel and left the belt hanging.
+    const m = /class="fx-line fx-sunk" style="--fx-plan-w:(\d+)px"/.exec(markup);
+    assert.ok(m, 'the floor rendered no plan width');
+    assert.doesNotMatch(markup, /class="fx-line fx-sunk" style="[^"]*[^-]width:/, 'the floor must not pin its width');
     return Number(m[1]);
   };
   const small = widthOf(render((s) => (s.control.cap = 2)));
@@ -255,6 +259,42 @@ test('raising the cap widens the floor', () => {
   const huge = widthOf(render((s) => (s.control.cap = 40)));
   const atLimit = widthOf(render((s) => (s.control.cap = 8)));
   assert.equal(huge, atLimit, 'the drawn floor must stop growing at the bay limit');
+});
+
+/**
+ * Injection fakes a world change, which only the static demo has any use for: a
+ * real run against a fake provider is still a real run, and a panel that lies to
+ * the harness there is a way to lie to yourself about what it is reacting to. The
+ * empty-floor line reads the same predicate, so it never offers an injection there
+ * is no panel for.
+ */
+test('injection is a demo control, not a provider one', () => {
+  const demo = render((s) => (s.config.injectable = true));
+  assert.match(demo, /class="inject"/, 'the demo build must keep the inject panel');
+
+  // `injectable` still true — a fake provider is configured — and still no panel.
+  const real = render((s) => (s.config.injectable = true), false);
+  assert.doesNotMatch(real, /class="inject"/, 'a real run must not offer injection');
+  assert.doesNotMatch(real, /Inject event/, 'nor its label');
+
+  const idle = render((s) => {
+    s.agents = [];
+    s.config.injectable = true;
+  }, false);
+  assert.match(idle, /waiting for the world to change/, 'the empty floor must not offer a panel that is gone');
+});
+
+/**
+ * A clear deletes the rows, for every cockpit rather than this one — so it is two
+ * clicks, and it is only offered when there is something to clear.
+ */
+test('faults offer a clear only when there are faults', () => {
+  const withFaults = render();
+  assert.match(withFaults, /clear all \d+\?|>clear</, 'recorded faults must offer a clear');
+
+  const none = render((s) => (s.errors = []));
+  assert.match(none, /No faults recorded\./);
+  assert.doesNotMatch(none, />clear</, 'an empty log must not offer a clear');
 });
 
 /**

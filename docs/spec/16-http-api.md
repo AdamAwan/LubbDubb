@@ -109,6 +109,22 @@ directly).
 
 Runs a cycle. `{ ok: true, report }`.
 
+### `POST /api/errors/clear`
+
+Deletes the whole error log and returns `{ ok: true, cleared }` — how many rows went. Broadcasts a
+coarse `dirty`, so a second cockpit watching stops showing rows that are gone rather than holding
+them until its next poll. Idempotent (`cleared: 0` on an empty log), and it stops nothing: a fault
+recorded after a clear lands as usual.
+
+All of it, never a slice. "Clear the faults I can see" is a different sentence on a list the snapshot
+truncates at 100, and two cockpits would disagree about which those were. It is a **delete**, not an
+acknowledged-up-to watermark, because nothing in the harness reads `error_events` back — the log is a
+list an operator reads and clears, so the only thing a clear can lose is a row nobody had read.
+
+A `POST` rather than a `DELETE`: the auth hook and the structural route-table test that walks it both
+key on the `/api` prefix, and one verb for one meaning on this surface is worth more than matching
+HTTP's.
+
 ### `POST /api/inject`
 
 **403 unless a `fake` provider is configured** — defence in depth, since the cockpit also hides the

@@ -140,6 +140,7 @@ export function useCockpit(): CockpitStatus {
     return {
       refresh,
       pulse: () => then(api.pulse()),
+      clearErrors: () => then(api.clearErrors()),
       select: (agentId) => setSelected(agentId),
 
       killAgent: (id) => then(api.killAgent(id)),

@@ -13,6 +13,8 @@ import type { RecoveryVerdict } from '../types.js';
 export interface CockpitActions {
   refresh(): Promise<void>;
   pulse(): Promise<void>;
+  /** Drop the fault log — the rows go, for every cockpit. */
+  clearErrors(): Promise<void>;
 
   select(agentId: string | null): void;
 

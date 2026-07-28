@@ -367,6 +367,17 @@
   margin: 0;
   font-weight: 600;
 }
+/* The right-hand side of a head: the reading, and the one act it offers. The row
+   itself comes from `.fx-head > div` above — a head is one line whichever side you
+   read it from — so only the button needs saying, in the note's own type so it
+   sits *in* the head rather than on top of it. */
+.fx-head-act .btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
 .fx-note {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -380,19 +391,29 @@
   overflow-x: auto;
   overflow-y: hidden;
 }
-/* Width is set inline from the bay count — the floor grows with the cap, so the
-   plan's own coordinate system is the only thing that can size it. The belt and
-   the gate are positioned in the same units as the SVG viewBox, which is what
-   keeps the cut line over the gap it names. */
+/* `--fx-plan-w` is set inline from the bay count — the floor grows with the cap,
+   so the plan's own coordinate system is the only thing that can size it. The
+   belt and the gate are positioned in the same units as the SVG viewBox, which
+   is what keeps the cut line over the gap it names.
+   It is the floor's *minimum* rather than its width: a plan narrower than the
+   panel (one or two bays) would otherwise end mid-panel and leave the belt
+   hanging in mid-air, when a belt that stops where the bays stop is exactly the
+   thing a line never does. Above it the scroller takes over as before. */
 .fx-line {
   position: relative;
+  min-width: var(--fx-plan-w);
+  width: 100%;
   height: 236px;
   overflow: hidden;
 }
+/* Pinned to the plan's own width, not the floor's: stretched, the SVG rescales
+   and centres its viewBox, and the crates — laid out in the same px units as the
+   bays — would stop lining up with the inserters they feed. */
 .fx-plan {
   position: absolute;
-  inset: 0;
-  width: 100%;
+  top: 0;
+  left: 0;
+  width: var(--fx-plan-w);
   height: 100%;
 }
 
@@ -799,7 +820,7 @@
   [data-fx='production'],
   [data-fx='launches'],
   [data-fx='faults'],
-  [data-fx='work-orders'],
+  [data-fx='blueprints'],
   [data-fx='off-blueprint'],
   [data-fx='signals'] {
     grid-column: span 1;
@@ -844,7 +865,7 @@
 [data-fx='launches'] {
   order: 7;
 }
-[data-fx='work-orders'] {
+[data-fx='blueprints'] {
   order: 8;
 }
 [data-fx='research'] {

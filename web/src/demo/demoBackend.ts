@@ -86,6 +86,13 @@ class DemoServer {
     return { ok: true };
   }
 
+  async clearErrors(): Promise<{ ok: true; cleared: number }> {
+    const cleared = this.state.errors.length;
+    this.state.errors = [];
+    this.dirty();
+    return { ok: true, cleared };
+  }
+
   async inject(event: unknown): Promise<{ ok: true }> {
     this.applyInjection(event as Record<string, unknown>);
     this.dirty();
@@ -777,6 +784,7 @@ export const demoApi = {
   // reason the real route refuses when the issues provider is `fake`.
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
   pulse: () => getServer().pulse(),
+  clearErrors: () => getServer().clearErrors(),
   inject: (event: unknown) => getServer().inject(event),
   answerEscalation: (id: string, response: string) => getServer().answerEscalation(id, response),
   decidePermission: (id: string, allow: boolean, note?: string) => getServer().decidePermission(id, allow, note),

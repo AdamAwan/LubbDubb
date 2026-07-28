@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SkinProps } from '../types.js';
 import { AgentDrawer } from '../../components/AgentDrawer.js';
+import { ConfirmButton } from '../../components/ConfirmButton.js';
 import { EscalationCard } from '../../components/EscalationCard.js';
 import { FindingsPanel } from '../../components/FindingsPanel.js';
 import { InjectPanel } from '../../components/InjectPanel.js';
@@ -127,7 +128,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         {view.live.length === 0 && (
           <p className="fx-empty">
             No bots out. The floor is idle
-            {state.config.injectable ? ' — inject an event to wake it.' : ' — waiting for the world to change.'}
+            {view.demo ? ' — inject an event to wake it.' : ' — waiting for the world to change.'}
           </p>
         )}
         {view.live.map((a) => (
@@ -257,17 +258,21 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     </section>
   );
 
-  const workOrders = (
-    <section className="fx-card fx-bev" data-fx="work-orders">
+  // Injection is a *demo* control, not a provider one: it fakes a world change,
+  // which is only ever something the static Pages build needs — a real run with a
+  // fake provider is still a run, and the panel there is a way to lie to yourself
+  // about what the harness is reacting to.
+  const blueprints = (
+    <section className="fx-card fx-bev" data-fx="blueprints">
       <div className="fx-head">
         <div>
-          <Icon name="inserter" />
-          <h2>Work Orders</h2>
+          <Icon name="blueprint" />
+          <h2>Blueprints</h2>
         </div>
         <p className="fx-note">queued ahead of every rule</p>
       </div>
       <LaunchPanel jobs={state.jobs} onChanged={actions.refresh} />
-      {state.config.injectable && <InjectPanel onInjected={actions.refresh} world={state.world} />}
+      {view.demo && <InjectPanel onInjected={actions.refresh} world={state.world} />}
     </section>
   );
 
@@ -348,7 +353,21 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           <Icon name="alert" />
           <h2>Faults</h2>
         </div>
-        <p className="fx-note">{state.errors.length} recorded</p>
+        <div className="fx-head-act">
+          <p className="fx-note">{state.errors.length} recorded</p>
+          {/* Two-step, because the rows go: nothing in the harness reads the fault
+              log back, so a clear costs nothing it decides on — but it costs the
+              only copy, and for every cockpit rather than this one. */}
+          {state.errors.length > 0 && (
+            <ConfirmButton
+              className="ghost small"
+              label="clear"
+              confirmLabel={`clear all ${state.errors.length}?`}
+              title="Delete every recorded fault — this cannot be undone"
+              onConfirm={() => actions.clearErrors()}
+            />
+          )}
+        </div>
       </div>
       <div className="fx-body">
         {state.errors.length === 0 && <p className="fx-empty">No faults recorded.</p>}
@@ -387,7 +406,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           {recovery}
           {alerts}
           {stamp}
-          {workOrders}
+          {blueprints}
           {faults}
         </div>
         <div className="fx-rail fx-rail-floor">

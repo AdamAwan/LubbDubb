@@ -98,6 +98,8 @@ const realApi = {
   // An operator's click, never a rule: see src/graph/unrecorded.ts.
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),
   pulse: () => post('/api/pulse'),
+  // Clears the fault log for every cockpit, not just this one: the rows go.
+  clearErrors: () => post<{ ok: true; cleared: number }>('/api/errors/clear'),
   inject: (event: unknown) => post('/api/inject', event),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),
   // Clear an item without answering it, for when the thing was handled outside the
