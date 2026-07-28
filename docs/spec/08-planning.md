@@ -392,8 +392,15 @@ progress reporting never takes the pulse down with it.
 
 ## Replan
 
-`POST /api/plans/:id/replan` flips the plan row to `planning`, withdraws any pending plan proposal,
-and kicks a cycle. That is all it does.
+`POST /api/plans/:id/replan` flips the plan row to `planning`, clears `discussing` if it was set,
+withdraws any pending plan proposal, and kicks a cycle. That is all it does.
+
+Clearing `discussing` is not optional when a replan is requested mid-conversation: the flag is what
+picks the template rule 3c renders from `planning`, so leaving it set would render `discuss-plan` on
+the next dispatch instead of the `issue-replan` this call actually asked for — the two routes would
+disagree about what plain `planning` means. `PlanPanel.tsx` and the factory skin's `TechTree.tsx` keep
+Replan visible during a discussion for exactly this reason (the modal hides it, they don't); the route
+must be safe to call in that state, not merely reachable.
 
 The withdrawal is not optional under `requireApproval`: a pending verdict holds rule 3d off the plan,
 so the amended decomposition would never be put to anyone — and the stale card, if accepted, would
@@ -428,15 +435,25 @@ prompt.
 `POST /api/plans/:id/discuss`:
 
 1. 404 when the plan is unknown.
-2. `store.setPlanStatus(id, 'planning')` — exactly what `/replan` does.
-3. `store.setPlanDiscussing(id, true)`.
-4. Withdraw any pending plan proposal (`ProposalDesk.reject`, "superseded by a discussion"). Safe for
+2. **409 unless `plan.status === 'awaiting_approval'`.** Every framing of Discuss — the design, this
+   section, the `discuss-plan` prompt itself ("before approving it") — only ever contemplates talking
+   through a decomposition that is still a pending question. Without the guard, discussing a `single`
+   plan and then ending the discussion writes `awaiting_approval` over zero parts: rule 3d proposes it,
+   an operator approves an empty decomposition, `resolvePlanRoute` now returns `parts` instead of
+   `single`, and the issue is parked with no ready part, no agent and no chip explaining why. Discussing
+   an already-`active` plan is the milder version of the same mistake — it reopens the gate rule 4a
+   already cleared and stops scheduling the remaining parts, which is exactly the harm `/discuss/end`'s
+   own 409 (below) exists to prevent on the way back out. `PlanModal.tsx` hides the Discuss button
+   outside `awaiting_approval` so the UI cannot offer what the route refuses.
+3. `store.setPlanStatus(id, 'planning')` — exactly what `/replan` does.
+4. `store.setPlanDiscussing(id, true)`.
+5. Withdraw any pending plan proposal (`ProposalDesk.reject`, "superseded by a discussion"). Safe for
    the reason the replan withdrawal is safe: the status write lands first, so `refusePlan` finds the
    plan no longer `awaiting_approval` and no-ops — the withdrawal only closes the inbox item. And
    **necessary**: a pending proposal holds rule 3d (`planProposalHold`), so the amended decomposition
    would never be put to anyone, and the stale card, if accepted, would release a plan its reader never
    saw.
-5. Broadcast, run a cycle.
+6. Broadcast, run a cycle.
 
 Returns `{ ok: true, plan }`.
 
@@ -471,9 +488,16 @@ pane is those two calls plus a link to the real drawer for tool calls.
   stale or duplicate call, reopening the approval gate on a plan whose parts are already dispatched).
   Otherwise it sets the plan back to `awaiting_approval`, clears `discussing`, broadcasts and runs a
   cycle — restoring the status is not an afterthought: clearing the flag alone would leave the plan in
-  `planning`, which is exactly what rule 3c dispatches a fresh planner from. It does **not** kill the
-  discussion agent; it is the operator's escape hatch, and the agent finishes its own turn or is ended
-  separately. Returns `{ ok: true, plan }`.
+  `planning`, which is exactly what rule 3c dispatches a fresh planner from. It **does** end the
+  discussion agent — the live task on `planOrigin(planIssueNumber(plan.originRef))`, completed through
+  the same `AgentManager.complete` the cockpit's own agent-complete button uses, the clean `done`
+  terminal that reclaims the worktree rather than `kill`'s abandonment. Left alive, the planner holds a
+  fleet slot and a worktree with nothing to talk to — the modal's discussion pane is gated on
+  `plan.discussing`, so the reply box is already gone — and a late `plan_submit` from that stale agent
+  would revert this very approval back to `awaiting_approval` through ingestion's unconditional
+  `requireApproval` re-check. A missing agent (already gone) or a completion that fails is a no-op, not
+  a route failure: the plan restore is the important half and must land regardless. Returns
+  `{ ok: true, plan }`.
 - **It dies.** The plan stays `planning` with `discussing` set, so rule 3c re-dispatches, bounded by the
   existing `dispatchVerdict` attempt cap on `issue:<n>:plan`; a spent cap fails the plan back to `parts`
   exactly as a spent replan does. Deliberately the same failure envelope as replan, not a new one.

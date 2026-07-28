@@ -84,6 +84,24 @@ test('/discuss/end refuses a plan that is not being discussed, and leaves it unt
   system.store.close();
 });
 
+test('/discuss refuses a plan that is not awaiting approval, and leaves it untouched', async () => {
+  const { system, app } = await buildTestApp();
+  const plan = seedAwaitingApprovalPlan(system);
+  // `single` is the trace that actually parks an issue: an unguarded discussion
+  // ending on it writes `awaiting_approval` over zero parts, an operator approves
+  // an empty plan, and the issue is left with no ready part and no agent.
+  system.store.setPlanStatus(plan.id, 'single');
+
+  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
+  assert.equal(res.statusCode, 409);
+
+  const after = system.store.getPlan(plan.id)!;
+  assert.equal(after.status, 'single', 'a refused call must not move the plan at all');
+  assert.equal(after.discussing, false);
+  await app.close();
+  system.store.close();
+});
+
 test('a discussed plan gets a conversational planner, not a fresh one', async () => {
   const { system, app } = await buildTestApp();
   const plan = seedAwaitingApprovalPlan(system);
@@ -98,6 +116,8 @@ test('a discussed plan gets a conversational planner, not a fresh one', async ()
   assert.match(task!.prompt, /conversation/i);
   assert.match(task!.prompt, /escalate/);
   assert.doesNotMatch(task!.prompt, /an operator has asked for it to be replanned/);
+  await app.close();
+  system.store.close();
 });
 
 test('an ordinary replan is untouched by the discussion arm', async () => {
@@ -107,6 +127,38 @@ test('an ordinary replan is untouched by the discussion arm', async () => {
   const task = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
   assert.ok(task);
   assert.match(task!.prompt, /an operator has asked for it to be replanned/);
+  await app.close();
+  system.store.close();
+});
+
+test('replan during a discussion clears the discussing flag', async () => {
+  const { system, app } = await buildTestApp();
+  const plan = seedAwaitingApprovalPlan(system);
+  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
+  assert.equal(system.store.getPlan(plan.id)!.discussing, true);
+
+  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/replan` });
+  assert.equal(res.statusCode, 200);
+  const after = system.store.getPlan(plan.id)!;
+  assert.equal(after.status, 'planning');
+  assert.equal(after.discussing, false, 'a replan requested mid-discussion must not leave the flag set');
+  assert.equal((res.json() as { plan: Plan }).plan.discussing, false, 'the response body agrees with the store');
+
+  // The discussion agent still holds the origin (rule 3c dispatches no second
+  // planner while it does), so end it and prove the *next* dispatch reads the
+  // cleared flag: `discuss-plan` would render again if the clear were lost.
+  const discussionTask = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
+  assert.ok(discussionTask?.agentId);
+  system.agents.kill(discussionTask!.agentId!);
+  await system.harness.runCycle('manual');
+  const replanTask = system.store
+    .listTasks()
+    .find((t) => t.originRef === 'issue:231:plan' && t.id !== discussionTask!.id);
+  assert.ok(replanTask, 'rule 3c dispatched a fresh planner once the origin freed up');
+  assert.match(replanTask!.prompt, /an operator has asked for it to be replanned/);
+  assert.doesNotMatch(replanTask!.prompt, /conversation/i);
+  await app.close();
+  system.store.close();
 });
 
 test('an amended plan ends the discussion and comes back as a fresh proposal', async () => {
@@ -150,6 +202,8 @@ test('an amended plan ends the discussion and comes back as a fresh proposal', a
   const pending = system.store.listProposals().filter((p) => p.kind === 'plan' && p.status === 'pending');
   assert.equal(pending.length, 1);
   assert.notEqual(pending[0]!.id, first.id);
+  await app.close();
+  system.store.close();
 });
 
 test('nothing is scheduled from a plan while it is being discussed', async () => {
@@ -169,6 +223,8 @@ test('nothing is scheduled from a plan while it is being discussed', async () =>
   assert.deepEqual(partTasks, []);
   const planners = system.store.listTasks().filter((t) => t.originRef === 'issue:231:plan');
   assert.equal(planners.length, 1, 'exactly one planner, however many pulses run');
+  await app.close();
+  system.store.close();
 });
 
 // -- fixtures ----------------------------------------------------------------

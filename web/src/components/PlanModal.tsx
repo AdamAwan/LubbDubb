@@ -239,13 +239,18 @@ export function PlanModal({
                 </>
               )}
               <span className="spacer" />
-              <AsyncButton
-                className="ghost"
-                title="Talk it through with an agent, which can amend the plan — nothing is scheduled while you do"
-                onClick={() => onDiscuss(plan.id)}
-              >
-                Discuss…
-              </AsyncButton>
+              {/* The route 409s outside `awaiting_approval` (discussing a `single` or
+                  `active` plan manufactures or reopens an approval gate it never had),
+                  so the button must not offer what the route refuses. */}
+              {plan.status === 'awaiting_approval' && (
+                <AsyncButton
+                  className="ghost"
+                  title="Talk it through with an agent, which can amend the plan — nothing is scheduled while you do"
+                  onClick={() => onDiscuss(plan.id)}
+                >
+                  Discuss…
+                </AsyncButton>
+              )}
               <AsyncButton
                 className="ghost"
                 title="Ask the planner again from the plan's current state. Nothing is torn down."

@@ -68,7 +68,9 @@ export function App() {
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
       agent={state.agents.find(
-        (a) => status.view.taskFor(a)?.originRef === `${viewedPlan.originRef}:plan` && a.status !== 'done',
+        (a) =>
+          status.view.taskFor(a)?.originRef === `${viewedPlan.originRef}:plan` &&
+          (a.status === 'running' || a.status === 'waiting'),
       )}
       now={status.view.now}
       refUrls={state.refUrls}
