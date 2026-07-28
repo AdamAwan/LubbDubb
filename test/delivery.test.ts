@@ -1,0 +1,132 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { deliveryHold, deliverySignalQuery } from '../src/delivery/delivery.js';
+import type { Issue, IssueDelivery, WorldEvent } from '../src/types.js';
+
+// The pure hold predicate: what a `delivered` verdict holds, and what ends it.
+// No store, no world snapshot — the two arms are decidable from a row, an issue
+// and a list of transitions, which is what lets the rule and the cockpit chip
+// ask the same question and get the same answer.
+
+function delivery(over: Partial<IssueDelivery> = {}): IssueDelivery {
+  return {
+    originRef: 'issue:12',
+    summary: 'PR #40 merged and covers every acceptance criterion',
+    by: 'assessor',
+    agentId: 'a1',
+    taskId: 't1',
+    decidedAt: '2026-07-28T10:00:00.000Z',
+    updatedAt: '2026-07-28T10:00:00.000Z',
+    ...over,
+  };
+}
+
+function issue(over: Partial<Issue> = {}): Issue {
+  return {
+    id: 'i12',
+    number: 12,
+    title: 'Add the thing',
+    body: 'please',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+    ...over,
+  };
+}
+
+function event(over: Partial<WorldEvent> = {}): WorldEvent {
+  return {
+    id: 'e1',
+    kind: 'issue_linked',
+    ref: 'issue:12',
+    summary: 'Issue #12 linked to PR #41',
+    createdAt: '2026-07-28T11:00:00.000Z',
+    ...over,
+  };
+}
+
+test('no verdict holds nothing', () => {
+  assert.equal(deliveryHold(null, issue()), null);
+});
+
+test('a standing verdict holds, and names who cast it', () => {
+  const held = deliveryHold(delivery(), issue());
+  assert.ok(held, 'a standing verdict with no signal and no state change still holds');
+  assert.match(held, /the assessor marked it delivered/);
+  assert.match(held, /covers every acceptance criterion/, 'the summary is quoted so the reason is reviewable');
+
+  const byOperator = deliveryHold(delivery({ by: 'operator' }), issue());
+  assert.match(byOperator ?? '', /^you marked it delivered/);
+});
+
+// -- arm 1: the tracker move -------------------------------------------------
+
+test('the operator moving the ticket back to a pickup state clears it', () => {
+  const held = deliveryHold(delivery(), issue({ workItemState: 'Ready' }), { pickupStates: ['Ready', 'Doing'] });
+  assert.equal(held, null, 'moving the ticket in the tracker is the override');
+});
+
+test('the review state is not a pickup state, so the verdict still stands there', () => {
+  const held = deliveryHold(delivery(), issue({ workItemState: 'In Review' }), { pickupStates: ['Ready', 'Doing'] });
+  assert.ok(held);
+});
+
+test('a provider with no work-item states leaves arm 1 unable to fire', () => {
+  // GitHub: `workItemState` is undefined, so only the signal arm can clear it.
+  assert.ok(deliveryHold(delivery(), issue(), { pickupStates: ['Ready'] }));
+  assert.ok(deliveryHold(delivery(), issue({ workItemState: 'Ready' })), 'no configured pickup states, no arm 1');
+});
+
+// -- arm 2: world signal -----------------------------------------------------
+
+test('any transition on the issue after the verdict clears it', () => {
+  assert.equal(deliveryHold(delivery(), issue(), { signals: [event()] }), null);
+  assert.equal(
+    deliveryHold(delivery(), issue(), { signals: [event({ kind: 'issue_opened', summary: 'reopened' })] }),
+    null,
+    'any kind counts — a filter here would be a second opinion about which changes matter',
+  );
+});
+
+test('a transition older than the verdict does not clear it', () => {
+  const stale = event({ createdAt: '2026-07-28T09:00:00.000Z' });
+  assert.ok(deliveryHold(delivery(), issue(), { signals: [stale] }));
+});
+
+test('a transition on a different issue does not clear it', () => {
+  const elsewhere = event({ ref: 'issue:13' });
+  assert.ok(deliveryHold(delivery(), issue(), { signals: [elsewhere] }));
+  assert.ok(deliveryHold(delivery(), issue(), { signals: [event({ ref: null })] }), 'a global event names no item');
+});
+
+test('there is no timer arm — an untouched issue is held indefinitely', () => {
+  // The asymmetry with `proposalHold`'s settle window is deliberate: an accepted
+  // act waits on the world to reflect something done (a duration), a delivered
+  // issue waits on it to become something else (an event).
+  const ancient = delivery({ decidedAt: '2020-01-01T00:00:00.000Z' });
+  assert.ok(deliveryHold(ancient, issue(), { signals: [] }));
+});
+
+// -- the query ---------------------------------------------------------------
+
+test('the signal query is null when nothing stands, so no read happens at all', () => {
+  assert.equal(deliverySignalQuery([]), null);
+});
+
+test('the query names every held issue and the oldest verdict', () => {
+  const q = deliverySignalQuery([
+    delivery({ originRef: 'issue:12', decidedAt: '2026-07-28T10:00:00.000Z' }),
+    delivery({ originRef: 'issue:13', decidedAt: '2026-07-27T10:00:00.000Z' }),
+  ]);
+  assert.ok(q);
+  assert.equal(q.since, '2026-07-27T10:00:00.000Z', 'bounded by time, so the oldest verdict sets the window');
+  assert.deepEqual(q.refs.sort(), ['issue:12', 'issue:13']);
+});
+
+test('an off-vocabulary origin is never expired by a signal it cannot be matched against', () => {
+  assert.equal(deliverySignalQuery([delivery({ originRef: 'job:7' })]), null);
+  assert.ok(
+    deliveryHold(delivery({ originRef: 'job:7' }), issue(), { signals: [event({ ref: 'job:7' })] }),
+    'the ask and the match narrow identically, which is why one private mapping owns both',
+  );
+});
