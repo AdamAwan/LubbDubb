@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
-import { liveParts } from '../plans/parts.js';
+import { liveParts, partSettled } from '../plans/parts.js';
 import type {
   Agent,
   AgentFile,
@@ -26,6 +26,7 @@ import type {
   DeliveryAuthor,
   IssueConclusionVerdict,
   Job,
+  PartOutcomeKind,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -114,6 +115,10 @@ export class Store {
     this.ensureColumns('plan_parts', {
       rationale: 'TEXT',
       acceptance: 'TEXT',
+      expected_kind: 'TEXT',
+      outcome_kind: 'TEXT',
+      outcome_ref: 'TEXT',
+      outcome_summary: 'TEXT',
     });
   }
 
@@ -672,6 +677,12 @@ export class Store {
         scope: input.scope,
         rationale: input.rationale,
         acceptance: input.acceptance,
+        expectedKind: input.expectedKind,
+        // Progress, not declaration — an amendment re-declaring a part must not
+        // wipe an outcome it already reached. Same split as branch/prNumber below.
+        outcomeKind: prev?.outcomeKind ?? null,
+        outcomeRef: prev?.outcomeRef ?? null,
+        outcomeSummary: prev?.outcomeSummary ?? null,
         dependsOn: input.dependsOn,
         branch: prev?.branch ?? null,
         prNumber: prev?.prNumber ?? null,
@@ -683,10 +694,15 @@ export class Store {
       return part;
     });
     const stmt = this.db.prepare(
-      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, rationale, acceptance, depends_on, branch, pr_number, status, task_id, created_at, updated_at)
-       VALUES (@id, @planId, @slug, @seq, @title, @scope, @rationale, @acceptance, @dependsOn, @branch, @prNumber, @status, @taskId, @createdAt, @updatedAt)
+      // The outcome columns are deliberately absent from DO UPDATE SET: they are
+      // progress, and an amendment re-declaring a part must leave what it produced
+      // alone. `expected_kind` is part of the declaration, so it does update.
+      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, rationale, acceptance, expected_kind,
+         outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, task_id, created_at, updated_at)
+       VALUES (@id, @planId, @slug, @seq, @title, @scope, @rationale, @acceptance, @expectedKind,
+         @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
-         rationale=excluded.rationale, acceptance=excluded.acceptance,
+         rationale=excluded.rationale, acceptance=excluded.acceptance, expected_kind=excluded.expected_kind,
          depends_on=excluded.depends_on, updated_at=excluded.updated_at`,
     );
     const insertAll = this.db.transaction((all: PlanPart[]) => {
@@ -750,6 +766,31 @@ export class Store {
     return this.updatePlanPart(id, { status: 'dispatched', taskId, branch });
   }
 
+  /**
+   * A part finished without a pull request — it produced a report, or determined
+   * that nothing needed building.
+   *
+   * Its own method rather than an {@link updatePlanPart} patch, because the guard
+   * *is* the point: the write is conditional on the part still being worked, so a
+   * second call changes nothing and a merged or retired part cannot be re-labelled.
+   * Idempotence in the write, not in a read-then-check somebody has to remember —
+   * the same discipline as `decideProposal` and `link_ticket`.
+   */
+  concludePlanPart(
+    id: string,
+    outcome: { kind: PartOutcomeKind; ref: string | null; summary: string },
+  ): PlanPart | null {
+    const result = this.db
+      .prepare(
+        `UPDATE plan_parts SET status='concluded', outcome_kind=?, outcome_ref=?, outcome_summary=?, updated_at=?
+         WHERE id=? AND status IN ('dispatched','in_review')`,
+      )
+      .run(outcome.kind, outcome.ref, outcome.summary, this.now(), id);
+    if (result.changes === 0) return null;
+    const row = this.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    return row ? rowToPlanPart(row) : null;
+  }
+
   /** Move a plan's own status (the parts roll-up, a replan, an abandon). */
   setPlanStatus(id: string, status: PlanStatus): Plan | null {
     const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
@@ -797,7 +838,10 @@ export class Store {
     if (plan.status !== 'active' && plan.status !== 'complete') return null;
     const parts = liveParts(this.listPlanParts(planId));
     if (parts.length === 0) return null;
-    const next: PlanStatus = parts.every((p) => p.status === 'merged') ? 'complete' : 'active';
+    // Every terminal, not just merges: a part that concluded with a report or a
+    // determination is finished, and counting only merges is what held a whole
+    // decomposition open on the one part that found nothing to build.
+    const next: PlanStatus = parts.every(partSettled) ? 'complete' : 'active';
     if (next === plan.status) return null;
     return this.setPlanStatus(planId, next);
   }
@@ -1619,6 +1663,10 @@ interface PlanPartRow {
   /** Nullable *and* possibly absent: added by `migrate()` on databases from an older build. */
   rationale: string | null | undefined;
   acceptance: string | null | undefined;
+  expected_kind: string | null | undefined;
+  outcome_kind: string | null | undefined;
+  outcome_ref: string | null | undefined;
+  outcome_summary: string | null | undefined;
   depends_on: string;
   branch: string | null;
   pr_number: number | null;
@@ -1851,6 +1899,10 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     scope: r.scope,
     rationale: r.rationale ?? null,
     acceptance: r.acceptance ?? null,
+    expectedKind: partOutcomeKindOf(r.expected_kind),
+    outcomeKind: partOutcomeKindOf(r.outcome_kind),
+    outcomeRef: r.outcome_ref ?? null,
+    outcomeSummary: r.outcome_summary ?? null,
     // Written as JSON by upsertPlanParts; a corrupt value degrades to "no deps"
     // rather than throwing the whole snapshot away.
     dependsOn: parseDependsOn(r.depends_on),
@@ -1861,6 +1913,15 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+/**
+ * Narrowed rather than cast: these two columns are absent on older databases and
+ * are the only part of the row a *human* can edit by hand, so an unrecognised
+ * value degrades to "unstated" instead of putting a status nothing switches on
+ * into the type.
+ */
+function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | null {
+  return raw === 'code' || raw === 'report' || raw === 'determination' ? raw : null;
 }
 function parseDependsOn(raw: string): string[] {
   try {

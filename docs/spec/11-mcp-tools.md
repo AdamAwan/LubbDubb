@@ -24,6 +24,7 @@ discover what a synchronous error would have said in one turn.
 | `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                 |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                         |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                   |
+| `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                     |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
 
 ### The `_status` envelope
@@ -237,6 +238,33 @@ the credential.
 
 It routes through `AgentManager.recordAssessment` for the `assessment` event, so the cockpit
 repaints on the verdict rather than on the next pulse.
+
+### `conclude_part`
+
+Arguments `{kind, summary, evidenceRef?}`. Pure layer in `src/mcp/partOutcome.ts`; the part is
+resolved from the credential (agent → task → `issue:<n>:part:<slug>`), so there is no part argument
+and an agent cannot conclude a sibling's work. `partConclusionOrigin` refuses every other caller **by
+name**, pointing each at the tool it actually wants — `conclude_work` for a whole-issue agent,
+`plan_submit` for a planner, `assess_issue` for an assessor — because an agent handed `{ok: true}`
+would reasonably believe it had closed something.
+
+`kind` is `report` or `determination`. **`code` is refused, with its reason given**: a code part
+finishes by merging a pull request, which the world observes, so accepting `code` here would let an
+agent declare its own work finished with no PR behind it — the false terminal that ruled derivation
+out entirely (see [08](08-planning.md)). The tool covers exactly the two outcomes that have no outside
+world.
+
+`summary` is required, non-empty, bounded at 2000 characters and **refused rather than trimmed** when
+over-long — `conclude_work`'s rule, for its reason: a terminal an operator reads to decide what the
+plan achieved must not be silently truncated, and for a determination it is the entire record of why
+no code was written. `evidenceRef` is optional and must be `flag:<id>` or `finding:<id>`; requiring it
+was rejected because a write-up landing at a path `classifyArtifact` does not promote would leave the
+part unable to close, reintroducing the parked-plan bug in a narrower case.
+
+Idempotence is in the write: `Store.concludePlanPart` updates `WHERE id=? AND status IN
+('dispatched','in_review')` and returns null when no row changed, so a second call is refused and a
+merged or retired part cannot be re-labelled. It routes through `AgentManager.recordPartOutcome` for
+the `partOutcome` event, so the cockpit repaints on the verdict rather than on the next pulse.
 
 ### `request_permission`
 

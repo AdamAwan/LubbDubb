@@ -1,5 +1,5 @@
 import { prState } from '../prHealth.js';
-import type { Plan, PlanPart, PlanStatus, PullRequest } from '../types.js';
+import type { PartOutcomeKind, Plan, PlanPart, PlanStatus, PullRequest } from '../types.js';
 
 /**
  * Scheduling a multi-PR plan's parts, as pure functions over the part rows.
@@ -73,7 +73,7 @@ export function partDepth(part: PlanPart, index: Map<string, PlanPart>): number 
  * source that sees a branch before a PR exists).
  */
 export function dependencySatisfied(dep: PlanPart, pushed: (part: PlanPart) => boolean): boolean {
-  if (dep.status === 'merged') return true;
+  if (partSettled(dep)) return true;
   if (dep.status === 'dispatched' || dep.status === 'in_review') return pushed(dep);
   return false;
 }
@@ -81,7 +81,13 @@ export function dependencySatisfied(dep: PlanPart, pushed: (part: PlanPart) => b
 /**
  * The base a part's branch is cut from: its dependency's branch while that
  * dependency is still in flight (this is the stack), the integration branch once
- * the dependency merged or when there is none.
+ * the dependency reached a terminal or when there is none.
+ *
+ * `partSettled` rather than `merged` is load-bearing here, not tidiness. A
+ * *concluded* dependency produced no pull request and may never have pushed its
+ * branch at all, so returning that branch would hand `WorktreeManager.ensure` a ref
+ * it cannot resolve — which throws, deliberately, rather than falling back to an
+ * incidental base.
  */
 export function partBase(
   part: PlanPart,
@@ -90,7 +96,7 @@ export function partBase(
   defaultBranch: string,
 ): string {
   const dep = dependencyOf(part, index);
-  if (!dep || dep.status === 'merged') return defaultBranch;
+  if (!dep || partSettled(dep)) return defaultBranch;
   return dep.branch ?? partBranch(issueNumber, dep.slug);
 }
 
@@ -103,10 +109,37 @@ export function liveParts(parts: PlanPart[]): PlanPart[] {
   return parts.filter((p) => p.status !== 'retired');
 }
 
-/** How far a plan has got, for the cockpit's per-issue chip. */
-export function planProgress(parts: PlanPart[]): { merged: number; total: number } {
+/**
+ * Has this part reached a terminal?
+ *
+ * `merged` and `concluded` both mean finished, and this is the one place that says
+ * so. Every roll-up, progress count, dependency test and sibling description asks
+ * it rather than comparing to `merged` — which is what stops those sites drifting
+ * into disagreeing about what "done" is, the way two independent readings always
+ * eventually do.
+ */
+export function partSettled(part: PlanPart): boolean {
+  return part.status === 'merged' || part.status === 'concluded';
+}
+
+/**
+ * What a part produced, or null while it is still in flight.
+ *
+ * `code` is **derived from `merged`, never stored**: a part that merged a pull
+ * request has said what it produced by producing it, and writing the column too
+ * would put a second answer inside `observePartPr`'s path — one more thing the PR
+ * fold could get wrong, for nothing.
+ */
+export function partOutcomeKind(part: PlanPart): PartOutcomeKind | null {
+  if (part.status === 'merged') return 'code';
+  if (part.status === 'concluded') return part.outcomeKind;
+  return null;
+}
+
+/** How far a plan has got, for the cockpit's per-issue chip. Counts every terminal, not just merges. */
+export function planProgress(parts: PlanPart[]): { settled: number; total: number } {
   const live = liveParts(parts);
-  return { merged: live.filter((p) => p.status === 'merged').length, total: live.length };
+  return { settled: live.filter(partSettled).length, total: live.length };
 }
 
 /**
@@ -164,7 +197,7 @@ export function observePartPr(
  * can be rewritten freely, work that reached the outside world cannot.
  */
 export function partHasWork(part: PlanPart): boolean {
-  return part.status === 'dispatched' || part.status === 'in_review' || part.status === 'merged';
+  return part.status === 'dispatched' || part.status === 'in_review' || partSettled(part);
 }
 
 /**
@@ -225,10 +258,18 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
   const live = liveParts(parts);
   if (live.length === 0) return `The current plan is "${plan.status}" and declares no parts.`;
   const lines = live.map((p) => {
-    const where = p.prNumber !== null ? `PR #${p.prNumber}` : (p.branch ?? 'no branch yet');
+    const where =
+      p.status === 'concluded'
+        ? `${partOutcomeKind(p) ?? 'concluded'}: ${p.outcomeSummary ?? 'no summary'}`
+        : p.prNumber !== null
+          ? `PR #${p.prNumber}`
+          : (p.branch ?? 'no branch yet');
     const dep = p.dependsOn[0];
     const stacks = dep === undefined ? '' : `, stacks on "${dep}"`;
-    return `- "${p.slug}": ${p.title} [${p.status}, ${where}${stacks}] — ${p.scope}`;
+    // Only when it says something: every other part is expected to produce code,
+    // and saying so on each line would bury the two that don't.
+    const expects = p.expectedKind && p.expectedKind !== 'code' ? `, planned as a ${p.expectedKind}` : '';
+    return `- "${p.slug}": ${p.title} [${p.status}, ${where}${stacks}${expects}] — ${p.scope}`;
   });
   const why = plan.reason ? `\nIt was split because: ${plan.reason}` : '';
   return `The current plan is "${plan.status}" with ${live.length} part(s).${why}\n${lines.join('\n')}`;
@@ -243,7 +284,7 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
  */
 export function siblingContext(parts: PlanPart[], current: PlanPart): { done: string; remaining: string } {
   const others = liveParts(parts).filter((p) => p.slug !== current.slug);
-  const exists = (p: PlanPart): boolean => p.status === 'merged' || p.status === 'in_review';
+  const exists = (p: PlanPart): boolean => partSettled(p) || p.status === 'in_review';
   return {
     done: describe(others.filter(exists), 'Nothing has landed yet — this is the first part.'),
     remaining: describe(
@@ -257,8 +298,46 @@ function describe(parts: PlanPart[], empty: string): string {
   if (parts.length === 0) return empty;
   return parts
     .map((p) => {
-      const where = p.prNumber !== null ? ` (PR #${p.prNumber})` : p.branch !== null ? ` (branch ${p.branch})` : '';
+      // A concluded part left a record, not code. Naming a PR or a branch for one
+      // would send the agent looking on disk for work that was never written.
+      const where =
+        p.status === 'concluded'
+          ? ` (${partOutcomeKind(p) ?? 'concluded'}: ${p.outcomeSummary ?? 'no summary'})`
+          : p.prNumber !== null
+            ? ` (PR #${p.prNumber})`
+            : p.branch !== null
+              ? ` (branch ${p.branch})`
+              : '';
       return `- ${p.title} [${p.slug}, ${p.status}${where}] — ${p.scope}`;
     })
     .join('\n');
+}
+
+/**
+ * What a part expected to produce no code is told, appended to its rendered prompt.
+ *
+ * **Appended, never filled into the template.** Prompt templates are
+ * operator-overridable and `loadPromptTemplates` rejects only *unknown*
+ * placeholders, so a `{kind}` token would be silently dropped by exactly the
+ * deployments that customised most — and this is the instruction without which the
+ * part cannot finish at all. Appending has no fallback to get wrong. Same reason
+ * `outstandingWorkNote` and the rejection note append.
+ *
+ * Empty for a `code` or unstated part: its prompt already tells it to open a pull
+ * request, and a part that turns out to need no code learns `conclude_part` from
+ * the tool list, where a tool belongs.
+ */
+export function partOutcomeNote(part: PlanPart): string {
+  if (!part.expectedKind || part.expectedKind === 'code') return '';
+  const what =
+    part.expectedKind === 'report'
+      ? 'a write-up, a measurement or a document — not a change to the code'
+      : 'a determination: whether anything needs doing here at all, and the evidence for it';
+  return (
+    `\n\n---\n\nThis part was planned to produce ${what}. So it may well end with no pull request, and ` +
+    `that is success rather than failure. When you have finished, call **conclude_part** with kind ` +
+    `"${part.expectedKind}" and a summary of what you found. That is the only thing that closes a part ` +
+    `with no pull request behind it — until you do, this plan and its issue stay open. If the work turns ` +
+    `out to need code after all, ignore this and open a pull request as normal.`
+  );
 }

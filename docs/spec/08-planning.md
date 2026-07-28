@@ -196,11 +196,14 @@ answer the agent) records the error alone.
 | `bySlug(parts)`                                          | An index for the dependency walks.                                                                          |
 | `dependencyOf(part, index)`                              | The single dependency, or null.                                                                             |
 | `partDepth(part, index)`                                 | How deep in a stack. Bounded by the part count, so a surviving cycle cannot spin.                           |
-| `dependencySatisfied(dep, pushed)`                       | `merged` unconditionally; `dispatched`/`in_review` only when the branch carries commits beyond the base.    |
-| `partBase(part, index, n, defaultBranch)`                | The dependency's branch while it is in flight; the integration branch once it merged or when there is none. |
+| `partSettled(part)`                                      | `merged` \| `concluded` — has this part reached a terminal. The one place that says so.                     |
+| `partOutcomeKind(part)`                                  | `code` (derived from `merged`), the stored kind for `concluded`, else null.                                 |
+| `dependencySatisfied(dep, pushed)`                       | `partSettled` unconditionally; `dispatched`/`in_review` only when the branch carries commits beyond base.   |
+| `partBase(part, index, n, defaultBranch)`                | The dependency's branch while it is in flight; the integration branch once it settled or when there is none. |
 | `liveParts(parts)`                                       | Everything not `retired`. **Every** count, roll-up, prompt and rule reads this.                             |
-| `planProgress(parts)`                                    | `{merged, total}` over live parts.                                                                          |
-| `partHasWork(part)`                                      | `dispatched` \| `in_review` \| `merged`.                                                                    |
+| `planProgress(parts)`                                    | `{settled, total}` over live parts.                                                                         |
+| `partHasWork(part)`                                      | `dispatched` \| `in_review` \| `partSettled`.                                                               |
+| `partOutcomeNote(part)`                                  | What a non-code part is told, appended to its rendered prompt. Empty for a code or unstated part.           |
 | `partsToRetire(existing, declared)`                      | Which parts an amendment retires.                                                                           |
 | `amendedPlanStatus(verdict, surviving, requireApproval)` | The status an ingested or amended plan resolves to.                                                         |
 | `currentPlanSummary(plan, parts)`                        | The current plan rendered for a replanning agent — slug, status, PR/branch, dependency, scope.              |
@@ -216,9 +219,57 @@ not its to do.
 
 ### Statuses
 
-`pending` → `ready` → `dispatched` → `in_review` → `merged`, plus `blocked` and `retired`. Retiring is
-a status transition, not a disappearance: the row stays so the graph remains readable after a replan,
-and nothing schedules it again.
+`pending` → `ready` → `dispatched` → `in_review` → `merged`, plus `concluded`, `blocked` and
+`retired`. Retiring is a status transition, not a disappearance: the row stays so the graph remains
+readable after a replan, and nothing schedules it again.
+
+### Terminals that are not a merge
+
+`merged` is the terminal for a part that ends in a pull request. `concluded` is the terminal for one
+that does not: it produced a **report** (a write-up, a measurement, a document) or reached a
+**determination** (nothing needs building — it is already done, it duplicates other work, or the
+premise was wrong). Both are terminals, and everything that means _finished_ asks `partSettled` rather
+than comparing to `merged`, so those sites cannot drift into disagreeing.
+
+Without this a plan could only contain work the planner could imagine merging, and — the expensive
+half — one no-code part parked the whole issue: it stayed `dispatched`, `liveParts` never emptied, the
+roll-up never reached `complete`, and rule 3b held the work item in the review state for the life of
+the plan.
+
+`concluded` is **not** a kind of retirement. `retired` means "dropped by an amendment before anything
+was started", which `partHasWork` enforces; a concluded part did its work and found there was nothing
+to build, and collapsing the two would discard the provenance of what it found.
+
+Four columns carry it on `plan_parts`, each with an `ensureColumns` entry (`CREATE TABLE IF NOT
+EXISTS` never alters an existing table, so a column without one is invisible on every older database):
+`expected_kind` (the planner's declaration; null means unstated, which reads as `code`),
+`outcome_kind`, `outcome_ref` (optional, `flag:<id>` or `finding:<id>`) and `outcome_summary`.
+
+A merged part's actual kind is **derived, never stored** — `partOutcomeKind` returns `code` for
+`merged`. Storing it too would put a second answer inside `observePartPr`'s path, one more thing the
+PR fold could get wrong for no gain.
+
+**The agent declares it; the reconciler does not derive it.** Deriving a terminal from an artifact or
+a finding recorded against the part's origin would infer a positive terminal from incidental output —
+the thing the harness refuses everywhere else (`undeclared` kept distinct from `more_work`, the DONE
+sentinel from the `result` event). A code part that wrote a design note and died before opening its PR
+would close as a report, silently completing a plan on work that never happened. Declaration's failure
+mode is far cheaper: `foldStalled` returns a `dispatched` part whose agent is gone to `ready`, it is
+re-dispatched, and the attempt cap escalates — a visible loop ending at a human.
+
+**Stacking degrades, with one guard.** `partBase` returns the default branch for a `concluded`
+dependency, because such a part may never have pushed a branch at all and basing on it would hand
+`WorktreeManager.ensure` an unresolvable ref. `basePrOf` and `isStackedPr` are reached only through a
+`pr_number`, so they degrade with no guard.
+
+**Dispatch is unchanged.** A part expected to produce a report still gets a code agent, a worktree and
+a branch — it has to read the repository. The branch simply never carries a PR, so origin and branch
+stay 1:1 and no new dispatch arm exists. `partOutcomeNote` is **appended** to the rendered `plan-part`
+prompt rather than filled into it: templates are operator-overridable and `loadPromptTemplates` rejects
+only _unknown_ placeholders, so a `{kind}` token would be silently dropped by exactly the deployments
+that customised most — and this is the instruction without which the part cannot finish.
+
+The `conclude_part` tool is where an agent casts it; see [11](11-mcp-tools.md).
 
 ## Rule 4a — scheduling parts
 
@@ -370,6 +421,12 @@ the same cycle.
 
 Retired parts are skipped entirely — there is no reality to fold on, and nothing should quietly bring
 them back.
+
+**Concluded parts are skipped too, for the opposite reason, and this is where the fold genuinely
+differs by kind.** The reconciler is built on "the store holds intent, the outside world is the source
+of truth" — but a report and a determination have no outside world: the record was durable in the
+store the moment the agent wrote it. The only thing the fold could do to such a part is undo it, which
+is exactly what a stray push or a PR opened on its branch would otherwise achieve.
 
 ### The ref-collision guard
 

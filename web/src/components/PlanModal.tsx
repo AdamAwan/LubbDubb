@@ -60,7 +60,9 @@ export function PlanModal({
   const send = useAsyncAction();
 
   const live = parts.filter((p) => p.status !== 'retired');
-  const merged = live.filter((p) => p.status === 'merged').length;
+  // Both terminals — a part can finish as a write-up or a determination, and
+  // counting only merges would show a finished plan as still in flight.
+  const settled = live.filter((p) => p.status === 'merged' || p.status === 'concluded').length;
   const issueNumber = issueOf(plan.originRef);
   const queued = new Map(upcoming.map((q) => [q.origin, q]));
   // A verdict is only on offer while the plan is still the thing that was
@@ -83,7 +85,7 @@ export function PlanModal({
           </span>
           {live.length > 0 && (
             <span className="chip small">
-              {merged}/{live.length} merged
+              {settled}/{live.length} done
             </span>
           )}
           <button className="btn ghost small pm-close" onClick={onClose}>
@@ -287,6 +289,17 @@ function PartBlock({
           <span className="pm-part-title">{part.title}</span>
           <span className="chip small mono">{part.slug}</span>
           <span className="chip small">{part.status.replace('_', ' ')}</span>
+          {/* This is the surface `planning.requireApproval` exists for: seeing that
+              step 3 is "write it up" rather than "build it" is what an operator is
+              approving. Shown only when the kind is not code, which is the default. */}
+          {kindOf(part) && (
+            <span
+              className="chip small"
+              title={part.status === 'concluded' ? 'What it produced' : 'What it will produce'}
+            >
+              {kindOf(part)}
+            </span>
+          )}
           {part.prNumber !== null && <span className="chip small">{refLink(`#${part.prNumber}`, refUrls)}</span>}
           {queue && (
             <span
@@ -316,6 +329,17 @@ function PartBlock({
             {part.acceptance}
           </div>
         )}
+        {/* A concluded part left a record rather than a pull request, so this is the
+            only place its outcome is readable at all. */}
+        {part.status === 'concluded' && part.outcomeSummary && (
+          <div className="pm-field">
+            <b>
+              {part.outcomeKind ?? 'concluded'}
+              {part.expectedKind && part.expectedKind !== part.outcomeKind ? ` (planned as ${part.expectedKind})` : ''}
+            </b>
+            {part.outcomeSummary}
+          </div>
+        )}
         {/*
           Spelled out rather than left as an `on <slug>` chip: the stack edge is
           what decides which branch this part is cut from, and getting it wrong is
@@ -332,6 +356,15 @@ function PartBlock({
 }
 
 /** The issue number a plan hangs off (`issue:12` → 12), or null for a shape we don't recognise. */
+/**
+ * What a part produced, or is expected to produce — null when that is code, which
+ * is every ordinary part and would be noise on each row.
+ */
+function kindOf(part: PlanPart): string | null {
+  const kind = part.status === 'concluded' ? (part.outcomeKind ?? 'concluded') : (part.expectedKind ?? null);
+  return kind && kind !== 'code' ? kind : null;
+}
+
 function issueOf(originRef: string): number | null {
   const m = /^issue:(\d+)$/.exec(originRef);
   return m ? Number(m[1]) : null;

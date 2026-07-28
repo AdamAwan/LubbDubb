@@ -1,5 +1,5 @@
 import type { Plan, PlanPart } from '../types.js';
-import { planProgress } from './parts.js';
+import { partOutcomeKind, planProgress } from './parts.js';
 
 /**
  * The plan's status comment on the tracker item — the one progress channel both
@@ -11,11 +11,14 @@ import { planProgress } from './parts.js';
  * so what a human reads is exactly what the scheduler believes.
  */
 export function renderPlanComment(plan: Plan, parts: PlanPart[]): string {
-  const { merged, total } = planProgress(parts);
+  const { settled, total } = planProgress(parts);
+  // "merged" was the only terminal when this was written, and is not any more. An
+  // operator reading "3/4 parts merged" on a plan whose fourth part was a write-up
+  // is being told something false.
   const heading =
     plan.status === 'complete'
-      ? `**Plan complete** — all ${total} part${total === 1 ? '' : 's'} merged.`
-      : `**Plan in progress** — ${merged}/${total} part${total === 1 ? '' : 's'} merged.`;
+      ? `**Plan complete** — all ${total} part${total === 1 ? '' : 's'} finished.`
+      : `**Plan in progress** — ${settled}/${total} part${total === 1 ? '' : 's'} done.`;
   const lines = parts.map((p) => `- ${statusMark(p)} **${p.title}** (\`${p.slug}\`) — ${where(p)}`);
   const why = plan.reason ? `\n\n${plan.reason}` : '';
   // Never a closing instruction, and never a close: completion goes no further
@@ -30,7 +33,11 @@ const MARKER = '<!-- lubbdubb:plan -->\n_LubbDubb delivery plan_';
 
 function statusMark(part: PlanPart): string {
   switch (part.status) {
+    // A concluded part is finished, so it ticks like a merged one. *What kind* of
+    // finish it was is carried by `where`, not by a second mark a reader of the
+    // thread would have no way to interpret.
     case 'merged':
+    case 'concluded':
       return '[x]';
     // Shown, not hidden: a reader of the thread should see that a part was dropped
     // by a replan rather than find it silently missing from the list.
@@ -48,6 +55,15 @@ function statusMark(part: PlanPart): string {
 }
 
 function where(part: PlanPart): string {
+  if (part.status === 'concluded') {
+    const kind = partOutcomeKind(part) ?? 'concluded';
+    // Surfaced, never validated: the planner expecting code and the agent finding a
+    // duplicate is information an operator wants, not an error — and refusing it
+    // would be refusing the truthful close.
+    const planned = part.expectedKind && part.expectedKind !== kind ? ` (planned as ${part.expectedKind})` : '';
+    const summary = part.outcomeSummary ? ` — ${part.outcomeSummary}` : '';
+    return `${kind}${planned}${summary}`;
+  }
   if (part.prNumber !== null) return `${label(part)} · PR #${part.prNumber}`;
   if (part.branch !== null) return `${label(part)} · \`${part.branch}\``;
   return label(part);

@@ -142,9 +142,11 @@ export function conclusionOrigin(
       ok: false,
       error:
         `conclude_work is for the whole issue, and you are working one part of issue #${part[1]}'s plan. ` +
-        `The harness concludes a decomposed issue from its plan — when every part has merged, the issue ` +
-        `is done, and no part agent has to say so. Finish your part; if you believe the *plan* is wrong ` +
-        `(a part is missing, or one is no longer needed), use report_finding.`,
+        `The harness concludes a decomposed issue from its plan — when every part has finished, the issue ` +
+        `is done, and no part agent has to say so. Finish your part: open its pull request, or if it ` +
+        `finished without one (it was a write-up, or you found nothing needs building) close it with ` +
+        `conclude_part. If you believe the *plan* is wrong (a part is missing, or one is no longer ` +
+        `needed), use report_finding.`,
     };
   }
   const planner = /^issue:(\d+):plan$/.exec(ref);

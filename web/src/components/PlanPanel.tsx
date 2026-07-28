@@ -77,7 +77,10 @@ function PlanCard({
 }) {
   const issueNumber = issueOf(plan.originRef);
   const live = parts.filter((p) => p.status !== 'retired');
-  const merged = live.filter((p) => p.status === 'merged').length;
+  // Every terminal, not just merges — a part can finish as a write-up or as the
+  // determination that nothing needed building, and counting only merges would
+  // show a finished plan as still in flight.
+  const settled = live.filter((p) => p.status === 'merged' || p.status === 'concluded').length;
   // The cut sits before the first part the dispatcher ranked but did not start —
   // the same rule `UpNext` draws. `capped` parts sit below it too, but they are
   // held by the plan's own limit rather than by a full fleet, so they say so.
@@ -95,8 +98,8 @@ function PlanCard({
           {plan.status.replace(/_/g, ' ')}
         </span>
         {live.length > 0 && (
-          <span className="chip small" title="Parts merged out of the parts this plan still declares">
-            {merged}/{live.length} merged
+          <span className="chip small" title="Parts finished out of the parts this plan still declares">
+            {settled}/{live.length} done
           </span>
         )}
         <button
@@ -169,6 +172,10 @@ function PartRow({
       <span className="plan-mark">{MARK[part.status] ?? '·'}</span>
       <span className="plan-part-title">{part.title}</span>
       <span className="chip small">{part.status.replace('_', ' ')}</span>
+      {/* What it produced, or — before it finishes — what the planner expected it to.
+          Only when that is not code: every other part is a PR, and saying so on each
+          row would bury the two that are not. */}
+      {kindChip(part)}
       {part.prNumber !== null && <span className="chip small">{refLink(`#${part.prNumber}`, refUrls)}</span>}
       {part.prNumber === null && part.branch !== null && (
         <span className="chip small mono">{refLink(part.branch, refUrls)}</span>
@@ -197,9 +204,30 @@ function PartRow({
   );
 }
 
+/**
+ * What a part produced (once concluded) or is expected to produce, when that is
+ * anything other than code. A mismatch between the two is *shown*, never treated
+ * as an error: the planner expecting code and the agent finding a duplicate is
+ * exactly what an operator wants to see.
+ */
+function kindChip(part: PlanPart) {
+  const actual = part.status === 'concluded' ? (part.outcomeKind ?? 'concluded') : null;
+  const kind = actual ?? (part.expectedKind && part.expectedKind !== 'code' ? part.expectedKind : null);
+  if (!kind || kind === 'code') return null;
+  const planned =
+    actual && part.expectedKind && part.expectedKind !== actual ? ` · planned as ${part.expectedKind}` : '';
+  return (
+    <span className="chip small" title={`${actual ? 'Produced' : 'Planned to produce'} a ${kind}${planned}`}>
+      {kind}
+      {planned}
+    </span>
+  );
+}
+
 /** Where a part sits, at a glance — the same vocabulary the tracker status comment uses. */
 const MARK: Record<string, string> = {
   merged: '✓',
+  concluded: '✓',
   in_review: '◐',
   dispatched: '▸',
   blocked: '!',

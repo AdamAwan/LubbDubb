@@ -41,6 +41,14 @@ const PartSchema = z.object({
   rationale: z.string().min(1).optional(),
   /** What makes this part done. */
   acceptance: z.string().min(1).optional(),
+  /**
+   * What this part produces. Optional, and defaulted at *read* time rather than
+   * here: an older plan, and an operator override that never learned the field,
+   * must keep validating — and `code` is the assumption everything else already
+   * made. `determination` is what lets a planner decompose investigative work
+   * honestly instead of inventing a pull request for it.
+   */
+  expectedKind: z.enum(['code', 'report', 'determination']).optional(),
 });
 
 /**
@@ -189,5 +197,6 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
     dependsOn: part.dependsOn,
     rationale: part.rationale ?? null,
     acceptance: part.acceptance ?? null,
+    expectedKind: part.expectedKind ?? null,
   }));
 }

@@ -201,10 +201,14 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   scope       TEXT NOT NULL,          -- files/areas this part owns, for the prompt
   rationale   TEXT,                   -- why this is its own PR
   acceptance  TEXT,                   -- what makes this part done
+  expected_kind   TEXT,               -- code | report | determination; null = unstated, reads as code
+  outcome_kind    TEXT,               -- what it actually produced, written at close (never for a merge)
+  outcome_ref     TEXT,               -- flag:<id> | finding:<id>, optional evidence
+  outcome_summary TEXT,               -- what the concluding agent found; required at close
   depends_on  TEXT NOT NULL,          -- JSON array of sibling slugs
   branch      TEXT,
   pr_number   INTEGER,
-  status      TEXT NOT NULL,          -- pending | ready | dispatched | in_review | merged | blocked
+  status      TEXT NOT NULL,          -- pending | ready | dispatched | in_review | merged | concluded | blocked | retired
   task_id     TEXT,
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,

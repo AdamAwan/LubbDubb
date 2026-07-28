@@ -75,6 +75,10 @@ function part(slug: string, seq: number, over: Partial<PlanPart> = {}): PlanPart
     scope: `src/${slug}/`,
     rationale: null,
     acceptance: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
     dependsOn: [],
     branch: null,
     prNumber: null,
@@ -293,7 +297,7 @@ test('retired parts drop out of the progress count but stay in the graph', () =>
     part('b', 2, { status: 'ready' }),
     part('c', 3, { status: 'retired' }),
   ];
-  assert.deepEqual(planProgress(parts), { merged: 1, total: 2 });
+  assert.deepEqual(planProgress(parts), { settled: 1, total: 2 });
 });
 
 test('a replan carries the current plan into the prompt, slugs included', async () => {
@@ -370,7 +374,7 @@ test('a complete plan says how to get out of it, rather than reading as still in
   };
   const verdict = issuePickupStatus(issue(12), ctx);
   assert.equal(verdict.status, 'planning');
-  assert.match(verdict.reasons[0]!, /plan complete — all 2 parts merged; close the issue or replan/);
+  assert.match(verdict.reasons[0]!, /plan complete — all 2 parts finished; close the issue or replan/);
   // And replan really is the way out: the same plan back in `planning` owes a planner.
   assert.equal(
     resolvePlanRoute({
@@ -450,7 +454,16 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
     reason: 'Schema first.',
   });
   system.store.upsertPlanParts(stored.id, [
-    { slug: 'schema', seq: 1, title: 'Schema', scope: 'src/store/', dependsOn: [], rationale: null, acceptance: null },
+    {
+      slug: 'schema',
+      seq: 1,
+      title: 'Schema',
+      scope: 'src/store/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
     {
       slug: 'api',
       seq: 2,
@@ -459,11 +472,12 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      expectedKind: null,
     },
   ]);
 
   // The graph is in the snapshot — until now it existed only in the database, and
-  // the per-issue chip's "n/m parts merged" was all a human could see.
+  // the per-issue chip's "n/m parts done" was all a human could see.
   const snapshot = await buildStateSnapshot(system);
   assert.deepEqual(
     snapshot.planParts.map((p) => [p.slug, p.status]),

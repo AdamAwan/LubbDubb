@@ -456,7 +456,39 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     (they would answer "why did this part not get an agent" with the wrong reason). Skipping the
     plan outright is the tempting version and the wrong one: an unapproved decomposition would
     look exactly like an idle fleet, which is the invisibility `capped` was named to fix.
-    Tests: `test/planPart.test.ts`, `test/planApproval.test.ts`.
+  - **A part can finish without a pull request (#160).** `merged` was the only status meaning "this
+    work finished", so a part whose honest answer was _"nothing to build — #98 already fixed this"_
+    had nowhere to go: it stayed `dispatched`, `liveParts` never emptied, the roll-up never reached
+    `complete`, and rule 3b parked its issue for the life of the plan. **One** new terminal,
+    `concluded`, covers the two outcomes that aren't a merge (`report`, `determination`), carried by
+    four additive `plan_parts` columns — so they need an `ensureColumns('plan_parts', …)` entry, and
+    have one. `merged` is untouched, which is what keeps the whole PR-observation path free of a new
+    arm; instead every `=== 'merged'` that meant _reached its terminal_ now asks the pure
+    `partSettled`, so those sites can't drift into disagreeing about what done is. `code` is
+    **derived** from `merged` by `partOutcomeKind` and never stored — storing it would put a second
+    answer inside `observePartPr`'s path. Things to preserve:
+    - **The agent declares it; the reconciler does not derive it.** Deriving from an artifact or a
+      finding on the part's origin would infer a positive terminal from incidental output — the thing
+      refused everywhere else (`undeclared` vs `more_work`, the DONE sentinel vs the `result` event) —
+      and a code part that wrote a design note then died before its PR would close as a report,
+      silently completing a plan on work that never happened. Declaration's failure mode is cheaper by
+      a lot, and only because `foldStalled` already exists: a forgotten call returns the part to
+      `ready`, re-dispatches, and escalates on the attempt cap — a visible loop ending at a human.
+    - **`conclude_part` refuses `kind: 'code'`, with the reason given.** A merge is observed; letting
+      an agent declare one would be the false terminal arriving through the front door.
+    - **The reconciler skips a `concluded` part**, and this is the one place its fold genuinely
+      differs by kind: a report and a determination have **no outside world** to be the source of
+      truth, so the only thing the fold could do is undo them.
+    - **`partBase` returns the default branch for a `concluded` dependency** — a real bug if missed,
+      not tidying: such a part may never have pushed, and `WorktreeManager.ensure` throws on an
+      unresolvable base rather than picking an incidental one. `basePrOf`/`isStackedPr` are reached
+      only via a `pr_number` and degrade with no guard (asserted, not assumed).
+    - **`concluded` is not a kind of `retired`.** Retired means "dropped before anything was started"
+      (`partHasWork` enforces it); a concluded part did the work and found nothing to build.
+    - **Dispatch is unchanged** — a report part still gets a code agent, worktree and branch, so
+      origin/branch stays 1:1. `partOutcomeNote` is **appended** to the rendered prompt, never
+      interpolated, for the reason the rejection and outstanding-work notes are.
+      Tests: `test/planPart.test.ts`, `test/planApproval.test.ts`, `test/planReconcile.test.ts`.
 - **Stack safety (stage 4 — the last one).** Three things, all in `test/stackedPrs.test.ts`.
   - **CI attribution.** A stacked PR's CI runs the commits of the PR beneath it, so one red base
     turns the whole stack red and rule 1 would put an agent on each of them to fix code that isn't
@@ -1023,6 +1055,16 @@ preserve:
   status line whose value is being cheap and frequent. Only an empty note is refused. It routes
   through `AgentManager.recordProgress` for the `progress` event, which the `Hub` turns into a plain
   `dirty` (unlike `agent:tail`, the payload is already on the row that the refetch brings).
+
+- **`conclude_part(kind, summary, evidenceRef?)` — the terminal for a plan part that produced no PR**
+  (#160; the plan-parts bullet above carries the full argument). Fenced to `issue:<n>:part:<slug>`
+  by `partConclusionOrigin`, which refuses every other caller **by name** and points each at the tool
+  it actually wants. **`kind` accepts `report` and `determination` only** — a merge is observed, so
+  accepting `code` would let an agent declare its own work finished with no pull request behind it.
+  The summary is required and refused rather than trimmed when over-long (`conclude_work`'s rule, for
+  its reason); the evidence ref is optional, because requiring it would leave a write-up at a path
+  `classifyArtifact` doesn't promote unable to close — the parked-plan bug in a narrower case.
+  Idempotence is in the write (`WHERE id=? AND status IN ('dispatched','in_review')`).
 
 - **Transport is a Unix socket (named pipe on Windows), never a TCP port** — the cockpit's HTTP
   surface is already unauthenticated on `0.0.0.0`. `bridge.mjs` (spawned by `claude`, shipped `.mjs`

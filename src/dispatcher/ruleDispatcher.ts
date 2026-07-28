@@ -49,6 +49,7 @@ import {
   partBranch,
   partDepth,
   partOrigin,
+  partOutcomeNote,
   planIssueNumber,
   siblingContext,
 } from '../plans/parts.js';
@@ -1121,17 +1122,21 @@ export class RuleDispatcher implements Dispatcher {
         base,
         partId: part.id,
         title,
-        prompt: this.templates.render('plan-part', {
-          number: issueNumber,
-          title: issue.title,
-          part: part.title,
-          scope: part.scope,
-          branch,
-          base,
-          plan: plan.reason ?? 'the planner gave no reason',
-          done,
-          remaining,
-        }),
+        // Appended, not interpolated: `loadPromptTemplates` rejects only *unknown*
+        // placeholders, so an override that never learned a `{kind}` token would
+        // silently drop the one instruction a non-code part needs to finish at all.
+        prompt:
+          this.templates.render('plan-part', {
+            number: issueNumber,
+            title: issue.title,
+            part: part.title,
+            scope: part.scope,
+            branch,
+            base,
+            plan: plan.reason ?? 'the planner gave no reason',
+            done,
+            remaining,
+          }) + partOutcomeNote(part),
         originRef: origin,
         originTitle: `${issue.title} — ${part.title}`,
         originSummary: part.scope,
