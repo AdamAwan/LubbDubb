@@ -907,6 +907,27 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { nodes, refUrls };
   });
 
+  // The prompt book the rule dispatcher renders from — what the harness says to
+  // its agents, and which of those wordings the operator has replaced.
+  //
+  // Its own route, fetched on open rather than shipped on `/api/state`, for the
+  // work graph's reason inverted: the graph is too big to poll, this is too
+  // *static* to. `loadPromptTemplates` reads the override directory once at boot,
+  // so the book cannot change while the process is up and re-sending it every
+  // couple of seconds would be paying for a constant.
+  //
+  // Read-only on purpose. Editing stays a file drop into `promptTemplatesDir`:
+  // a write route would have to answer "when does this take effect", and the
+  // honest answer — at the next restart — is worse than not offering it. `dir`
+  // is what makes the panel actionable without one.
+  app.get('/api/prompts', async () => ({
+    dir: config.promptTemplatesDir ?? null,
+    // The `claude` dispatcher composes its prompts via the LLM and reads none of
+    // this. The cockpit says so rather than drawing a book that never fires.
+    dispatcher: config.dispatcher,
+    templates: system.prompts.describe(),
+  }));
+
   app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
 
   // -- Static SPA (production build) --------------------------------------

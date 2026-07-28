@@ -302,8 +302,11 @@ dispatcher emits, each under a stable `PromptId`, each with a built-in default, 
 list, and a doc string.
 
 Ids: `issue-plan`, `issue-replan`, `plan-part`, `plan-approval`, `plan-part-escalation`, `issue-pickup`,
-`issue-pickup-escalation`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
-`pr-review-comment`, `pr-concern-escalation`, `story-groom`, `story-waf`, `story-pickup`.
+`issue-pickup-escalation`, `issue-assess`, `pr-ci-fix`, `pr-base-update-behind`,
+`pr-base-update-conflict`, `pr-review-comment`, `pr-concern-escalation`, `story-groom`, `story-waf`,
+`story-pickup`, `finding-ticket`, `work-item-ticket`. The last two are route-driven rather than
+dispatcher-driven — they are here because _how a ticket should be worded_ is the operator's opinion,
+which is what the book exists to make overridable.
 
 Overrides: drop `<id>.md` into `promptTemplatesDir` (default `.lubbdubb/prompts`). They are read
 **once at boot**. `loadPromptTemplates` fails fast — at boot, not as a silently broken prompt — when a
@@ -313,3 +316,10 @@ agent; a comment inside the body is left alone. `renderTemplate` substitutes `{n
 leaves an unmatched token untouched.
 
 `docs/prompt-templates/` holds ready-to-copy samples of the current defaults, one file per id.
+
+`PromptTemplates.describe()` returns the whole book — id, doc, placeholders, the **effective** text
+and whether an override replaced it — which is what `GET /api/prompts` serves to the cockpit's
+Prompts panel ([16](16-http-api.md#get-apiprompts), [17](17-cockpit.md)). `overridden` is held on the
+book from the overrides it was constructed with rather than re-derived by comparing text back against
+the registry: the book is the one thing that knows an override happened, and a consumer deciding it a
+second way could disagree with it.
