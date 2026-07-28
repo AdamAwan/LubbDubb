@@ -68,6 +68,15 @@ already-spent cap) and the button would appear to do nothing. `planning` is only
 explicit replan — ingestion writes `single` or `active` — so the narrowed window cannot loosen the
 throttle on a first-time planner.
 
+The boundary is **strict** (`>`, not `>=`): an attempt stamped in the same millisecond as
+`plan.updatedAt` is the *previous* planner's. The two writes are ordered by construction — the
+dispatch decision is recorded by a cycle that ran before the operator asked, and `/replan` moves the
+plan afterwards — so only the clock's millisecond resolution makes them look simultaneous. Reading
+that tie as "this replan has already had an attempt" is exactly the dead button the window exists to
+prevent; the cost the other way is at most one uncooled re-dispatch when a replan's *own* planner is
+dispatched inside the same millisecond as the request, and the origin gate already stops that being a
+second concurrent planner.
+
 ## Rule 3c — the planner
 
 Dispatches a **code** agent (it needs a worktree to read the repo) on `plan/issue/<n>`, origin

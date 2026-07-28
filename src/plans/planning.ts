@@ -127,6 +127,16 @@ interface PlanRouteInput {
  * attempt cap), and the button would appear to do nothing. `planning` is only ever
  * reached by an explicit replan — ingestion writes `single`/`active` — so the
  * narrowed window can't loosen the throttle on a first-time planner.
+ *
+ * The boundary is **strict**: an attempt stamped in the same millisecond as the
+ * plan write is the *previous* planner's, because the two are ordered by
+ * construction — the decision is recorded by a cycle that ran before the operator
+ * asked, and `/replan` moves the plan afterwards. Only a millisecond clock makes
+ * them look simultaneous. Breaking that tie the other way is what the window
+ * exists to prevent (the button appears to do nothing for fifteen minutes); the
+ * cost the other way is at most one uncooled re-dispatch when a replan's *own*
+ * planner is dispatched inside the same millisecond as the request, and the
+ * origin gate already stops that being a second concurrent planner.
  */
 export function plannerVerdict(
   issueNumber: number,
@@ -138,7 +148,7 @@ export function plannerVerdict(
   const since = plan?.status === 'planning' ? Date.parse(plan.updatedAt) : NaN;
   const decisions = Number.isNaN(since)
     ? recentDecisions
-    : recentDecisions.filter((d) => Date.parse(d.createdAt) >= since);
+    : recentDecisions.filter((d) => Date.parse(d.createdAt) > since);
   return dispatchVerdict(planOrigin(issueNumber), now, decisions, cooldown);
 }
 
