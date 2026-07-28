@@ -66,18 +66,27 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Submit your verdict with the plan_submit tool if you have it — it validates on the spot, so a ' +
       'rejected plan comes back with the reason and you can fix it and call again. Otherwise write the ' +
       'same document to {planFile} in this worktree, creating the directory if needed. For one PR:\n\n' +
-      '  {"version": 1, "verdict": "single", "reason": "<one sentence>"}\n\n' +
+      '  {"version": 1, "verdict": "single", "reason": "<one sentence>",\n' +
+      '   "risks": "<what could go wrong>", "outOfScope": "<what you are not doing>",\n' +
+      '   "document": "<the full write-up, markdown>"}\n\n' +
       'For several, each part being one reviewable PR:\n\n' +
-      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>", "parts": [\n' +
-      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": []},\n' +
-      '    {"slug": "dispatcher", "title": "...", "scope": "src/dispatcher/...", "dependsOn": ["schema"]}\n' +
+      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>",\n' +
+      '   "risks": "...", "outOfScope": "...", "document": "...", "parts": [\n' +
+      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [],\n' +
+      '     "rationale": "why this is its own PR", "acceptance": "what makes it done"},\n' +
+      '    {"slug": "dispatcher", "title": "...", "scope": "src/dispatcher/...", "dependsOn": ["schema"],\n' +
+      '     "rationale": "...", "acceptance": "..."}\n' +
       '  ]}\n\n' +
       'Slugs are short, lowercase, kebab-case and unique; "scope" names the files or areas that part owns, ' +
       'so parts running at the same time do not collide; "dependsOn" names **at most one** sibling slug — a part ' +
       'stacks on a single branch, so two dependencies is not expressible and the plan will be rejected.\n\n' +
+      '"document" is not optional in practice: a human reads it and decides whether this work happens. ' +
+      'Write it for them, in markdown — why the work is shaped this way, what you considered and rejected, ' +
+      'and a section naming whatever you are least sure about. A plan with no write-up is one they have to ' +
+      'take on trust.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you ' +
       'are on branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule 3c). The agent writes its verdict to the plan file; nothing else it does is read. Placeholders: {number} {title} {body} {branch} {planFile}.',
+    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule 3c). The agent writes its verdict to the plan file; nothing else it does is read. Asks for the write-up (`risks`, `outOfScope`, `document`) and per-part `rationale`/`acceptance` — all optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -87,8 +96,10 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Read the repository and the state above, then submit the amended plan with the plan_submit tool if you ' +
       'have it (it validates on the spot and tells you why if it rejects), otherwise write it to {planFile} in ' +
       'this worktree. Either way it is the same document as the original:\n\n' +
-      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>", "parts": [\n' +
-      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": []}\n' +
+      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>",\n' +
+      '   "risks": "...", "outOfScope": "...", "document": "...", "parts": [\n' +
+      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [],\n' +
+      '     "rationale": "...", "acceptance": "..."}\n' +
       '  ]}\n\n' +
       'Rules that make an amendment safe:\n\n' +
       '- **Slugs are the merge key.** Re-use the exact slug of every part you are keeping, whatever else you change ' +
@@ -100,10 +111,13 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'that is no longer needed.\n' +
       '- New parts may be added, and dependencies rewired, subject to the same rule as before: "dependsOn" names ' +
       '**at most one** sibling slug.\n' +
-      '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n\n' +
+      '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n' +
+      '- **Re-state the write-up.** `document`, `risks` and `outOfScope` are replaced by what you submit, not ' +
+      'merged — an amendment that omits them leaves the previous ones standing, which will read as though the ' +
+      'old reasoning still applies.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
       'branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule 3c, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key and that in-flight parts must be re-declared. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule 3c, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the write-up (`document`/`risks`/`outOfScope`) is replaced rather than merged. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'plan-part': {
     placeholders: ['number', 'title', 'part', 'scope', 'branch', 'base', 'plan', 'done', 'remaining'],
