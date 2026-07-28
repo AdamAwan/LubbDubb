@@ -14,6 +14,10 @@ import { unrecordedWork, workItemTicketFields } from '../src/graph/unrecorded.js
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { jobBranch } from '../src/jobs.js';
 import { Store } from '../src/store/store.js';
+import { buildSystem } from '../src/system.js';
+import { loadConfig } from '../src/config.js';
+import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { buildApp } from '../src/server/app.js';
 
 // Stage 3: the roots that had no work item behind them. Adoption first (this
 // file's opening block) — the two arms that make "unparented PR" name one
@@ -408,6 +412,121 @@ test('the fold is the only writer: a second filing cannot re-parent an adopted n
     'parent_ref is write-once once non-null, which is what stops this ever being redone',
   );
   store.close();
+});
+
+// ---------------------------------------------------------------------------
+// The route
+// ---------------------------------------------------------------------------
+
+/** A harness with an issue tracker configured, so filing has somewhere to go. */
+function buildServed(over: Record<string, unknown> = {}) {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: '',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    ...over,
+  });
+  return buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+}
+
+/**
+ * Run `fn` with GITHUB_TOKEN present, then restore it — `buildIntegrations`
+ * refuses the github provider without one, and these tests want its *coordinates*
+ * (which is all `trackerCoordinates` reads), not its network.
+ */
+async function withGithubToken(fn: () => Promise<void>): Promise<void> {
+  const prev = process.env.GITHUB_TOKEN;
+  process.env.GITHUB_TOKEN = 'test-token';
+  try {
+    await fn();
+  } finally {
+    if (prev === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = prev;
+  }
+}
+
+/** Run a code job to `dispatched` — the state that makes it unrecorded work. */
+async function dispatchedJob(system: ReturnType<typeof buildSystem>) {
+  const job = system.store.createJob({ title: 'Bump the linter', prompt: 'bump it', kind: 'code' });
+  system.store.markJobDispatched(job.id, 't-stub');
+  await system.harness.runCycle('manual');
+  return job;
+}
+
+test('the roots route reports unrecorded work beside the roots', async () => {
+  const system = buildServed();
+  const job = await dispatchedJob(system);
+
+  const { app } = await buildApp(system);
+  const res = await app.inject({ method: 'GET', url: '/api/work' });
+  assert.equal(res.statusCode, 200);
+  const body = res.json() as { unrecorded: { ref: string; filing: string | null }[] };
+  assert.deepEqual(
+    body.unrecorded.map((u) => u.ref),
+    [`job:${job.id}`],
+  );
+  assert.equal(body.unrecorded[0]?.filing, null);
+  await app.close();
+  system.store.close();
+});
+
+test('filing queues a desk job and opens the filing, and a second click is refused', async () => {
+  // `fake` has no tracker to file into, so this is the github-configured path.
+  await withGithubToken(async () => {
+    const system = buildServed({
+      integrations: { source: 'fake', issues: 'github', backlog: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    });
+    const job = await dispatchedJob(system);
+    const ref = `job:${job.id}`;
+
+    const { app } = await buildApp(system);
+    const res = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
+    assert.equal(res.statusCode, 200);
+    const filed = res.json() as { job: { kind: string; prompt: string }; filing: { status: string } };
+    assert.equal(filed.job.kind, 'desk', 'filing touches no repository — and a desk job is never itself unrecorded');
+    assert.match(filed.job.prompt, /a\/b/, 'the coordinates the agent cannot infer');
+    assert.equal(filed.filing.status, 'filing');
+
+    const again = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
+    assert.equal(again.statusCode, 409, 'an agent is already filing this one');
+
+    const listed = await app.inject({ method: 'GET', url: '/api/work' });
+    assert.equal(
+      (listed.json() as { unrecorded: { filing: string | null }[] }).unrecorded.find((u) => u.filing !== null)?.filing,
+      'filing',
+      'the node stays listed so the click does not look like it did nothing',
+    );
+    await app.close();
+    system.store.close();
+  });
+});
+
+test('the route refuses an unknown ref, work that is already recorded, and a missing tracker', async () => {
+  const system = buildServed();
+  const job = await dispatchedJob(system);
+  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Widget' });
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+
+  assert.equal((await app.inject({ method: 'POST', url: '/api/work/job:nope/file' })).statusCode, 404, 'no such node');
+
+  // An issue is a work item; it is never unrecorded. Checked ahead of the tracker
+  // arm, so this holds even on a deployment with nowhere to file.
+  const recordedIssue = await app.inject({ method: 'POST', url: '/api/work/issue:12/file' });
+  assert.equal(recordedIssue.statusCode, 409);
+  assert.match((recordedIssue.json() as { error: string }).error, /not unrecorded work/);
+
+  // The `fake` provider has nowhere to file into, which is the same predicate
+  // `canFileTickets` hides the button on.
+  const res = await app.inject({ method: 'POST', url: `/api/work/job:${job.id}/file` });
+  assert.equal(res.statusCode, 409);
+  assert.match((res.json() as { error: string }).error, /no issue tracker is configured/);
+  await app.close();
+  system.store.close();
 });
 
 test('adoption is write-once: a later fold never re-parents a job', () => {
