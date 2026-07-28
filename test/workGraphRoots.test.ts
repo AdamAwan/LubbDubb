@@ -285,6 +285,33 @@ test('a filing in flight keeps the node listed, carrying its status', () => {
   store.close();
 });
 
+test('an ignored node stays in the set, carrying the verdict rather than being filtered out', () => {
+  const { store, nodes } = recorded({ jobs: [job()] });
+  store.ignoreWorkItem('job:j7');
+  const found = unrecordedWork(nodes, [job()], [], store.listWorkItemIgnores());
+  assert.equal(found.length, 1, 'filtering here would leave the panel and the file route disagreeing');
+  assert.equal(found[0]?.ignored, true);
+  assert.equal(found[0]?.title, 'Bump the linter', 'the row keeps its title, so the un-ignore has something to offer');
+
+  store.unignoreWorkItem('job:j7');
+  assert.equal(
+    unrecordedWork(nodes, [job()], [], store.listWorkItemIgnores())[0]?.ignored,
+    false,
+    'the undo is a delete — one representation of "not ignored"',
+  );
+  store.close();
+});
+
+test('ignoring twice is one row, and un-ignoring what was never ignored is silent', () => {
+  const store = new Store(':memory:');
+  store.ignoreWorkItem('job:j7');
+  store.ignoreWorkItem('job:j7');
+  assert.deepEqual(store.listWorkItemIgnores(), ['job:j7'], 'the refusal lives in the write');
+  store.unignoreWorkItem('job:nope');
+  assert.deepEqual(store.listWorkItemIgnores(), ['job:j7']);
+  store.close();
+});
+
 test('the ticket prompt names the tracker, the ref and what the work produced', () => {
   // Open first, then merged — a PR is parented while it is in the open list, and
   // the write-once parent is what carries the edge past the merge.
@@ -528,6 +555,36 @@ test('the route refuses an unknown ref, work that is already recorded, and a mis
   const res = await app.inject({ method: 'POST', url: `/api/work/job:${job.id}/file` });
   assert.equal(res.statusCode, 409);
   assert.match((res.json() as { error: string }).error, /no issue tracker is configured/);
+  await app.close();
+  system.store.close();
+});
+
+test('ignoring a node clears it from the list, survives a re-read, and refuses a filing', async () => {
+  const system = buildServed();
+  const job = await dispatchedJob(system);
+  const ref = `job:${job.id}`;
+  const { app } = await buildApp(system);
+
+  assert.equal((await app.inject({ method: 'POST', url: '/api/work/job:nope/ignore' })).statusCode, 404);
+
+  assert.equal((await app.inject({ method: 'POST', url: `/api/work/${ref}/ignore` })).statusCode, 200);
+  const listed = await app.inject({ method: 'GET', url: '/api/work' });
+  const body = listed.json() as { unrecorded: { ref: string; ignored: boolean }[] };
+  assert.deepEqual(
+    body.unrecorded.map((u) => [u.ref, u.ignored]),
+    [[ref, true]],
+    'still reported, so the panel can offer the un-ignore — it is the panel that hides it',
+  );
+
+  // The file route reads the same predicate, so it refuses what the panel no
+  // longer offers rather than filing a ticket for work the operator dismissed.
+  const filed = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
+  assert.equal(filed.statusCode, 409);
+  assert.match((filed.json() as { error: string }).error, /ignored/);
+
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/work/${ref}/ignore` })).statusCode, 200);
+  const after = await app.inject({ method: 'GET', url: '/api/work' });
+  assert.equal((after.json() as { unrecorded: { ignored: boolean }[] }).unrecorded[0]?.ignored, false);
   await app.close();
   system.store.close();
 });

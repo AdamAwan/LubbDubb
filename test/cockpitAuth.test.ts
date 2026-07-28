@@ -40,13 +40,15 @@ function tokenOf(cockpitUrl: string | null): string {
 // a hand-maintained list of paths cannot have.
 // ---------------------------------------------------------------------------
 
-/** Every `app.get`/`app.post` path declared in `app.ts`, with params filled in. */
-function declaredRoutes(): { method: 'GET' | 'POST'; url: string }[] {
+type RouteMethod = 'GET' | 'POST' | 'DELETE';
+
+/** Every `app.get`/`app.post`/`app.delete` path declared in `app.ts`, with params filled in. */
+function declaredRoutes(): { method: RouteMethod; url: string }[] {
   const source = readFileSync(new URL('../src/server/app.ts', import.meta.url), 'utf8');
-  const routes: { method: 'GET' | 'POST'; url: string }[] = [];
-  for (const [, method, path] of source.matchAll(/\bapp\.(get|post)\('([^']+)'/g)) {
+  const routes: { method: RouteMethod; url: string }[] = [];
+  for (const [, method, path] of source.matchAll(/\bapp\.(get|post|delete)\('([^']+)'/g)) {
     if (!method || !path) continue;
-    routes.push({ method: method.toUpperCase() as 'GET' | 'POST', url: path.replace(/:[A-Za-z]+/g, '1') });
+    routes.push({ method: method.toUpperCase() as RouteMethod, url: path.replace(/:[A-Za-z]+/g, '1') });
   }
   return routes;
 }

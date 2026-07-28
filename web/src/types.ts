@@ -238,6 +238,8 @@ export interface UnrecordedWorkView {
   firstSeenAt: string;
   /** A filing already in flight, if one is. Null means the button is live. */
   filing: 'filing' | 'filed' | null;
+  /** The operator cleared this row: no tracker item is wanted for it. */
+  ignored: boolean;
 }
 export interface Job {
   id: string;

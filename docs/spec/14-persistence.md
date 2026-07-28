@@ -35,8 +35,8 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides`, `work_nodes` and
-`work_item_filings` were all introduced as new tables and therefore have no
+`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides`, `work_nodes`,
+`work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore have no
 migration entry — but `findings` has since gained `ticket_ref`, which is exactly the case the table
 above exists for.
 
@@ -58,6 +58,7 @@ above exists for.
 | `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.       | `ref` is `PRIMARY KEY`        |
 | `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                  | `target_ref` is `PRIMARY KEY` |
+| `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.      | `target_ref` is `PRIMARY KEY` |
 | `agent_transcripts`  | Chunked agent output.                                                                          | `PRIMARY KEY (agent_id, seq)` |
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                | —                             |
 | `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                       | —                             |

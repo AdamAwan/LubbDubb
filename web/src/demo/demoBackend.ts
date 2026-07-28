@@ -783,6 +783,7 @@ export const demoApi = {
   // Nothing to file into either: the demo has no tracker, which is the same
   // reason the real route refuses when the issues provider is `fake`.
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
+  setWorkItemIgnored: (_ref: string, _ignored: boolean) => Promise.resolve({ ok: true as const }),
   pulse: () => getServer().pulse(),
   clearErrors: () => getServer().clearErrors(),
   inject: (event: unknown) => getServer().inject(event),

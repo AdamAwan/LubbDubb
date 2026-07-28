@@ -1456,6 +1456,36 @@ export class Store {
     if (result.changes === 0) return null;
     return this.findWorkItemFilingByJobId(jobId);
   }
+
+  /**
+   * The operator's other answer to unrecorded work: no ticket is wanted for this.
+   *
+   * Idempotent in the write (`target_ref` is the primary key), so a second click
+   * is one row — the discipline `createWorkItemFiling` follows for the same
+   * reason. Undone by {@link unignoreWorkItem}, which is a delete: an ignore that
+   * could be "cleared" to some other state would be a second representation of
+   * "not ignored".
+   */
+  ignoreWorkItem(targetRef: string): void {
+    this.db
+      .prepare(`INSERT OR IGNORE INTO work_item_ignores (target_ref, created_at) VALUES (?, ?)`)
+      .run(targetRef, this.now());
+  }
+
+  /** Undo. Silent when nothing stood — the caller asked for an absence and has it. */
+  unignoreWorkItem(targetRef: string): void {
+    this.db.prepare(`DELETE FROM work_item_ignores WHERE target_ref=?`).run(targetRef);
+  }
+
+  /**
+   * Every standing ignore. Unbounded for `listWorkItemFilings`' reason: a verdict
+   * that aged out of a window would put a row the operator dismissed back in front
+   * of them, which is the whole thing they were clearing.
+   */
+  listWorkItemIgnores(): string[] {
+    const rows = this.db.prepare(`SELECT target_ref FROM work_item_ignores`).all() as { target_ref: string }[];
+    return rows.map((r) => r.target_ref);
+  }
 }
 
 // ---------------------------------------------------------------------------

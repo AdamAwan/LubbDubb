@@ -1661,19 +1661,71 @@ body {
   font-size: 14px;
   color: var(--muted);
 }
+.work-panel h3 {
+  font-size: 13px;
+  color: var(--text);
+  margin: 12px 0 4px;
+}
+.work-panel p {
+  margin: 0 0 8px;
+}
 .work-root {
   border-bottom: 1px solid var(--border);
 }
+/* A `.btn`, so the UA's own button chrome never shows through: it defaults to a
+   light face, and every token here puts light ink on it — the row went unreadable
+   under both skins. `.btn.ghost` supplies the transparent background; the rest
+   below is the row shape, which the base button is not. */
 .work-root-head {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   padding: 6px 4px;
+  border: 0;
+  border-radius: 0;
   text-align: left;
   font: inherit;
   color: var(--text);
   cursor: pointer;
+}
+.work-root-head:hover {
+  background: var(--panel-2);
+}
+/* One row per item, with the actions pinned right and everything before it free
+   to wrap — an unrecorded item's title is an operator's job prompt, so it is as
+   long as they made it. */
+.work-unrecorded-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.work-unrecorded-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.work-unrecorded-row .work-title {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.work-ignored {
+  margin-top: 8px;
+}
+.work-ignored-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px;
+  border: 0;
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 .work-caret {
   color: var(--muted);
