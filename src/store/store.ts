@@ -37,6 +37,8 @@ import type {
   WorkNodeKind,
   WorkNodeObservation,
   WorkNodeProvenance,
+  WorkItemFiling,
+  WorkItemFilingStatus,
   WorldEvent,
   WorldEventInput,
   WorldSnapshot,
@@ -1353,6 +1355,93 @@ export class Store {
       .all(rootRef) as WorkNodeRow[];
     return rows.map(rowToWorkNode);
   }
+
+  /**
+   * Every node, in one read.
+   *
+   * The unrecorded-work detector needs the whole table — its verdict is per-node
+   * but the evidence beside it is what ran underneath — and rebuilding that from
+   * {@link listWorkRoots} plus a {@link listWorkSubtree} each is N+1 queries for
+   * something one `SELECT` answers.
+   *
+   * Note this is *not* wired into the recorder, which still reads `existing` the
+   * roots-then-subtrees way. Doing so would close the stage-1 backfill reach gap
+   * (a node whose ancestor chain is incomplete is invisible to the fold), and that
+   * gap was ruled on and deliberately left — see `docs/spec/14-persistence.md`.
+   */
+  listWorkNodes(): WorkNode[] {
+    const rows = this.db.prepare(`SELECT * FROM work_nodes ORDER BY first_seen_at ASC`).all() as WorkNodeRow[];
+    return rows.map(rowToWorkNode);
+  }
+
+  // -- Work-item filings (stage 3) ------------------------------------------
+
+  /**
+   * Open a filing for an unrecorded node.
+   *
+   * Returns null when one already stands for that target: the refusal lives in
+   * the write (`target_ref` is the primary key), not in a caller remembering to
+   * look first — the same discipline as `decideProposal` and `linkFindingTicket`.
+   */
+  createWorkItemFiling(input: { targetRef: string; jobId: string }): WorkItemFiling | null {
+    const ts = this.now();
+    const row: WorkItemFiling = {
+      targetRef: input.targetRef,
+      jobId: input.jobId,
+      status: 'filing',
+      ticketRef: null,
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    const result = this.db
+      .prepare(
+        `INSERT OR IGNORE INTO work_item_filings (target_ref, job_id, status, ticket_ref, created_at, updated_at)
+         VALUES (@targetRef, @jobId, @status, @ticketRef, @createdAt, @updatedAt)`,
+      )
+      .run(row);
+    return result.changes === 0 ? null : row;
+  }
+
+  /**
+   * Every filing ever opened.
+   *
+   * Unbounded on purpose, like `listProposals`: a linked filing is what parents
+   * its node, and one that aged out of a window would have the fold quietly
+   * un-record work the operator already filed.
+   */
+  listWorkItemFilings(): WorkItemFiling[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM work_item_filings ORDER BY created_at ASC`)
+      .all() as WorkItemFilingRow[];
+    return rows.map(rowToWorkItemFiling);
+  }
+
+  /** The filing a job was created for, if it was created for one. */
+  findWorkItemFilingByJobId(jobId: string): WorkItemFiling | null {
+    const row = this.db.prepare(`SELECT * FROM work_item_filings WHERE job_id=?`).get(jobId) as
+      | WorkItemFilingRow
+      | undefined;
+    return row ? rowToWorkItemFiling(row) : null;
+  }
+
+  /**
+   * Record the ticket a filing agent created: `filing` → `filed`.
+   *
+   * Guarded in the write rather than by a read-then-check, mirroring
+   * {@link linkFindingTicket} exactly — an agent that calls `link_ticket` twice
+   * links once. Null means there was nothing awaiting a ticket, which the tool
+   * turns into an error the agent can read.
+   */
+  linkWorkItemFiling(jobId: string, ticketRef: string): WorkItemFiling | null {
+    const updatedAt = this.now();
+    const result = this.db
+      .prepare(
+        `UPDATE work_item_filings SET status='filed', ticket_ref=?, updated_at=? WHERE job_id=? AND status='filing'`,
+      )
+      .run(ticketRef, updatedAt, jobId);
+    if (result.changes === 0) return null;
+    return this.findWorkItemFilingByJobId(jobId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1550,6 +1639,26 @@ function rowToWorkNode(row: WorkNodeRow): WorkNode {
     provenance: row.provenance as WorkNodeProvenance | null,
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
+  };
+}
+
+interface WorkItemFilingRow {
+  target_ref: string;
+  job_id: string;
+  status: string;
+  ticket_ref: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToWorkItemFiling(row: WorkItemFilingRow): WorkItemFiling {
+  return {
+    targetRef: row.target_ref,
+    jobId: row.job_id,
+    status: row.status as WorkItemFilingStatus,
+    ticketRef: row.ticket_ref,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 

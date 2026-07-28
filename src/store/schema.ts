@@ -316,6 +316,24 @@ CREATE TABLE IF NOT EXISTS work_nodes (
   last_seen_at  TEXT NOT NULL
 );
 
+-- A work item the operator asked an agent to create in the tracker, for work the
+-- harness did that nothing external accounts for (stage 3). Keyed on the node it
+-- is for, so one node has at most one filing and a second click is refused by the
+-- write. Two statuses for the reason findings has them: filing is asynchronous, so
+-- 'filing' means an agent is creating it and 'filed' is the one carrying a ref.
+--
+-- Not a findings row: a Finding is testimony, with agent_id/task_id NOT NULL and
+-- attribution taken structurally from a credential. A harness-authored row has
+-- neither, and forging them is the lie structural identity exists to prevent.
+CREATE TABLE IF NOT EXISTS work_item_filings (
+  target_ref TEXT PRIMARY KEY,
+  job_id     TEXT NOT NULL,
+  status     TEXT NOT NULL,          -- filing | filed
+  ticket_ref TEXT,                   -- the item it was filed as ("issue:314"), once created
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
@@ -330,5 +348,6 @@ CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_events_at ON usage_events(at);
 CREATE INDEX IF NOT EXISTS idx_error_events_created ON error_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_work_nodes_parent ON work_nodes(parent_ref);
+CREATE INDEX IF NOT EXISTS idx_work_item_filings_job ON work_item_filings(job_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_origin ON tasks(origin_ref);
 `;

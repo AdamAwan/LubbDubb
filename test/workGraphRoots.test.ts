@@ -143,6 +143,67 @@ test("an issue's own branch match is never displaced by a job", () => {
   assert.equal(node(out, 'pr:41').parentRef, 'issue:12');
 });
 
+// ---------------------------------------------------------------------------
+// The filing record
+// ---------------------------------------------------------------------------
+
+test('a filing is opened once per node — a second click is refused by the write', () => {
+  const store = new Store(':memory:');
+  const first = store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file1' });
+  assert.equal(first?.status, 'filing');
+  assert.equal(first?.ticketRef, null, 'the ticket does not exist yet — that is what filing means');
+
+  assert.equal(
+    store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file2' }),
+    null,
+    'the refusal is the primary key, not a caller remembering to look',
+  );
+  assert.equal(store.listWorkItemFilings().length, 1);
+  store.close();
+});
+
+test('linking settles a filing exactly once', () => {
+  const store = new Store(':memory:');
+  store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file1' });
+
+  const linked = store.linkWorkItemFiling('job_file1', 'issue:314');
+  assert.equal(linked?.status, 'filed');
+  assert.equal(linked?.ticketRef, 'issue:314');
+
+  assert.equal(
+    store.linkWorkItemFiling('job_file1', 'issue:999'),
+    null,
+    'an agent that calls link_ticket twice links once',
+  );
+  assert.equal(store.findWorkItemFilingByJobId('job_file1')?.ticketRef, 'issue:314');
+  store.close();
+});
+
+test('a job that is filing nothing resolves to no filing', () => {
+  const store = new Store(':memory:');
+  assert.equal(store.findWorkItemFilingByJobId('job_unrelated'), null);
+  assert.equal(store.linkWorkItemFiling('job_unrelated', 'issue:314'), null);
+  store.close();
+});
+
+test('listWorkNodes reads the whole table, roots and descendants alike', () => {
+  const store = new Store(':memory:');
+  store.recordWorkGraph(
+    foldWorkGraph(
+      input({ world: world({ issues: [issue({ linkedPrNumber: 41 })], pullRequests: [pr()] }), jobs: [job()] }),
+    ),
+  );
+  assert.deepEqual(
+    store
+      .listWorkNodes()
+      .map((n) => n.ref)
+      .sort(),
+    ['issue:12', 'job:j7', 'pr:41'],
+    'the detector needs descendants, which listWorkRoots cannot give it',
+  );
+  store.close();
+});
+
 test('adoption is write-once: a later fold never re-parents a job', () => {
   const store = new Store(':memory:');
   const adopted = foldWorkGraph(
