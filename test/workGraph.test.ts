@@ -13,6 +13,10 @@ import type {
   WorldSnapshot,
 } from '../src/types.js';
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
+import { buildSystem } from '../src/system.js';
+import { loadConfig } from '../src/config.js';
+import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 
 function obs(over: Partial<WorkNodeObservation> & Pick<WorkNodeObservation, 'ref' | 'kind'>): WorkNodeObservation {
   return { title: over.ref, status: 'open', terminal: false, parentRef: null, ...over };
@@ -387,4 +391,55 @@ test('a job is its own root, and a cancelled one is terminal', () => {
 
   const cancelled = foldWorkGraph(input({ jobs: [job({ status: 'cancelled' })] }));
   assert.equal(node(cancelled, 'job:j7').terminal, true);
+});
+
+test('a merged PR stays merged in the graph long after the world forgets it', async () => {
+  // The headline property, in three moves: the merge is *observed* while the PR is
+  // still in `closedPullRequests`, then the PR leaves both lists the way the 6h
+  // `closedPrWindowMs` retires it, and the graph is asked again.
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: '',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    // Nothing here needs an agent; a paused fleet keeps the pulse to the world.
+    startPaused: true,
+  });
+  const system = buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+
+  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Widget' });
+  system.connector.inject({ kind: 'new_pr', number: 40, title: 'Add the widget', branch: 'issue/12' });
+  await system.harness.runCycle('manual');
+
+  const open = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
+  assert.equal(open?.status, 'open');
+  assert.equal(open?.parentRef, 'issue:12');
+
+  // The fake models a merge as a `pr_closed` that moves the row into the closed
+  // list — there is no `pr_merged` event, and `mergePr` leaves the PR in place.
+  system.connector.inject({ kind: 'pr_closed', prNumber: 40, merged: true });
+  await system.harness.runCycle('manual');
+  const merged = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
+  assert.equal(merged?.status, 'merged', 'the merge is observed while it is still in the world');
+  assert.equal(merged?.terminal, true);
+  assert.equal(merged?.provenance, 'observed');
+
+  // Age the row out of the retention window. The fake never expires its closed
+  // list, so emptying the shared world document by hand is what standing past
+  // `closedPrWindowMs` does on a real provider: PR #40 is in neither list.
+  new FakeWorldStore(system.store).mutate((world) => {
+    world.closedPullRequests = [];
+  });
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+
+  const after = system.store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:40');
+  assert.equal(after?.status, 'merged', 'the graph still knows PR #40 merged');
+  assert.equal(after?.terminal, true);
+  // The distinction that makes this durability rather than a lucky re-derivation:
+  // absence-means-merged would have rewritten this to `inferred`.
+  assert.equal(after?.provenance, 'observed', 'the record was kept, not re-guessed');
+  assert.equal(after?.parentRef, 'issue:12', 'and still knows which issue it delivered');
+  system.store.close();
 });

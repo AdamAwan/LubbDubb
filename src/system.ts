@@ -11,6 +11,7 @@ import { WorktreeManager } from './worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { PlanReconciler } from './plans/planReconciler.js';
+import { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import { AgentManager } from './agents/agentManager.js';
 import {
   buildClaudeArgs,
@@ -67,6 +68,12 @@ export interface System {
   executor: ActionExecutor;
   dispatcher: Dispatcher;
   harness: Harness;
+  /**
+   * Writes the durable work graph each pulse. Exposed because the record outlives
+   * the world's memory of it — the routes and tests that read the graph back have
+   * no other handle on the thing that wrote it.
+   */
+  graph: WorkGraphRecorder;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
   /**
@@ -365,12 +372,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  const graph = new WorkGraphRecorder({ store, errors });
+
   const harness = new Harness({
     store,
     connector,
     dispatcher,
     executor,
     plans,
+    graph,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
@@ -457,6 +467,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     executor,
     dispatcher,
     harness,
+    graph,
     runtimeControl,
     issuePickup,
     prompts,
