@@ -58,10 +58,30 @@ test('ending a discussion puts the plan back to awaiting approval', async () => 
 });
 
 test('a missing plan is a 404 on both discussion routes', async () => {
-  const { app } = await buildTestApp();
+  const { system, app } = await buildTestApp();
   assert.equal((await app.inject({ method: 'POST', url: '/api/plans/nope/discuss' })).statusCode, 404);
   assert.equal((await app.inject({ method: 'POST', url: '/api/plans/nope/discuss/end' })).statusCode, 404);
   await app.close();
+  system.store.close();
+});
+
+test('/discuss/end refuses a plan that is not being discussed, and leaves it untouched', async () => {
+  const { system, app } = await buildTestApp();
+  const plan = seedAwaitingApprovalPlan(system);
+  // `active`, not `awaiting_approval`: this is the state where an unguarded
+  // restore actually costs something — parts already dispatched, agents already
+  // on branches — and where forcing it back to `awaiting_approval` would reopen
+  // an approval gate nobody asked to reopen and stop rule 4a scheduling its parts.
+  system.store.setPlanStatus(plan.id, 'active');
+
+  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss/end` });
+  assert.equal(res.statusCode, 409);
+
+  const after = system.store.getPlan(plan.id)!;
+  assert.equal(after.status, 'active', 'a refused call must not move the plan at all');
+  assert.equal(after.discussing, false);
+  await app.close();
+  system.store.close();
 });
 
 // -- fixtures ----------------------------------------------------------------

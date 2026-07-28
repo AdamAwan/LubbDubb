@@ -514,6 +514,13 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     const { id } = req.params as { id: string };
     const plan = store.getPlan(id);
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
+    // Compare-and-set against `discussing`, the same discipline `releasePlan` and
+    // `refusePlan` apply to `awaiting_approval`: an unguarded restore would force
+    // *any* plan back to `awaiting_approval` on a stale or duplicate call — a plan
+    // already `active`, with parts dispatched and agents on branches, would have
+    // its approval gate reopened and rule 4a would stop scheduling its parts. The
+    // flag is exactly what says whether this call still names a live discussion.
+    if (!plan.discussing) return reply.code(409).send({ error: `plan ${id} is not being discussed` });
     store.setPlanStatus(id, 'awaiting_approval');
     const next = store.setPlanDiscussing(id, false);
     hub.broadcast({ type: 'world:changed' });
