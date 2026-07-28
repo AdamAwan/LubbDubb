@@ -553,8 +553,11 @@ export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary'>;
  */
 export type IssueConclusionVerdict = 'done' | 'more_work';
 
-/** Who cast a verdict: the agent that did the work, or the operator overriding it. */
-export type ConclusionAuthor = 'agent' | 'operator';
+/**
+ * Who cast a verdict: the agent that did the work, the assessor that later judged
+ * the issue as a whole, or the operator overriding either.
+ */
+export type ConclusionAuthor = 'agent' | 'assessor' | 'operator';
 
 /**
  * One issue's standing conclusion — the `conclude_work` tool's row, or the
@@ -577,6 +580,41 @@ export interface IssueConclusion {
   agentId: string | null;
   taskId: string | null;
   createdAt: string;
+  updatedAt: string;
+}
+
+/** Who decided an issue was delivered: the assessing agent, or the operator directly. */
+export type DeliveryAuthor = 'assessor' | 'operator';
+
+/**
+ * One issue's standing `delivered` verdict — the harness's own park.
+ *
+ * Distinct from {@link IssueConclusion}, and deliberately not a third member of
+ * {@link IssueConclusionVerdict}, because the two have different lifetimes and
+ * different readers. A conclusion is declared once by the agent that did the work
+ * and **gates nothing** — rule 3b is its only consumer. A delivery verdict is
+ * re-read by the pickup gate every pulse and stops standing when the world moves
+ * (`src/delivery/delivery.ts`). Folding them would give the resolver an expiring
+ * member its other two do not have, and would overwrite the working agent's note
+ * with the assessor's.
+ *
+ * They are mutually exclusive: writing either clears the other, in the store, so
+ * an issue never carries a conclusion and a delivery that contradict.
+ *
+ * `delivered` is weaker than the tracker's `closed` and reversible. It says the
+ * harness believes it has done what it can, and its only effect is to stop pickup.
+ */
+export interface IssueDelivery {
+  /** The issue, as `issue:<n>` — the same origin the conclusion and every gate keys on. */
+  originRef: string;
+  /** What was delivered, and on what evidence. Required: a bare verdict is not reviewable. */
+  summary: string;
+  by: DeliveryAuthor;
+  /** The assessing agent and its task, from the credential. Null for an operator verdict. */
+  agentId: string | null;
+  taskId: string | null;
+  /** When the verdict was first cast — the instant world signal is measured against. */
+  decidedAt: string;
   updatedAt: string;
 }
 

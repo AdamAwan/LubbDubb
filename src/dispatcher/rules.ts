@@ -74,6 +74,12 @@ export const DISPATCH_RULES = {
     description:
       'With `planning.requireApproval` on, a `parts` verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and rule 4a schedules none of its parts until you accept. Accepting releases the plan; rejecting retires the parts nothing has started for and falls the issue back to a single pull request, so a "no" leaves it a route instead of parking it. A replan asks again — the amended decomposition is a new proposal, and the old verdict cannot release it. Off by default: without the flag a decomposition commits the moment the planner writes it, exactly as before.',
   },
+  'issue-assess': {
+    number: '3e',
+    name: 'Issue may be finished',
+    description:
+      'A watched open issue that has already had agents on it, has nothing in flight and no open PR, gets a code agent to read what was actually delivered and say whether the issue is finished. It writes `delivered` — weaker than the tracker’s `closed`, reversible, and its only effect is to stop pickup — or sends the issue back round with an outstanding-work note. It is what stops rule 4 re-picking work whose PR has merged and left the open list, which on GitHub nothing else prevents, and it ranks ahead of pickup for exactly the issues both would otherwise claim. Off by default; an assessor that spends its attempt cap fails the issue open to ordinary pickup, so a failure can never park an issue.',
+  },
   'plan-part': {
     number: '4a',
     name: 'Plan part ready',

@@ -23,6 +23,7 @@ discover what a synchronous error would have said in one turn.
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                   |
 | `link_ticket`        | Report the ticket a filing agent created, closing the loop on a filed finding.                                                                                                                                                            |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                         |
+| `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                   |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
 
 ### The `_status` envelope
@@ -77,7 +78,15 @@ PR's CI status or review comments had to shell out, which is provider-coupled (n
   agent told `CI failing on base PR #7` and an operator reading the same phrase are reading one fact.
 - **A closed PR is still readable** — "did the PR my branch is stacked on actually merge, or was it
   abandoned?" is exactly the question the closed-PR window answers.
-- **An issue additionally carries its plan graph**, which lives only in the store.
+- **An issue additionally carries its plan graph and its work subtree**, both of which live only in
+  the store. The subtree is what the world cannot supply: `closedPullRequests` is bounded by
+  `closedPrWindowMs` (6h), so a PR that delivered the issue last week is simply absent from the
+  snapshot and the edge to it is in the graph or nowhere. Each node carries its `provenance`, so a
+  reader can weigh "the harness watched this merge" (`observed`) against "it left the open list and
+  the merge was assumed" (`inferred`) — rule 3e's assessor is the reader stage 1 recorded that
+  distinction for. The lookup is `Store.listWorkSubtree`, in the tool layer rather than in the pure
+  `worldRead.ts`, and nothing here imports the fold, so the dispatcher-side lens property in
+  [`14-persistence.md`](14-persistence.md) is untouched.
 - **`ref` is suffix-tolerant, kind-strict.** `pr:42:ci`, `issue:12:part:schema` and `issue:12:plan` all
   name their world item, so the origin ref from `_status.origin` passes back verbatim; bare `42` and
   `#42` work too. Omitting `ref` defaults to the caller's own origin. A prefix that contradicts `kind`
@@ -193,6 +202,30 @@ everything is delivered and it is waiting on test. See
 
 It routes through `AgentManager.recordConclusion` for the `conclusion` event, so the cockpit repaints
 on the verdict rather than on the next pulse.
+
+### `assess_issue`
+
+Arguments `{status: 'delivered'|'more_work', summary}`. Rule 3e's assessor casts its verdict here.
+Identity is structural as for every other write tool — no issue argument, the origin resolved from
+the credential.
+
+- **`assessmentOrigin` refuses every agent that is _doing_ the work**, which is `conclusionOrigin`'s
+  discipline pointed the other way. There a part agent is refused because the plan speaks for the
+  issue; here a pickup, planner or part agent is refused because judging your own delivery is not an
+  assessment — having someone else look is the entire point of the rule. Both refusals name the tool
+  that _is_ the caller's, so an agent reaching for the wrong one is told which is right.
+- **The two verdicts land in two places**, because they are two statements that already exist.
+  `more_work` is what `issue_conclusions` means and what rule 3b's inverse arm already reads — a
+  second source for one statement would be a duplicate opinion. `delivered` writes the
+  `issue_deliveries` park, which gates pickup, as no conclusion does. Writing either clears the
+  other, in the store.
+- **`delivered` does not close the ticket**, and both the tool description and the response say so
+  twice: an agent that believed it had closed the issue would stop looking at it. The description
+  also says which way to err — a wrong `delivered` parks real work silently, a wrong `more_work`
+  costs one more agent.
+
+It routes through `AgentManager.recordAssessment` for the `assessment` event, so the cockpit
+repaints on the verdict rather than on the next pulse.
 
 ### `request_permission`
 

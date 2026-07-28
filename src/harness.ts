@@ -10,6 +10,7 @@ import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { isPrExcluded } from './prHealth.js';
 import { rejectionSignalQuery } from './proposals/proposals.js';
+import { deliverySignalQuery } from './delivery/delivery.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, Task, WorldEvent, WorldSnapshot } from './types.js';
@@ -169,6 +170,15 @@ export class Harness extends EventEmitter {
       // unbounded in age on purpose: a verdict that aged out of a window would
       // have the harness re-pick work someone already declared done.
       const conclusions = store.listIssueConclusions();
+      // The harness's own park: issues an assessor judged delivered. Unbounded in
+      // age for the same reason conclusions are, and the world read that ends one
+      // is derived from the verdicts themselves — so a deployment that has never
+      // assessed an issue does no read at all.
+      const deliveries = store.listDeliveries();
+      const deliveryWindow = deliverySignalQuery(deliveries);
+      const deliverySignals = deliveryWindow
+        ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
+        : [];
       const recentDecisions = store.listDecisions(200);
       // Acts already put to a human: a rule that proposed one holds off while the
       // verdict stands, so one question is asked once (issue #109).
@@ -213,6 +223,8 @@ export class Harness extends EventEmitter {
         plans,
         planParts,
         conclusions,
+        deliveries,
+        deliverySignals,
         recentDecisions,
         proposals,
         rejectionSignals,

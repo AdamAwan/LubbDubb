@@ -35,7 +35,7 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions`, `priority_overrides` and `work_nodes` were all introduced as new tables and therefore have no
+`agent_files`, `issue_conclusions`, `issue_deliveries`, `priority_overrides` and `work_nodes` were all introduced as new tables and therefore have no
 migration entry — but `findings` has since gained `ticket_ref`, which is exactly the case the table
 above exists for.
 
@@ -54,6 +54,7 @@ above exists for.
 | `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.    | `origin_ref` is `PRIMARY KEY` |
 | `plans`              | One delivery plan per issue.                                                             | `origin_ref` is `UNIQUE`      |
 | `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                 | `UNIQUE (plan_id, slug)`      |
+| `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from. | `ref` is `PRIMARY KEY`        |
 | `agent_transcripts`  | Chunked agent output.                                                                    | `PRIMARY KEY (agent_id, seq)` |
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                          | —                             |
@@ -207,3 +208,19 @@ by the fake providers so an injected world survives a restart.
   no pass prunes it.
 - **The runtime cap and pause flag are not persisted.** They live in `RuntimeControl` and a restart
   reverts to config.
+
+### Known limitation: the work graph's backfill reach
+
+`WorkGraphRecorder.record` builds the `existing` set it folds against as
+`listWorkRoots().flatMap(root => listWorkSubtree(root.ref))`, which reaches a node only if its
+**whole ancestor chain** already has rows. On a backfill pass a plan or part belonging to an
+already-closed issue never gets an `issue:<n>` node — providers list open issues only — so that
+subtree is invisible to the fold.
+
+The consequence is **conservative**: such a node stays stale at whatever it was last recorded as
+(typically `open`) rather than being falsely marked merged, so nothing downstream is told something
+untrue. Closing it means a fourth store method returning every row flat, where the work-graph design
+deliberately enumerated three.
+
+Ruled on and left as-is. It is recorded here rather than only in the pull request that introduced it,
+because a pull request body is not where anyone looks for a limitation six months later.

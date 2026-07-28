@@ -15,7 +15,7 @@ Values are merged in this order, later winning:
 4. Explicit `overrides` passed to `loadConfig(overrides)` (tests, embedding)
 
 Five keys are **deep-merged** rather than replaced, so a config file can set one field of them
-without dropping the rest: `autoSend`, `integrations`, `planning`, `mcp`, `auth`. Everything else —
+without dropping the rest: `autoSend`, `integrations`, `planning`, `assessment`, `mcp`, `auth`. Everything else —
 including `issuePriorityLabels` — is replaced wholesale.
 
 `loadConfig` **throws** for one combination: a `host` that is reachable off this machine together
@@ -92,6 +92,7 @@ resolve them against the wrong directory:
 | `planning.maxConcurrentPartsPerIssue` | `number` | `2`       | How many parts of one plan may have live agents at once.                                                               |
 | `planning.requireApproval`          | `boolean` | `false`   | Put a `parts` verdict to a human before anything is scheduled from it. Off leaves an enabled funnel byte-for-byte as it was: a decomposition commits the moment the planner writes it. |
 | `planning.gitFetchIntervalMs`       | `number`  | `60000`   | Floor on how often plan reconciliation runs `git fetch`. `0` = every pulse.                                             |
+| `assessment.enabled`                | `boolean` | `false`   | Rule 3e, the assessor: ask whether an issue that has had work and has nothing in flight is finished, and park it as `delivered` if so. **Off by default** — unlike `mcp` it is not purely additive, since it gates pickup and spends an agent per assessed issue. Off, no assessor runs, no verdict is written, and rule 4 behaves exactly as it does today. |
 | `mcp.enabled`                       | `boolean` | `true`    | The agent tool channel. **On by default**, because it is purely additive; off leaves agents on the sentinels alone.     |
 | `mcp.permissionEscalation`          | `boolean` | `true`    | The permission backstop (`--permission-prompt-tool`). A tool call the `agentAllowedTools` list doesn't cover is routed to the operator (allow/deny in "Needs you") instead of hanging. Gated by `mcp.enabled` — the tool lives on the MCP server. Off falls back to Claude's default headless deny. |
 

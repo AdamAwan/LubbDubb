@@ -15,6 +15,12 @@ import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import { CONCLUSION_VERDICT_HELP, CONCLUSION_VERDICTS, validateConclusion } from './conclusion.js';
+import {
+  ASSESSMENT_VERDICT_HELP,
+  ASSESSMENT_VERDICTS,
+  validateAssessment,
+  type AssessmentVerdict,
+} from './assessment.js';
 import { FINDING_KIND_HELP, FINDING_KINDS, parseFindingRef, validateFinding } from './findings.js';
 import { MCP_TOOL_NAMES } from './names.js';
 import { normaliseNote } from './progress.js';
@@ -38,6 +44,11 @@ export interface AgentToolTarget {
     verdict: IssueConclusionVerdict,
     note: string,
   ): { ok: true; conclusion: IssueConclusion } | { ok: false; error: string };
+  recordAssessment(
+    agentId: string,
+    verdict: AssessmentVerdict,
+    summary: string,
+  ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
 }
 
 interface McpToolDeps {
@@ -501,6 +512,57 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
         });
       },
     },
+    {
+      name: MCP_TOOL_NAMES[8],
+      description:
+        'Say whether the ISSUE you were dispatched to assess is finished. You are the second look: ' +
+        'another agent did the work and said what it believed it delivered, and your job is to check ' +
+        "that against the repository you are standing in and the harness's record of what was done " +
+        '(world_read on your issue). Say "delivered" only if what the issue asked for is actually ' +
+        'present — that stops the harness scheduling anything further, though it does not close the ' +
+        'ticket and can be undone. Say "more_work" if something is missing or you could not verify it, ' +
+        'and the issue comes back round with your summary in front of the next agent. If you are torn, ' +
+        'say more_work: a wrong "delivered" parks real work silently, a wrong "more_work" costs one agent.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            enum: [...ASSESSMENT_VERDICTS],
+            description: ASSESSMENT_VERDICTS.map((v) => `${v}: ${ASSESSMENT_VERDICT_HELP[v]}`).join('. '),
+          },
+          summary: {
+            type: 'string',
+            description:
+              'What you found, and on what evidence — which pull requests delivered what, and whether the ' +
+              'harness watched them merge or assumed it. For more_work, precisely what is missing: the next ' +
+              'agent starts from this.',
+          },
+        },
+        required: ['status', 'summary'],
+      },
+      handler: (args) => {
+        const parsed = validateAssessment(args);
+        if (!parsed.ok) return toolError(`Assessment rejected: ${parsed.error}`);
+        // Structural identity, and here it decides whether there is anything to
+        // assess at all: an agent that did the work is refused rather than scoped
+        // down, because judging your own delivery is not an assessment.
+        const result = deps.agents.recordAssessment(agent.id, parsed.verdict, parsed.summary);
+        if (!result.ok) return toolError(result.error);
+        return ok({
+          assessed: true,
+          issue: result.issueOrigin,
+          status: result.verdict,
+          note:
+            parsed.verdict === 'delivered'
+              ? 'Recorded. The harness will not pick this issue up again while the verdict stands — it ends ' +
+                'when the issue changes in the tracker or someone clears it. The ticket is not closed; that ' +
+                'stays a human decision.'
+              : 'Recorded. The issue is back in the queue and your summary goes to whoever picks it up. ' +
+                'Nothing is dispatched right now.',
+        });
+      },
+    },
   ];
 }
 
@@ -573,6 +635,32 @@ function readWorld(
           prNumber: p.prNumber,
         })),
       };
+    }
+    // The durable record of what was actually done for this issue — stage 1's
+    // work graph. This is what the world cannot supply: `closedPullRequests` is
+    // bounded by `closedPrWindowMs` (6h), so a PR that delivered the issue last
+    // week is simply absent from the snapshot, and the edge to it is here or
+    // nowhere. `provenance` rides along because the assessor must weigh "the
+    // harness watched this merge" differently from "it left the open list and
+    // the merge was assumed" — stage 1 recorded that distinction for this reader.
+    //
+    // Reading it here rather than in the pure `worldRead.ts` keeps that file's
+    // line: it maps a snapshot, and the store lookups live in the tool layer.
+    // Nothing about stage 1's structural property changes — that is about no
+    // *rule* consulting the graph, and an agent reading its own history is the
+    // consumer it was built for.
+    const work = store.listWorkSubtree(target.target.canonical);
+    if (work.length > 0) {
+      item.work = work.map((n) => ({
+        ref: n.ref,
+        kind: n.kind,
+        parentRef: n.parentRef,
+        baseRef: n.baseRef,
+        title: n.title,
+        status: n.status,
+        terminal: n.terminal,
+        provenance: n.provenance,
+      }));
     }
   }
   // The snapshot's age, because it is a pulse-old reading rather than a live fetch

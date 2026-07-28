@@ -121,6 +121,7 @@ chip.
 | `unwatched` | Not opted in, or parked by the state gate.                             |
 | `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                   |
 | `escalated` | Attempt cap spent; parked on a human.                                  |
+| `delivered` | Assessed as delivered — parked until the world or the operator says otherwise. |
 | `blocked`   | Eligible, but dispatch is paused or the cap is reached.                |
 | `eligible`  | Would be picked up next cycle.                                         |
 
@@ -132,7 +133,13 @@ never moves again on its own — `"plan complete — all N parts merged; close t
 
 `IssuePickupContext` carries the same inputs rule 4 consults: the policy, `DEFAULT_COOLDOWN`, the
 world's `takenAt` as "now", tasks, the last 200 decisions, the **unfiltered** open PR list, the plan
-graph, the planning policy, and the current headroom / paused flag.
+graph, the planning policy, the standing delivery verdicts with the world transitions that may have
+ended one, and the current headroom / paused flag.
+
+The `delivered` arm is asked **after** `has_pr` and `active`, and that order is deliberate: a
+delivered issue that somehow has an open PR is honestly `has_pr` — the PR rules own it — and one
+with a live agent is honestly `active`. Saying "delivered" in either case would send the operator
+looking in the wrong place.
 
 ## Rule 4 in full
 
@@ -198,3 +205,61 @@ proposal's note is: an operator override omitting a new token would silently dro
 Consequence worth knowing: on a provider with no work-item state machine (GitHub, the fake) a
 conclusion is recorded and displayed but changes no dispatch — there is no review state to be parked
 in, so there is no bounce-back to suppress.
+
+## The delivery park (`delivered`)
+
+The consequence above is exactly what this closes. `delivered` is the harness's **own** park, for
+the providers that have no tracker park — rule 3b's review-state hold, generalised off the tracker
+onto a row the harness owns. It is written by rule 3e's assessor (see
+[the dispatcher spec](05-dispatcher.md)) or by the operator, and unlike a conclusion **it gates
+pickup**.
+
+It is deliberately weaker than the tracker's `closed` and it is reversible:
+
+- **`delivered`** — the harness believes it has done what it can. Its only effect is to stop pickup.
+  **Not terminal.**
+- **`closed`** — the human agrees. Tracker status, read never computed, and the only terminal one.
+
+The gap between them is days of testing and sign-off, and that gap is the whole reason the state
+exists.
+
+### What ends it
+
+`deliveryHold(delivery, issue, ctx)` (`src/delivery/delivery.ts`, pure) is asked in **two places off
+the one predicate** — rule 4's eligibility filter and `issuePickupStatus` — so the chip can never
+promise what the next cycle refuses. Two arms, plus a third clearer that is deliberately not an arm:
+
+1. **The issue is observed in a pickup state again.** The operator moved the ticket, and CLAUDE.md
+   already promises that is the override. It cannot be a signal: `worldDiff` emits `issue_opened`,
+   `issue_closed` and `issue_linked` and **nothing for a `workItemState` transition**. Reading the
+   _current_ state is also sturdier — it survives a restart and a lost baseline, where an event
+   between two pulses does not. Adding an `issue_state` event was considered and refused: it would
+   make the verdict depend on the harness having witnessed the moment of the move.
+2. **Any world transition on `issue:<n>` strictly after the verdict.** Issue #109 phase 4's
+   rejection-expiry pattern, which covers the providers where arm 1 can never fire. "Any" rather
+   than a per-kind list, for `expiringSignal`'s reason: a filter here would be a second opinion
+   about which changes matter, sitting nowhere near the rule it second-guesses.
+3. **The operator clears it** (`POST /api/issues/:number/delivered` with `{delivered: false}`). A
+   delete, which is why it is not an arm — the absence of a verdict keeps exactly one
+   representation.
+
+**There is no timer arm.** The asymmetry with `proposalHold`'s accepted settle window is the point:
+an accepted act waits on the world to _reflect_ something already done, which is a duration; a
+delivered issue waits on it to _become_ something else, which is an event. A clock expiry would mean
+"delivered for now", and re-picking work that was genuinely delivered is the failure this exists to
+stop.
+
+Expiry lifts the hold; it does not retract the verdict. The row stays, so the assessor's summary
+remains readable as the last thing said about the issue.
+
+### Why not a third `IssueConclusionVerdict`
+
+A conclusion is declared once by the agent that did the work and **gates nothing**; a delivery
+verdict is re-read by a gate every pulse and expires on world signal. Folding them would give
+`resolveIssueConclusion` an expiring member its other two do not have, and would overwrite the
+working agent's note with the assessor's. So `issue_deliveries` is a separate table — the same
+argument [proposals](../../CLAUDE.md) made for a fresh table over columns on `escalations`.
+
+The two are **mutually exclusive**: writing either clears the other, enforced in the store rather
+than in a caller, because a caller that remembered one and forgot the other would leave rule 3b
+returning an item to pickup while this gate held it.

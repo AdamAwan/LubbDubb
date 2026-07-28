@@ -156,6 +156,17 @@ export function conclusionOrigin(
         `not delivering it. Submit your decomposition with plan_submit instead.`,
     };
   }
+  const assessor = /^issue:(\d+):assess$/.exec(ref);
+  if (assessor) {
+    return {
+      ok: false,
+      error:
+        `conclude_work is for an agent that did the work, and you were dispatched to *assess* issue ` +
+        `#${assessor[1]} rather than to deliver it. Cast your verdict with assess_issue instead — it ` +
+        `carries the extra answer yours needs ("delivered"), which parks the issue without claiming an ` +
+        `agent finished a turn on it.`,
+    };
+  }
   return {
     ok: false,
     error:

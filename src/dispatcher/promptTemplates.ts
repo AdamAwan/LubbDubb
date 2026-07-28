@@ -29,6 +29,7 @@ type PromptId =
   | 'plan-part-escalation'
   | 'issue-pickup'
   | 'issue-pickup-escalation'
+  | 'issue-assess'
   | 'pr-ci-fix'
   | 'pr-base-update-behind'
   | 'pr-base-update-conflict'
@@ -147,6 +148,12 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'Auto-resolution of issue #{number} ("{title}") keeps failing: {attempts} agent attempt(s) produced no linked PR. Please take a look.',
     doc: 'Escalated to a human when issue pickup keeps failing to produce a linked PR. Placeholders: {number} {title} {attempts}.',
+  },
+  'issue-assess': {
+    placeholders: ['number', 'title', 'body', 'branch'],
+    template:
+      'Issue #{number} ("{title}") has had work done on it and has nothing in flight right now. Decide whether it is finished.\n\n{body}\n\nYou are on branch {branch}, cut from the default branch, so the repository you can see is the delivered state. Read it. Call world_read("issue", "issue:{number}") for the harness\'s own record of what was done — the pull requests that delivered this issue, including ones long gone from the world, each marked `observed` (the harness watched it merge) or `inferred` (it left the open list and the merge was assumed). An inferred merge is weaker evidence; say so if your verdict rests on one.\n\nThen call assess_issue:\n\n- "delivered" if what the issue asked for is actually present in the repository. This stops the harness scheduling anything further for it. It does NOT close the ticket — a human does that after testing, and your verdict is reversible.\n- "more_work" if something the issue asked for is missing. Say precisely what, because the next agent is given your words.\n\nDo not implement anything and do not open a pull request. Judge from what is there. If you genuinely cannot tell, say "more_work" and explain what you could not verify — a wrong "delivered" parks real work silently, while a wrong "more_work" costs one more agent.',
+    doc: 'Sent to a code agent for an issue that has had work and has nothing in flight (rule 3e). It reads the delivered state on the default branch plus the work graph via world_read, and casts a verdict with assess_issue. Placeholders: {number} {title} {body} {branch}.',
   },
   'pr-ci-fix': {
     placeholders: ['number', 'title', 'branch'],

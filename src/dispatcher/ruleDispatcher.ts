@@ -2,7 +2,7 @@ import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './d
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import { inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../prHealth.js';
-import type { Agent, Decision, Plan, PlanPart, PullRequest, Task } from '../types.js';
+import type { Agent, Decision, Issue, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import {
   isIssuePickupEligible,
   issueBranch,
@@ -17,6 +17,14 @@ import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } fro
 import type { DispatchRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { resolveIssueConclusion } from '../issueConclusion.js';
+import { deliveryHold } from '../delivery/delivery.js';
+import {
+  DEFAULT_ASSESSMENT,
+  assessBranch,
+  assessOrigin,
+  hasPriorWork,
+  type AssessmentPolicy,
+} from '../delivery/assessment.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { PLAN_FILE } from '../plans/planDocument.js';
 import {
@@ -54,6 +62,7 @@ import {
  *   3b. A work item's state lags its PR -> move it to/from the review state
  *   3c. A watched open issue has no plan -> planning agent (funnel, off by default)
  *   3d. A decomposition awaits approval  -> put it to a human (opt-in, off by default)
+ *   3e. An issue has had work and nothing is in flight -> assessor (off by default)
  *   4. An open issue has no open PR   -> code agent to resolve it into a PR
  *
  * At most one code agent works a given PR branch: when a fresh signal lands on a
@@ -77,6 +86,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly templates: PromptTemplates;
   private readonly defaultBranch: string;
   private readonly planning: PlanningPolicy;
+  private readonly assessment: AssessmentPolicy;
 
   /**
    * `pickup` gates and orders issue pickup (rule 4). Omitted/partial => no gate
@@ -89,7 +99,9 @@ export class RuleDispatcher implements Dispatcher {
    * `defaultBranch` names the base a PR is assumed to target when the provider
    * doesn't report one, and only phrases the base-update prompt. `planning` turns
    * the plan funnel (rule 3c) on; omitted/disabled leaves rule 4 un-narrowed and
-   * behaviour exactly as it is without plans.
+   * behaviour exactly as it is without plans. `assessment` turns rule 3e on;
+   * omitted/disabled means no assessor fires and no issue is ever parked as
+   * delivered, so pickup behaves exactly as it does today.
    */
   constructor(
     pickup: Partial<IssuePickupPolicy> = {},
@@ -97,6 +109,7 @@ export class RuleDispatcher implements Dispatcher {
     templates: PromptTemplates = defaultPromptTemplates(),
     defaultBranch = 'main',
     planning: Partial<PlanningPolicy> = {},
+    assessment: Partial<AssessmentPolicy> = {},
   ) {
     this.defaultBranch = defaultBranch;
     this.planning = {
@@ -106,6 +119,7 @@ export class RuleDispatcher implements Dispatcher {
       // Reconciliation's knob, not the dispatcher's; carried so the policy stays one object.
       gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
     };
+    this.assessment = { enabled: assessment.enabled ?? DEFAULT_ASSESSMENT.enabled };
     this.templates = templates;
     this.pickup = {
       watchLabel: pickup.watchLabel,
@@ -490,10 +504,24 @@ export class RuleDispatcher implements Dispatcher {
     // these, leave the rest" — untagged issues stay visible in the world, just
     // unacted-on — and order by label-encoded priority so the important ones claim
     // limited headroom first (tie-break by issue number for determinism).
+    // Standing `delivered` verdicts, keyed on the same `issue:<n>` origin. Unlike a
+    // conclusion this one gates: an assessed issue is parked until the world moves
+    // or the operator says otherwise. Asked through the same pure `deliveryHold`
+    // the cockpit chip asks, so the two can never disagree about an issue.
+    const deliveries = new Map((ctx.deliveries ?? []).map((d) => [d.originRef, d]));
+    const deliveryParked = (issue: Issue): boolean =>
+      deliveryHold(deliveries.get(issueOrigin(issue.number)) ?? null, issue, {
+        pickupStates: this.pickup.pickupStates,
+        signals: ctx.deliverySignals,
+      }) !== null;
+
     const eligibleIssues = ctx.world.issues
       .filter(
         (i) =>
-          i.state === 'open' && openPrForIssue(i, openPrs) === null && isIssuePickupEligible(i, this.pickup).eligible,
+          i.state === 'open' &&
+          openPrForIssue(i, openPrs) === null &&
+          !deliveryParked(i) &&
+          isIssuePickupEligible(i, this.pickup).eligible,
       )
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
       .sort((a, b) => b.weight - a.weight || a.issue.number - b.issue.number);
@@ -582,6 +610,87 @@ export class RuleDispatcher implements Dispatcher {
           reason,
         } satisfies RawAction,
       });
+    }
+
+    // 3e: Ask whether an issue that has already had work is finished.
+    //
+    // The gap this closes: `openPrForIssue` reads only the *open* list, so the
+    // moment a delivering PR merges the issue is once again "open, watched, no open
+    // PR" — rule 4's entire precondition — and a fresh agent is put on work already
+    // sitting on the default branch. Azure is half-covered by accident (rule 3b
+    // parks the item in the review state), but that park is a *tracker* state and
+    // GitHub has none, so there the only thing bounding the loop is the attempt cap.
+    //
+    // Deliberately **not** driven off `eligibleIssues`, for rule 4a's reason: that
+    // list applies the workflow-state gate, and the Azure case this must cover is
+    // precisely an item parked in the review state. The watch/ignore tag is the only
+    // pickup gate that applies, evaluated once on the issue.
+    //
+    // Ranked ahead of rule 4 and suppressing it for the same issue. An open watched
+    // issue with no open PR is a candidate for both, and `hasPriorWork` is what tells
+    // them apart: nothing started means pickup, something finished means ask. Without
+    // the suppression both fire and two agents land on one issue, one assessing and
+    // one redoing the work.
+    const assessing = new Set<number>();
+    if (this.assessment.enabled) {
+      for (const issue of ctx.world.issues) {
+        if (issue.state !== 'open') continue;
+        if (issueWatchGateReason(issue, this.pickup) !== null) continue;
+        if (openPrForIssue(issue, openPrs) !== null) continue;
+        if (deliveryParked(issue)) continue; // already assessed; the verdict stands
+        if (!hasPriorWork(issue.number, ctx.tasks)) continue;
+        // A plan that still schedules something owns the issue — a decomposition in
+        // flight is not a finished one, and an unapproved one is not even decided.
+        const plan = plansByOrigin.get(issueOrigin(issue.number));
+        if (plan && (plan.status === 'planning' || plan.status === 'active' || plan.status === 'awaiting_approval'))
+          continue;
+        // Anything live under the issue — a pickup agent, a planner, a part — means
+        // the answer is not yet knowable.
+        const root = issueOrigin(issue.number);
+        if ([...activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
+
+        const origin = assessOrigin(issue.number);
+        const verdict = dispatchVerdict(origin, now, ctx.recentDecisions, this.cooldown);
+        // Fails open, exactly as the planner does and for its reason: narrowing rule
+        // 4 without this turns any assessor crash into a permanently parked issue.
+        // A spent cap returns the issue to ordinary pickup, with no escalation —
+        // there is nothing for a human to do about an assessment that did not happen
+        // that they cannot do by looking at the issue.
+        if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
+
+        assessing.add(issue.number);
+        const branch = assessBranch(issue.number);
+        const title = `Assess issue #${issue.number}`;
+        const reason = `Issue #${issue.number} has had work and has nothing in flight; assess whether it is finished.`;
+        candidates.push({
+          origin,
+          rule: 'issue-assess',
+          title,
+          kind: 'code',
+          branch,
+          reason,
+          held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
+          action: {
+            type: 'dispatch_code_agent',
+            branch,
+            // Cut from the default branch: merged work is *on* it, so it is the only
+            // checkout in which "was this delivered" can be answered at all.
+            base: this.defaultBranch,
+            title,
+            prompt: this.templates.render('issue-assess', {
+              number: issue.number,
+              title: issue.title,
+              body: issue.body,
+              branch,
+            }),
+            originRef: origin,
+            originTitle: issue.title,
+            originSummary: issue.body,
+            rule: 'issue-assess',
+            reason,
+          } satisfies RawAction,
+        });
+      }
     }
 
     // 4a: Schedule the parts of a decomposed issue — what makes a `parts` verdict
@@ -712,6 +821,11 @@ export class RuleDispatcher implements Dispatcher {
       // Narrowed by the funnel: an issue is picked up only once its plan says one
       // PR will do. Everything below is byte-for-byte what it was before the gate.
       if (routes.get(issue.number)?.route !== 'single') continue;
+      // Rule 3e is asking whether this issue is already finished. Picking it up in
+      // the same cycle would put a second agent on it to redo the work the first is
+      // still judging. The set is built once, above, so the two rules cannot hold
+      // different opinions about which issues are in it.
+      if (assessing.has(issue.number)) continue;
       const origin = `issue:${issue.number}`;
       // An agent already on this issue owns it — don't throttle/escalate over a
       // live attempt; the active-task de-dup handles it.

@@ -20,6 +20,7 @@ import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../m
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
+import { deliverySignalQuery } from '../delivery/delivery.js';
 import { watchLabelsFor } from '../watchLabels.js';
 import {
   authRefusalHint,
@@ -368,6 +369,42 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     hub.broadcast({ type: 'world:changed' });
     if (verdict === 'more_work') await harness.runCycle('manual');
     return { ok: true, conclusion };
+  });
+
+  // Park an issue as delivered by hand, or release one the assessor parked.
+  //
+  // The operator's own arm of the same verdict rule 3e's assessor casts, and the
+  // escape hatch for it — an operator looking at a finished issue must not have to
+  // wait for an agent to agree, and one looking at a wrongly-parked issue must be
+  // able to say so without moving the ticket. It writes the *harness's* record and
+  // never the tracker: `delivered` is deliberately weaker than `closed`, and
+  // closing the ticket stays a human act performed in the tracker itself.
+  //
+  // Clearing is a delete rather than a stored "not delivered", so the absence of a
+  // verdict keeps exactly one representation — `clearIssueConclusion`'s reason.
+  app.post('/api/issues/:number/delivered', async (req, reply) => {
+    const { number } = req.params as { number: string };
+    const issueNumber = Number(number);
+    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
+    const { delivered, summary } = (req.body ?? {}) as { delivered?: unknown; summary?: unknown };
+    if (typeof delivered !== 'boolean') return reply.code(400).send({ error: 'delivered must be a boolean' });
+    const originRef = issueConclusionOrigin(issueNumber);
+    if (!delivered) {
+      store.clearDelivery(originRef);
+      hub.broadcast({ type: 'world:changed' });
+      // Releasing a park is a request to reconsider the issue now, not next beat.
+      await harness.runCycle('manual');
+      return { ok: true, delivered: false };
+    }
+    const delivery = store.recordDelivery({
+      originRef,
+      // As on the conclusion route, an operator has the row in front of them, so
+      // the summary is optional and the default says who decided.
+      summary: typeof summary === 'string' && summary.trim() ? summary.trim() : 'Marked delivered by the operator.',
+      by: 'operator',
+    });
+    hub.broadcast({ type: 'world:changed' });
+    return { ok: true, delivery };
   });
 
   // Toggle a story's watch/ignore state — same opt-in model as issues. Stories are
@@ -940,6 +977,8 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
   // same rows rule 3b reads, so the chip and the rule can't disagree.
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
+  const deliveries = store.listDeliveries();
+  const deliveryWindow = deliverySignalQuery(deliveries);
   // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
   // below predicts what actually happens next cycle. The decision window (200)
   // and the headroom arithmetic mirror `Harness.runCycle`.
@@ -957,6 +996,10 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     plans,
     planParts,
     planning: config.planning,
+    // The harness's own park, read the same way `Harness.runCycle` reads it — the
+    // event query is null (and no read happens) until an issue has been assessed.
+    deliveries,
+    deliverySignals: deliveryWindow ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
     headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
     paused: control.paused,
   };
