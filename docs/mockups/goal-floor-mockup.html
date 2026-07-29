@@ -344,10 +344,19 @@
 
   .rail {
     display: flex;
-    align-items: stretch;
+    /* Centred, not stretched: a machine is a fixed-size thing, and stretching
+       one to the height of the tallest neighbour drew a four-lane-tall splitter
+       the moment a floor had lanes in it. The silo opts back in below, because a
+       silo genuinely is as tall as what feeds it. */
+    align-items: center;
     gap: 0;
     min-width: max-content;
     padding-bottom: 8px;
+  }
+
+  .rail > .silo {
+    align-self: stretch;
+    min-height: 132px;
   }
 
   /* A machine: bevelled panel, tone stripe on top, status word at the foot. */
@@ -482,88 +491,86 @@
     }
   }
 
-  /* -------- fan-out: a splitter, a spine, and one lane per branch --------
+  /* -------- the graph floor: a DAG, drawn at a fixed pitch --------
 
-     Lanes diverge and never re-converge, because a part may declare at most
-     one dependency (enforced at the plan's zod boundary). Drawing a diamond
-     here would be a shape the schema cannot produce. Everything converges at
-     the silo instead, which is the only place it legitimately does. */
-  .fanout {
-    display: flex;
-    align-items: stretch;
-    flex: 0 0 auto;
+     A branching plan is not a rail, so this floor is one SVG with computed
+     positions — the same shape `TechTree.tsx` already uses (`nodeX(col)`,
+     `nodeY(row)`) and the same shape `layoutFloor` would return. Column is
+     longest-path depth, row is the lane; belts are edges. */
+  .graph {
+    min-width: max-content;
+    padding-bottom: 6px;
   }
 
-  .spine {
-    width: 14px;
-    flex: 0 0 auto;
-    margin: 10px 0;
-    background-image: repeating-linear-gradient(
-      -30deg,
-      var(--fx-belt) 0 6px,
-      var(--fx-belt-dark) 6px 12px
-    );
-    background-size: 100% 24px;
-    border-left: 1px solid var(--border-lo);
-    border-right: 1px solid var(--border-lo);
-    animation: spine 0.9s linear infinite;
+  .graph svg {
+    display: block;
   }
 
-  .spine.stopped {
+  .g-kind {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.13em;
+    fill: var(--muted);
+  }
+
+  .g-name {
+    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
+    font-size: 14px;
+    fill: var(--text);
+  }
+
+  .g-meta {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+    font-size: 10px;
+    fill: var(--muted);
+  }
+
+  .g-word {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  .g-fix {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    fill: var(--accent);
+  }
+
+  /* A belt edge: a dark bed with hazard stripes running along it. */
+  .g-bed {
+    stroke: var(--fx-belt-dark);
+    stroke-width: 11;
+    fill: none;
+    stroke-linecap: round;
+  }
+
+  .g-run {
+    stroke: var(--fx-belt);
+    stroke-width: 11;
+    fill: none;
+    stroke-linecap: butt;
+    stroke-dasharray: 7 9;
+    animation: edge 0.8s linear infinite;
+  }
+
+  /* Nothing travels this edge yet — its prerequisite has not merged. */
+  .g-run.cold {
+    stroke: #4a453f;
     animation: none;
-    background-image: repeating-linear-gradient(-30deg, #4a453f 0 6px, #322e2a 6px 12px);
   }
 
-  .spine.merge {
-    background-image: repeating-linear-gradient(30deg, var(--fx-belt) 0 6px, var(--fx-belt-dark) 6px 12px);
-  }
-
-  @keyframes spine {
+  @keyframes edge {
     to {
-      background-position: 0 24px;
+      stroke-dashoffset: -16;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .spine {
+    .g-run {
       animation: none;
     }
-  }
-
-  .lanes {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    flex: 0 0 auto;
-  }
-
-  .lane {
-    display: flex;
-    align-items: stretch;
-    flex: 0 0 auto;
-  }
-
-  /* A lane the per-plan concurrency cap is holding: present, ordered, not
-     running. Backed-up hatching rather than a ghost — the work is approved and
-     real, it simply has no slot. */
-  .lane.capped .m {
-    background-image: repeating-linear-gradient(
-      45deg,
-      rgba(242, 193, 78, 0.07) 0 8px,
-      transparent 8px 16px
-    );
-  }
-
-  .lane-tag {
-    align-self: center;
-    padding: 0 8px;
-    font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
-    font-size: 10px;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--muted);
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
   }
 
   /* Scanners sit on the belt out of a machine: one per CI check. */
@@ -1002,7 +1009,7 @@
       <h2>The mockup</h2>
       <p>
         Six goals, one selected at a time — one per state the floor has to keep apart. Click a patch to change floors;
-        <b>issue:196</b> is the parallel one.
+        <b>issue:196</b> is the branching one.
       </p>
     </div>
 
@@ -1039,7 +1046,7 @@
         >
           <span class="ref">issue:196 · ore patch</span>
           <span class="ttl">Extract the notification pipeline</span>
-          <span class="st" style="color: var(--accent)">4 lanes · 1/6</span>
+          <span class="st" style="color: var(--accent)">5 PRs · branches · 1/5</span>
         </button>
         <button
           class="patch"
@@ -1235,211 +1242,175 @@
         </div>
       </div>
 
-      <!-- ============ FLOOR: #196, parallel lanes ============ -->
+      <!-- ============ FLOOR: #196, a branching plan ============
+           PR1 unlocks PR2 and PR3 · PR2 unlocks PR4 · PR5 waits on PR3 and PR4.
+           Column is longest-path depth, row is lane, belts are edges. -->
       <div class="floor" id="f196" role="tabpanel" hidden>
-        <div class="rail">
-          <div class="m" style="--tone: var(--blue)">
-            <div class="cap"></div>
-            <svg class="glyph"><use href="#i-patch" /></svg>
-            <div class="body">
-              <span class="kind">Ore patch</span>
-              <span class="name">Extract the notification pipeline</span>
-              <span class="meta">issue:196 · watched</span>
-            </div>
-            <span class="word">Being mined</span>
-          </div>
+        <div class="graph">
+          <svg viewBox="0 0 1720 248" width="1720" height="248" role="img"
+            aria-label="A plan of five pull requests: PR1 unlocks PR2 and PR3, PR2 unlocks PR4, and PR5 waits on both PR3 and PR4.">
+            <!-- ---- belts (edges) ---- -->
+            <g>
+              <path class="g-bed" d="M652 120 C 676 120 680 64 704 64" />
+              <path class="g-run" d="M652 120 C 676 120 680 64 704 64" />
+              <path class="g-bed" d="M652 120 C 676 120 680 176 704 176" />
+              <path class="g-run" d="M652 120 C 676 120 680 176 704 176" />
 
-          <i class="belt"></i>
+              <path class="g-bed" d="M880 64 L932 64" />
+              <path class="g-run cold" d="M880 64 L932 64" />
 
-          <div class="m" style="--tone: var(--green)">
-            <div class="cap"></div>
-            <svg class="glyph"><use href="#i-furnace" /></svg>
-            <div class="body">
-              <span class="kind">Furnace</span>
-              <span class="name">Smelted into 6 parts</span>
-              <span class="meta">plan · accepted 2d ago</span>
-            </div>
-            <span class="word">Plan active</span>
-          </div>
+              <path class="g-bed" d="M1108 64 C 1132 64 1136 120 1160 120" />
+              <path class="g-run cold" d="M1108 64 C 1132 64 1136 120 1160 120" />
 
-          <i class="belt"></i>
+              <path class="g-bed" d="M880 176 L1116 176 C 1140 176 1140 120 1160 120" />
+              <path class="g-run cold" d="M880 176 L1116 176 C 1140 176 1140 120 1160 120" />
 
-          <div class="m" style="--tone: var(--blue)">
-            <div class="cap"></div>
-            <svg class="glyph"><use href="#i-pr" /></svg>
-            <div class="body">
-              <span class="kind">Assembler · schema</span>
-              <span class="name">The event table and its migration</span>
-              <span class="meta">out: code · PR #148</span>
-              <span class="meta">green · merges first</span>
-            </div>
-            <span class="word">In review</span>
-          </div>
+              <path class="g-bed" d="M196 120 L248 120" />
+              <path class="g-run" d="M196 120 L248 120" />
+              <path class="g-bed" d="M424 120 L476 120" />
+              <path class="g-run" d="M424 120 L476 120" />
+              <path class="g-bed" d="M1336 120 L1388 120" />
+              <path class="g-run cold" d="M1336 120 L1388 120" />
+              <path class="g-bed" d="M1484 120 L1524 120" />
+              <path class="g-run cold" d="M1484 120 L1524 120" />
+            </g>
 
-          <i class="belt"></i>
+            <!-- ---- belt fixtures: where lanes divide and rejoin ---- -->
+            <g fill="var(--panel-2)" stroke="var(--accent)" stroke-width="1.6">
+              <rect x="662" y="112" width="16" height="16" transform="rotate(45 670 120)" />
+              <rect x="1124" y="112" width="16" height="16" transform="rotate(45 1132 120)" />
+            </g>
+            <text class="g-fix" x="670" y="222" text-anchor="middle">SPLITTER</text>
+            <text class="g-fix" x="1132" y="222" text-anchor="middle">MERGER</text>
 
-          <div class="m" style="--tone: var(--accent)">
-            <div class="cap"></div>
-            <svg class="glyph"><use href="#i-splitter" /></svg>
-            <div class="body">
-              <span class="kind">Splitter</span>
-              <span class="name">4 parts stack on schema</span>
-              <span class="meta">cap: 2 lanes at a time</span>
-            </div>
-            <span class="word">Feeding 4 lanes</span>
-          </div>
+            <!-- ---- 1 · the ticket ---- -->
+            <g>
+              <rect x="20" y="72" width="176" height="96" fill="var(--panel)" stroke="var(--border-hi)" />
+              <rect x="20" y="72" width="176" height="4" fill="var(--blue)" />
+              <text class="g-kind" x="30" y="94">ORE PATCH</text>
+              <text class="g-name" x="30" y="114">Notifications</text>
+              <text class="g-meta" x="30" y="132">issue:196 · watched</text>
+              <text class="g-word" x="30" y="158" fill="var(--blue)">BEING MINED</text>
+            </g>
 
-          <div class="fanout">
-            <i class="spine"></i>
-            <div class="lanes">
-              <!-- lane A: working, has a PR, and a locked part behind it -->
-              <div class="lane">
-                <span class="lane-tag">lane A</span>
-                <i class="belt"></i>
-                <div class="m" style="--tone: var(--blue)">
-                  <div class="cap"></div>
-                  <svg class="glyph"><use href="#i-assembler" /></svg>
-                  <div class="body">
-                    <span class="kind">Assembler · api</span>
-                    <span class="name">Publish endpoint</span>
-                    <span class="meta">recipe: src/notify/api/</span>
-                    <span class="meta">bot · 14m</span>
-                  </div>
-                  <span class="word">Working</span>
-                </div>
-                <i class="belt"></i>
-                <div class="m" style="--tone: var(--red)">
-                  <div class="cap"></div>
-                  <svg class="glyph"><use href="#i-pr" /></svg>
-                  <div class="body">
-                    <span class="kind">Pull request</span>
-                    <span class="name">PR #151 · api</span>
-                    <span class="meta">base: issue/196/schema</span>
-                  </div>
-                  <span class="word">Repair en route</span>
-                </div>
-                <div class="scan">
-                  <span class="scanner"><i class="dot" style="background: var(--red)"></i>tests · damaged</span>
-                  <span class="scanner"><i class="dot" style="background: var(--green)"></i>static analysis · pass</span>
-                </div>
-                <i class="belt"></i>
-                <div class="m ghost">
-                  <div class="cap"></div>
-                  <svg class="glyph" style="color: var(--fx-ghost)"><use href="#i-assembler" /></svg>
-                  <div class="body">
-                    <span class="kind">Assembler · ui</span>
-                    <span class="name">Preferences screen</span>
-                    <span class="meta">waits on: api</span>
-                  </div>
-                  <span class="word" style="--tone: var(--fx-ghost)">Locked · 2 merges away</span>
-                </div>
-              </div>
+            <!-- ---- 2 · the planner ---- -->
+            <g>
+              <rect x="248" y="72" width="176" height="96" fill="var(--panel)" stroke="var(--border-hi)" />
+              <rect x="248" y="72" width="176" height="4" fill="var(--green)" />
+              <text class="g-kind" x="258" y="94">FURNACE</text>
+              <text class="g-name" x="258" y="114">Smelted into 5</text>
+              <text class="g-meta" x="258" y="132">plan · active · 1/5</text>
+              <text class="g-word" x="258" y="158" fill="var(--green)">PLAN ACTIVE</text>
+            </g>
 
-              <!-- lane B: working, no PR yet -->
-              <div class="lane">
-                <span class="lane-tag">lane B</span>
-                <i class="belt"></i>
-                <div class="m" style="--tone: var(--blue)">
-                  <div class="cap"></div>
-                  <svg class="glyph"><use href="#i-assembler" /></svg>
-                  <div class="body">
-                    <span class="kind">Assembler · worker</span>
-                    <span class="name">Delivery worker and retries</span>
-                    <span class="meta">recipe: src/notify/worker/</span>
-                    <span class="meta">bot · 6m</span>
-                  </div>
-                  <span class="word">Working</span>
-                </div>
-                <i class="belt"></i>
-                <div class="m ghost">
-                  <div class="cap"></div>
-                  <svg class="glyph" style="color: var(--fx-ghost)"><use href="#i-pr" /></svg>
-                  <div class="body">
-                    <span class="kind">Pull request</span>
-                    <span class="name">Not opened yet</span>
-                    <span class="meta">branch: issue/196/worker</span>
-                  </div>
-                  <span class="word" style="--tone: var(--fx-ghost)">No output yet</span>
-                </div>
-              </div>
+            <!-- ---- PR1 · merged, and it unlocks two ---- -->
+            <g>
+              <rect x="476" y="72" width="176" height="96" fill="var(--panel)" stroke="var(--border-hi)" />
+              <rect x="476" y="72" width="176" height="4" fill="var(--green)" />
+              <text class="g-kind" x="486" y="94">ASSEMBLER · PR1</text>
+              <text class="g-name" x="486" y="114">Event schema</text>
+              <text class="g-meta" x="486" y="132">out: code · PR #148</text>
+              <text class="g-word" x="486" y="158" fill="var(--green)">MERGED</text>
+            </g>
 
-              <!-- lane C: a report part — finished, and never had a PR -->
-              <div class="lane">
-                <span class="lane-tag">lane C</span>
-                <i class="belt"></i>
-                <div class="m" style="--tone: var(--green)">
-                  <div class="cap"></div>
-                  <svg class="glyph"><use href="#i-doc" /></svg>
-                  <div class="body">
-                    <span class="kind">Assembler · notes</span>
-                    <span class="name">Survey the existing webhook path</span>
-                    <span class="meta">out: report</span>
-                    <span class="meta">artifact: notify-survey.md</span>
-                  </div>
-                  <span class="word">Concluded</span>
-                </div>
-              </div>
+            <!-- ---- PR2 · in review, CI red ---- -->
+            <g>
+              <rect x="704" y="16" width="176" height="96" fill="var(--panel)" stroke="var(--red)" />
+              <rect x="704" y="16" width="176" height="4" fill="var(--red)" />
+              <text class="g-kind" x="714" y="38">ASSEMBLER · PR2</text>
+              <text class="g-name" x="714" y="58">Publish endpoint</text>
+              <text class="g-meta" x="714" y="76">PR #151 · base main</text>
+              <text class="g-word" x="714" y="102" fill="var(--red)">REPAIR EN ROUTE</text>
+            </g>
 
-              <!-- lane D: ready, and held by the per-plan cap -->
-              <div class="lane capped">
-                <span class="lane-tag">lane D</span>
-                <i class="belt stopped"></i>
-                <div class="m" style="--tone: var(--amber)">
-                  <div class="cap"></div>
-                  <svg class="glyph"><use href="#i-assembler" /></svg>
-                  <div class="body">
-                    <span class="kind">Assembler · ui-shell</span>
-                    <span class="name">Settings shell and routing</span>
-                    <span class="meta">recipe: web/src/notify/</span>
-                    <span class="meta">ready · no bot</span>
-                  </div>
-                  <span class="word">Output backed up</span>
-                </div>
-              </div>
-            </div>
-            <i class="spine merge"></i>
-          </div>
+            <!-- ---- PR3 · a bot on it, no PR yet ---- -->
+            <g>
+              <rect x="704" y="128" width="176" height="96" fill="var(--panel)" stroke="var(--border-hi)" />
+              <rect x="704" y="128" width="176" height="4" fill="var(--blue)" />
+              <text class="g-kind" x="714" y="150">ASSEMBLER · PR3</text>
+              <text class="g-name" x="714" y="170">Delivery worker</text>
+              <text class="g-meta" x="714" y="188">bot · 6m · no PR yet</text>
+              <text class="g-word" x="714" y="214" fill="var(--blue)">WORKING</text>
+            </g>
 
-          <div class="silo">
-            <span class="cap-lbl">Silo</span>
-            <div class="fill" style="height: 17%"></div>
-            <span class="lbl">1 / 6 in</span>
-          </div>
+            <!-- ---- PR4 · locked behind PR2 ---- -->
+            <g>
+              <rect
+                x="932"
+                y="16"
+                width="176"
+                height="96"
+                fill="var(--panel-2)"
+                stroke="var(--fx-ghost)"
+                stroke-dasharray="5 4"
+              />
+              <rect x="932" y="16" width="176" height="4" fill="var(--fx-ghost)" opacity=".55" />
+              <text class="g-kind" x="942" y="38">ASSEMBLER · PR4</text>
+              <text class="g-name" x="942" y="58" fill="#bfe2f2">Preferences UI</text>
+              <text class="g-meta" x="942" y="76">waits on: PR2</text>
+              <text class="g-word" x="942" y="102" fill="var(--fx-ghost)">LOCKED · 1 AHEAD</text>
+            </g>
 
-          <i class="belt stopped"></i>
+            <!-- ---- PR5 · the convergence: waits on PR3 AND PR4 ---- -->
+            <g>
+              <rect
+                x="1160"
+                y="72"
+                width="176"
+                height="96"
+                fill="var(--panel-2)"
+                stroke="var(--accent)"
+                stroke-dasharray="5 4"
+              />
+              <rect x="1160" y="72" width="176" height="4" fill="var(--accent)" opacity=".7" />
+              <text class="g-kind" x="1170" y="94">ASSEMBLER · PR5</text>
+              <text class="g-name" x="1170" y="114" fill="#f3d5aa">End-to-end tests</text>
+              <text class="g-meta" x="1170" y="132" fill="var(--accent)">waits on: PR3 + PR4</text>
+              <text class="g-word" x="1170" y="158" fill="var(--accent)">LOCKED · 2 AHEAD</text>
+            </g>
 
-          <div class="m" style="--tone: var(--grey)">
-            <div class="cap"></div>
-            <svg class="glyph"><use href="#i-sat" /></svg>
-            <div class="body">
-              <span class="kind">Satellite</span>
-              <span class="name">Goal check</span>
-              <span class="meta">rule 3e · assessment</span>
-            </div>
-            <span class="word">Not yet built</span>
-          </div>
+            <!-- ---- the silo ---- -->
+            <g>
+              <rect x="1388" y="16" width="96" height="208" fill="var(--panel-2)" stroke="var(--border-hi)" />
+              <rect x="1389" y="182" width="94" height="41" fill="var(--green)" opacity=".3" />
+              <rect x="1389" y="182" width="94" height="2" fill="var(--green)" />
+              <text class="g-kind" x="1436" y="36" text-anchor="middle">SILO</text>
+              <text class="g-meta" x="1436" y="212" text-anchor="middle" fill="var(--text)">1 / 5 in</text>
+            </g>
+
+            <!-- ---- the goal check ---- -->
+            <g>
+              <rect x="1524" y="72" width="176" height="96" fill="var(--panel)" stroke="var(--border-hi)" />
+              <rect x="1524" y="72" width="176" height="4" fill="var(--grey)" />
+              <text class="g-kind" x="1534" y="94">SATELLITE</text>
+              <text class="g-name" x="1534" y="114">Goal check</text>
+              <text class="g-meta" x="1534" y="132">rule 3e · assessment</text>
+              <text class="g-word" x="1534" y="158" fill="var(--grey)">NOT YET BUILT</text>
+            </g>
+          </svg>
         </div>
 
-        <div class="plate" style="--tone: var(--amber)">
-          <span class="who">Cap · 2 per plan</span>
+        <div class="plate" style="--tone: var(--accent)">
+          <span class="who">PR5 · converges</span>
           <span
-            >Lane D is ready and has no bot, because <code>maxConcurrentPartsPerIssue</code> is 2 and lanes A and B hold
-            the slots. Drawn as backed up rather than dropped: a limit you cannot see looks exactly like an idle
-            fleet.</span
+            >Two belts feed it, so it starts only once <b>both</b> PR3 and PR4 have merged — at which point neither is
+            open and its base is the default branch. <b>This needs the plan schema relaxed</b>: `dependsOn` is capped at
+            one entry today. See the note below the mockup.</span
           >
         </div>
 
         <div class="plate" style="--tone: var(--amber)">
           <span class="who">Pollution</span>
           <span
-            >Two bots wrote <code>src/notify/types.ts</code> — lane A and lane B, two branches, both still live. Nothing
-            reconciles that but a merge, and only parallel lanes can produce it.</span
+            >Two bots wrote <code>src/notify/types.ts</code> — PR2's and PR3's, two branches, both still live. Nothing
+            reconciles that but a merge, and only concurrent lanes can produce it.</span
           >
         </div>
 
         <div class="foot">
-          <span>Lanes fan out and never re-converge — a part stacks on <b>at most one</b> other.</span>
-          <span>Everything meets at the silo, which is the only honest join.</span>
+          <span><i class="dot" style="background: var(--fx-belt)"></i>Belt running — the prerequisite merged</span>
+          <span><i class="dot" style="background: #4a453f"></i>Belt cold — nothing can travel it yet</span>
+          <span>◆ splitter, where lanes divide · ◆ merger, where they rejoin</span>
         </div>
       </div>
 
@@ -1807,11 +1778,11 @@
       </article>
       <article class="note">
         <p class="n">04</p>
-        <h3>A splitter, where the stream divides</h3>
+        <h3>A splitter, and a merger</h3>
         <p>
-          One is drawn at every column where the lane count goes up — after the furnace when a plan's parts are
-          independent, after the first part when they stack on it. It is what makes a <code>single</code> verdict
-          visible at last: one lane straight through, no splitter at all.
+          Belt fixtures, not machines — a machine is always a work item, and the split is a property of the graph. A
+          splitter wherever one part unlocks several, a merger wherever a part waits on several. A
+          <code>single</code> verdict gets neither: one lane straight through, which is a reading nothing draws today.
         </p>
       </article>
       <article class="note">
@@ -1823,6 +1794,79 @@
         </p>
       </article>
     </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>The merger needs one server change</h2>
+      <p>PR5 waiting on both PR3 and PR4 is not expressible today. It is close to expressible, and here is the gap.</p>
+    </div>
+
+    <p>
+      <code>PlanPart.dependsOn</code> is capped at <b>one</b> entry, refused at the plan document's zod boundary
+      alongside cycle detection. So the graph the harness can currently hold is a forest of chains that fan out and
+      never rejoin — PR1 → PR2 → PR4 and PR1 → PR3, with no way to say PR5 needs both.
+    </p>
+    <p>
+      But the cap is a <em>static approximation</em> of the rule that actually matters, and the codebase says so in as
+      many words: it is <b>"the static form of <em>at most one open dependency</em>"</b>. The reason for it is base
+      selection — with two dependencies both could be in review at once, and there would be no single branch to base
+      the new work on.
+    </p>
+    <p>
+      <b>That reason does not bite on PR5.</b> A part with two prerequisites starts only when both have
+      <em>merged</em>, at which point <b>zero</b> are open and its base is unambiguously the default branch. The
+      dangerous case — two <em>open</em> dependencies — is still refused; it is refused dynamically, at dispatch,
+      rather than statically at ingestion.
+    </p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Change</th>
+            <th>What it becomes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>planDocument.ts</code> — the arity check</td>
+            <td>
+              Drop the <code>dependsOn.length &gt; 1</code> refusal. Cycle detection already walks the whole array and
+              is unaffected.
+            </td>
+          </tr>
+          <tr>
+            <td><code>partBase</code> — base selection</td>
+            <td>
+              The <b>single unsettled</b> dependency's branch, or the default branch when every dependency has
+              settled. A part with two unsettled deps is <b>not ready</b> — the old invariant, now enforced where it
+              is actually true rather than one step early.
+            </td>
+          </tr>
+          <tr>
+            <td><code>dependencyOf</code> → <code>dependenciesOf</code></td>
+            <td>
+              Returns the list rather than <code>dependsOn[0]</code>. <code>dependencySatisfied</code> is already
+              per-dependency and unchanged — it is just called N times.
+            </td>
+          </tr>
+          <tr>
+            <td><code>partDepth</code></td>
+            <td>
+              <code>max</code> over every dependency rather than following one — longest path, so a merger never draws
+              to the left of something it waits on.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="caption">
+      Worth being plain about: this is the one part of this design that is not purely a lens. Everything else reads
+      state that already exists; this changes what a plan may <em>say</em>. It is small and it is the shape
+      <code>docs/workflow.md</code> already draws — but it is a real change to the planner's contract, and the planner
+      prompt has to be told the new arity or it will keep emitting chains.
+    </p>
   </section>
 
   <section>
@@ -1870,8 +1914,13 @@
           </tr>
           <tr>
             <td>Splitter</td>
-            <td>The decomposition itself — where one goal becomes N lanes</td>
-            <td>lane count rising between two columns of <code>layoutFloor</code></td>
+            <td>A part that unlocks several — where the graph branches</td>
+            <td>out-degree &gt; 1 in <code>layoutFloor</code>'s edge list</td>
+          </tr>
+          <tr>
+            <td>Merger</td>
+            <td>A part that waits on several — where the graph rejoins</td>
+            <td>in-degree &gt; 1 (<strong>needs the schema change below</strong>)</td>
           </tr>
           <tr>
             <td>Assembly machine</td>
@@ -2026,10 +2075,10 @@
       </li>
       <li>
         <div>
-          <b>Parallel work draws as parallel lanes, and never as a converging diamond.</b>
+          <b>A branching plan draws as a graph — it splits, and it rejoins.</b>
           <span
-            >— floor #196: a splitter into four lanes, two PRs open at once on one base, a report finishing beside
-            them, a lane held by the cap, and a pollution warning only concurrency can produce.</span
+            >— floor #196: PR1 unlocks PR2 and PR3, PR2 unlocks PR4, and PR5 waits on PR3 <em>and</em> PR4. Cold belts
+            mark the edges nothing can travel yet.</span
           >
         </div>
       </li>

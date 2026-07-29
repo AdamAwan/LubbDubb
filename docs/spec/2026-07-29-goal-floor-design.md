@@ -74,18 +74,46 @@ This is `layoutTechTree`'s own algorithm — `depths()` walking `dependsOn`, the
 which is the concrete form of decision 3 above: the floor does not merely replace the tech tree, it
 does the tree's job as a proper part of its own.
 
-## Parallel work, and the shape it cannot have
+## Parallel work: the plan is a graph, and it rejoins
 
-A goal's parts are not a chain. `PlanPart.dependsOn` holds **at most one** slug, enforced at the plan
-document's zod boundary alongside cycle detection, so the graph is a **forest of chains that fan out
-where several parts name the same prerequisite**. Two consequences the drawing must respect:
+A goal's parts are not a chain and not a forest either. The shape to draw is the one
+`docs/workflow.md` already draws and the one the floor is designed against:
 
-- **Lanes diverge and never re-converge.** A converging diamond is a shape the schema cannot produce
-  — with two dependencies both could be in review at once and there would be no single branch to base
-  on, which is why the arity is one. Drawing one would be confidently wrong, which is worse than
-  drawing nothing. Everything meets at the **silo**, which is the only honest join on the floor.
-- **`workflow.md`'s stack diagram is looser than the schema.** It shows `P2 → P4` and `P3 → P4`. That
-  is a sketch of the idea, not an expressible plan. Do not implement from it.
+```
+PR1 ─┬─> PR2 ──> PR4 ─┬─> PR5
+     └─> PR3 ──────────┘
+```
+
+One part unlocking several is a **splitter**; a part waiting on several is a **merger**. Both are
+drawn as belt fixtures rather than machines, because a machine is always a *work item* and the
+branching is a property of the graph, not a thing anyone does.
+
+### The merger is not expressible today, and the fix is small
+
+`PlanPart.dependsOn` is capped at **one** entry, refused at the plan document's zod boundary alongside
+cycle detection. So PR5 cannot currently say it needs both PR3 and PR4.
+
+But that cap is a *static approximation* of the rule that actually matters, and `CLAUDE.md` says so in
+as many words: it is **"the static form of _at most one open dependency_"**. The reason behind it is
+base selection — with two dependencies both could be in review at once and there would be no single
+branch to base on.
+
+**That reason does not bite on the merger.** A part with two prerequisites starts only when both have
+*merged*, at which point **zero** are open and its base is unambiguously the default branch. The
+dangerous case — two *open* dependencies — is still refused; it is refused **dynamically, at
+dispatch**, rather than statically at ingestion, which is where the rule was always true.
+
+| Change | What it becomes |
+| --- | --- |
+| `planDocument.ts` arity check | Drop the `dependsOn.length > 1` refusal. Cycle detection already walks the whole array and is unaffected. |
+| `partBase` | The **single unsettled** dependency's branch, or the default branch when all have settled. |
+| `dependencyOf` → `dependenciesOf` | Returns the list. `dependencySatisfied` is already per-dependency and unchanged — it is called N times. |
+| `partDepth` | `max` over every dependency, so a merger never draws to the left of something it waits on. |
+| The `issue-plan` prompt | Told the new arity, or the planner keeps emitting chains. |
+
+This is **the one part of this design that is not purely a lens.** Everything else reads state that
+already exists; this changes what a plan may *say*. Small, and the shape the workflow doc already
+draws — but a real change to the planner's contract, and worth deciding separately from the drawing.
 
 Parallel lanes are also where three readings become visible that a single chain never shows, and each
 is an existing field with nothing new required:
@@ -99,28 +127,28 @@ is an existing field with nothing new required:
 The cap especially has to be drawn rather than dropped: a limit you cannot see looks exactly like an
 idle fleet, which is the invisibility `capped` and `unapproved` were added to `QueueItem` to fix.
 
-## The splitter — where the stream divides
+## The splitter and the merger — belt fixtures, not machines
 
-The plan is the machine that turns one goal into N lanes, so the decomposition gets a **splitter**,
-drawn at every column where the lane count goes up. That is a rule rather than a fixed position: a
-plan whose parts are independent splits straight out of the furnace, and one whose parts stack on a
-common first part splits after *it*.
+They are drawn on the belts rather than as machines, and the rule is worth keeping: **every machine on
+the floor is a work item.** A splitter has no status, no agent and no origin ref — it is where the
+edge list branches — so making it a machine would break the one property that keeps the floor a view
+of the work rather than a diagram of it. (It also drew a four-lane-tall tile the first time a floor
+had lanes, which is the visual symptom of the same mistake.)
 
-The furnace stays the **planner** (rule 3c) and the splitter is the **plan it produced**, because they
-are different acts: the furnace is a judgement — an agent reads the repository and decides the shape —
-while the splitter is that decision's structure, re-read every pulse. Folding them would put a
-transformation and a routing in one machine and lose the distinction the moment a replan changes the
-split without re-running the planner.
+The furnace stays the **planner** (rule 3c) and is a machine, because it is an act: an agent reads the
+repository and decides the shape. The splitter is that decision's *structure*, re-read every pulse.
+Folding them would lose the distinction the moment a replan changes the split without re-running the
+planner.
 
-The splitter also earns its place by drawing something nothing currently draws: a **`single` verdict
-is one lane straight through, with no splitter at all**. The planner ran, considered the goal, and
-decided it was one pull request's worth of work — today that outcome is indistinguishable from a floor
-that was never planned.
+The pair also draws something nothing currently draws: a **`single` verdict is one lane straight
+through, with neither fixture on it**. The planner ran, considered the goal, and decided it was one
+pull request's worth of work — today that outcome is indistinguishable from a floor that was never
+planned.
 
 *Considered and not taken:* making the **assay** a filter splitter (workable one way, unclear the
-other). It is a real two-way division, but one of the two outputs is a dead end rather than a lane, and
-a splitter feeding a siding is a weaker picture than a drill that has stopped and says why. The assay
-stays a machine with a verdict.
+other). It is a real two-way division, but one output is a dead end rather than a lane, and a splitter
+feeding a siding is a weaker picture than a drill that has stopped and says why. The assay stays a
+machine with a verdict.
 
 ## The scanners are generated, never named
 
@@ -178,7 +206,8 @@ Every noun lands in `web/src/skins/factory/vocabulary.ts` and nowhere else.
 | Unsurveyed patch          | A job with no ticket behind it                   | `/api/work` → `unrecorded`                           |
 | Assay drill               | The goal assay, rule 3f                          | **new** `issue.assay`                                |
 | Furnace                   | The planner, rule 3c                             | `plan.status`, `plan.reason`                         |
-| Splitter                  | The decomposition — one goal becoming N lanes    | lane count rising between two `layoutFloor` columns   |
+| Splitter                  | A part that unlocks several — the graph branches | out-degree > 1 in `layoutFloor`'s edge list           |
+| Merger                    | A part that waits on several — the graph rejoins | in-degree > 1 (**needs the arity change above**)      |
 | Blueprint ghosts          | `awaiting_approval`                              | `plan.status` + `upcoming` item `unapproved`         |
 | Assembly machine          | A plan part; its recipe is the part's scope      | `planParts[]`, `dependsOn`, `scope`                  |
 | What comes out of it      | `PartOutcomeKind` — code, report, determination  | `part.expectedKind` / `part.outcomeKind`             |
@@ -216,8 +245,12 @@ which is *why* the two verdicts above are computed server-side, and the structur
 - `test/factorySkin.test.ts` — every arm of the new vocabulary function, exhaustively, as it already
   covers `QueueItem.status`; the belt-stops-with-the-harness assertion extended to the floor.
 - A pure `layoutFloor` test: same structure in, same positions out, regardless of any state field —
-  plus a fan-out case asserting the lane assignment, and that **no two edges ever share a target**,
-  which is the drawing's half of the schema's one-dependency rule.
+  plus the `PR1 → {PR2, PR3}, PR2 → PR4, {PR3, PR4} → PR5` graph asserting that a merger lands to the
+  **right of every part it waits on** (the longest-path property), which is what a naive
+  `dependsOn[0]` depth gets wrong.
+- If the arity change lands: `partBase` returning the default branch when every dependency has
+  settled, and a part with two *open* dependencies never reading as ready — the invariant moving from
+  ingestion to dispatch, asserted where it now lives.
 - `test/cockpitSkins.test.ts` picks up the conformance render for free.
 - Server-side: `ciVerdict` on the snapshot asserted against `classifyCiFailures` directly, so the two
   can never answer differently.
