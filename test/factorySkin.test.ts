@@ -127,7 +127,11 @@ function floorInput(over: {
   };
 }
 
-function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void, demo = true): string {
+function render(
+  mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void,
+  demo = true,
+  connected = true,
+): string {
   const now = Date.parse('2026-01-01T12:00:00.000Z');
   const realNow = Date.now;
   Date.now = () => now;
@@ -137,7 +141,7 @@ function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void
     const view = buildViewModel({
       state,
       now,
-      connected: true,
+      connected,
       demo,
       selected: null,
       liveOutput: new Map(),
@@ -452,11 +456,57 @@ test('every desk has a way in from the status bar', () => {
     s.jobs = [];
   });
   assert.match(quiet, /class="fx-read fx-act quiet"/, 'a zero count must mute a gauge, not remove it');
+  // Counted by the chevron rather than by `fx-act`: the scan gauge presses too
+  // and wears the same face, and the chevron is the bar's one word for "there is
+  // a panel behind this".
   assert.equal(
-    (quiet.match(/class="fx-read fx-act/g) ?? []).length,
+    (quiet.match(/class="fx-chev"/g) ?? []).length,
     3,
     'all three ways in must survive their counts being zero',
   );
+});
+
+/**
+ * One subject, stated once. The bar had grown two pairs of duplicates — the fleet
+ * as a Bots reading *and* as the `live/cap` inside the cap control, the pulse as a
+ * countdown *and* as a "Run a scan" button at the far end — and a bar that says
+ * everything twice is the one that runs out of room. Asserted on the number
+ * itself rather than on the markup that draws it, so a later re-arrangement is
+ * free and a re-introduced second copy is not.
+ */
+test('the fleet and the pulse are each one control in the bar', () => {
+  const markup = render((s) => {
+    s.control.cap = 3;
+  });
+  const bar = markup.slice(0, markup.indexOf('fx-rails'));
+
+  assert.equal((bar.match(/2\/3|2<\/span>\s*<small>\/3/g) ?? []).length, 1, 'the fleet must be one reading in the bar');
+  assert.match(bar, /class="fleet-control[^"]*"/, 'and it must be the one with the steppers on it');
+
+  assert.match(
+    bar,
+    /<button[^>]*class="fx-read fx-act fx-run[^"]*"[^>]*>(?:(?!<\/button>).)*Scan/s,
+    'the scan gauge must be the button that runs one',
+  );
+  assert.doesNotMatch(bar, /Run a scan/, 'so there must be no second button saying so');
+});
+
+/**
+ * Off the air. Every panel on this floor is a reading the harness confirms, and a
+ * stale one is drawn in exactly the chrome of a live one — so a "live/offline"
+ * chip in the corner asks an operator to remember to check it before believing
+ * anything else. The floor states it instead and draws nothing else.
+ */
+test('a dropped link empties the floor rather than dating it', () => {
+  const live = render();
+  assert.doesNotMatch(live, />live</, 'a connected cockpit must not spend bar width saying so');
+
+  const off = render(undefined, true, false);
+  assert.match(off, /Off the air/, 'a dropped link must be stated');
+  assert.doesNotMatch(off, /class="fx-rails"/, 'and nothing the harness stopped confirming may be drawn');
+  for (const gauge of ['Scan', 'Bots', 'Alerts', 'Faults']) {
+    assert.doesNotMatch(off, new RegExp(`>${gauge}<`), `${gauge} is a number nobody is confirming`);
+  }
 });
 
 /**

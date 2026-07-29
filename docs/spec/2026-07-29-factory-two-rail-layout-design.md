@@ -112,6 +112,16 @@ a resize listener.
   things. If it wraps badly at a narrow width the entire act half becomes hard to reach,
   which is a failure mode the three-rail layout did not have — so the width sweep checks
   the bar, not only the rails.
+
+  _This one happened._ The bar wrapped to two rows on a laptop, and the cause was not the
+  three new gauges but two pairs of duplicates it had been carrying all along — the fleet
+  as both a `Bots` reading and the `live/cap` inside the cap control, the pulse as both a
+  `Scan` countdown and a "Run a scan" button. Each pair is now one control, the
+  live/offline chip is gone (a dropped socket empties the floor instead), and the ident's
+  dispatcher caption is a hover. `Scan`, in particular, is no longer inert — so section 2's
+  chevron is the narrower rule it should always have been: it says _opens a panel_, not
+  merely _presses_. See [17](17-cockpit.md#one-subject-once--and-nothing-at-all-when-the-link-drops).
+
 - **The summary reading is gone.** `AlertBay` named which bay each alert came off in one
   line without scrolling. That now costs a click.
 - **Demo injection is one level deeper.** It stays `view.demo`-gated and moves inside the

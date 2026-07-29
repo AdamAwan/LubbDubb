@@ -308,89 +308,113 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       <SpriteSheet />
       <StatusBar view={view} actions={actions} onOpen={setModal} />
 
+      {/* The socket is how this page learns anything changed. Without it every
+          panel below is a photograph of the moment the link dropped, drawn in
+          the same chrome as a live one — and the numbers that matter here (bots
+          out, alerts pending, what is on the belt) are the ones that go wrong
+          quietly. A "live/offline" chip in the corner asked the operator to
+          remember to check it, so the floor states it instead: nothing is shown
+          except the fact that nothing is known. The poll keeps running
+          underneath, so the floor returns by itself. */}
+      {!view.connected && (
+        <section className="fx-card fx-bev fx-offline">
+          <Icon name="alert" className="lg" />
+          <h2>Off the air</h2>
+          <p>
+            The cockpit has lost its link to the harness. Everything this floor draws is a reading the harness confirms,
+            so while the link is down there is nothing here worth showing.
+          </p>
+          <p className="fx-empty">The harness itself is unaffected — bots keep working. Reconnecting…</p>
+        </section>
+      )}
+
       {/* Above the rails and outside the grid, because while it is up *no pulse
           runs*: every other surface on this page is stale for the same reason, so
           a card among the rails would leave an operator hunting for why their
           fleet is frozen. */}
-      {recovery}
+      {view.connected && (
+        <>
+          {recovery}
 
-      {/* Two rails split on *whose turn it is*: what the harness is doing, and
+          {/* Two rails split on *whose turn it is*: what the harness is doing, and
           what the world is doing back. What *you* are the blocker for is no
           longer a rail — it is a count in the status bar, because that is how it
           is read. Below 1900px these dissolve and `order` restores the reading
           order. Production heads the world rail rather than the floor: its
           subject is output, which is merges — the world's answer to the floor's
           effort. */}
-      <div className="fx-rails">
-        <div className="fx-rail fx-rail-floor">
-          {line}
-          {bots}
-          {goalFloor}
-          {yard}
-          {offBlueprint}
-        </div>
-        <div className="fx-rail fx-rail-world">
-          {productionPanel}
-          {launches}
-          {signals}
-          {shiftLog}
-        </div>
-      </div>
+          <div className="fx-rails">
+            <div className="fx-rail fx-rail-floor">
+              {line}
+              {bots}
+              {goalFloor}
+              {yard}
+              {offBlueprint}
+            </div>
+            <div className="fx-rail fx-rail-world">
+              {productionPanel}
+              {launches}
+              {signals}
+              {shiftLog}
+            </div>
+          </div>
 
-      {modal === 'production' && (
-        <Modal
-          title="Production"
-          icon="lamp"
-          note="dispatches are effort · merges are output"
-          onClose={() => setModal(null)}
-        >
-          <Production reading={production} />
-        </Modal>
-      )}
+          {modal === 'production' && (
+            <Modal
+              title="Production"
+              icon="lamp"
+              note="dispatches are effort · merges are output"
+              onClose={() => setModal(null)}
+            >
+              <Production reading={production} />
+            </Modal>
+          )}
 
-      {modal === 'alerts' && (
-        <Modal
-          title="Awaiting Your Stamp"
-          icon="alert"
-          note={`${view.openEscalations.length} pending`}
-          onClose={() => setModal(null)}
-        >
-          <StampDesk view={view} actions={actions} />
-        </Modal>
-      )}
+          {modal === 'alerts' && (
+            <Modal
+              title="Awaiting Your Stamp"
+              icon="alert"
+              note={`${view.openEscalations.length} pending`}
+              onClose={() => setModal(null)}
+            >
+              <StampDesk view={view} actions={actions} />
+            </Modal>
+          )}
 
-      {modal === 'faults' && (
-        <Modal
-          title="Faults"
-          icon="gear"
-          note={`${state.errors.length} recorded · nothing in the harness reads these back`}
-          onClose={() => setModal(null)}
-        >
-          <FaultLog view={view} actions={actions} />
-        </Modal>
-      )}
+          {modal === 'faults' && (
+            <Modal
+              title="Faults"
+              icon="gear"
+              note={`${state.errors.length} recorded · nothing in the harness reads these back`}
+              onClose={() => setModal(null)}
+            >
+              <FaultLog view={view} actions={actions} />
+            </Modal>
+          )}
 
-      {modal === 'blueprints' && (
-        <Modal title="Blueprints" icon="blueprint" note="queued ahead of every rule" onClose={() => setModal(null)}>
-          <BlueprintDesk view={view} actions={actions} />
-        </Modal>
-      )}
+          {modal === 'blueprints' && (
+            <Modal title="Blueprints" icon="blueprint" note="queued ahead of every rule" onClose={() => setModal(null)}>
+              <BlueprintDesk view={view} actions={actions} />
+            </Modal>
+          )}
 
-      {view.selectedAgent && (
-        <AgentDrawer
-          agent={view.selectedAgent}
-          task={view.taskFor(view.selectedAgent)}
-          refUrls={state.refUrls}
-          live={view.selectedOutput}
-          flags={view.flagsByAgent.get(view.selectedAgent.id)}
-          artifactUrls={state.artifactUrls ?? {}}
-          files={view.filesByAgent.get(view.selectedAgent.id)}
-          onClose={() => actions.select(null)}
-          onRespond={(text) => actions.respondAgent(view.selectedAgent!.id, text)}
-          onKill={() => actions.killAgent(view.selectedAgent!.id)}
-          onComplete={() => actions.completeAgent(view.selectedAgent!.id)}
-          onInterrupt={() => actions.interruptAgent(view.selectedAgent!.id)}
-        />
+          {view.selectedAgent && (
+            <AgentDrawer
+              agent={view.selectedAgent}
+              task={view.taskFor(view.selectedAgent)}
+              refUrls={state.refUrls}
+              live={view.selectedOutput}
+              flags={view.flagsByAgent.get(view.selectedAgent.id)}
+              artifactUrls={state.artifactUrls ?? {}}
+              files={view.filesByAgent.get(view.selectedAgent.id)}
+              onClose={() => actions.select(null)}
+              onRespond={(text) => actions.respondAgent(view.selectedAgent!.id, text)}
+              onKill={() => actions.killAgent(view.selectedAgent!.id)}
+              onComplete={() => actions.completeAgent(view.selectedAgent!.id)}
+              onInterrupt={() => actions.interruptAgent(view.selectedAgent!.id)}
+            />
+          )}
+        </>
       )}
     </div>
   );

@@ -164,7 +164,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 20px;
+  gap: 10px 16px;
   padding: 9px 14px;
   margin-bottom: 12px;
 }
@@ -221,7 +221,7 @@
 }
 
 .fx-meter {
-  width: 84px;
+  width: 64px;
   height: 13px;
   padding: 2px;
   display: block;
@@ -300,6 +300,38 @@
 .fx-act.quiet > .fx-ic {
   color: var(--fx-belt-dark);
 }
+/* The scan gauge presses too, and it *acts* rather than opening — so it takes
+   the raised face and leaves the chevron, which is this bar's word for "there is
+   a panel behind this". Nothing is reserved on the right for one. */
+.fx-act.fx-run {
+  padding-right: 12px;
+}
+.fx-act.fx-run:disabled {
+  cursor: progress;
+}
+
+/* Bots is the cap control wearing the gauge's icon and label, so the control's
+   own "cap" caption would be the third word for one number. The count keeps the
+   bar's display face rather than the shared component's. */
+.fx-fleet .fc-label {
+  display: none;
+}
+.fx-fleet .fleet-control {
+  border: 0;
+  background: none;
+  padding: 0;
+  gap: 2px;
+}
+.fx-fleet .fc-count {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  min-width: 38px;
+}
+.fx-fleet .fleet-control.paused .fc-count {
+  color: var(--accent);
+}
+
 .fx-chev {
   position: absolute;
   right: 7px;
@@ -329,6 +361,34 @@
   100% {
     opacity: 0.28;
   }
+}
+
+/* ============================ off the air ============================
+
+   The floor with the link down: one card, centred, and nothing else on the page.
+   It is deliberately the *only* thing drawn — a stale panel and a live one are
+   the same chrome, so the honest layout is the empty one. */
+
+.fx-offline {
+  max-width: 46rem;
+  margin: 8vh auto 0;
+  padding: 26px 28px;
+  text-align: center;
+}
+.fx-offline > .fx-ic {
+  color: var(--red);
+}
+.fx-offline h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 8px 0 12px;
+}
+.fx-offline p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 /* ============================ the line ============================ */

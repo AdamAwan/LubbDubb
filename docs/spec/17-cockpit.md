@@ -174,11 +174,14 @@ is what keeps them tested.
 
 Four rules hold them:
 
-- **A gauge that opens something must look like it does.** `Scan`, `Power` and `Bots` are inert
-  readings, so an `onClick` on a `.fx-read` is invisible — indistinguishable from three neighbours
-  that do not respond, which is exactly how it was first reported. A navigating gauge is `.fx-act`: a
-  real `<button>` with a raised face, a hover lift, a pointer and a chevron. Icons are distinct per
-  gauge (`alert`, `gear`, `blueprint`) so three adjacent buttons stay legible.
+- **A gauge that acts must look like it does.** `Power` is an inert reading, so an `onClick` on a
+  plain `.fx-read` is invisible — indistinguishable from a neighbour that does not respond, which is
+  exactly how it was first reported. A gauge that does something is `.fx-act`: a real `<button>` with
+  a raised face, a hover lift and a pointer. Icons are distinct per gauge (`alert`, `gear`,
+  `blueprint`) so three adjacent buttons stay legible. **The chevron is the narrower word** — it says
+  _there is a panel behind this_ — so the three desks carry one and `Scan`, which runs a pulse rather
+  than opening anything, does not (`.fx-run`). `test/factorySkin.test.ts` counts the ways in by
+  chevron for that reason.
 - **Only Alerts is ever red**, and that is the skin's existing rule rather than a new one: red means
   an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber) and a
   queued blueprint is waiting on a slot, not on you (neither).
@@ -189,6 +192,36 @@ Four rules hold them:
 - **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
   listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
   answering still happens on the shared `EscalationCard`, which owns the refusal rules.
+
+#### One subject, once — and nothing at all when the link drops
+
+Absorbing the act rail made the bar the busiest surface on the floor, and it was carrying two of
+everything. The fleet was a `Bots` reading _and_ the `live/cap` inside the cap control an inch to its
+right; the pulse was a `Scan` countdown at one end _and_ a "Run a scan" button at the other. Three
+rules now hold it, and each removes a duplicate rather than shrinking a survivor — the bar's wrap
+point moved in by ~260px without a reading being lost:
+
+- **The reading and its control are one gauge.** `Bots` _is_ `FleetControl`, wearing the gauge's icon
+  and label; the shared component is unchanged, because a skin may not reach `api.js` and embedding it
+  is the sanctioned route to a control. Its own `cap` caption is hidden in the skin's CSS — a third
+  word for one number.
+- **The gauge is the button.** `ScanRead` presses, and the countdown on its face is what says whether
+  pressing it is worth anything. It stays pressable while paused or held: that is precisely when an
+  operator wants to confirm nothing moves. The radar still stops turning in both.
+- **Config is a hover, not a caption.** Which dispatcher is wired cannot change while the harness is
+  up, so it is the ident's `title`. `demo` stays on the face — it is the difference between a floor
+  and a picture of one.
+
+The **live/offline chip is gone entirely**, and this is the one change that is not only about width.
+Every panel on this floor is a reading the harness confirms, and a stale one is drawn in exactly the
+chrome of a live one, so a chip in the corner asked an operator to remember to check it before
+believing anything else — the same failure `capped` and `unapproved` were added to `QueueItem` to
+fix, one level up. So a dropped socket **empties the floor**: the bar is the ident plus a single
+`Link · offline` reading, and the rails, the recovery banner, the modals and the drawer are not
+rendered at all — one `Off the air` card in their place. Nothing is being polled into a lie, the
+harness is unaffected and says so, and the reconnect brings the floor back by itself.
+`test/factorySkin.test.ts` asserts both halves: one fleet reading and no second scan button while
+connected, and no gauge at all while not.
 
 #### What the floor draws beyond the queue
 
