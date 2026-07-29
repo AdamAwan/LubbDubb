@@ -19,6 +19,7 @@ import {
   type PrMachineReading,
   type SatelliteReading,
   type ScannerState,
+  type StatusCommentReading,
 } from './vocabulary.js';
 
 /**
@@ -285,6 +286,29 @@ interface GoalFloorInput {
 const issueOrigin = (n: number): string => `issue:${n}`;
 const partOrigin = (n: number, slug: string): string => `issue:${n}:part:${slug}`;
 
+/**
+ * The signal post's second meta line, one string per reading.
+ *
+ * It never links: `Plan.statusCommentRef` is a *provider comment id*, not a URL,
+ * and `refUrls` cannot resolve one — so the only thing the cockpit may claim is
+ * that a comment exists.
+ */
+const COMMENT_META: Record<StatusCommentReading, string> = {
+  written: 'status comment · written',
+  unwritten: 'status comment · none written',
+  no_plan: 'no plan · no status comment to write',
+};
+
+/**
+ * Three readings, not two. A plan that has written no comment yet has a writer
+ * that has not spoken; an unplanned issue has no writer at all, which is a
+ * different fact and gets different words.
+ */
+function statusCommentReading(plan: Plan | null): StatusCommentReading {
+  if (!plan) return 'no_plan';
+  return plan.statusCommentRef ? 'written' : 'unwritten';
+}
+
 export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   const { issue, plan, openPrs, closedPrs, tasks, upcoming, recorded } = input;
   const n = issue.number;
@@ -550,17 +574,21 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     edges.push({ from: tail, to: manifestRef });
 
     const signalRef = `${patchRef}:signal`;
+    const comment = statusCommentReading(plan);
     machines.push({
       ref: signalRef,
       kind: 'signal',
       kindLabel: 'Signal post',
       name: 'Update the ticket',
-      // The state move alone. The plan's status comment is real and is not on the
-      // wire, so claiming it here would be a machine reading a field the cockpit
-      // cannot see (#171).
-      meta: [issue.workItemState ? `state · ${issue.workItemState}` : 'no workflow state on this provider'],
+      // Both signals the harness actually sends (#171): the state move, and the
+      // one living status comment the plan reconciler keeps. The comment line is
+      // a fact, never a link — a provider comment id is not a URL.
+      meta: [
+        issue.workItemState ? `state · ${issue.workItemState}` : 'no workflow state on this provider',
+        COMMENT_META[comment],
+      ],
       presence: 'built',
-      status: signalPostStatus(issue.workItemState),
+      status: signalPostStatus(issue.workItemState, comment),
       scanners: [],
       prNumber: null,
       fill: null,

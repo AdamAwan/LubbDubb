@@ -249,6 +249,15 @@ export interface Plan {
   document: string | null;
   /** True while a discussion agent is conversing about this plan — nothing is scheduled meanwhile. */
   discussing: boolean;
+  /**
+   * The provider's id for the one living status comment the plan reconciler
+   * maintains on the issue, or null before it has written one.
+   *
+   * A comment id is **not** a URL and `refUrls` cannot resolve one, so nothing
+   * here may link it or render its body — the only reading it supports is that a
+   * comment exists.
+   */
+  statusCommentRef: string | null;
   createdAt: string;
   updatedAt: string;
 }
