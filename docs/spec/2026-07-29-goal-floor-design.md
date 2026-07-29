@@ -8,8 +8,8 @@ workability, decomposed, each step producing a pull request, each pull request p
 merging, the merged parts accumulating against one goal, and the goal check firing on the lot.
 
 This is the design for that third view. The mockup it was written against is
-[`goal-floor-mockup.html`](../mockups/goal-floor-mockup.html) — open it in a browser; five goals, one
-per state the floor has to be able to draw.
+[`goal-floor-mockup.html`](../mockups/goal-floor-mockup.html) — open it in a browser; six goals, one
+per state the floor has to be able to draw, including one decomposed into four parallel lanes.
 
 ## The four decisions
 
@@ -61,13 +61,66 @@ prose is read.
 
 ### 4. Layout vs reading — position from structure, state from the poll
 
-`layoutFloor(...)` is pure over **refs and dependency edges alone** — no status, no tone, no
-timestamps — and is memoised on a structural key (the sorted ref list plus the edge list). A machine
-therefore moves only when the graph's *shape* changes: a part appears, a part is retired, a PR is
+`layoutFloor(...)` assigns each machine a **(column, lane)** and is pure over **refs and dependency
+edges alone** — no status, no tone, no timestamps. Column is dependency depth; lane is the branch the
+machine sits on. It is memoised on a structural key (the sorted ref list plus the edge list), so a
+machine moves only when the graph's *shape* changes: a part appears, a part is retired, a PR is
 opened. Tone, status word, plate text and belt motion are looked up per render off the snapshot.
 
 Without the split, a floor re-laid on every poll jitters exactly when an operator is watching it most
 closely, which is when something is going wrong.
+
+This is `layoutTechTree`'s own algorithm — `depths()` walking `dependsOn`, then a row per column —
+which is the concrete form of decision 3 above: the floor does not merely replace the tech tree, it
+does the tree's job as a proper part of its own.
+
+## Parallel work, and the shape it cannot have
+
+A goal's parts are not a chain. `PlanPart.dependsOn` holds **at most one** slug, enforced at the plan
+document's zod boundary alongside cycle detection, so the graph is a **forest of chains that fan out
+where several parts name the same prerequisite**. Two consequences the drawing must respect:
+
+- **Lanes diverge and never re-converge.** A converging diamond is a shape the schema cannot produce
+  — with two dependencies both could be in review at once and there would be no single branch to base
+  on, which is why the arity is one. Drawing one would be confidently wrong, which is worse than
+  drawing nothing. Everything meets at the **silo**, which is the only honest join on the floor.
+- **`workflow.md`'s stack diagram is looser than the schema.** It shows `P2 → P4` and `P3 → P4`. That
+  is a sketch of the idea, not an expressible plan. Do not implement from it.
+
+Parallel lanes are also where three readings become visible that a single chain never shows, and each
+is an existing field with nothing new required:
+
+| Reading | Source |
+| --- | --- |
+| Two PRs open at once on one base | `part.prNumber` + `pr.baseBranch`; `isStackedPr` already holds the merge |
+| A lane ready with no bot | `maxConcurrentPartsPerIssue` → the `capped` `QueueItem.status` |
+| Two bots writing one file | `overlaps[]`, which only concurrency can produce |
+
+The cap especially has to be drawn rather than dropped: a limit you cannot see looks exactly like an
+idle fleet, which is the invisibility `capped` and `unapproved` were added to `QueueItem` to fix.
+
+## The splitter — where the stream divides
+
+The plan is the machine that turns one goal into N lanes, so the decomposition gets a **splitter**,
+drawn at every column where the lane count goes up. That is a rule rather than a fixed position: a
+plan whose parts are independent splits straight out of the furnace, and one whose parts stack on a
+common first part splits after *it*.
+
+The furnace stays the **planner** (rule 3c) and the splitter is the **plan it produced**, because they
+are different acts: the furnace is a judgement — an agent reads the repository and decides the shape —
+while the splitter is that decision's structure, re-read every pulse. Folding them would put a
+transformation and a routing in one machine and lose the distinction the moment a replan changes the
+split without re-running the planner.
+
+The splitter also earns its place by drawing something nothing currently draws: a **`single` verdict
+is one lane straight through, with no splitter at all**. The planner ran, considered the goal, and
+decided it was one pull request's worth of work — today that outcome is indistinguishable from a floor
+that was never planned.
+
+*Considered and not taken:* making the **assay** a filter splitter (workable one way, unclear the
+other). It is a real two-way division, but one of the two outputs is a dead end rather than a lane, and
+a splitter feeding a siding is a weaker picture than a drill that has stopped and says why. The assay
+stays a machine with a verdict.
 
 ## The scanners are generated, never named
 
@@ -125,6 +178,7 @@ Every noun lands in `web/src/skins/factory/vocabulary.ts` and nowhere else.
 | Unsurveyed patch          | A job with no ticket behind it                   | `/api/work` → `unrecorded`                           |
 | Assay drill               | The goal assay, rule 3f                          | **new** `issue.assay`                                |
 | Furnace                   | The planner, rule 3c                             | `plan.status`, `plan.reason`                         |
+| Splitter                  | The decomposition — one goal becoming N lanes    | lane count rising between two `layoutFloor` columns   |
 | Blueprint ghosts          | `awaiting_approval`                              | `plan.status` + `upcoming` item `unapproved`         |
 | Assembly machine          | A plan part; its recipe is the part's scope      | `planParts[]`, `dependsOn`, `scope`                  |
 | What comes out of it      | `PartOutcomeKind` — code, report, determination  | `part.expectedKind` / `part.outcomeKind`             |
@@ -161,7 +215,9 @@ which is *why* the two verdicts above are computed server-side, and the structur
 
 - `test/factorySkin.test.ts` — every arm of the new vocabulary function, exhaustively, as it already
   covers `QueueItem.status`; the belt-stops-with-the-harness assertion extended to the floor.
-- A pure `layoutFloor` test: same structure in, same positions out, regardless of any state field.
+- A pure `layoutFloor` test: same structure in, same positions out, regardless of any state field —
+  plus a fan-out case asserting the lane assignment, and that **no two edges ever share a target**,
+  which is the drawing's half of the schema's one-dependency rule.
 - `test/cockpitSkins.test.ts` picks up the conformance render for free.
 - Server-side: `ciVerdict` on the snapshot asserted against `classifyCiFailures` directly, so the two
   can never answer differently.
