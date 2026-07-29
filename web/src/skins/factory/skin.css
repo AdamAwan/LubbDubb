@@ -257,49 +257,68 @@
   opacity: 0.35;
 }
 
-/* ============================ alert bay ============================ */
+/* ======================= gauges that open things =======================
 
-.fx-alerts {
+   Three of the gauges in the status bar navigate: alerts, faults, blueprints,
+   each opening the panel it counts. The other three are inert readings, and the
+   first attempt made these look identical to them — an `onClick` on a `.fx-read`,
+   which is invisible because its three neighbours don't respond to one. So a
+   clickable gauge is a *pressable object*: a raised face, a hover lift, a pointer
+   and a chevron. The chevron is the half that says so while standing still. */
+
+.fx-act {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 9px 10px 9px 18px;
-  margin-bottom: 12px;
-}
-.fx-alerts::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 9px;
-  background: repeating-linear-gradient(45deg, var(--accent) 0 5px, var(--bg) 5px 10px);
-}
-.fx-alert {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 10px;
-  flex: 1 1 280px;
-  min-width: 0;
-  text-align: left;
+  padding: 5px 26px 5px 10px;
+  border-top: 1px solid var(--border-hi);
+  border-left: 1px solid var(--border-hi);
+  border-right: 1px solid var(--border-lo);
+  border-bottom: 1px solid var(--border-lo);
+  background: linear-gradient(180deg, #302c29, #262320);
   font: inherit;
   color: inherit;
   cursor: pointer;
+  transition:
+    transform 0.09s ease,
+    background 0.12s ease;
 }
-.fx-alert:disabled {
-  cursor: default;
+.fx-act:hover {
+  background: linear-gradient(180deg, #3a3530, #2c2825);
+  transform: translateY(-1px);
 }
-.fx-alert > .fx-ic {
-  color: var(--muted);
+.fx-act:active {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, #262320, #302c29);
 }
-.fx-alert.crit > .fx-ic {
-  color: var(--red);
-  animation: fx-blink 1.5s steps(1, end) infinite;
+.fx-act:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-.fx-alert.warn > .fx-ic {
+/* Nothing to see, but never gone: Faults is the only way to the fault log, which
+   carries the clear — and a gauge that disappeared would reflow the whole bar
+   every time its number left zero. */
+.fx-act.quiet .fx-val,
+.fx-act.quiet > .fx-ic {
+  color: var(--fx-belt-dark);
+}
+.fx-chev {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin-top: -5.5px;
+  color: var(--grey);
+}
+.fx-act:hover .fx-chev {
   color: var(--accent);
+}
+/* Amber, not red: a recorded fault blocks nothing. Red on this floor means one
+   thing, and it is the alert gauge's alone. */
+.fx-val.warn {
+  color: var(--accent);
+}
+.fx-act .fx-val.crit {
+  animation: fx-blink 1.5s steps(1, end) infinite;
 }
 @keyframes fx-blink {
   0%,
@@ -310,29 +329,6 @@
   100% {
     opacity: 0.28;
   }
-}
-.fx-alert .txt {
-  min-width: 0;
-}
-.fx-alert-hd {
-  font-family: var(--font-display);
-  font-size: 13px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  display: block;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.fx-alert-sd {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--grey);
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ============================ the line ============================ */
@@ -756,7 +752,7 @@
 
 /* ============================ arrangements ============================
 
-   One DOM, four widths. `FactoryRoot` always renders three rails; only the
+   One DOM, four widths. `FactoryRoot` always renders both rails; only the
    widest arrangement keeps them, and below that `.fx-rail` goes
    `display: contents` so its panels fall through and become tiles of the page
    grid directly. The breakpoint therefore lives here and only here — matching
@@ -766,12 +762,17 @@
      < 940   one column
      940+    two columns
      1500+   tiled: one four-column page grid, each panel spanning what it needs
-     1900+   railed: three columns that scroll on their own, page fixed to the
+     1900+   railed: two columns that scroll on their own, floor fixed to the
              viewport
 
-   The rails' document order is *act, floor, world*, which is not the order the
-   floor reads top-to-bottom in. So the two dissolved arrangements set `order`
-   per panel (below): the line first, then the detail it cannot hold, and the
+   There were three rails. The first held what *you* were the blocker for, and
+   its panels are read as a count far more often than as contents — so the count
+   became a gauge in the status bar and the panel opens from it. See
+   `docs/spec/2026-07-29-factory-two-rail-layout-design.md`.
+
+   The rails' document order is *floor, world*, which is not the order the floor
+   reads top-to-bottom in. So the two dissolved arrangements set `order` per
+   panel (below): the line first, then the detail it cannot hold, and the
    readings you consult rather than watch — production, the log, the signals —
    after it. */
 
@@ -811,7 +812,6 @@
     grid-column: span 4;
   }
   [data-fx='bots'],
-  [data-fx='stamp'],
   [data-fx='goal-floor'],
   [data-fx='yard'],
   [data-fx='shift-log'] {
@@ -819,74 +819,57 @@
   }
   [data-fx='production'],
   [data-fx='launches'],
-  [data-fx='faults'],
-  [data-fx='blueprints'],
   [data-fx='off-blueprint'],
   [data-fx='signals'] {
     grid-column: span 1;
   }
   /* A tile that would run away vertically scrolls inside itself, so one long
      list cannot set the height of the row it happens to sit in. */
-  [data-fx='bots'] > .fx-body,
-  [data-fx='stamp'] > .fx-body,
-  [data-fx='faults'] > .fx-body {
+  [data-fx='bots'] > .fx-body {
     max-height: 620px;
     overflow-y: auto;
   }
 }
 
-/* The banner and the alert bay are the operator's interrupt: full bleed at
-   every width at which the page is a grid at all. */
-.fx .recovery-banner,
-.fx-alerts {
-  grid-column: 1 / -1;
+/* Recovery is a banner rather than a panel — while it is up no pulse runs, so
+   every other surface is stale for the same reason. It sits outside `.fx-rails`
+   entirely, which is why it needs no `grid-column` to span and no `order` to
+   lead: it is a block above the grid at every width, and a flex child of the
+   railed column at 1900+. */
+.fx .recovery-banner {
+  margin-bottom: 12px;
 }
 
 /* Document order is the rails' order; this is the floor's. Applies wherever
    the rails are dissolved, and is reset inside a rail below. */
-.fx .recovery-banner {
+.fx-line-wrap {
   order: 1;
 }
-.fx-alerts {
+[data-fx='bots'] {
   order: 2;
 }
-.fx-line-wrap {
+[data-fx='off-blueprint'] {
   order: 3;
 }
-[data-fx='bots'] {
+[data-fx='launches'] {
   order: 4;
 }
-[data-fx='off-blueprint'] {
+[data-fx='goal-floor'] {
   order: 5;
 }
-[data-fx='stamp'] {
-  order: 6;
-}
-[data-fx='launches'] {
-  order: 7;
-}
-[data-fx='blueprints'] {
-  order: 8;
-}
-[data-fx='goal-floor'] {
-  order: 9;
-}
 [data-fx='yard'] {
-  order: 10;
+  order: 6;
 }
 /* Production is a reading you consult, not a picture you watch, so it sits with
    the log rather than under the line. Same demotion the world rail makes. */
 [data-fx='production'] {
-  order: 11;
+  order: 7;
 }
 [data-fx='shift-log'] {
-  order: 12;
+  order: 8;
 }
 [data-fx='signals'] {
-  order: 13;
-}
-[data-fx='faults'] {
-  order: 14;
+  order: 9;
 }
 
 /* ---------------- 1900+ : railed ---------------- */
@@ -899,14 +882,15 @@
     flex-direction: column;
     gap: 12px;
   }
-  /* The shell's own gap spaces the bar now. */
-  .fx-status {
+  /* The shell's own gap spaces the bar and the banner now. */
+  .fx-status,
+  .fx .recovery-banner {
     margin-bottom: 0;
   }
   .fx-rails {
     flex: 1;
     min-height: 0;
-    grid-template-columns: 26rem minmax(0, 1fr) 24rem;
+    grid-template-columns: minmax(0, 1fr) 26rem;
     /* A rail must fill its row, not shrink to its content — `start` (right for
        tiles, which must not stretch to the tallest in their row) would give the
        rail its content height, and `overflow-y` on a box tall enough to hold
@@ -947,7 +931,7 @@
 
 @media (min-width: 2400px) {
   .fx-rails {
-    grid-template-columns: 30rem minmax(0, 1fr) 30rem;
+    grid-template-columns: minmax(0, 1fr) 30rem;
   }
 }
 
@@ -1452,6 +1436,13 @@
   align-items: center;
   gap: 12px;
 }
+/* A destructive two-step sits above the log it clears, not in the head beside
+   Close — one misclick between "leave" and "delete the only copy" is too few. */
+.fx-modal-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
 
 /* ============================ the goal floor ============================
 
@@ -1820,7 +1811,7 @@
   .fx-exhaust,
   .fx-gf-belt,
   .fx-silo-ready,
-  .fx-alert.crit > .fx-ic {
+  .fx-act .fx-val.crit {
     animation: none !important;
   }
 }

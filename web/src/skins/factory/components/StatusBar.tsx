@@ -7,11 +7,62 @@ import { UsageChip } from '../../../components/UsageChip.js';
 import { relTime } from '../../../components/util.js';
 import { SkinPicker } from '../../SkinPicker.js';
 import { powerReading } from '../power.js';
-import { Icon } from './Sprite.js';
+import type { FactoryModal } from './Modal.js';
+import { Icon, type IconName } from './Sprite.js';
 
 /** One labelled gauge. */
 function Read({ children }: { children: React.ReactNode }): JSX.Element {
   return <div className="fx-read">{children}</div>;
+}
+
+/**
+ * A gauge that opens a panel over the floor.
+ *
+ * Distinct from `Read` on purpose. The plain gauges are *inert* — Scan, Power and
+ * Bots are readings, and pressing one does nothing — so an `onClick` bolted to
+ * one of those is invisible: it looks exactly like the three neighbours that
+ * don't respond, which is precisely how the first attempt was reported. This is a
+ * real button with its own chrome, and the chevron is the part that says so while
+ * standing still.
+ *
+ * A count of zero mutes the gauge but never removes it. Faults is the only way to
+ * the fault log, which carries the two-step `clear` — a control that must not
+ * become unreachable because the log happens to be empty — and a gauge that
+ * vanished would reflow the bar every time the number moved off zero.
+ */
+function ActRead({
+  icon,
+  label,
+  count,
+  tone,
+  title,
+  onOpen,
+}: {
+  icon: IconName;
+  label: string;
+  count: number;
+  /** `crit` is red and reserved: an agent is parked on a question only you can answer. */
+  tone?: 'crit' | 'warn';
+  title: string;
+  onOpen: () => void;
+}): JSX.Element {
+  const lit = count > 0;
+  return (
+    <button
+      type="button"
+      className={`fx-read fx-act ${lit ? '' : 'quiet'}`}
+      onClick={onOpen}
+      title={title}
+      aria-label={title}
+    >
+      <Icon name={icon} className="sm" />
+      <span className="fx-lbl">{label}</span>
+      <span className={`fx-val ${lit && tone ? tone : ''}`}>{count}</span>
+      <svg className="fx-chev" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
 }
 
 /**
@@ -37,20 +88,35 @@ function Accumulators({ cells }: { cells: number[] }): JSX.Element {
 }
 
 /**
- * The control-room strip: scan, power, bots, alerts, and the controls.
+ * The control-room strip: scan, power, bots, the three ways in, and the controls.
  *
  * The radar is the pulse, and it is the one gauge with an off state — it stops
  * turning when the harness is paused or held, because a sweep that keeps going
  * while nothing is being decided is the single most misleading thing this page
  * could draw.
+ *
+ * Alerts, Faults and Blueprints used to be three panels standing in a permanent
+ * left-hand rail, and all three are read as a *number* far more often than as
+ * contents. A number is a gauge, so each is one here and its panel opens from it.
+ * That is what deleted the rail. See
+ * `docs/spec/2026-07-29-factory-two-rail-layout-design.md`.
  */
-export function StatusBar({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+export function StatusBar({
+  view,
+  actions,
+  onOpen,
+}: {
+  view: CockpitView;
+  actions: CockpitActions;
+  onOpen: (modal: FactoryModal) => void;
+}): JSX.Element {
   const { state } = view;
   const stopped = view.pulseHeld || state.control.paused;
   // Power is the subscriber window when the status-line capture has seen one;
   // otherwise there is no percentage to draw and the shared cost chip says what
   // is actually known instead of a meter inventing a denominator.
   const power = powerReading(state.usage);
+  const queued = state.jobs.filter((j) => j.status === 'queued').length;
 
   return (
     <div className="fx-status fx-bev">
@@ -132,15 +198,46 @@ export function StatusBar({ view, actions }: { view: CockpitView; actions: Cockp
         </span>
       </Read>
 
-      <Read>
-        <Icon
-          name="alert"
-          className="sm"
-          title={`${view.openEscalations.length} open alerts, ${state.errors.length} recorded faults`}
-        />
-        <span className="fx-lbl">Alerts</span>
-        <span className={`fx-val ${view.openEscalations.length > 0 ? 'crit' : ''}`}>{view.openEscalations.length}</span>
-      </Read>
+      {/* Alerts is red and the other two never are: on this floor red means one
+          thing, an agent parked on a question only you can answer. A fault blocks
+          nothing and a queued blueprint is waiting on a slot, not on you. */}
+      <ActRead
+        icon="alert"
+        label="Alerts"
+        count={view.openEscalations.length}
+        tone="crit"
+        title={
+          view.openEscalations.length === 0
+            ? 'Nothing is waiting on you — open the stamp desk anyway'
+            : `${view.openEscalations.length} bot${view.openEscalations.length === 1 ? '' : 's'} parked on a question only you can answer — open the stamp desk`
+        }
+        onOpen={() => onOpen('alerts')}
+      />
+
+      <ActRead
+        icon="gear"
+        label="Faults"
+        count={state.errors.length}
+        tone="warn"
+        title={
+          state.errors.length === 0
+            ? 'No faults recorded — open the fault log anyway'
+            : `${state.errors.length} recorded fault${state.errors.length === 1 ? '' : 's'} — open the fault log`
+        }
+        onOpen={() => onOpen('faults')}
+      />
+
+      <ActRead
+        icon="blueprint"
+        label="Queued"
+        count={queued}
+        title={
+          queued === 0
+            ? 'Stamp a new blueprint'
+            : `${queued} blueprint${queued === 1 ? '' : 's'} waiting for a free pad — open the blueprint desk`
+        }
+        onOpen={() => onOpen('blueprints')}
+      />
 
       <span className={`chip ${view.connected ? 'ok' : 'bad'}`}>
         <span className={`dot ${view.connected ? 'green' : 'red'}`} /> {view.connected ? 'live' : 'offline'}

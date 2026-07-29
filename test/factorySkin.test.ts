@@ -4,6 +4,7 @@ import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
+import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, WorldEvent } from '../web/src/types.js';
 
@@ -40,6 +41,7 @@ const { buildGoalFloor, floorFixtures, layoutFloor, partProgress } = await impor
   '../web/src/skins/factory/goalFloor.js'
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
+const { BlueprintDesk, FaultLog } = await import('../web/src/skins/factory/components/Desks.js');
 const { siloFill, siloGates } = await import('../web/src/skins/factory/silo.js');
 const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
@@ -144,6 +146,40 @@ function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void
       viewingPlan: null,
     });
     return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
+  } finally {
+    Date.now = realNow;
+  }
+}
+
+/**
+ * The same, for a desk that opens from a status-bar gauge rather than sitting in a
+ * rail. `renderToStaticMarkup` cannot click, so a panel behind a modal is
+ * unreachable through `render()` — which is the reason the three desks are
+ * components and not JSX inlined into `FactoryRoot`.
+ */
+function renderDesk(
+  Desk: (props: { view: CockpitView; actions: CockpitActions }) => JSX.Element,
+  mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void,
+  demo = true,
+): string {
+  const now = Date.parse('2026-01-01T12:00:00.000Z');
+  const realNow = Date.now;
+  Date.now = () => now;
+  try {
+    const { state } = buildDemoState();
+    mutate?.(state);
+    const view = buildViewModel({
+      state,
+      now,
+      connected: true,
+      demo,
+      selected: null,
+      liveOutput: new Map(),
+      tails: new Map(),
+      lastPulseAt: now,
+      viewingPlan: null,
+    });
+    return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));
   } finally {
     Date.now = realNow;
   }
@@ -372,11 +408,11 @@ test('raising the cap widens the floor', () => {
  * is no panel for.
  */
 test('injection is a demo control, not a provider one', () => {
-  const demo = render((s) => (s.config.injectable = true));
+  const demo = renderDesk(BlueprintDesk, (s) => (s.config.injectable = true));
   assert.match(demo, /class="inject"/, 'the demo build must keep the inject panel');
 
   // `injectable` still true — a fake provider is configured — and still no panel.
-  const real = render((s) => (s.config.injectable = true), false);
+  const real = renderDesk(BlueprintDesk, (s) => (s.config.injectable = true), false);
   assert.doesNotMatch(real, /class="inject"/, 'a real run must not offer injection');
   assert.doesNotMatch(real, /Inject event/, 'nor its label');
 
@@ -388,14 +424,50 @@ test('injection is a demo control, not a provider one', () => {
 });
 
 /**
+ * The desks are behind a gauge, so the *way in* is the thing that can now go
+ * missing — and a count nothing can open is the dead `see the fault log at the
+ * foot of the floor` line this replaced. Each gauge is asserted to be a real
+ * button, and Faults is asserted to stay one at zero: it is the only way to the
+ * log, which carries the clear.
+ */
+test('every desk has a way in from the status bar', () => {
+  const markup = render();
+  for (const label of ['Alerts', 'Faults', 'Queued']) {
+    assert.match(
+      markup,
+      new RegExp(`<button[^>]*class="fx-read fx-act[^"]*"[^>]*>(?:(?!</button>).)*${label}`, 's'),
+      `${label} must be a button in the bar`,
+    );
+  }
+
+  // The rail is gone: nothing may still be placed as a panel.
+  assert.doesNotMatch(markup, /data-fx="stamp"/, 'the stamp desk must not also be a panel');
+  assert.doesNotMatch(markup, /data-fx="faults"/, 'the fault log must not also be a panel');
+  assert.doesNotMatch(markup, /data-fx="blueprints"/, 'the blueprint desk must not also be a panel');
+  assert.doesNotMatch(markup, /fx-rail-act/, 'the act rail must be gone');
+
+  const quiet = render((s) => {
+    s.errors = [];
+    s.escalations = [];
+    s.jobs = [];
+  });
+  assert.match(quiet, /class="fx-read fx-act quiet"/, 'a zero count must mute a gauge, not remove it');
+  assert.equal(
+    (quiet.match(/class="fx-read fx-act/g) ?? []).length,
+    3,
+    'all three ways in must survive their counts being zero',
+  );
+});
+
+/**
  * A clear deletes the rows, for every cockpit rather than this one — so it is two
  * clicks, and it is only offered when there is something to clear.
  */
 test('faults offer a clear only when there are faults', () => {
-  const withFaults = render();
+  const withFaults = renderDesk(FaultLog);
   assert.match(withFaults, /clear all \d+\?|>clear</, 'recorded faults must offer a clear');
 
-  const none = render((s) => (s.errors = []));
+  const none = renderDesk(FaultLog, (s) => (s.errors = []));
   assert.match(none, /No faults recorded\./);
   assert.doesNotMatch(none, />clear</, 'an empty log must not offer a clear');
 });
