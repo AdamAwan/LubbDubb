@@ -142,6 +142,11 @@ const realApi = {
   // returning the issue to whatever its agent or its plan says.
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/conclusion`, { verdict }),
+  // The operator's override of the intake verdict (#158). `unclear` is the one
+  // reading that blocks dispatch, so this is the escape hatch that gate has to
+  // have; `null` clears it, which is a delete and not a synonym for `workable`.
+  setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/assay`, { verdict }),
   setStoryWatched: (storyId: string, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/stories/${storyId}/watch`, { watched }),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),

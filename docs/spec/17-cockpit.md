@@ -56,10 +56,13 @@ bundle imports no server code, and a copy of eighteen prompts shipped to fill th
 to drift from the originals with nothing to catch it.
 
 `WorldSummary` moved the other way — out of Classic and into `components/` when the second skin
-arrived. Most of it is drawing, but the watch/ignore toggles and the conclusion verdict are operator
-controls with refusal rules behind them, which is the side of the split they belong on. A skin
-reimplementing it would sooner or later ship a world view missing a toggle, and switching skins would
-silently take a capability away.
+arrived. Most of it is drawing, but the watch/ignore toggles, the conclusion verdict and the assay
+override are operator controls with refusal rules behind them, which is the side of the split they
+belong on. A skin reimplementing it would sooner or later ship a world view missing a toggle, and
+switching skins would silently take a capability away. The assay override is the sharpest case, which
+is why it is here and not only on the Goal Floor: an `unclear` verdict is the one intake reading that
+_blocks_ dispatch ([06](06-issue-pickup.md)), so a skin without it is a cockpit you cannot un-block an
+issue from.
 
 **Skins never import `api.js`.** Every mutation is enumerated on `CockpitActions`, pre-bound, so a
 skin cannot grow a capability another lacks — a difference that would surface only as a button
@@ -269,7 +272,12 @@ Six properties, and they are what to preserve:
   schema can emit it (#170), so relaxing the arity cap needs no cockpit change.
 - **Absent is not stopped.** A goal nothing has assayed draws **no drill**; one refused at intake
   draws a drill that is red, stopped, and carrying its reason. Collapsing the two would put #158 back
-  — the whole point of intake having a verdict.
+  — the whole point of intake having a verdict. That refusal's plate is a **second entry point** onto
+  the shared assay override above (`PlanModal`'s pattern, where three surfaces reach one `viewPlan`),
+  and the only plate carrying one: `FloorPlate.assayIssue` names the issue an override would rewrite
+  and is null on every other plate, so the component never decides for itself which plate that is —
+  the first `workable` plate anyone adds cannot silently grow buttons. The buttons sit beside the
+  assayer's words rather than over them, with the expiry sentence under both.
 - **A CI machine's state comes from the verdict, never a check's name.** Scanners are generated from
   `pr.ciVerdict` (`dispatch` → damaged, `escalate` → not ours, `ignored` → muted), so a floor running
   against a config naming any check at all renders with no code change, and **no check name from any
@@ -455,9 +463,21 @@ for the world to change — chosen from `config.injectable`.
   collided. Each row shows the path, its writers with their origins and branches, and marks the
   `sameWorktree` case.
 - **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
-  toggle; issues with their state, linked PR, pickup chip, conclusion chip and **shortfall** chip, and
-  a watch toggle; stories with a watch toggle; and a **Recently closed** section marking each PR
-  merged vs closed-unmerged.
+  toggle; issues with their state, linked PR, pickup chip, conclusion chip and **shortfall** chip, a
+  watch toggle, the conclusion toggles and the **assay override**; stories with a watch toggle; and a
+  **Recently closed** section marking each PR merged vs closed-unmerged.
+
+  The assay override draws on an issue the intake verdict **refused** and nowhere else
+  (`POST /api/issues/:number/assay`, [16](16-http-api.md)). A `workable` verdict blocks nothing, so a
+  button on one would offer to change a reading that changes no behaviour. It is **two buttons and not
+  one toggle**: `work anyway` writes `workable`, while `clear assay` deletes the row — `null` is not
+  `workable`, it is the store's one representation of "nobody has decided", which is also what a
+  crashed assayer leaves behind. The assayer's own summary is quoted into the title and never
+  rewritten. Both titles carry the sentence the buttons cannot say for themselves: the hold **also
+  ends by itself** the moment the ticket's own text fingerprints differently, with no timer and
+  nothing re-asking — an operator who does not know that reaches for the override where editing the
+  goal was the honest fix. It writes the harness's own record and touches no tracker, the same
+  discipline as the conclusion route.
 
   The shortfall chip (`plan fell short` / `part fell short` / `goal is wrong`, with the assessor's
   summary in its title) sits **beside** the pickup chip and inside neither it nor the conclusion

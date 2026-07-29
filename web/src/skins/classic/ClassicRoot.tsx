@@ -224,6 +224,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
             onToggleIssueWatch={(issueNumber, watched) => actions.setIssueWatched(issueNumber, watched)}
             onToggleStoryWatch={(storyId, watched) => actions.setStoryWatched(storyId, watched)}
             onSetConclusion={(issueNumber, verdict) => actions.setIssueConclusion(issueNumber, verdict)}
+            onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
             onViewPlan={(id) => actions.viewPlan(id)}
           />
         </section>

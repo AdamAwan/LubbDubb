@@ -2,6 +2,7 @@ import { useEffect, useState, type JSX } from 'react';
 import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../../types.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
 import { refLink } from '../../../components/util.js';
+import { ASSAY_EXPIRY } from '../../../components/WorldSummary.js';
 import { buildGoalFloor, type GoalFloorModel, type Machine } from '../goalFloor.js';
 import { clip, iconForStage, patchStatus, toneColor } from '../vocabulary.js';
 
@@ -21,7 +22,10 @@ import { clip, iconForStage, patchStatus, toneColor } from '../vocabulary.js';
  *
  * - **Absent is not stopped.** A goal nothing has assayed draws no drill at all;
  *   one refused at intake draws a drill that is red, stopped and carrying its
- *   reason. Telling those apart by reading a caption would put #158 back.
+ *   reason. Telling those apart by reading a caption would put #158 back. That
+ *   plate is the one that carries an override, because a refusal is the one
+ *   intake reading that blocks dispatch — and it says, beside the buttons, that
+ *   the hold also ends by itself on the next edit to the ticket.
  * - **A stopped machine says why, in the harness's own words.** Every plate below
  *   the floor quotes a string the server computed — an assay summary, a planner's
  *   reason, a health reason, a queue item's reason. Nothing is assembled here and
@@ -58,6 +62,14 @@ interface GoalFloorProps {
   stopped: boolean;
   onViewPlan: (planId: string) => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
+  /**
+   * Override a refused intake verdict. A second entry point onto the same action
+   * the Yard's issue row carries — `viewPlan`'s pattern — because the floor is
+   * where a stopped drill is *seen*, and an operator who has to go and find
+   * another panel to un-block it is one gate away from editing the ticket to say
+   * something they do not mean.
+   */
+  onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
   /** `GET /api/work/:ref`, routed through `CockpitActions` — a skin never reaches `api.js`. */
   onFetchWork: (ref: string) => Promise<{ nodes: WorkNodeView[] }>;
 }
@@ -146,6 +158,12 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
           <span className="fx-gf-who">{plate.who}</span>
           {plate.route && <span className="fx-gf-route">route · {plate.route}</span>}
           <span>{plate.text}</span>
+          {/* The buttons sit beside the assayer's words and never replace them:
+              only `assayIssue` decides that this is the plate they belong on, so
+              a verdict that blocks nothing cannot grow an override. Clearing is
+              a third option rather than this toggle's other end — `null` is the
+              store's one representation of "nobody has decided". */}
+          {plate.assayIssue !== null && <AssayOverride issueNumber={plate.assayIssue} onSetAssay={props.onSetAssay} />}
           {plate.planId && (
             <span className="fx-gf-act">
               <button className="fx-btn" onClick={() => props.onViewPlan(plate.planId!)}>
@@ -190,6 +208,46 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
         </span>
         <span>◆ splitter, where lanes divide · ◆ merger, where they rejoin</span>
       </div>
+    </>
+  );
+}
+
+/**
+ * The two ways out of a refused goal, drawn on the plate that carries the
+ * refusal — a second entry point onto the Yard's own control, never a second
+ * decision about when it may be offered.
+ *
+ * They sit **beside** the assayer's words, which the plate keeps quoting
+ * verbatim. Two buttons rather than one toggle: `null` is not `workable`, it is
+ * the store's single representation of "nobody has decided". The hint under them
+ * is the one thing neither button can say for itself.
+ */
+function AssayOverride({
+  issueNumber,
+  onSetAssay,
+}: {
+  issueNumber: number;
+  onSetAssay: GoalFloorProps['onSetAssay'];
+}): JSX.Element {
+  return (
+    <>
+      <span className="fx-gf-act">
+        <AsyncButton
+          className="fx-btn"
+          onClick={() => onSetAssay(issueNumber, 'workable')}
+          title="Work it anyway: the harness stops holding pickup and runs a cycle now."
+        >
+          Work it anyway
+        </AsyncButton>
+        <AsyncButton
+          className="fx-btn"
+          onClick={() => onSetAssay(issueNumber, null)}
+          title="Clear the verdict — nobody has decided, and an assayer may judge the goal again. Not the same as calling it workable."
+        >
+          Clear verdict
+        </AsyncButton>
+      </span>
+      <span className="fx-gf-hint">{ASSAY_EXPIRY}</span>
     </>
   );
 }

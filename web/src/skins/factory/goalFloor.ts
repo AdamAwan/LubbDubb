@@ -249,6 +249,17 @@ interface FloorPlate {
   route: string | null;
   /** The plan this plate is about, so the shared modal can be opened from it. */
   planId: string | null;
+  /**
+   * The issue whose intake verdict this plate can override, and null on every
+   * other plate — including a `workable` one, which draws no plate at all.
+   *
+   * A field rather than the component reading `floor.issueNumber` off the model:
+   * the floor always knows its issue, so a component-side test for "is this the
+   * assay plate" would be a second answer to a question this file already
+   * decided, and the first `workable` plate anyone adds would silently grow an
+   * override for a verdict that blocks nothing.
+   */
+  assayIssue: number | null;
 }
 
 export interface GoalFloorModel {
@@ -346,7 +357,14 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     edges.push({ from: head, to: assayRef });
     head = assayRef;
     if (assay.verdict === 'unclear') {
-      plates.push({ who: 'Assay · refused', tone: 'bad', text: assay.summary, route: null, planId: null });
+      plates.push({
+        who: 'Assay · refused',
+        tone: 'bad',
+        text: assay.summary,
+        route: null,
+        planId: null,
+        assayIssue: n,
+      });
     }
   }
 
@@ -373,7 +391,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   edges.push({ from: head, to: furnaceRef });
 
   if (plan?.reason && plan.status === 'awaiting_approval') {
-    plates.push({ who: 'Blueprint', tone: 'ghost', text: plan.reason, route: null, planId: plan.id });
+    plates.push({ who: 'Blueprint', tone: 'ghost', text: plan.reason, route: null, planId: plan.id, assayIssue: null });
   }
 
   // -- the assembly floor ------------------------------------------------
@@ -447,7 +465,14 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       // An unapproved plan already has one plate saying so; a plate per ghost
       // part would be the same sentence three times.
       if (!ghostPlan && held && held.status !== 'dispatching') {
-        plates.push({ who: `Assembler · ${i + 1}`, tone: 'warn', text: held.reason, route: null, planId: null });
+        plates.push({
+          who: `Assembler · ${i + 1}`,
+          tone: 'warn',
+          text: held.reason,
+          route: null,
+          planId: null,
+          assayIssue: null,
+        });
       }
     });
   } else if (singleRef && issue.linkedPrNumber) {
@@ -524,6 +549,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       text: shortfall.summary,
       route: shortfall.cause,
       planId: plan?.id ?? null,
+      assayIssue: null,
     });
   }
 
@@ -592,7 +618,14 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   // so the specific machine plates above read first.
   for (const reason of issue.pickup?.reasons ?? []) {
     if (!plates.some((p) => p.text === reason)) {
-      plates.push({ who: 'Ore patch', tone: patchStatus(pickupStatus).tone, text: reason, route: null, planId: null });
+      plates.push({
+        who: 'Ore patch',
+        tone: patchStatus(pickupStatus).tone,
+        text: reason,
+        route: null,
+        planId: null,
+        assayIssue: null,
+      });
     }
   }
 
@@ -673,6 +706,7 @@ function prPlates(pr: PullRequest): FloorPlate[] {
     text,
     route: null,
     planId: null,
+    assayIssue: null,
   }));
 }
 
