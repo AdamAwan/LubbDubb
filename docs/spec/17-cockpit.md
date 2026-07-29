@@ -478,8 +478,9 @@ for the world to change — chosen from `config.injectable`.
   collided. Each row shows the path, its writers with their origins and branches, and marks the
   `sameWorktree` case.
 - **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
-  toggle; issues with their state, linked PR, pickup chip, conclusion chip and **shortfall** chip, a
-  watch toggle, the conclusion toggles and the **assay override**; stories with a watch toggle; and a
+  toggle; issues with their state, linked PR, pickup chip, **plan chip**, conclusion chip and
+  **shortfall** chip, a watch toggle, the conclusion toggles and the **assay override**; stories with
+  a watch toggle; and a
   **Recently closed** section marking each PR merged vs closed-unmerged.
 
   The assay override draws on an issue the intake verdict **refused** and nowhere else
@@ -519,7 +520,9 @@ for the world to change — chosen from `config.injectable`.
   `no watch label "…"` chip repeating down every untriaged row. Dropping the pickup chip wholesale
   is safe because the bucket reads _labels_ while the Azure state gate reports through _status_: a
   watched issue parked by `pickupStates` is filed under Watched, where its `in review` reason still
-  shows. **"Recently closed" lives in the Watched tab alone**, since it exists so a PR you were
+  shows. The **plan chip is exempt** and draws on every tab: it states no pickup verdict, and a plan
+  on an issue somebody has since tagged leave-alone is exactly the record worth reading.
+  **"Recently closed" lives in the Watched tab alone**, since it exists so a PR you were
   following doesn't silently vanish mid-session — a statement to someone monitoring — and bucketing
   those rows by their own labels would scatter them. Tab counts cover live world items only, so the
   Watched number doesn't climb as work finishes.
@@ -614,13 +617,31 @@ no injection surface to reason about at all.
 **Entry points** — the button or chip appears wherever a plan is mentioned:
 
 - the approval card in "Needs you" (`EscalationCard`), when `proposal.kind === 'plan'`;
-- each row of the classic `PlanPanel`, and the Goal Floor's blueprint plate for a plan awaiting approval;
-- the issue's pickup chip in the **shared** `WorldSummary` — the chip that already reads
-  `2/5 parts merged` becomes the button, so both skins get it for free.
+- each row of the classic `PlanPanel`, and the Goal Floor's own plan bar;
+- a **`plan · <status>`** chip on the issue's row in the **shared** `WorldSummary`, so both skins get
+  it for free.
 
 The modal is useful **after** approval too, as the record of what was agreed — which is most of why it
 is a modal reachable from anywhere rather than a section of the approval card that disappears once
-answered.
+answered. **Every entry point is therefore keyed on the plan existing, and none on what it is doing.**
+That is a correction, not a restatement: two of the three were keyed on a transient condition, and
+between them they left the modal reachable only during the approval window.
+
+- The Goal Floor's controls rode on the **Blueprint plate**, and a plate is a stopped machine's
+  reason — that one draws only while a decomposition is `awaiting_approval`. So the click that
+  approved a plan was also the click that took away the only way to read it back. They now hang off
+  `GoalFloorModel.planId`, which was declared for exactly this and never wired, and `FloorPlate` no
+  longer carries a `planId` at all — one way in, rather than a second answer about when it may be
+  offered. The plate keeps quoting the planner; only the buttons moved.
+- `WorldSummary` made the **pickup chip itself** the button. `pickupChip` returns null for `done` and
+  `has_pr` — precisely where an issue sits once its parts have pull requests — and the whole chip is
+  hidden off the watched tab, so the plan became unreadable at the point it started being worked. A
+  plan's existence is not a pickup verdict, so the chip is now its own, is neither gated on one nor
+  drawn out of one, and names the plan's status because that is the one fact deciding whether opening
+  it is a decision or a reading.
+
+`test/factorySkin.test.ts` asserts the floor's way in across **every** plan status rather than only
+the one that was broken, so a later attempt to hang it off a plate fails a test.
 
 ## Links
 

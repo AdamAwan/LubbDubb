@@ -17,7 +17,7 @@
  * reach one `viewPlan`.
  */
 import { useState } from 'react';
-import type { AppState, Issue, PullRequest } from '../types.js';
+import type { AppState, Issue, Plan, PullRequest } from '../types.js';
 import { watchBucket, type WatchBucket } from '../worldBuckets.js';
 import { statusDot, refLink, refChip } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
@@ -46,6 +46,33 @@ function pickupChip(pickup: Issue['pickup']) {
       {pickup.reasons[0] ?? pickup.status}
       {pickup.reasons.length > 1 ? ` +${pickup.reasons.length - 1}` : ''}
     </span>
+  );
+}
+
+/**
+ * The way into an issue's decomposition, and it draws whenever there is one.
+ *
+ * It used to ride *on* the pickup chip — the plan opened by clicking whatever
+ * that chip said. Two transient conditions were therefore governing access to a
+ * standing record: `pickupChip` returns null for `done` and `has_pr`, which is
+ * exactly where an issue sits once its parts have pull requests, and the whole
+ * chip is hidden off the watched tab. So the plan became unreadable at the point
+ * it started being worked. A plan's existence is not a pickup verdict, so this is
+ * neither gated on one nor drawn out of one.
+ *
+ * The status is on the chip rather than left to the modal: it is the one fact
+ * that decides whether opening it is a decision or a reading.
+ */
+function planChip(plan: Plan | undefined, onViewPlan: (planId: string) => void) {
+  if (!plan) return null;
+  return (
+    <button
+      className={`btn ghost small chip-button${plan.status === 'awaiting_approval' ? ' warn' : ''}`}
+      onClick={() => onViewPlan(plan.id)}
+      title="Open the plan for this issue — every part, its scope, and the planner's write-up"
+    >
+      plan · {plan.status.replace(/_/g, ' ')}
+    </button>
   );
 }
 
@@ -372,23 +399,11 @@ export function WorldSummary({
                 ignored
               </span>
             )}
-            {showPickupChip &&
-              (() => {
-                const chip = pickupChip(i.pickup);
-                if (!chip) return null;
-                const plan = (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`);
-                return plan ? (
-                  <button
-                    className="btn ghost small chip-button"
-                    onClick={() => onViewPlan(plan.id)}
-                    title="Open the plan for this issue"
-                  >
-                    {chip}
-                  </button>
-                ) : (
-                  chip
-                );
-              })()}
+            {showPickupChip && pickupChip(i.pickup)}
+            {planChip(
+              (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`),
+              onViewPlan,
+            )}
             {conclusionChip(i.conclusion)}
             {shortfallChip(i.shortfall, i.number, state.proposals)}
             {i.linkedPrNumber !== null && (

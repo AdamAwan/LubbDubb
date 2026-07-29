@@ -1644,6 +1644,20 @@
   gap: 6px;
   margin-left: auto;
 }
+/* The plan's own bar, above the floor rather than under it: it is not a stopped
+   machine's reason, it is the way into the record of what was agreed, and it is
+   drawn for as long as there is a plan at all. Same plate frame so it reads as
+   part of the same family, with the accent border marking it as a control rather
+   than a complaint. */
+.fx-gf-plan {
+  margin-bottom: 9px;
+  padding: 7px 11px;
+  border-left: 3px solid var(--accent);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 12.5px;
+}
 /* The one thing an override's buttons cannot say for themselves: the hold lifts
    by itself on the next edit to the ticket. Full-width so it wraps under the
    reason rather than competing with it. */

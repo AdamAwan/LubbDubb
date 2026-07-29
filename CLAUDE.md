@@ -427,7 +427,15 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     plan gained five optional narrative fields (`risks`, `outOfScope`, `document` at plan level;
     `rationale`, `acceptance` per part) that `upsertPlan` preserves on absence rather than clearing.
     A shared `PlanModal`, opened via `viewPlan` on `CockpitActions`, renders the whole decomposition
-    plus the markdown write-up from anywhere the plan is mentioned. `POST /api/plans/:id/discuss` /
+    plus the markdown write-up from anywhere the plan is mentioned. **Every entry point is keyed on
+    the plan existing, never on what it is doing** — two were not, and between them the modal was
+    reachable only while the decomposition was `awaiting_approval`: the Goal Floor's controls rode on
+    the Blueprint _plate_ (a plate is a stopped machine's reason, and that one draws for that status
+    alone), so approving a plan removed the only way to read it back, and `WorldSummary` made the
+    _pickup chip_ the button, which is null for `done`/`has_pr` — where an issue sits once its parts
+    have PRs. The floor's controls now hang off `GoalFloorModel.planId` (declared for this and never
+    wired; `FloorPlate.planId` is gone, so there is one way in rather than a second answer about when
+    it may be offered) and the plan has its own `plan · <status>` chip on the issue row. `POST /api/plans/:id/discuss` /
     `.../discuss/end` let an operator talk to the planner before deciding — a replan with a
     conversational prompt (`discuss-plan`), inheriting rule 3c's origin gate, cooldown, attempt cap
     and fail-open rather than earning new ones. See [08](docs/spec/08-planning.md) and

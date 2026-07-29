@@ -122,6 +122,7 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
     upcoming: props.upcoming,
     recorded,
   });
+  const { planId } = floor;
 
   return (
     <>
@@ -147,6 +148,35 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
         })}
       </div>
 
+      {/* The plan's controls hang off the *floor*, which is what
+          `GoalFloorModel.planId` was declared for and never wired to. They used
+          to ride on the Blueprint plate — a plate that draws only while the
+          decomposition is `awaiting_approval` — so approving a plan was also the
+          moment the only way to read it disappeared. A plan is a standing record
+          of what was agreed, not a question that closes, so its way in is drawn
+          for as long as there is one. */}
+      {planId && (
+        <div className="fx-gf-plan fx-sunk">
+          <span className="fx-gf-who">Blueprint</span>
+          <span className="fx-gf-act">
+            <button
+              className="fx-btn"
+              onClick={() => props.onViewPlan(planId)}
+              title="Every part, its scope, why it is its own pull request, and the planner's write-up"
+            >
+              Open plan
+            </button>
+            <AsyncButton
+              className="fx-btn"
+              onClick={() => props.onReplan(planId)}
+              title="Send the plan back to a planner. Parts nothing has started for are retired."
+            >
+              Replan
+            </AsyncButton>
+          </span>
+        </div>
+      )}
+
       <FloorPlan floor={floor} stopped={stopped} refUrls={refUrls} />
 
       {floor.plates.map((plate, i) => (
@@ -164,20 +194,6 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
               a third option rather than this toggle's other end — `null` is the
               store's one representation of "nobody has decided". */}
           {plate.assayIssue !== null && <AssayOverride issueNumber={plate.assayIssue} onSetAssay={props.onSetAssay} />}
-          {plate.planId && (
-            <span className="fx-gf-act">
-              <button className="fx-btn" onClick={() => props.onViewPlan(plate.planId!)}>
-                Open plan
-              </button>
-              <AsyncButton
-                className="fx-btn"
-                onClick={() => props.onReplan(plate.planId!)}
-                title="Send the plan back to a planner. Parts nothing has started for are retired."
-              >
-                Replan
-              </AsyncButton>
-            </span>
-          )}
         </div>
       ))}
 

@@ -256,8 +256,6 @@ interface FloorPlate {
   text: string;
   /** A shortfall's declared route, which is the one plate that points backwards. */
   route: string | null;
-  /** The plan this plate is about, so the shared modal can be opened from it. */
-  planId: string | null;
   /**
    * The issue whose intake verdict this plate can override, and null on every
    * other plate — including a `workable` one, which draws no plate at all.
@@ -279,7 +277,17 @@ export interface GoalFloorModel {
   fixtures: FloorFixture[];
   layout: FloorLayout;
   plates: FloorPlate[];
-  /** The plan behind this floor, for the panel's Replan / View controls. */
+  /**
+   * The plan behind this floor — the floor's one way into the shared modal, and
+   * its Replan control.
+   *
+   * On the *floor* rather than on a plate, because a plate is a stopped machine's
+   * reason and every reason is transient: the Blueprint plate that used to carry
+   * these controls draws only while a decomposition is `awaiting_approval`, so
+   * approving a plan was the moment its record stopped being readable. What the
+   * plan is doing belongs to the furnace machine; whether there *is* one is a fact
+   * about the floor.
+   */
   planId: string | null;
 }
 
@@ -397,7 +405,6 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
         tone: 'bad',
         text: assay.summary,
         route: null,
-        planId: null,
         assayIssue: n,
       });
     }
@@ -427,7 +434,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   edges.push({ from: head, to: furnaceRef });
 
   if (plan?.reason && plan.status === 'awaiting_approval') {
-    plates.push({ who: 'Blueprint', tone: 'ghost', text: plan.reason, route: null, planId: plan.id, assayIssue: null });
+    plates.push({ who: 'Blueprint', tone: 'ghost', text: plan.reason, route: null, assayIssue: null });
   }
 
   // -- the assembly floor ------------------------------------------------
@@ -507,7 +514,6 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
           tone: 'warn',
           text: held.reason,
           route: null,
-          planId: null,
           assayIssue: null,
         });
       }
@@ -588,7 +594,6 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       tone: 'bad',
       text: shortfall.summary,
       route: shortfall.cause,
-      planId: plan?.id ?? null,
       assayIssue: null,
     });
   }
@@ -672,7 +677,6 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
         tone: patchStatus(pickupStatus).tone,
         text: reason,
         route: null,
-        planId: null,
         assayIssue: null,
       });
     }
@@ -754,7 +758,6 @@ function prPlates(pr: PullRequest): FloorPlate[] {
     tone: (pr.ciStatus === 'failing' ? 'bad' : 'warn') as MachineStatus['tone'],
     text,
     route: null,
-    planId: null,
     assayIssue: null,
   }));
 }
