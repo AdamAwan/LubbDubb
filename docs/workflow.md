@@ -1,9 +1,9 @@
 # The target workflow
 
 This document describes the **workflow LubbDubb is being built to run end to end**. Unlike
-[`spec/`](README.md), it is not a statement of current behaviour: some stages below exist and are
-described in the spec, some exist in a narrower form, and some do not exist yet. The last section
-says which is which, so this document can be checked rather than believed.
+[`spec/`](README.md), it is not a statement of current behaviour: most stages below exist and are
+described in the spec, and a few exist in a narrower form than they are drawn. The last section says
+which is which, so this document can be checked rather than believed.
 
 Its second purpose is to say **which stages are generic**. The workflow drawn here is one shape the
 harness runs; the stages are deliberately points of variation, so a team whose quality bar, tracker
@@ -80,39 +80,53 @@ flowchart TD
         direction LR
         TS{Tests}
         SA{Static analysis}
+        PH{Pipeline health}
         HR{Human review}
     end
 
     SR -- clean --> QG
-    QG -- something to answer --> FX[Fix, or defend the decision]
+    QG -- ours to answer --> FX[Fix, or defend the decision]
     FX --> PR
-    QG -- all satisfied --> EG[[Environment is healthy<br/>enough to merge into]]
-    EG --> M([Merge])
+    QG -- red, but not ours --> WT[Hold, and say why]
+    WT -. the check goes green .-> QG
+    QG -- all satisfied --> M([Merge])
 ```
 
 The self-review step runs on **every** pull request, before any gate is consulted. It is the
 cheapest place to catch the things a reviewer would otherwise spend their attention on.
 
-**The gates are a set, not a list.** Tests, static analysis and human review are three instances of
-one shape: something reports a verdict on the pull request, and each verdict is classified into what
-to do about it. The classification is the configurable part, and it is per check rather than per
-pull request:
+**The gates are a set, not a list.** Tests, static analysis, pipeline health and human review are
+four instances of one shape: something reports a verdict on the pull request, and each verdict is
+classified into what to do about it. The classification is the configurable part, and it is per
+check rather than per pull request:
 
 | The check is                | The response                                                             |
 | --------------------------- | ------------------------------------------------------------------------ |
 | ours, and failing           | fix it, with guidance specific to that check where the guidance is known |
 | ours, and flaky             | fix it, with more latitude                                               |
-| someone else's, and failing | do not send an agent at it — say so, and hold                            |
+| red, but not ours to fix    | do not send an agent at it — hold, say why, and wait for it to clear     |
 | unrecognised                | fix it, and name it, so a check added later is never silently ignored    |
 
 That last row is what keeps a configured gate set honest: a new check nobody has written a rule for
 is treated as actionable and *named*, rather than parked forever as an unknown.
 
-A failing gate that is not ours is the case worth stating separately, because getting it wrong is
-expensive in a way that is easy to miss: an agent sent at a wall it was never getting through burns
-its attempts and then escalates in a way that reads as its own failure. The gate holds instead, and
-the reason reaches both the human and the agent — an agent that cannot see the held check watches CI
-stay red after a correct fix and starts chasing a failure that was never its own.
+**The third row is the one that changes what the workflow can express**, and the clearest case for
+it is a check on the health of the deployment pipeline itself. It fails when the pipeline is in no
+state to receive changes. It is a real signal, it is correctly blocking — stacking more changes into
+a broken pipeline is exactly what it exists to prevent — and there is no fix an agent could write,
+because nothing about this pull request caused it. Without per-check classification the only
+readings available are *red, therefore fix it* and *ignore this check entirely*, and both are wrong:
+one sends an agent at a wall, the other merges into the broken pipeline the check was warning about.
+The right reading is a third one — **wait** — and it needs a per-check rule to say so.
+
+Getting it wrong is expensive in a way that is easy to miss. An agent sent at a wall it was never
+getting through burns its attempts and then escalates in a way that reads as its own failure. So the
+gate holds instead, and the reason reaches both the human and the agent — an agent that cannot see
+the held check watches CI stay red after a correct fix and starts chasing a failure that was never
+its own.
+
+The hold ends when the check does. Nothing re-asks a human and nothing times out, because the thing
+being waited on reports its own recovery.
 
 `Fix, or defend the decision` is deliberately two verbs. A review comment is not automatically
 correct, and a workflow whose only response to a comment is compliance produces work that drifts
@@ -161,6 +175,7 @@ differently; the right column is how that answer is expressed.
 | Work kind                | what a deliverable may be                        | the terminal an agent declares when it finishes                  |
 | Quality gates            | which checks exist and what each failure means   | a per-check rule set, as in the table above                      |
 | Human review             | whether a reply goes out unattended              | a confidence threshold plus an allow-list, else a human accepts  |
+| Readiness to merge into  | what must be true of the target before landing   | a check on the pull request, held by its rule until it clears    |
 | Merge                    | when a pull request is allowed to land           | health predicates plus the stack rules                           |
 | Report and ticket update | what a finished piece of work must leave behind  | prompts, which are operator-overridable files                    |
 
@@ -184,10 +199,13 @@ exist for:
 Checked against [`spec/`](README.md), which describes what the code does now.
 
 **Runs today, as drawn:** intake from a ticket, the watch gate, the information check, planning and
-plan approval, the plan's dependency-chained parts, per-check CI classification, the self-review
-step, the reply/fix-or-defend loop, stacked-PR attribution and the bottom-up merge rule, non-code
-terminals for a part, the "did this deliver the goal" check, and the tracker state update on the way
-into review.
+plan approval, the plan's dependency-chained parts, per-check CI classification and its hold arm,
+the self-review step, the reply/fix-or-defend loop, stacked-PR attribution and the bottom-up merge
+rule, non-code terminals for a part, the "did this deliver the goal" check, and the tracker state
+update on the way into review.
+
+The environment-readiness stage needs no mechanism of its own: it is a check like any other, and the
+rule that holds on it is the same rule that holds on any red check nobody here can fix.
 
 **Narrower than drawn:**
 
@@ -199,8 +217,4 @@ into review.
   run's outcome into quality-pillar commentary — the "WAF pillars" line in the original sketch of
   this flow is not a thing the harness does.
 
-**Not there yet:**
-
-- **The healthy-environment gate.** Merging is gated on the pull request's own health and its place
-  in the stack, not on whether the environment being merged into is currently in a fit state to
-  receive it.
+Nothing in this document describes a stage the harness has no mechanism for.
