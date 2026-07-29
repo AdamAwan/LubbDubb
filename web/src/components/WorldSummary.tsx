@@ -19,7 +19,7 @@
 import { useState } from 'react';
 import type { AppState, Issue, PullRequest } from '../types.js';
 import { watchBucket, type WatchBucket } from '../worldBuckets.js';
-import { statusDot, refLink } from './util.js';
+import { statusDot, refLink, refChip } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
 
 /**
@@ -465,6 +465,15 @@ export function WorldSummary({
                 >
                   clear assay
                 </AsyncButton>
+                {/* What the harness said on the ticket about this refusal, which
+                    is the half of it the operator could not see (#171). It sits
+                    beside the overrides and not among them: the two buttons
+                    change the verdict, this only opens what was already said —
+                    and it draws only when the provider resolved a URL, so an
+                    unwritten comment and an unresolvable one are both silent. */}
+                {refChip(i.assay.commentRef, 'comment ↗', refUrls, {
+                  title: 'The comment the harness is keeping on this ticket, asking for what it needs',
+                })}
               </>
             )}
           </div>

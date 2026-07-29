@@ -1640,6 +1640,29 @@ can't resolve a ref returns `null`; the ref then renders as plain text (the `fak
 behaviour). If you add a new ref shape, extend `githubRefUrl` (+ its unit test) and, if it's a new
 structured field, feed it into `buildRefUrls`.
 
+- **A comment the harness maintains on a ticket is stored as a provider id and shipped as a ref
+  (#171).** The plan's status comment and the goal assay's refusal are the two, and both are written
+  against the world **without anyone authorising them** — mechanical bookkeeping, deliberately not
+  auto-send gated, kept from being noise by the one-comment rule. Both of those calls rest on an
+  operator being able to _read_ the comment, which they could not: `plans.status_comment_ref` and
+  `issue_assays.comment_ref` were server-side only. What the store keeps is the right value for
+  `upsertIssueComment` to round-trip and exactly the wrong one to put on the wire — an id resolves to
+  nothing alone, and `githubRefUrl` reads a bare number as an **issue number**, so shipping one keys a
+  confident link to an unrelated ticket. `issueCommentRef(originRef, commentId)` (pure,
+  `src/server/refUrls.ts`) pairs it with its issue into `issue:12:comment:456`, the same suffixed
+  vocabulary as `issue:12:plan`; `githubRefUrl` resolves that to `/issues/12#issuecomment-456`
+  (**numeric ids only** — another provider's would build an anchor that scrolls nowhere, so it falls
+  through to the issue page). One function builds the shipped value _and_ feeds `buildRefUrls`, so the
+  key and the lookup cannot disagree. The **store is untouched**: this is a read-only translation on
+  the way out, and no new write path exists. **Absent draws nothing** — null on the wire (nothing
+  written) and a ref missing from `refUrls` (a provider that builds no URLs; Azure implements no
+  `RefResolvable` at all) both degrade to silence, since a caption with no link asserts a comment
+  exists while giving nobody a way to read it. `refChip` (`web/src/components/util.tsx`) is where that
+  rule lives for the cockpit — it renders nothing unless the ref resolved. On the Goal Floor the
+  _reading_ ("status comment · written") and the _way in_ (`Machine.link`) are deliberately separate,
+  so a plan under a URL-less provider can still say a notice went out. Tests:
+  `test/statusComments.test.ts`, plus the comment arms in `test/refUrls.test.ts`.
+
 ## Gotchas
 
 - **Don't launch the server from inside a Claude Code session** when using `agentMode: 'pty'`.

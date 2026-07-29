@@ -152,6 +152,39 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
         },
+        // A watched ticket the harness has deliberately not started on: the goal
+        // assay could not work out what to do from the description, so pickup is
+        // held and the row carries both overrides plus a way into the question the
+        // harness asked on the thread (#171). The one demo state where the harness
+        // has spoken to somebody outside the cockpit.
+        {
+          id: 'iss-219',
+          number: 219,
+          title: 'Make the queue smarter',
+          body: 'Up next puts the wrong things first sometimes.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'assay',
+            reasons: [
+              'the goal assay could not act on this goal — "Nothing here names which ordering is wrong, ' +
+                'or what the right one would be." (' +
+                ago(52) +
+                ')',
+            ],
+          },
+          assay: {
+            verdict: 'unclear',
+            summary:
+              'Nothing here names which ordering is wrong, or what the right one would be. Which two items ' +
+              'came out in the wrong order, and which should have been first?',
+            by: 'assayer',
+            decidedAt: ago(52),
+            commentRef: 'issue:219:comment:8402',
+          },
+        },
         {
           id: 'iss-231',
           number: 231,
@@ -257,8 +290,9 @@ export function buildDemoState(): DemoSeed {
           'it means.',
         discussing: false,
         // An active plan whose parts have moved: the reconciler has news to
-        // report, so its one living comment exists.
-        statusCommentRef: 'ic_212',
+        // report, so its one living comment exists. Canonical (`issue:<n>:comment:<id>`)
+        // exactly as the server ships it — the store's provider id never reaches here.
+        statusCommentRef: 'issue:212:comment:8391',
         createdAt: ago(90),
         updatedAt: ago(6),
       },
@@ -799,6 +833,12 @@ export function buildDemoState(): DemoSeed {
       '#143': 'https://github.com/example/lubbdubb/pull/143',
       '#140': 'https://github.com/example/lubbdubb/pull/140',
       '#231': 'https://github.com/example/lubbdubb/issues/231',
+      '#219': 'https://github.com/example/lubbdubb/issues/219',
+      // The two comments the harness maintains on a ticket by itself, keyed by the
+      // canonical ref the snapshot ships (#171) and anchored the way the provider
+      // builds them. Absent from this map ⇒ the cockpit draws no way in at all.
+      'issue:212:comment:8391': 'https://github.com/example/lubbdubb/issues/212#issuecomment-8391',
+      'issue:219:comment:8402': 'https://github.com/example/lubbdubb/issues/219#issuecomment-8402',
     },
     // The rule book the server ships in /api/state (src/dispatcher/rules.ts) —
     // canned to just the rules the demo's decisions reference.

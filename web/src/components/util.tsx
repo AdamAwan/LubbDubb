@@ -20,6 +20,41 @@ export function refLink(token: string, refUrls: Record<string, string>): ReactNo
 }
 
 /**
+ * A ref rendered as a captioned link rather than as its own token — for refs whose
+ * canonical shape is machinery a human does not read (`issue:12:comment:456`),
+ * where `refLink`'s "the token is the label" would put a ref string on screen.
+ *
+ * **Nothing is drawn unless the provider resolved it**, which is the whole rule
+ * for the comments the harness maintains on a ticket (#171): a caption with no
+ * link asserts something exists while giving nobody a way to read it, and that is
+ * the outcome the issue ruled out. So a missing ref, an older server that sends
+ * none, and a provider that builds no URLs all degrade to the same silence.
+ */
+export function refChip(
+  ref: string | null | undefined,
+  label: string,
+  refUrls: Record<string, string>,
+  opts: { title?: string; className?: string } = {},
+): ReactNode {
+  const url = ref ? refUrls[ref] : undefined;
+  if (!url) return null;
+  // Chip-shaped by default, because the surfaces that draw one sit in a row of
+  // chips and buttons; a caller whose own frame supplies the sizing (the Goal
+  // Floor draws inside an SVG node) passes its own class rather than fighting it.
+  return (
+    <a
+      className={opts.className ?? 'ext-ref chip small'}
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={opts.title}
+    >
+      {label}
+    </a>
+  );
+}
+
+/**
  * The URL to open a flagged artifact: an http(s) ref opens directly, a
  * worktree-relative path routes through the confined, sandboxed artifact route.
  *

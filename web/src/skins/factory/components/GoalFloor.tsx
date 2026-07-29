@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../../types.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
-import { refLink } from '../../../components/util.js';
+import { refChip, refLink } from '../../../components/util.js';
 import { ASSAY_EXPIRY } from '../../../components/WorldSummary.js';
 import { buildGoalFloor, type GoalFloorModel, type Machine } from '../goalFloor.js';
 import { clip, iconForStage, patchStatus, toneColor } from '../vocabulary.js';
@@ -401,6 +401,19 @@ function FloorPlan({
               {m.prNumber !== null && (
                 <foreignObject x={mx + NODE_W - 50} y={my + 11} width="44" height="16">
                   <span className="fx-gf-pr">{refLink(`#${m.prNumber}`, refUrls)}</span>
+                </foreignObject>
+              )}
+              {/* The same corner, and never both: a machine with a pull request
+                  behind it has no second way out. This one is captioned rather
+                  than printed, because the ref it opens (`issue:12:comment:456`)
+                  is machinery — and it draws only when the provider resolved a
+                  URL, so an unresolvable comment leaves the meta line's reading
+                  standing on its own. */}
+              {m.prNumber === null && m.link !== null && refUrls[m.link.ref] && (
+                <foreignObject x={mx + NODE_W - 62} y={my + 11} width="56" height="16">
+                  <span className="fx-gf-pr">
+                    {refChip(m.link.ref, m.link.label, refUrls, { className: 'ext-ref' })}
+                  </span>
                 </foreignObject>
               )}
               {m.scanners.map((s, i) => (

@@ -490,6 +490,14 @@ it is one comment rather than a stream, it is mechanical bookkeeping rather than
 is why it is **not** auto-send gated. A failure to write it is recorded and the pulse continues —
 progress reporting never takes the pulse down with it.
 
+It is also the one act the plan path performs against the world without asking anyone, so the operator
+has to be able to read it: `/api/state` ships `plan.statusCommentRef` as a **canonical comment ref**
+(see [15](15-integrations.md#comment-refs)) rather than the store's provider id, resolved through
+`buildRefUrls` like every other link. Not auto-send gating it and keeping it to one comment are both
+right, and both rest on it being visible — which, until #171, it was not except by opening the
+tracker. Absent (no comment written yet) and unresolvable (a provider that builds no URLs) both reach
+the cockpit as silence rather than as a link to nowhere.
+
 `Store.rollUpPlanStatus` moves a plan to `complete` when every live part is `merged`.
 
 ## Replan

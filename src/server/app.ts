@@ -7,7 +7,7 @@ import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
 import type { IssueAssay, ShortfallCause, WorldSnapshot } from '../types.js';
 import { Hub } from './hub.js';
-import { buildRefUrls } from './refUrls.js';
+import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
@@ -1285,6 +1285,14 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // and the snapshot itself, so the chip and the panel can't disagree.
   const plans = store.listPlans();
   const planParts = store.listAllPlanParts();
+  // The same rows, translated for the wire (#171). The plan reconciler's one
+  // living status comment is stored as a **provider comment id**, which is what
+  // `upsertIssueComment` round-trips and exactly what the cockpit must not hold:
+  // an id resolves to nothing on its own, and a bare number reads as an *issue
+  // number* to `githubRefUrl`. `issueCommentRef` pairs it with the issue it lives
+  // on, so the ref shipped here is one `refUrls` can answer — and the same
+  // function feeds that map below, so the key and the lookup cannot disagree.
+  const wirePlans = plans.map((p) => ({ ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef) }));
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
   // same rows rule 3b reads, so the chip and the rule can't disagree.
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
@@ -1358,7 +1366,18 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     // A filed ticket is brand new, so it is usually *not* in the world lists the
     // `#n` keys are built from — it needs resolving by its canonical ref or the
     // chip the operator just created links nowhere.
-    refs: [...findings.map((f) => f.ref), ...findings.map((f) => f.ticketRef), ...proposals.map((p) => p.ref)],
+    refs: [
+      ...findings.map((f) => f.ref),
+      ...findings.map((f) => f.ticketRef),
+      ...proposals.map((p) => p.ref),
+      // The comments the harness maintains on a ticket without being asked — the
+      // plan's status comment and the assay's refusal (#171). Read off the values
+      // actually shipped (and off the same `issueCommentRef` for the assay), so a
+      // ref the cockpit holds is always the ref this map was keyed by. A provider
+      // that resolves neither leaves them absent, and the cockpit draws nothing.
+      ...wirePlans.map((p) => p.statusCommentRef),
+      ...assays.map((a) => issueCommentRef(a.originRef, a.commentRef)),
+    ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
   return {
@@ -1455,7 +1474,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     // The plan graph, which until now existed only in the database: the per-issue
     // chip could say "2/5 parts merged" and nothing could say *which* five. The
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
-    plans,
+    plans: wirePlans,
     planParts,
     tasks,
     // Operator-launched jobs (newest first) — the cockpit shows the queued
@@ -1515,11 +1534,18 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
  * while a refused one draws a drill that is stopped and says why. Collapsing the
  * two would put #158's verdict back where it was — legible only as prose inside
  * `pickup.reasons`.
+ *
+ * `commentRef` is the one thing here the assay says to somebody *else*: the
+ * standing comment the desk keeps on the ticket, as a canonical ref (#171). It is
+ * the sharper half of that issue — the harness explaining on another person's
+ * ticket why it will not act — and until now the operator could only find it by
+ * opening the tracker and reading the thread. `goalRef` is still deliberately not
+ * shipped: it is a fingerprint the hold is measured against, not a reading.
  */
 function assayVerdictOf(assay: IssueAssay | undefined) {
   if (!assay) return null;
   const { verdict, summary, by, decidedAt } = assay;
-  return { verdict, summary, by, decidedAt };
+  return { verdict, summary, by, decidedAt, commentRef: issueCommentRef(assay.originRef, assay.commentRef) };
 }
 
 /** A concise task/job title from a free-form prompt: its first non-empty line, capped. */

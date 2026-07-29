@@ -120,6 +120,18 @@ export interface Issue {
     summary: string;
     by: 'assayer' | 'operator';
     decidedAt: string;
+    /**
+     * The standing comment the assay desk keeps on this ticket, as a canonical
+     * ref to look up in `refUrls` (#171) — the one thing the assay says to the
+     * person who wrote the item, and the one outbound act it performs.
+     *
+     * Optional and null-able, and both mean *draw nothing*: an older server does
+     * not send it, a verdict that never wrote a comment has none, and a provider
+     * that cannot build a URL leaves it out of `refUrls`. A caption with no link
+     * would assert a comment exists while giving nobody a way to read it, which
+     * is the outcome #171 ruled out.
+     */
+    commentRef?: string | null;
   } | null;
 }
 interface Story {
@@ -250,12 +262,19 @@ export interface Plan {
   /** True while a discussion agent is conversing about this plan — nothing is scheduled meanwhile. */
   discussing: boolean;
   /**
-   * The provider's id for the one living status comment the plan reconciler
-   * maintains on the issue, or null before it has written one.
+   * The one living status comment the plan reconciler maintains on the issue, as
+   * a canonical ref (`issue:12:comment:456`) to look up in `refUrls` — or null
+   * before it has written one.
    *
-   * A comment id is **not** a URL and `refUrls` cannot resolve one, so nothing
-   * here may link it or render its body — the only reading it supports is that a
-   * comment exists.
+   * **Not the provider's comment id**, which is what the *store* keeps: an id is
+   * meaningless outside the provider seam that round-trips it, and a bare number
+   * reads as an issue number to anything that resolves refs. The server pairs it
+   * with its issue on the way out (#171), so the two records that keep a comment
+   * — this and an issue's `assay.commentRef` — reach the cockpit in one shape.
+   *
+   * Present but unresolved is a real state (no provider builds Azure URLs yet, and
+   * the `fake` connector has no pages): the reading "a comment exists" still
+   * stands, but nothing may offer a link for it.
    */
   statusCommentRef: string | null;
   createdAt: string;

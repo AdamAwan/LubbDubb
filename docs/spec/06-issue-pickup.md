@@ -385,6 +385,14 @@ rather than overwriting the record of the old one), and a hold that has ended is
 thread rather than left standing. It is the assay's only outbound act: nothing is closed, rejected,
 labelled or edited.
 
+Because it is the harness explaining, on somebody else's ticket, why it will not act, the operator
+must be able to read it without opening the tracker: `/api/state` ships it as `issue.assay.commentRef`
+— a canonical comment ref beside the verdict, resolved through `buildRefUrls` like every other link
+(see [15](15-integrations.md#comment-refs)). The cockpit draws it on the issue row **beside** the two
+assay overrides, never among them: those change the verdict, this only opens what was already said. A
+verdict whose comment has not been written yet, and a provider that cannot build a URL, both draw
+nothing.
+
 ### The watch gate
 
 The assay applies only to issues that already pass the watch gate — it never filters an untagged
