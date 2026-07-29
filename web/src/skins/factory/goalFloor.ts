@@ -227,6 +227,15 @@ export interface Machine {
   scanners: Scanner[];
   /** A `#n` to link, when this machine has a pull request behind it. */
   prNumber: number | null;
+  /**
+   * Something else this machine can open, as a ref to look up in `refUrls` under a
+   * caption of its own — today only the signal post's status comment (#171),
+   * whose ref (`issue:12:comment:456`) is machinery rather than something to
+   * print. Null everywhere else, and never set beside `prNumber`: they share one
+   * corner of the node, and a machine claiming two ways out would draw one over
+   * the other.
+   */
+  link: { ref: string; label: string } | null;
   /** The silo's fill, 0–1. Null on every other machine. */
   fill: number | null;
   siloLabel: string | null;
@@ -299,9 +308,10 @@ const partOrigin = (n: number, slug: string): string => `issue:${n}:part:${slug}
 /**
  * The signal post's second meta line, one string per reading.
  *
- * It never links: `Plan.statusCommentRef` is a *provider comment id*, not a URL,
- * and `refUrls` cannot resolve one — so the only thing the cockpit may claim is
- * that a comment exists.
+ * The line is the *reading* and is drawn whatever the provider can resolve; the
+ * machine's `link` beside it is the way in, and appears only when there is a URL
+ * (#171). Keeping them apart is what lets a plan under a provider that builds no
+ * URLs still say it has posted a notice, without offering a link to nowhere.
  */
 const COMMENT_META: Record<StatusCommentReading, string> = {
   written: 'status comment · written',
@@ -351,6 +361,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     status: patchStatus(pickupStatus),
     scanners: [],
     prNumber: null,
+    link: null,
     fill: null,
     siloLabel: null,
   });
@@ -374,6 +385,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       status: assayStatus(assay.verdict),
       scanners: [],
       prNumber: null,
+      link: null,
       fill: null,
       siloLabel: null,
     });
@@ -408,6 +420,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     status: plan ? furnaceStatus(plan.status) : { word: 'Unbuilt', tone: 'off' },
     scanners: [],
     prNumber: null,
+    link: null,
     fill: null,
     siloLabel: null,
   });
@@ -481,6 +494,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
         // a row of green scanners under it says nothing an operator can act on.
         scanners: pr && progress !== 'shipped' ? scannersFor(pr) : [],
         prNumber: part.prNumber,
+        link: null,
         fill: null,
         siloLabel: null,
       });
@@ -512,6 +526,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       status: prMachineStatus(reading),
       scanners: singlePr ? scannersFor(singlePr) : [],
       prNumber: issue.linkedPrNumber,
+      link: null,
       fill: null,
       siloLabel: null,
     });
@@ -539,6 +554,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     status: siloStatus(filled, total),
     scanners: [],
     prNumber: null,
+    link: null,
     fill: total === 0 ? 0 : filled / total,
     siloLabel: `${filled} / ${total || '—'} in`,
   });
@@ -560,6 +576,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     status: satelliteStatus(reading),
     scanners: [],
     prNumber: null,
+    link: null,
     fill: null,
     siloLabel: null,
   });
@@ -593,6 +610,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       status: manifestStatus(Boolean(conclusion?.note)),
       scanners: [],
       prNumber: null,
+      link: null,
       fill: null,
       siloLabel: null,
     });
@@ -606,8 +624,10 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       kindLabel: 'Signal post',
       name: 'Update the ticket',
       // Both signals the harness actually sends (#171): the state move, and the
-      // one living status comment the plan reconciler keeps. The comment line is
-      // a fact, never a link — a provider comment id is not a URL.
+      // one living status comment the plan reconciler keeps. The meta line states
+      // the reading; the link opens the notice itself, and only when the provider
+      // resolved a URL for it — so the post can say it has spoken on a provider
+      // that builds no URLs without offering a way in that goes nowhere.
       meta: [
         issue.workItemState ? `state · ${issue.workItemState}` : 'no workflow state on this provider',
         COMMENT_META[comment],
@@ -616,6 +636,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       status: signalPostStatus(issue.workItemState, comment),
       scanners: [],
       prNumber: null,
+      link: plan?.statusCommentRef ? { ref: plan.statusCommentRef, label: 'notice ↗' } : null,
       fill: null,
       siloLabel: null,
     });
@@ -635,6 +656,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       status: launchStatus(Boolean(shortfall)),
       scanners: [],
       prNumber: null,
+      link: null,
       fill: null,
       siloLabel: null,
     });

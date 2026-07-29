@@ -1,6 +1,6 @@
 import type { Plan, PlanPart, QueueItem } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { refLink, relTime } from './util.js';
+import { refChip, refLink, relTime } from './util.js';
 
 /**
  * The multi-PR plan graph, per issue — the first time it is visible outside the
@@ -102,6 +102,15 @@ function PlanCard({
             {settled}/{live.length} done
           </span>
         )}
+        {/* The one thing this plan has said to the world without anyone
+            authorising it: the status comment the reconciler keeps on the issue,
+            edited in place and written only when there is news (#171). It is
+            deliberately not auto-send gated, which rests on an operator being
+            able to read it — so it is linked here rather than left to whoever
+            thinks to open the tracker. Absent, or unresolvable, draws nothing. */}
+        {refChip(plan.statusCommentRef, 'status comment ↗', refUrls, {
+          title: "The plan's one living status comment on the issue — the harness's own progress notice",
+        })}
         <button
           className="btn ghost world-toggle"
           onClick={() => onViewPlan(plan.id)}

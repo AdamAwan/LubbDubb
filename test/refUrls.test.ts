@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
-import { buildRefUrls } from '../src/server/refUrls.js';
+import { buildRefUrls, issueCommentRef } from '../src/server/refUrls.js';
 
 // --------------------------------------------------------------------------
 // githubRefUrl — the provider's canonical ref → URL mapping (pure)
@@ -103,4 +103,56 @@ test('buildRefUrls: omits refs the resolver cannot map (e.g. the fake provider)'
     resolve: () => null,
   });
   assert.deepEqual(map, {});
+});
+
+// --------------------------------------------------------------------------
+// issueCommentRef — the wire shape for a comment the harness maintains (#171)
+// --------------------------------------------------------------------------
+
+test('issueCommentRef: pairs a provider comment id with the issue it lives on', () => {
+  assert.equal(issueCommentRef('issue:12', '456'), 'issue:12:comment:456');
+});
+
+test('issueCommentRef: nothing written, nothing to link', () => {
+  assert.equal(issueCommentRef('issue:12', null), null);
+  assert.equal(issueCommentRef('issue:12', ''), null);
+});
+
+test('issueCommentRef: refuses an origin that is not an issue', () => {
+  // Every caller has a plain `issue:<n>` origin; a suffixed or absent one would
+  // name the wrong thing, and guessing is what turns a link into a wrong link.
+  assert.equal(issueCommentRef('issue:12:plan', '456'), null);
+  assert.equal(issueCommentRef('pr:12', '456'), null);
+  assert.equal(issueCommentRef(null, '456'), null);
+});
+
+test('issueCommentRef: the ref it builds is the one githubRefUrl resolves', () => {
+  // The pair is the whole point: the id alone reads as an *issue number* to the
+  // resolver, so shipping one would key a confident link to an unrelated ticket.
+  const ref = issueCommentRef('issue:12', '456')!;
+  assert.equal(githubRefUrl(O, R, ref), `${BASE}/issues/12#issuecomment-456`);
+  assert.equal(githubRefUrl(O, R, '456'), `${BASE}/issues/456`);
+});
+
+test('githubRefUrl: an issue comment resolves to its anchor on the issue page', () => {
+  assert.equal(githubRefUrl(O, R, 'issue:13:comment:9001'), `${BASE}/issues/13#issuecomment-9001`);
+});
+
+test('githubRefUrl: a non-numeric comment id falls through to the issue page', () => {
+  // Another provider's id, or the fake connector's `comment_1`: GitHub's anchor is
+  // `#issuecomment-<numeric id>`, so an anchor built from one would scroll nowhere.
+  assert.equal(githubRefUrl(O, R, 'issue:13:comment:comment_1'), `${BASE}/issues/13`);
+});
+
+test('buildRefUrls: keys a comment ref by itself, and omits it when unresolvable', () => {
+  const resolve = (ref: string) => (ref === 'issue:12:comment:456' ? 'https://gh/issues/12#issuecomment-456' : null);
+  const map = buildRefUrls({
+    pullRequests: [],
+    issues: [],
+    taskBranches: [],
+    refs: ['issue:12:comment:456', 'issue:99:comment:1', null],
+    resolve,
+  });
+  assert.equal(map['issue:12:comment:456'], 'https://gh/issues/12#issuecomment-456');
+  assert.equal(map['issue:99:comment:1'], undefined);
 });

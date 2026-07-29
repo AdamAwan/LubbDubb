@@ -430,7 +430,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                           |
 | `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                       |
 | `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall` and `assay` per issue. |
-| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads.                                                                            |
+| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref. |
 | `tasks`              | Every task.                                                                                                                         |
 | `jobs`               | Operator jobs, newest first.                                                                                                        |
 | `agents`             | Every agent row, including usage and the progress note.                                                                             |
@@ -448,7 +448,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                    |
 | `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                        |
 
-Six consistency points:
+Seven consistency points:
 
 - **The pickup verdict uses the same inputs rule 4 consults** — the policy, `DEFAULT_COOLDOWN`, the
   world's `takenAt`, tasks, the last 200 decisions, the **unfiltered** open PR list, the plan graph,
@@ -474,7 +474,16 @@ Six consistency points:
   reading rather than a synonym for `workable`: `pickup.reasons[0]` already carries the refusal text,
   but "refused" and "awaiting a verdict" differ _only_ in that prose, and telling them apart by reading
   a string written for a human is what `signalPolarity` refuses to do. `goalRef` is deliberately not
-  shipped — it is the fingerprint the hold is measured against, not a reading.
+  shipped — it is the fingerprint the hold is measured against, not a reading. `commentRef` rides
+  beside the verdict: the standing comment the assay desk keeps on the ticket, as a canonical ref.
+- **A comment the harness maintains ships as a ref, never as the provider's id** (#171). Both records
+  that keep one — `plan.statusCommentRef` and `issue.assay.commentRef` — are stored as a provider
+  comment id and translated on the way out by `issueCommentRef` into `issue:<n>:comment:<id>` (see
+  [15](15-integrations.md#comment-refs)). The store is untouched; the id is what `upsertIssueComment`
+  round-trips, and it is exactly what must not reach a resolver, which reads a bare number as an issue
+  number. The same function feeds `buildRefUrls`, so the ref the cockpit holds is always the ref the
+  map was keyed by. **Null means no comment was written**, and a ref absent from `refUrls` means the
+  provider could not build a URL — both draw nothing rather than a boolean nobody can act on.
 - **`refUrls` covers closed PRs too**, since the cockpit's "recently closed" section links their
   numbers, and it resolves finding refs directly (a finding often names an item not in the world).
 

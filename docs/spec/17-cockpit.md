@@ -312,17 +312,21 @@ this codebase has already paid for twice.
 the dispatcher.
 
 **The signal post claims both signals the harness sends** (#171): the work item's state move, and the
-one living status comment the plan reconciler keeps. `Plan.statusCommentRef` was already in the
-snapshot — `plans` is `store.listPlans()` shipped whole — and merely undeclared in `web/src/types.ts`,
-exactly the position `issue.workItemState` was in before #168, so declaring it was the whole of the
-server side. Three things hold it together. **A plan with no comment says so rather than falling
-silent**, which is what having a writer on the wire buys: both states are now readings rather than one
-reading and one blank. **No plan is not the same as no comment** — an unplanned issue has no plan row,
-so nothing *could* have written one, and that third reading gets its own words rather than being
-folded into the second. And the comment is **stated, never linked**: `status_comment_ref` is a
-provider comment id, `refUrls` cannot resolve one, and the cockpit cannot render its body, so the only
-claim it supports is that a comment exists. `signalPostStatus` is a closed fold with a word per
-combination of the two signals, asserted arm by arm in `test/factorySkin.test.ts`.
+one living status comment the plan reconciler keeps. Three things hold it together. **A plan with no
+comment says so rather than falling silent**, which is what having a writer on the wire buys: both
+states are readings rather than one reading and one blank. **No plan is not the same as no comment** —
+an unplanned issue has no plan row, so nothing *could* have written one, and that third reading gets
+its own words rather than being folded into the second. And **the reading and the way in are separate
+facts**: the meta line states which of the three it is and is drawn whatever the provider can resolve,
+while the machine's `link` — captioned `notice ↗`, never printing the ref, which is machinery —
+appears only when `refUrls` has a URL for it. Keeping them apart is what lets a plan under a provider
+that builds no URLs still say a notice went out, without offering a way in that goes nowhere.
+`signalPostStatus` is a closed fold with a word per combination of the two signals, asserted arm by
+arm in `test/factorySkin.test.ts`.
+
+`Machine.link` is `{ref, label} | null` and is **never set beside `prNumber`**: they share one corner
+of the node, so a machine claiming two ways out would draw one over the other. The test asserts that
+rather than trusting it.
 
 One thing is still deliberately **not** drawn. Quality-pillar commentary is not drawn at all, for the
 stronger version of the old reason — nothing in the harness writes it, so a third line there would be
@@ -623,6 +627,27 @@ answered.
 The cockpit never builds a provider URL. `refUrls` in the state snapshot is a `ref → URL` map, and
 `linkify` / `refLink` (`web/src/components/util.tsx`) look refs up in it. A ref the provider could not
 resolve is absent from the map and renders as plain text — which is what the `fake` provider produces.
+
+`refChip(ref, label, refUrls, title?)` is the third of them, for refs whose canonical shape is
+machinery a human does not read (`issue:12:comment:456`), where `refLink`'s "the token is the label"
+would put a ref string on screen. It renders **nothing at all** unless the provider resolved the ref:
+a caption with no link asserts something exists while giving nobody a way to read it, which is the
+outcome #171 ruled out. So an unwritten comment, an older server that sends none, and a provider that
+builds no URLs are all one silence.
+
+### What the harness has said on a ticket
+
+Two records carry a comment the harness maintains by itself, and both reach the cockpit as canonical
+refs (see [15](15-integrations.md#comment-refs)):
+
+| Record      | Wire field               | Where it is drawn                                                                          |
+| ----------- | ------------------------ | ------------------------------------------------------------------------------------------ |
+| Plan status | `plan.statusCommentRef`  | `PlanPanel`'s plan head (`status comment ↗`), and the Goal Floor's signal post (`notice ↗`) |
+| Goal assay  | `issue.assay.commentRef` | The shared `WorldSummary` issue row (`comment ↗`), beside the two assay overrides           |
+
+The assay's is the sharper case of the two: that comment is the harness explaining, on somebody else's
+ticket, why it will not act — so it sits **beside** the overrides and not among them. The two buttons
+change the verdict; this only opens what was already said.
 
 ## Chips and verdicts
 

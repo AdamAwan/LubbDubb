@@ -179,6 +179,30 @@ world — a closed duplicate, say). **First writer wins**, so an authoritative i
 overwritten by a resolver fallback. A ref the provider cannot resolve is simply omitted, and the
 cockpit renders it as plain text — which is the correct behaviour for the `fake` provider.
 
+### Comment refs
+
+The two comments the harness maintains on a ticket by itself — a plan's status comment and the goal
+assay's refusal — are stored as a **provider comment id** (`GhCommentRef` carries a number; Azure
+addresses an edit by work item + comment). That is the right value for `upsertIssueComment` to
+round-trip and the wrong one to put on the wire: an id resolves to nothing on its own, and a bare
+number is read as an *issue number* by `githubRefUrl`'s last-but-one arm — so shipping one would key a
+confident link to an unrelated ticket.
+
+`issueCommentRef(originRef, commentId)` (pure, `src/server/refUrls.ts`) pairs the id with the issue it
+lives on, producing `issue:12:comment:456` — the same suffixed vocabulary as `issue:12:plan` and
+`issue:12:part:<slug>`. It is null-in/null-out, and refuses an origin that is not a plain `issue:<n>`,
+so a caller cannot accidentally name the wrong thing. **The store is untouched**: this is a read-only
+translation on the way out, and the provider seam still round-trips the id it was given.
+
+`githubRefUrl` resolves that shape to `/issues/<n>#issuecomment-<id>` — the one ref that opens
+something more specific than an item's own page. The id must be **numeric**, and the fall-through is
+deliberate: GitHub's anchor is minted from a numeric id, so another provider's (or the `fake`
+connector's `comment_1`) would build an anchor that scrolls nowhere, and landing on the issue page is
+honest because the comment is on it. Azure implements no `RefResolvable` at all, so a comment ref
+there resolves to nothing and the cockpit draws no way in — the same degradation every other ref
+already has under that provider, and the reason the shape is expressible under both rather than only
+GitHub-shaped.
+
 If you add a new ref shape, extend `githubRefUrl` (and its unit test) and, if it is a new structured
 field, feed it into `buildRefUrls`.
 

@@ -25,6 +25,29 @@ interface RefUrlInputs {
   resolve: (ref: string) => string | null;
 }
 
+/**
+ * The canonical ref for the one living comment the harness maintains on an issue
+ * — the plan's status comment, and the goal assay's refusal (issue #171).
+ *
+ * It exists because the two records store a **provider comment id** (`GhCommentRef`
+ * carries a number; Azure addresses an edit by work item + comment), which is the
+ * right thing for `upsertIssueComment` to round-trip and the wrong thing to put on
+ * the wire: a bare id is not resolvable on its own — worse, `githubRefUrl` reads a
+ * bare number as an *issue number*, so shipping one would key a confident link to
+ * an unrelated ticket. Pairing it with the issue it lives on makes it a ref in the
+ * vocabulary everything else already writes (`issue:12:plan`, `issue:12:part:x`),
+ * which `resolveRefUrl` can answer and the cockpit can look up.
+ *
+ * Null in, null out — a comment that was never written has no ref, and the caller
+ * ships that null rather than branching. The store keeps the provider id
+ * unchanged; this is a read-only translation for the wire.
+ */
+export function issueCommentRef(originRef: string | null, commentId: string | null): string | null {
+  if (!commentId) return null;
+  const match = /^issue:(\d+)$/.exec(originRef ?? '');
+  return match ? `issue:${match[1]}:comment:${commentId}` : null;
+}
+
 export function buildRefUrls(inputs: RefUrlInputs): Record<string, string> {
   const { pullRequests, issues, taskBranches, refs, resolve } = inputs;
   const map: Record<string, string> = {};
