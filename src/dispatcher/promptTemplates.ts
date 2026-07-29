@@ -27,6 +27,7 @@ type PromptId =
   | 'discuss-plan'
   | 'plan-part'
   | 'plan-approval'
+  | 'issue-shortfall'
   | 'plan-part-escalation'
   | 'issue-pickup'
   | 'issue-pickup-escalation'
@@ -177,6 +178,15 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'issue is worked as a single pull request instead — parts nothing has been started for are retired. If you ' +
       'want a different split, use Replan on the plan panel: that asks the planner again and comes back here.',
     doc: 'Put to a human when `planning.requireApproval` is on and a `parts` verdict has landed (rule 3d). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. Placeholders: {number} {title} {parts} {reason} {list}.',
+  },
+  'issue-shortfall': {
+    placeholders: ['number', 'title', 'summary', 'consequence'],
+    template:
+      'An assessment of issue #{number} ("{title}") found that the work is finished and the goal is still not ' +
+      'reached. Nothing has been scheduled about it.\n\nWhat the assessor found:\n\n{summary}\n\n{consequence}\n\n' +
+      'Reject and nothing happens: the issue stays exactly where it is, and the assessment stays on record so you ' +
+      'can see why. Say why you rejected it — the harness will not ask again until something changes on the issue.',
+    doc: 'Put to a human when an assessment says the goal was not reached and named something the harness can act on (rule 3g). A proposal, not a question: accepting performs the arm {consequence} describes. Placeholders: {number} {title} {summary} {consequence}.',
   },
   'plan-part-escalation': {
     placeholders: ['number', 'part', 'attempts'],

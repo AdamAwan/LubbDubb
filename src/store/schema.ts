@@ -170,6 +170,31 @@ CREATE TABLE IF NOT EXISTS issue_deliveries (
   updated_at TEXT NOT NULL
 );
 
+-- The assessor's negative verdict: the issue was worked and the goal is not
+-- reached (issue #159). The mirror of issue_deliveries and deliberately NOT a
+-- column on it — that table's every reader is a pickup gate, and this row gates
+-- nothing. One row per issue, overwritten per assessment; mutually exclusive with
+-- a delivery, enforced in the store.
+--
+-- The cause column is what makes it routable: three distinct failures wear one
+-- face, and routing all three to a replan re-decomposes plans whose shape was
+-- fine. It is declared by the assessor rather than derived, for conclude_part's
+-- reason, and it is NULLABLE — an issue with no plan has no decomposition to be
+-- wrong about, so "the work is just not finished" names nothing and routes to
+-- nothing. That is the absence of a value rather than a fourth member, for the
+-- reason 'undeclared' is not a stored conclusion verdict.
+CREATE TABLE IF NOT EXISTS issue_shortfalls (
+  origin_ref TEXT PRIMARY KEY,      -- "issue:12"
+  cause      TEXT,                  -- plan | part | goal | null (nothing to route)
+  part_slug  TEXT,                  -- the part that fell short; only for cause='part'
+  summary    TEXT NOT NULL,
+  by         TEXT NOT NULL,         -- assessor | operator
+  agent_id   TEXT,                  -- null for an operator verdict
+  task_id    TEXT,
+  decided_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Whether an issue's goal text can be acted on at all — the goal assay's verdict,
 -- cast before anything is dispatched against it (issue #158). Written for BOTH
 -- outcomes, or the assayer re-runs on the same issue every cycle; only 'unclear'

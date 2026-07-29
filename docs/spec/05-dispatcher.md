@@ -58,6 +58,7 @@ expand a row into the rule that fired and why that rule exists.
 | `plan-approval`            | 3d   | Plan needs your approval | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.                                                     |
 | `issue-assess`             | 3e   | Issue may be finished    | With assessment on, a watched open issue has had work, has nothing in flight and no open PR.                                                              |
 | `issue-assay`              | 3f   | Issue goal needs checking | With the assay on, a watched open issue nothing has been started for has no verdict on its goal text.                                                    |
+| `issue-shortfall`          | 3g   | Assessment says the goal was missed | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                             |
 | `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                                                                        |
 | `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                                                                 |
 | `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                                                                   |
@@ -100,7 +101,8 @@ Candidates are appended in this order, and the order _is_ the priority:
 4. **Planners** (rule 3c) — a planner unblocks work, so it wins a slot before the work it unblocks.
 5. **Assessors** (rule 3e) — an assessment decides whether an issue needs work at all, so it is
    asked before the work is scheduled. An assessed issue is **suppressed** from rule 4 that cycle;
-   see below.
+   see below. Rule 3g, which routes what an assessment found, claims no headroom and so appears
+   nowhere in this ranking: it only proposes and escalates.
 6. **Plan parts** (rule 4a), ranked by dependency depth, then issue number, then part sequence, so
    the bottom of a stack is cut before the branch its dependents will base on is needed.
 7. **Issue pickups** (rule 4), ordered by label-encoded priority then issue number.
@@ -277,9 +279,72 @@ permanently parked issue. A cooling assessor suppresses pickup for that cycle on
 in the queue as `cooldown`.
 
 The agent casts its verdict with the `assess_issue` tool ([`11-mcp-tools.md`](11-mcp-tools.md)):
-`delivered` writes the park, `more_work` writes the `issue_conclusions` row rule 3b's inverse arm
-already reads. See [`06-issue-pickup.md`](06-issue-pickup.md) for what the park holds and what ends
-it.
+`delivered` writes the park, `more_work` writes an `issue_shortfalls` row that rule 3g routes. See
+[`06-issue-pickup.md`](06-issue-pickup.md) for what the park holds and what ends it.
+
+## Rule 3g — routing a failed assessment
+
+The other end of the loop the assessor opens. Plan → Work → is the goal achieved? → No → re-plan:
+the check was rule 3e, the replan was `POST /api/plans/:id/replan`, and **nothing joined them**. A
+negative verdict was written into `issue_conclusions`, whose only consumer is rule 3b's inverse arm
+— which emits a *tracker* move, so it fires only where `issueInReviewState` is configured. On GitHub
+it changed no dispatch at all; and on either provider, for an issue with a plan, rule 4 is gated on
+the `single` route and rule 4a finds every part settled. The assessor said "not delivered" and the
+harness scheduled nothing, anywhere.
+
+This rule is the one consumer of `issue_shortfalls`, and it routes by the cause the assessor
+**declared** rather than one the harness derived. Deriving it would send every shortfall to a replan
+and re-decompose plans whose shape was never the problem — the failure the issue itself names.
+
+| cause  | means                                                        | arm                                             |
+| ------ | ------------------------------------------------------------ | ----------------------------------------------- |
+| `plan` | the decomposition is wrong — a part is missing, or the split | **A** — propose a replan                        |
+| `part` | the split was right; one named part missed its own scope     | **B** — propose one appended follow-up part     |
+| `goal` | the issue itself is wrong, ambiguous or obsolete             | **C** — escalate, and schedule nothing           |
+| _none_ | nothing was named beyond "the work is not finished"          | nothing at all                                  |
+
+**Arm A** flips the plan to `planning`, which is the entire effect: rule 3c already routes such a
+plan back to a planner with the `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict`
+already narrows the cooldown to decisions since `plan.updatedAt` so the original planner does not
+throttle it. `releasePlan`'s pattern — one status write, and a rule that was already there starts
+working. The assessor's summary is appended to `plan.reason`, which `currentPlanSummary` already
+renders, rather than to a new `{shortfall}` placeholder an operator override could silently drop.
+
+**Arm B** appends one part (slug `<slug>-followup`, `dependsOn: []`, the assessor's summary as its
+scope) through the same `upsertPlanParts` an amendment uses, and leaves the part that fell short
+**exactly as it is**. Returning it to `ready` is the tempting version and the wrong one:
+`partHasWork` is the existing statement of why — a merged part's PR is on the default branch and its
+branch is spent, so re-dispatching puts an agent on a branch whose PR is closed. Appending meets
+"never retire a part with work started" by construction rather than by a check. The plan moves
+`complete` → `active` through the roll-up it already computes.
+
+**Arm C** files an escalation and schedules nothing. It is deliberately **not** a proposal: a
+proposal whose accept and reject both do nothing is not a decision. It is deduped the way rule 1b's
+escalation is — on an open item for `issue:<n>:shortfall` **and** on a recent executed one in the
+audit log, each covering the other's blind spot.
+
+Arms A and B are `Proposal`s (kind `shortfall`, ref `issue:<n>:shortfall`) because both spend a
+fleet, and a plan the harness rewrote on its own would churn `plan_parts` under whatever is running.
+The **full** `proposalHold` applies, unlike a plan proposal's: the row persists until its arm is
+performed, so without the durable `rejected` arm one refusal would be re-asked every pulse. It
+expires on world signal like any other rejection — `proposalWorldRef` maps the ref to `issue:<n>`
+unmodified — or a replan refused once would veto every future one.
+
+**The loop is bounded by machinery that already exists.** The human is the outer bound: nothing is
+rewritten without a click. `dispatchVerdict`'s cooldown and 3-attempt cap on `issue:<n>:assess` is
+the inner one, so `assess → propose → replan → work → assess` is bounded at three rounds by a
+counter already in the code. Nothing new counts it: a second counter claiming to bound the same loop
+would be two answers to one question.
+
+**With the funnel off, both plan-shaped arms degrade to arm C** rather than being taken. A replan
+needs rule 3c to pick the `planning` plan up and a follow-up needs rule 4a to schedule it, so
+accepting either with planning disabled would park the issue on a transition nothing consumes — the
+same fail-safe direction as the planner's and the assessor's.
+
+Rejecting acts on nothing and **leaves the row standing**: the verdict is still true, you declined to
+act on it, and the cockpit chip should keep saying so. That is the asymmetry with `refusePlan`, which
+exists only because a plan is the sole thing that schedules anything for a decomposed issue. A
+shortfall gates nothing, so refusing one leaves the issue exactly where it was.
 
 ## Rule 3 — the merge gate
 

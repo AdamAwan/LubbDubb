@@ -18,6 +18,7 @@ import type {
   IssueConclusionVerdict,
   PartOutcomeKind,
   PlanPart,
+  ShortfallCause,
   Task,
   WorkItemFiling,
 } from '../types.js';
@@ -41,6 +42,7 @@ import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
+import { liveParts } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
 import { debugEnabled, debugLog } from '../debug.js';
 
@@ -543,12 +545,25 @@ export class AgentManager extends EventEmitter {
    * {@link recordConclusion}'s reason: the event repaints the cockpit now rather
    * than on the next pulse.
    *
-   * The two verdicts land in two different places, because they are two
-   * statements that already exist. `more_work` *is* what `issue_conclusions`
-   * means and what rule 3b's inverse arm already reads — a second source for one
-   * statement would be the duplicate-opinion bug. `delivered` is the park, and
-   * gates pickup, which no conclusion does. Their mutual exclusion is enforced in
-   * the store, so it is not re-implemented here.
+   * The two verdicts land in two different rows, because they are two verdicts
+   * with opposite polarity. `delivered` is the harness's park and **gates pickup**;
+   * a shortfall gates nothing and exists to *release* work, which is why it is a
+   * table of its own rather than a column on the delivery (see
+   * {@link IssueShortfall}). Their mutual exclusion is enforced in the store, so it
+   * is not re-implemented here.
+   *
+   * It deliberately no longer writes `issue_conclusions`. That row is the working
+   * agent's own declaration about its own run, keyed on the issue — so an assessor
+   * writing into it overwrote the agent's note, author and timestamp, with no
+   * precedence between the two parties for the resolver to read. That was a bug
+   * independent of this feature (issue #159), and `resolveIssueConclusion` now
+   * ranks the two records instead.
+   *
+   * **The plan-aware refusals are here rather than in `validateAssessment`**
+   * because they are store questions, and they are the tool channel's whole point:
+   * a structured payload whose rejection the agent never hears costs a whole agent
+   * to discover, which is the `plan.json` lesson. Each names the alternative, the
+   * way `conclusionOrigin` and `partConclusionOrigin` do.
    *
    * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
@@ -557,6 +572,8 @@ export class AgentManager extends EventEmitter {
     agentId: string,
     verdict: AssessmentVerdict,
     summary: string,
+    cause: ShortfallCause | null = null,
+    part: string | null = null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string } {
     const agent = this.store.getAgent(agentId);
     const task = agent ? this.store.getTask(agent.taskId) : null;
@@ -572,16 +589,59 @@ export class AgentManager extends EventEmitter {
         agentId,
         taskId: task.id,
       });
-    } else {
-      this.store.recordIssueConclusion({
-        originRef: origin.issueOrigin,
-        verdict: 'more_work',
-        note: summary,
-        by: 'assessor',
-        agentId,
-        taskId: task.id,
-      });
+      this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+      return { ok: true, issueOrigin: origin.issueOrigin, verdict };
     }
+
+    // The discriminator is the plan *row*, not its parts: a `single` verdict is a
+    // plan, and replanning one is the honest response to "one pull request was not
+    // enough" — it re-runs the planner, which may now decompose it.
+    const plan = this.store.listPlans().find((p) => p.originRef === origin.issueOrigin) ?? null;
+    const parts = plan ? liveParts(this.store.listPlanParts(plan.id)) : [];
+
+    if (plan === null && (cause === 'plan' || cause === 'part')) {
+      return {
+        ok: false,
+        error:
+          `cause "${cause}" says the delivery plan is what fell short, and ${origin.issueOrigin} has no plan — ` +
+          `there is nothing to re-plan and no part to follow up. If the issue's own goal is the problem, say ` +
+          `cause "goal". If the work simply is not finished, say more_work with no cause: the issue comes ` +
+          `back round for pickup with your summary against it.`,
+      };
+    }
+    if (plan !== null && cause === null) {
+      return {
+        ok: false,
+        error:
+          `${origin.issueOrigin} has a delivery plan, so a shortfall has to say what fell short or the harness ` +
+          `cannot route it: cause "plan" (the split itself is wrong, or a part is missing), "part" (one named ` +
+          `part missed its own scope — name it in \`part\`), or "goal" (the issue itself is wrong, and no ` +
+          `planner can fix that).`,
+      };
+    }
+    if (cause === 'part' && !parts.some((p) => p.slug === part)) {
+      return {
+        ok: false,
+        error:
+          parts.length === 0
+            ? `${origin.issueOrigin}'s plan declares no parts — it is a single-pull-request verdict, so there ` +
+              `is no "${part}" to follow up. Say cause "plan" if one pull request was not enough; the planner ` +
+              `will see your summary and may decompose it.`
+            : `"${part}" is not a live part of ${origin.issueOrigin}'s plan. Its parts are: ` +
+              `${parts.map((p) => p.slug).join(', ')}. Name one of those, or say cause "plan" if the part you ` +
+              `have in mind is one the decomposition is missing.`,
+      };
+    }
+
+    this.store.recordShortfall({
+      originRef: origin.issueOrigin,
+      cause,
+      partSlug: part,
+      summary,
+      by: 'assessor',
+      agentId,
+      taskId: task.id,
+    });
     this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
     return { ok: true, issueOrigin: origin.issueOrigin, verdict };
   }

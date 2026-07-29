@@ -322,7 +322,7 @@ test('a delivered verdict parks the issue, attributed from the credential', asyn
   system.store.close?.();
 });
 
-test('a more_work verdict lands as the conclusion rule 3b already reads', async () => {
+test('a more_work verdict lands as a shortfall, never in the working agent’s own row', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:assess');
   const res = await callTool(system, agent, 'assess_issue', {
@@ -331,11 +331,14 @@ test('a more_work verdict lands as the conclusion rule 3b already reads', async 
   });
   assert.equal(res.isError, false);
 
-  // Not a second source for one statement: `more_work` *is* what issue_conclusions
-  // means, and what rule 3b's inverse arm already acts on.
-  const conclusion = system.store.getIssueConclusion('issue:12');
-  assert.equal(conclusion?.verdict, 'more_work');
-  assert.equal(conclusion?.by, 'assessor');
+  // It used to write `issue_conclusions`, which is keyed on the issue and is the
+  // row `conclude_work` writes — so an assessment overwrote the working agent's
+  // own declaration, its note and its author, with no precedence between two
+  // parties the resolver could not tell apart (issue #159).
+  const shortfall = system.store.getShortfall('issue:12');
+  assert.equal(shortfall?.by, 'assessor');
+  assert.equal(shortfall?.agentId, agent.id, 'attribution is structural — the tool takes no issue argument');
+  assert.equal(system.store.getIssueConclusion('issue:12'), null, "the agent's own row is left alone");
   assert.equal(system.store.getDelivery('issue:12'), null, 'and the park is not written');
   system.store.close?.();
 });
@@ -347,10 +350,10 @@ test('the two verdicts clear each other, so an issue never carries both', async 
   await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'all present' });
   await callTool(system, agent, 'assess_issue', { status: 'more_work', summary: 'actually the CLI half is missing' });
   assert.equal(system.store.getDelivery('issue:12'), null);
-  assert.equal(system.store.getIssueConclusion('issue:12')?.verdict, 'more_work');
+  assert.ok(system.store.getShortfall('issue:12'));
 
   await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'the CLI half landed in PR #41' });
-  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  assert.equal(system.store.getShortfall('issue:12'), null);
   assert.ok(system.store.getDelivery('issue:12'));
   system.store.close?.();
 });

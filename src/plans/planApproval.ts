@@ -1,17 +1,21 @@
 import type { Store } from '../store/store.js';
 import type { PlanPart } from '../types.js';
 import { amendedPlanStatus, liveParts, partsToRetire } from './parts.js';
+import { followupPartInput } from '../delivery/shortfall.js';
 
 /**
- * What a human's verdict on a decomposition *does* to the plan (issue #109
- * phase 3). Two functions, one shape: read the plan, refuse unless it is still
- * the thing that was proposed, write one status, say what happened.
+ * What a human's verdict *does* to the plan — three functions, one shape: read the
+ * plan, refuse unless it is still the thing that was proposed, write, say what
+ * happened.
  *
- * Both are compare-and-set against `awaiting_approval` for the same reason
- * `Store.decideProposal` is one against `pending`: a verdict that arrives after
- * the plan moved on — an operator who hit Replan with the card still open — must
- * not release or refuse a decomposition nobody was shown. `better-sqlite3` writes
- * are synchronous, so the read-then-write here is race-free by construction.
+ * The first two are the approval gate (issue #109 phase 3) and compare-and-set
+ * against `awaiting_approval` for the same reason `Store.decideProposal` is one
+ * against `pending`: a verdict that arrives after the plan moved on — an operator
+ * who hit Replan with the card still open — must not release or refuse a
+ * decomposition nobody was shown. The third is a failed assessment's arm (issue
+ * #159) and compare-and-sets against the states in which its arm still means
+ * something. `better-sqlite3` writes are synchronous, so every read-then-write
+ * here is race-free by construction.
  */
 
 /**
@@ -103,6 +107,87 @@ export function refusePlan(store: Store, planId: string, originRef: string): Pla
         : `retired ${retire.length} unstarted part(s); ${surviving.length} part(s) already in flight keep running`,
   };
 }
+
+/**
+ * Perform the arm an accepted shortfall names (issue #159) — the "No → re-plan"
+ * end of the loop, finally wired to the check at the other end.
+ *
+ * **Arm A, `plan` — send the decomposition back.** One status write, and the
+ * entire effect: rule 3c already routes a `planning` plan to a planner with the
+ * `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict` already
+ * narrows the cooldown to decisions since `plan.updatedAt` so the original
+ * planner's attempt does not throttle the replan. This is {@link releasePlan}'s
+ * pattern — write one status, and a rule that was already there starts working.
+ * The assessor's summary rides to the planner through `Plan.reason`, appended
+ * rather than replacing it: the planner's own reasoning is what the replan is
+ * amending, so overwriting it would take away the thing being corrected.
+ *
+ * **Arm B, `part` — append, never resurrect.** The tempting version returns the
+ * named part to `ready`, and `partHasWork` is the existing statement of why it is
+ * wrong: a merged part's PR is on the default branch and its branch is spent, so
+ * re-dispatching puts an agent on a branch whose PR is closed. So one new part is
+ * appended for the scope that fell short and the named part is left exactly as it
+ * is — which meets "cannot retire parts that have work started" by construction
+ * rather than by a check. Rule 4a schedules it with no new dispatch path, and the
+ * plan moves `complete` → `active` through the roll-up it already computes.
+ *
+ * Routing arm B to a replan instead was considered and refused: that is precisely
+ * the issue's stated failure mode — re-decomposing a plan whose shape was fine —
+ * and it would give the surviving parts new slugs unless the planner happened to
+ * preserve them.
+ */
+export function actOnShortfall(
+  store: Store,
+  act: { planId: string; originRef: string; cause: 'plan' | 'part'; partSlug: string | null; summary: string },
+): PlanSettlement {
+  const plan = store.getPlan(act.planId);
+  if (!plan) return { ok: false, detail: `plan ${act.planId} for ${act.originRef} no longer exists` };
+  // `planning` means a planner already has it — accepting again would be a second
+  // replan of a plan nobody has re-derived yet. `awaiting_approval` means the
+  // decomposition the assessment judged has since been replaced by one no human
+  // has released, so acting on the old verdict would settle a plan nobody saw.
+  if (plan.status === 'planning' || plan.status === 'awaiting_approval')
+    return { ok: false, detail: `plan ${act.planId} is "${plan.status}" — it has already moved on` };
+
+  if (act.cause === 'plan') {
+    store.setPlanStatus(act.planId, 'planning', appendShortfallReason(plan.reason, act.summary));
+    return { ok: true, detail: `sent the plan for ${act.originRef} back to a planner with what fell short` };
+  }
+
+  const parts = store.listPlanParts(act.planId);
+  const target = liveParts(parts).find((p) => p.slug === act.partSlug);
+  if (!target)
+    return { ok: false, detail: `"${act.partSlug}" is no longer a live part of the plan for ${act.originRef}` };
+  // Seq beyond every existing part, live or retired: rule 4a orders by depth then
+  // seq, and a follow-up is the last thing the plan does.
+  const seq = Math.max(0, ...parts.map((p) => p.seq)) + 1;
+  const [appended] = store.upsertPlanParts(act.planId, [followupPartInput(target, act.summary, seq)]);
+  // The plan may have rolled up to `complete` when the part that fell short
+  // merged. An unsettled part makes that false again, and the roll-up is the one
+  // place that reading lives — deriving it here would be a second opinion.
+  store.rollUpPlanStatus(act.planId);
+  return {
+    ok: true,
+    detail: `appended part "${appended?.slug ?? act.partSlug}" to the plan for ${act.originRef}; "${target.slug}" is untouched`,
+  };
+}
+
+/**
+ * The planner's own reason, with what the assessment found appended.
+ *
+ * Appended rather than replaced because the replan is *amending* the planner's
+ * reasoning, and a planner shown only the complaint has lost the decomposition it
+ * is being asked to correct. Bounded so a long assessment cannot grow the row
+ * without limit across repeated shortfalls.
+ */
+function appendShortfallReason(reason: string | null, summary: string): string {
+  const note = `An assessment of the delivered work found: ${summary}`;
+  const joined = reason ? `${reason}\n\n${note}` : note;
+  return joined.length > MAX_PLAN_REASON ? `${joined.slice(0, MAX_PLAN_REASON - 1)}…` : joined;
+}
+
+/** Long enough for a planner's reasoning plus a couple of assessments against it. */
+const MAX_PLAN_REASON = 4000;
 
 /** The live parts a refusal left standing — everything it did not just retire. */
 function survivorsOf(parts: PlanPart[], retired: PlanPart[]): PlanPart[] {

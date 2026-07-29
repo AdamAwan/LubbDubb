@@ -183,6 +183,10 @@ export class Harness extends EventEmitter {
       // assessed an issue does no read at all.
       const deliveries = store.listDeliveries();
       const deliveryWindow = deliverySignalQuery(deliveries);
+      // Its negative mirror: issues an assessor judged worked-and-still-short. It
+      // holds nothing, so it needs no signal read of its own — it lives until the
+      // arm it named has been performed, and rule `issue-shortfall` is its one reader.
+      const shortfalls = store.listShortfalls();
       const deliverySignals = deliveryWindow
         ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs)
         : [];
@@ -244,6 +248,7 @@ export class Harness extends EventEmitter {
         conclusions,
         deliveries,
         deliverySignals,
+        shortfalls,
         assays,
         assaySignals,
         recentDecisions,

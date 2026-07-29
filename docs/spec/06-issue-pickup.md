@@ -275,6 +275,37 @@ The two are **mutually exclusive**: writing either clears the other, enforced in
 than in a caller, because a caller that remembered one and forgot the other would leave rule 3b
 returning an item to pickup while this gate held it.
 
+## The shortfall — the same verdict's other polarity
+
+An assessment's `more_work` writes `issue_shortfalls`, and the single most important thing about that
+row is what it does to this document: **nothing**. It is not a pickup gate, it is not asked by
+`issuePickupStatus`, and an issue carrying one is eligible exactly as if it carried nothing —
+releasing work is the whole point of the verdict. Its one consumer is
+[rule 3g](05-dispatcher.md#rule-3g--routing-a-failed-assessment), which routes what the assessor said
+fell short.
+
+That is why it is a **separate table** rather than a polarity column on `issue_deliveries`, and the
+reason is stronger than the one that split deliveries from conclusions:
+
+|              | `issue_deliveries`                                | `issue_shortfalls`                       |
+| ------------ | ------------------------------------------------- | ---------------------------------------- |
+| read by      | a gate, every pulse                               | one rule, until it is acted on           |
+| effect       | **holds** pickup                                  | **releases** work                        |
+| ends on      | world signal, tracker move, operator clear        | the arm it named being performed         |
+
+One table with a `polarity` column would leave every present and future reader remembering which one
+it was holding, from rows that look identical until you read a column — the drift class this repo has
+already paid for twice (`proposalHold` vs `planProposalHold`; detection vs stripping in the PTY
+scanner), and both times the fix was to keep the two predicates apart rather than give one a flag.
+`test/issueShortfall.test.ts` asserts the split **structurally** — `src/delivery/delivery.ts` names no
+shortfall type at all — as well as behaviourally, so a later polarity flag fails a test rather than
+quietly holding an issue this row exists to free.
+
+A shortfall and a delivery are mutually exclusive, for the reason a delivery and a conclusion are. A
+shortfall and a **conclusion** are not: the conclusion is the working agent's own statement about its
+own run and the assessor must never overwrite it, so both rows stand and `resolveIssueConclusion`
+ranks them — operator toggle, then shortfall, then the agent, then the plan derivation.
+
 ## The goal assay (`unclear`)
 
 Every gate above asks about **policy**: the watch tag, the workflow state, the cooldown, the attempt
