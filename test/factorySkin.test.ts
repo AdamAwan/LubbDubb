@@ -635,6 +635,57 @@ test('a refused floor draws the override, and a workable one does not', () => {
   assert.doesNotMatch(workable, /Clear verdict/);
 });
 
+/**
+ * The plan is readable for as long as there is one.
+ *
+ * These controls used to ride on the Blueprint plate, which draws only while a
+ * decomposition is `awaiting_approval` — so the click that approved a plan was
+ * also the one that took away the only way to read it back. Asserted across every
+ * status rather than on the one that was broken: a plate is a stopped machine's
+ * reason and every reason is transient, so any later attempt to hang the way in
+ * off one fails here.
+ */
+test('the floor opens its plan whatever the plan is doing', () => {
+  const renderFloor = (plan: Plan | null): string => {
+    const input = floorInput({ plan, parts: plan ? [planPart('a', [], 'ready', 1)] : [] });
+    return renderToStaticMarkup(
+      createElement(GoalFloor, {
+        issues: [input.issue],
+        plans: input.plan ? [input.plan] : [],
+        parts: input.parts,
+        openPrs: [],
+        closedPrs: [],
+        tasks: [],
+        upcoming: [],
+        refUrls: {},
+        stopped: false,
+        onViewPlan: () => undefined,
+        onReplan: () => undefined,
+        onSetAssay: () => undefined,
+        onFetchWork: () => Promise.resolve({ nodes: [] }),
+      }),
+    );
+  };
+
+  for (const status of ['planning', 'single', 'awaiting_approval', 'active', 'complete', 'abandoned'] as const) {
+    const markup = renderFloor({ ...PLAN, status, reason: 'Three parts, stacked.' });
+    assert.match(markup, /Open plan/, `a ${status} plan must be openable from the floor`);
+    assert.match(markup, /Replan/, `a ${status} plan must be replannable from the floor`);
+  }
+
+  // The awaiting-approval plate still quotes the planner beside the floor; what
+  // moved is only where the buttons live, so the reason must not have gone with them.
+  assert.match(
+    renderFloor({ ...PLAN, status: 'awaiting_approval', reason: 'Three parts, stacked.' }),
+    /Three parts, stacked\./,
+    'the planner still speaks on the plate the buttons left',
+  );
+
+  const none = renderFloor(null);
+  assert.doesNotMatch(none, /Open plan/, 'a goal with no plan offers nothing to open');
+  assert.doesNotMatch(none, /Replan/);
+});
+
 /** Every arm of the new vocabulary renders a word — a blank machine says nothing. */
 test('every goal-floor stage has a word', () => {
   const pickups: string[] = [
