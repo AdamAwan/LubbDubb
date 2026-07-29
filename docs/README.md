@@ -14,6 +14,7 @@ off by default is described as off by default, and what turning it on does.
 | Path                | What it holds                                                                                       |
 | ------------------- | --------------------------------------------------------------------------------------------------- |
 | `spec/`             | The specification, one document per subsystem. Numbered by the order they build on each other.      |
+| `workflow.md`       | The end-to-end workflow the harness is built to run, and where a different one slots in. Not spec.  |
 | `prompt-templates/` | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id.      |
 | `superpowers/`      | Historical design records — the proposals that preceded features. Superseded by `spec/`; see below. |
 
