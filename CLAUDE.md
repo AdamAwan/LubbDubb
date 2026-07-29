@@ -444,9 +444,17 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     the plan (and suppresses its own inverse there), so re-applying the state gate would stop the
     remaining parts ever being scheduled. `issuePickupStatus` answers the `parts` arm **before**
     the open-PR gate for the same reason, reporting `2/5 parts merged`.
-  - **A part may declare at most one dependency**, enforced in the zod boundary alongside cycle
-    detection. It's the static form of "at most one _open_ dependency": with two, both could be in
-    review at once and there'd be no single branch to base on.
+  - **A part may declare any number of dependencies, and the arity rule lives in the reconciler
+    (#170).** It used to be capped at one in the zod boundary, as the static form of "at most one
+    _open_ dependency" — but that cap refused something safe. `PlanReconciler.readiness` now holds a
+    part `pending` unless every dependency is satisfied **and at most one is still unsettled**, which
+    is the same rule where "open" can actually be observed. So a **rejoin** works: a part naming two
+    prerequisites waits for both to settle and then bases on the default branch, because by then
+    nothing is open to stack on. A chain is untouched (one dependency → stacks on its branch as soon
+    as it has _pushed_), and only an unsettled dependency costs a `hasCommitsBeyond`, so the git cost
+    is unchanged. Two things this dragged in: `partDepth` is **longest path**, or a rejoin sorts ahead
+    of what it waits on, and `findDependencyCycle` walks **every** edge — a chain walk was the whole
+    graph while arity was one, and misses `a → [x, b]`, `b → [a]` the moment it isn't.
   - **Base selection rides on the action.** `dispatch_code_agent` carries `base` + `partId`; the
     executor passes `base` to `WorktreeManager.ensure` and calls `Store.markPartDispatched` only
     _after_ the spawn (same rule as `jobId` — a held dispatch must leave the part `ready`).

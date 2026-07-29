@@ -78,11 +78,10 @@ const layoutCache = new Map<string, FloorLayout>();
  * Column is **longest-path depth**, not the depth of the first prerequisite that
  * happens to be listed: a part waiting on several must never draw to the left of
  * something it waits on, and `dependsOn[0]` gets exactly that wrong the first
- * time a plan rejoins. That also means this tolerates **in-degree greater than
- * one** today, before the schema can emit it — `PlanPart.dependsOn` is capped at
- * one entry at the plan document's zod boundary, and relaxing that cap (#170) is
- * a change to what a plan may *say* rather than a drawing decision, so it is
- * deliberately not made here. When it lands this needs no cockpit change.
+ * time a plan rejoins. This was written to tolerate **in-degree greater than one**
+ * before the schema could emit it; #170 relaxed the arity cap at the plan
+ * document's zod boundary, and — as intended — the drawing needed no change for a
+ * rejoining plan to lay out correctly.
  *
  * Cycle-guarded for the reason the tech tree's walk was: the server refuses
  * cycles at ingestion, but this runs against whatever a snapshot happens to

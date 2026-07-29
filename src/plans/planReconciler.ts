@@ -5,7 +5,15 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanPart, PullRequest, Task, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
-import { bySlug, dependencyOf, dependencySatisfied, observePartPr, partBranch, planIssueNumber } from './parts.js';
+import {
+  bySlug,
+  dependenciesOf,
+  dependencySatisfied,
+  observePartPr,
+  partBranch,
+  partSettled,
+  planIssueNumber,
+} from './parts.js';
 import type { PlanningPolicy } from './planning.js';
 
 interface PlanReconcilerDeps {
@@ -202,17 +210,44 @@ export class PlanReconciler {
     return live ? null : { status: 'ready' };
   }
 
-  /** `ready` once every dependency has pushed a branch worth stacking on, else `pending`. */
+  /**
+   * `ready` once every dependency has pushed a branch worth stacking on, else
+   * `pending`.
+   *
+   * **This is where the arity rule lives** (issue #170). Ingestion used to refuse a
+   * part naming more than one dependency, as the static form of "at most one *open*
+   * dependency"; it now accepts a rejoin, and the real rule is enforced here, where
+   * "open" is a thing that can actually be observed. Two halves, and the second is
+   * not optional: every dependency must be satisfied, **and at most one of them may
+   * still be unsettled** — because `partBase` cuts this part's branch from that one,
+   * and with two in flight there are two candidate branches and no way to choose. A
+   * rejoin therefore waits for all of its prerequisites to reach a terminal and then
+   * bases on the integration branch, which is the case the old cap refused for a
+   * reason that was never true of it.
+   *
+   * Only an unsettled dependency costs a git read: `dependencySatisfied` answers for
+   * a settled one without asking. So a chain — every plan written before this — makes
+   * exactly the one shell-out it always did, and a rejoin makes at most one too.
+   */
   private async readiness(
     part: PlanPart,
     index: Map<string, PlanPart>,
     issueNumber: number,
   ): Promise<PlanPart['status']> {
-    const dep = dependencyOf(part, index);
-    if (!dep) return 'ready';
-    const branch = dep.branch ?? partBranch(issueNumber, dep.slug);
-    const pushed = await this.deps.git.hasCommitsBeyond(branch, this.deps.defaultBranch);
-    return dependencySatisfied(dep, () => pushed) ? 'ready' : 'pending';
+    const deps = dependenciesOf(part, index);
+    if (deps.length === 0) return 'ready';
+    const unsettled = deps.filter((d) => !partSettled(d));
+    if (unsettled.length > 1) return 'pending';
+    const pushed = new Map(
+      await Promise.all(
+        unsettled.map(async (dep) => {
+          const branch = dep.branch ?? partBranch(issueNumber, dep.slug);
+          return [dep.slug, await this.deps.git.hasCommitsBeyond(branch, this.deps.defaultBranch)] as const;
+        }),
+      ),
+    );
+    const satisfied = deps.every((dep) => dependencySatisfied(dep, (d) => pushed.get(d.slug) === true));
+    return satisfied ? 'ready' : 'pending';
   }
 
   private async writeStatusComment(plan: Plan, parts: PlanPart[], issueNumber: number): Promise<void> {

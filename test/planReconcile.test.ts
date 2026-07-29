@@ -5,8 +5,9 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { PlanReconciler } from '../src/plans/planReconciler.js';
 import { renderPlanComment } from '../src/plans/planComment.js';
 import { DEFAULT_PLANNING } from '../src/plans/planning.js';
+import { bySlug, partBase } from '../src/plans/parts.js';
 import type { ActionSink, IssueCommentInput, SendResult } from '../src/sink/actionSink.js';
-import type { ErrorLogEntry, ErrorLogInput, PullRequest, WorldSnapshot } from '../src/types.js';
+import type { ErrorLogEntry, ErrorLogInput, PlanPartInput, PullRequest, WorldSnapshot } from '../src/types.js';
 
 /** A sink that records the plan's status comment and refuses everything else. */
 function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
@@ -350,5 +351,141 @@ test('a plan finishing on a mix of terminals completes and says so without claim
   assert.match(body, /all 2 parts finished/);
   assert.match(body, /determination.*Already covered by #98/);
   assert.doesNotMatch(body, /API.*merged/);
+  h.store.close();
+});
+
+// -- A plan whose lanes rejoin (issue #170) ----------------------------------
+
+/** Declaration boilerplate, so the new tests read as the graph they are about. */
+function partInput(slug: string, seq: number, dependsOn: string[]): PlanPartInput {
+  return {
+    slug,
+    seq,
+    title: slug,
+    scope: `src/${slug}/`,
+    dependsOn,
+    rationale: null,
+    acceptance: null,
+    expectedKind: null,
+  };
+}
+
+/**
+ * A plan for issue 12 whose two lanes rejoin: `wire` needs **both** `schema` and
+ * `api`, which the plan document's zod boundary refused until #170. The arity rule
+ * moved here, so this is where it is asserted.
+ */
+function rejoinSetup(): Harness {
+  const store = new Store(':memory:');
+  const git = new FakeGitObserver();
+  const { sink, comments } = recordingSink();
+  const errors: ErrorLogInput[] = [];
+  const plan = store.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Two lanes, then a merger',
+    status: 'active',
+    reason: 'Schema and API are independent; wiring them needs both.',
+  });
+  store.upsertPlanParts(plan.id, [
+    partInput('schema', 1, []),
+    partInput('api', 2, []),
+    partInput('wire', 3, ['schema', 'api']),
+  ]);
+  const reconciler = new PlanReconciler({
+    store,
+    git,
+    sink,
+    planning: { ...DEFAULT_PLANNING, enabled: true },
+    defaultBranch: 'main',
+    errors: { record: (entry) => (errors.push(entry), {}) as ErrorLogEntry },
+  });
+  return { store, git, comments, errors, reconciler, planId: plan.id };
+}
+
+/** Put a part in review on its own branch, with the branch carrying commits. */
+function inReview(h: Harness, slug: string, prNumber: number): PullRequest {
+  const part = h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!;
+  const branch = `issue/12/${slug}`;
+  h.store.updatePlanPart(part.id, { status: 'in_review', branch, prNumber });
+  h.git.setDivergence(branch, 'main', { ahead: 2, behind: 0 });
+  return pr(prNumber, branch);
+}
+
+function statusOf(h: Harness, slug: string): string {
+  return h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!.status;
+}
+
+test('a part with two dependencies still open stays pending — the arity rule, dynamically', async () => {
+  const h = rejoinSetup();
+  // Both dependencies are *satisfied*: each has pushed a branch worth stacking on,
+  // so the only thing holding `wire` is that there are two of them in flight and
+  // `partBase` would have two candidate branches and no way to choose. This is the
+  // case the old static `dependsOn.length > 1` refusal existed to prevent.
+  const prs = [inReview(h, 'schema', 40), inReview(h, 'api', 41)];
+  await h.reconciler.reconcile(world(prs));
+  assert.equal(statusOf(h, 'schema'), 'in_review');
+  assert.equal(statusOf(h, 'api'), 'in_review');
+  assert.equal(statusOf(h, 'wire'), 'pending');
+  h.store.close();
+});
+
+test('one dependency merged and one open readies the rejoin, based on the one still open', async () => {
+  const h = rejoinSetup();
+  const open = inReview(h, 'api', 41);
+  const schema = h.store.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
+  h.store.updatePlanPart(schema.id, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 });
+
+  await h.reconciler.reconcile(world([open]));
+  assert.equal(statusOf(h, 'wire'), 'ready', 'one unsettled dependency is the ordinary stack');
+
+  const parts = h.store.listPlanParts(h.planId);
+  const wire = parts.find((p) => p.slug === 'wire')!;
+  assert.equal(partBase(wire, bySlug(parts), 12, 'main'), 'issue/12/api', 'it stacks on the one still in flight');
+  h.store.close();
+});
+
+test('both dependencies merged readies the rejoin on the integration branch', async () => {
+  const h = rejoinSetup();
+  for (const [slug, number] of [
+    ['schema', 40],
+    ['api', 41],
+  ] as const) {
+    const part = h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!;
+    h.store.updatePlanPart(part.id, { status: 'merged', branch: `issue/12/${slug}`, prNumber: number });
+  }
+
+  await h.reconciler.reconcile(world());
+  assert.equal(statusOf(h, 'wire'), 'ready');
+
+  const parts = h.store.listPlanParts(h.planId);
+  const wire = parts.find((p) => p.slug === 'wire')!;
+  // Nothing is open, so there is nothing to stack on and no choice to make — which
+  // is the whole reason a rejoin is safe and the old cap was too strict.
+  assert.equal(partBase(wire, bySlug(parts), 12, 'main'), 'main');
+  h.store.close();
+});
+
+test('a rejoin waits on every dependency, not just the ones that have settled', async () => {
+  const h = rejoinSetup();
+  // `api` merged, `schema` has an agent but has pushed nothing. One unsettled, so
+  // the arity half passes; the satisfaction half must still hold `wire`.
+  const api = h.store.listPlanParts(h.planId).find((p) => p.slug === 'api')!;
+  h.store.updatePlanPart(api.id, { status: 'merged', branch: 'issue/12/api', prNumber: 41 });
+  const schema = h.store.listPlanParts(h.planId).find((p) => p.slug === 'schema')!;
+  const task = h.store.createTask({
+    kind: 'code',
+    title: 'Schema',
+    prompt: 'p',
+    branch: 'issue/12/schema',
+    originRef: 'issue:12:part:schema',
+  });
+  h.store.markPartDispatched(schema.id, task.id, 'issue/12/schema');
+
+  await h.reconciler.reconcile(world());
+  assert.equal(statusOf(h, 'wire'), 'pending', 'basing on an empty branch gains nothing');
+
+  h.git.setDivergence('issue/12/schema', 'main', { ahead: 1, behind: 0 });
+  await h.reconciler.reconcile(world());
+  assert.equal(statusOf(h, 'wire'), 'ready');
   h.store.close();
 });

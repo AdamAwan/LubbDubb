@@ -269,7 +269,7 @@ export interface PlanPart {
   seq: number;
   title: string;
   scope: string;
-  /** Sibling slugs this part stacks on (at most one). */
+  /** Sibling slugs this part needs first: one to stack on it, several to rejoin them. */
   dependsOn: string[];
   /** Why this is its own PR rather than folded into a sibling. */
   rationale: string | null;

@@ -107,12 +107,18 @@ Validation (`PlanDocumentSchema`, zod):
 - `slug` matches `^[a-z0-9][a-z0-9-]*$` and is unique within the document. It is the **merge key**: an
   amended plan merges on it, so it must survive a replan.
 - `scope` (files/areas this part owns) is non-empty.
-- `dependsOn` names **at most one** sibling. This is the static form of "a part may stack on at most
-  one _open_ dependency": with two, both could be in review at once and there would be no single
-  branch to base on. Enforced here rather than discovered at dispatch, where the plan is already
-  persisted.
+- `dependsOn` names **any number** of siblings, and arity is deliberately **not** constrained here.
+  It was capped at one, as the static form of "a part may stack on at most one _open_ dependency" —
+  but that cap refused something safe. A part naming several prerequisites is a **rejoin**: it starts
+  only once all of them have settled, at which point _none_ is open and its base is unambiguously the
+  integration branch. The dangerous case — two dependencies still in flight, with no single branch to
+  cut from — is still refused, by `PlanReconciler.readiness` rather than here, because "open" is a
+  thing only the scheduler can observe. See [The arity rule](#the-arity-rule-where-it-lives) below.
 - A dependency must resolve to a declared slug and must not be the part itself.
-- Dependency cycles are rejected (`findDependencyCycle`). A cycle would deadlock every part in it.
+- Dependency cycles are rejected (`findDependencyCycle`). A cycle would deadlock every part in it. The
+  walk is depth-first over **every** edge, not down a single chain: while arity was capped at one a
+  chain walk _was_ the whole graph, but the moment a part may name several a cycle reachable only
+  through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
 
 `parsePlanDocument(raw)` parses JSON then validates; `validatePlanDocument(value)` validates an
 already-decoded object. The `plan_submit` tool enters at the second, the file path at the first —
@@ -203,12 +209,12 @@ answer the agent) records the error alone.
 | Function                                                 | Answers                                                                                                      |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `bySlug(parts)`                                          | An index for the dependency walks.                                                                           |
-| `dependencyOf(part, index)`                              | The single dependency, or null.                                                                              |
-| `partDepth(part, index)`                                 | How deep in a stack. Bounded by the part count, so a surviving cycle cannot spin.                            |
+| `dependenciesOf(part, index)`                            | The declared dependencies, in declared order, skipping slugs the index no longer holds.                       |
+| `partDepth(part, index)`                                 | How deep in a stack — **longest path**, so a rejoin never sorts ahead of what it waits on. Cycle-guarded.     |
 | `partSettled(part)`                                      | `merged` \| `concluded` — has this part reached a terminal. The one place that says so.                      |
 | `partOutcomeKind(part)`                                  | `code` (derived from `merged`), the stored kind for `concluded`, else null.                                  |
 | `dependencySatisfied(dep, pushed)`                       | `partSettled` unconditionally; `dispatched`/`in_review` only when the branch carries commits beyond base.    |
-| `partBase(part, index, n, defaultBranch)`                | The dependency's branch while it is in flight; the integration branch once it settled or when there is none. |
+| `partBase(part, index, n, defaultBranch)`                | The one unsettled dependency's branch; the integration branch once all have settled or when there are none.   |
 | `liveParts(parts)`                                       | Everything not `retired`. **Every** count, roll-up, prompt and rule reads this.                              |
 | `planProgress(parts)`                                    | `{settled, total}` over live parts.                                                                          |
 | `partHasWork(part)`                                      | `dispatched` \| `in_review` \| `partSettled`.                                                                |
@@ -221,6 +227,34 @@ answer the agent) records the error alone.
 
 `dependencySatisfied` is why `dispatched` is not enough on its own: a dispatched part's branch exists
 the moment its worktree does, and basing on an empty branch gains nothing.
+
+### The arity rule: where it lives
+
+A part may declare any number of prerequisites, and exactly one rule governs what that means:
+
+> Every dependency must be satisfied, **and at most one of them may still be unsettled.**
+
+Both halves are enforced in one place, `PlanReconciler.readiness`, because both are readings of the
+world rather than of the document. The second half is what the zod arity cap used to approximate: it
+exists because `partBase` cuts this part's branch from the unsettled dependency, and with two in flight
+there are two candidate branches and no way to choose between them.
+
+What that buys is the **rejoin** — a part naming two prerequisites that ran in parallel lanes. It is
+held `pending` while either is in flight, becomes `ready` once both have settled, and bases on the
+integration branch, because by then there is nothing open to stack on. The chain is unchanged: one
+dependency means the part starts as soon as that dependency has _pushed_ (not merged) and stacks on its
+branch, which is the existing behaviour of every plan written before this.
+
+Two consequences worth stating:
+
+- **A chain costs exactly the git reads it always did.** Only an unsettled dependency is worth a
+  shell-out — `dependencySatisfied` answers for a settled one without asking git — and after the
+  at-most-one test there is at most one such dependency, so `readiness` makes at most one
+  `hasCommitsBeyond` call per part either way.
+- **`partBase` is never asked to choose.** Readiness holds the part `pending` in the only case where it
+  would have to. If it somehow is asked, declared order decides rather than the function throwing: a
+  base that is merely the wrong one of two is a rebase, where a throw takes the pulse's whole dispatch
+  down with it.
 
 `siblingContext` splits by whether the work exists yet, because the halves mean different things to
 the agent: `done` is code it may find on its branch and must not redo, `remaining` is work explicitly
@@ -424,9 +458,11 @@ Per part, in order, first non-null wins:
    re-dispatched through the per-part origin's cooldown and attempt cap.
 
 Then readiness: for parts in `pending`/`ready`/`blocked`, `ready` once every dependency has pushed a
-branch worth stacking on, else `pending`. Readiness is computed against a **working copy** with this
-pulse's observations already applied, so a dependency that merged this cycle unblocks its dependent in
-the same cycle.
+branch worth stacking on **and at most one of them is still unsettled**, else `pending` — see
+[The arity rule](#the-arity-rule-where-it-lives), which lives here and nowhere else. Readiness is
+computed against a **working copy** with this pulse's observations already applied, so a dependency that
+merged this cycle unblocks its dependent in the same cycle — which is also what releases a rejoin the
+moment its last prerequisite merges.
 
 Retired parts are skipped entirely — there is no reality to fold on, and nothing should quietly bring
 them back.
