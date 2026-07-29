@@ -1,4 +1,4 @@
-import type { RecoveryVerdict } from '../types.js';
+import type { RecoveryVerdict, WorkNodeView } from '../types.js';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
@@ -48,4 +48,15 @@ export interface CockpitActions {
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
   setStoryWatched(storyId: string, watched: boolean): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
+
+  /**
+   * One work item's durable subtree (`GET /api/work/:ref`), fetched on demand.
+   *
+   * A read rather than a mutation, and on this seam for the same reason every
+   * mutation is: a skin may not import `api.js`, so without it the Goal Floor
+   * could not reach the record at all. It is deliberately **not** a snapshot key
+   * — the graph never forgets, so shipping the forest on every poll would be the
+   * wrong shape, which is why `/api/work` is its own route.
+   */
+  fetchWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[] }>;
 }

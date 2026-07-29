@@ -42,8 +42,16 @@ export function botState(agent: Agent): 'working' | 'idle' | 'spent' {
   return 'spent';
 }
 
-/** How urgently a machine's status reads. `bad` is the red one, and stays rationed. */
-export type StatusTone = 'ok' | 'warn' | 'bad' | 'idle' | 'off';
+/**
+ * How urgently a machine's status reads. `bad` is the red one, and stays rationed.
+ *
+ * `ghost` and `next` arrived with the Goal Floor and are not shades of the five
+ * above: a ghost is *drawn but not built* — an unapproved decomposition, a part
+ * whose prerequisite has not merged — which is neither a fault nor an idle
+ * machine, and `next` is the one thing that could start now, which had been
+ * reading as `warn` and so as a mild fault.
+ */
+export type StatusTone = 'ok' | 'warn' | 'bad' | 'idle' | 'off' | 'ghost' | 'next';
 
 /**
  * A tone's colour, for the SVG half of the floor.
@@ -64,6 +72,10 @@ export function toneColor(tone: StatusTone): string {
       return 'var(--blue)';
     case 'off':
       return 'var(--grey)';
+    case 'ghost':
+      return 'var(--fx-ghost)';
+    case 'next':
+      return 'var(--accent)';
   }
 }
 
@@ -174,4 +186,270 @@ export function signalPolarity(kind: WorldEventKind): SignalPolarity {
  */
 export function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+/* ======================= the Goal Floor's own nouns =======================
+ *
+ * One arm per stage of `docs/workflow.md`, beside `bayMachineStatus` and
+ * `crateMachineStatus` rather than inside the floor's component, for the reason
+ * stated at the top of this file: the floor draws the same work in a rail, in a
+ * plate and in the patch strip, and a stage that answered differently in two of
+ * them would be a costume rather than a view.
+ *
+ * Each closed input set is a `Record`, not a `switch` with a default: a status
+ * added to the harness then fails `typecheck:web` on the day it is written,
+ * rather than rendering a blank word at 3am. The lookups are functions so the
+ * exhaustive test has one thing to call.
+ */
+
+/** Whether a machine is built, drawn-but-not-built, or never reached at all. */
+export type MachinePresence = 'built' | 'ghost' | 'unbuilt';
+
+/** Every stage of the workflow that is a machine. Fixtures are not in here. */
+export type FloorStage =
+  | 'patch'
+  | 'assay'
+  | 'furnace'
+  | 'assembler'
+  | 'pr'
+  | 'silo'
+  | 'satellite'
+  | 'manifest'
+  | 'signal'
+  | 'launch';
+
+const STAGE_ICONS: Record<FloorStage, IconName> = {
+  patch: 'patch',
+  assay: 'drill',
+  furnace: 'furnace',
+  assembler: 'assembler',
+  pr: 'pr',
+  silo: 'chest',
+  satellite: 'satellite',
+  manifest: 'doc',
+  signal: 'signal',
+  launch: 'rocket',
+};
+
+/** Which machine draws a stage. One mapping, so the strip and the floor agree. */
+export function iconForStage(stage: FloorStage): IconName {
+  return STAGE_ICONS[stage];
+}
+
+/**
+ * A plan part's progress, folded from `PlanPart.status` by `partProgress` — the
+ * structural half, so this file decides only what it is *called*.
+ */
+export type PartProgress = 'shipped' | 'building' | 'ready' | 'locked' | 'blocked';
+
+/** Every `issuePickupStatus` verdict, as the ore patch reads it. */
+type PickupStatus =
+  | 'done'
+  | 'has_pr'
+  | 'active'
+  | 'ignored'
+  | 'unwatched'
+  | 'planning'
+  | 'delivered'
+  | 'assay'
+  | 'cooldown'
+  | 'escalated'
+  | 'blocked'
+  | 'eligible';
+
+const PATCH_WORDS: Record<PickupStatus, MachineStatus> = {
+  // "Worked out" rather than "empty": a delivered goal is a patch that gave up
+  // everything it had, which is the good ending, not an absence.
+  done: { word: 'Worked out', tone: 'ok' },
+  delivered: { word: 'Worked out', tone: 'ok' },
+  has_pr: { word: 'Being mined', tone: 'ok' },
+  active: { word: 'Being mined', tone: 'ok' },
+  planning: { word: 'Being mined', tone: 'ok' },
+  eligible: { word: 'Ready to mine', tone: 'next' },
+  // The patch is untouched *because a drill said so* — the drill carries the
+  // reason, so the patch says only that nothing has been taken out of it.
+  assay: { word: 'Untouched', tone: 'idle' },
+  cooldown: { word: 'Between shifts', tone: 'warn' },
+  escalated: { word: 'Needs you', tone: 'bad' },
+  blocked: { word: 'No power', tone: 'off' },
+  ignored: { word: 'Left alone', tone: 'off' },
+  unwatched: { word: 'No claim staked', tone: 'off' },
+};
+
+/**
+ * The ore patch — a ticket, and the head of every floor.
+ *
+ * An unknown status falls back rather than rendering blank: the snapshot is a
+ * wire format and a cockpit may be a version behind its server.
+ */
+export function patchStatus(status: string): MachineStatus {
+  return PATCH_WORDS[status as PickupStatus] ?? { word: 'Unsurveyed', tone: 'off' };
+}
+
+/**
+ * The assay drill (rule 3f).
+ *
+ * There are only two verdicts because the third — nobody has judged this goal —
+ * is drawn by there being **no drill on the floor at all**. That is the whole
+ * point of #158 having given intake a verdict, and a third word here would put
+ * the feature back: an absent machine and a stopped one must not be told apart
+ * by reading their captions.
+ */
+export function assayStatus(verdict: 'workable' | 'unclear'): MachineStatus {
+  return verdict === 'workable' ? { word: 'Cleared', tone: 'ok' } : { word: 'Stopped', tone: 'bad' };
+}
+
+/** Every `Plan.status`, as the furnace reads it. */
+type PlanStatus = 'planning' | 'single' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
+
+const FURNACE_WORDS: Record<PlanStatus, MachineStatus> = {
+  planning: { word: 'Smelting', tone: 'idle' },
+  // A `single` verdict is a decision, not an absence: the planner read the
+  // repository and said one pull request will do. Nothing drew that before.
+  single: { word: 'No splitter', tone: 'ok' },
+  awaiting_approval: { word: 'Blueprint on the desk', tone: 'ghost' },
+  active: { word: 'Plan active', tone: 'ok' },
+  complete: { word: 'Plan complete', tone: 'ok' },
+  abandoned: { word: 'Gone cold', tone: 'off' },
+};
+
+/** The furnace — the planner (rule 3c). A floor with no plan draws it unbuilt. */
+export function furnaceStatus(status: string): MachineStatus {
+  return FURNACE_WORDS[status as PlanStatus] ?? { word: 'Gone cold', tone: 'off' };
+}
+
+const ASSEMBLER_WORDS: Record<PartProgress, MachineStatus> = {
+  shipped: { word: 'Shipped', tone: 'ok' },
+  building: { word: 'Working', tone: 'idle' },
+  ready: { word: 'Ready to start', tone: 'next' },
+  locked: { word: 'Locked', tone: 'ghost' },
+  blocked: { word: 'Jammed', tone: 'bad' },
+};
+
+/**
+ * An assembly machine — one plan part.
+ *
+ * `ahead` is how many merges are still owed before it can start, and it is a
+ * count rather than a name because a merger waits on several: "locked · 2 ahead"
+ * is the one reading a chain never had to give.
+ *
+ * A part of an unapproved plan says **not connected** whatever its own status —
+ * every part of such a plan is `ready`, and drawing five ready machines that no
+ * bot will ever reach is the invisibility `unapproved` was added to `QueueItem`
+ * to fix.
+ */
+export function assemblerStatus(progress: PartProgress, opts: { ghost?: boolean; ahead?: number }): MachineStatus {
+  if (opts.ghost) return { word: 'Not connected', tone: 'ghost' };
+  const base = ASSEMBLER_WORDS[progress];
+  if (progress === 'locked' && (opts.ahead ?? 0) > 0) {
+    return { word: `Locked · ${opts.ahead} ahead`, tone: base.tone };
+  }
+  return base;
+}
+
+/** What a pull request machine is doing, from the verdicts already on the PR. */
+export type PrMachineReading = 'shipped' | 'scrapped' | 'repairing' | 'held' | 'blocked' | 'on_the_pad';
+
+const PR_WORDS: Record<PrMachineReading, MachineStatus> = {
+  shipped: { word: 'Shipped', tone: 'ok' },
+  // Closed without merging. Never inferred from a PR disappearing — the server
+  // only sets `state: 'closed'` on an abandonment it actually observed.
+  scrapped: { word: 'Scrapped', tone: 'off' },
+  repairing: { word: 'Repair en route', tone: 'bad' },
+  held: { word: 'Held — not ours', tone: 'warn' },
+  blocked: { word: 'Held', tone: 'warn' },
+  on_the_pad: { word: 'On the pad', tone: 'ok' },
+};
+
+export function prMachineStatus(reading: PrMachineReading): MachineStatus {
+  return PR_WORDS[reading];
+}
+
+/**
+ * One scanner on the belt — a quality gate.
+ *
+ * The states are the arms of the CI classification verdict plus the two a
+ * *passing* or *pending* gate needs, and never a check's name: a floor running
+ * against a config naming any check at all renders correctly with no code change
+ * here, which is why no check name from any workplace appears in this repository.
+ */
+export type ScannerState = 'pass' | 'damaged' | 'not_ours' | 'muted' | 'awaiting';
+
+const SCANNER_WORDS: Record<ScannerState, MachineStatus> = {
+  pass: { word: 'pass', tone: 'ok' },
+  damaged: { word: 'damaged', tone: 'bad' },
+  // The rule for this check says wait, so no bot is sent — and the reason
+  // travels to the one that is (`ciFailureNote`), which is why it is named here
+  // rather than hidden.
+  not_ours: { word: 'not ours', tone: 'warn' },
+  muted: { word: 'muted', tone: 'off' },
+  awaiting: { word: 'awaiting', tone: 'idle' },
+};
+
+export function scannerStatus(state: ScannerState): MachineStatus {
+  return SCANNER_WORDS[state];
+}
+
+/** The silo — the goal filling with delivered parts. */
+export function siloStatus(filled: number, total: number): MachineStatus {
+  if (total === 0) return { word: 'No recipe', tone: 'off' };
+  if (filled >= total) return { word: 'Full', tone: 'ok' };
+  return filled === 0 ? { word: 'Empty', tone: 'idle' } : { word: 'Filling', tone: 'idle' };
+}
+
+/** What the goal check (rule 3e) has said, if anything. */
+export type SatelliteReading = 'unbuilt' | 'verified' | 'more_work' | 'returned';
+
+const SATELLITE_WORDS: Record<SatelliteReading, MachineStatus> = {
+  unbuilt: { word: 'Not yet built', tone: 'off' },
+  verified: { word: 'Verified', tone: 'ok' },
+  more_work: { word: 'More work found', tone: 'warn' },
+  returned: { word: 'Sent it back', tone: 'bad' },
+};
+
+export function satelliteStatus(reading: SatelliteReading): MachineStatus {
+  return SATELLITE_WORDS[reading];
+}
+
+/** The manifest — report what was done, off `issue.conclusion.note`. */
+export function manifestStatus(hasNote: boolean): MachineStatus {
+  return hasNote ? { word: 'Filed', tone: 'ok' } : { word: 'Nothing written', tone: 'off' };
+}
+
+/**
+ * The signal post — update the ticket.
+ *
+ * It claims the **state move alone**. The plan's status comment is real and is
+ * not on the wire (`plans.status_comment_ref` is server-side only), so a second
+ * line here would be a machine reading a field the cockpit cannot see; quality-
+ * pillar commentary is not drawn for the stronger version of the same reason —
+ * nothing in the harness writes it.
+ */
+export function signalPostStatus(workItemState: string | null | undefined): MachineStatus {
+  return workItemState ? { word: 'Posted', tone: 'ok' } : { word: 'No state to move', tone: 'off' };
+}
+
+/** The launch — `delivered`, or a launch that failed verification. */
+export function launchStatus(returned: boolean): MachineStatus {
+  return returned ? { word: 'Returned', tone: 'bad' } : { word: 'Away', tone: 'ok' };
+}
+
+/**
+ * Where a shortfall sends the work back to, in the floor's own terms.
+ *
+ * The cause is *declared* by the assessor, never derived — deriving it would
+ * route every shortfall to a replan — so the three arms stay three, and a
+ * shortfall naming nothing is a fourth answer rather than a guessed `goal`.
+ */
+export function returnRoute(cause: 'plan' | 'part' | 'goal' | null): string {
+  switch (cause) {
+    case 'plan':
+      return 'back to the furnace';
+    case 'part':
+      return 'one more assembler';
+    case 'goal':
+      return 'back to the patch';
+    default:
+      return 'no route named';
+  }
 }

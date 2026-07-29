@@ -399,3 +399,62 @@ test('listPolicyCiChecks: azure counts only enabled, blocking, named CI policies
   assert.deepEqual(listPolicyCiChecks(evals), [{ name: 'CI build', status: 'failing' }]);
   assert.equal(aggregatePolicyCiStatus(evals), 'failing');
 });
+
+// --------------------------------------------------------------------------
+// The cockpit's half (issue #168)
+// --------------------------------------------------------------------------
+
+test('/api/state ships the classification verdict, from the same call the dispatcher makes', async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { buildSystem } = await import('../src/system.js');
+  const { FakePtyBackend } = await import('../src/pty/fakeBackend.js');
+  const { buildStateSnapshot } = await import('../src/server/app.js');
+
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-ci-'));
+  const ci: CiPolicy = {
+    checks: [
+      { match: 'flaky*', onFailure: 'ignore' },
+      { match: 'deploy/*', onFailure: 'escalate' },
+    ],
+  };
+  const system = buildSystem(
+    loadConfig({
+      auth: { enabled: false } as never,
+      dbPath: ':memory:',
+      dispatcher: 'rule',
+      agentMode: 'raw',
+      deskRoot: join(dir, 'desk'),
+      worktreeRoot: join(dir, 'wt'),
+      heartbeatIntervalMs: 999_999,
+      ci,
+    }),
+    { backend: new FakePtyBackend(), errorMirror: () => {} },
+  );
+
+  // The baseline is seeded rather than pulsed: the verdict under test is the one
+  // the cockpit reads, and a cycle would put an agent on the red CI as well.
+  const checks: CiCheck[] = [
+    { name: 'unit', status: 'failing' },
+    { name: 'deploy/preview', status: 'failing' },
+    { name: 'flaky-suite', status: 'failing' },
+  ];
+  const world = await system.connector.getState();
+  system.store.setWorldBaseline({
+    ...world,
+    pullRequests: [pr(31, { ciStatus: 'failing', ciChecks: checks })],
+  });
+
+  const snapshot = buildStateSnapshot(system) as unknown as {
+    world: { pullRequests: { number: number; ciVerdict: unknown }[] };
+  };
+  const shipped = snapshot.world.pullRequests.find((p) => p.number === 31)!.ciVerdict;
+  // Asserted against the function itself rather than against a transcribed
+  // literal: a second expectation written out by hand is a second implementation
+  // of the classifier, and the whole reason this is computed server-side is that
+  // two answers to this question drift silently — the floor saying *repair* while
+  // the harness held.
+  assert.deepEqual(shipped, classifyCiFailures(checks, ci));
+  system.store.close?.();
+});

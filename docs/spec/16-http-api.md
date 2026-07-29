@@ -181,7 +181,7 @@ touches the tracker**: `closed` stays the human's.
 ### `POST /api/issues/:number/shortfall`
 
 Body `{cause: 'plan'|'part'|'goal'|null, part?: string, summary?: string}`. The operator's arm of the
-assessor's *negative* verdict — the issue was worked and its goal is still not reached — and, more
+assessor's _negative_ verdict — the issue was worked and its goal is still not reached — and, more
 importantly, the escape hatch it has to have. `cause: null` **clears** the row (a delete, so "nothing
 fell short" has one representation); anything else records one, which clears any standing delivery in
 the store. `cause: 'part'` requires the part slug in `part`. 400 on a non-integer issue number, an
@@ -424,31 +424,31 @@ anything that is not `/api` or `/ws` — so client-side routing works.
 `buildStateSnapshot(system)` assembles everything the cockpit needs in one response. Several values are
 read **once** and shared, so two parts of the UI cannot disagree.
 
-| Key                  | Contents                                                                                                                      |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`.  |
-| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                     |
-| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                 |
-| `world`              | The snapshot, with `health` and `attention` attached per open PR and `pickup` per issue.                                      |
-| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads.                                                                      |
-| `tasks`              | Every task.                                                                                                                   |
-| `jobs`               | Operator jobs, newest first.                                                                                                  |
-| `agents`             | Every agent row, including usage and the progress note.                                                                       |
-| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                      |
-| `files`              | Every file every agent wrote.                                                                                                 |
-| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                |
-| `findings`           | Every finding.                                                                                                                |
-| `escalations`        | Every escalation.                                                                                                             |
-| `recovery`           | Agents the previous run orphaned, each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**. |
-| `decisions`          | The last 100 decisions.                                                                                                       |
-| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher.                 |
-| `worldEvents`        | The last 100 world events.                                                                                                    |
-| `errors`             | The last 100 recorded failures.                                                                                               |
-| `refUrls`            | The `ref → URL` map.                                                                                                          |
-| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                              |
-| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                  |
+| Key                  | Contents                                                                                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`.        |
+| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                           |
+| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                       |
+| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall` and `assay` per issue. |
+| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads.                                                                            |
+| `tasks`              | Every task.                                                                                                                         |
+| `jobs`               | Operator jobs, newest first.                                                                                                        |
+| `agents`             | Every agent row, including usage and the progress note.                                                                             |
+| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                            |
+| `files`              | Every file every agent wrote.                                                                                                       |
+| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                      |
+| `findings`           | Every finding.                                                                                                                      |
+| `escalations`        | Every escalation.                                                                                                                   |
+| `recovery`           | Agents the previous run orphaned, each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.       |
+| `decisions`          | The last 100 decisions.                                                                                                             |
+| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher.                       |
+| `worldEvents`        | The last 100 world events.                                                                                                          |
+| `errors`             | The last 100 recorded failures.                                                                                                     |
+| `refUrls`            | The `ref → URL` map.                                                                                                                |
+| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                    |
+| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                        |
 
-Four consistency points:
+Six consistency points:
 
 - **The pickup verdict uses the same inputs rule 4 consults** — the policy, `DEFAULT_COOLDOWN`, the
   world's `takenAt`, tasks, the last 200 decisions, the **unfiltered** open PR list, the plan graph,
@@ -461,6 +461,20 @@ Four consistency points:
   same decision window, plus the proposals and the world events since the oldest standing rejection
   (`rejectionSignalQuery` → `Store.listWorldEventsSince`, so nothing is read until an operator has
   rejected something). Nothing in the dispatcher reads it.
+- **The CI verdict is `classifyCiFailures(pr.ciChecks, config.ci)`**, beside `health` and `attention`
+  and computed from the **same call the dispatcher makes** (see [07](07-pull-requests.md)). The
+  alternative — shipping `config.ci` and re-matching in the browser — means a second glob matcher and
+  a second first-match-wins ordering living nowhere near the rule they duplicate, and it fails
+  silently: the cockpit would say _repair_ while the harness held. `test/ciPolicy.test.ts` asserts the
+  shipped value against the function itself rather than against a transcribed literal, so a second
+  expectation written out by hand cannot become a second implementation.
+- **The assay verdict sits beside `conclusion` and `shortfall`, not inside `pickup`** — pickup answers
+  "would an agent start next cycle", the assay answers "is there anything here to start on" (see
+  [06](06-issue-pickup.md)). `{verdict, summary, by, decidedAt}`, or **null**, and null is a third
+  reading rather than a synonym for `workable`: `pickup.reasons[0]` already carries the refusal text,
+  but "refused" and "awaiting a verdict" differ _only_ in that prose, and telling them apart by reading
+  a string written for a human is what `signalPolarity` refuses to do. `goalRef` is deliberately not
+  shipped — it is the fingerprint the hold is measured against, not a reading.
 - **`refUrls` covers closed PRs too**, since the cockpit's "recently closed" section links their
   numbers, and it resolves finding refs directly (a finding often names an item not in the world).
 

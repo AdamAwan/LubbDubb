@@ -20,7 +20,7 @@ import { Modal } from './components/Modal.js';
 import { Production, ProductionTile } from './components/Production.js';
 import { Signals } from './components/Signals.js';
 import { Silos } from './components/Silos.js';
-import { TechTree } from './components/TechTree.js';
+import { GoalFloor } from './components/GoalFloor.js';
 import { powerReading } from './power.js';
 import { productionReading } from './production.js';
 import { clip } from './vocabulary.js';
@@ -277,24 +277,33 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     </section>
   );
 
-  const research = (
-    <section className="fx-card fx-bev" data-fx="research">
+  // The floor takes the Research slot, and replaces what stood there. The tech
+  // tree drew a plan's parts by depth and stopped at the part; the floor lays the
+  // same parts out in the same dependency order and adds everything on either
+  // side of them. Keeping both would have left two components deriving a part's
+  // state from `PlanPart.status` independently.
+  const goalFloor = (
+    <section className="fx-card fx-bev" data-fx="goal-floor">
       <div className="fx-head">
         <div>
-          <Icon name="blueprint" />
-          <h2>Research</h2>
+          <Icon name="patch" />
+          <h2>Goal Floor</h2>
         </div>
-        <p className="fx-note">depth is how many merges must land first</p>
+        <p className="fx-note">one goal, patch to launch</p>
       </div>
-      <TechTree
+      <GoalFloor
+        issues={state.world.issues}
         plans={state.plans ?? []}
         parts={state.planParts ?? []}
+        openPrs={state.world.pullRequests}
+        closedPrs={state.world.closedPullRequests ?? []}
+        tasks={state.tasks}
         upcoming={state.upcoming?.items ?? []}
-        now={now}
         refUrls={state.refUrls}
-        paused={stopped}
-        onReplan={(planId) => actions.replan(planId)}
+        stopped={stopped}
         onViewPlan={(id) => actions.viewPlan(id)}
+        onReplan={(planId) => actions.replan(planId)}
+        onFetchWork={(ref) => actions.fetchWorkSubtree(ref)}
       />
     </section>
   );
@@ -415,7 +424,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         <div className="fx-rail fx-rail-floor">
           {line}
           {bots}
-          {research}
+          {goalFloor}
           {yard}
           {offBlueprint}
         </div>

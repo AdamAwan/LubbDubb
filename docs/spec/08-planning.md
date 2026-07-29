@@ -69,11 +69,11 @@ explicit replan — ingestion writes `single` or `active` — so the narrowed wi
 throttle on a first-time planner.
 
 The boundary is **strict** (`>`, not `>=`): an attempt stamped in the same millisecond as
-`plan.updatedAt` is the *previous* planner's. The two writes are ordered by construction — the
+`plan.updatedAt` is the _previous_ planner's. The two writes are ordered by construction — the
 dispatch decision is recorded by a cycle that ran before the operator asked, and `/replan` moves the
 plan afterwards — so only the clock's millisecond resolution makes them look simultaneous. Reading
 that tie as "this replan has already had an attempt" is exactly the dead button the window exists to
-prevent; the cost the other way is at most one uncooled re-dispatch when a replan's *own* planner is
+prevent; the cost the other way is at most one uncooled re-dispatch when a replan's _own_ planner is
 dispatched inside the same millisecond as the request, and the origin gate already stops that being a
 second concurrent planner.
 
@@ -200,24 +200,24 @@ answer the agent) records the error alone.
 
 `src/plans/parts.ts` — all pure.
 
-| Function                                                 | Answers                                                                                                     |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `bySlug(parts)`                                          | An index for the dependency walks.                                                                          |
-| `dependencyOf(part, index)`                              | The single dependency, or null.                                                                             |
-| `partDepth(part, index)`                                 | How deep in a stack. Bounded by the part count, so a surviving cycle cannot spin.                           |
-| `partSettled(part)`                                      | `merged` \| `concluded` — has this part reached a terminal. The one place that says so.                     |
-| `partOutcomeKind(part)`                                  | `code` (derived from `merged`), the stored kind for `concluded`, else null.                                 |
-| `dependencySatisfied(dep, pushed)`                       | `partSettled` unconditionally; `dispatched`/`in_review` only when the branch carries commits beyond base.   |
+| Function                                                 | Answers                                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `bySlug(parts)`                                          | An index for the dependency walks.                                                                           |
+| `dependencyOf(part, index)`                              | The single dependency, or null.                                                                              |
+| `partDepth(part, index)`                                 | How deep in a stack. Bounded by the part count, so a surviving cycle cannot spin.                            |
+| `partSettled(part)`                                      | `merged` \| `concluded` — has this part reached a terminal. The one place that says so.                      |
+| `partOutcomeKind(part)`                                  | `code` (derived from `merged`), the stored kind for `concluded`, else null.                                  |
+| `dependencySatisfied(dep, pushed)`                       | `partSettled` unconditionally; `dispatched`/`in_review` only when the branch carries commits beyond base.    |
 | `partBase(part, index, n, defaultBranch)`                | The dependency's branch while it is in flight; the integration branch once it settled or when there is none. |
-| `liveParts(parts)`                                       | Everything not `retired`. **Every** count, roll-up, prompt and rule reads this.                             |
-| `planProgress(parts)`                                    | `{settled, total}` over live parts.                                                                         |
-| `partHasWork(part)`                                      | `dispatched` \| `in_review` \| `partSettled`.                                                               |
-| `partOutcomeNote(part)`                                  | What a non-code part is told, appended to its rendered prompt. Empty for a code or unstated part.           |
-| `partsToRetire(existing, declared)`                      | Which parts an amendment retires.                                                                           |
-| `amendedPlanStatus(verdict, surviving, requireApproval)` | The status an ingested or amended plan resolves to.                                                         |
-| `currentPlanSummary(plan, parts)`                        | The current plan rendered for a replanning agent — slug, status, PR/branch, dependency, scope.              |
-| `siblingContext(parts, current)`                         | `{done, remaining}` for the part prompt.                                                                    |
-| `observePartPr(part, branch, openPrs, closedPrs)`        | The pure core of PR observation (below).                                                                    |
+| `liveParts(parts)`                                       | Everything not `retired`. **Every** count, roll-up, prompt and rule reads this.                              |
+| `planProgress(parts)`                                    | `{settled, total}` over live parts.                                                                          |
+| `partHasWork(part)`                                      | `dispatched` \| `in_review` \| `partSettled`.                                                                |
+| `partOutcomeNote(part)`                                  | What a non-code part is told, appended to its rendered prompt. Empty for a code or unstated part.            |
+| `partsToRetire(existing, declared)`                      | Which parts an amendment retires.                                                                            |
+| `amendedPlanStatus(verdict, surviving, requireApproval)` | The status an ingested or amended plan resolves to.                                                          |
+| `currentPlanSummary(plan, parts)`                        | The current plan rendered for a replanning agent — slug, status, PR/branch, dependency, scope.               |
+| `siblingContext(parts, current)`                         | `{done, remaining}` for the part prompt.                                                                     |
+| `observePartPr(part, branch, openPrs, closedPrs)`        | The pure core of PR observation (below).                                                                     |
 
 `dependencySatisfied` is why `dispatched` is not enough on its own: a dispatched part's branch exists
 the moment its worktree does, and basing on an empty branch gains nothing.
@@ -464,7 +464,7 @@ withdraws any pending plan proposal, and kicks a cycle. That is all it does.
 Clearing `discussing` is not optional when a replan is requested mid-conversation: the flag is what
 picks the template rule 3c renders from `planning`, so leaving it set would render `discuss-plan` on
 the next dispatch instead of the `issue-replan` this call actually asked for — the two routes would
-disagree about what plain `planning` means. `PlanPanel.tsx` and the factory skin's `TechTree.tsx` keep
+disagree about what plain `planning` means. `PlanPanel.tsx` and the factory skin's `GoalFloor.tsx` keep
 Replan visible during a discussion for exactly this reason (the modal hides it, they don't); the route
 must be safe to call in that state, not merely reachable.
 

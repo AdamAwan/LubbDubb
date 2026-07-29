@@ -5,7 +5,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
-import type { Decision, PlanPart, PullRequest, QueueItem, WorldEvent } from '../web/src/types.js';
+import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, WorldEvent } from '../web/src/types.js';
 
 // Same reason as `cockpitSkins.test.ts`: Vite compiles the cockpit's JSX with the
 // automatic runtime and `tsx` with the classic one, so the global goes in before
@@ -14,14 +14,114 @@ import type { Decision, PlanPart, PullRequest, QueueItem, WorldEvent } from '../
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { resolveSkin } = await import('../web/src/skins/registry.js');
-const { bayMachineStatus, botState, clip, crateMachineStatus, iconForOrigin, inserterPhase, signalPolarity } =
-  await import('../web/src/skins/factory/vocabulary.js');
-const { layoutTechTree, researchQueue } = await import('../web/src/skins/factory/techTree.js');
+const {
+  assayStatus,
+  assemblerStatus,
+  bayMachineStatus,
+  botState,
+  clip,
+  crateMachineStatus,
+  furnaceStatus,
+  iconForOrigin,
+  inserterPhase,
+  launchStatus,
+  manifestStatus,
+  patchStatus,
+  prMachineStatus,
+  satelliteStatus,
+  scannerStatus,
+  signalPolarity,
+  signalPostStatus,
+  siloStatus,
+  toneColor,
+  returnRoute,
+} = await import('../web/src/skins/factory/vocabulary.js');
+const { buildGoalFloor, floorFixtures, layoutFloor, partProgress } = await import(
+  '../web/src/skins/factory/goalFloor.js'
+);
 const { siloFill, siloGates } = await import('../web/src/skins/factory/silo.js');
 const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
 
 const INERT = new Proxy({} as CockpitActions, { get: () => () => Promise.resolve() });
+
+// ---- Goal Floor fixtures -------------------------------------------------
+//
+// Built by hand rather than mutated out of the demo world, because the point of
+// most of these assertions is a *state combination* the demo does not contain —
+// a refused assay, a delivered goal with its tail, a shortfall.
+const NOW = '2026-01-01T00:00:00.000Z';
+
+const PLAN: Plan = {
+  id: 'plan-9',
+  originRef: 'issue:9',
+  title: 'A goal',
+  status: 'active',
+  reason: null,
+  risks: null,
+  outOfScope: null,
+  document: null,
+  discussing: false,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+function planPart(slug: string, dependsOn: string[], status: string, seq: number): PlanPart {
+  return {
+    id: `p-${slug}`,
+    planId: 'plan-9',
+    slug,
+    seq,
+    title: slug,
+    scope: 'src/',
+    dependsOn,
+    rationale: null,
+    acceptance: null,
+    branch: null,
+    prNumber: null,
+    status,
+    taskId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function floorInput(over: {
+  plan?: Plan | null;
+  parts?: PlanPart[];
+  openPrs?: PullRequest[];
+  pickup?: string;
+  workItemState?: string;
+  linkedPrNumber?: number;
+  assay?: Issue['assay'];
+  conclusion?: Issue['conclusion'];
+  shortfall?: Issue['shortfall'];
+}) {
+  const issue: Issue = {
+    id: 'iss-9',
+    number: 9,
+    title: 'A goal',
+    body: '',
+    labels: [],
+    state: 'open',
+    workItemState: over.workItemState,
+    linkedPrNumber: over.linkedPrNumber ?? null,
+    pickup: { eligible: false, status: over.pickup ?? 'planning', reasons: [] },
+    assay: over.assay ?? null,
+    conclusion: over.conclusion,
+    shortfall: over.shortfall ?? null,
+  };
+  return {
+    issue,
+    plan: over.plan === undefined ? PLAN : over.plan,
+    parts: over.parts ?? [],
+    openPrs: over.openPrs ?? [],
+    closedPrs: [],
+    tasks: [],
+    upcoming: [],
+    recorded: [],
+  };
+}
 
 function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void, demo = true): string {
   const now = Date.parse('2026-01-01T12:00:00.000Z');
@@ -299,77 +399,68 @@ test('faults offer a clear only when there are faults', () => {
 });
 
 /**
- * `dependsOn` is a prerequisite edge, so depth is how many merges must land
- * before a part can start — the one thing a flat stack cannot show, and the
- * reason this is a tree.
+ * Position comes from **structure alone** — refs and dependency edges, no status,
+ * no timestamps — which is what stops a floor being re-laid on every poll and
+ * jittering exactly when an operator is watching it most closely.
  */
-test('the tech tree lays parts out by dependency depth', () => {
-  const part = (slug: string, dependsOn: string[], status: string, seq: number): PlanPart => ({
-    id: `p-${slug}`,
-    planId: 'plan-1',
-    slug,
-    seq,
-    title: slug,
-    scope: 'src/',
-    dependsOn,
-    rationale: null,
-    acceptance: null,
-    branch: null,
-    prNumber: null,
-    status,
-    taskId: null,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  });
+test('the floor lays out from structure and nothing else', () => {
+  const refs = ['a', 'b', 'c', 'd'];
+  const edges = [
+    { from: 'a', to: 'b' },
+    { from: 'b', to: 'c' },
+    { from: 'b', to: 'd' },
+  ];
+  const first = layoutFloor(refs, edges);
+  const columns = (l: ReturnType<typeof layoutFloor>) => refs.map((r) => l.slots.get(r)?.column);
+  assert.deepEqual(columns(first), [0, 1, 2, 2], 'column is dependency depth');
+  assert.notEqual(first.slots.get('c')?.lane, first.slots.get('d')?.lane, 'siblings share a column, not a lane');
 
-  // A chain that fans out: two parts naming one prerequisite is how a tree
-  // branches when `dependsOn` holds at most one slug.
-  const layout = layoutTechTree([
-    part('schema', [], 'merged', 1),
-    part('api', ['schema'], 'in_review', 2),
-    part('cockpit', ['api'], 'ready', 3),
-    part('docs', ['api'], 'pending', 4),
-  ]);
-
-  const col = (slug: string) => layout.nodes.find((n) => n.part.slug === slug)?.col;
-  assert.equal(col('schema'), 0);
-  assert.equal(col('api'), 1);
-  assert.equal(col('cockpit'), 2);
-  assert.equal(col('docs'), 2, 'siblings on one prerequisite share a column');
-  assert.notEqual(
-    layout.nodes.find((n) => n.part.slug === 'cockpit')?.row,
-    layout.nodes.find((n) => n.part.slug === 'docs')?.row,
-    'siblings must not be drawn on top of each other',
+  // The same structure a second time, from a fresh array (so nothing is passing
+  // by identity), must land in exactly the same places.
+  const again = layoutFloor(
+    [...refs],
+    edges.map((e) => ({ ...e })),
   );
-
-  // Only an edge out of a merged part is a path work can travel.
-  assert.equal(layout.edges.find((e) => e.fromSlug === 'schema')?.lit, true);
-  assert.equal(layout.edges.find((e) => e.fromSlug === 'api')?.lit, false);
-
-  // Locked parts are absent from the queue: a part whose prerequisite has not
-  // merged is not queued for anything, and listing it would put four items in a
-  // queue that can only start one.
-  const queue = researchQueue(layout).map((n) => n.part.slug);
-  assert.deepEqual(queue, ['api', 'cockpit']);
+  assert.deepEqual(columns(again), columns(first));
+  assert.equal(again.columns, first.columns);
+  assert.equal(again.lanes, first.lanes);
 });
 
-/** A replan retires parts, and a retired part is not work the plan still owes. */
-test('the tech tree drops retired parts', () => {
-  const base = {
-    planId: 'plan-1',
-    scope: 'src/',
-    branch: null,
-    prNumber: null,
-    taskId: null,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  };
-  const layout = layoutTechTree([
-    { ...base, id: 'a', slug: 'a', seq: 1, title: 'a', dependsOn: [], status: 'merged' },
-    { ...base, id: 'b', slug: 'b', seq: 2, title: 'b', dependsOn: ['a'], status: 'retired' },
-  ] as PlanPart[]);
-  assert.equal(layout.nodes.length, 1);
-  assert.equal(layout.edges.length, 0, 'an edge into a retired part is not a path');
+/**
+ * The converging graph the design is drawn against:
+ *
+ *     PR1 ─┬─> PR2 ──> PR4 ─┬─> PR5
+ *          └─> PR3 ──────────┘
+ *
+ * PR5 must land to the right of **everything** it waits on, which is the
+ * longest-path property and precisely what a naive `dependsOn[0]` depth gets
+ * wrong. The plan schema cannot emit this yet (#170 relaxes the arity cap); the
+ * layout tolerates it today so that change needs no cockpit change.
+ */
+test('a converging part lands right of everything it waits on', () => {
+  const refs = ['pr1', 'pr2', 'pr3', 'pr4', 'pr5'];
+  const edges = [
+    { from: 'pr1', to: 'pr2' },
+    { from: 'pr1', to: 'pr3' },
+    { from: 'pr2', to: 'pr4' },
+    { from: 'pr3', to: 'pr5' },
+    { from: 'pr4', to: 'pr5' },
+  ];
+  const layout = layoutFloor(refs, edges);
+  const col = (r: string) => layout.slots.get(r)!.column;
+  assert.equal(col('pr1'), 0);
+  assert.equal(col('pr2'), 1);
+  assert.equal(col('pr3'), 1);
+  assert.equal(col('pr4'), 2);
+  // Not 2 — which is what taking the first dependency's depth would have given.
+  assert.equal(col('pr5'), 3, 'a merger draws right of its deepest prerequisite');
+  assert.ok(col('pr5') > col('pr3') && col('pr5') > col('pr4'));
+
+  // Where the lanes divide and where they rejoin, from the edge list alone.
+  assert.deepEqual(floorFixtures(edges), [
+    { ref: 'pr1', kind: 'splitter' },
+    { ref: 'pr5', kind: 'merger' },
+  ]);
 });
 
 /**
@@ -377,22 +468,289 @@ test('the tech tree drops retired parts', () => {
  * whatever the snapshot happens to carry and a cockpit that hangs is worse than
  * one that draws a cycle flat.
  */
-test('the tech tree survives a dependency cycle', () => {
-  const base = {
-    planId: 'plan-1',
-    scope: 'src/',
-    branch: null,
-    prNumber: null,
-    taskId: null,
-    status: 'ready',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  };
-  const layout = layoutTechTree([
-    { ...base, id: 'a', slug: 'a', seq: 1, title: 'a', dependsOn: ['b'] },
-    { ...base, id: 'b', slug: 'b', seq: 2, title: 'b', dependsOn: ['a'] },
-  ] as PlanPart[]);
-  assert.equal(layout.nodes.length, 2);
+test('the floor survives a dependency cycle', () => {
+  const layout = layoutFloor(
+    ['a', 'b'],
+    [
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'a' },
+    ],
+  );
+  assert.equal(layout.slots.size, 2);
+});
+
+/** A replan retires parts, and a retired part is not work the plan still owes. */
+test('the floor drops retired parts', () => {
+  const floor = buildGoalFloor(
+    floorInput({
+      parts: [planPart('a', [], 'merged', 1), planPart('b', ['a'], 'retired', 2)],
+    }),
+  );
+  const slugs = floor.machines.filter((m) => m.kind === 'assembler').map((m) => m.ref);
+  assert.deepEqual(slugs, ['issue:9:part:a']);
+});
+
+/**
+ * Both terminals are done. A concluded part produced a write-up or a
+ * determination rather than a merge, and there is nothing left to wait for —
+ * the same reading `partSettled` gives on the server.
+ */
+test('every plan part status folds to a progress', () => {
+  const statuses = [
+    'pending',
+    'ready',
+    'dispatched',
+    'in_review',
+    'merged',
+    'concluded',
+    'blocked',
+    'retired',
+  ] as const;
+  for (const status of statuses) {
+    const progress = partProgress(planPart('s', [], status, 1));
+    assert.ok(assemblerStatus(progress, {}).word.length > 0, `${status} rendered no word`);
+  }
+  assert.equal(partProgress(planPart('s', [], 'merged', 1)), 'shipped');
+  assert.equal(partProgress(planPart('s', [], 'concluded', 1)), 'shipped');
+});
+
+/**
+ * The whole point of #158 having given intake a verdict. A goal nothing has
+ * assayed draws **no drill**; one refused at intake draws a drill that is
+ * stopped and carries the reason it wrote on the ticket. Collapsing the two
+ * would put the feature back.
+ */
+test('absent is not stopped', () => {
+  const untouched = buildGoalFloor(floorInput({}));
+  assert.equal(
+    untouched.machines.find((m) => m.kind === 'assay'),
+    undefined,
+    'a goal nobody has assayed has no drill at all',
+  );
+
+  const refused = buildGoalFloor(
+    floorInput({
+      assay: { verdict: 'unclear', summary: 'Name one behaviour that is wrong today.', by: 'assayer', decidedAt: NOW },
+    }),
+  );
+  const drill = refused.machines.find((m) => m.kind === 'assay');
+  assert.ok(drill, 'a refused goal must draw a drill');
+  assert.equal(drill.status.tone, 'bad');
+  assert.equal(drill.presence, 'built');
+  // The reason is the harness's own, quoted rather than composed.
+  assert.ok(
+    refused.plates.some((p) => p.text === 'Name one behaviour that is wrong today.'),
+    'a stopped machine must carry the reason the harness computed',
+  );
+});
+
+/** Every arm of the new vocabulary renders a word — a blank machine says nothing. */
+test('every goal-floor stage has a word', () => {
+  const pickups: string[] = [
+    'done',
+    'has_pr',
+    'active',
+    'ignored',
+    'unwatched',
+    'planning',
+    'delivered',
+    'assay',
+    'cooldown',
+    'escalated',
+    'blocked',
+    'eligible',
+  ];
+  for (const s of pickups) assert.ok(patchStatus(s).word.length > 0, `patch ${s} rendered no word`);
+  // A cockpit may be a version behind its server, so an unknown status falls
+  // back rather than rendering blank.
+  assert.ok(patchStatus('something-new').word.length > 0);
+
+  for (const s of ['planning', 'single', 'awaiting_approval', 'active', 'complete', 'abandoned'])
+    assert.ok(furnaceStatus(s).word.length > 0, `furnace ${s} rendered no word`);
+  assert.ok(furnaceStatus('something-new').word.length > 0);
+
+  for (const v of ['workable', 'unclear'] as const) assert.ok(assayStatus(v).word.length > 0);
+  for (const p of ['shipped', 'building', 'ready', 'locked', 'blocked'] as const)
+    assert.ok(assemblerStatus(p, {}).word.length > 0, `assembler ${p} rendered no word`);
+  for (const r of ['shipped', 'scrapped', 'repairing', 'held', 'blocked', 'on_the_pad'] as const)
+    assert.ok(prMachineStatus(r).word.length > 0, `pr ${r} rendered no word`);
+  for (const s of ['pass', 'damaged', 'not_ours', 'muted', 'awaiting'] as const)
+    assert.ok(scannerStatus(s).word.length > 0, `scanner ${s} rendered no word`);
+  for (const r of ['unbuilt', 'verified', 'more_work', 'returned'] as const)
+    assert.ok(satelliteStatus(r).word.length > 0, `satellite ${r} rendered no word`);
+  for (const c of ['plan', 'part', 'goal', null] as const) assert.ok(returnRoute(c).length > 0);
+  assert.ok(siloStatus(0, 0).word.length > 0);
+  assert.ok(siloStatus(1, 3).word.length > 0);
+  assert.ok(siloStatus(3, 3).word.length > 0);
+  assert.ok(manifestStatus(true).word.length > 0 && manifestStatus(false).word.length > 0);
+  assert.ok(signalPostStatus('Done').word.length > 0 && signalPostStatus(null).word.length > 0);
+  assert.ok(launchStatus(true).word.length > 0 && launchStatus(false).word.length > 0);
+
+  // Every tone has a colour, including the two the floor added: a tone with no
+  // value paints an SVG attribute with the string "undefined".
+  for (const tone of ['ok', 'warn', 'bad', 'idle', 'off', 'ghost', 'next'] as const)
+    assert.match(toneColor(tone), /^var\(--/);
+});
+
+/**
+ * A CI machine's state comes from the classification verdict, never from a
+ * check's name — so a floor running against a config naming any check at all
+ * renders with no code change here.
+ *
+ * Human review is the exception worth knowing: reviewer policies deliberately do
+ * not fold into `ciChecks` (they map to `approved`/`unresolvedComments`), so that
+ * one scanner is fed from `pr.approved` or it is permanently absent.
+ */
+test('scanners are generated from the verdict, and human review from approval', () => {
+  const floor = buildGoalFloor(
+    floorInput({
+      linkedPrNumber: 77,
+      openPrs: [
+        {
+          id: 'pr-77',
+          number: 77,
+          title: 'Do the thing',
+          branch: 'issue/9',
+          ciStatus: 'failing',
+          unresolvedComments: [],
+          approved: false,
+          ciVerdict: {
+            actionable: true,
+            dispatch: [{ name: 'alpha', rule: null }],
+            escalate: [{ name: 'beta', rule: null }],
+            ignored: [{ name: 'gamma', rule: null }],
+            urgent: false,
+          },
+        } as PullRequest,
+      ],
+    }),
+  );
+  const pr = floor.machines.find((m) => m.kind === 'pr');
+  assert.ok(pr);
+  assert.deepEqual(
+    pr.scanners.map((s) => [s.name, s.state]),
+    [
+      ['alpha', 'damaged'],
+      ['beta', 'not_ours'],
+      ['gamma', 'muted'],
+      ['human review', 'awaiting'],
+    ],
+  );
+  assert.equal(pr.status.word, 'Repair en route');
+
+  // Nothing dispatchable and something held: the harness is waiting on the
+  // outside world, which is amber rather than red.
+  const held = buildGoalFloor(
+    floorInput({
+      linkedPrNumber: 77,
+      openPrs: [
+        {
+          id: 'pr-77',
+          number: 77,
+          title: 'Do the thing',
+          branch: 'issue/9',
+          ciStatus: 'failing',
+          unresolvedComments: [],
+          approved: true,
+          ciVerdict: {
+            actionable: false,
+            dispatch: [],
+            escalate: [{ name: 'beta', rule: null }],
+            ignored: [],
+            urgent: false,
+          },
+        } as PullRequest,
+      ],
+    }),
+  );
+  const heldPr = held.machines.find((m) => m.kind === 'pr')!;
+  assert.equal(heldPr.status.word, 'Held — not ours');
+  assert.equal(heldPr.scanners.at(-1)?.state, 'pass', 'an approved PR reads as a passed human review');
+});
+
+/** An unapproved decomposition is drawn, and nothing on it is built. */
+test('an awaiting-approval plan draws ghosts', () => {
+  const floor = buildGoalFloor(
+    floorInput({
+      plan: { ...PLAN, status: 'awaiting_approval', reason: 'Signer first, then the route.' },
+      parts: [planPart('signer', [], 'ready', 1), planPart('route', ['signer'], 'ready', 2)],
+    }),
+  );
+  const assemblers = floor.machines.filter((m) => m.kind === 'assembler');
+  assert.equal(assemblers.length, 2);
+  assert.ok(assemblers.every((m) => m.presence === 'ghost' && m.status.word === 'Not connected'));
+  assert.ok(floor.plates.some((p) => p.text === 'Signer first, then the route.'));
+});
+
+/**
+ * The tail is on the goal check's **yes** arm, which is why no floor in flight
+ * reaches it: a shortfall returns before this point.
+ */
+test('the loop reaches an end, and the end is drawn', () => {
+  const inFlight = buildGoalFloor(floorInput({ parts: [planPart('a', [], 'in_review', 1)] }));
+  assert.equal(
+    inFlight.machines.some((m) => m.kind === 'manifest'),
+    false,
+  );
+  assert.equal(
+    inFlight.machines.some((m) => m.kind === 'launch'),
+    false,
+  );
+  assert.equal(inFlight.machines.find((m) => m.kind === 'satellite')?.presence, 'unbuilt');
+
+  const delivered = buildGoalFloor(
+    floorInput({
+      pickup: 'delivered',
+      workItemState: 'Done',
+      conclusion: { verdict: 'done', by: 'assessor', note: 'retry wraps both call sites', at: NOW },
+      parts: [planPart('a', [], 'merged', 1)],
+    }),
+  );
+  assert.deepEqual(
+    delivered.machines.map((m) => m.kind),
+    ['patch', 'furnace', 'assembler', 'silo', 'satellite', 'manifest', 'signal', 'launch'],
+  );
+  assert.equal(delivered.machines.find((m) => m.kind === 'satellite')?.status.word, 'Verified');
+  assert.equal(delivered.machines.find((m) => m.kind === 'launch')?.status.word, 'Away');
+
+  // A shortfall returns before the tail, and names the route it goes back on.
+  const short = buildGoalFloor(
+    floorInput({
+      pickup: 'eligible',
+      shortfall: {
+        cause: 'plan',
+        partSlug: null,
+        summary: 'The retry-after header is never set.',
+        by: 'assessor',
+        decidedAt: NOW,
+      },
+      parts: [planPart('a', [], 'merged', 1)],
+    }),
+  );
+  assert.equal(
+    short.machines.some((m) => m.kind === 'manifest'),
+    false,
+    'a shortfall returns before the tail',
+  );
+  assert.equal(short.machines.find((m) => m.kind === 'launch')?.status.word, 'Returned');
+  const plate = short.plates.find((p) => p.route);
+  assert.equal(plate?.route, 'plan');
+  assert.equal(plate?.text, 'The retry-after header is never set.');
+});
+
+/**
+ * The belt is the harness running. A belt still moving under a stopped harness
+ * is the one confidently-wrong thing this layout could draw, so it is asserted
+ * rather than trusted to the CSS.
+ */
+test('the goal floor belts stop with the harness', () => {
+  assert.match(render(), /fx-gf-belt lit /, 'a running harness must leave a lit belt running');
+  assert.doesNotMatch(render(), /fx-gf-belt[^"]*stopped/, 'nothing stops a belt while cycles run');
+  assert.match(
+    render((s) => (s.control.paused = true)),
+    /fx-gf-belt[^"]*stopped/,
+    'paused must stop every belt on the floor',
+  );
 });
 
 /**

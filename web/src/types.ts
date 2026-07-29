@@ -32,6 +32,30 @@ export interface PullRequest {
    * `done`|`ignored`|`you`|`harness`|`elsewhere`|`settled`|`stalled`.
    */
   attention?: { status: string; reasons: string[] };
+  /**
+   * What the harness will do about each *failing* check, from the server's own
+   * `classifyCiFailures` — the third verdict beside `health` and `attention`.
+   *
+   * Computed there rather than here on purpose: the alternative is shipping the
+   * CI policy and re-matching in the browser, i.e. a second glob matcher and a
+   * second first-match-wins ordering living nowhere near the rule they duplicate.
+   * `actionable` with three empty lists is the provider reporting no per-check
+   * detail — missing detail, not a clean bill of health.
+   */
+  ciVerdict?: CiVerdictView;
+}
+/** One failing check and the policy rule that claimed it (null = nothing matched). */
+interface CiMatchView {
+  name: string;
+  /** Only `guidance` and `urgent` are of any use here; the glob is not a reading. */
+  rule: { guidance?: string; urgent?: boolean } | null;
+}
+interface CiVerdictView {
+  actionable: boolean;
+  dispatch: CiMatchView[];
+  escalate: CiMatchView[];
+  ignored: CiMatchView[];
+  urgent: boolean;
 }
 export interface Issue {
   id: string;
@@ -40,6 +64,13 @@ export interface Issue {
   body: string;
   labels: string[];
   state: string;
+  /**
+   * The tracker's own workflow state (`Ready`, `In Review`, `Done`), unlike
+   * {@link Issue.state} which collapses to open/closed. Absent on providers that
+   * have no such notion (github/fake). It has always ridden the snapshot via the
+   * spread — it was only ever undeclared here.
+   */
+  workItemState?: string | null;
   linkedPrNumber: number | null;
   /**
    * Server-computed pickup verdict (mirrors PR `health`): what the harness is
@@ -71,6 +102,23 @@ export interface Issue {
     partSlug: string | null;
     summary: string;
     by: 'assessor' | 'operator';
+    decidedAt: string;
+  } | null;
+  /**
+   * The intake verdict (#158), beside `conclusion` and `shortfall` and inside
+   * `pickup` for none of their reasons: pickup answers "would an agent start next
+   * cycle", the assay answers "is there anything here to start on".
+   *
+   * **Null is a third reading, not a synonym for `workable`.** A goal nothing has
+   * assayed has no drill on its floor at all; a refused one has a drill that is
+   * stopped and carries its reason. `pickup.reasons[0]` already holds that reason
+   * as prose, and telling the two apart by reading a string written for a human is
+   * exactly what `signalPolarity` refuses to do.
+   */
+  assay?: {
+    verdict: 'workable' | 'unclear';
+    summary: string;
+    by: 'assayer' | 'operator';
     decidedAt: string;
   } | null;
 }

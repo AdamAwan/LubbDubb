@@ -24,7 +24,17 @@ export type IconName =
   | 'inserter'
   | 'belt'
   | 'lamp'
-  | 'rocket';
+  | 'rocket'
+  // The Goal Floor's stages. Each is a machine that exists on the floor and
+  // nowhere else, so they are added rather than borrowed: an ore patch drawn as
+  // a flask would say "issue" where the point is "the thing being mined".
+  | 'patch'
+  | 'drill'
+  | 'furnace'
+  | 'pr'
+  | 'satellite'
+  | 'doc'
+  | 'signal';
 
 /** One icon, inheriting `currentColor` and sized by CSS. */
 export function Icon({ name, className = '', title }: { name: IconName; className?: string; title?: string }) {
@@ -270,6 +280,90 @@ export function SpriteSheet(): JSX.Element {
             strokeWidth="1.5"
             strokeLinejoin="round"
           />
+        </symbol>
+        <symbol id="fx-i-patch" viewBox="0 0 24 24">
+          <path
+            d="M3 19h18l-3.5-7H6.5L3 19Z"
+            fill="currentColor"
+            fillOpacity=".14"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <circle cx="9" cy="15.5" r="1.3" fill="currentColor" />
+          <circle cx="13.5" cy="16.5" r="1.6" fill="currentColor" />
+          <circle cx="16" cy="14" r="1.1" fill="currentColor" />
+        </symbol>
+        <symbol id="fx-i-drill" viewBox="0 0 24 24">
+          <rect
+            x="6"
+            y="3"
+            width="12"
+            height="6"
+            fill="currentColor"
+            fillOpacity=".16"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <path d="M12 9v8M9 21h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M10 17h4l-2 3z" fill="currentColor" />
+        </symbol>
+        <symbol id="fx-i-furnace" viewBox="0 0 24 24">
+          <path
+            d="M4 20V8l8-4 8 4v12z"
+            fill="currentColor"
+            fillOpacity=".16"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path d="M9 20v-5h6v5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        </symbol>
+        <symbol id="fx-i-pr" viewBox="0 0 24 24">
+          <circle cx="7" cy="6" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="7" cy="18" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="17" cy="18" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M7 8.4v7.2M17 15.6V9a2.6 2.6 0 0 0-2.6-2.6H10" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        </symbol>
+        <symbol id="fx-i-satellite" viewBox="0 0 24 24">
+          <rect
+            x="9"
+            y="9"
+            width="6"
+            height="6"
+            fill="currentColor"
+            fillOpacity=".18"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <path d="M3 6h5v5H3zM16 13h5v5h-5z" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M8 9.5 9.5 10M15 13.5l1-.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        </symbol>
+        <symbol id="fx-i-doc" viewBox="0 0 24 24">
+          <path
+            d="M6 3h8l4 4v14H6z"
+            fill="currentColor"
+            fillOpacity=".14"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path d="M9 12h6M9 16h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </symbol>
+        <symbol id="fx-i-signal" viewBox="0 0 24 24">
+          <rect
+            x="7"
+            y="3"
+            width="10"
+            height="12"
+            fill="currentColor"
+            fillOpacity=".14"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <circle cx="12" cy="7" r="1.6" fill="currentColor" />
+          <circle cx="12" cy="11.5" r="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M12 15v6M8 21h8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </symbol>
       </defs>
     </svg>

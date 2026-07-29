@@ -792,7 +792,7 @@
   /* The big picture stays whole across both tracks; everything else is detail
      that reads fine in a half-width column. */
   .fx-line-wrap,
-  [data-fx='research'],
+  [data-fx='goal-floor'],
   [data-fx='yard'] {
     grid-column: span 2;
   }
@@ -812,7 +812,7 @@
   }
   [data-fx='bots'],
   [data-fx='stamp'],
-  [data-fx='research'],
+  [data-fx='goal-floor'],
   [data-fx='yard'],
   [data-fx='shift-log'] {
     grid-column: span 2;
@@ -868,7 +868,7 @@
 [data-fx='blueprints'] {
   order: 8;
 }
-[data-fx='research'] {
+[data-fx='goal-floor'] {
   order: 9;
 }
 [data-fx='yard'] {
@@ -1453,87 +1453,220 @@
   gap: 12px;
 }
 
-/* ============================ research (the tech tree) ============================ */
+/* ============================ the goal floor ============================
 
-.fx-trees {
-  display: grid;
-  gap: 14px;
-}
-.fx-tree-hd {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-wrap: wrap;
-  margin-bottom: 9px;
-}
-.fx-tech-chip {
-  padding: 1px 7px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.fx-tree {
-  height: auto;
-  display: block;
-  padding: 2px 0 6px;
-}
-.fx-tree-pr {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--grey);
-}
-/* The part a PR is open on. One ring, because "being worked" is the only state
-   on this graph an operator cannot act on and should not be drawn to. */
-.fx-researching {
-  animation: fx-charge 2.2s ease-in-out infinite;
-}
+   One ticket's whole production line. Two halves: a strip of ore patches that
+   picks which floor is drawn, and the floor itself as a single SVG — one
+   renderer for the linear case and the branching one alike, because drawing them
+   two ways would be two components deriving a part's state independently, which
+   is the thing this panel replaced the tech tree to stop. */
 
-.fx-queue-strip {
+.fx-gf-patches {
   display: flex;
-  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  padding: 7px 9px;
-  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 9px;
 }
-.fx-queue-cap {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--grey);
-}
-.fx-qchip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 7px;
+.fx-gf-patch {
+  flex: 0 0 auto;
+  /* A fixed band, not content-sized: a long ticket title otherwise makes one
+     patch as wide as the panel and the strip stops being scannable. */
+  width: 216px;
+  text-align: left;
   background: var(--panel);
+  color: var(--text);
   border-top: 1px solid var(--border-hi);
   border-left: 1px solid var(--border-hi);
   border-right: 1px solid var(--border-lo);
   border-bottom: 1px solid var(--border-lo);
+  padding: 8px 10px 8px 13px;
+  cursor: pointer;
+  font: inherit;
+  display: grid;
+  gap: 3px;
+  position: relative;
+}
+/* A patch is the first machine of its own floor, so the selector is drawn in the
+   same vocabulary as the thing it selects — the tone stripe is the machine's. */
+.fx-gf-patch::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--fx-tone, var(--grey));
+}
+.fx-gf-patch.on {
+  background: var(--accent-fill);
+}
+/* The single column has to be told it may shrink, or it sizes to the longest
+   title and the fixed width above clips it mid-word with no ellipsis. */
+.fx-gf-patch {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fx-gf-patch > span {
+  min-width: 0;
+  /* `.fx-job` carries `margin-right: auto` for its use in a flex row; on a grid
+     item an auto margin makes the box size to its content instead of stretching
+     to the column, which is what was clipping a title mid-word with no ellipsis. */
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fx-gf-patch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.fx-gf-patch-word {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fx-tone, var(--grey));
 }
-.fx-qchip.now {
-  background: var(--blue-fill);
-  border-color: var(--blue-line);
-  color: var(--fx-ghost);
+
+.fx-gf {
+  display: block;
+  height: auto;
+  padding: 2px 0 6px;
 }
-.fx-qchip .n {
+.fx-gf-kind {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.13em;
+  fill: var(--muted);
+}
+.fx-gf-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  fill: var(--text);
+}
+.fx-gf-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--muted);
+}
+/* The silo's count, in the middle of the tower rather than at its foot: the
+   status word already owns the bottom row of every machine, this one included. */
+.fx-gf-count {
+  font-family: var(--font-display);
+  font-size: 16px;
+  fill: var(--text);
+}
+.fx-gf-word {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+.fx-gf-m.ghost .fx-gf-name,
+.fx-gf-m.ghost .fx-gf-kind,
+.fx-gf-m.ghost .fx-gf-meta {
+  fill: #bfe2f2;
+}
+.fx-gf-pr {
+  font-family: var(--font-mono);
+  font-size: 9px;
   color: var(--grey);
 }
-.fx-qchip.now .n {
-  color: var(--blue);
+
+/* A belt edge: hazard stripes on a dark bed. Two states, and they are different
+   facts — `cold` is an edge nothing can travel yet, `stopped` is the harness not
+   running. A belt still moving under a stopped harness is the one confidently
+   wrong thing this layout could draw, so it is asserted in the tests. */
+.fx-gf-bed {
+  stroke: var(--fx-belt-dark);
+  stroke-width: 10;
+  fill: none;
+  stroke-linecap: round;
 }
-.fx-queue-age {
+.fx-gf-belt {
+  stroke: var(--fx-belt);
+  stroke-width: 10;
+  fill: none;
+  stroke-linecap: butt;
+  stroke-dasharray: 7 9;
+  animation: fx-gf-edge 0.8s linear infinite;
+}
+.fx-gf-belt.cold {
+  stroke: #4a453f;
+  animation: none;
+}
+.fx-gf-belt.stopped {
+  animation-play-state: paused;
+}
+@keyframes fx-gf-edge {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+/* Fixtures are 14px diamonds, not tiles: a splitter has no status, no agent and
+   no origin ref, and a machine drawn for one stretches to the full height of the
+   fan-out. */
+.fx-gf-fixture rect {
+  fill: var(--panel-2);
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+.fx-gf-fix {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  fill: var(--accent);
+}
+
+/* What a stopped machine is stopped for, in the harness's own words. */
+.fx-gf-plate {
+  margin-top: 8px;
+  padding: 8px 11px;
+  border-left: 3px solid var(--fx-tone, var(--grey));
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.fx-gf-who,
+.fx-gf-route {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--fx-tone, var(--grey));
+  white-space: nowrap;
+}
+.fx-gf-route {
+  border: 1px solid var(--fx-tone, var(--grey));
+  padding: 1px 6px;
+}
+.fx-gf-act {
+  display: flex;
+  gap: 6px;
   margin-left: auto;
+}
+
+.fx-gf-foot {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-top: 9px;
+  margin-top: 9px;
+  border-top: 1px solid var(--border-lo);
+  box-shadow: 0 -1px 0 var(--border-hi) inset;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.fx-gf-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fx-gf-dot {
+  width: 6px;
+  height: 6px;
+  display: block;
+  flex: 0 0 auto;
 }
 
 /* ============================ circuit signals ============================ */
@@ -1645,7 +1778,7 @@
    text an operator needs in order to do something about it. */
 .fx-brownout .fx-plan,
 .fx-brownout .fx-belt,
-.fx-brownout .fx-tree,
+.fx-brownout .fx-gf,
 .fx-brownout .fx-silo-tower {
   opacity: 0.62;
 }
@@ -1663,7 +1796,7 @@
   .fx-sweep,
   .fx-rocket,
   .fx-exhaust,
-  .fx-researching,
+  .fx-gf-belt,
   .fx-silo-ready,
   .fx-alert.crit > .fx-ic {
     animation: none !important;
