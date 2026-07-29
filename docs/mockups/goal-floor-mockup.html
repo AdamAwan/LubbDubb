@@ -929,6 +929,12 @@
       <path d="M3 6h5v5H3zM16 13h5v5h-5z" fill="none" stroke="currentColor" stroke-width="1.6" />
       <path d="M8 9.5 9.5 10M15 13.5l1-.5" stroke="currentColor" stroke-width="1.6" />
     </symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24">
+      <rect x="7" y="3" width="10" height="12" fill="none" stroke="currentColor" stroke-width="1.6" />
+      <circle cx="12" cy="7" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="11.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.4" />
+      <path d="M12 15v6M8 21h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+    </symbol>
     <symbol id="i-rocket" viewBox="0 0 24 24">
       <path
         d="M12 2c3 2.5 4.5 6 4.5 10L12 17l-4.5-5C7.5 8 9 4.5 12 2Z"
@@ -1008,8 +1014,8 @@
     <div class="sec-head">
       <h2>The mockup</h2>
       <p>
-        Six goals, one selected at a time — one per state the floor has to keep apart. Click a patch to change floors;
-        <b>issue:196</b> is the branching one.
+        Seven goals, one selected at a time — one per state the floor has to keep apart. Click a patch to change
+        floors; <b>issue:196</b> is the branching one and <b>issue:187</b> is the only one that reaches the end.
       </p>
     </div>
 
@@ -1064,6 +1070,18 @@
           class="patch"
           role="tab"
           aria-selected="false"
+          aria-controls="f187"
+          data-floor="f187"
+          style="--tone: var(--green)"
+        >
+          <span class="ref">issue:187 · ore patch</span>
+          <span class="ttl">Retry transient snapshot failures</span>
+          <span class="st" style="color: var(--green)">Launched · delivered</span>
+        </button>
+        <button
+          class="patch"
+          role="tab"
+          aria-selected="false"
           aria-controls="f219"
           data-floor="f219"
           style="--tone: var(--red)"
@@ -1094,7 +1112,7 @@
         >
           <span class="ref">issue:240 · ore patch</span>
           <span class="ttl">Mirror escalations into a chat channel</span>
-          <span class="st">Unsurveyed</span>
+          <span class="st">No claim staked</span>
         </button>
       </div>
 
@@ -1185,6 +1203,7 @@
             <span class="scanner"><i class="dot" style="background: var(--red)"></i>static analysis · damaged</span>
             <span class="scanner"><i class="dot" style="background: var(--amber)"></i>pipeline health · not ours</span>
             <span class="scanner muted"><i class="dot" style="background: var(--grey)"></i>flaky suite · muted</span>
+            <span class="scanner"><i class="dot" style="background: var(--blue)"></i>human review · awaiting</span>
           </div>
 
           <i class="belt"></i>
@@ -1523,6 +1542,133 @@
         </p>
       </div>
 
+      <!-- ============ FLOOR: #187, the whole tail ============
+           The only floor that reaches the end, which is why the last two
+           machines live here: `Report what was done` and `Update the ticket`
+           are on the goal check's YES arm, so no in-flight floor reaches
+           them. -->
+      <div class="floor" id="f187" role="tabpanel" hidden>
+        <div class="rail">
+          <div class="m" style="--tone: var(--green)">
+            <div class="cap"></div>
+            <svg class="glyph"><use href="#i-patch" /></svg>
+            <div class="body">
+              <span class="kind">Ore patch</span>
+              <span class="name">Retry transient snapshot failures</span>
+              <span class="meta">issue:187 · watched</span>
+            </div>
+            <span class="word">Worked out</span>
+          </div>
+
+          <i class="belt"></i>
+
+          <div class="m" style="--tone: var(--green)">
+            <div class="cap"></div>
+            <svg class="glyph"><use href="#i-furnace" /></svg>
+            <div class="body">
+              <span class="kind">Furnace</span>
+              <span class="name">One PR will do</span>
+              <span class="meta">plan · single</span>
+            </div>
+            <span class="word">No splitter</span>
+          </div>
+
+          <i class="belt"></i>
+
+          <div class="m" style="--tone: var(--green)">
+            <div class="cap"></div>
+            <svg class="glyph"><use href="#i-pr" /></svg>
+            <div class="body">
+              <span class="kind">Pull request</span>
+              <span class="name">PR #144 · bounded retry</span>
+              <span class="meta">4 scanners green</span>
+              <span class="meta">merged 3h ago</span>
+            </div>
+            <span class="word">Shipped</span>
+          </div>
+
+          <i class="belt"></i>
+
+          <div class="silo">
+            <span class="cap-lbl">Silo</span>
+            <div class="fill" style="height: 100%"></div>
+            <span class="lbl">1 / 1 in</span>
+          </div>
+
+          <i class="belt"></i>
+
+          <div class="m" style="--tone: var(--green)">
+            <div class="cap"></div>
+            <svg class="glyph"><use href="#i-sat" /></svg>
+            <div class="body">
+              <span class="kind">Satellite</span>
+              <span class="name">Goal achieved</span>
+              <span class="meta">assessor · 2h ago</span>
+            </div>
+            <span class="word">Verified</span>
+          </div>
+
+          <i class="belt"></i>
+
+          <div class="m" style="--tone: var(--green)">
+            <div class="cap"></div>
+            <svg class="glyph"><use href="#i-doc" /></svg>
+            <div class="body">
+              <span class="kind">Manifest</span>
+              <span class="name">Report what was done</span>
+              <span class="meta">conclusion · by assessor</span>
+              <span class="meta">"retry wraps both call sites"</span>
+            </div>
+            <span class="word">Filed</span>
+          </div>
+
+          <i class="belt"></i>
+
+          <div class="m" style="--tone: var(--green)">
+            <div class="cap"></div>
+            <svg class="glyph"><use href="#i-signal" /></svg>
+            <div class="body">
+              <span class="kind">Signal post</span>
+              <span class="name">Update the ticket</span>
+              <span class="meta">state → Done</span>
+              <span class="meta">status comment written</span>
+            </div>
+            <span class="word">Posted</span>
+          </div>
+
+          <i class="belt"></i>
+
+          <div class="m" style="--tone: var(--green)">
+            <div class="cap"></div>
+            <svg class="glyph"><use href="#i-rocket" /></svg>
+            <div class="body">
+              <span class="kind">Launch</span>
+              <span class="name">Delivered</span>
+              <span class="meta">pickup held · reversible</span>
+            </div>
+            <span class="word">Away</span>
+          </div>
+        </div>
+
+        <div class="plate" style="--tone: var(--green)">
+          <span class="who">The tail</span>
+          <span
+            >Both new machines sit on the goal check's <b>yes</b> arm, which is why no floor in flight reaches them —
+            a shortfall returns before this point. The manifest reads the conclusion; the signal post reads the work
+            item's state and the status comment the reconciler keeps.</span
+          >
+        </div>
+
+        <div class="plate" style="--tone: var(--amber)">
+          <span class="who">Narrower than drawn</span>
+          <span
+            >The workflow doc's ticket update includes <em>quality-pillar commentary</em>, and the harness has no step
+            that writes it. State moves and status comments are real; the pillars are not. Drawn as two lines on the
+            machine rather than a third the harness cannot fill.</span
+          >
+        </div>
+      </div>
+
       <!-- ================= FLOOR: #219, refused ================= -->
       <div class="floor" id="f219" role="tabpanel" hidden>
         <div class="rail">
@@ -1709,7 +1855,7 @@
               <span class="name">Mirror escalations into a chat channel</span>
               <span class="meta">issue:240 · not watched</span>
             </div>
-            <span class="word">Unsurveyed</span>
+            <span class="word">No claim staked</span>
           </div>
 
           <i class="belt stopped"></i>
@@ -1943,6 +2089,14 @@
             <td><strong>new</strong> <code>pr.ciVerdict</code> — see below</td>
           </tr>
           <tr>
+            <td>— the human-review scanner</td>
+            <td>The approval on the pull request</td>
+            <td>
+              <code>pr.approved</code> / <code>unresolvedComments</code> — drawn <em>as</em> a scanner, fed from a
+              different field
+            </td>
+          </tr>
+          <tr>
             <td>Ship part</td>
             <td>A merged PR, or a concluded part's artifact</td>
             <td><code>part.status</code> via <code>partSettled</code></td>
@@ -1956,6 +2110,19 @@
             <td>Satellite</td>
             <td>The assessment, rule 3e</td>
             <td><code>issue.conclusion</code> (<code>by: 'assessor'</code>)</td>
+          </tr>
+          <tr>
+            <td>Manifest</td>
+            <td>Report what was done</td>
+            <td><code>issue.conclusion.note</code></td>
+          </tr>
+          <tr>
+            <td>Signal post</td>
+            <td>Update the ticket — state and comment</td>
+            <td>
+              <code>issue.workItemState</code> (rides the snapshot already, undeclared in the web types) + the plan's
+              status comment, which <strong>is not on the wire</strong>
+            </td>
           </tr>
           <tr>
             <td>Launch</td>
@@ -2030,6 +2197,110 @@
 
   <section>
     <div class="sec-head">
+      <h2>Checked against <code>docs/workflow.md</code></h2>
+      <p>Every node of the committed flow, and where it is on the floor. Four are deliberately not machines.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Workflow node</th>
+            <th>On the floor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Ticket</td>
+            <td>Ore patch</td>
+          </tr>
+          <tr>
+            <td>Enough information to proceed?</td>
+            <td>Assay drill — refusal is red and stopped, with the reason it wrote on the ticket</td>
+          </tr>
+          <tr>
+            <td>…the goal text changes ⇢ Ticket</td>
+            <td>Stated on #219; the hold ends by itself</td>
+          </tr>
+          <tr>
+            <td>Plan the work / Plan accepted?</td>
+            <td>Furnace / blueprint ghosts and the stamp</td>
+          </tr>
+          <tr>
+            <td>— no, revise → Plan</td>
+            <td><b>Deferred.</b> Reject settles the plan; the return arrow is not drawn</td>
+          </tr>
+          <tr>
+            <td>Do the work (question / research / code)</td>
+            <td>Assemblers, with the outcome kind on the machine — #204 finishes on a determination</td>
+          </tr>
+          <tr>
+            <td>Agent reviews its own work</td>
+            <td>
+              <b>Not a machine, by decision.</b> It becomes a check, so it arrives as one more scanner and needs
+              nothing of its own
+            </td>
+          </tr>
+          <tr>
+            <td>Quality gates — tests, static analysis, pipeline health</td>
+            <td>Scanners, one per failing check, state from the classification verdict</td>
+          </tr>
+          <tr>
+            <td>Quality gates — human review</td>
+            <td>
+              A scanner like the rest. Note the source differs: reviewer policies deliberately do
+              <em>not</em> fold into <code>ciChecks</code>, they map to <code>approved</code> /
+              <code>unresolvedComments</code>
+            </td>
+          </tr>
+          <tr>
+            <td>ours → fix or defend · red but not ours → hold and say why</td>
+            <td>Repair en route · held amber with the reason, and the reason travels to the agent too</td>
+          </tr>
+          <tr>
+            <td>All satisfied → Merge</td>
+            <td>Ship part into the silo</td>
+          </tr>
+          <tr>
+            <td>Goal achieved?</td>
+            <td>Satellite</td>
+          </tr>
+          <tr>
+            <td>— no → Plan</td>
+            <td>Return belt, routed by what fell short (#204)</td>
+          </tr>
+          <tr>
+            <td>Report what was done</td>
+            <td>Manifest (#187)</td>
+          </tr>
+          <tr>
+            <td>Update the ticket — state, comments</td>
+            <td>Signal post (#187). <b>Quality pillars are not drawn</b> — the harness has no step that writes them</td>
+          </tr>
+          <tr>
+            <td>Done</td>
+            <td>Launch</td>
+          </tr>
+          <tr>
+            <td>A stacked PR's checks run the commits underneath it</td>
+            <td>
+              Reads through the same scanner row — <code>inheritedCiFailure</code> already renders
+              <em>CI failing on base PR #n</em>, so it needs no new shape
+            </td>
+          </tr>
+          <tr>
+            <td>Start with a prompt → find or create a ticket</td>
+            <td>
+              Unsurveyed patch, from <code>unrecorded</code>. Narrower than drawn in the doc too: filing is an operator
+              click, not a workflow step
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
       <h2>Acceptance, against the drawing</h2>
       <p>Each line of the issue's list, and where it is satisfied above.</p>
     </div>
@@ -2080,6 +2351,12 @@
             >— floor #196: PR1 unlocks PR2 and PR3, PR2 unlocks PR4, and PR5 waits on PR3 <em>and</em> PR4. Cold belts
             mark the edges nothing can travel yet.</span
           >
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>The loop reaches an end, and the end is drawn.</b>
+          <span>— floor #187: goal check → manifest → signal post → launch, the goal check's yes arm in full.</span>
         </div>
       </li>
       <li>

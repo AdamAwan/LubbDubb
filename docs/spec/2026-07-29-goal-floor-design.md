@@ -8,8 +8,11 @@ workability, decomposed, each step producing a pull request, each pull request p
 merging, the merged parts accumulating against one goal, and the goal check firing on the lot.
 
 This is the design for that third view. The mockup it was written against is
-[`goal-floor-mockup.html`](../mockups/goal-floor-mockup.html) — open it in a browser; six goals, one
-per state the floor has to be able to draw, including one decomposed into four parallel lanes.
+[`goal-floor-mockup.html`](../mockups/goal-floor-mockup.html) — open it in a browser; seven goals, one
+per state the floor has to be able to draw, including one branching plan and one that reaches the end.
+
+It is checked node by node against [`workflow.md`](../workflow.md); that table is in the mockup, and
+the four stages that are deliberately *not* machines are argued below.
 
 ## The four decisions
 
@@ -150,6 +153,40 @@ other). It is a real two-way division, but one output is a dead end rather than 
 feeding a siding is a weaker picture than a drill that has stopped and says why. The assay stays a
 machine with a verdict.
 
+## The tail: report, and update the ticket
+
+`workflow.md`'s loop does not end at the goal check — it ends `Goal achieved? → yes → Report what was
+done → Update the ticket → Done`. Both stages run today, so both get machines:
+
+- **Manifest** — report what was done. Reads `issue.conclusion.note`.
+- **Signal post** — update the ticket. Reads `issue.workItemState` (which already rides the snapshot
+  via the spread, undeclared in `web/src/types.ts`) plus the plan's status comment, which is **not on
+  the wire** — `plans.status_comment_ref` is server-side only. Either ship it or draw the state move
+  alone; do not imply a comment the cockpit cannot see.
+
+They sit on the goal check's **yes** arm, which is why no in-flight floor reaches them: a shortfall
+returns before this point. The mockup therefore needed a seventh goal (`issue:187`) that actually
+finishes — the absence of one was a hole in the mockup, not only in the tail.
+
+**Quality-pillar commentary is deliberately not drawn.** `workflow.md`'s own "where this stands
+today" says there is no step that folds a run's outcome into it, so a third line on the signal post
+would be a machine reading a field nothing writes.
+
+## Four workflow stages that are deliberately not machines
+
+Checked node by node against `docs/workflow.md`; these four are decisions rather than omissions:
+
+- **The self-review step.** It is becoming a check, so it arrives as one more scanner on the belt and
+  needs no shape of its own.
+- **Human review.** Likewise a scanner — but note the source differs from its neighbours: reviewer
+  policies deliberately do *not* fold into `ciChecks` (they map to `approved` / `unresolvedComments`,
+  see the Azure CI aggregation), so this one scanner is fed from a different field. Drawing it from
+  `ciVerdict` would leave it permanently absent.
+- **Inherited CI attribution.** `inheritedCiFailure` already renders `CI failing on base PR #n`, so
+  the stacked case reads through the scanner row unchanged. No new shape.
+- **"Plan accepted? → no, revise".** Deferred. Rejection settles the plan; the return arrow is not
+  drawn, unlike the shortfall's, which is.
+
 ## The scanners are generated, never named
 
 Machine state comes from the verdict `classifyCiFailures` returns, never from a check's name:
@@ -216,6 +253,8 @@ Every noun lands in `web/src/skins/factory/vocabulary.ts` and nowhere else.
 | Ship part                 | A merged PR, or a concluded part's artifact      | `part.status` via the `partSettled` reading          |
 | Silo                      | The goal, filling with delivered parts           | the roll-up the pickup chip already counts           |
 | Satellite                 | The assessment, rule 3e                          | `issue.conclusion` (`by: 'assessor'`)                |
+| Manifest                  | Report what was done                             | `issue.conclusion.note`                              |
+| Signal post               | Update the ticket — state and comment            | `issue.workItemState` + the plan status comment (**not on the wire**) |
 | Launch                    | `delivered`                                      | `issue.pickup.status === 'delivered'`                |
 | Launch fails verification | A shortfall, rule 3g — routed by what fell short | `issue.shortfall.cause`                              |
 | Energy                    | Cap, `paused`, rate limits                       | `control`, `usage` — `power.ts` already folds it     |
