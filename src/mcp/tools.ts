@@ -186,7 +186,10 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
                 dependsOn: {
                   type: 'array',
                   items: { type: 'string' },
-                  description: 'At most one slug: the part this one stacks on.',
+                  description:
+                    'Sibling slugs this part needs first. One means it stacks on that part and starts once ' +
+                    'that part has pushed. Several means the lanes rejoin: it starts only once all of them ' +
+                    'have merged, and is cut from the integration branch.',
                 },
                 rationale: { type: 'string', description: 'Why this is its own PR rather than folded into a sibling.' },
                 acceptance: { type: 'string', description: 'What makes this part done.' },

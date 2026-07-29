@@ -99,19 +99,14 @@ const PlanDocumentSchema = z
       }
       slugs.add(part.slug);
     }
+    // `dependsOn` is deliberately *not* capped at one entry (issue #170). The cap was
+    // the static form of "a part may stack on at most one *open* dependency", and that
+    // rule is real — but it does not bite on a rejoin, where several prerequisites all
+    // have to have settled before the part starts, leaving nothing open and the
+    // integration branch as the unambiguous base. The dangerous case is refused
+    // dynamically instead, by `PlanReconciler.readiness`, which is the only place that
+    // can see whether a dependency is still in flight *now*.
     for (const part of doc.parts) {
-      // The static form of "a part may stack on at most one *open* dependency":
-      // with two declared dependencies both can be in review at the same moment
-      // and there is no single branch to base the part on. Multi-parent merge
-      // bases aren't worth the complexity, so the constraint is enforced here
-      // rather than discovered at dispatch, where the plan is already persisted.
-      if (part.dependsOn.length > 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['parts'],
-          message: `"${part.slug}" declares ${part.dependsOn.length} dependencies; a part may stack on at most one`,
-        });
-      }
       for (const dep of part.dependsOn) {
         if (dep === part.slug) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['parts'], message: `"${part.slug}" depends on itself` });
@@ -137,22 +132,37 @@ const PlanDocumentSchema = z
     }
   });
 
-/** The slugs of one dependency cycle, or null when the graph is acyclic. */
+/**
+ * The slugs of one dependency cycle, or null when the graph is acyclic.
+ *
+ * A depth-first walk over **every** edge, not down a single chain. While arity was
+ * capped at one a chain walk was the whole graph; the moment a part may name several
+ * prerequisites (issue #170) a cycle reachable only through the second one — `a`
+ * depends on `[x, b]`, `b` on `[a]` — is a cycle a chain walk cannot see, and one
+ * that survives ingestion deadlocks every part in it silently.
+ */
 function findDependencyCycle(parts: { slug: string; dependsOn: string[] }[]): string[] | null {
   const deps = new Map(parts.map((p) => [p.slug, p.dependsOn]));
   const settled = new Set<string>();
-  for (const start of deps.keys()) {
-    if (settled.has(start)) continue;
-    const path: string[] = [];
-    const onPath = new Set<string>();
-    let current: string | undefined = start;
-    while (current !== undefined && deps.has(current) && !settled.has(current)) {
-      if (onPath.has(current)) return [...path.slice(path.indexOf(current)), current];
-      path.push(current);
-      onPath.add(current);
-      current = deps.get(current)?.[0];
+  const onPath = new Set<string>();
+  const path: string[] = [];
+  const walk = (slug: string): string[] | null => {
+    if (settled.has(slug) || !deps.has(slug)) return null; // done, or names an unknown part (reported above)
+    if (onPath.has(slug)) return [...path.slice(path.indexOf(slug)), slug];
+    onPath.add(slug);
+    path.push(slug);
+    for (const dep of deps.get(slug) ?? []) {
+      const cycle = walk(dep);
+      if (cycle) return cycle;
     }
-    for (const slug of path) settled.add(slug);
+    onPath.delete(slug);
+    path.pop();
+    settled.add(slug);
+    return null;
+  };
+  for (const start of deps.keys()) {
+    const cycle = walk(start);
+    if (cycle) return cycle;
   }
   return null;
 }

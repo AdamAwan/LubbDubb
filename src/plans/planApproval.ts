@@ -29,8 +29,9 @@ export function describeProposedParts(parts: PlanPart[]): string {
   if (live.length === 0) return 'The plan declares no parts.';
   return live
     .map((p) => {
-      const dep = p.dependsOn[0];
-      const stacks = dep === undefined ? '' : `, stacks on "${dep}"`;
+      // Every prerequisite: the operator is weighing the shape, and a rejoin whose
+      // second dependency went unmentioned would read as a plain chain.
+      const stacks = p.dependsOn.length === 0 ? '' : `, stacks on ${p.dependsOn.map((d) => `"${d}"`).join(' + ')}`;
       return `- "${p.slug}": ${p.title}${stacks} — ${p.scope}`;
     })
     .join('\n');

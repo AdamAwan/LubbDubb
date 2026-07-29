@@ -305,16 +305,19 @@ test('the plan file is tracked as a written file but never promoted to an artifa
   system.store.close();
 });
 
-test('a part may declare at most one dependency, and the graph must be acyclic', () => {
+test('a part may declare several dependencies, and the graph must still be acyclic', () => {
   const doc = (parts: string): string => `{"version":1,"verdict":"parts","reason":"x","parts":[${parts}]}`;
   const part = (slug: string, deps: string[]): string =>
     `{"slug":"${slug}","title":"T","scope":"s","dependsOn":[${deps.map((d) => `"${d}"`).join(',')}]}`;
 
-  // Two dependencies is the static form of "two *open* dependencies": both could be
-  // in review at once and there would be no single branch to base the part on.
-  const two = parsePlanDocument(doc([part('a', []), part('b', []), part('c', ['a', 'b'])].join(',')));
-  assert.equal(two.ok, false);
-  assert.match(two.ok === false ? two.error : '', /at most one/);
+  // Several dependencies is a *rejoin*, and accepted since #170. The arity cap here
+  // was the static form of "at most one *open* dependency", which is a rule about
+  // the world rather than the document — a part naming two starts only once both
+  // have settled, at which point neither is open. It now lives in
+  // `PlanReconciler.readiness`, which can see what is in flight; see planReconcile.
+  const rejoin = parsePlanDocument(doc([part('a', []), part('b', []), part('c', ['a', 'b'])].join(',')));
+  assert.equal(rejoin.ok, true);
+  assert.deepEqual(rejoin.ok ? rejoin.document.parts[2]?.dependsOn : null, ['a', 'b']);
 
   // A cycle deadlocks every part in it — none is ever ready, and the issue silently
   // stops progressing. Reject the document so the planner is retried instead.
@@ -322,8 +325,28 @@ test('a part may declare at most one dependency, and the graph must be acyclic',
   assert.equal(cycle.ok, false);
   assert.match(cycle.ok === false ? cycle.error : '', /dependency cycle/);
 
-  // A chain is fine — that is exactly what a stack is.
+  // And a cycle reachable only through a *second* dependency, which is the case the
+  // walk had to be widened for: while arity was capped at one, following
+  // `dependsOn[0]` was the whole graph, and `a -> [x, b]`, `b -> [a]` slips straight
+  // through it. A multi-entry array makes that a real, silently deadlocking plan.
+  const deep = parsePlanDocument(doc([part('x', []), part('a', ['x', 'b']), part('b', ['a'])].join(',')));
+  assert.equal(deep.ok, false);
+  assert.match(deep.ok === false ? deep.error : '', /dependency cycle/);
+
+  // Self-dependency and unknown slugs are refused whatever the arity.
+  const bad = parsePlanDocument(doc([part('a', []), part('b', ['a', 'nope'])].join(',')));
+  assert.equal(bad.ok, false);
+  assert.match(bad.ok === false ? bad.error : '', /unknown part "nope"/);
+
+  // A chain is fine — that is exactly what a stack is, and unchanged.
   assert.equal(parsePlanDocument(doc([part('a', []), part('b', ['a']), part('c', ['b'])].join(','))).ok, true);
+  // A diamond: two independent lanes off one root, rejoining. The shape #170 exists for.
+  assert.equal(
+    parsePlanDocument(
+      doc([part('root', []), part('l', ['root']), part('r', ['root']), part('join', ['l', 'r'])].join(',')),
+    ).ok,
+    true,
+  );
 });
 
 // -- the widened document (risks/outOfScope/document, per-part rationale/acceptance) --

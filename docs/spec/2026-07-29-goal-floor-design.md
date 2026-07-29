@@ -118,6 +118,13 @@ This is **the one part of this design that is not purely a lens.** Everything el
 already exists; this changes what a plan may *say*. Small, and the shape the workflow doc already
 draws — but a real change to the planner's contract, and worth deciding separately from the drawing.
 
+**Decided and landed (issue #170).** One thing the table above omitted: the invariant does not simply
+vanish from ingestion, it *moves* to `PlanReconciler.readiness`, which holds a part `pending` unless
+every dependency is satisfied **and at most one is still unsettled** — without that second half
+`partBase` has two candidate branches and no way to choose. `findDependencyCycle` also had to be
+widened to walk every edge; following `dependsOn[0]` was the whole graph only while arity was capped.
+The drawing needed no change, as intended. See [08](08-planning.md#the-arity-rule-where-it-lives).
+
 Parallel lanes are also where three readings become visible that a single chain never shows, and each
 is an existing field with nothing new required:
 

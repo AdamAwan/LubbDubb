@@ -15,6 +15,7 @@ import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { DEFAULT_PLANNING } from '../src/plans/planning.js';
 import {
   bySlug,
+  dependenciesOf,
   dependencySatisfied,
   partBase,
   partBranch,
@@ -129,6 +130,73 @@ test('depth is the chain length, and the base follows the dependency state', () 
   // Dependency merged -> back to the integration branch; nothing to stack on.
   const merged = bySlug([part('a', 1, { status: 'merged' }), parts[1]!]);
   assert.equal(partBase(parts[1]!, merged, 12, 'main'), 'main');
+});
+
+// -- A plan that rejoins rather than only chaining (issue #170) --------------
+
+test('dependenciesOf returns every declared dependency, skipping slugs the plan no longer holds', () => {
+  const parts = [
+    part('schema', 1),
+    part('api', 2),
+    part('wire', 3, { dependsOn: ['schema', 'api', 'dropped-by-a-replan'] }),
+  ];
+  const index = bySlug(parts);
+  // Declared order, because that is what `partBase` falls back on; and a dangling
+  // slug is not a dependency, because there is nothing left to wait for.
+  assert.deepEqual(
+    dependenciesOf(parts[2]!, index).map((p) => p.slug),
+    ['schema', 'api'],
+  );
+  assert.deepEqual(dependenciesOf(parts[0]!, index), []);
+});
+
+test('partDepth is the longest path, so a rejoin never sorts ahead of what it waits on', () => {
+  // The design's own graph: pr1 -> {pr2, pr3}, pr2 -> pr4, {pr3, pr4} -> pr5.
+  // `dependsOn[0]` gets pr5 wrong — through pr3 it reads depth 2, which sorts it
+  // level with pr4, the part it is waiting for.
+  const parts = [
+    part('pr1', 1),
+    part('pr2', 2, { dependsOn: ['pr1'] }),
+    part('pr3', 3, { dependsOn: ['pr1'] }),
+    part('pr4', 4, { dependsOn: ['pr2'] }),
+    part('pr5', 5, { dependsOn: ['pr3', 'pr4'] }),
+  ];
+  const index = bySlug(parts);
+  assert.deepEqual(
+    parts.map((p) => partDepth(p, index)),
+    [0, 1, 1, 2, 3],
+  );
+});
+
+test('partDepth terminates on a cycle the store somehow holds', () => {
+  // Ingestion refuses cycles, but this runs against whatever the rows say, and a
+  // dispatch-order heuristic that spins is worse than one that answers oddly.
+  const parts = [part('a', 1, { dependsOn: ['b'] }), part('b', 2, { dependsOn: ['a'] })];
+  const index = bySlug(parts);
+  for (const p of parts) assert.equal(Number.isFinite(partDepth(p, index)), true);
+});
+
+test('a rejoin bases on the integration branch; one dependency still in flight is stacked on', () => {
+  const wire = part('wire', 3, { dependsOn: ['schema', 'api'] });
+
+  // Every dependency settled — the case the old arity cap refused, and the base is
+  // unambiguous precisely because nothing is open. Note one of them `concluded`:
+  // it may never have pushed, so its branch is not a candidate at all.
+  const settled = bySlug([
+    part('schema', 1, { status: 'merged', branch: 'issue/12/schema' }),
+    part('api', 2, { status: 'concluded', outcomeKind: 'report', branch: null }),
+    wire,
+  ]);
+  assert.equal(partBase(wire, settled, 12, 'main'), 'main');
+
+  // Exactly one unsettled: stack on that one. The reconciler is what guarantees
+  // there is never more than one to choose between (see planReconcile.test.ts).
+  const oneOpen = bySlug([
+    part('schema', 1, { status: 'merged', branch: 'issue/12/schema' }),
+    part('api', 2, { status: 'in_review', branch: 'issue/12/api' }),
+    wire,
+  ]);
+  assert.equal(partBase(wire, oneOpen, 12, 'main'), 'issue/12/api');
 });
 
 test('sibling context separates work that exists from work that is not yours', () => {

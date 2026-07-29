@@ -898,7 +898,7 @@ export interface PlanPart {
   outcomeRef: string | null;
   /** What the concluding agent said it found. Required at close, so never empty on a concluded part. */
   outcomeSummary: string | null;
-  /** Sibling slugs this part stacks on. */
+  /** Sibling slugs this part needs first: one to stack on it, several to rejoin them. */
   dependsOn: string[];
   branch: string | null;
   prNumber: number | null;

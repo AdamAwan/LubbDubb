@@ -37,31 +37,57 @@ export function bySlug(parts: PlanPart[]): Map<string, PlanPart> {
 }
 
 /**
- * A part's single dependency, or null. Ingestion caps `dependsOn` at one entry
- * (see `planDocument.ts`), which is the static form of "a part may stack on at
- * most one *open* dependency" — with two declared dependencies both could be in
- * review at the same moment and there would be no single branch to base on.
+ * A part's declared dependencies, in declared order, skipping any slug the index
+ * doesn't hold — an amendment may have retired a part something else still names,
+ * and a dangling slug is not a dependency anything can wait for.
+ *
+ * `dependsOn` used to be capped at one entry at the zod boundary, as the static
+ * form of "a part may stack on at most one *open* dependency" (issue #170). The
+ * rule it approximated is real; the approximation refused something safe. A part
+ * with several prerequisites is a **rejoin**: it starts only once all of them have
+ * settled, at which point *none* is open and its base is unambiguously the
+ * integration branch. The dangerous case — two dependencies still in flight, with
+ * no single branch to cut from — is still refused, but dynamically, by
+ * `PlanReconciler.readiness`, which is where the rule was always true.
  */
-export function dependencyOf(part: PlanPart, index: Map<string, PlanPart>): PlanPart | null {
-  const slug = part.dependsOn[0];
-  return slug === undefined ? null : (index.get(slug) ?? null);
+export function dependenciesOf(part: PlanPart, index: Map<string, PlanPart>): PlanPart[] {
+  const deps: PlanPart[] = [];
+  for (const slug of part.dependsOn) {
+    const dep = index.get(slug);
+    if (dep) deps.push(dep);
+  }
+  return deps;
 }
 
 /**
  * How deep in a stack a part sits — 0 for a part with no dependency. Bottoms are
- * dispatched first, so the branch a dependent will base on exists sooner. Bounded
- * by the part count so a dependency cycle that survived ingestion can't spin.
+ * dispatched first, so the branch a dependent will base on exists sooner.
+ *
+ * **Longest path, not the first prerequisite that happens to be listed.** A part
+ * waiting on several must never sort ahead of something it waits on, and
+ * `dependsOn[0]` gets exactly that wrong the first time a plan rejoins. Cycle-
+ * guarded by the walking set: ingestion refuses cycles, but this runs against
+ * whatever the store happens to hold, and a dispatch-order heuristic must not spin.
+ *
+ * (`layoutFloor` in the cockpit's factory skin computes the same longest-path
+ * depth for a *column*. Deliberately not shared: the two answer for different
+ * purposes, and `test/workGraph.test.ts` asserts `src/` and `web/` stay apart.)
  */
 export function partDepth(part: PlanPart, index: Map<string, PlanPart>): number {
-  let depth = 0;
-  let current: PlanPart | null = part;
-  const seen = new Set<string>();
-  while (current && !seen.has(current.slug)) {
-    seen.add(current.slug);
-    current = dependencyOf(current, index);
-    if (current) depth += 1;
-  }
-  return depth;
+  const depths = new Map<string, number>();
+  const walking = new Set<string>();
+  const depthOf = (current: PlanPart): number => {
+    const cached = depths.get(current.slug);
+    if (cached !== undefined) return cached;
+    if (walking.has(current.slug)) return 0;
+    walking.add(current.slug);
+    let deepest = 0;
+    for (const dep of dependenciesOf(current, index)) deepest = Math.max(deepest, depthOf(dep) + 1);
+    walking.delete(current.slug);
+    depths.set(current.slug, deepest);
+    return deepest;
+  };
+  return depthOf(part);
 }
 
 /**
@@ -79,9 +105,18 @@ export function dependencySatisfied(dep: PlanPart, pushed: (part: PlanPart) => b
 }
 
 /**
- * The base a part's branch is cut from: its dependency's branch while that
- * dependency is still in flight (this is the stack), the integration branch once
- * the dependency reached a terminal or when there is none.
+ * The base a part's branch is cut from: the branch of its one **unsettled**
+ * dependency while that dependency is still in flight (this is the stack), the
+ * integration branch once every dependency has reached a terminal or when there are
+ * none. So a rejoin — a part naming several prerequisites — bases on the
+ * integration branch, because it is only ever asked once all of them have settled.
+ *
+ * It is never asked to choose between two in-flight dependencies:
+ * `PlanReconciler.readiness` holds a part `pending` while more than one is
+ * unsettled, which is the dynamic form of the arity cap ingestion used to enforce.
+ * Declared order decides if it somehow is, rather than throwing — a base that is
+ * merely the wrong one of two is a rebase; a throw here takes the pulse's whole
+ * dispatch down.
  *
  * `partSettled` rather than `merged` is load-bearing here, not tidiness. A
  * *concluded* dependency produced no pull request and may never have pushed its
@@ -95,8 +130,8 @@ export function partBase(
   issueNumber: number,
   defaultBranch: string,
 ): string {
-  const dep = dependencyOf(part, index);
-  if (!dep || partSettled(dep)) return defaultBranch;
+  const dep = dependenciesOf(part, index).find((d) => !partSettled(d));
+  if (!dep) return defaultBranch;
   return dep.branch ?? partBranch(issueNumber, dep.slug);
 }
 
@@ -264,8 +299,9 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
         : p.prNumber !== null
           ? `PR #${p.prNumber}`
           : (p.branch ?? 'no branch yet');
-    const dep = p.dependsOn[0];
-    const stacks = dep === undefined ? '' : `, stacks on "${dep}"`;
+    // Every declared prerequisite, not the first: an amendment turns on slugs, so a
+    // summary naming one of a rejoin's two would invite the replanner to drop the other.
+    const stacks = p.dependsOn.length === 0 ? '' : `, stacks on ${p.dependsOn.map((d) => `"${d}"`).join(' + ')}`;
     // Only when it says something: every other part is expected to produce code,
     // and saying so on each line would bury the two that don't.
     const expects = p.expectedKind && p.expectedKind !== 'code' ? `, planned as a ${p.expectedKind}` : '';

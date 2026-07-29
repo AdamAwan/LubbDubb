@@ -434,8 +434,9 @@ test('the floor lays out from structure and nothing else', () => {
  *
  * PR5 must land to the right of **everything** it waits on, which is the
  * longest-path property and precisely what a naive `dependsOn[0]` depth gets
- * wrong. The plan schema cannot emit this yet (#170 relaxes the arity cap); the
- * layout tolerates it today so that change needs no cockpit change.
+ * wrong. The layout tolerated this before the plan schema could emit it; #170
+ * relaxed the arity cap and needed no cockpit change — see the end-to-end test at
+ * the bottom of this file, which drives the same shape out of the real store.
  */
 test('a converging part lands right of everything it waits on', () => {
   const refs = ['pr1', 'pr2', 'pr3', 'pr4', 'pr5'];
@@ -895,4 +896,66 @@ test('the accumulator bank fills left to right from one number', () => {
   // Out-of-range input clamps rather than drawing a cell fuller than full.
   assert.deepEqual(accumulatorCells(140, 2), [1, 1]);
   assert.deepEqual(accumulatorCells(-10, 2), [0, 0]);
+});
+
+/**
+ * End to end for #170, and the property it was worth checking: a plan that
+ * **rejoins** draws with no cockpit change at all.
+ *
+ * The document goes through the server's own zod boundary and the real store, and
+ * the rows that come back out are what `/api/state` ships — so this is the whole
+ * path from what a planner may now say to what the floor draws, rather than a
+ * hand-built graph. `layoutFloor` was written to tolerate in-degree greater than
+ * one before the schema could emit it; this is the first test that emits it.
+ */
+test('a rejoining plan, ingested by the server, draws its merger on the floor', async () => {
+  const { Store } = await import('../src/store/store.js');
+  const { parsePlanDocument, planPartInputs } = await import('../src/plans/planDocument.js');
+
+  const parsed = parsePlanDocument(
+    JSON.stringify({
+      version: 1,
+      verdict: 'parts',
+      reason: 'schema and api are independent; the wiring needs both',
+      parts: [
+        { slug: 'schema', title: 'The tables', scope: 'src/store/', dependsOn: [] },
+        { slug: 'api', title: 'The route', scope: 'src/server/', dependsOn: [] },
+        { slug: 'wire', title: 'Wire them together', scope: 'src/system.ts', dependsOn: ['schema', 'api'] },
+      ],
+    }),
+  );
+  if (!parsed.ok) throw new Error(`the boundary must accept a rejoin: ${parsed.error}`);
+
+  const store = new Store(':memory:');
+  const plan = store.upsertPlan({ originRef: 'issue:9', title: 'A goal', status: 'active', reason: 'two lanes' });
+  store.upsertPlanParts(plan.id, planPartInputs(parsed.document));
+  // The wire: `/api/state` ships store rows as JSON, and the cockpit's PlanPart is
+  // deliberately a separate declaration from the server's.
+  const rows = JSON.parse(JSON.stringify(store.listPlanParts(plan.id))) as PlanPart[];
+  store.close();
+
+  const floor = buildGoalFloor(floorInput({ plan: PLAN, parts: rows }));
+  const col = (slug: string) => floor.layout.slots.get(`issue:9:part:${slug}`)!.column;
+
+  // Both lanes come off the furnace and land in the same column; the merger draws
+  // right of both, which is the longest-path property doing its job on real rows.
+  assert.equal(col('schema'), col('api'));
+  assert.ok(col('wire') > col('schema') && col('wire') > col('api'));
+
+  // The join is read off the edge list, so the fixture appears with nothing added.
+  assert.deepEqual(
+    floor.fixtures.filter((f) => f.kind === 'merger').map((f) => f.ref),
+    ['issue:9:part:wire'],
+  );
+  assert.deepEqual(
+    floor.edges.filter((e) => e.to === 'issue:9:part:wire').map((e) => e.from),
+    ['issue:9:part:schema', 'issue:9:part:api'],
+  );
+
+  // And the machine says what it is waiting for — both of them, not the first.
+  const wire = floor.machines.find((m) => m.ref === 'issue:9:part:wire')!;
+  assert.ok(
+    wire.meta.includes('waits on: schema + api'),
+    `the merger must name every prerequisite, got ${JSON.stringify(wire.meta)}`,
+  );
 });

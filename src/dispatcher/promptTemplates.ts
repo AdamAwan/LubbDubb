@@ -78,11 +78,17 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [],\n' +
       '     "rationale": "why this is its own PR", "acceptance": "what makes it done"},\n' +
       '    {"slug": "dispatcher", "title": "...", "scope": "src/dispatcher/...", "dependsOn": ["schema"],\n' +
+      '     "rationale": "...", "acceptance": "..."},\n' +
+      '    {"slug": "wire-up", "title": "...", "scope": "src/system.ts", "dependsOn": ["schema", "dispatcher"],\n' +
       '     "rationale": "...", "acceptance": "..."}\n' +
       '  ]}\n\n' +
       'Slugs are short, lowercase, kebab-case and unique; "scope" names the files or areas that part owns, ' +
-      'so parts running at the same time do not collide; "dependsOn" names **at most one** sibling slug — a part ' +
-      'stacks on a single branch, so two dependencies is not expressible and the plan will be rejected.\n\n' +
+      'so parts running at the same time do not collide; "dependsOn" names the sibling slugs a part needs before ' +
+      'it can start. Usually that is none or one. **One** means it stacks: it starts as soon as that sibling has ' +
+      'pushed a branch, and is cut from that branch. **Several** means the lanes rejoin: a part naming several ' +
+      'does not start until every one of them has **merged**, and is then cut from the integration branch. Use it ' +
+      'for work that genuinely gathers separate lanes back together — the part that wires two independent pieces ' +
+      'to each other — and not to express a vague ordering, because it waits for all of them.\n\n' +
       '"expectedKind" is optional and defaults to "code" — a part that ends in a merged pull request. Use ' +
       '"report" when the deliverable is a write-up or a measurement, and "determination" when the part ' +
       'decides whether anything needs building at all. They exist so investigative work can be decomposed ' +
@@ -116,8 +122,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'exist and are not yours to withdraw; leaving them out does not undo them.\n' +
       '- **A part you leave out is retired**, and only if nothing was started for it. That is how you remove work ' +
       'that is no longer needed.\n' +
-      '- New parts may be added, and dependencies rewired, subject to the same rule as before: "dependsOn" names ' +
-      '**at most one** sibling slug.\n' +
+      '- New parts may be added, and dependencies rewired. "dependsOn" names the sibling slugs a part needs: none, ' +
+      'one (it stacks on that branch and starts once that sibling has pushed), or several (the lanes rejoin — it ' +
+      'starts only once every one of them has merged, and is cut from the integration branch). A cycle is refused.\n' +
       '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n' +
       '- **Re-state the write-up.** `document`, `risks` and `outOfScope` are replaced by what you submit, not ' +
       'merged — an amendment that omits them leaves the previous ones standing, which will read as though the ' +
