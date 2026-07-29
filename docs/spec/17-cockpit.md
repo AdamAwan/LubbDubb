@@ -203,11 +203,9 @@ argument for each is in its module's header, and the reason for the shape is wor
   plot into and whether the axes are labelled. The modal is an `.fx-card` with a backdrop rather than
   a second surface, and closes on the backdrop, the button _and_ Escape — a thing that covers the
   floor must not have exactly one exit.
-- **Research** (`techTree.ts`) draws a plan as a tech tree. `dependsOn` holds at most one slug, so
-  the graph is a forest of chains fanning out where parts share a prerequisite — and depth _is_ how
-  many merges must land before a part can start, which a flat stack cannot show. Retired parts are
-  excluded, matching `liveParts`. Replan stays a `CockpitActions` call with only the drawing
-  skin-side, which is the `UpNext` precedent, not a departure from it.
+- **The Goal Floor** (`goalFloor.ts` + `components/GoalFloor.tsx`) draws **one ticket's whole
+  production line**, patch to launch, and takes the slot the tech tree had. See
+  [The Goal Floor](#the-goal-floor) below.
 - **Circuit signals** group `worldEvents` by `(kind, ref)` and carry a count — three comments on one
   PR read as one signal, not three unrelated rows. Polarity comes from the **kind alone**
   (`signalPolarity`); the summary is prose written for a human, and parsing it here would be a
@@ -232,6 +230,84 @@ Two panels on the act rail carry a rule of their own:
   `POST /api/errors/clear`. Two-step because the rows go: nothing in the harness reads the fault log
   back, so a clear costs nothing anything decides on — but it costs the only copy, and for every
   cockpit rather than this one.
+
+#### The Goal Floor
+
+`TheLine` draws the **dispatcher** — bays, belt, headroom gate, subject: agents. The Goal Floor draws
+the **work**: one ticket's whole production line, in the order
+[`docs/workflow.md`](../workflow.md) describes it. Ticket → is there enough here to act on → plan →
+do the work → checks → merge → is the goal achieved → report → update the ticket → done. Its design
+is [`2026-07-29-goal-floor-design.md`](2026-07-29-goal-floor-design.md), and the mockup it was
+written against carries a node-by-node conformance table against the workflow doc.
+
+| Factory              | Harness                                            |
+| -------------------- | -------------------------------------------------- |
+| Ore patch            | A ticket, and the strip that picks which floor     |
+| Assay drill          | The goal assay, rule 3f                            |
+| Furnace              | The planner, rule 3c                               |
+| Splitter / merger    | Where the plan's edge list branches and rejoins    |
+| Assembly machine     | A plan part, carrying the pull request it produced |
+| Scanners on the belt | CI checks, classified — plus human review          |
+| Silo                 | The goal, filling with settled parts               |
+| Satellite            | The assessment, rule 3e                            |
+| Manifest             | Report what was done — `issue.conclusion.note`     |
+| Signal post          | Update the ticket — `issue.workItemState`          |
+| Launch               | `delivered`, or a launch that failed verification  |
+
+Six properties, and they are what to preserve:
+
+- **Every machine is a work item.** A splitter and a merger have no status, no agent and no origin
+  ref — they are where the edge list branches — so they are belt _fixtures_. Drawing one as a machine
+  also stretches it to the full height of the fan-out, which is the same mistake showing up as a
+  visual bug.
+- **Position comes from structure alone.** `layoutFloor(refs, edges)` is pure over refs and
+  dependency edges — no status, no tone, no timestamps — and memoised on the shape, so a machine moves
+  only when a part appears, is retired, or opens a pull request. Without the split a floor is re-laid
+  on every poll and jitters exactly when an operator is watching it most closely. Column is
+  **longest-path depth**, not `dependsOn[0]`'s: a part waiting on several must never draw to the left
+  of something it waits on. That also means it tolerates **in-degree > 1** today, before the plan
+  schema can emit it (#170), so relaxing the arity cap needs no cockpit change.
+- **Absent is not stopped.** A goal nothing has assayed draws **no drill**; one refused at intake
+  draws a drill that is red, stopped, and carrying its reason. Collapsing the two would put #158 back
+  — the whole point of intake having a verdict.
+- **A CI machine's state comes from the verdict, never a check's name.** Scanners are generated from
+  `pr.ciVerdict` (`dispatch` → damaged, `escalate` → not ours, `ignored` → muted), so a floor running
+  against a config naming any check at all renders with no code change, and **no check name from any
+  workplace appears in this repository**. Human review is the exception worth knowing: reviewer
+  policies deliberately do not fold into `ciChecks` — they map to `approved`/`unresolvedComments` —
+  so that one scanner is fed from `pr.approved` or it is permanently absent.
+- **A stopped machine says why, in the harness's own words.** Every plate under the floor quotes a
+  string the server computed: an assay summary, a planner's reason, a `health` reason, a
+  `QueueItem.reason`. No prose is assembled in the browser and none is parsed, for `signalPolarity`'s
+  reason. The queue's own words are reused on a held machine too — a part the cap is holding says
+  _output backed up_ rather than _ready to start_ beside a bot that is never coming.
+- **The belt is the harness running.** A lit belt animates only while cycles run; paused or held on
+  recovery, they all stop. `cold` is a different fact and a different class — an edge nothing can
+  travel yet, because the machine behind it has not produced anything. Asserted in
+  `test/factorySkin.test.ts` rather than trusted to the CSS.
+
+**Two sources, with different jobs.** `/api/state` is the live reading and wins wherever both speak;
+`GET /api/work/issue:<n>` is fetched **once** when a floor is opened, never on a poll, and may only
+_add_ settled machines the world has forgotten — a PR merged past `closedPrWindowMs`. That one line is
+the whole of the merge: two sources each partly owning a field is how they start disagreeing. The
+fetch goes through `fetchWorkSubtree` on `CockpitActions`, because a skin may not import `api.js`.
+
+**It replaced the tech tree rather than joining it.** The tree's one unique claim — depth is how many
+merges must land before a part can start — survives intact as the floor's column, and `stateOf` /
+`depths` moved into `goalFloor.ts` as `partProgress` and `layoutFloor`. Keeping both would have left
+two components deriving a part's state from `PlanPart.status` independently, which is the drift class
+this codebase has already paid for twice.
+
+**Two verdicts are computed server-side and shipped** (`pr.ciVerdict`, `issue.assay` — see
+[16](16-http-api.md)), and that is _why_: nothing under `web/` may import `src/dispatcher/` or
+`src/graph/`, asserted structurally in `test/workGraph.test.ts` beside the two that say the same of
+the dispatcher.
+
+Two things are deliberately **not** drawn. The plan's status comment is real and is not on the wire
+(`plans.status_comment_ref` is server-side only), so the signal post claims the state move alone
+(#171). Quality-pillar commentary is not drawn at all, for the stronger version of the same reason —
+nothing in the harness writes it, so a third line there would be a machine reading a field with no
+writer.
 
 The icons are original marks in `Sprite.tsx`. The game the treatment nods at owns its art outright
 and licenses none of it for redistribution, so none of it is used or traced; what carries the
@@ -270,13 +346,16 @@ format an operator sees is correctly their machine's business; it is only the go
 be nobody's. An assertion beside the comparison fails if the pin ever stops taking effect.
 
 `test/factorySkin.test.ts` covers that skin's pure vocabulary exhaustively (every `QueueItem.status`
-has a machine word; only `waiting` reads as jammed; the two `waiting`s do not read alike; a paused
-floor outranks every other diagnosis) plus each derivation added beside it: tech-tree depth,
-sibling rows, unlit edges, retired parts and a cycle that must not hang the cockpit; the silo's
-fixed denominator; production counting only what landed and admitting when the log is too short;
-the accumulator gauge clamping. It also pins the renders where being wrong would be worse than
-being absent: the belt stopping, the gate tracking the cut, the belt splitting into a moving and a
-compressed run, and the floor widening with the cap up to its bound.
+and every Goal Floor stage has a machine word; only `waiting` reads as jammed; the two `waiting`s do
+not read alike; a paused floor outranks every other diagnosis; every `StatusTone` resolves to a
+colour) plus each derivation added beside it: the floor's longest-path columns, lanes, fixtures,
+retired parts and a cycle that must not hang the cockpit; every `PlanPart.status` folding to a
+progress; absent-is-not-stopped; scanners generated from the verdict with human review fed from
+approval; ghosts; the tail; the silo's fixed denominator; production counting only what landed and
+admitting when the log is too short; the accumulator gauge clamping. It also pins the renders where
+being wrong would be worse than being absent: both belts stopping, the gate tracking the cut, the
+belt splitting into a moving and a compressed run, and the floor widening with the cap up to its
+bound.
 
 A skin registered but not otherwise tested still gets the conformance render for free, which is the
 point of driving it off `SKINS` — it is asserted on the day it is written rather than the day it
@@ -384,7 +463,7 @@ for the world to change — chosen from `config.injectable`.
   summary in its title) sits **beside** the pickup chip and inside neither it nor the conclusion
   chip, for the reason `attention` sits beside `health`: pickup answers "would an agent start on this
   next cycle", and a shortfall's honest answer to that is "yes, and that is the point"
-  ([06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity)). What it adds is *what*
+  ([06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity)). What it adds is _what_
   fell short, which is the whole of what makes the verdict routable and the one thing an operator has
   to see before being asked to authorize a replan. A shortfall with no cause draws nothing — the
   conclusion chip beside it already reads `work left`, and one home per fact.
@@ -467,7 +546,7 @@ Plans panel drew rows whose `scope` was a tooltip. There was no way to say "show
 **It is shell-owned**, opened through `viewPlan(planId: string | null)` on `CockpitActions` — the same
 seam `select(agentId)` already uses for "which drawer is open is cockpit state, not skin state", and
 for the same reason: one implementation of the modal across both skins, while each skin keeps its own
-drawing of a plan elsewhere (Classic's `PlanPanel` rows, the factory tech tree's nodes). A skin must
+drawing of a plan elsewhere (Classic's `PlanPanel` rows, the Goal Floor's assembly machines). A skin must
 not reach `api.js` (`test/cockpitSkins.test.ts`), so the seam is the only way a skin-side button can
 open a shared modal.
 
@@ -500,7 +579,7 @@ no injection surface to reason about at all.
 **Entry points** — the button or chip appears wherever a plan is mentioned:
 
 - the approval card in "Needs you" (`EscalationCard`), when `proposal.kind === 'plan'`;
-- each row of the classic `PlanPanel` and each node of the factory tech tree (`TechTree.tsx`);
+- each row of the classic `PlanPanel`, and the Goal Floor's blueprint plate for a plan awaiting approval;
 - the issue's pickup chip in the **shared** `WorldSummary` — the chip that already reads
   `2/5 parts merged` becomes the button, so both skins get it for free.
 

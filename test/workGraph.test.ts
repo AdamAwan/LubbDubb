@@ -491,12 +491,12 @@ test('the routes serve roots and one subtree, and refuse an unknown root', async
   system.store.close();
 });
 
-function srcFiles(dir: string): string[] {
+function srcFiles(dir: string, exts = ['.ts']): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) out.push(...srcFiles(path));
-    else if (entry.name.endsWith('.ts')) out.push(path);
+    if (entry.isDirectory()) out.push(...srcFiles(path, exts));
+    else if (exts.some((ext) => entry.name.endsWith(ext))) out.push(path);
   }
   return out.sort();
 }
@@ -524,4 +524,22 @@ test('and nothing in the dispatcher reaches any part of the graph', () => {
   // agent's own record suppress another's dispatch.
   const readers = srcFiles('src/dispatcher').filter((f) => readFileSync(f, 'utf8').includes('graph/'));
   assert.deepEqual(readers, [], 'the dispatcher decides from the world and the store, never from the record');
+});
+
+test('and nothing under web/ reaches the dispatcher or the graph', () => {
+  // The third sibling, for the cockpit (#168). The Goal Floor draws two verdicts
+  // — a PR's CI classification and an issue's assay — that the browser cannot
+  // compute without server code, and importing it is exactly the wrong way to
+  // get them: a second glob matcher and a second first-match-wins ordering,
+  // sitting nowhere near the rule they duplicate, failing silently the first time
+  // they disagreed. So both are computed in `buildStateSnapshot` and shipped, and
+  // this is what keeps that the only way.
+  //
+  // Relative depth is deliberately included in the needle (`../src/`): a match on
+  // the bare directory name would fire on `web/src/` itself.
+  const importers = srcFiles('web/src', ['.ts', '.tsx']).filter((f) => {
+    const text = readFileSync(f, 'utf8');
+    return /from '(\.\.\/)+src\/(dispatcher|graph)\//.test(text);
+  });
+  assert.deepEqual(importers, [], 'the cockpit renders what the server decided; it never re-decides it');
 });

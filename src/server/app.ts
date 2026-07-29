@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
-import type { ShortfallCause, WorldSnapshot } from '../types.js';
+import type { IssueAssay, ShortfallCause, WorldSnapshot } from '../types.js';
 import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
@@ -26,6 +26,7 @@ import { detectFileOverlaps } from '../fileOverlap.js';
 import { deliverySignalQuery } from '../delivery/delivery.js';
 import { SHORTFALL_CAUSES } from '../delivery/shortfall.js';
 import { assaySignalQuery, goalFingerprint } from '../intake/assay.js';
+import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { watchLabelsFor } from '../watchLabels.js';
 import {
   authRefusalHint,
@@ -1295,6 +1296,9 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   const shortfallsByOrigin = new Map(shortfalls.map((s) => [s.originRef, s]));
   const assays = store.listAssays();
   const assayWindow = assaySignalQuery(assays);
+  // Keyed the same way the conclusion and shortfall maps below are, so the
+  // per-issue verdict beside them reads off one lookup.
+  const assaysByOrigin = new Map(assays.map((a) => [a.originRef, a]));
   // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
   // below predicts what actually happens next cycle. The decision window (200)
   // and the headroom arithmetic mirror `Harness.runCycle`.
@@ -1406,6 +1410,14 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
         ...pr,
         health: prHealth(pr, world.pullRequests),
         attention: prAttentionStatus(pr, attentionCtx),
+        // The third verdict beside the other two, and it exists for the same
+        // reason they are computed here rather than in the browser: the
+        // alternative is shipping `config.ci` and re-matching client-side, which
+        // means a second glob matcher and a second first-match-wins ordering
+        // sitting nowhere near the rule they duplicate. That drift would fail
+        // silently — the cockpit saying *repair* while the harness held. Same
+        // call the dispatcher makes, off the same policy.
+        ciVerdict: classifyCiFailures(pr.ciChecks, config.ci),
       })),
       // `conclusion` sits beside `pickup` and does not feed it — the same
       // relationship `attention` has to `health` above. Pickup answers "would an
@@ -1429,6 +1441,15 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
         // what the harness has offered to do about it, which neither of the other
         // two can say.
         shortfall: shortfallsByOrigin.get(issueConclusionOrigin(issue.number)) ?? null,
+        // The intake verdict, beside the other two for their reason and inside
+        // `pickup` for none: pickup answers "would an agent start next cycle",
+        // the assay answers "is there anything here to start on". `pickup.reasons`
+        // already carries the refusal *text*, but "refused" and "awaiting a
+        // verdict" differ only in that prose — and telling them apart by reading
+        // a human-facing string is what `signalPolarity` refuses to do. So the
+        // discriminator is structural. `goalRef` is deliberately not shipped: it
+        // is a fingerprint the hold is measured against, not a reading.
+        assay: assayVerdictOf(assaysByOrigin.get(issueConclusionOrigin(issue.number))),
       })),
     },
     // The plan graph, which until now existed only in the database: the per-issue
@@ -1484,6 +1505,21 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     dispatchRules: DISPATCH_RULES,
     usage: buildUsage(system),
   };
+}
+
+/**
+ * The reviewable half of a stored assay, or null when nobody has judged the goal.
+ *
+ * Null and `workable` are not the same reading and neither is `unclear`, which is
+ * the whole point of the field: a goal nothing has assayed draws no drill at all,
+ * while a refused one draws a drill that is stopped and says why. Collapsing the
+ * two would put #158's verdict back where it was — legible only as prose inside
+ * `pickup.reasons`.
+ */
+function assayVerdictOf(assay: IssueAssay | undefined) {
+  if (!assay) return null;
+  const { verdict, summary, by, decidedAt } = assay;
+  return { verdict, summary, by, decidedAt };
 }
 
 /** A concise task/job title from a free-form prompt: its first non-empty line, capped. */

@@ -111,6 +111,15 @@ function StatusGlyph({ tone }: { tone: MachineStatus['tone'] }): JSX.Element {
       return <circle cx="6" cy="6" r="3.4" fill="none" stroke={color} strokeWidth="1.8" />;
     case 'off':
       return <path d="M7 1.4 3 6.8h2.6L4.8 10.6 9 5.2H6.3z" fill={color} />;
+    // The two the Goal Floor added. Nothing on this panel returns them today —
+    // the switch is exhaustive, so they are here to be a shape rather than a
+    // blank badge the day something does.
+    case 'ghost':
+      return (
+        <rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="2 2" />
+      );
+    case 'next':
+      return <path d="M3.4 2.4 8.6 6l-5.2 3.6z" fill={color} />;
   }
 }
 
