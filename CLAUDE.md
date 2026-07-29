@@ -741,6 +741,55 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     (`assessment.enabled`), like `planning` and unlike `mcp`: it gates pickup and spends an agent, so
     it is not purely additive. Tests: `test/delivery.test.ts`, `test/issueAssess.test.ts`,
     `test/issueDelivery.test.ts`.
+  - **The negative verdict, and what it drives (#159).** Stage 2 shipped the assessor able to say
+    "not delivered" and nothing able to hear it. The intended loop is Plan → Work → is the goal
+    achieved? → No → re-plan: the check was rule 3e, the replan was `POST /api/plans/:id/replan`, and
+    the middle was missing. Worse than "no representation" — `more_work` **was** recorded, into
+    `issue_conclusions`, which is (a) the working agent's own row and (b) read only by rule 3b's
+    inverse arm, which emits a **tracker** move. So on GitHub it changed no dispatch at all, and on
+    either provider for a decomposed issue rule 4 is gated on the `single` route while rule 4a finds
+    every part settled. What carries the fix:
+    - **A fresh `issue_shortfalls` table, not a polarity column on `issue_deliveries`**, and the
+      polarity is the argument. Every reader of a delivery is a **gate** — `deliveryHold`, each
+      pulse, holding pickup off — and this row must gate **nothing**, because releasing work is the
+      point. One table would leave every present and future reader remembering which polarity it
+      held, from rows identical until you read a column: `proposalHold`-vs-`planProposalHold` again.
+      `test/issueShortfall.test.ts` asserts it **structurally** (`src/delivery/delivery.ts` names no
+      shortfall type) as well as behaviourally, so a later flag fails a test rather than quietly
+      parking an issue. It is mutually exclusive with a delivery (each write clears the other, in the
+      store) and deliberately **not** with a conclusion — overwriting the working agent's declaration
+      is the bug, so both rows stand and `resolveIssueConclusion` ranks them: operator toggle, then
+      shortfall (the assessor is later and better informed), then the agent, then the plan.
+    - **The cause is declared, and all three are routed differently.** `plan` → propose a replan
+      (arm A: one `setPlanStatus(planning)` write, and rule 3c takes over — `releasePlan`'s pattern);
+      `part` → propose one **appended** follow-up part (arm B); `goal` → escalate and schedule
+      nothing (arm C, #158's question). Deriving the cause would send all three to a replan and
+      re-decompose plans whose shape was fine, which is the issue's own stated failure mode. **No
+      cause is a fourth answer**, never one of the three: an unplanned issue that simply is not
+      finished names nothing, so nothing fires — folding it into `goal` would escalate "the ticket is
+      wrong" every time, a route invented from silence.
+    - **Arm B appends; it never resurrects.** `partHasWork` is the existing statement of why — a
+      merged part's PR is on the default branch and its branch is spent — so the part that fell short
+      is left exactly as it is and "never retire a part with work started" is met _by construction_.
+      The plan moves `complete` → `active` through the roll-up it already computes.
+    - **Arms A and B are `Proposal`s (kind `shortfall`, ref `issue:<n>:shortfall`); arm C is not.**
+      Both spend a fleet, and a plan rewritten without a click would churn `plan_parts` under live
+      agents. Arm C schedules nothing, and a proposal whose accept and reject both do nothing is not
+      a decision — so it is rule 1b's escalation, deduped on the open inbox item _and_ a recent
+      executed decision. The **full** `proposalHold` applies (unlike a plan proposal's): the row
+      persists until its arm is performed, so without the durable `rejected` arm one refusal is
+      re-asked every pulse. `proposalWorldRef` maps the ref to `issue:<n>` unmodified, so phase 4's
+      signal expiry works untouched — it must, or one refused replan vetoes every future one.
+    - **The loop is bounded by machinery that already exists**: the human outside, and
+      `dispatchVerdict`'s 3-attempt cap on `issue:<n>:assess` inside. Nothing new counts it — a
+      second counter for one loop is two answers to one question.
+    - Consequences worth knowing: **rejecting leaves the row standing** (the verdict is still true;
+      you declined to act), which is the asymmetry with `refusePlan` and why
+      `POST /api/issues/:number/shortfall` exists as the operator's clear. **With `planning` off both
+      plan-shaped arms degrade to arm C**, since accepting either would park the issue on a
+      transition no rule consumes. The assessor's summary reaches a replanner through `plan.reason`
+      (which `currentPlanSummary` already renders) rather than a new prompt placeholder an override
+      could silently drop. Tests: `test/issueShortfall.test.ts`.
 - **`src/harness.ts`** is the pulse: snapshot world → diff against the previous snapshot
   (`src/world/worldDiff.ts`, persisted as `world_events` + streamed as `world:events` for the
   cockpit's Activity feed) → plan reconciliation → work-graph record → `Dispatcher.decide` →

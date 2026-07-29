@@ -26,8 +26,11 @@ import type {
   FindingStatus,
   IssueConclusion,
   IssueDelivery,
+  IssueShortfall,
   DeliveryAuthor,
   IssueConclusionVerdict,
+  ShortfallAuthor,
+  ShortfallCause,
   Job,
   PartOutcomeKind,
   Plan,
@@ -586,12 +589,16 @@ export class Store {
    * world signal against, and refreshing it on every re-assessment would keep
    * moving the goalposts a transition has to clear.
    *
-   * **Writing this clears any standing conclusion**, in the same transaction. The
-   * assessor is later and better informed than the agent that declared its own
-   * run, and leaving both would have rule 3b return the item to pickup while this
-   * gate blocked it. The mirror lives in {@link recordIssueConclusion}; both are
-   * here because this is the only file that touches SQLite, and a caller that
-   * remembered one and forgot the other would leave the two contradicting.
+   * **Writing this clears any standing conclusion _and_ any standing shortfall**,
+   * in the same transaction. The assessor is later and better informed than the
+   * agent that declared its own run, and leaving both would have rule 3b return
+   * the item to pickup while this gate blocked it; a shortfall is the direct
+   * contradiction of this row — "worked, and not delivered" against "delivered" —
+   * so an assessment that changes its mind must not leave rule `issue-shortfall`
+   * proposing a replan for an issue the gate has just parked. The mirrors live in
+   * {@link recordIssueConclusion} and {@link recordShortfall}; all three are here
+   * because this is the only file that touches SQLite, and a caller that
+   * remembered one and forgot the other would leave them contradicting.
    */
   recordDelivery(input: {
     originRef: string;
@@ -622,6 +629,7 @@ export class Store {
         )
         .run(d);
       this.db.prepare(`DELETE FROM issue_conclusions WHERE origin_ref=?`).run(d.originRef);
+      this.db.prepare(`DELETE FROM issue_shortfalls WHERE origin_ref=?`).run(d.originRef);
     });
     write(row);
     return row;
@@ -657,6 +665,94 @@ export class Store {
    */
   clearDelivery(originRef: string): boolean {
     return this.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(originRef).changes > 0;
+  }
+
+  /**
+   * Record that an issue was worked and its goal is *not* reached — the assessor's
+   * negative verdict, or the operator's (issue #159).
+   *
+   * `decided_at` is preserved across an overwrite, exactly as a delivery's is, so
+   * the row still dates the moment the issue was first judged short. Here that is
+   * cosmetic rather than load-bearing — nothing measures world signal against it,
+   * because this row holds nothing and so has nothing to expire — but keeping the
+   * two rows the same shape is what stops a reader having to remember which one
+   * dates what.
+   *
+   * **Writing this clears any standing delivery**, in the same transaction: they
+   * are the two polarities of one question and an issue must never carry both.
+   * It deliberately does **not** clear an {@link IssueConclusion} — that is the
+   * working agent's own statement about its own run, and overwriting it is
+   * precisely the bug this table was created to stop. `resolveIssueConclusion`
+   * ranks the two instead.
+   */
+  recordShortfall(input: {
+    originRef: string;
+    cause: ShortfallCause | null;
+    partSlug?: string | null;
+    summary: string;
+    by: ShortfallAuthor;
+    agentId?: string | null;
+    taskId?: string | null;
+  }): IssueShortfall {
+    const ts = this.now();
+    const prev = this.getShortfall(input.originRef);
+    const row: IssueShortfall = {
+      originRef: input.originRef,
+      cause: input.cause,
+      // Only a `part` cause names one. Normalised here rather than trusted from
+      // the caller, so a re-assessment that changed cause cannot leave a slug
+      // behind pointing the arm resolver at a part nobody named.
+      partSlug: input.cause === 'part' ? (input.partSlug ?? null) : null,
+      summary: input.summary,
+      by: input.by,
+      agentId: input.agentId ?? null,
+      taskId: input.taskId ?? null,
+      decidedAt: prev?.decidedAt ?? ts,
+      updatedAt: ts,
+    };
+    const write = this.db.transaction((s: IssueShortfall) => {
+      this.db
+        .prepare(
+          `INSERT INTO issue_shortfalls (origin_ref, cause, part_slug, summary, by, agent_id, task_id, decided_at, updated_at)
+           VALUES (@originRef, @cause, @partSlug, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
+           ON CONFLICT(origin_ref) DO UPDATE SET
+             cause=excluded.cause, part_slug=excluded.part_slug, summary=excluded.summary, by=excluded.by,
+             agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
+        )
+        .run(s);
+      this.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(s.originRef);
+    });
+    write(row);
+    return row;
+  }
+
+  getShortfall(originRef: string): IssueShortfall | null {
+    const row = this.db.prepare(`SELECT * FROM issue_shortfalls WHERE origin_ref=?`).get(originRef) as
+      | IssueShortfallRow
+      | undefined;
+    return row ? rowToShortfall(row) : null;
+  }
+
+  /**
+   * Every standing shortfall. Unbounded in age for {@link listDeliveries}' reason,
+   * and smaller still: a row lives only until the arm it named has been acted on.
+   */
+  listShortfalls(): IssueShortfall[] {
+    const rows = this.db.prepare(`SELECT * FROM issue_shortfalls`).all() as IssueShortfallRow[];
+    return rows.map(rowToShortfall);
+  }
+
+  /**
+   * Drop an issue's shortfall — what the *effect it drove* does once it has taken
+   * place, and the operator's "no, leave this alone" besides.
+   *
+   * A delete rather than a settled status, for {@link clearIssueConclusion}'s
+   * reason: "nothing fell short here" is one state and storing it would give the
+   * rule two ways to read it. Unlike a proposal there is no verdict to keep — the
+   * proposal row is where the human's decision is recorded and audited.
+   */
+  clearShortfall(originRef: string): boolean {
+    return this.db.prepare(`DELETE FROM issue_shortfalls WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
   /**
@@ -884,12 +980,24 @@ export class Store {
   }
 
   /** Move a plan's own status (the parts roll-up, a replan, an abandon). */
-  setPlanStatus(id: string, status: PlanStatus): Plan | null {
+  /**
+   * Move a plan to a new status, optionally rewriting the reason that goes with it.
+   *
+   * `reason` is optional and **preserved on absence**, like every other narrative
+   * field on a plan: the planner's own words are what a replan amends, so a
+   * transition that had no opinion about them must not clear them. The one caller
+   * that passes it is a shortfall's replan arm (issue #159), which appends what an
+   * assessment found — the summary reaches the replanning agent through
+   * `currentPlanSummary`, which already renders this field, rather than through a
+   * new prompt placeholder an operator override could silently drop.
+   */
+  setPlanStatus(id: string, status: PlanStatus, reason?: string): Plan | null {
     const row = this.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
     if (!row) return null;
     const updatedAt = this.now();
-    this.db.prepare(`UPDATE plans SET status=?, updated_at=? WHERE id=?`).run(status, updatedAt, id);
-    return { ...rowToPlan(row), status, updatedAt };
+    const next = reason ?? row.reason;
+    this.db.prepare(`UPDATE plans SET status=?, reason=?, updated_at=? WHERE id=?`).run(status, next, updatedAt, id);
+    return { ...rowToPlan(row), status, reason: next, updatedAt };
   }
 
   /**
@@ -1745,6 +1853,17 @@ interface IssueDeliveryRow {
   decided_at: string;
   updated_at: string;
 }
+interface IssueShortfallRow {
+  origin_ref: string;
+  cause: string | null;
+  part_slug: string | null;
+  summary: string;
+  by: string;
+  agent_id: string | null;
+  task_id: string | null;
+  decided_at: string;
+  updated_at: string;
+}
 interface IssueAssayRow {
   origin_ref: string;
   verdict: string;
@@ -1987,6 +2106,19 @@ function rowToDelivery(r: IssueDeliveryRow): IssueDelivery {
     originRef: r.origin_ref,
     summary: r.summary,
     by: r.by as DeliveryAuthor,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    decidedAt: r.decided_at,
+    updatedAt: r.updated_at,
+  };
+}
+function rowToShortfall(r: IssueShortfallRow): IssueShortfall {
+  return {
+    originRef: r.origin_ref,
+    cause: (r.cause as ShortfallCause | null) ?? null,
+    partSlug: r.part_slug,
+    summary: r.summary,
+    by: r.by as ShortfallAuthor,
     agentId: r.agent_id,
     taskId: r.task_id,
     decidedAt: r.decided_at,

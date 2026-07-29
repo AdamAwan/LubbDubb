@@ -5,6 +5,7 @@ import type {
   IssueConclusion,
   IssueAssay,
   IssueDelivery,
+  IssueShortfall,
   Job,
   Plan,
   PlanPart,
@@ -84,6 +85,15 @@ export interface DispatchContext {
    * Absent = nothing observed, which holds every verdict.
    */
   deliverySignals?: WorldEvent[];
+  /**
+   * Standing "worked, and the goal is not reached" verdicts, keyed on the same
+   * `issue:<n>` origin — the assessor's negative arm (issue #159). Unlike a
+   * delivery this **gates nothing**: rule `issue-shortfall` is its one consumer,
+   * and what it does is route the failure the assessor named — a replan, a
+   * follow-up part, or a human. Absent/empty means nothing has fallen short, which
+   * is every deployment until an assessment says so.
+   */
+  shortfalls?: IssueShortfall[];
   /**
    * Standing goal-assay verdicts, keyed on the same `issue:<n>` origin — whether an
    * issue's text can be worked from at all (issue #158). An `unclear` verdict gates

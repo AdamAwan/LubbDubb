@@ -127,6 +127,33 @@ const ActionSchema = z.discriminatedUnion('type', [
     prompt: z.string().min(1),
     ...base,
   }),
+  /**
+   * Put an assessor's "worked, and the goal is not reached" to a human, with the
+   * arm its declared cause routes to (issue #159). Like `propose_plan` it carries
+   * no act to publish: the executor turns it into an inbox item plus a `shortfall`
+   * proposal, and accepting that proposal performs the arm — a replan, or a
+   * follow-up part. It is a proposal rather than an automatic action because both
+   * arms spend a fleet and a plan the harness rewrote on its own would churn
+   * `plan_parts` under whatever was already running.
+   */
+  z.object({
+    type: z.literal('propose_shortfall'),
+    /** The issue the shortfall is about (`issue:12`) — the proposal's ref derives from it. */
+    originRef: z.string().min(1),
+    /** The issue number, so the executor need not re-parse the origin to name the ref. */
+    issueNumber: z.number().int(),
+    /** The plan the arm acts on. Both arms transition a plan, so both need one. */
+    planId: z.string().min(1),
+    /** What the assessor said fell short — decides which arm accepting performs. */
+    cause: z.enum(['plan', 'part']),
+    /** The part that fell short; required by the `part` arm and unused by the other. */
+    partSlug: z.string().min(1).nullable().default(null),
+    /** The assessor's own words: the replan's context, or the follow-up part's scope. */
+    summary: z.string().min(1),
+    /** What the operator is shown: what fell short, and what accepting does. */
+    prompt: z.string().min(1),
+    ...base,
+  }),
   z.object({
     type: z.literal('set_work_item_state'),
     /** The work item / issue number to transition. */

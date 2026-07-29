@@ -376,8 +376,18 @@ for the world to change — chosen from `config.injectable`.
   collided. Each row shows the path, its writers with their origins and branches, and marks the
   `sameWorktree` case.
 - **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
-  toggle; issues with their state, linked PR and pickup chip, and a watch toggle; stories with a watch
-  toggle; and a **Recently closed** section marking each PR merged vs closed-unmerged.
+  toggle; issues with their state, linked PR, pickup chip, conclusion chip and **shortfall** chip, and
+  a watch toggle; stories with a watch toggle; and a **Recently closed** section marking each PR
+  merged vs closed-unmerged.
+
+  The shortfall chip (`plan fell short` / `part fell short` / `goal is wrong`, with the assessor's
+  summary in its title) sits **beside** the pickup chip and inside neither it nor the conclusion
+  chip, for the reason `attention` sits beside `health`: pickup answers "would an agent start on this
+  next cycle", and a shortfall's honest answer to that is "yes, and that is the point"
+  ([06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity)). What it adds is *what*
+  fell short, which is the whole of what makes the verdict routable and the one thing an operator has
+  to see before being asked to authorize a replan. A shortfall with no cause draws nothing — the
+  conclusion chip beside it already reads `work left`, and one home per fact.
 
   Rows are filed under three tabs — **Watched** / **Unwatched** / **Ignored** — by the pure
   `watchBucket` (`web/src/worldBuckets.ts`) over each item's labels, with the server's precedence

@@ -11,6 +11,9 @@
  * reviewable, and it is written once per issue rather than once a minute.
  */
 
+import { SHORTFALL_CAUSES, SHORTFALL_CAUSE_HELP } from '../delivery/shortfall.js';
+import type { ShortfallCause } from '../types.js';
+
 /** What an assessor may conclude. */
 export const ASSESSMENT_VERDICTS = ['delivered', 'more_work'] as const;
 
@@ -21,16 +24,31 @@ export const ASSESSMENT_VERDICT_HELP: Record<AssessmentVerdict, string> = {
     'what the issue asked for is present in the repository; the harness should schedule nothing further ' +
     'for it. This does not close the ticket — a human does that after testing — and it is reversible',
   more_work:
-    'something the issue asked for is missing or unverifiable; the issue should come back round, with ' +
-    'your summary in front of the next agent',
+    'something the issue asked for is missing or unverifiable. Say what fell short in `cause` and the ' +
+    'harness routes it: a wrong decomposition back to a planner, one short part to a follow-up part, a ' +
+    'wrong goal to a human',
 };
 
 /** Long enough to be prose, short of a pasted transcript. Matches the conclusion cap. */
 const MAX_ASSESSMENT_SUMMARY = 2000;
 
+/**
+ * A validated assessment. `cause`/`part` are only ever set for `more_work` — a
+ * delivered issue has nothing that fell short — and `cause` may still be null
+ * there, because whether it is *required* depends on the plan, which is a store
+ * question this pure layer deliberately cannot ask. That check lives in
+ * `AgentManager.recordAssessment`, one call away, where the plan is in hand.
+ */
+interface ValidAssessment {
+  verdict: AssessmentVerdict;
+  summary: string;
+  cause: ShortfallCause | null;
+  part: string | null;
+}
+
 export function validateAssessment(
   args: Record<string, unknown>,
-): { ok: true; verdict: AssessmentVerdict; summary: string } | { ok: false; error: string } {
+): ({ ok: true } & ValidAssessment) | { ok: false; error: string } {
   const verdict = args.status;
   if (typeof verdict !== 'string' || !ASSESSMENT_VERDICTS.includes(verdict as AssessmentVerdict)) {
     return {
@@ -56,7 +74,56 @@ export function validateAssessment(
       error: `summary is too long (${summary.length} chars, max ${MAX_ASSESSMENT_SUMMARY}). Summarise it.`,
     };
   }
-  return { ok: true, verdict: verdict as AssessmentVerdict, summary };
+
+  // A `delivered` verdict has nothing that fell short, so the two shortfall
+  // fields are *refused* rather than ignored — an assessor that filled them in
+  // has contradicted itself, and silently dropping them would leave it believing
+  // it had routed something.
+  if (verdict === 'delivered') {
+    if (args.cause !== undefined || args.part !== undefined) {
+      return {
+        ok: false,
+        error:
+          'cause and part describe what fell short, and you said the issue is delivered. Drop them, or ' +
+          'say more_work if something is in fact missing.',
+      };
+    }
+    return { ok: true, verdict, summary, cause: null, part: null };
+  }
+
+  const cause = args.cause;
+  if (cause !== undefined && (typeof cause !== 'string' || !SHORTFALL_CAUSES.includes(cause as ShortfallCause))) {
+    return {
+      ok: false,
+      error:
+        `cause must be one of ${SHORTFALL_CAUSES.join(', ')}. ` +
+        SHORTFALL_CAUSES.map((c) => `${c}: ${SHORTFALL_CAUSE_HELP[c]}`).join('. '),
+    };
+  }
+  const part = typeof args.part === 'string' ? args.part.trim() : '';
+  if (part && cause !== 'part') {
+    return {
+      ok: false,
+      error:
+        `part names the one part that fell short, which only means something for cause "part" — you said ` +
+        `${cause === undefined ? 'no cause' : `"${cause}"`}. Say cause "part" if that is what you meant, or drop part.`,
+    };
+  }
+  if (cause === 'part' && !part) {
+    return {
+      ok: false,
+      error:
+        'cause "part" says one named part did not deliver its scope, so name it in `part` (its slug, as the ' +
+        'plan declares it). If you cannot say which, the decomposition itself is what is wrong — say cause "plan".',
+    };
+  }
+  return {
+    ok: true,
+    verdict: verdict as AssessmentVerdict,
+    summary,
+    cause: (cause as ShortfallCause | undefined) ?? null,
+    part: part || null,
+  };
 }
 
 /**

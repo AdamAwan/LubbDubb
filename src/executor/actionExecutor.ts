@@ -21,7 +21,8 @@ import {
   rejectionSignalQuery,
   replyProposalRef,
 } from '../proposals/proposals.js';
-import { releasePlan } from '../plans/planApproval.js';
+import { actOnShortfall, releasePlan } from '../plans/planApproval.js';
+import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
@@ -227,6 +228,50 @@ export class ActionExecutor {
           break;
         }
 
+        case 'propose_shortfall': {
+          // Born here with the other three, from a validated action, for
+          // `propose_plan`'s reason: proposals are created in one place, so "who
+          // may put something to a human" has a single answer. The hold is asked
+          // here too — rule `issue-shortfall` suppresses itself, but every path
+          // that reaches the executor must be covered, not just the one that
+          // happens to check first.
+          //
+          // Unlike a plan this uses the *full* `proposalHold`, all three arms. A
+          // plan proposal is made once per verdict and both settlements rewrite
+          // the row the gate reads; a shortfall is proposed off a row that
+          // persists until its arm is performed, so without the durable `rejected`
+          // arm one refusal would be re-asked every pulse. It expires on world
+          // signal like any other rejection, which it must: a replan refused
+          // because the issue needed one more look would otherwise be vetoed for
+          // good, and that is exactly the phase-4 failure.
+          const ref = shortfallRef(action.issueNumber);
+          const proposals = store.listProposals();
+          const signals = this.rejectionSignals(proposals);
+          const heldBy = proposalHold('shortfall', ref, proposals, { rejectionSignals: signals });
+          if (heldBy) {
+            record('skipped', `Skipped proposing a response to the assessment of ${action.originRef}: ${heldBy}.`);
+            break;
+          }
+          const again = reaskContext('shortfall', ref, proposals, { rejectionSignals: signals });
+          const esc = this.deps.escalations.create({
+            type: 'approve_change',
+            prompt: again ? `${again}\n\n${action.prompt}` : action.prompt,
+            context: { originRef: action.originRef, planId: action.planId },
+          });
+          const proposal = store.createProposal({
+            kind: 'shortfall',
+            ref,
+            action: action as unknown as Action,
+            escalationId: esc.id,
+          });
+          record(
+            'executed',
+            `Proposed a response to the failed assessment of ${action.originRef}: ${esc.id} / ${proposal.id}. ` +
+              `Accepting ${action.cause === 'plan' ? 'sends the plan back to a planner' : `appends a follow-up part for "${action.partSlug}"`}; nothing happens until then.`,
+          );
+          break;
+        }
+
         case 'set_work_item_state': {
           // A mechanical bookkeeping transition (e.g. move a work item to "In
           // Review" once its PR is open), not a publish-to-the-world action — so it
@@ -392,6 +437,25 @@ export class ActionExecutor {
       return settled.ok
         ? audit('executed', `Approved the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`)
         : audit('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
+    }
+    // A shortfall publishes nothing either: accepting it either sends the plan
+    // back to a planner (rule 3c takes over) or appends one part for rule 4a to
+    // schedule. It runs here for the plan act's reason — this is the one place an
+    // accepted proposal becomes both its effect and its audit row.
+    if (act.kind === 'shortfall') {
+      const settled = actOnShortfall(store, act);
+      // The row is consumed by the effect it drove, which is what "ends on" means
+      // for this table: leaving it standing would have the rule re-propose the arm
+      // the moment the settle window lapsed, on a plan already back with a planner.
+      // A *rejection* deliberately leaves it — the verdict is still true, the
+      // operator simply declined to act, and the cockpit chip should keep saying so.
+      if (settled.ok) store.clearShortfall(act.originRef);
+      return settled.ok
+        ? audit(
+            'executed',
+            `Acted on the assessment of ${act.originRef}: ${settled.detail} — authorized by ${by} (${proposal.id}).`,
+          )
+        : audit('skipped', `Nothing to act on for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
     // The verdict's note is the decider's own reason — a human's comment, or the
     // threshold auto-send cleared — so the audit line carries it verbatim rather

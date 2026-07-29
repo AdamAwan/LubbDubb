@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
-import type { WorldSnapshot } from '../types.js';
+import type { ShortfallCause, WorldSnapshot } from '../types.js';
 import { Hub } from './hub.js';
 import { buildRefUrls } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
@@ -24,6 +24,7 @@ import { planOrigin } from '../plans/planning.js';
 import { planIssueNumber } from '../plans/parts.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { deliverySignalQuery } from '../delivery/delivery.js';
+import { SHORTFALL_CAUSES } from '../delivery/shortfall.js';
 import { assaySignalQuery, goalFingerprint } from '../intake/assay.js';
 import { watchLabelsFor } from '../watchLabels.js';
 import {
@@ -477,6 +478,54 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     });
     hub.broadcast({ type: 'world:changed' });
     return { ok: true, delivery };
+  });
+
+  // Record by hand that an issue was worked and its goal is not reached, or clear
+  // a standing shortfall.
+  //
+  // The operator's own arm of the assessor's negative verdict, and — more
+  // importantly — the escape hatch it has to have. A shortfall lives until the arm
+  // it named is performed, and *rejecting* the proposal deliberately leaves it
+  // standing (the verdict is still true; you simply declined to act on it). So
+  // without this the row and its chip would stand for good, with no way to say
+  // "no, that is settled now" short of marking the issue delivered, which claims
+  // something different.
+  //
+  // Clearing is a delete rather than a stored "no shortfall", for
+  // `clearIssueConclusion`'s reason. Writing one clears any standing delivery, in
+  // the store — the two are opposite answers to one question.
+  app.post('/api/issues/:number/shortfall', async (req, reply) => {
+    const { number } = req.params as { number: string };
+    const issueNumber = Number(number);
+    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
+    const body = (req.body ?? {}) as { cause?: unknown; part?: unknown; summary?: unknown };
+    const originRef = issueConclusionOrigin(issueNumber);
+    if (body.cause === null) {
+      store.clearShortfall(originRef);
+      hub.broadcast({ type: 'world:changed' });
+      // Clearing releases the rule that was about to ask about it — reconsider now.
+      await harness.runCycle('manual');
+      return { ok: true, shortfall: null };
+    }
+    if (body.cause !== undefined && !SHORTFALL_CAUSES.includes(body.cause as ShortfallCause))
+      return reply.code(400).send({ error: `cause must be null or one of ${SHORTFALL_CAUSES.join(', ')}` });
+    const cause = (body.cause as ShortfallCause | undefined) ?? null;
+    if (cause === 'part' && (typeof body.part !== 'string' || !body.part.trim()))
+      return reply.code(400).send({ error: 'cause "part" needs the part slug in `part`' });
+    const shortfall = store.recordShortfall({
+      originRef,
+      cause,
+      partSlug: typeof body.part === 'string' ? body.part.trim() : null,
+      // As on the conclusion and delivery routes, an operator has the row in front
+      // of them, so the summary is optional and the default says who decided.
+      summary:
+        typeof body.summary === 'string' && body.summary.trim()
+          ? body.summary.trim()
+          : 'Marked as not delivered by the operator.',
+      by: 'operator',
+    });
+    hub.broadcast({ type: 'world:changed' });
+    return { ok: true, shortfall };
   });
 
   // Toggle a story's watch/ignore state — same opt-in model as issues. Stories are
@@ -1240,6 +1289,10 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
   const deliveries = store.listDeliveries();
   const deliveryWindow = deliverySignalQuery(deliveries);
+  // The negative mirror, keyed the same way — the rows rule `issue-shortfall`
+  // reads, so the chip and the rule cannot disagree about what fell short.
+  const shortfalls = store.listShortfalls();
+  const shortfallsByOrigin = new Map(shortfalls.map((s) => [s.originRef, s]));
   const assays = store.listAssays();
   const assayWindow = assaySignalQuery(assays);
   // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
@@ -1367,7 +1420,15 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
         conclusion: resolveIssueConclusion(
           conclusions.get(issueConclusionOrigin(issue.number)) ?? null,
           plans.find((p) => p.originRef === issueConclusionOrigin(issue.number)) ?? null,
+          shortfallsByOrigin.get(issueConclusionOrigin(issue.number)) ?? null,
         ),
+        // Beside the conclusion and the pickup verdict, never inside either, for
+        // the reason `attention` sits beside `health`: pickup answers "would an
+        // agent start on this next cycle", and a shortfall's answer to that is
+        // "yes, and that is the point". What this adds is *what fell short* and
+        // what the harness has offered to do about it, which neither of the other
+        // two can say.
+        shortfall: shortfallsByOrigin.get(issueConclusionOrigin(issue.number)) ?? null,
       })),
     },
     // The plan graph, which until now existed only in the database: the per-issue

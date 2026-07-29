@@ -10,6 +10,7 @@ import type {
   IssueConclusionVerdict,
   PartOutcomeKind,
   PlanPart,
+  ShortfallCause,
   Task,
   WorkItemFiling,
 } from '../types.js';
@@ -30,6 +31,7 @@ import {
   validateGoalAssay,
   type GoalAssayVerdictName,
 } from './goalAssay.js';
+import { SHORTFALL_CAUSE_HELP, SHORTFALL_CAUSES, shortfallRecordedNote } from '../delivery/shortfall.js';
 import { FINDING_KIND_HELP, FINDING_KINDS, parseFindingRef, validateFinding } from './findings.js';
 import { PART_OUTCOME_KIND_HELP, PART_OUTCOME_KINDS, validatePartConclusion } from './partOutcome.js';
 import { MCP_TOOL_NAMES } from './names.js';
@@ -64,6 +66,8 @@ export interface AgentToolTarget {
     agentId: string,
     verdict: AssessmentVerdict,
     summary: string,
+    cause: ShortfallCause | null,
+    part: string | null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
   recordAssay(
     agentId: string,
@@ -576,9 +580,10 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
         "that against the repository you are standing in and the harness's record of what was done " +
         '(world_read on your issue). Say "delivered" only if what the issue asked for is actually ' +
         'present — that stops the harness scheduling anything further, though it does not close the ' +
-        'ticket and can be undone. Say "more_work" if something is missing or you could not verify it, ' +
-        'and the issue comes back round with your summary in front of the next agent. If you are torn, ' +
-        'say more_work: a wrong "delivered" parks real work silently, a wrong "more_work" costs one agent.',
+        'ticket and can be undone. Say "more_work" if something is missing or you could not verify it — ' +
+        'then say in `cause` WHICH of three things fell short, because the harness routes each of them ' +
+        'differently and cannot guess. If you are torn, say more_work: a wrong "delivered" parks real ' +
+        'work silently, a wrong "more_work" costs one agent.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -594,6 +599,21 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
               'harness watched them merge or assumed it. For more_work, precisely what is missing: the next ' +
               'agent starts from this.',
           },
+          cause: {
+            type: 'string',
+            enum: [...SHORTFALL_CAUSES],
+            description:
+              'more_work only, and required when the issue has a plan: what fell short. ' +
+              SHORTFALL_CAUSES.map((c) => `${c}: ${SHORTFALL_CAUSE_HELP[c]}`).join('. ') +
+              '. Nothing happens without a human accepting it first, so pick the honest one rather than ' +
+              'the one you think will be approved.',
+          },
+          part: {
+            type: 'string',
+            description:
+              'The slug of the part that fell short, exactly as the plan declares it. Required for ' +
+              'cause "part" and meaningless for the others.',
+          },
         },
         required: ['status', 'summary'],
       },
@@ -602,20 +622,27 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
         if (!parsed.ok) return toolError(`Assessment rejected: ${parsed.error}`);
         // Structural identity, and here it decides whether there is anything to
         // assess at all: an agent that did the work is refused rather than scoped
-        // down, because judging your own delivery is not an assessment.
-        const result = deps.agents.recordAssessment(agent.id, parsed.verdict, parsed.summary);
+        // down, because judging your own delivery is not an assessment. The
+        // plan-aware refusals happen there too — this layer cannot read a plan.
+        const result = deps.agents.recordAssessment(
+          agent.id,
+          parsed.verdict,
+          parsed.summary,
+          parsed.cause,
+          parsed.part,
+        );
         if (!result.ok) return toolError(result.error);
         return ok({
           assessed: true,
           issue: result.issueOrigin,
           status: result.verdict,
+          cause: parsed.cause,
           note:
             parsed.verdict === 'delivered'
               ? 'Recorded. The harness will not pick this issue up again while the verdict stands — it ends ' +
                 'when the issue changes in the tracker or someone clears it. The ticket is not closed; that ' +
                 'stays a human decision.'
-              : 'Recorded. The issue is back in the queue and your summary goes to whoever picks it up. ' +
-                'Nothing is dispatched right now.',
+              : shortfallRecordedNote(parsed.cause),
         });
       },
     },

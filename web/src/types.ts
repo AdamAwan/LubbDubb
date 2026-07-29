@@ -55,10 +55,24 @@ export interface Issue {
    */
   conclusion?: {
     verdict: 'done' | 'more_work' | 'undeclared';
-    by: 'agent' | 'operator' | 'plan' | null;
+    by: 'agent' | 'assessor' | 'operator' | 'plan' | null;
     note: string;
     at: string | null;
   };
+  /**
+   * An assessor's "this was worked and the goal is still not reached", beside the
+   * other two and inside neither. Pickup says whether an agent would start next
+   * cycle — and a shortfall's answer to that is "yes, and that is the point" — so
+   * what this adds is *what* fell short and therefore what the harness has offered
+   * to do about it. Null/absent means nothing has.
+   */
+  shortfall?: {
+    cause: 'plan' | 'part' | 'goal' | null;
+    partSlug: string | null;
+    summary: string;
+    by: 'assessor' | 'operator';
+    decidedAt: string;
+  } | null;
 }
 interface Story {
   id: string;
@@ -375,9 +389,9 @@ export interface Escalation {
  */
 export interface Proposal {
   id: string;
-  /** 'reply_draft' | 'merge' | 'plan'. */
+  /** 'reply_draft' | 'merge' | 'plan' | 'shortfall'. */
   kind: string;
-  /** The act's subject, e.g. `pr:42:merge` or `issue:12:plan`. */
+  /** The act's subject, e.g. `pr:42:merge`, `issue:12:plan` or `issue:12:shortfall`. */
   ref: string;
   /** 'pending' | 'accepted' | 'rejected'. */
   status: string;

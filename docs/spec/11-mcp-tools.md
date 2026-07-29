@@ -218,20 +218,43 @@ on the verdict rather than on the next pulse.
 
 ### `assess_issue`
 
-Arguments `{status: 'delivered'|'more_work', summary}`. Rule 3e's assessor casts its verdict here.
-Identity is structural as for every other write tool — no issue argument, the origin resolved from
-the credential.
+Arguments `{status: 'delivered'|'more_work', summary, cause?, part?}`. Rule 3e's assessor casts its
+verdict here. Identity is structural as for every other write tool — no issue argument, the origin
+resolved from the credential.
 
 - **`assessmentOrigin` refuses every agent that is _doing_ the work**, which is `conclusionOrigin`'s
   discipline pointed the other way. There a part agent is refused because the plan speaks for the
   issue; here a pickup, planner or part agent is refused because judging your own delivery is not an
   assessment — having someone else look is the entire point of the rule. Both refusals name the tool
   that _is_ the caller's, so an agent reaching for the wrong one is told which is right.
-- **The two verdicts land in two places**, because they are two statements that already exist.
-  `more_work` is what `issue_conclusions` means and what rule 3b's inverse arm already reads — a
-  second source for one statement would be a duplicate opinion. `delivered` writes the
-  `issue_deliveries` park, which gates pickup, as no conclusion does. Writing either clears the
-  other, in the store.
+- **The two verdicts land in two rows of opposite polarity.** `delivered` writes the
+  `issue_deliveries` park, which **gates pickup**; `more_work` writes an `issue_shortfalls` row,
+  which gates nothing and exists to *release* work. They are mutually exclusive — writing either
+  clears the other, in the store — and they are separate tables rather than one with a polarity
+  column precisely because every reader of the first holds and the second must never be mistaken for
+  one (see [`14-persistence.md`](14-persistence.md)).
+- **It no longer writes `issue_conclusions` at all**, and that is a bug fix independent of the
+  routing. That row is keyed `origin_ref PRIMARY KEY` and is the row `conclude_work` writes, so an
+  assessor writing `more_work` into it **overwrote the working agent's own declaration** — its note,
+  its author, its timestamp — and `resolveIssueConclusion` read `by: 'assessor'` and `by: 'agent'`
+  through one arm with no precedence between them. There are two records now, and one resolver, which
+  ranks a shortfall above an agent's own declaration (the assessor is later and better informed) and
+  the operator's toggle above both.
+- **`cause` says *what* fell short, and it is required when the issue has a plan.** `plan`, `part`
+  (with `part` naming the slug) or `goal` — see [rule 3g](05-dispatcher.md) for what each routes to.
+  The refusals are **plan-aware and synchronous**, which is the tool channel's whole point: a `part`
+  slug that is not a live part is refused with the parts that are, `plan`/`part` on an issue with no
+  plan is refused and pointed at `goal`, and a missing cause on a planned issue is refused with the
+  three alternatives. This is the `plan.json` lesson applied — a structured payload whose rejection
+  the agent never hears costs a whole agent to discover.
+- **No cause is a fourth answer, not a default.** On an issue with no plan there is no decomposition
+  to be wrong about, so "the work is just not finished" names nothing and routes to nothing: the
+  verdict stands, `resolveIssueConclusion` reads it as `more_work`, and no arm fires. Folding it into
+  `goal` would file an escalation claiming the ticket is wrong every time an unplanned issue fell
+  short — a route invented from silence, which is what `undeclared` exists to refuse.
+- **`delivered` may not carry a cause.** An assessor that filled one in has contradicted itself, and
+  is refused rather than having the fields silently dropped — dropping them would leave it believing
+  it had routed something.
 - **`delivered` does not close the ticket**, and both the tool description and the response say so
   twice: an agent that believed it had closed the issue would stop looking at it. The description
   also says which way to err — a wrong `delivered` parks real work silently, a wrong `more_work`

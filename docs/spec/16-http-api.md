@@ -178,6 +178,24 @@ harness's own park, which gates pickup and nothing else (see
 exactly one representation. Like the conclusion route it writes the harness's own record and **never
 touches the tracker**: `closed` stays the human's.
 
+### `POST /api/issues/:number/shortfall`
+
+Body `{cause: 'plan'|'part'|'goal'|null, part?: string, summary?: string}`. The operator's arm of the
+assessor's *negative* verdict — the issue was worked and its goal is still not reached — and, more
+importantly, the escape hatch it has to have. `cause: null` **clears** the row (a delete, so "nothing
+fell short" has one representation); anything else records one, which clears any standing delivery in
+the store. `cause: 'part'` requires the part slug in `part`. 400 on a non-integer issue number, an
+unrecognised cause, or a `part` cause with no slug.
+
+The escape hatch matters here in a way it does not for the other two verdicts. A shortfall lives
+until the arm it named has been performed, and **rejecting** rule 3g's proposal deliberately leaves
+it standing — the verdict is still true; you simply declined to act on it. Without this route the row
+and its cockpit chip would stand for good, with no way to settle it short of marking the issue
+delivered, which claims something different.
+
+Unlike the delivery it gates nothing, so recording one never parks an issue; see
+[06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity).
+
 ### `POST /api/issues/:number/assay`
 
 Body `{verdict: 'workable'|'unclear'|null, summary?: string}`. The operator's arm of the goal assay,

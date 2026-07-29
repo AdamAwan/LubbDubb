@@ -727,6 +727,84 @@ export interface IssueAssay {
   updatedAt: string;
 }
 
+/**
+ * Which of the three failures an assessor's "not delivered" actually is (issue
+ * #159).
+ *
+ * They wear one face — the issue was worked and the goal is not reached — and
+ * they want three different things done, so the cause is **declared** by the
+ * assessor rather than derived by the harness. Deriving "the plan was wrong" from
+ * the fact that something is missing would route every shortfall to a replan, and
+ * re-decompose plans whose shape was never the problem: the issue's own point 2.
+ *
+ * - `plan` — the decomposition was wrong: a part is missing, or the split is. The
+ *   whole plan goes back to a planner.
+ * - `part` — the split was right and one named part did not deliver its scope. A
+ *   follow-up part is appended; the plan is not re-derived.
+ * - `goal` — the issue itself is wrong, ambiguous or obsolete. Nothing is
+ *   dispatched: that is #158's question, and this arm exists to stop pretending
+ *   the planner can answer it.
+ *
+ * **No cause is a fourth answer, and it is never one of these three.** An issue
+ * with no plan has no decomposition to be wrong about, so the honest reading of a
+ * negative assessment there is usually just "the work is not finished" — which
+ * names nothing to route and wants nothing done beyond what `more_work` already
+ * did: the issue comes back round. That is the absence of a value, not a member,
+ * for `undeclared`'s reason — folding it into `goal` would file an escalation
+ * claiming the ticket is wrong every time an unplanned issue fell short, which is
+ * inferring a route from silence.
+ */
+export type ShortfallCause = 'plan' | 'part' | 'goal';
+
+/** Who judged that an issue fell short: the assessing agent, or the operator directly. */
+export type ShortfallAuthor = 'assessor' | 'operator';
+
+/**
+ * One issue's standing "worked, and the goal is not reached" verdict — the
+ * negative mirror of {@link IssueDelivery}.
+ *
+ * A **separate table** rather than a polarity column on the delivery row, and the
+ * reason is the polarity itself. Every reader of `issue_deliveries` is a *gate*:
+ * `deliveryHold` is asked by rule 4's filter and by `issuePickupStatus`, each
+ * pulse, and it holds pickup off. A shortfall must gate **nothing** — releasing
+ * work is the entire point — so putting the two in one table would leave every
+ * present and future reader having to remember which polarity it is holding, from
+ * a row that looks identical until you read a column. That is the drift class this
+ * repo has already paid for twice (`proposalHold` vs `planProposalHold`, detection
+ * vs stripping in the PTY scanner), and both times the fix was to keep the two
+ * predicates apart rather than give one a flag.
+ *
+ * It is also **not** an {@link IssueConclusion}. That row is the working agent's
+ * own declaration about its own run, keyed `origin_ref PRIMARY KEY` — so an
+ * assessor writing `more_work` into it overwrote the agent's note, its author and
+ * its timestamp, with no precedence between two parties the resolver could not
+ * tell apart. The assessor writes here instead, and `resolveIssueConclusion` reads
+ * both, ranking this one higher because the assessor is later and better informed
+ * than the agent that declared its own work.
+ *
+ * Mutually exclusive with a delivery — writing either clears the other, in the
+ * store — for the reason a delivery and a conclusion are: they are two answers to
+ * one question, so one must win, and a caller that remembered one and forgot the
+ * other would leave the pickup gate holding an issue this row is trying to release.
+ */
+export interface IssueShortfall {
+  /** The issue, as `issue:<n>` — the same origin every gate and verdict keys on. */
+  originRef: string;
+  /** What fell short — or null when there was nothing to name (see {@link ShortfallCause}). */
+  cause: ShortfallCause | null;
+  /** The part that fell short. Only ever set for `cause: 'part'`. */
+  partSlug: string | null;
+  /** What is missing. Required: it becomes the next agent's starting point. */
+  summary: string;
+  by: ShortfallAuthor;
+  /** The assessing agent and its task, from the credential. Null for an operator verdict. */
+  agentId: string | null;
+  taskId: string | null;
+  /** When the verdict was first cast. */
+  decidedAt: string;
+  updatedAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Plans (the multi-PR issue funnel)
 // ---------------------------------------------------------------------------
@@ -952,8 +1030,14 @@ export interface Escalation {
  * a merge. The third, `plan`, is the odd one and deliberately so — it publishes
  * nothing. Accepting it *releases a rule*: a decomposition of an issue into
  * stacked PRs stays unscheduled until a human says yes (phase 3).
+ *
+ * `shortfall` is the fourth and publishes nothing either (issue #159): accepting
+ * it acts on an assessor's "this was worked and the goal is not reached" — sending
+ * the plan back to a planner, or appending a follow-up part. It is a proposal
+ * rather than an automatic action because both arms spend a fleet, and a plan the
+ * harness rewrote on its own would churn `plan_parts` under whatever is running.
  */
-export type ProposalKind = 'reply_draft' | 'merge' | 'plan';
+export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall';
 
 /** One-way: a proposal leaves `pending` exactly once, in one of two directions. */
 type ProposalStatus = 'pending' | 'accepted' | 'rejected';
@@ -1010,6 +1094,7 @@ type ActionType =
   | 'reply_on_pr'
   | 'merge_pr'
   | 'propose_plan'
+  | 'propose_shortfall'
   | 'set_work_item_state'
   | 'no_op';
 

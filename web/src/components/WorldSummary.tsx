@@ -86,6 +86,58 @@ function conclusionChip(conclusion: Issue['conclusion']) {
   );
 }
 
+/** What each shortfall cause has the harness offering to do, in the chip's own words. */
+const SHORTFALL_LABEL: Record<string, string> = {
+  plan: 'plan fell short',
+  part: 'part fell short',
+  goal: 'goal is wrong',
+};
+
+/** What accepting the harness's offer would do, per cause — the chip's second half. */
+const SHORTFALL_CONSEQUENCE: Record<string, string> = {
+  plan: 'the harness has offered to send the plan back to a planner',
+  part: 'the harness has offered to append a follow-up part',
+  goal: 'nothing is scheduled — a wrong goal is not something a planner or an agent can fix',
+};
+
+/**
+ * The per-issue shortfall chip: an assessment said the goal is still not reached.
+ *
+ * It draws beside the pickup and conclusion chips rather than inside either, for
+ * the reason `attention` sits beside `health`: pickup answers "would an agent
+ * start on this next cycle", and a shortfall's honest answer to that is "yes, and
+ * that is the point". What is missing from both is *what* fell short — which is
+ * the whole of what makes the verdict routable, and the one thing an operator has
+ * to see before they are asked to authorize a replan.
+ *
+ * The title names the **consequence** as well as the verdict, and quotes the
+ * pending proposal's id when there is one, so the row and the "Needs you" inbox
+ * join — `prAttention`'s `settled` arm's trick, paying the same one-item-in-two-
+ * places cost for the same reason: a row that says it is stalled without saying
+ * what is waiting on you is the re-derivation across four panels this avoids.
+ *
+ * A shortfall with no cause names nothing to route and draws nothing: the
+ * conclusion chip beside it already says "work left", and one home per fact.
+ */
+function shortfallChip(shortfall: Issue['shortfall'], issueNumber: number, proposals: AppState['proposals']) {
+  const label = shortfall?.cause ? SHORTFALL_LABEL[shortfall.cause] : undefined;
+  if (!shortfall || !label) return null;
+  const who = shortfall.by === 'operator' ? 'You' : 'The assessor';
+  const what = shortfall.cause === 'part' ? ` (part "${shortfall.partSlug ?? '?'}")` : '';
+  const pending = (proposals ?? []).find(
+    (p) => p.kind === 'shortfall' && p.ref === `issue:${issueNumber}:shortfall` && p.status === 'pending',
+  );
+  const waiting = pending ? ` Awaiting your accept/reject (${pending.id}).` : '';
+  return (
+    <span
+      className="chip small warn"
+      title={`${who} said${what}: ${shortfall.summary}\n\n${SHORTFALL_CONSEQUENCE[shortfall.cause!]}.${waiting}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** How each attention arm reads on the chip. `done`/`ignored` are omitted — see below. */
 const COURT_LABEL: Record<string, string> = {
   you: 'your turn',
@@ -318,6 +370,7 @@ export function WorldSummary({
                 );
               })()}
             {conclusionChip(i.conclusion)}
+            {shortfallChip(i.shortfall, i.number, state.proposals)}
             {i.linkedPrNumber !== null && (
               <span
                 className={`chip small${linkLive ? '' : ' stale'}`}
