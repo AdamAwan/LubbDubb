@@ -203,6 +203,29 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * Override the goal assay — the demo mirror of the escape hatch a blocking gate
+   * has to have. `null` deletes the row rather than storing a third verdict, so
+   * "nobody has decided" keeps one representation here too.
+   */
+  async setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      issue.assay =
+        verdict === null
+          ? null
+          : {
+              verdict,
+              by: 'operator',
+              summary: 'Set by the operator from the cockpit.',
+              decidedAt: new Date().toISOString(),
+            };
+      this.addDecision('issue_assay_set', 'ok', `issue #${issueNumber} → ${verdict ?? 'unassayed'}`);
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   /** Toggle an issue's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
   async setIssueWatched(issueNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
@@ -835,6 +858,8 @@ export const demoApi = {
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     getServer().setIssueConclusion(issueNumber, verdict),
+  setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
+    getServer().setIssueAssay(issueNumber, verdict),
   setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
   replan: (planId: string) => getServer().replan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),

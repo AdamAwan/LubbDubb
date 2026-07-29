@@ -39,6 +39,7 @@ const {
 const { buildGoalFloor, floorFixtures, layoutFloor, partProgress } = await import(
   '../web/src/skins/factory/goalFloor.js'
 );
+const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
 const { siloFill, siloGates } = await import('../web/src/skins/factory/silo.js');
 const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
@@ -543,6 +544,94 @@ test('absent is not stopped', () => {
     refused.plates.some((p) => p.text === 'Name one behaviour that is wrong today.'),
     'a stopped machine must carry the reason the harness computed',
   );
+});
+
+/**
+ * The refusal is the one intake reading that *blocks* dispatch, so it is the one
+ * that gets an override — and the plate says which issue it would override, so
+ * the component never has to decide that for itself. A `workable` verdict blocks
+ * nothing and draws no plate at all; if one is ever added, this is what stops it
+ * silently growing buttons that change a reading nothing acts on.
+ */
+test('only a refused assay carries an override', () => {
+  const refused = buildGoalFloor(
+    floorInput({
+      assay: { verdict: 'unclear', summary: 'Name one behaviour that is wrong today.', by: 'assayer', decidedAt: NOW },
+    }),
+  );
+  const plate = refused.plates.find((p) => p.assayIssue !== null);
+  assert.ok(plate, 'a refused goal must offer an override somewhere on its floor');
+  assert.equal(plate.assayIssue, 9, 'the override names the issue it would rewrite');
+  assert.equal(plate.text, 'Name one behaviour that is wrong today.', 'the assayer is still quoted verbatim');
+
+  const workable = buildGoalFloor(
+    floorInput({ assay: { verdict: 'workable', summary: 'Clear enough.', by: 'assayer', decidedAt: NOW } }),
+  );
+  assert.equal(
+    workable.plates.find((p) => p.assayIssue !== null),
+    undefined,
+    'a verdict that blocks nothing gets no override',
+  );
+
+  // Every other plate the floor can draw leaves the field null, so the component's
+  // one test for "is this the assay plate" cannot be right by accident.
+  const busy = buildGoalFloor(
+    floorInput({
+      plan: { ...PLAN, status: 'awaiting_approval', reason: 'Three parts, stacked.' },
+      parts: [planPart('a', [], 'ready', 1)],
+      shortfall: { cause: 'plan', partSlug: null, summary: 'Still not delivered.', by: 'assessor', decidedAt: NOW },
+    }),
+  );
+  assert.ok(busy.plates.length > 0, 'the busy floor must draw plates for this to mean anything');
+  assert.ok(
+    busy.plates.every((p) => p.assayIssue === null),
+    'no plate but the refusal may carry an override',
+  );
+});
+
+/**
+ * The floor is the second entry point onto the shared action, so what it draws is
+ * asserted here rather than trusted: two buttons and not one toggle (clearing is
+ * a delete, and `null` is not `workable`), and the sentence saying the hold also
+ * lifts by itself — without which an operator overrides goals an edit would have
+ * fixed honestly.
+ */
+test('a refused floor draws the override, and a workable one does not', () => {
+  const renderFloor = (assay: Issue['assay']): string => {
+    const input = floorInput({ assay });
+    return renderToStaticMarkup(
+      createElement(GoalFloor, {
+        issues: [input.issue],
+        plans: input.plan ? [input.plan] : [],
+        parts: input.parts,
+        openPrs: [],
+        closedPrs: [],
+        tasks: [],
+        upcoming: [],
+        refUrls: {},
+        stopped: false,
+        onViewPlan: () => undefined,
+        onReplan: () => undefined,
+        onSetAssay: () => undefined,
+        onFetchWork: () => Promise.resolve({ nodes: [] }),
+      }),
+    );
+  };
+
+  const refused = renderFloor({
+    verdict: 'unclear',
+    summary: 'Name one behaviour that is wrong today.',
+    by: 'assayer',
+    decidedAt: NOW,
+  });
+  assert.match(refused, /Work it anyway/, 'a refused goal must be workable anyway from the floor');
+  assert.match(refused, /Clear verdict/, 'clearing is a third option, not the same button');
+  assert.match(refused, /Name one behaviour that is wrong today\./, 'the buttons sit beside the reason, not over it');
+  assert.match(refused, /ends by itself/, 'the panel must say the hold lifts on the next edit to the ticket');
+
+  const workable = renderFloor({ verdict: 'workable', summary: 'Clear enough.', by: 'assayer', decidedAt: NOW });
+  assert.doesNotMatch(workable, /Work it anyway/, 'a verdict that blocks nothing offers no override');
+  assert.doesNotMatch(workable, /Clear verdict/);
 });
 
 /** Every arm of the new vocabulary renders a word — a blank machine says nothing. */

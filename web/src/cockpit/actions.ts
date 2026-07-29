@@ -48,6 +48,17 @@ export interface CockpitActions {
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
   setStoryWatched(storyId: string, watched: boolean): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
+  /**
+   * Override the goal assay's verdict (#158). On the seam rather than in a skin
+   * for the reason every mutation is: a skin may not import `api.js`, and an
+   * `unclear` verdict is the one intake reading that *blocks* dispatch — so
+   * without this the only escape hatch is editing the ticket.
+   *
+   * `null` clears the row, which is a third option and not `workable`: the store
+   * keeps one representation of "nobody has decided", and that is also what a
+   * crashed assayer leaves behind.
+   */
+  setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
 
   /**
    * One work item's durable subtree (`GET /api/work/:ref`), fetched on demand.

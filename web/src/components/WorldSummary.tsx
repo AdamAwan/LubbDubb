@@ -2,12 +2,19 @@
  * Shared, not skin-owned — the one panel that moved back across the line when a
  * second skin arrived.
  *
- * It looks like drawing, and most of it is; but the watch/ignore toggles and the
- * conclusion verdict are operator controls with refusal rules behind them, and
- * those are what the shared/skinned split is drawn on. A skin that reimplemented
- * this would sooner or later ship a world view missing a toggle, and flipping
- * skins would silently take a capability away. Tinting it through the tokens is
- * the cost of not having that happen.
+ * It looks like drawing, and most of it is; but the watch/ignore toggles, the
+ * conclusion verdict and the assay override are operator controls with refusal
+ * rules behind them, and those are what the shared/skinned split is drawn on. A
+ * skin that reimplemented this would sooner or later ship a world view missing a
+ * toggle, and flipping skins would silently take a capability away. Tinting it
+ * through the tokens is the cost of not having that happen.
+ *
+ * The assay override is the sharpest case of that, which is why it lives here
+ * and not only on the Goal Floor: an `unclear` verdict is the one intake reading
+ * that *blocks* dispatch, so a skin without the override is a cockpit you cannot
+ * un-block an issue from. The floor's refused-assay plate is a second entry
+ * point through the same action — `PlanModal`'s pattern, where three surfaces
+ * reach one `viewPlan`.
  */
 import { useState } from 'react';
 import type { AppState, Issue, PullRequest } from '../types.js';
@@ -138,6 +145,16 @@ function shortfallChip(shortfall: Issue['shortfall'], issueNumber: number, propo
   );
 }
 
+/**
+ * The one thing an override's buttons cannot say for themselves, and the reason
+ * it is said everywhere they are drawn: a refusal is not permanent and nothing is
+ * re-asking. It lifts by itself the moment the ticket's own text fingerprints
+ * differently — so an operator who does not know that will reach for the override
+ * on issues where editing the goal was the honest fix.
+ */
+export const ASSAY_EXPIRY =
+  "This hold also ends by itself the moment the ticket's own text changes — there is no timer and nothing re-asking.";
+
 /** How each attention arm reads on the chip. `done`/`ignored` are omitted — see below. */
 const COURT_LABEL: Record<string, string> = {
   you: 'your turn',
@@ -187,6 +204,7 @@ export function WorldSummary({
   onToggleIssueWatch,
   onToggleStoryWatch,
   onSetConclusion,
+  onSetAssay,
   onViewPlan,
 }: {
   state: AppState;
@@ -194,6 +212,8 @@ export function WorldSummary({
   onToggleIssueWatch: (issueNumber: number, watched: boolean) => Promise<unknown> | unknown;
   onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
   onSetConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) => Promise<unknown> | unknown;
+  /** Override the intake verdict — see {@link ASSAY_EXPIRY} for what it is beside. */
+  onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
   /** Open the full plan for an issue's decomposition, when it has one. */
   onViewPlan: (planId: string) => void;
 }) {
@@ -420,6 +440,32 @@ export function WorldSummary({
               >
                 more work
               </AsyncButton>
+            )}
+            {/* Only a refusal gets an override. A `workable` verdict blocks
+                nothing, so a button on one would offer to change a reading that
+                changes no behaviour — and clearing is a *third* option rather
+                than the same toggle's other end, because `null` is not
+                `workable`: it is the store's one representation of "nobody has
+                decided", which is also what a crashed assayer leaves behind.
+                The assayer's own words are quoted into the title and never
+                rewritten here. */}
+            {i.state === 'open' && i.assay?.verdict === 'unclear' && (
+              <>
+                <AsyncButton
+                  className="ghost world-toggle"
+                  onClick={() => onSetAssay(i.number, 'workable')}
+                  title={`The assay refused this goal: "${i.assay.summary}"\n\nWork it anyway — the harness stops holding pickup and runs a cycle now. ${ASSAY_EXPIRY}`}
+                >
+                  work anyway
+                </AsyncButton>
+                <AsyncButton
+                  className="ghost world-toggle"
+                  onClick={() => onSetAssay(i.number, null)}
+                  title={`Clear the verdict, so nobody has decided and an assayer may judge the goal again — not the same as calling it workable. ${ASSAY_EXPIRY}`}
+                >
+                  clear assay
+                </AsyncButton>
+              </>
             )}
           </div>
         );

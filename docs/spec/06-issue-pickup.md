@@ -340,7 +340,11 @@ way to stop the harness working:
   the planner's fail-open and the assessor's, for their reason. This is also
   `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence.
 - **The hold expires on its own** (below).
-- **The operator can clear or override it** (`POST /api/issues/:number/assay`).
+- **The operator can clear or override it** (`POST /api/issues/:number/assay`), from either cockpit:
+  the refused issue's row in `WorldSummary`, and the Goal Floor's refused-assay plate as a second
+  entry point onto the same action ([17](17-cockpit.md)). Only a refusal draws the affordance — a
+  `workable` verdict blocks nothing — and clearing is a distinct third option rather than the same
+  toggle's other end.
 
 ### What ends a hold
 
