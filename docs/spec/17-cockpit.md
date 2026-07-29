@@ -251,7 +251,7 @@ written against carries a node-by-node conformance table against the workflow do
 | Silo                 | The goal, filling with settled parts               |
 | Satellite            | The assessment, rule 3e                            |
 | Manifest             | Report what was done — `issue.conclusion.note`     |
-| Signal post          | Update the ticket — `issue.workItemState`          |
+| Signal post          | Update the ticket — state and status comment       |
 | Launch               | `delivered`, or a launch that failed verification  |
 
 Six properties, and they are what to preserve:
@@ -303,11 +303,22 @@ this codebase has already paid for twice.
 `src/graph/`, asserted structurally in `test/workGraph.test.ts` beside the two that say the same of
 the dispatcher.
 
-Two things are deliberately **not** drawn. The plan's status comment is real and is not on the wire
-(`plans.status_comment_ref` is server-side only), so the signal post claims the state move alone
-(#171). Quality-pillar commentary is not drawn at all, for the stronger version of the same reason —
-nothing in the harness writes it, so a third line there would be a machine reading a field with no
-writer.
+**The signal post claims both signals the harness sends** (#171): the work item's state move, and the
+one living status comment the plan reconciler keeps. `Plan.statusCommentRef` was already in the
+snapshot — `plans` is `store.listPlans()` shipped whole — and merely undeclared in `web/src/types.ts`,
+exactly the position `issue.workItemState` was in before #168, so declaring it was the whole of the
+server side. Three things hold it together. **A plan with no comment says so rather than falling
+silent**, which is what having a writer on the wire buys: both states are now readings rather than one
+reading and one blank. **No plan is not the same as no comment** — an unplanned issue has no plan row,
+so nothing *could* have written one, and that third reading gets its own words rather than being
+folded into the second. And the comment is **stated, never linked**: `status_comment_ref` is a
+provider comment id, `refUrls` cannot resolve one, and the cockpit cannot render its body, so the only
+claim it supports is that a comment exists. `signalPostStatus` is a closed fold with a word per
+combination of the two signals, asserted arm by arm in `test/factorySkin.test.ts`.
+
+One thing is still deliberately **not** drawn. Quality-pillar commentary is not drawn at all, for the
+stronger version of the old reason — nothing in the harness writes it, so a third line there would be
+a machine reading a field with no writer.
 
 The icons are original marks in `Sprite.tsx`. The game the treatment nods at owns its art outright
 and licenses none of it for redistribution, so none of it is used or traced; what carries the

@@ -256,6 +256,9 @@ export function buildDemoState(): DemoSeed {
           'schema part alone is a no-op migration; the reads part alone changes what code reads but not what ' +
           'it means.',
         discussing: false,
+        // An active plan whose parts have moved: the reconciler has news to
+        // report, so its one living comment exists.
+        statusCommentRef: 'ic_212',
         createdAt: ago(90),
         updatedAt: ago(6),
       },
@@ -289,6 +292,9 @@ export function buildDemoState(): DemoSeed {
           'With `auth.enabled` off there is no signing key, so the route must serve with no capability at all. ' +
           'That means two modes and only one of them is covered by the capability tests.',
         discussing: false,
+        // An unapproved decomposition announces nothing, so the reconciler has
+        // deliberately written no comment for this one.
+        statusCommentRef: null,
         createdAt: ago(12),
         updatedAt: ago(12),
       },

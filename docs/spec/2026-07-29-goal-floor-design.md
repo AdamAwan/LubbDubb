@@ -162,7 +162,9 @@ done → Update the ticket → Done`. Both stages run today, so both get machine
 - **Signal post** — update the ticket. Reads `issue.workItemState` (which already rides the snapshot
   via the spread, undeclared in `web/src/types.ts`) plus the plan's status comment, which is **not on
   the wire** — `plans.status_comment_ref` is server-side only. Either ship it or draw the state move
-  alone; do not imply a comment the cockpit cannot see.
+  alone; do not imply a comment the cockpit cannot see. _The floor shipped drawing the state move
+  alone; #171 then took the first option — `Plan.statusCommentRef` is declared in `web/src/types.ts`
+  and the post claims both signals. See [17](17-cockpit.md)._
 
 They sit on the goal check's **yes** arm, which is why no in-flight floor reaches them: a shortfall
 returns before this point. The mockup therefore needed a seventh goal (`issue:187`) that actually
@@ -254,7 +256,7 @@ Every noun lands in `web/src/skins/factory/vocabulary.ts` and nowhere else.
 | Silo                      | The goal, filling with delivered parts           | the roll-up the pickup chip already counts           |
 | Satellite                 | The assessment, rule 3e                          | `issue.conclusion` (`by: 'assessor'`)                |
 | Manifest                  | Report what was done                             | `issue.conclusion.note`                              |
-| Signal post               | Update the ticket — state and comment            | `issue.workItemState` + the plan status comment (**not on the wire**) |
+| Signal post               | Update the ticket — state and comment            | `issue.workItemState` + `plan.statusCommentRef` (shipped by #171)     |
 | Launch                    | `delivered`                                      | `issue.pickup.status === 'delivered'`                |
 | Launch fails verification | A shortfall, rule 3g — routed by what fell short | `issue.shortfall.cause`                              |
 | Energy                    | Cap, `paused`, rate limits                       | `control`, `usage` — `power.ts` already folds it     |

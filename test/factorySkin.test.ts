@@ -62,6 +62,7 @@ const PLAN: Plan = {
   outOfScope: null,
   document: null,
   discussing: false,
+  statusCommentRef: null,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -583,7 +584,15 @@ test('every goal-floor stage has a word', () => {
   assert.ok(siloStatus(1, 3).word.length > 0);
   assert.ok(siloStatus(3, 3).word.length > 0);
   assert.ok(manifestStatus(true).word.length > 0 && manifestStatus(false).word.length > 0);
-  assert.ok(signalPostStatus('Done').word.length > 0 && signalPostStatus(null).word.length > 0);
+  // Both signals the signal post claims, in every combination: a plan with no
+  // comment must say so rather than fall silent, and "no plan at all" is a third
+  // reading rather than a shade of the second.
+  for (const state of ['Done', null] as const)
+    for (const comment of ['written', 'unwritten', 'no_plan'] as const)
+      assert.ok(
+        signalPostStatus(state, comment).word.length > 0,
+        `signal post ${state ?? 'no state'}/${comment} rendered no word`,
+      );
   assert.ok(launchStatus(true).word.length > 0 && launchStatus(false).word.length > 0);
 
   // Every tone has a colour, including the two the floor added: a tone with no
@@ -712,6 +721,34 @@ test('the loop reaches an end, and the end is drawn', () => {
   );
   assert.equal(delivered.machines.find((m) => m.kind === 'satellite')?.status.word, 'Verified');
   assert.equal(delivered.machines.find((m) => m.kind === 'launch')?.status.word, 'Away');
+
+  // The signal post claims both signals the harness sends (#171), and the three
+  // readings of the status comment stay three: a plan that has written one, a
+  // plan that has not, and no plan at all — which is not a plan gone quiet but
+  // nothing that could ever have written. None of them may link the ref: it is a
+  // provider comment id, which `refUrls` cannot resolve.
+  const signalOf = (over: Parameters<typeof floorInput>[0]) =>
+    buildGoalFloor(
+      floorInput({
+        pickup: 'delivered',
+        workItemState: 'Done',
+        conclusion: { verdict: 'done', by: 'assessor', note: 'retry wraps both call sites', at: NOW },
+        parts: [planPart('a', [], 'merged', 1)],
+        ...over,
+      }),
+    ).machines.find((m) => m.kind === 'signal');
+
+  const unwritten = signalOf({});
+  const written = signalOf({ plan: { ...PLAN, statusCommentRef: 'ic_9' } });
+  const noPlan = signalOf({ plan: null, parts: [] });
+  assert.notEqual(written?.status.word, unwritten?.status.word, 'a written status comment must read differently');
+  assert.deepEqual(written?.meta, ['state · Done', 'status comment · written']);
+  assert.deepEqual(unwritten?.meta, ['state · Done', 'status comment · none written']);
+  assert.deepEqual(noPlan?.meta, ['state · Done', 'no plan · no status comment to write']);
+  assert.ok(
+    [written, unwritten, noPlan].every((m) => !m?.meta.some((line) => line.includes('ic_9') || line.includes('http'))),
+    'a comment id is not a URL and is never rendered',
+  );
 
   // A shortfall returns before the tail, and names the route it goes back on.
   const short = buildGoalFloor(

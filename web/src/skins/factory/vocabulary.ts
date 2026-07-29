@@ -417,16 +417,58 @@ export function manifestStatus(hasNote: boolean): MachineStatus {
 }
 
 /**
+ * Whether the plan's status comment has been written, has not been yet, or could
+ * never have been.
+ *
+ * Three readings rather than two, and the third is the point: an unplanned issue
+ * has no plan row at all, so there is nothing that *could* have written a
+ * comment, while a plan whose reconciler has not written one yet has a writer
+ * that has not spoken. Folding them together would report the funnel being off
+ * as a machine that fell silent.
+ */
+export type StatusCommentReading = 'written' | 'unwritten' | 'no_plan';
+
+/**
+ * A word per combination, as a closed fold: the two signals the harness can put
+ * on a ticket are the state move and the status comment, and every pairing of
+ * them is a real reading that gets said out loud. An arm rendering blank because
+ * a combination went unconsidered is the failure this shape removes.
+ */
+const SIGNAL_WORDS: Record<'moved' | 'no_state', Record<StatusCommentReading, MachineStatus>> = {
+  moved: {
+    written: { word: 'Posted', tone: 'ok' },
+    // The state went out and no notice did — not a fault, since the reconciler
+    // writes only when there is news, so this is a partial post rather than a jam.
+    unwritten: { word: 'State posted', tone: 'ok' },
+    // Nothing was owed a notice, so moving the state is the whole of the job.
+    no_plan: { word: 'Posted', tone: 'ok' },
+  },
+  no_state: {
+    written: { word: 'Notice posted', tone: 'ok' },
+    // Something could have gone out and nothing did.
+    unwritten: { word: 'Nothing posted', tone: 'off' },
+    // Nothing could have: no workflow state on this provider, and no plan.
+    no_plan: { word: 'Nothing to post', tone: 'off' },
+  },
+};
+
+/**
  * The signal post — update the ticket.
  *
- * It claims the **state move alone**. The plan's status comment is real and is
- * not on the wire (`plans.status_comment_ref` is server-side only), so a second
- * line here would be a machine reading a field the cockpit cannot see; quality-
- * pillar commentary is not drawn for the stronger version of the same reason —
- * nothing in the harness writes it.
+ * It claims **both** signals the harness actually sends: the work item's state
+ * move, and the plan's one living status comment (#171). A plan that has written
+ * no comment says so rather than falling silent — with `statusCommentRef` on the
+ * wire both states are real readings, where before a second line here would have
+ * been a machine reading a field the cockpit could not see.
+ *
+ * Quality-pillar commentary is still not drawn, for the stronger version of that
+ * older reason — nothing in the harness writes it at all.
  */
-export function signalPostStatus(workItemState: string | null | undefined): MachineStatus {
-  return workItemState ? { word: 'Posted', tone: 'ok' } : { word: 'No state to move', tone: 'off' };
+export function signalPostStatus(
+  workItemState: string | null | undefined,
+  comment: StatusCommentReading,
+): MachineStatus {
+  return SIGNAL_WORDS[workItemState ? 'moved' : 'no_state'][comment];
 }
 
 /** The launch — `delivered`, or a launch that failed verification. */
