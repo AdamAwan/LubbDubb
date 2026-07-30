@@ -118,10 +118,10 @@ Red means exactly one thing on that floor: an agent parked on a question only yo
 
 `FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
 it sits are separate edits. It renders the Parts Inspection strip full width, then **two rails** — `floor` (the line, bots, the
-goal floor, the yard) and `world` (production, signals, shift log) — split on _whose turn it
+goal floor, the yard) and `world` (signals, shift log) — split on _whose turn it
 is_ rather than on subject. The strip is above both because a PR outranks that split: it is the one
-world object you are usually the blocker for. Production heads the world rail rather than the floor because its subject
-is output, and output is merges — the world's answer to the floor's effort.
+world object you are usually the blocker for. Production used to head the world rail and is no
+longer a panel at all: it is the **Output** gauge in the status bar, and the graph opens from it.
 
 There were **three**. The first was `act`: what _you_ are the blocker for. It is gone, and what
 replaced it is the next section — three of its panels are read as a count far more often than as
@@ -165,7 +165,7 @@ Four consequences to preserve:
   the shell's `work-panel` is a sibling below it and stays scrollable, since `WorkTreePanel` fetches
   on open and a skin may not reach `api.js`.
 
-#### The four desks
+#### The five ways in
 
 Alerts, faults and blueprints stood in the act rail, and each is read as a **number** far more often
 than as contents. So the number is a gauge in the status bar and the panel opens from it as a
@@ -182,13 +182,29 @@ behind a click, which is what keeps them tested.
 there was no reading and at one the rail reflowed. The rename is to the harness's own word for
 these (the `findings` table, `report_finding`, `FindingsPanel`), so one subject has one name from
 the tool call to the gauge, and it is 35px narrower than `Off-blueprint` was. It does not buy the
-single-row bar back: five gauges plus the ident and the picker need 1603px, so the bar is one row
-above ~1654px and two below, and the duplicate-removal that fixed this last time has nothing left
-to remove. See the design's cost section. It belongs with the desks rather than on the floor because the floor
+single-row bar back, and Output made that worse rather than better: the bar's content is 1878px
+now, so it is one row above ~1900px and two below, and the duplicate-removal that fixed this last
+time has nothing left to remove. That is the cost of the spark — 213px against a counted gauge's
+~122px — and it is paid knowingly: the alternative is a gauge whose face is a number that cannot
+say what the panel was for. The threshold landing on the railed breakpoint is a coincidence, not a
+rule; nothing keys on it. See the findings design's cost section. It belongs with the desks rather than on the floor because the floor
 rail is what the _harness_ is doing, and a finding is something nobody is doing: nothing in the
 dispatcher reads `findings`, so promote / file / dismiss is the only way one becomes anything. Its
 design is
 [`2026-07-30-factory-findings-gauge-design.md`](2026-07-30-factory-findings-gauge-design.md).
+
+**Output is the fifth**, and it is the one that was never a count. Production had already been
+reduced to a panel at the head of the world rail whose entire content was a tile you clicked to open
+the graph — a way in standing in a rail, above two panels an operator actually watches. It is read
+the way the desks are read, so it became a gauge the same way; the difference is only what a gauge
+of it can say. A rate over a 6h window collapsed to one number is a snapshot again, which is the
+thing the graph exists to escape, so the **face is a spark** — `ProductionSpark`, the same plotting
+functions the graph uses, at gauge weight — and the value beside it is the output rate alone,
+merges an hour. Dispatches per merge is the number that joins the two and it is a sentence rather
+than a glyph, so it is the hover and the graph's own note. The spark drops the escalation series:
+in a 64-unit box a third colour is a smudge, the bar already speaks for escalations in a gauge of
+its own four inches to the right, and what is left — a filled ground of dispatches with a merge line
+over it — is exactly the comparison the churn ratio is a number for.
 
 Five rules hold them:
 
@@ -196,10 +212,10 @@ Five rules hold them:
   plain `.fx-read` is invisible — indistinguishable from a neighbour that does not respond, which is
   exactly how it was first reported. A gauge that does something is `.fx-act`: a real `<button>` with
   a raised face, a hover lift and a pointer. Icons are distinct per gauge (`alert`, `gear`, `chest`,
-  `blueprint`) so four adjacent buttons stay legible. **The chevron is the narrower word** — it says
-  _there is a panel behind this_ — so the four desks carry one and `Scan`, which runs a pulse rather
-  than opening anything, does not (`.fx-run`). `test/factorySkin.test.ts` counts the ways in by
-  chevron for that reason.
+  `blueprint`, `lamp`) so five adjacent buttons stay legible. **The chevron is the narrower word** —
+  it says _there is a panel behind this_ — so all five carry one and `Scan`, which runs a pulse
+  rather than opening anything, does not (`.fx-run`). `test/factorySkin.test.ts` counts the ways in
+  by chevron for that reason.
 - **Only Alerts is ever red**, and that is the skin's existing rule rather than a new one: red means
   an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
   finding is something a bot noticed on its way past rather than something it is stuck on (amber),
@@ -328,12 +344,14 @@ argument for each is in its module's header, and the reason for the shape is wor
   produced no work. The churn ratio (dispatches per merge) is the point of the panel. When the
   decision log does not reach back to the window's start the panel **says so**: a rate that silently
   under-reports is worse than no rate. It is the one panel an operator _consults_ rather than
-  watches, so it draws at two sizes off one set of plotting functions: a **tile** at the head of the
-  world rail carrying the whole reading a glance wants (the shape of the three series, the three
-  rates, the churn number), and the **full panel** — axes, deltas, spend, the truncation caveat —
-  behind a click, in the skin's `Modal`. Two components drawing the same series independently would
-  be two things to keep in step for no gain; the only difference between them is the rectangle they
-  plot into and whether the axes are labelled. The modal is an `.fx-card` with a backdrop rather than
+  watches, and it is **not on the floor**: it draws at two sizes off one set of plotting functions —
+  the **spark** on the status bar's Output gauge (two series, gauge weight; see
+  [the five ways in](#the-five-ways-in)) and the **full graph** — axes, deltas, spend, the
+  truncation caveat — behind the click, in the skin's `Modal`. Two components drawing the same
+  series independently would be two things to keep in step for no gain; the only difference between
+  them is the rectangle they plot into, how heavy the strokes are in it, and whether the axes are
+  labelled. `FactoryRoot` derives the reading once and hands it to both, so the gauge and the graph
+  cannot disagree. The modal is an `.fx-card` with a backdrop rather than
   a second surface, and closes on the backdrop, the button _and_ Escape — a thing that covers the
   floor must not have exactly one exit.
 - **The Goal Floor** (`goalFloor.ts` + `components/GoalFloor.tsx`) draws **one ticket's whole

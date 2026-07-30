@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { axisScale, type ProductionReading, type SeriesKey } from '../production.js';
+import { axisScale, type ProductionReading, type ProductionSeries, type SeriesKey } from '../production.js';
 
 /**
  * The production graph.
@@ -10,12 +10,13 @@ import { axisScale, type ProductionReading, type SeriesKey } from '../production
  * of the whole panel: dispatches are effort and merges are output, and a rising
  * first line with a flat second one is a floor spinning.
  *
- * It draws at two sizes off one set of plotting functions. The tile is the
- * reading an operator glances at — the shape of the lines and the churn number —
- * and the full panel, which only opens on a click, is where the axes, the rates
- * and the caveats live. Two components drawing the same series independently
- * would be two things to keep in step for no gain; the only difference between
- * them is the rectangle they plot into and whether the axes are labelled.
+ * It draws at two sizes off one set of plotting functions. The **spark** is the
+ * face of the status bar's Output gauge — the shape alone, at the size a gauge
+ * has — and the full panel, which only opens on a click, is where the axes, the
+ * rates and the caveats live. Two components drawing the same series
+ * independently would be two things to keep in step for no gain; the only
+ * difference between them is the rectangle they plot into, how heavy the strokes
+ * are in it, and whether the axes are labelled.
  */
 
 const SERIES_COLOR: Record<SeriesKey, string> = {
@@ -32,8 +33,12 @@ interface Plot {
 }
 
 const FULL: Plot = { left: 38, right: 608, top: 12, bottom: 176 };
-/** No axis labels to leave room for, so the lines run the width of the box. */
-const SPARK: Plot = { left: 3, right: 245, top: 6, bottom: 62 };
+/**
+ * Gauge-sized: no axis labels to leave room for, so the lines run the whole box.
+ * The inset is the endpoint dot's radius, which would otherwise be clipped by
+ * the sunk face at either end of the run.
+ */
+const SPARK: Plot = { left: 2.5, right: 61.5, top: 4, bottom: 22 };
 
 function pointsPath(points: readonly number[], peak: number, plot: Plot): string {
   const span = points.length > 1 ? (plot.right - plot.left) / (points.length - 1) : 0;
@@ -59,11 +64,26 @@ function endpoint(points: readonly number[], peak: number, plot: Plot): { x: num
  * The series themselves. Dispatches carry an area fill — it is the baseline
  * every other series is read against, so it reads as the ground rather than a
  * third equal line.
+ *
+ * `weight` scales every stroke, dash and endpoint with the box. A 2px line is
+ * right across 620 units and a smear across 64, so the spark would otherwise be
+ * three overlapping bands rather than three lines — and the whole reason it
+ * shares this function is that its shape must be the panel's shape.
  */
-function Lines({ reading, peak, plot }: { reading: ProductionReading; peak: number; plot: Plot }): JSX.Element {
+function Lines({
+  series,
+  peak,
+  plot,
+  weight = 1,
+}: {
+  series: readonly ProductionSeries[];
+  peak: number;
+  plot: Plot;
+  weight?: number;
+}): JSX.Element {
   return (
     <>
-      {reading.series.map((s) => {
+      {series.map((s) => {
         const path = pointsPath(s.points, peak, plot);
         const end = endpoint(s.points, peak, plot);
         return (
@@ -79,11 +99,11 @@ function Lines({ reading, peak, plot }: { reading: ProductionReading; peak: numb
               d={path}
               fill="none"
               stroke={SERIES_COLOR[s.key]}
-              strokeWidth={s.key === 'escalations' ? 1.8 : 2}
-              strokeDasharray={s.key === 'escalations' ? '4 3' : undefined}
+              strokeWidth={(s.key === 'escalations' ? 1.8 : 2) * weight}
+              strokeDasharray={s.key === 'escalations' ? `${4 * weight} ${3 * weight}` : undefined}
               strokeLinejoin="round"
             />
-            <circle cx={end.x} cy={end.y} r="3.4" fill={SERIES_COLOR[s.key]} />
+            <circle cx={end.x} cy={end.y} r={3.4 * weight} fill={SERIES_COLOR[s.key]} />
           </g>
         );
       })}
@@ -107,30 +127,26 @@ function churnLine(reading: ProductionReading): JSX.Element {
 }
 
 /**
- * The glance: the shape of the three series and the one number, sized to sit in
- * a rail. It is a button because the full panel is a click away and nothing else
- * on this tile is interactive.
+ * The face of the Output gauge: effort against output, at gauge size.
+ *
+ * Two series, not three. Escalations belong to the graph, where there is room to
+ * label them and a legend saying which line is which — in a 64-unit box a third
+ * colour is a smudge, and the bar already speaks for them in a gauge of their
+ * own, in red, four inches to the right. What is left is exactly the comparison
+ * the churn ratio is a number for: the filled ground is dispatches, the line
+ * over it is merges, and the two diverging is a floor spinning.
+ *
+ * The y-scale is the whole reading's peak, not these two series', so the shape
+ * here and the shape in the graph are the same shape.
  */
-export function ProductionTile({ reading, onOpen }: { reading: ProductionReading; onOpen: () => void }): JSX.Element {
+export function ProductionSpark({ reading }: { reading: ProductionReading }): JSX.Element {
   const { max: peak } = axisScale(reading.peak);
+  const series = reading.series.filter((s) => s.key !== 'escalations');
 
   return (
-    <button type="button" className="fx-prod-tile" onClick={onOpen}>
-      <div className="fx-prod-spark fx-sunk">
-        <svg viewBox="0 0 248 68" role="img" aria-label={ariaLabel(reading)}>
-          <Lines reading={reading} peak={peak} plot={SPARK} />
-        </svg>
-      </div>
-      <div className="fx-prod-rates">
-        {reading.series.map((s) => (
-          <span key={s.key} className="fx-krate">
-            <span className="sw" style={{ background: SERIES_COLOR[s.key] }} />
-            <b>{s.perHour.toFixed(1)}</b>/h
-          </span>
-        ))}
-      </div>
-      <p className="fx-prod-note">{churnLine(reading)}</p>
-    </button>
+    <svg className="fx-prod-spark fx-sunk" viewBox="0 0 64 26" role="img" aria-label={ariaLabel(reading)}>
+      <Lines series={series} peak={peak} plot={SPARK} weight={0.55} />
+    </svg>
   );
 }
 
@@ -175,7 +191,7 @@ export function Production({ reading }: { reading: ProductionReading }): JSX.Ele
               now
             </text>
           </g>
-          <Lines reading={reading} peak={peak} plot={FULL} />
+          <Lines series={reading.series} peak={peak} plot={FULL} />
         </svg>
       </div>
 

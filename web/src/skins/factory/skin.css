@@ -828,13 +828,16 @@
    There were three rails. The first held what *you* were the blocker for, and
    its panels are read as a count far more often than as contents — so the count
    became a gauge in the status bar and the panel opens from it. See
-   `docs/spec/2026-07-29-factory-two-rail-layout-design.md`.
+   `docs/spec/2026-07-29-factory-two-rail-layout-design.md`. Production left the
+   world rail the same way, and it is the reason the world rail is now two
+   panels rather than three.
 
    The rails' document order is *floor, world*, which is not the order the floor
    reads top-to-bottom in. So the two dissolved arrangements set `order` per
    panel (below): the line first, then the detail it cannot hold, and the
-   readings you consult rather than watch — production, the log, the signals —
-   after it. */
+   readings you consult rather than watch — the log, the signals — after it.
+   Production was the third of those and is not a panel at all now: it is the
+   Output gauge in the status bar, and the graph opens from it. */
 
 .fx-rails {
   display: grid;
@@ -877,7 +880,6 @@
   [data-fx='shift-log'] {
     grid-column: span 2;
   }
-  [data-fx='production'],
   [data-fx='signals'] {
     grid-column: span 1;
   }
@@ -911,11 +913,6 @@
 }
 [data-fx='yard'] {
   order: 5;
-}
-/* Production is a reading you consult, not a picture you watch, so it sits with
-   the log rather than under the line. Same demotion the world rail makes. */
-[data-fx='production'] {
-  order: 6;
 }
 [data-fx='shift-log'] {
   order: 7;
@@ -1418,56 +1415,23 @@
   font-weight: 600;
 }
 
-/* The tile: the same three series at rail width, and the one number. A button,
-   because opening the full panel is the only thing on it to do. */
-.fx-prod-tile {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0;
-  background: none;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.fx-prod-tile:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
+/* The spark: the face of the Output gauge in the status bar. Sized like the
+   power meter beside it rather than like a chart, because that is what it is —
+   a reading on a gauge, and the graph it opens is where the picture lives. */
 .fx-prod-spark {
-  padding: 6px;
-}
-.fx-prod-spark svg {
-  width: 100%;
-  height: auto;
+  width: 58px;
+  height: 24px;
+  flex: 0 0 auto;
   display: block;
 }
-.fx-prod-tile:hover .fx-prod-spark {
+.fx-prod-read:hover .fx-prod-spark {
   border-color: var(--accent);
 }
-.fx-prod-rates {
-  display: flex;
-  gap: 12px;
-  margin-top: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-}
-.fx-krate {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-variant-numeric: tabular-nums;
-}
-.fx-krate .sw {
-  width: 9px;
-  height: 9px;
-  flex: 0 0 auto;
-}
-.fx-krate b {
-  color: var(--text);
-  font-weight: 600;
+/* Wider than the counted gauges, and only because the spark is 58px of it. The
+   value is the narrowest thing that can carry a rate, which is why it is merges
+   an hour and not the churn ratio with a unit hung off it. */
+.fx-prod-read .fx-val {
+  font-size: 14px;
 }
 
 /* ============================ modal ============================ */

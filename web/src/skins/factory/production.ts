@@ -16,7 +16,7 @@ const BUCKETS = 6;
 
 export type SeriesKey = 'dispatches' | 'merges' | 'escalations';
 
-interface ProductionSeries {
+export interface ProductionSeries {
   key: SeriesKey;
   label: string;
   /** Counts per bucket, oldest first. */
