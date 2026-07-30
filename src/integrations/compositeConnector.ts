@@ -7,10 +7,8 @@ import type {
   PrMergeInput,
   PrReplyInput,
   SendResult,
-  StoryLabelInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
-import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
 import {
   isInjectable,
@@ -20,7 +18,6 @@ import {
   isPrMergeCapable,
   isPrReplyCapable,
   isRefResolvable,
-  isStoryLabelCapable,
   isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
@@ -38,7 +35,6 @@ import {
 export class CompositeConnector implements Connector, ActionSink {
   constructor(
     private readonly integrations: Integration[],
-    private readonly store: Store,
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
 
@@ -49,7 +45,6 @@ export class CompositeConnector implements Connector, ActionSink {
       pullRequests: slices.flatMap((s) => s.pullRequests ?? []),
       closedPullRequests: slices.flatMap((s) => s.closedPullRequests ?? []),
       issues: slices.flatMap((s) => s.issues ?? []),
-      stories: slices.flatMap((s) => s.stories ?? []),
     };
   }
 
@@ -77,12 +72,6 @@ export class CompositeConnector implements Connector, ActionSink {
     return handler.setIssueLabel(input);
   }
 
-  async setStoryLabel(input: StoryLabelInput): Promise<SendResult> {
-    const handler = this.integrations.find(isStoryLabelCapable);
-    if (!handler) throw new Error('no integration can label stories (no backlog provider is StoryLabelCapable)');
-    return handler.setStoryLabel(input);
-  }
-
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     const handler = this.integrations.find(isWorkItemStateCapable);
     if (!handler)
@@ -107,18 +96,13 @@ export class CompositeConnector implements Connector, ActionSink {
   }
 
   /**
-   * Apply an injected event to whichever fake integration owns its kind, then log
-   * it. An event with no fake owner (e.g. its domain is served by a real adapter
-   * that reads from the network) is recorded as an unhandled inject rather than
-   * throwing — you cannot fake-inject onto a real provider.
+   * Apply an injected event to whichever fake integration owns its kind. An event
+   * with no fake owner (e.g. its domain is served by a real adapter that reads from
+   * the network) is dropped rather than throwing — you cannot fake-inject onto a
+   * real provider.
    */
   inject(event: InjectableEvent): void {
     const target = this.integrations.find((i) => isInjectable(i) && i.handles(event.kind));
-    if (target && isInjectable(target)) {
-      target.inject(event);
-      this.store.recordConnectorEvent(event.kind, event);
-    } else {
-      this.store.recordConnectorEvent('inject_unhandled', event);
-    }
+    if (target && isInjectable(target)) target.inject(event);
   }
 }

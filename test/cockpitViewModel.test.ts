@@ -24,7 +24,7 @@ function stateWith(over: Partial<AppState>): AppState {
     worldEvents: [],
     dispatchRules: [],
     jobs: [],
-    world: { pullRequests: [], issues: [], stories: [] },
+    world: { pullRequests: [], issues: [] },
     ...over,
   } as unknown as AppState;
 }

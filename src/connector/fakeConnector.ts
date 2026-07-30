@@ -7,19 +7,17 @@ import type {
   PrMergeInput,
   PrReplyInput,
   SendResult,
-  StoryLabelInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Story, WorldSnapshot } from '../types.js';
+import type { WorldSnapshot } from '../types.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { FakeWorldStore } from '../integrations/fake/fakeWorld.js';
 import { FakeGitHubIntegration } from '../integrations/fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from '../integrations/fake/fakeIssues.js';
-import { FakeBacklogIntegration } from '../integrations/fake/fakeBacklog.js';
 
 /**
- * A convenience bundle: the fake integrations (source control, issues, backlog)
+ * A convenience bundle: the fake integrations (source control, issues)
  * sharing one persisted world, composed behind {@link Connector} +
  * {@link ActionSink}. Equivalent to selecting the `fake` provider for every
  * capability — this is what makes the harness behave identically to before the
@@ -33,14 +31,12 @@ export class FakeConnector implements Connector, ActionSink {
   private readonly composite: CompositeConnector;
   private readonly github: FakeGitHubIntegration;
   private readonly issues: FakeIssuesIntegration;
-  private readonly backlog: FakeBacklogIntegration;
 
   constructor(store: Store, now: () => string = () => new Date().toISOString()) {
     const world = new FakeWorldStore(store);
-    this.github = new FakeGitHubIntegration(world, store);
+    this.github = new FakeGitHubIntegration(world);
     this.issues = new FakeIssuesIntegration(world);
-    this.backlog = new FakeBacklogIntegration(world);
-    this.composite = new CompositeConnector([this.github, this.issues, this.backlog], store, now);
+    this.composite = new CompositeConnector([this.github, this.issues], now);
   }
 
   getState(): Promise<WorldSnapshot> {
@@ -63,10 +59,6 @@ export class FakeConnector implements Connector, ActionSink {
     return this.composite.setIssueLabel(input);
   }
 
-  setStoryLabel(input: StoryLabelInput): Promise<SendResult> {
-    return this.composite.setStoryLabel(input);
-  }
-
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     return this.composite.setWorkItemState(input);
   }
@@ -78,10 +70,6 @@ export class FakeConnector implements Connector, ActionSink {
   /** Apply an event to the fake world (routes to the owning module) and log it. */
   inject(event: InjectableEvent): void {
     this.composite.inject(event);
-  }
-
-  markStoryState(storyId: string, state: Story['state']): void {
-    this.backlog.markStoryState(storyId, state);
   }
 
   markIssueLinked(issueNumber: number, prNumber: number): void {

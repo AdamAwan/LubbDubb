@@ -1586,12 +1586,6 @@ export class Store {
       .run(key, value);
   }
 
-  recordConnectorEvent(kind: string, payload: unknown): void {
-    this.db
-      .prepare(`INSERT INTO connector_events (id, kind, payload, created_at) VALUES (?,?,?,?)`)
-      .run(`ev_${nanoid(10)}`, kind, JSON.stringify(payload), this.now());
-  }
-
   // -- Error log -----------------------------------------------------------
 
   recordError(input: ErrorLogInput): ErrorLogEntry {

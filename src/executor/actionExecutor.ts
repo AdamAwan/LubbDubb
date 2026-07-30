@@ -105,7 +105,7 @@ export class ActionExecutor {
           // The branch half of the same gate (issue #116). For every world-driven
           // rule origin and branch are 1:1 (`pr:<n>:*`→`pr.branch`,
           // `issue:<n>`→`issue/<n>`, `issue:<n>:plan`→`plan/issue/<n>`,
-          // `issue:<n>:part:<slug>`→`issue/<n>/<slug>`, `story:<id>:work`→`story/<id>`),
+          // `issue:<n>:part:<slug>`→`issue/<n>/<slug>`),
           // so the origin check above already *is* a branch check and this one is a
           // no-op for them — asserted in test/jobQueue.test.ts, because a later rule
           // that broke the 1:1 property would otherwise break it silently. Two paths

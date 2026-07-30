@@ -1,5 +1,5 @@
 import type { Store } from '../../store/store.js';
-import type { Issue, PullRequest, Story } from '../../types.js';
+import type { Issue, PullRequest } from '../../types.js';
 
 const STATE_KEY = 'fake_world';
 
@@ -9,10 +9,9 @@ export interface FakeWorld {
   /** PRs an injected `pr_closed` moved out of the open set — the fake's retention window. */
   closedPullRequests: PullRequest[];
   issues: Issue[];
-  stories: Story[];
 }
 
-const EMPTY_WORLD: FakeWorld = { pullRequests: [], closedPullRequests: [], issues: [], stories: [] };
+const EMPTY_WORLD: FakeWorld = { pullRequests: [], closedPullRequests: [], issues: [] };
 
 /**
  * A thin read/write wrapper over the single persisted `fake_world` document in

@@ -257,7 +257,7 @@ test('with the funnel off both plan-shaped arms degrade rather than parking the 
 test('an ignored or closed issue’s shortfall drives nothing', async () => {
   const tagged = await dispatcher().decide(
     ctx({
-      world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['lubbdubb-ignore'] })], stories: [] },
+      world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['lubbdubb-ignore'] })] },
       shortfalls: [shortfallRow({ cause: 'plan' })],
       plans: [planRow()],
     }),
@@ -266,7 +266,7 @@ test('an ignored or closed issue’s shortfall drives nothing', async () => {
 
   const closed = await dispatcher().decide(
     ctx({
-      world: { takenAt: NOW, pullRequests: [], issues: [issue({ state: 'closed' })], stories: [] },
+      world: { takenAt: NOW, pullRequests: [], issues: [issue({ state: 'closed' })] },
       shortfalls: [shortfallRow({ cause: 'plan' })],
       plans: [planRow()],
     }),
@@ -599,7 +599,7 @@ function task(over: Partial<Task> = {}): Task {
 
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
     tasks: [task()],
     agents: [],
     openEscalations: [],

@@ -230,7 +230,6 @@ export function WorldSummary({
   showPullRequests = true,
   onToggleExclude,
   onToggleIssueWatch,
-  onToggleStoryWatch,
   onSetConclusion,
   onSetAssay,
   onViewPlan,
@@ -247,7 +246,6 @@ export function WorldSummary({
   showPullRequests?: boolean;
   onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
   onToggleIssueWatch: (issueNumber: number, watched: boolean) => Promise<unknown> | unknown;
-  onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
   onSetConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) => Promise<unknown> | unknown;
   /** Override the intake verdict — see {@link ASSAY_EXPIRY} for what it is beside. */
   onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
@@ -255,7 +253,7 @@ export function WorldSummary({
   onViewPlan: (planId: string) => void;
 }) {
   const [tab, setTab] = useState<WatchBucket>('watched');
-  const { pullRequests, issues, stories } = state.world;
+  const { pullRequests, issues } = state.world;
   // Newest first: a PR you were watching disappears mid-session otherwise, with
   // nothing to say whether it landed or was abandoned.
   const recentlyClosed = showPullRequests
@@ -282,11 +280,9 @@ export function WorldSummary({
   const counts: Record<WatchBucket, number> = { watched: 0, unwatched: 0, ignored: 0 };
   if (showPullRequests) for (const pr of pullRequests) counts[prBucket(pr.labels)]++;
   for (const i of issues) counts[itemBucket(i.labels)]++;
-  for (const s of stories) counts[itemBucket(s.labels)]++;
 
   const visiblePrs = showPullRequests ? pullRequests.filter((pr) => inTab(prBucket(pr.labels))) : [];
   const visibleIssues = issues.filter((i) => inTab(itemBucket(i.labels)));
-  const visibleStories = stories.filter((s) => inTab(itemBucket(s.labels)));
   // "Recently closed" lives in the Watched tab alone: it exists so a PR you were
   // following doesn't silently vanish mid-session, which is a statement to someone
   // monitoring. Bucketing those rows by their own labels would scatter them.
@@ -321,7 +317,7 @@ export function WorldSummary({
       )}
       {counts[tab] === 0 && gated && (
         <div className="world-empty">
-          no {TAB_LABEL[tab].toLowerCase()} {showPullRequests ? 'PRs, issues or stories' : 'issues or stories'}
+          no {TAB_LABEL[tab].toLowerCase()} {showPullRequests ? 'PRs or issues' : 'issues'}
         </div>
       )}
       {visiblePrs.length > 0 && (
@@ -503,44 +499,6 @@ export function WorldSummary({
                 })}
               </>
             )}
-          </div>
-        );
-      })}
-      {visibleStories.length > 0 && (
-        <div className="world-row">
-          <span>Stories</span>
-          <b>{visibleStories.length}</b>
-        </div>
-      )}
-      {visibleStories.map((s) => {
-        const isIgnored = (s.labels ?? []).includes(ignoreLabel);
-        const watched = itemBucket(s.labels) === 'watched';
-        return (
-          <div key={s.id} className={`world-item${isIgnored ? ' excluded' : ''}`}>
-            {s.title} <span className="chip small">{s.state}</span>
-            {isIgnored && showPickupChip && (
-              <span className="chip small" title={`Tagged "${ignoreLabel}" — the harness is leaving this story alone`}>
-                ignored
-              </span>
-            )}
-            {!isIgnored && !watched && showPickupChip && (
-              <span className="chip small" title={`No "${watchLabel}" tag — the harness isn't picking this story up`}>
-                unwatched
-              </span>
-            )}
-            {(!s.description || !s.acceptanceCriteria) && <span className="chip small warn">needs grooming</span>}
-            {s.wafPillars.length === 0 && <span className="chip small warn">no WAF</span>}
-            <AsyncButton
-              className="ghost world-toggle"
-              onClick={() => onToggleStoryWatch(s.id, !watched)}
-              title={
-                watched
-                  ? `Remove "${watchLabel}" so the harness leaves this story alone`
-                  : `Tag this story "${watchLabel}" so the harness picks it up`
-              }
-            >
-              {watched ? 'ignore' : 'watch'}
-            </AsyncButton>
           </div>
         );
       })}

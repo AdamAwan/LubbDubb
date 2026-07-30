@@ -640,7 +640,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
     },
   });
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.number, 7);
   assert.equal(pr.title, 'Add widget');
@@ -659,7 +659,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
 test('snapshot leaves mergeable undefined while Azure is still computing', async () => {
   const { api } = fakeApi({ pulls: [pull({ pullRequestId: 7, mergeStatus: 'queued' })] });
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.mergeable, undefined);
   assert.equal(pr.mergeableState, 'unknown');
@@ -674,7 +674,7 @@ test('snapshot applies the prAuthor filter client-side', async () => {
     ],
   });
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store, prAuthor: 'alice@acme.com' });
+  const sc = new AzureDevOpsSourceControlIntegration({ api, prAuthor: 'alice@acme.com' });
   const prs = (await sc.snapshot()).pullRequests!;
   assert.deepEqual(
     prs.map((p) => p.number),
@@ -686,11 +686,11 @@ test('snapshot applies the prAuthor filter client-side', async () => {
 test('snapshot returns the last-good slice and records an error event on failure', async () => {
   const store = new Store(':memory:');
   const good = fakeApi({ pulls: [pull({ pullRequestId: 7 })] });
-  const sc = new AzureDevOpsSourceControlIntegration({ api: good.api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api: good.api });
   await sc.snapshot(); // warm the last-good cache
 
   const bad = fakeApi({ throwOn: 'listActivePullRequests' });
-  const sc2 = new AzureDevOpsSourceControlIntegration({ api: bad.api, store });
+  const sc2 = new AzureDevOpsSourceControlIntegration({ api: bad.api });
   const slice = await sc2.snapshot(); // cold + failing → empty, and it must not throw
   assert.deepEqual(slice.pullRequests, []);
   store.close();
@@ -703,7 +703,7 @@ test('snapshot returns the last-good slice and records an error event on failure
 test('postPrReply threads under an existing thread when commentId is set', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   const res = await sc.postPrReply({ prNumber: 7, commentId: '300', body: 'because X' });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.threadReplies, [{ prId: 7, threadId: 300, parentCommentId: 1, content: 'because X' }]);
@@ -714,7 +714,7 @@ test('postPrReply threads under an existing thread when commentId is set', async
 test('postPrReply opens a new thread when commentId is null', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   const res = await sc.postPrReply({ prNumber: 7, commentId: null, body: 'ping' });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.newThreads, [{ prId: 7, content: 'ping' }]);
@@ -725,7 +725,7 @@ test('postPrReply opens a new thread when commentId is null', async () => {
 test('mergePr completes the PR with the snapshotted head commit and requested strategy', async () => {
   const { api, recorded } = fakeApi({ pulls: [pull({ pullRequestId: 7, lastMergeSourceCommit: 'headsha' })] });
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   await sc.snapshot(); // learn the head commit
   const res = await sc.mergePr({ prNumber: 7, method: 'squash' });
   assert.equal(res.ok, true);
@@ -736,7 +736,7 @@ test('mergePr completes the PR with the snapshotted head commit and requested st
 test('mergePr throws when the PR was never snapshotted (no known head commit)', async () => {
   const { api } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   await assert.rejects(() => sc.mergePr({ prNumber: 99, method: 'merge' }), /no known merge commit/);
   store.close();
 });
@@ -744,7 +744,7 @@ test('mergePr throws when the PR was never snapshotted (no known head commit)', 
 test('snapshot maps a PR label through (the exclusion-tag signal)', async () => {
   const { api } = fakeApi({ pulls: [pull({ pullRequestId: 7 })], labels: { 7: ['lubbdubb-ignore'] } });
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   const prSlice = (await sc.snapshot()).pullRequests![0]!;
   assert.deepEqual(prSlice.labels, ['lubbdubb-ignore']);
   store.close();
@@ -753,7 +753,7 @@ test('snapshot maps a PR label through (the exclusion-tag signal)', async () => 
 test('setPrLabel adds or removes a label through the API', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new AzureDevOpsSourceControlIntegration({ api, store });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
   await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: true });
   await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: false });
   assert.deepEqual(recorded.labelSets, [
@@ -787,7 +787,7 @@ test('work items snapshot maps state / tags→labels / linked PR', async () => {
     ],
   });
   const store = new Store(':memory:');
-  const issues = new AzureDevOpsWorkItemsIntegration({ api, store });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
   const slice = await issues.snapshot();
   assert.equal(slice.issues!.length, 1);
   const issue = slice.issues![0]!;
@@ -804,7 +804,7 @@ test('work items snapshot maps state / tags→labels / linked PR', async () => {
 test('setWorkItemState transitions the work item and records a connector event', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const issues = new AzureDevOpsWorkItemsIntegration({ api, store });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
   const res = await issues.setWorkItemState({ number: 101, state: 'In Review' });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.stateSets, [{ id: 101, state: 'In Review' }]);
@@ -814,7 +814,7 @@ test('setWorkItemState transitions the work item and records a connector event',
 test('work items snapshot passes the tag filter through to the API', async () => {
   const { api, recorded } = fakeApi({ workItems: [] });
   const store = new Store(':memory:');
-  const issues = new AzureDevOpsWorkItemsIntegration({ api, store, workItemTag: 'agent-ready' });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, workItemTag: 'agent-ready' });
   await issues.snapshot();
   assert.deepEqual(recorded.tagQueries, ['agent-ready']);
   store.close();
@@ -823,7 +823,7 @@ test('work items snapshot passes the tag filter through to the API', async () =>
 test('work items snapshot passes the assignee filter through to the API', async () => {
   const { api, recorded } = fakeApi({ workItems: [] });
   const store = new Store(':memory:');
-  const issues = new AzureDevOpsWorkItemsIntegration({ api, store, assignedTo: 'me@acme.com' });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, assignedTo: 'me@acme.com' });
   await issues.snapshot();
   assert.deepEqual(recorded.assignedToQueries, ['me@acme.com']);
   store.close();
@@ -832,7 +832,7 @@ test('work items snapshot passes the assignee filter through to the API', async 
 test('work items snapshot returns the last-good slice and records an error event on failure', async () => {
   const store = new Store(':memory:');
   const bad = fakeApi({ throwOn: 'listOpenWorkItems' });
-  const issues = new AzureDevOpsWorkItemsIntegration({ api: bad.api, store });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api: bad.api });
   const slice = await issues.snapshot();
   assert.deepEqual(slice.issues, []);
   store.close();
@@ -886,7 +886,7 @@ test('work items snapshot resolves tag ownership only for items carrying the gat
     },
   });
   const store = new Store(':memory:');
-  const issues = new AzureDevOpsWorkItemsIntegration({ api, store, ownershipTag: 'agent-ready' });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, ownershipTag: 'agent-ready' });
   const slice = await issues.snapshot();
   const byNumber = new Map(slice.issues!.map((i) => [i.number, i]));
   assert.deepEqual(byNumber.get(1)!.labelsAddedByViewer, ['agent-ready']);
@@ -900,7 +900,7 @@ test('work items snapshot resolves tag ownership only for items carrying the gat
 test('work items snapshot leaves ownership untracked when the gate is off', async () => {
   const { api, recorded } = fakeApi({ workItems: [workItem({ id: 1, tags: ['agent-ready'] })] });
   const store = new Store(':memory:');
-  const issues = new AzureDevOpsWorkItemsIntegration({ api, store });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
   const slice = await issues.snapshot();
   assert.equal(slice.issues![0]!.labelsAddedByViewer, undefined);
   assert.deepEqual(recorded.updateQueries, []);
@@ -910,7 +910,7 @@ test('work items snapshot leaves ownership untracked when the gate is off', asyn
 test('the plan status comment is created once on the work item, then edited in place', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const issues = new AzureDevOpsWorkItemsIntegration({ api, store });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
   const created = await issues.upsertIssueComment({ number: 101, body: 'first', commentRef: null });
   assert.equal(created.ref, '5101');
   // Azure addresses an edit by (work item, comment), so both have to ride in.

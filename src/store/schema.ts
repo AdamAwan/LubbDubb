@@ -363,13 +363,6 @@ CREATE TABLE IF NOT EXISTS connector_state (
   value TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS connector_events (
-  id         TEXT PRIMARY KEY,
-  kind       TEXT NOT NULL,
-  payload    TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
 -- Observed world state transitions, diffed from consecutive snapshots. The
 -- activity feed's backing store — the world counterpart to the decision log.
 CREATE TABLE IF NOT EXISTS world_events (

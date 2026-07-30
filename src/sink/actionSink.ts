@@ -7,9 +7,8 @@
  * connector drops in behind `Connector`, without any other module changing.
  *
  * v1 ships `FakeConnector` as the sink too: it "sends" by reflecting the effect
- * back into its own fake world (marking the answered comment handled) and logging
- * a connector event, so nothing actually leaves the machine while the seam stays
- * real and testable.
+ * back into its own fake world (marking the answered comment handled), so nothing
+ * actually leaves the machine while the seam stays real and testable.
  */
 
 export interface PrReplyInput {
@@ -51,15 +50,6 @@ export interface IssueLabelInput {
   present: boolean;
 }
 
-export interface StoryLabelInput {
-  /** The story id to label (stories are keyed by string id, not a number). */
-  id: string;
-  /** The label to add or remove — the watch/ignore tag. */
-  label: string;
-  /** True to add the label, false to remove it. Idempotent either way. */
-  present: boolean;
-}
-
 export interface IssueCommentInput {
   /** The issue / work item to comment on. */
   number: number;
@@ -87,8 +77,6 @@ export interface ActionSink {
   setPrLabel(input: PrLabelInput): Promise<SendResult>;
   /** Add/remove a label on an issue / work item — the cockpit's watch/ignore toggle. Throws if it fails. */
   setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
-  /** Add/remove a label on a story — the cockpit's watch/ignore toggle (fake backlog only). Throws if it fails. */
-  setStoryLabel(input: StoryLabelInput): Promise<SendResult>;
   /**
    * Move a work item to a provider-native state (e.g. Azure "In Review" once a PR
    * is open), so it stops being re-picked while under review. Idempotent. Throws if

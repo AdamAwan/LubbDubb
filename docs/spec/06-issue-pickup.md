@@ -9,7 +9,7 @@
 - `${prefix}-ignore` — "leave this alone"
 
 `watchLabelsFor(prefix)` derives the pair. An **empty prefix yields empty labels**, which every gate
-reads as "feature off": PRs are never excluded, issues and stories are never watch-gated. That is the
+reads as "feature off": PRs are never excluded, issues are never watch-gated. That is the
 escape hatch tests use.
 
 `resolveWatchState(labels, {watchLabel, ignoreLabel, defaultWatched})` folds the precedence, and it is
@@ -35,13 +35,10 @@ Where each gate lives:
 - **PRs** — `isPrExcluded(pr, ignoreLabel)` in `src/prHealth.ts`. `Harness.runCycle` filters excluded
   PRs out of the dispatch world.
 - **Issues** — `isIssuePickupEligible` / `issuePickupStatus` in `src/dispatcher/issuePickup.ts`.
-- **Stories** — `watchGateReason(labels, policy)`, the label half on its own (stories have no state
-  gate or ownership refinement).
 
 The cockpit's per-row toggles write the tags back through outbound capabilities on the `ActionSink`
-seam (`POST /api/prs/:n/exclude`, `POST /api/issues/:n/watch`, `POST /api/stories/:id/watch`). The
-issue and story toggles write the pair — adding one label and removing the other — so the two stay
-mutually exclusive. These are **label writes, not dispatcher actions**.
+seam (`POST /api/prs/:n/exclude`, `POST /api/issues/:n/watch`). The issue toggle writes the pair —
+adding one label and removing the other — so the two stay mutually exclusive. These are **label writes, not dispatcher actions**.
 
 ## `IssuePickupPolicy`
 
@@ -192,7 +189,7 @@ tell that from "there was never a PR", and the item would bounce back to a picku
 put a fresh agent on work already on the default branch.
 
 Only a **whole-issue origin** may declare (`conclusionOrigin`). `issue:<n>:part:<slug>`,
-`issue:<n>:plan`, `pr:<n>:*`, `story:*` and `job:<id>` are refused, each with its own reason. That is
+`issue:<n>:plan`, `pr:<n>:*` and `job:<id>` are refused, each with its own reason. That is
 the structural half of _"done" means the issue is finished, not my slice of it_: a part agent has no
 verdict to cast, because the plan roll-up already speaks for the issue.
 

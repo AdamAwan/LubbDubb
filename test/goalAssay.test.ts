@@ -75,7 +75,7 @@ function assay(over: Partial<IssueAssay> = {}): IssueAssay {
 
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
     tasks: [],
     agents: [],
     openEscalations: [],
@@ -194,7 +194,7 @@ test('the watch gate applies — an untagged issue is never assayed', async () =
   assert.deepEqual(origins(unwatched.actions), [], 'the assay never filters a backlog nobody opted in');
 
   const watched = await d.decide(
-    ctx({ world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['agent-ready'] })], stories: [] } }),
+    ctx({ world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['agent-ready'] })] } }),
   );
   assert.deepEqual(origins(watched.actions), ['issue:12:assay']);
 });
@@ -268,7 +268,7 @@ test('editing the ticket ends the hold, with no event to have witnessed', async 
   assert.equal(isAssayed(assay(), edited), false, 'and it is assayed again rather than merely released');
 
   const { actions } = await assayer().decide(
-    ctx({ world: { takenAt: NOW, pullRequests: [], issues: [edited], stories: [] }, assays: [assay()] }),
+    ctx({ world: { takenAt: NOW, pullRequests: [], issues: [edited] }, assays: [assay()] }),
   );
   assert.deepEqual(origins(actions), ['issue:12:assay'], 'the edit re-opens the question, on the next pulse');
 });
@@ -551,7 +551,7 @@ function commentSink(): { sink: ActionSink; writes: { number: number; body: stri
 }
 
 function world(over: Partial<Issue> = {}): WorldSnapshot {
-  return { takenAt: NOW, pullRequests: [], issues: [issue(over)], stories: [] };
+  return { takenAt: NOW, pullRequests: [], issues: [issue(over)] };
 }
 
 test('a refused goal asks its question on the ticket, once, and edits it thereafter', async () => {

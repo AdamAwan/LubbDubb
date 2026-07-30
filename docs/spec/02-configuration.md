@@ -168,7 +168,6 @@ them silently is the failure worth catching at boot.
 | --------------------------------------------- | ------------------------------- | --------- | ------------------------------------------------------------- |
 | `integrations.sourceControl`                  | `'fake' \| 'github' \| 'azure'` | `'fake'`  | Who supplies pull requests.                                   |
 | `integrations.issues`                         | `'fake' \| 'github' \| 'azure'` | `'fake'`  | Who supplies issues / work items.                             |
-| `integrations.backlog`                        | `'fake'`                        | `'fake'`  | Who supplies stories. `fake` is the only registered provider. |
 | `github.owner`, `github.repo`                 | `string`                        | unset     | Required when any capability uses `github`.                   |
 | `github.filters.prAuthor`                     | `string` (optional)             | unset     | Only surface PRs opened by this login.                        |
 | `azureDevOps.organization/project/repository` | `string`                        | unset     | Required when any capability uses `azure`.                    |

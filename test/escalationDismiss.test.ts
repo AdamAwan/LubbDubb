@@ -63,7 +63,7 @@ async function parkedAgent() {
     return c;
   };
   const system = buildSystem(streamConfig(), { streamSpawner: spawner, errorMirror: () => {} });
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

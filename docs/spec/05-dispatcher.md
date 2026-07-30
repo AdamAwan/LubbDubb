@@ -63,10 +63,7 @@ expand a row into the rule that fired and why that rule exists.
 | `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                                                                        |
 | `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                                                                 |
 | `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                                                                   |
-| `story-groom`              | 5    | Story grooming           | A ready story lacks a description or acceptance criteria.                                                                                                 |
-| `story-waf`                | 6    | Missing WAF pillars      | A ready story has no WAF pillars.                                                                                                                         |
-| `story-pickup`             | 7    | Idle capacity pickup     | Headroom remains and a groomed ready story is the highest priority.                                                                                       |
-| `idle`                     | 8    | Nothing actionable       | No rule matched — recorded as a `no_op`, so idleness stays auditable.                                                                                     |
+| `idle`                     | 5    | Nothing actionable       | No rule matched — recorded as a `no_op`, so idleness stays auditable.                                                                                     |
 
 ## Rank-then-slice
 
@@ -107,9 +104,6 @@ Candidates are appended in this order, and the order _is_ the priority:
 6. **Plan parts** (rule 4a), ranked by dependency depth, then issue number, then part sequence, so
    the bottom of a stack is cut before the branch its dependents will base on is needed.
 7. **Issue pickups** (rule 4), ordered by label-encoded priority then issue number.
-8. **Story grooming and WAF** (rules 5/6).
-9. **Story pickup** (rule 7) — ranked last, so at zero headroom it queues as `waiting` rather than
-   silently vanishing.
 
 Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `escalate_to_human`,
 `respond_to_agent`) are
@@ -455,10 +449,10 @@ instead.
 dispatcher emits, each under a stable `PromptId`, each with a built-in default, a declared placeholder
 list, and a doc string.
 
-Ids: `issue-plan`, `issue-replan`, `plan-part`, `plan-approval`, `plan-part-escalation`, `issue-pickup`,
-`issue-pickup-escalation`, `issue-assess`, `issue-assay`, `pr-ci-fix`, `pr-base-update-behind`,
-`pr-base-update-conflict`, `pr-review-comment`, `pr-concern-escalation`, `story-groom`, `story-waf`,
-`story-pickup`, `finding-ticket`, `work-item-ticket`. The last two are route-driven rather than
+Ids: `issue-plan`, `issue-replan`, `discuss-plan`, `plan-part`, `plan-approval`, `issue-shortfall`,
+`plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-assay`,
+`issue-retro`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`, `pr-review-comment`,
+`pr-concern-escalation`, `finding-ticket`, `work-item-ticket`. The last two are route-driven rather than
 dispatcher-driven — they are here because _how a ticket should be worded_ is the operator's opinion,
 which is what the book exists to make overridable.
 

@@ -30,14 +30,4 @@ export type InjectableEvent =
   // GitHub-issue signals.
   | { kind: 'new_issue'; number: number; title: string; body?: string; labels?: string[] }
   | { kind: 'issue_state'; number: number; state: 'open' | 'closed' }
-  | { kind: 'issue_linked_pr'; number: number; prNumber: number }
-  | {
-      kind: 'new_story';
-      title: string;
-      priority?: number;
-      description?: string;
-      acceptanceCriteria?: string;
-      wafPillars?: string[];
-      labels?: string[];
-    }
-  | { kind: 'story_state'; storyId: string; state: 'ready' | 'in_progress' | 'blocked' | 'done' };
+  | { kind: 'issue_linked_pr'; number: number; prNumber: number };

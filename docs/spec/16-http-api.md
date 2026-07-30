@@ -305,10 +305,6 @@ is visible on the day it is written.
 Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. Nothing is redacted: `Config`
 holds no secrets by construction ([02](02-configuration.md)).
 
-### `POST /api/stories/:id/watch`
-
-The same, for a story id, routed to the fake backlog's `StoryLabelCapable`.
-
 ### `POST /api/jobs`
 
 Queue an operator job. See [13](13-jobs-and-findings.md). 400 on a missing/empty prompt, a bad `kind`,

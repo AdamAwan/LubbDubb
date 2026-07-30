@@ -189,7 +189,7 @@ function delivered(number = 12): IssueDelivery {
 
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
     tasks: [],
     agents: [],
     openEscalations: [],

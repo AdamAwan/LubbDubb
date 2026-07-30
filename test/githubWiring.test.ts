@@ -21,7 +21,7 @@ function withToken(token: string | null, fn: () => void): void {
 }
 
 function selection(over: Partial<IntegrationSelection>): IntegrationSelection {
-  return { sourceControl: 'fake', issues: 'fake', backlog: 'fake', ...over };
+  return { sourceControl: 'fake', issues: 'fake', ...over };
 }
 
 test('loadConfig carries a github block (owner/repo/filters) from overrides', () => {

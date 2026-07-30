@@ -18,7 +18,6 @@ interface ActionSink {
   mergePr(input): Promise<SendResult>;
   setPrLabel(input): Promise<SendResult>;
   setIssueLabel(input): Promise<SendResult>;
-  setStoryLabel(input): Promise<SendResult>;
   setWorkItemState(input): Promise<SendResult>;
   upsertIssueComment(input): Promise<SendResult>;
 }
@@ -33,7 +32,6 @@ Every outbound method **throws** on failure; `SendResult` carries `ok` and an op
 | --------------- | ------------------- | ------------------------- |
 | `sourceControl` | Pull requests       | `fake`, `github`, `azure` |
 | `issues`        | Issues / work items | `fake`, `github`, `azure` |
-| `backlog`       | Stories             | `fake`                    |
 
 `src/integrations/registry.ts` maps capability → provider id → factory. Adding a provider is one line
 there. An unknown provider id throws at boot, listing the valid ids for that capability. The fake
@@ -43,7 +41,7 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
-`PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `IssueLabelCapable`, `StoryLabelCapable`,
+`PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `IssueCommentCapable`, `RefResolvable`, and the fake-only `Injectable`.
 
 A provider implements only what it supports. **New outbound actions add a new capability interface
@@ -65,9 +63,8 @@ Implements both seams:
 
 ## The `fake` provider
 
-Three integrations over one `FakeWorldStore`, which persists to `connector_state` so an injected world
-survives restarts. `FakeGitHubIntegration` owns PRs, `FakeIssuesIntegration` issues,
-`FakeBacklogIntegration` stories.
+Two integrations over one `FakeWorldStore`, which persists to `connector_state` so an injected world
+survives restarts. `FakeGitHubIntegration` owns PRs, `FakeIssuesIntegration` issues.
 
 They are the only `Injectable` providers. `POST /api/inject` accepts:
 
@@ -82,8 +79,6 @@ They are the only `Injectable` providers. `POST /api/inject` accepts:
 | `new_issue`               | Adds an open issue.                                                    |
 | `issue_state`             | Opens/closes an issue.                                                 |
 | `issue_linked_pr`         | Sets `linkedPrNumber`.                                                 |
-| `new_story`               | Adds a story.                                                          |
-| `story_state`             | Sets a story's state.                                                  |
 
 `pr_closed` **moves** the row rather than copying it. `mergePr` still marks a PR merged in place so the
 deterministic loop settles; a PR present in both lists would have the world diff report one merge

@@ -14,22 +14,19 @@ import { basePrOf, inheritedCiFailure, prHealth, prState } from '../prHealth.js'
  * The kinds a read can name.
  *
  * Taken from what the dispatcher already models rather than invented: these are
- * exactly the three lists a {@link WorldSnapshot} carries and the three ref
- * prefixes the rest of the system already writes (`pr:42`, `issue:12`,
- * `story:abc`). A fourth vocabulary would be a fourth thing to keep in step with
- * the rules, and there is nothing for it to name.
+ * exactly the lists a {@link WorldSnapshot} carries and the ref prefixes the rest
+ * of the system already writes (`pr:42`, `issue:12`). A third vocabulary would be
+ * a third thing to keep in step with the rules, and there is nothing for it to name.
  */
-export const WORLD_READ_KINDS = ['pr', 'issue', 'story'] as const;
+export const WORLD_READ_KINDS = ['pr', 'issue'] as const;
 
 type WorldReadKind = (typeof WORLD_READ_KINDS)[number];
 
 /** A parsed target: which of the snapshot's lists to look in, and which row. */
 interface WorldRef {
   kind: WorldReadKind;
-  /** PR/issue number. Null for a story, which providers address by opaque id. */
+  /** PR/issue number. */
   number: number | null;
-  /** Story id. Null for a PR/issue. */
-  id: string | null;
   /** The canonical form (`pr:42`), echoed back and used in error messages. */
   canonical: string;
 }
@@ -62,22 +59,15 @@ export function parseWorldRef(
     return { ok: false, error: `kind must be one of ${WORLD_READ_KINDS.join(', ')} (got ${JSON.stringify(kind)}).` };
   }
   const raw = typeof ref === 'string' ? ref.trim() : '';
-  if (!raw) return { ok: false, error: `world_read needs a ref, e.g. ${k === 'story' ? 'story:abc' : `${k}:42`}.` };
+  if (!raw) return { ok: false, error: `world_read needs a ref, e.g. ${k}:42.` };
 
   let rest = raw;
-  const prefixed = /^(pr|issue|story):(.*)$/.exec(raw);
+  const prefixed = /^(pr|issue):(.*)$/.exec(raw);
   if (prefixed) {
     if (prefixed[1] !== k) {
       return { ok: false, error: `ref "${raw}" is a ${prefixed[1]} ref, but kind is "${k}". Pass one or the other.` };
     }
     rest = prefixed[2] ?? '';
-  }
-
-  if (k === 'story') {
-    // Story ids are provider-opaque, so everything after `story:` is the id.
-    const id = rest.trim();
-    if (!id) return { ok: false, error: `ref "${raw}" names no story id.` };
-    return { ok: true, target: { kind: k, number: null, id, canonical: `story:${id}` } };
   }
 
   // `pr:42:ci` / `issue:12:part:schema` — the number is the first segment; the
@@ -87,7 +77,7 @@ export function parseWorldRef(
     return { ok: false, error: `ref "${raw}" does not contain a ${k} number (expected e.g. ${k}:42 or 42).` };
   }
   const number = Number(head);
-  return { ok: true, target: { kind: k, number, id: null, canonical: `${k}:${number}` } };
+  return { ok: true, target: { kind: k, number, canonical: `${k}:${number}` } };
 }
 
 /**
@@ -131,25 +121,6 @@ export function readWorldItem(
           // number here does not by itself mean that PR is still open.
           linkedPrNumber: issue.linkedPrNumber,
           url: issue.url ?? null,
-        },
-      };
-    }
-    case 'story': {
-      const story = world.stories.find((s) => s.id === target.id);
-      if (!story) return { ok: false, error: `no story ${target.canonical}. ${knownStories(world)}` };
-      return {
-        ok: true,
-        item: {
-          kind: 'story',
-          ref: target.canonical,
-          id: story.id,
-          title: story.title,
-          description: story.description,
-          acceptanceCriteria: story.acceptanceCriteria,
-          wafPillars: story.wafPillars,
-          state: story.state,
-          priority: story.priority,
-          labels: story.labels ?? [],
         },
       };
     }
@@ -219,12 +190,5 @@ function knownIssues(world: WorldSnapshot): string {
   return suggest(
     'Issues',
     world.issues.map((i) => `#${i.number}`),
-  );
-}
-
-function knownStories(world: WorldSnapshot): string {
-  return suggest(
-    'Stories',
-    world.stories.map((s) => s.id),
   );
 }

@@ -77,7 +77,6 @@ function world(over: Partial<WorldSnapshot> = {}): WorldSnapshot {
     pullRequests: [],
     closedPullRequests: [],
     issues: [],
-    stories: [],
     ...over,
   };
 }

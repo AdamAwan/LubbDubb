@@ -174,7 +174,6 @@ export function useCockpit(): CockpitStatus {
 
       setPrExcluded: (n, excluded) => then(api.setPrExcluded(n, excluded)),
       setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
-      setStoryWatched: (id, watched) => then(api.setStoryWatched(id, watched)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
       setIssueAssay: (n, verdict) => then(api.setIssueAssay(n, verdict)),
 

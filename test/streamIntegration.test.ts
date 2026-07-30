@@ -37,6 +37,12 @@ function streamConfig() {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
+    // The funnel in front of pickup defaults **on**; these tests are about the
+    // agent transport, so pin it off and let rule 4 dispatch directly.
+    planning: { enabled: false } as never,
+    assessment: { enabled: false } as never,
+    assay: { enabled: false } as never,
+    retrospective: { enabled: false } as never,
   });
 }
 
@@ -49,7 +55,7 @@ test('stream-mode: persisted transcript is clean and structured (no leaked senti
   };
   const system = buildSystem(streamConfig(), { streamSpawner: spawner });
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
@@ -87,7 +93,7 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   };
   const system = buildSystem(streamConfig(), { streamSpawner: spawner });
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   await system.harness.runCycle('manual');
 
   // One agent launched; the task was sent to it as a JSON user message.
@@ -95,7 +101,7 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
   const child = children[0]!;
   const firstMsg = JSON.parse(child.writes[0]!.trim());
   assert.equal(firstMsg.type, 'user');
-  assert.match(firstMsg.message.content, /missing/);
+  assert.match(firstMsg.message.content, /issue #902/);
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
 

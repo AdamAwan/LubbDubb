@@ -25,10 +25,10 @@ function testConfig() {
 }
 
 test('isWorldInjectable: true only when a fake provider is configured', () => {
-  assert.equal(isWorldInjectable({ sourceControl: 'fake', issues: 'fake', backlog: 'fake' }), true);
+  assert.equal(isWorldInjectable({ sourceControl: 'fake', issues: 'fake' }), true);
   // One fake capability keeps injection available (its domain can still receive events).
-  assert.equal(isWorldInjectable({ sourceControl: 'github', issues: 'github', backlog: 'fake' }), true);
-  assert.equal(isWorldInjectable({ sourceControl: 'github', issues: 'github', backlog: 'azure' }), false);
+  assert.equal(isWorldInjectable({ sourceControl: 'github', issues: 'fake' }), true);
+  assert.equal(isWorldInjectable({ sourceControl: 'github', issues: 'azure' }), false);
 });
 
 test('/api/inject works and the snapshot advertises injectable with fake integrations', async () => {
@@ -41,13 +41,13 @@ test('/api/inject works and the snapshot advertises injectable with fake integra
   const res = await app.inject({
     method: 'POST',
     url: '/api/inject',
-    payload: { kind: 'new_story', title: 'Injected via HTTP', wafPillars: ['Reliability'] },
+    payload: { kind: 'new_issue', number: 901, title: 'Injected via HTTP' },
   });
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().ok, true);
 
   const after = await (await app.inject({ method: 'GET', url: '/api/state' })).json();
-  assert.ok(after.world.stories.some((s: { title: string }) => s.title === 'Injected via HTTP'));
+  assert.ok(after.world.issues.some((i: { title: string }) => i.title === 'Injected via HTTP'));
 
   await app.close();
   system.store.close();

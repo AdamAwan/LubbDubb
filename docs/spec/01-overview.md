@@ -1,7 +1,7 @@
 # 01 — System overview
 
 LubbDubb is a self-hosted orchestration harness. It watches a set of work inputs (pull requests,
-issues/work items, backlog stories), decides what should happen, and dispatches Claude Code agents to
+issues/work items), decides what should happen, and dispatches Claude Code agents to
 do it — each in its own git worktree — while a browser cockpit shows the fleet and collects the
 decisions a human has to make.
 
@@ -50,7 +50,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 
 | Term            | Meaning                                                                                            |
 | --------------- | -------------------------------------------------------------------------------------------------- |
-| **World**       | The outside state at one instant: open PRs, recently-closed PRs, issues, stories                    |
+| **World**       | The outside state at one instant: open PRs, recently-closed PRs, issues                             |
 | **Cycle/pulse** | One pass of the loop, identified by a `cyc_*` id                                                    |
 | **Origin ref**  | A stable string naming the world signal a piece of work exists for, e.g. `pr:42:ci`, `issue:12`     |
 | **Task**        | A unit of work materialised at dispatch time; owns a branch (code) or a scratch dir (desk)          |

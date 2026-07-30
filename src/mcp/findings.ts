@@ -61,7 +61,7 @@ const MAX_SUMMARY = 2000;
  * Normalise the item a finding is *about*.
  *
  * Deliberately the same closed vocabulary the rest of the harness writes
- * (`pr:42`, `issue:12`, `story:abc`), suffix-tolerant for the same reason
+ * (`pr:42`, `issue:12`), suffix-tolerant for the same reason
  * `world_read` is: the origin ref an agent holds (`pr:42:ci`,
  * `issue:12:part:schema`) names the item, so it can be passed back verbatim.
  *
@@ -80,19 +80,18 @@ export function parseFindingRef(ref: unknown): { ok: true; ref: string | null } 
   // tracked item. Not every discovery has one, which is why `ref` is optional.
   if (!raw) return { ok: true, ref: null };
 
-  const m = /^(pr|issue|story):(.+)$/.exec(raw);
+  const m = /^(pr|issue):(.+)$/.exec(raw);
   if (!m) {
     return {
       ok: false,
       error:
-        `ref "${raw}" is not a harness ref. Use "pr:42", "issue:41" or "story:abc" — a bare number is ` +
+        `ref "${raw}" is not a harness ref. Use "pr:42" or "issue:41" — a bare number is ` +
         'ambiguous between an issue and a PR. If the finding is about something the harness does not ' +
         'track (an upstream package, say), omit ref and describe it in the summary.',
     };
   }
-  const kind = m[1] as 'pr' | 'issue' | 'story';
+  const kind = m[1] as 'pr' | 'issue';
   const rest = m[2] ?? '';
-  if (kind === 'story') return { ok: true, ref: `story:${rest.trim()}` };
   // `pr:42:ci` / `issue:12:part:schema` — the number is the first segment; the
   // rest is the concern an origin ref carries, which names no different item.
   const head = rest.split(':')[0]?.replace(/^#/, '') ?? '';

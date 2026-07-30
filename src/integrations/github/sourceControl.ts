@@ -1,4 +1,3 @@
-import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
@@ -18,7 +17,6 @@ import { githubRefUrl } from './refUrl.js';
 interface GitHubSourceControlOpts {
   /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
-  store: Store;
   /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
   errors?: ErrorRecorder;
   /** Only surface PRs opened by this login. Unset = all open PRs. */
@@ -129,13 +127,11 @@ export class GitHubSourceControlIntegration
       input.commentId !== null
         ? await api.createPullReviewReply(input.prNumber, Number(input.commentId), input.body)
         : await api.createIssueComment(input.prNumber, input.body);
-    this.opts.store.recordConnectorEvent('pr_reply_sent', { ...input, ref: ref.url });
     return { ok: true, ref: ref.url };
   }
 
   async mergePr(input: PrMergeInput): Promise<SendResult> {
     const result = await this.opts.api.mergePull(input.prNumber, input.method);
-    this.opts.store.recordConnectorEvent('pr_merge_sent', { ...input, ref: result.sha });
     return { ok: result.merged, ref: result.sha };
   }
 
@@ -146,7 +142,6 @@ export class GitHubSourceControlIntegration
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {
     await this.opts.api.setPullLabel(input.prNumber, input.label, input.present);
-    this.opts.store.recordConnectorEvent('pr_label_set', { ...input });
     return { ok: true };
   }
 }

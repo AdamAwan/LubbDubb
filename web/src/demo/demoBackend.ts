@@ -245,17 +245,6 @@ class DemoServer {
     return { ok: true, watched };
   }
 
-  /** Toggle a story's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
-  async setStoryWatched(storyId: string, watched: boolean): Promise<{ ok: true; watched: boolean }> {
-    const story = this.state.world.stories.find((s) => s.id === storyId);
-    if (story) {
-      story.labels = applyWatch(story.labels, this.state.config, watched);
-      this.addDecision('story_label_set', 'ok', `${watched ? 'watching' : 'ignoring'} story ${story.title}`);
-      this.dirty();
-    }
-    return { ok: true, watched };
-  }
-
   /**
    * Send a plan back for replanning — the demo mirror of `POST /api/plans/:id/replan`.
    * Like the real endpoint it only flips the plan's status; the part rows are left
@@ -765,27 +754,6 @@ class DemoServer {
         }
         break;
       }
-      case 'new_story': {
-        const storyLabels = Array.isArray(ev.labels) ? (ev.labels as string[]) : [];
-        world.stories = [
-          ...world.stories,
-          {
-            id: this.id('st'),
-            title: String(ev.title ?? 'New story'),
-            description: null,
-            acceptanceCriteria: null,
-            wafPillars: [],
-            state: 'new',
-            priority: 2,
-            labels: storyLabels,
-          },
-        ];
-        this.addWorldEvent('story_added', null, `story added: ${String(ev.title ?? 'New story')}`);
-        if (isWatched(storyLabels, this.state.config)) {
-          this.trySpawn('groom_story', `Groom story: ${String(ev.title ?? 'New story')}`, null, null);
-        }
-        break;
-      }
       default:
         // Unknown/raw injection — record it so the feed shows *something* happened.
         this.addDecision('inject', 'ok', `injected ${kind || 'event'}`);
@@ -899,7 +867,6 @@ export const demoApi = {
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     getServer().setIssueAssay(issueNumber, verdict),
-  setStoryWatched: (storyId: string, watched: boolean) => getServer().setStoryWatched(storyId, watched),
   replan: (planId: string) => getServer().replan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),
   endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),

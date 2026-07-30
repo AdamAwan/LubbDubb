@@ -39,9 +39,6 @@ type PromptId =
   | 'pr-base-update-conflict'
   | 'pr-review-comment'
   | 'pr-concern-escalation'
-  | 'story-groom'
-  | 'story-waf'
-  | 'story-pickup'
   | 'finding-ticket'
   | 'work-item-ticket';
 
@@ -260,22 +257,6 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'Auto-resolution of "{title}" keeps failing: {attempts} agent attempt(s) on PR #{number} left the concern unresolved. Please handle it manually.',
     doc: 'Escalated to a human when a PR concern (CI / base / comment) keeps failing to clear. Placeholders: {number} {title} {attempts}.',
-  },
-  'story-groom': {
-    placeholders: ['title', 'missing'],
-    template: 'Story "{title}" is missing {missing}. Draft them.',
-    doc: 'Sent to a desk agent to groom a ready story lacking a description and/or acceptance criteria. {missing} is the computed phrase (e.g. "a description and acceptance criteria"). Placeholders: {title} {missing}.',
-  },
-  'story-waf': {
-    placeholders: ['title'],
-    template:
-      'Story "{title}" has no Well-Architected Framework pillars set. Determine which pillars apply and document them.',
-    doc: 'Sent to a desk agent to fill in WAF pillars on a ready story. Placeholders: {title}.',
-  },
-  'story-pickup': {
-    placeholders: ['title', 'description', 'acceptanceCriteria'],
-    template: 'Implement story "{title}".\n\nDescription: {description}\n\nAcceptance criteria: {acceptanceCriteria}',
-    doc: 'Sent to a code agent to implement the highest-priority groomed story when there is idle capacity. Placeholders: {title} {description} {acceptanceCriteria}.',
   },
   'finding-ticket': {
     placeholders: ['kind', 'kindHelp', 'ref', 'summary', 'originRef', 'tracker'],

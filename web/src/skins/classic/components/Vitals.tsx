@@ -16,10 +16,6 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
     (n, p) => n + p.unresolvedComments.filter((c) => !c.handled).length,
     0,
   );
-  const grooming = state.world.stories.filter(
-    (s) => !s.description || !s.acceptanceCriteria || s.wafPillars.length === 0,
-  ).length;
-
   const items: { label: string; value: number; tone?: 'urgent' | 'warn' | 'ok'; hint: string }[] = [
     { label: 'Running', value: liveAgents, tone: liveAgents ? 'ok' : undefined, hint: `${liveAgents} of ${cap} slots` },
     { label: 'Needs you', value: needsYou, tone: needsYou ? 'urgent' : undefined, hint: 'open escalations' },
@@ -37,7 +33,6 @@ export function Vitals({ state, liveAgents, cap }: { state: AppState; liveAgents
       tone: openComments ? 'warn' : undefined,
       hint: 'unhandled review comments',
     },
-    { label: 'Grooming', value: grooming, tone: grooming ? 'warn' : undefined, hint: 'stories missing detail' },
   ];
 
   return (

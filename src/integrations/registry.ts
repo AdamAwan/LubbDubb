@@ -3,7 +3,6 @@ import type { Capability, Integration, IntegrationContext, IntegrationSelection 
 import { FakeWorldStore } from './fake/fakeWorld.js';
 import { FakeGitHubIntegration } from './fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from './fake/fakeIssues.js';
-import { FakeBacklogIntegration } from './fake/fakeBacklog.js';
 import { OctokitGitHubApi } from './github/octokitGitHubApi.js';
 import { GitHubSourceControlIntegration } from './github/sourceControl.js';
 import { GitHubIssuesIntegration } from './github/issues.js';
@@ -22,12 +21,11 @@ type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integ
  */
 const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   sourceControl: {
-    fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.store, ctx.config.defaultBranch),
+    fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.config.defaultBranch),
     github: (ctx) => {
       const { api, gh } = githubApi(ctx);
       return new GitHubSourceControlIntegration({
         api,
-        store: ctx.store,
         errors: ctx.errors,
         prAuthor: gh.filters?.prAuthor,
         owner: gh.owner,
@@ -39,7 +37,6 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       const { api, az } = azureApi(ctx);
       return new AzureDevOpsSourceControlIntegration({
         api,
-        store: ctx.store,
         errors: ctx.errors,
         prAuthor: az.filters?.prAuthor,
         policyChecks: az.policyChecks,
@@ -53,7 +50,6 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       const { api, gh } = githubApi(ctx);
       return new GitHubIssuesIntegration({
         api,
-        store: ctx.store,
         errors: ctx.errors,
         owner: gh.owner,
         repo: gh.repo,
@@ -64,16 +60,12 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       const { api, az } = azureApi(ctx);
       return new AzureDevOpsWorkItemsIntegration({
         api,
-        store: ctx.store,
         errors: ctx.errors,
         workItemTag: az.filters?.workItemTag,
         assignedTo: az.filters?.workItemAssignedTo,
         ownershipTag: ownershipLabel(ctx),
       });
     },
-  },
-  backlog: {
-    fake: (_ctx, world) => new FakeBacklogIntegration(world),
   },
 };
 

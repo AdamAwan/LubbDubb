@@ -1,4 +1,3 @@
-import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { MergeMethod, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
@@ -17,7 +16,6 @@ import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKi
 interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
   api: AzureDevOpsApi;
-  store: Store;
   /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
   errors?: ErrorRecorder;
   /** Only surface PRs opened by this uniqueName. Unset = all active PRs. */
@@ -129,7 +127,6 @@ export class AzureDevOpsSourceControlIntegration
       input.commentId !== null
         ? await api.createThreadReply(input.prNumber, Number(input.commentId), 1, input.body)
         : await api.createThread(input.prNumber, input.body);
-    this.opts.store.recordConnectorEvent('pr_reply_sent', { ...input, ref: ref.url });
     return { ok: true, ref: ref.url };
   }
 
@@ -142,13 +139,11 @@ export class AzureDevOpsSourceControlIntegration
     }
     const result = await this.opts.api.completePullRequest(input.prNumber, commit, input.method);
     const ok = result.status === 'completed' || result.status === 'queued';
-    this.opts.store.recordConnectorEvent('pr_merge_sent', { ...input, ref: result.status });
     return { ok, ref: result.status };
   }
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {
     await this.opts.api.setPullLabel(input.prNumber, input.label, input.present);
-    this.opts.store.recordConnectorEvent('pr_label_set', { ...input });
     return { ok: true };
   }
 }

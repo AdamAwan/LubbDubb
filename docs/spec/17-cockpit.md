@@ -701,8 +701,7 @@ for the world to change — chosen from `config.injectable`.
   `sameWorktree` case.
 - **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
   toggle; issues with their state, linked PR, pickup chip, **plan chip**, conclusion chip and
-  **shortfall** chip, a watch toggle, the conclusion toggles and the **assay override**; stories with
-  a watch toggle; and a
+  **shortfall** chip, a watch toggle, the conclusion toggles and the **assay override**; and a
   **Recently closed** section marking each PR merged vs closed-unmerged.
 
   The assay override draws on an issue the intake verdict **refused** and nowhere else
@@ -728,7 +727,7 @@ for the world to change — chosen from `config.injectable`.
 
   Rows are filed under three tabs — **Watched** / **Unwatched** / **Ignored** — by the pure
   `watchBucket` (`web/src/worldBuckets.ts`) over each item's labels, with the server's precedence
-  (ignore wins, then watch, else the type default: PRs opt-out, issues and stories opt-in) and each
+  (ignore wins, then watch, else the type default: PRs opt-out, issues opt-in) and each
   tab's count on its label. It is deliberately a _three_-way split where `resolveWatchState` is
   binary: the gate only cares that an untagged issue won't be worked, while the panel has to tell
   "you tagged this leave-alone" from "you haven't triaged this yet" — the same `ignored`/`unwatched`

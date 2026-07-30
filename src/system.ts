@@ -152,7 +152,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // here so it's durable, mirrored to stderr, and streamed to the cockpit.
   const errors = new ErrorLog(store, opts.errorMirror);
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
-  const connector = new CompositeConnector(integrations, store, now);
+  const connector = new CompositeConnector(integrations, now);
   const backend = opts.backend ?? new NodePtyBackend();
 
   const worktrees = new WorktreeManager(config.repoRoot, config.worktreeRoot);

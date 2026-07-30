@@ -60,7 +60,6 @@ export interface CockpitActions {
 
   setPrExcluded(prNumber: number, excluded: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
-  setStoryWatched(storyId: string, watched: boolean): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**
    * Override the goal assay's verdict (#158). On the seam rather than in a skin

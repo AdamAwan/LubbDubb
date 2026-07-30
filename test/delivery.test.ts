@@ -141,7 +141,6 @@ test('a standing verdict stops rule 4, and lifting it lets pickup through', asyn
     takenAt: '2026-07-28T12:00:00.000Z',
     pullRequests: [],
     issues: [issue()],
-    stories: [],
   };
   // The retrospective is pinned off: this test is about rule 4 standing down for a
   // parked issue, and rule 3h legitimately writes a delivered goal up (covered in

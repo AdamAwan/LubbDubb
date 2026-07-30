@@ -40,7 +40,6 @@ function world(over: Partial<WorldSnapshot> = {}): WorldSnapshot {
     pullRequests: [],
     closedPullRequests: [],
     issues: [],
-    stories: [],
     ...over,
   };
 }
@@ -204,10 +203,8 @@ function ghApi(closed: GhClosedPull[], recorded: string[]): GitHubApi {
 
 test('the github provider reports recently-closed PRs, marked merged vs closed-unmerged', async () => {
   const since: string[] = [];
-  const store = new Store(':memory:');
   const integration = new GitHubSourceControlIntegration({
     api: ghApi([ghClosed(), ghClosed({ number: 43, merged: false, closedAt: '2026-07-25T10:00:00.000Z' })], since),
-    store,
     closedPrWindowMs: 6 * HOUR,
     now: () => NOW,
   });
@@ -229,7 +226,6 @@ test('the github provider skips the extra request entirely when the window is di
   const since: string[] = [];
   const integration = new GitHubSourceControlIntegration({
     api: ghApi([ghClosed()], since),
-    store: new Store(':memory:'),
     closedPrWindowMs: 0,
   });
   const slice = await integration.snapshot();
@@ -240,7 +236,6 @@ test('the github provider skips the extra request entirely when the window is di
 test('the prAuthor filter applies to closed PRs too', async () => {
   const integration = new GitHubSourceControlIntegration({
     api: ghApi([ghClosed(), ghClosed({ number: 43, authorLogin: 'someone-else' })], []),
-    store: new Store(':memory:'),
     prAuthor: 'alice',
     closedPrWindowMs: 6 * HOUR,
     now: () => NOW,
@@ -313,7 +308,6 @@ test('the azure provider reports completed and abandoned PRs, told apart', async
   const since: string[] = [];
   const integration = new AzureDevOpsSourceControlIntegration({
     api: azApi([azClosed(), azClosed({ pullRequestId: 43, merged: false })], since),
-    store: new Store(':memory:'),
     closedPrWindowMs: 3 * HOUR,
     now: () => NOW,
   });
@@ -334,7 +328,6 @@ test('the azure provider skips the lookup when the window is disabled, and filte
   const since: string[] = [];
   const off = new AzureDevOpsSourceControlIntegration({
     api: azApi([azClosed()], since),
-    store: new Store(':memory:'),
     closedPrWindowMs: 0,
   });
   assert.deepEqual((await off.snapshot()).closedPullRequests, []);
@@ -342,7 +335,6 @@ test('the azure provider skips the lookup when the window is disabled, and filte
 
   const filtered = new AzureDevOpsSourceControlIntegration({
     api: azApi([azClosed(), azClosed({ pullRequestId: 43, authorUniqueName: 'bob@acme.com' })], since),
-    store: new Store(':memory:'),
     prAuthor: 'alice@acme.com',
     closedPrWindowMs: 3 * HOUR,
     now: () => NOW,

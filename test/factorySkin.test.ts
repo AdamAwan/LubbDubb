@@ -211,7 +211,6 @@ test('every origin shape maps to one machine', () => {
   assert.equal(iconForOrigin('issue:12:plan'), 'blueprint');
   assert.equal(iconForOrigin('issue:12:part:api'), 'assembler');
   assert.equal(iconForOrigin('issue:12'), 'flask');
-  assert.equal(iconForOrigin('story:st-9:work'), 'flask');
   assert.equal(iconForOrigin('job:7'), 'chest');
   assert.equal(iconForOrigin(null), 'chest');
 });

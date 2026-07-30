@@ -249,7 +249,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           {state.worldObservedAt ? `observed ${relTime(state.worldObservedAt, now)}` : 'not yet observed'}
         </p>
       </div>
-      {/* Issues and stories only. Pull requests are drawn in full above the rails,
+      {/* Issues only. Pull requests are drawn in full above the rails,
           and the argument is the one that dissolved the act rail into gauges: one
           subject, one place. Classic keeps its own PR list — it has no strip. */}
       <WorldSummary
@@ -257,7 +257,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         showPullRequests={false}
         onToggleExclude={(prNumber, excluded) => actions.setPrExcluded(prNumber, excluded)}
         onToggleIssueWatch={(issueNumber, watched) => actions.setIssueWatched(issueNumber, watched)}
-        onToggleStoryWatch={(storyId, watched) => actions.setStoryWatched(storyId, watched)}
         onSetConclusion={(issueNumber, verdict) => actions.setIssueConclusion(issueNumber, verdict)}
         onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
         onViewPlan={(id) => actions.viewPlan(id)}
