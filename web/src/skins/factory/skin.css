@@ -879,7 +879,6 @@
   }
   [data-fx='production'],
   [data-fx='launches'],
-  [data-fx='off-blueprint'],
   [data-fx='signals'] {
     grid-column: span 1;
   }
@@ -908,28 +907,25 @@
 [data-fx='bots'] {
   order: 2;
 }
-[data-fx='off-blueprint'] {
+[data-fx='launches'] {
   order: 3;
 }
-[data-fx='launches'] {
+[data-fx='goal-floor'] {
   order: 4;
 }
-[data-fx='goal-floor'] {
-  order: 5;
-}
 [data-fx='yard'] {
-  order: 6;
+  order: 5;
 }
 /* Production is a reading you consult, not a picture you watch, so it sits with
    the log rather than under the line. Same demotion the world rail makes. */
 [data-fx='production'] {
-  order: 7;
+  order: 6;
 }
 [data-fx='shift-log'] {
-  order: 8;
+  order: 7;
 }
 [data-fx='signals'] {
-  order: 9;
+  order: 8;
 }
 
 /* ---------------- 1900+ : railed ---------------- */

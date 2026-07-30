@@ -8,7 +8,7 @@ import { Icon, type IconName } from './Sprite.js';
  * fifteen of which are wrong, and two panels in front at once is not something
  * this floor can draw.
  */
-export type FactoryModal = 'production' | 'alerts' | 'faults' | 'blueprints';
+export type FactoryModal = 'production' | 'alerts' | 'faults' | 'blueprints' | 'findings';
 
 /**
  * A panel opened over the floor.

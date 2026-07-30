@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import type { SkinProps } from '../types.js';
 import { AgentDrawer } from '../../components/AgentDrawer.js';
-import { FindingsPanel } from '../../components/FindingsPanel.js';
 import { RecoveryPanel } from '../../components/RecoveryPanel.js';
 import { WorldSummary } from '../../components/WorldSummary.js';
 import { relTime } from '../../components/util.js';
 import { SpriteSheet, Icon } from './components/Sprite.js';
 import { StatusBar } from './components/StatusBar.js';
-import { BlueprintDesk, FaultLog, StampDesk } from './components/Desks.js';
+import { BlueprintDesk, FaultLog, FindingsDesk, StampDesk } from './components/Desks.js';
 import { TheLine } from './components/TheLine.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
@@ -19,7 +18,6 @@ import { Silos } from './components/Silos.js';
 import { GoalFloor } from './components/GoalFloor.js';
 import { powerReading } from './power.js';
 import { productionReading } from './production.js';
-import { clip } from './vocabulary.js';
 
 /**
  * The cockpit as a production line.
@@ -35,11 +33,14 @@ import { clip } from './vocabulary.js';
  * reading a glance wants — the shape of the three series and the churn number —
  * and the axes, rates and caveats are behind the click.
  *
- * The stamp desk, the fault log and the blueprint desk are the same shape of
- * thing and used to be three panels in a permanent left-hand rail. All three are
- * read as a *count* far more often than as contents, so the count is a gauge in
- * the status bar and the panel opens from it — which is what deleted the rail.
- * See `docs/spec/2026-07-29-factory-two-rail-layout-design.md`.
+ * The stamp desk, the fault log, the blueprint desk and the findings desk are the
+ * same shape of thing, and the first three used to be panels in a
+ * permanent left-hand rail. All four are read as a *count* far more often than as
+ * contents, so the count is a gauge in the status bar and the panel opens from
+ * it — which is what deleted the rail, and then the last panel on the floor that
+ * was read the same way. See
+ * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
+ * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
  *
  * Every panel is bound to a `const` below and then *placed*, so what a panel
  * contains and where it sits stop being the same edit. There is one DOM for
@@ -58,7 +59,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
   const { state, now } = view;
   const [modal, setModal] = useState<FactoryModal | null>(null);
   const stopped = view.pulseHeld || state.control.paused;
-  const overlaps = state.overlaps ?? [];
   const power = powerReading(state.usage);
   const production = productionReading({
     decisions: state.decisions,
@@ -154,52 +154,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       </div>
     </section>
   );
-
-  const offBlueprint =
-    (state.findings?.length ?? 0) > 0 || overlaps.length > 0 ? (
-      <section className="fx-card fx-bev" data-fx="off-blueprint">
-        <div className="fx-head">
-          <div>
-            <Icon name="chest" />
-            <h2>Off-Blueprint</h2>
-          </div>
-          <p className="fx-note">nothing schedules these</p>
-        </div>
-        {(state.findings?.length ?? 0) > 0 && (
-          <FindingsPanel
-            findings={state.findings ?? []}
-            now={now}
-            refUrls={state.refUrls}
-            canFileTickets={state.config.canFileTickets}
-            onPromote={(id) => actions.promoteFinding(id)}
-            onFile={(id) => actions.fileFinding(id)}
-            onDismiss={(id) => actions.dismissFinding(id)}
-          />
-        )}
-        {overlaps.length > 0 && (
-          <>
-            <p className="fx-sub">
-              Two bots, one part {view.liveOverlapCount > 0 && `· ${view.liveOverlapCount} live`}
-            </p>
-            <div className="fx-body">
-              {overlaps.map((o) => (
-                <article key={o.path} className={`fx-bot fx-sunk ${o.live ? 'idle' : 'spent'}`}>
-                  <div className="fx-bot-top">
-                    <Icon name="alert" />
-                    <span className="fx-job" title={o.path}>
-                      {clip(o.path.split(/[\\/]/).pop() ?? o.path, 28)}
-                    </span>
-                    <span className="fx-ref">{o.sameWorktree ? 'same worktree' : 'two branches'}</span>
-                  </div>
-                  <p>{o.path}</p>
-                  <p className="fx-empty">{o.writers.map((w) => w.branch ?? w.agentId).join(' · ')}</p>
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
-    ) : null;
 
   const launches = (
     <section className="fx-card fx-bev" data-fx="launches">
@@ -349,7 +303,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
               {bots}
               {goalFloor}
               {yard}
-              {offBlueprint}
             </div>
             <div className="fx-rail fx-rail-world">
               {productionPanel}
@@ -389,6 +342,12 @@ export function FactoryRoot({ view, actions }: SkinProps) {
               onClose={() => setModal(null)}
             >
               <FaultLog view={view} actions={actions} />
+            </Modal>
+          )}
+
+          {modal === 'findings' && (
+            <Modal title="Findings" icon="chest" note="nothing schedules these" onClose={() => setModal(null)}>
+              <FindingsDesk view={view} actions={actions} />
             </Modal>
           )}
 

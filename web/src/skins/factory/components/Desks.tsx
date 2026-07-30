@@ -2,18 +2,22 @@ import type { JSX } from 'react';
 import type { SkinProps } from '../../types.js';
 import { ConfirmButton } from '../../../components/ConfirmButton.js';
 import { EscalationCard } from '../../../components/EscalationCard.js';
+import { FindingsPanel } from '../../../components/FindingsPanel.js';
 import { InjectPanel } from '../../../components/InjectPanel.js';
 import { LaunchPanel } from '../../../components/LaunchPanel.js';
 import { relTime } from '../../../components/util.js';
+import { clip } from '../vocabulary.js';
 import { Icon } from './Sprite.js';
 
 /**
- * The three desks: what the operator is the blocker for.
+ * The four desks: what the operator is the blocker for.
  *
- * These were three panels standing in a permanent left-hand rail, and all three
- * are read as a *count* far more often than as contents — so the count is a gauge
- * in the status bar and the desk opens from it as a `Modal`. See
- * `docs/spec/2026-07-29-factory-two-rail-layout-design.md`.
+ * Three were panels standing in a permanent left-hand rail, and the fourth —
+ * findings — was the last panel on the floor read the same way. All four are
+ * read as a *count* far more often than as contents, so the count is a gauge in
+ * the status bar and the desk opens from it as a `Modal`. See
+ * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
+ * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
  *
  * They are components rather than JSX inlined into `FactoryRoot` for the reason
  * `StatusBar` is: a `ConfirmButton`, a forty-row log and a demo gate are
@@ -121,6 +125,62 @@ export function BlueprintDesk({ view, actions }: SkinProps): JSX.Element {
     <>
       <LaunchPanel jobs={view.state.jobs} onChanged={actions.refresh} />
       {view.demo && <InjectPanel onInjected={actions.refresh} world={view.state.world} />}
+    </>
+  );
+}
+
+/**
+ * The findings desk: what agents noticed that nothing schedules.
+ *
+ * A desk rather than a panel for the reason the other three are, and a desk at all
+ * because a finding genuinely is something the operator is the sole blocker for —
+ * nothing in the dispatcher reads `findings`, so promote / file / dismiss is the
+ * only way one becomes anything.
+ *
+ * It was `Off-Blueprint` on the floor, and the rename is the harness's own word
+ * rather than a new one — the `findings` table, `report_finding`, `FindingsPanel` —
+ * so there is one name for it from the tool call to the gauge. It is also shorter,
+ * which is what keeps a fourth gauge from wrapping the bar.
+ *
+ * Overlaps ride along and are the exception: nothing actions them, here or in the
+ * harness. They are here because they answer the same question the findings do —
+ * what is going on that no rule accounts for — and they are deliberately absent
+ * from the gauge's count, which counts only what a click can resolve.
+ */
+export function FindingsDesk({ view, actions }: SkinProps): JSX.Element {
+  const { state, now } = view;
+  const overlaps = state.overlaps ?? [];
+  return (
+    <>
+      <FindingsPanel
+        findings={state.findings ?? []}
+        now={now}
+        refUrls={state.refUrls}
+        canFileTickets={state.config.canFileTickets}
+        onPromote={(id) => actions.promoteFinding(id)}
+        onFile={(id) => actions.fileFinding(id)}
+        onDismiss={(id) => actions.dismissFinding(id)}
+      />
+      {overlaps.length > 0 && (
+        <>
+          <p className="fx-sub">Two bots, one part {view.liveOverlapCount > 0 && `· ${view.liveOverlapCount} live`}</p>
+          <div className="fx-body">
+            {overlaps.map((o) => (
+              <article key={o.path} className={`fx-bot fx-sunk ${o.live ? 'idle' : 'spent'}`}>
+                <div className="fx-bot-top">
+                  <Icon name="alert" />
+                  <span className="fx-job" title={o.path}>
+                    {clip(o.path.split(/[\\/]/).pop() ?? o.path, 28)}
+                  </span>
+                  <span className="fx-ref">{o.sameWorktree ? 'same worktree' : 'two branches'}</span>
+                </div>
+                <p>{o.path}</p>
+                <p className="fx-empty">{o.writers.map((w) => w.branch ?? w.agentId).join(' · ')}</p>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

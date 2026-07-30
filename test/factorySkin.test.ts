@@ -41,7 +41,7 @@ const { buildGoalFloor, floorFixtures, layoutFloor, partProgress } = await impor
   '../web/src/skins/factory/goalFloor.js'
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
-const { BlueprintDesk, FaultLog } = await import('../web/src/skins/factory/components/Desks.js');
+const { BlueprintDesk, FaultLog, FindingsDesk } = await import('../web/src/skins/factory/components/Desks.js');
 const { siloFill, siloGates } = await import('../web/src/skins/factory/silo.js');
 const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
@@ -436,7 +436,7 @@ test('injection is a demo control, not a provider one', () => {
  */
 test('every desk has a way in from the status bar', () => {
   const markup = render();
-  for (const label of ['Alerts', 'Faults', 'Queued']) {
+  for (const label of ['Alerts', 'Faults', 'Findings', 'Queued']) {
     assert.match(
       markup,
       new RegExp(`<button[^>]*class="fx-read fx-act[^"]*"[^>]*>(?:(?!</button>).)*${label}`, 's'),
@@ -448,12 +448,14 @@ test('every desk has a way in from the status bar', () => {
   assert.doesNotMatch(markup, /data-fx="stamp"/, 'the stamp desk must not also be a panel');
   assert.doesNotMatch(markup, /data-fx="faults"/, 'the fault log must not also be a panel');
   assert.doesNotMatch(markup, /data-fx="blueprints"/, 'the blueprint desk must not also be a panel');
+  assert.doesNotMatch(markup, /data-fx="off-blueprint"/, 'the findings desk must not also be a panel');
   assert.doesNotMatch(markup, /fx-rail-act/, 'the act rail must be gone');
 
   const quiet = render((s) => {
     s.errors = [];
     s.escalations = [];
     s.jobs = [];
+    s.findings = [];
   });
   assert.match(quiet, /class="fx-read fx-act quiet"/, 'a zero count must mute a gauge, not remove it');
   // Counted by the chevron rather than by `fx-act`: the scan gauge presses too
@@ -461,9 +463,59 @@ test('every desk has a way in from the status bar', () => {
   // a panel behind this".
   assert.equal(
     (quiet.match(/class="fx-chev"/g) ?? []).length,
-    3,
-    'all three ways in must survive their counts being zero',
+    4,
+    'all four ways in must survive their counts being zero',
   );
+});
+
+/** The number on a gauge's face, read off the markup rather than off the state. */
+function gaugeCount(markup: string, label: string): string | undefined {
+  const m = markup.match(new RegExp(`${label}</span><span class="fx-val[^"]*">(\\d+)`));
+  assert.ok(m, `${label} must draw a count`);
+  return m[1];
+}
+
+/**
+ * The findings gauge counts what a *click resolves*, which is open findings
+ * and nothing else. A promoted, filed or dismissed finding is done and a `filing`
+ * one is decided, so neither is waiting on anyone; an overlap is diagnostic —
+ * nothing here or in the harness actions one — so it can never light a gauge whose
+ * whole claim is that pressing it leads to a decision. Asserted on the number
+ * rather than on the markup that draws it, so the arrangement stays free.
+ */
+test('the findings gauge counts open findings, and only those', () => {
+  const now = '2026-01-01T00:00:00.000Z';
+  const finding = (id: string, status: string) => ({
+    id,
+    agentId: 'agent-a1',
+    taskId: 'task-a1',
+    originRef: 'pr:142:ci',
+    kind: 'out_of_scope' as const,
+    ref: null,
+    summary: `something ${id}`,
+    status: status as 'open',
+    jobId: null,
+    ticketRef: null,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const mixed = render((s) => {
+    s.findings = [finding('f1', 'open'), finding('f2', 'dismissed'), finding('f3', 'filing'), finding('f4', 'filed')];
+  });
+  assert.equal(gaugeCount(mixed, 'Findings'), '1', 'only an open finding is unactioned');
+
+  // Overlaps present, no findings: the gauge is muted, and the desk still lists
+  // the overlap — it is the *count* they stay out of, not the panel.
+  const overlapsOnly = render((s) => {
+    s.findings = [];
+  });
+  assert.equal(gaugeCount(overlapsOnly, 'Findings'), '0', 'an overlap must not light the gauge');
+  const desk = renderDesk(FindingsDesk, (s) => {
+    s.findings = [];
+  });
+  assert.match(desk, /Two bots, one part/, 'the desk must still draw an overlap the gauge does not count');
+  assert.match(desk, /restAzureDevOpsApi\.ts/, 'and the path both bots are writing');
 });
 
 /**

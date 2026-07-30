@@ -114,7 +114,7 @@ Red means exactly one thing on that floor: an agent parked on a question only yo
 
 `FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
 it sits are separate edits. It renders **two rails** — `floor` (the line, bots, the goal floor, the
-yard, off-blueprint) and `world` (production, launches, signals, shift log) — split on _whose turn it
+yard) and `world` (production, launches, signals, shift log) — split on _whose turn it
 is_ rather than on subject. Production heads the world rail rather than the floor because its subject
 is output, and output is merges — the world's answer to the floor's effort.
 
@@ -160,35 +160,56 @@ Four consequences to preserve:
   the shell's `work-panel` is a sibling below it and stays scrollable, since `WorkTreePanel` fetches
   on open and a skin may not reach `api.js`.
 
-#### The three desks
+#### The four desks
 
 Alerts, faults and blueprints stood in the act rail, and each is read as a **number** far more often
 than as contents. So the number is a gauge in the status bar and the panel opens from it as a
 [`Modal`](#what-the-floor-draws-beyond-the-queue) — `FactoryModal` is one value rather than a boolean
-per modal, because four booleans admit sixteen states and two panels in front at once is not
-something this floor can draw. The desks themselves are `components/Desks.tsx`
-(`StampDesk` / `FaultLog` / `BlueprintDesk`), each taking `{ view, actions }` like `StatusBar`: a
-`ConfirmButton`, a forty-row log and a demo gate are _contents_, and the root's job is placement.
-Being components is also the only way `renderToStaticMarkup` can reach a panel behind a click, which
-is what keeps them tested.
+per modal, because a boolean each admits far more states than there are, and two panels in front at
+once is not something this floor can draw. The desks themselves are `components/Desks.tsx`
+(`StampDesk` / `FaultLog` / `BlueprintDesk` / `FindingsDesk`), each taking `{ view, actions }`
+like `StatusBar`: a `ConfirmButton`, a forty-row log and a demo gate are _contents_, and the root's
+job is placement. Being components is also the only way `renderToStaticMarkup` can reach a panel
+behind a click, which is what keeps them tested.
 
-Four rules hold them:
+**Findings is the fourth**, and it was never in that rail — it stood in the floor rail as the
+`Off-Blueprint` panel, which drew nothing at all when there was nothing to report, so at zero
+there was no reading and at one the rail reflowed. The rename is to the harness's own word for
+these (the `findings` table, `report_finding`, `FindingsPanel`), so one subject has one name from
+the tool call to the gauge, and it is 35px narrower than `Off-blueprint` was. It does not buy the
+single-row bar back: five gauges plus the ident and the picker need 1603px, so the bar is one row
+above ~1654px and two below, and the duplicate-removal that fixed this last time has nothing left
+to remove. See the design's cost section. It belongs with the desks rather than on the floor because the floor
+rail is what the _harness_ is doing, and a finding is something nobody is doing: nothing in the
+dispatcher reads `findings`, so promote / file / dismiss is the only way one becomes anything. Its
+design is
+[`2026-07-30-factory-findings-gauge-design.md`](2026-07-30-factory-findings-gauge-design.md).
+
+Five rules hold them:
 
 - **A gauge that acts must look like it does.** `Power` is an inert reading, so an `onClick` on a
   plain `.fx-read` is invisible — indistinguishable from a neighbour that does not respond, which is
   exactly how it was first reported. A gauge that does something is `.fx-act`: a real `<button>` with
-  a raised face, a hover lift and a pointer. Icons are distinct per gauge (`alert`, `gear`,
-  `blueprint`) so three adjacent buttons stay legible. **The chevron is the narrower word** — it says
-  _there is a panel behind this_ — so the three desks carry one and `Scan`, which runs a pulse rather
+  a raised face, a hover lift and a pointer. Icons are distinct per gauge (`alert`, `gear`, `chest`,
+  `blueprint`) so four adjacent buttons stay legible. **The chevron is the narrower word** — it says
+  _there is a panel behind this_ — so the four desks carry one and `Scan`, which runs a pulse rather
   than opening anything, does not (`.fx-run`). `test/factorySkin.test.ts` counts the ways in by
   chevron for that reason.
 - **Only Alerts is ever red**, and that is the skin's existing rule rather than a new one: red means
-  an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber) and a
-  queued blueprint is waiting on a slot, not on you (neither).
+  an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
+  finding is something a bot noticed on its way past rather than something it is stuck on (amber),
+  and a queued blueprint is waiting on a slot, not on you (neither).
+- **A gauge counts what a click resolves.** Findings counts findings at `open` and nothing
+  else: promoted, filed and dismissed are done, `filing` is decided (an agent is creating the
+  ticket), and **overlaps are excluded** — an overlap is diagnostic, with no button on it anywhere,
+  so a number a click could not move would be the dead `see the fault log at the foot of the floor`
+  line in a new place. They still show in the desk, because they answer the same question the
+  findings do. The consequence is honest and stated in the design: two agents editing one file is
+  the most urgent thing in that drawer and the one thing the face cannot advertise.
 - **A zero count mutes a gauge; it never removes it.** Faults is the only way to the fault log, which
   carries the two-step `clear` — a control that must not become unreachable because the log happens
   to be empty — and a gauge that vanished would reflow the bar every time its number left zero.
-  `test/factorySkin.test.ts` asserts all three survive a zero.
+  `test/factorySkin.test.ts` asserts all four survive a zero, counting the ways in by chevron.
 - **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
   listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
   answering still happens on the shared `EscalationCard`, which owns the refusal rules.

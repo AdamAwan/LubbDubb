@@ -138,13 +138,16 @@ function Accumulators({ cells }: { cells: number[] }): JSX.Element {
 }
 
 /**
- * The control-room strip: scan, power, bots, and the three ways in.
+ * The control-room strip: scan, power, bots, and the four ways in.
  *
  * Alerts, Faults and Blueprints used to be three panels standing in a permanent
  * left-hand rail, and all three are read as a *number* far more often than as
  * contents. A number is a gauge, so each is one here and its panel opens from it.
- * That is what deleted the rail. See
- * `docs/spec/2026-07-29-factory-two-rail-layout-design.md`.
+ * That is what deleted the rail. Findings is the fourth and was the last panel on
+ * the floor read the same way — `Off-Blueprint` there, renamed to the harness's
+ * own word for it, which is also short enough not to wrap the bar. See
+ * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
+ * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
  *
  * Every gauge is one subject stated once, which is what the bar had stopped
  * being: the fleet was a Bots reading *and* a `2/3` inside the cap control a few
@@ -174,6 +177,7 @@ export function StatusBar({
   // is actually known instead of a meter inventing a denominator.
   const power = powerReading(state.usage);
   const queued = state.jobs.filter((j) => j.status === 'queued').length;
+  const unactioned = (state.findings ?? []).filter((f) => f.status === 'open').length;
 
   // Which dispatcher is wired is config: read once, never again, and it cannot
   // change while the harness is up — so it is a hover on the name rather than a
@@ -249,9 +253,10 @@ export function StatusBar({
         <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
       </div>
 
-      {/* Alerts is red and the other two never are: on this floor red means one
+      {/* Alerts is red and the other three never are: on this floor red means one
           thing, an agent parked on a question only you can answer. A fault blocks
-          nothing and a queued blueprint is waiting on a slot, not on you. */}
+          nothing, a finding is something a bot noticed rather than something it is
+          stuck on, and a queued blueprint is waiting on a slot, not on you. */}
       <ActRead
         icon="alert"
         label="Alerts"
@@ -276,6 +281,24 @@ export function StatusBar({
             : `${state.errors.length} recorded fault${state.errors.length === 1 ? '' : 's'} — open the fault log`
         }
         onOpen={() => onOpen('faults')}
+      />
+
+      {/* Open findings only. A promoted, filed or dismissed one is done and a
+          `filing` one is decided, so neither is waiting on you; overlaps are
+          diagnostic — nothing here or in the harness actions them — so they can
+          never add to a number whose whole claim is that a click resolves it.
+          They still show in the desk. */}
+      <ActRead
+        icon="chest"
+        label="Findings"
+        count={unactioned}
+        tone="warn"
+        title={
+          unactioned === 0
+            ? 'Nothing reported outside a bot’s own task — open the findings desk anyway'
+            : `${unactioned} finding${unactioned === 1 ? '' : 's'} nothing schedules — open the findings desk`
+        }
+        onOpen={() => onOpen('findings')}
       />
 
       <ActRead
