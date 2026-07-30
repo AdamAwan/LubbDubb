@@ -322,7 +322,7 @@ argument for each is in its module's header, and the reason for the shape is wor
 - **Parts Inspection** (`inspection.ts` + `components/Inspection.tsx`) draws every open PR as one
   row, **above both rails**. It replaced two panels — the silo towers and the Launches log — and the
   reason is the analogy: a launch is a _goal closing_ (`iconForStage`), so a PR drawn as a silo topped
-  with a rocket claimed the merge was the ending. A merge loads one part into the silo. Five things
+  with a rocket claimed the merge was the ending. A merge loads one part into the silo. Six things
   carry it:
   - **It sits above the rails, breaking their whose-turn split on purpose.** A PR is the world object
     an operator is most often the blocker for, so it outranks the split rather than living inside it.
@@ -355,6 +355,15 @@ argument for each is in its module's header, and the reason for the shape is wor
     Classic — which has no strip — is unchanged, golden included); the factory passes `false`, and the
     flag gates the tab counts and the recently-closed list as well as the rows, or the counts would
     not match what the tab shows. One subject, one place: the argument that dissolved the act rail.
+  - **The watch/ignore toggle moves with the PRs.** `showPullRequests={false}` also drops the
+    exclude toggle `WorldSummary` renders on every PR row, so once the factory moved its PRs onto the
+    rack the toggle had no home — the only way to `-ignore` a PR from the cockpit was to switch to
+    Classic. So each open rack row carries it (`onToggleExclude` → `actions.setPrExcluded` →
+    `POST /api/prs/:n/exclude`, the same label write Classic makes): `ignore` when untagged, `watch`
+    to lift it, read off `pr.labels.includes(ignoreLabel)`. With **no `ignoreLabel` configured** the
+    gate is off, so the button renders **disabled rather than absent** — the control keeps its place
+    on the row and the reason is one hover away, the same rule the empty rack is drawn for. A merged
+    PR has none: there is nothing to leave alone.
 - **Production** (`production.ts`) is the only panel that reads against time, which is the only way
   to answer whether the floor is producing rather than merely busy. Rates come from the timestamps
   already on `decisions` and `worldEvents`; a held or skipped dispatch is not counted, because it

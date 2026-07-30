@@ -1513,7 +1513,15 @@ test('the rocket belongs to the goal closing, not to a merge', () => {
  * one that broke — the rule the fault gauge is kept muted-but-present for.
  */
 test('the rack says the rack is empty rather than drawing nothing', () => {
-  const html = renderToStaticMarkup(createElement(Inspection, { prs: [], closed: [], refUrls: {} }));
+  const html = renderToStaticMarkup(
+    createElement(Inspection, {
+      prs: [],
+      closed: [],
+      refUrls: {},
+      ignoreLabel: 'lubbdubb-ignore',
+      onToggleExclude: () => {},
+    }),
+  );
   assert.match(html, /Nothing on the rack/);
   // And a key is drawn only when there is something for it to explain.
   assert.ok(!html.includes('policy holds it'), 'no legend for an empty rack');
@@ -1558,6 +1566,8 @@ test('a drawn rack carries the group split, the states and the check names', () 
       ],
       closed: [mk(140, { merged: true }), mk(141, { state: 'closed' })],
       refUrls: {},
+      ignoreLabel: 'lubbdubb-ignore',
+      onToggleExclude: () => {},
     }),
   );
 
@@ -1579,6 +1589,60 @@ test('a drawn rack carries the group split, the states and the check names', () 
   assert.match(html, /Harness working it/);
   // One merge in the window, and the abandoned PR is not counted as loaded.
   assert.match(html, /1 part loaded into the silo/);
+});
+
+/**
+ * The watch/ignore toggle. The factory skin draws PRs on the rack rather than in
+ * The Yard (`showPullRequests={false}`), so this is the only home for the label
+ * write `WorldSummary` carries in the classic skin — its absence here was the
+ * regression this restores.
+ */
+test('every open rack row carries a watch/ignore toggle, and it reads off the ignore tag', () => {
+  const mk = (n: number, over: Partial<PullRequest>): PullRequest =>
+    ({
+      id: `p${n}`,
+      number: n,
+      title: `PR ${n}`,
+      branch: `b${n}`,
+      ciStatus: 'passing',
+      unresolvedComments: [],
+      ...over,
+    }) as PullRequest;
+  const html = renderToStaticMarkup(
+    createElement(Inspection, {
+      prs: [
+        mk(200, { attention: { status: 'you', reasons: ['your call'] } }),
+        mk(201, { labels: ['lubbdubb-ignore'], attention: { status: 'ignored', reasons: ['tagged ignore'] } }),
+      ],
+      closed: [],
+      refUrls: {},
+      ignoreLabel: 'lubbdubb-ignore',
+      onToggleExclude: () => {},
+    }),
+  );
+  // An un-tagged PR offers "ignore"; the tagged one offers the way back, "watch".
+  assert.match(html, /class="btn ghost fx-part-toggle"[^>]*>ignore</);
+  assert.match(html, /class="btn ghost fx-part-toggle"[^>]*>watch</);
+});
+
+/**
+ * With no ignore label configured the gate is off, so the toggle would write a
+ * tag nothing reads — it renders disabled rather than absent, so the control's
+ * place on the row is stable and the reason is one hover away.
+ */
+test('the toggle is disabled when no ignore label is configured', () => {
+  const pr = {
+    id: 'p1',
+    number: 1,
+    title: 'PR 1',
+    branch: 'b1',
+    ciStatus: 'passing',
+    unresolvedComments: [],
+  } as PullRequest;
+  const html = renderToStaticMarkup(
+    createElement(Inspection, { prs: [pr], closed: [], refUrls: {}, ignoreLabel: '', onToggleExclude: () => {} }),
+  );
+  assert.match(html, /class="btn ghost fx-part-toggle"[^>]*disabled/);
 });
 
 /**
