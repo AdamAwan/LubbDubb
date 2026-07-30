@@ -405,13 +405,22 @@ export function siloStatus(filled: number, total: number): MachineStatus {
   return filled === 0 ? { word: 'Empty', tone: 'idle' } : { word: 'Filling', tone: 'idle' };
 }
 
-/** What the goal check (rule 3e) has said, if anything. */
-export type SatelliteReading = 'unbuilt' | 'verified' | 'more_work' | 'returned';
+/**
+ * What the goal check (rule 3e) has said, if anything.
+ *
+ * Three readings, because rule 3e writes exactly two rows — a delivery and a
+ * shortfall — and the third reading is their absence. There was a fourth,
+ * `more_work`, and it was unreachable: it was gated on the *conclusion* fold
+ * returning `by: 'assessor'`, which only ever comes back out of the shortfall
+ * arm, and a shortfall reads `returned` before that arm is consulted. Two words
+ * for one row is two answers to one question, so it is gone rather than kept
+ * against a future that already has a word for it.
+ */
+export type SatelliteReading = 'unbuilt' | 'verified' | 'returned';
 
 const SATELLITE_WORDS: Record<SatelliteReading, MachineStatus> = {
   unbuilt: { word: 'Not yet built', tone: 'off' },
   verified: { word: 'Verified', tone: 'ok' },
-  more_work: { word: 'More work found', tone: 'warn' },
   returned: { word: 'Sent it back', tone: 'bad' },
 };
 

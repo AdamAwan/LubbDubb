@@ -105,6 +105,32 @@ export interface Issue {
     decidedAt: string;
   } | null;
   /**
+   * The positive mirror of `shortfall` — the assessor's "this goal is reached",
+   * beside the other verdicts and inside none of them, for their reasons.
+   *
+   * It has to be its own field because it cannot be read off `conclusion`: after
+   * the two-record split the assessor's *positive* verdict lives in
+   * `issue_deliveries`, so `resolveIssueConclusion` never returns
+   * `{by: 'assessor', verdict: 'done'}` — a delivered decomposed issue resolves to
+   * `{by: 'plan'}`, which says every part merged and says nothing about whether
+   * anyone checked the goal. Nor can it be read off `pickup.status`: the plan
+   * `parts` arm answers before the delivery park, so a delivered *decomposed*
+   * issue reports `planning`. Both readings are true; neither is this one.
+   *
+   * **Present only while the verdict still stands**, which is the same reading
+   * `deliveryHold` gives rule 4 — a tracker move back into a pickup state or a
+   * world transition since `decidedAt` ends it, and the field goes null with it.
+   * So absent means "no standing goal check", never "there was never one": once
+   * released the issue is back in play and rule 3e will assess it again, and a
+   * floor still reading *Verified* beside a patch that is ready to mine would be
+   * the contradiction this field exists to remove.
+   */
+  delivery?: {
+    summary: string;
+    by: 'assessor' | 'operator';
+    decidedAt: string;
+  } | null;
+  /**
    * The intake verdict (#158), beside `conclusion` and `shortfall` and inside
    * `pickup` for none of their reasons: pickup answers "would an agent start next
    * cycle", the assay answers "is there anything here to start on".
