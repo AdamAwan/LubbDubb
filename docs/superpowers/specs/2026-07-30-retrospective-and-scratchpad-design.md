@@ -123,12 +123,22 @@ Both route through `AgentManager` (not straight to the store) for the reason a f
 event is what puts it in the cockpit now rather than next pulse — and both carry the ordinary
 `_status` envelope.
 
-### Nothing in the dispatcher reads either table
+### The dispatcher reads existence, and never prose
 
-Both are lenses, like `findings`, `overlaps` and `prAttention`. A rule reading pad notes would let
-one agent's prose suppress another agent's dispatch, which is #108's open question 3 in different
-clothes. Asserted **structurally**, the way `test/workGraph.test.ts` asserts it: no file under
-`src/dispatcher/` names the scratchpad or retrospective modules.
+The pad is a lens, like `findings`, `overlaps` and `prAttention`: **nothing in the dispatcher reads
+it at all**. A rule reading pad notes would let one agent's prose suppress another agent's dispatch,
+which is #108's open question 3 in different clothes. Asserted structurally, the way
+`test/workGraph.test.ts` asserts its own: no file under `src/dispatcher/` names the scratchpad
+module.
+
+The retrospective is different in exactly one way, and the difference is bounded rather than
+argued away: rule 3h has to know whether a retro already exists, or it dispatches one every pulse
+forever. So `DispatchContext` carries `retrospectiveOrigins: string[]` — the keys of the rows that
+exist, wired in `harness.ts` from `store.listRetrospectiveOrigins()` — and **not** the summaries or
+the documents. Every other rule already reads its own verdict table this way; what must not reach a
+rule is the *writing*, since a rule branching on retro prose would let one agent's account of the
+run change what the harness schedules. `test/retrospective.test.ts` asserts the context type carries
+no document or summary field.
 
 ## Decision 5: rule `issue-retro` (3h), on by default
 
