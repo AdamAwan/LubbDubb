@@ -136,6 +136,19 @@ test('a red PR under a red base is inheriting; the bottom of the stack owns the 
   assert.equal(inheritedCiFailure(pr(43, 'z', { baseBranch: 'issue/12/schema' }), prs), null);
 });
 
+test('an Optional failure on the base is attributed, so no agent lands on the child', () => {
+  // A non-blocking check runs the base's commits exactly as a required one does,
+  // so it propagates up the stack the same way. Attribution reads
+  // `ciNeedsAttention` rather than the aggregate for precisely this: otherwise
+  // one red format check at the bottom puts an agent on every PR above it, each
+  // of them unable to fix anything.
+  const optional = [{ name: 'Typescript Code Formatter Validation', status: 'failing' as const, blocking: false }];
+  const base = pr(40, 'part-one', { ciStatus: 'passing', ciChecks: optional });
+  const child = pr(41, 'part-two', { baseBranch: 'part-one', ciStatus: 'passing', ciChecks: optional });
+  assert.equal(inheritedCiFailure(child, [base, child])?.number, 40);
+  assert.equal(inheritedCiFailure(base, [base, child]), null, 'the base owns its own failure');
+});
+
 test('attribution walks past a base whose own CI has not reported yet', () => {
   // The middle PR is still building. Without the walk its `pending` would read as
   // "the failure above is yours", and an agent would be sent to fix the bottom
