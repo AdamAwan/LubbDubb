@@ -58,7 +58,7 @@ export function OverlapPanel({
             {o.writers.map((w) => (
               <li key={w.agentId}>
                 {statusDot(w.status)}
-                <span className="mono">{w.branch ?? 'no branch'}</span>
+                <span className="mono">{w.branch ? refLink(w.branch, refUrls) : 'no branch'}</span>
                 <span className="muted">
                   {' — '}
                   {w.originRef ? refLink(w.originRef, refUrls) : (w.originTitle ?? 'untracked task')}

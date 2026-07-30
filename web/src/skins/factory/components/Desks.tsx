@@ -5,7 +5,7 @@ import { EscalationCard } from '../../../components/EscalationCard.js';
 import { FindingsPanel } from '../../../components/FindingsPanel.js';
 import { InjectPanel } from '../../../components/InjectPanel.js';
 import { LaunchPanel } from '../../../components/LaunchPanel.js';
-import { relTime } from '../../../components/util.js';
+import { refLink, relTime } from '../../../components/util.js';
 import { clip } from '../vocabulary.js';
 import { Icon } from './Sprite.js';
 
@@ -173,7 +173,14 @@ export function FindingsDesk({ view, actions }: SkinProps): JSX.Element {
                   <span className="fx-ref">{o.sameWorktree ? 'same worktree' : 'two branches'}</span>
                 </div>
                 <p>{o.path}</p>
-                <p className="fx-empty">{o.writers.map((w) => w.branch ?? w.agentId).join(' · ')}</p>
+                <p className="fx-empty">
+                  {o.writers.map((w, i) => (
+                    <span key={w.agentId}>
+                      {i > 0 && ' · '}
+                      {w.branch ? refLink(w.branch, state.refUrls) : w.agentId}
+                    </span>
+                  ))}
+                </p>
               </article>
             ))}
           </div>

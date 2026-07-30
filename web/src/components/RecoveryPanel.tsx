@@ -86,7 +86,7 @@ function CrashedCard({
         </span>
         <strong className="crashed-title">{crashed.title}</strong>
         {crashed.originRef && <span className="muted">{refLink(crashed.originRef, refUrls)}</span>}
-        {crashed.branch && <code className="branch">{crashed.branch}</code>}
+        {crashed.branch && <code className="branch">{refLink(crashed.branch, refUrls)}</code>}
       </div>
 
       <div className="crashed-meta muted">

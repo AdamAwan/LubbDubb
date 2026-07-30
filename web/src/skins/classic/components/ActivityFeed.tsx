@@ -1,14 +1,26 @@
 import { useMemo, useState } from 'react';
 import type { WorldEvent, WorldEventKind } from '../../../types.js';
-import { relTime } from '../../../components/util.js';
+import { linkify, relTime } from '../../../components/util.js';
 
 /**
  * The world's change history — the counterpart to the decision log, but for the
  * outside world rather than the harness. Each entry is one observed state
  * transition (a PR going green, an issue being linked, …), newest first.
  * Category chips narrow to PRs / Issues.
+ *
+ * Every summary embeds the item it is about as `PR #42` / `Issue #13`, so it runs
+ * through `linkify` — the same treatment the decision log gives its reasons — and
+ * a ref the provider can't resolve stays plain text.
  */
-export function ActivityFeed({ events, now }: { events: WorldEvent[]; now: number }) {
+export function ActivityFeed({
+  events,
+  now,
+  refUrls,
+}: {
+  events: WorldEvent[];
+  now: number;
+  refUrls: Record<string, string>;
+}) {
   const [filter, setFilter] = useState<string>('all');
 
   const counts = useMemo(() => {
@@ -40,7 +52,7 @@ export function ActivityFeed({ events, now }: { events: WorldEvent[]; now: numbe
               <span className={`badge ${categoryOf(e.kind)}`}>{labelOf(e.kind)}</span>
               <span className="muted audit-time">{relTime(e.createdAt, now)}</span>
             </div>
-            <div className="audit-reason">{e.summary}</div>
+            <div className="audit-reason">{linkify(e.summary, refUrls)}</div>
           </div>
         ))}
       </div>

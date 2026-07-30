@@ -21,6 +21,7 @@ import { AsyncButton } from './AsyncButton.js';
 export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTickets: boolean }) {
   const [roots, setRoots] = useState<WorkNodeView[]>([]);
   const [unrecorded, setUnrecorded] = useState<UnrecordedWorkView[]>([]);
+  const [rootUrls, setRootUrls] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [showIgnored, setShowIgnored] = useState(false);
   const [subtree, setSubtree] = useState<{ nodes: WorkNodeView[]; refUrls: Record<string, string> } | null>(null);
@@ -29,6 +30,7 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
     api.getWorkRoots().then((r) => {
       setRoots(r.roots);
       setUnrecorded(r.unrecorded);
+      setRootUrls(r.refUrls);
     });
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
   const row = (item: UnrecordedWorkView) => (
     <div className="work-unrecorded-row" key={item.ref}>
       <span className="work-title">{item.title}</span>
-      <span className="muted mono">{item.ref}</span>
+      <span className="muted mono">{refLink(item.ref, rootUrls)}</span>
       <span className="muted work-seen">
         {item.prCount === 1 ? '1 pull request' : `${item.prCount} pull requests`} · started{' '}
         {relTime(item.firstSeenAt, now)}
@@ -138,6 +140,9 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
             <span className="work-caret">{open === root.ref ? '▾' : '▸'}</span>
             <span className="work-title">{root.title}</span>
             <span className={`chip small${root.terminal ? ' ok' : ''}`}>{root.status}</span>
+            {/* Plain, not a link: the whole header is a toggle `<button>`, and an
+                `<a>` nested in one is invalid interactive content. The expanded
+                subtree draws this same root node with its ref linked. */}
             <span className="muted mono">{root.ref}</span>
           </button>
           {open === root.ref &&
@@ -181,7 +186,7 @@ function WorkRow({
       )}
       {node.baseRef !== null && (
         <span className="chip small" title="Stacked on this PR — a cross-link, not what caused the work">
-          on {node.baseRef}
+          on {refLink(node.baseRef, refUrls)}
         </span>
       )}
       <span className="muted mono">{refLink(node.ref, refUrls)}</span>

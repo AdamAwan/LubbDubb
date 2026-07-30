@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Agent, AgentFile, AgentFlag, Task } from '../types.js';
 import { api } from '../api.js';
-import { statusDot, linkify, agentUsageLine } from './util.js';
+import { statusDot, linkify, refLink, agentUsageLine } from './util.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { FlagChips } from './FlagChips.js';
@@ -183,7 +183,7 @@ export function AgentDrawer({
           <div className="origin-context">
             {task.originTitle && (
               <div className="origin-title">
-                {task.originRef && <span className="chip small">{task.originRef}</span>}
+                {task.originRef && <span className="chip small">{refLink(task.originRef, refUrls)}</span>}
                 <span>{task.originTitle}</span>
               </div>
             )}

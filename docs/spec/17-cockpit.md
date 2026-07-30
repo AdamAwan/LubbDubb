@@ -873,6 +873,29 @@ a caption with no link asserts something exists while giving nobody a way to rea
 outcome #171 ruled out. So an unwritten comment, an older server that sends none, and a provider that
 builds no URLs are all one silence.
 
+**Every reference the UI shows is routed through one of the three (#199).** The rule is uniform: a
+PR/issue number links as `refLink('#'+n, refUrls)`, a colon-form origin/structured ref as
+`refLink(ref, refUrls)`, free text carrying `#n` mentions through `linkify(text, refUrls)`. So the
+decision log, the activity feed (`ActivityFeed`) and its factory twin (`Signals`), the findings
+panel, escalations, the plan panel/modal, the PR and issue rows, the up-next queue, the fleet cards
+(origin ref and branch), the overlap and recovery panels, and the work-tree panel all draw links
+wherever the provider can resolve them.
+
+For those link sites to actually resolve, three ref families the item lists do not cover are keyed on
+their own in `buildRefUrls` (see [16](16-http-api.md#refurls)): **world-event refs** (`pr:42`,
+`issue:13` — the structured ref each activity entry draws), **task origin refs** (`pr:142:ci`,
+`issue:13:part:x` — what the fleet/overlap/recovery cards link), and, on the `/api/work` routes, the
+**work roots and stacked base refs**. A `job:<id>` origin, or anything the provider can't map, is
+simply omitted and renders plain.
+
+Two surfaces are deliberately left as plain text, because their medium cannot host a practical link
+rather than for want of a URL: the factory **Line**'s belt crates (a continuously-moving target) and
+its SVG bay HUD, and the Goal Floor's **patch-tab strip** (each tab is a `<button>` that selects the
+goal, and an `<a>` nested in a button is invalid interactive content). Every ref they show is linked
+elsewhere — the shared `WorldSummary`/`WorkTree` panels, the fleet cards, and the classic skin — so
+nothing is unreachable; this mirrors the Goal Floor's own SVG `<text>` meta lines, which stay plain
+while only the compact PR chip is `foreignObject`-wrapped.
+
 ### What the harness has said on a ticket
 
 Two records carry a comment the harness maintains by itself, and both reach the cockpit as canonical

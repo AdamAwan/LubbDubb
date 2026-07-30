@@ -249,7 +249,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
             rules={state.dispatchRules}
           />
           <h2 className="feed-heading">Activity</h2>
-          <ActivityFeed events={state.worldEvents} now={now} />
+          <ActivityFeed events={state.worldEvents} now={now} refUrls={state.refUrls} />
           <h2 className="feed-heading">
             Errors <span className={`count${state.errors.length > 0 ? ' urgent' : ''}`}>{state.errors.length}</span>
           </h2>

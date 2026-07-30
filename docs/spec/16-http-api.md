@@ -212,9 +212,12 @@ no-op dressed as an override. 400 on a non-integer issue number or an unrecognis
 The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did
 that nothing in the tracker accounts for. Rate-limited rather than polled; the cockpit's Work panel
 fetches it on open, because `/api/state` comes round every couple of seconds and the graph only ever
-grows. Returns `{ roots, unrecorded }`. Each unrecorded entry carries `ignored` — an item the operator
-cleared is still reported, because the panel is what hides it and a row filtered out at the source has
-no title left to offer back under the un-ignore.
+grows. Returns `{ roots, unrecorded, refUrls }`. Each unrecorded entry carries `ignored` — an item the
+operator cleared is still reported, because the panel is what hides it and a row filtered out at the
+source has no title left to offer back under the un-ignore. `refUrls` keys the root and unrecorded-item
+refs the panel draws, resolved through the connector's own `resolveRefUrl` for the same reason the
+subtree route does (#199): this route ships no snapshot, and a PR the graph remembers merging left the
+world hours ago.
 
 ### `GET /api/work/:ref`
 
@@ -515,6 +518,12 @@ Seven consistency points:
   provider could not build a URL — both draw nothing rather than a boolean nobody can act on.
 - **`refUrls` covers closed PRs too**, since the cockpit's "recently closed" section links their
   numbers, and it resolves finding refs directly (a finding often names an item not in the world).
+- **`refUrls` also keys world-event refs and every task's origin ref** (#199), on top of the `#n` item
+  keys. The activity feed / signals panels draw a world event's structured `ref` (`pr:42`, `issue:13`),
+  and the fleet, overlap and recovery cards draw a task's colon-form origin (`pr:142:ci`,
+  `issue:13:part:x`) — neither is the `#n` the item lists key by, so each is resolved on its own.
+  A `job:<id>` origin resolves to nothing and is omitted, and the feed's `#n`-in-prose still links off
+  the item keys through `linkify`.
 
 `usage.windows` are summed from `usage_events` (all modes, self-computed); `usage.rateLimits` is the
 freshest PTY status-line payload, or `null`, in which case the cockpit chip falls back to cost.
