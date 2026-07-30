@@ -337,6 +337,16 @@ export interface GoalFloorModel {
    * about the floor.
    */
   planId: string | null;
+  /**
+   * The goal whose retrospective can be opened, as an `issue:<n>` ref, or null
+   * when nobody has written one.
+   *
+   * Keyed on the retrospective **existing**, never on what the floor is doing —
+   * the lesson `planId` was moved off the Blueprint plate to learn. A write-up is
+   * a standing record; the moment it stops being readable must not be the moment
+   * the machine that produced it changes status.
+   */
+  retroRef: string | null;
 }
 
 interface GoalFloorInput {
@@ -666,14 +676,20 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   let tail = satRef;
   if (delivered && !shortfall) {
     const manifestRef = `${patchRef}:manifest`;
+    const retro = issue.retrospective ?? null;
     machines.push({
       ref: manifestRef,
       kind: 'manifest',
       kindLabel: 'Manifest',
       name: 'Report what was done',
-      meta: conclusion?.note ? [conclusion.note] : ['—'],
+      // The retrospective's summary is the station's line; the working agent's own
+      // conclusion note stays beneath it rather than being replaced. They answer
+      // different questions — how the run went, and whether the goal was met — and
+      // a station that showed only the second would still be reporting nothing
+      // about the run it is named for.
+      meta: [retro?.summary ?? 'no retrospective yet', ...(conclusion?.note ? [conclusion.note] : [])],
       presence: 'built',
-      status: manifestStatus(Boolean(conclusion?.note)),
+      status: manifestStatus(Boolean(retro)),
       scanners: [],
       prNumber: null,
       link: null,
@@ -753,6 +769,8 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     layout: layoutFloor(refs, edges),
     plates,
     planId: plan?.id ?? null,
+    // Keyed on the write-up existing, and on nothing else — see `retroRef`.
+    retroRef: issue.retrospective ? `issue:${n}` : null,
   };
 }
 

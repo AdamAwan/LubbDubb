@@ -38,6 +38,12 @@ export interface CockpitActions {
    */
   viewPlan(planId: string | null): void;
   /**
+   * Which goal's retrospective is open, as an `issue:<n>` ref. On the seam for
+   * `viewPlan`'s reason: the modal is shared and reaches `api.js`, while the
+   * control that opens it is embedded by whichever skin draws the station.
+   */
+  viewRetro(issueRef: string | null): void;
+  /**
    * Open or close the settings modal — the running config and the skin picker.
    * On the seam for `viewPlan`'s reason: the modal is shared and hangs off the
    * shell (it reaches `/api/config`, which a skin may not do), while the cog that

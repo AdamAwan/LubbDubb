@@ -125,10 +125,30 @@ export function buildDemoState(): DemoSeed {
           number: 205,
           title: 'Document the sentinel protocol in the README',
           body: 'Explain @@LUBBDUBB_DONE@@ / @@LUBBDUBB_WAITING@@ and where detection lives.',
-          labels: ['docs'],
+          labels: ['docs', 'lubbdubb-watch'],
           state: 'open',
-          linkedPrNumber: 141,
-          pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #141'] },
+          // Delivered by PR #140, which merged and left the open list — the state
+          // the retrospective exists for, and the one the demo could not show
+          // before: a goal that is finished but not yet closed by a human.
+          linkedPrNumber: 140,
+          pickup: { eligible: false, status: 'delivered', reasons: ['assessed as delivered'] },
+          delivery: {
+            summary: 'PR #140 folded the checks and the docs landed with it.',
+            by: 'assessor',
+            decidedAt: new Date(Date.now() - 5_400_000).toISOString(),
+          },
+          conclusion: {
+            verdict: 'done' as const,
+            by: 'agent' as const,
+            note: 'README section added; detection covered.',
+            at: new Date(Date.now() - 5_700_000).toISOString(),
+          },
+          // The reading only — the document is fetched when the station is opened.
+          retrospective: {
+            summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
+            hasDocument: true,
+            updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
+          },
         },
         {
           id: 'iss-212',

@@ -3,6 +3,7 @@ import type {
   PromptTemplateView,
   RecoveryVerdict,
   RunningConfigGroup,
+  RetrospectiveView,
   UnrecordedWorkView,
   WorkNodeView,
 } from './types.js';
@@ -100,6 +101,13 @@ const realApi = {
   getWorkSubtree: (ref: string) =>
     authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) =>
       json<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }>(r),
+    ),
+  // A goal's retrospective, fetched when the Manifest station is opened. The
+  // snapshot carries only the summary, for the reason the work graph is not
+  // polled: a document per issue on every poll pays for the feature in bandwidth.
+  getRetrospective: (ref: string) =>
+    authFetch(`/api/retrospectives/${encodeURIComponent(ref)}`).then((r) =>
+      json<{ retrospective: RetrospectiveView | null }>(r),
     ),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.

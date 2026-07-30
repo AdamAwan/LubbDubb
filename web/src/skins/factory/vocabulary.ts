@@ -428,9 +428,16 @@ export function satelliteStatus(reading: SatelliteReading): MachineStatus {
   return SATELLITE_WORDS[reading];
 }
 
-/** The manifest — report what was done, off `issue.conclusion.note`. */
-export function manifestStatus(hasNote: boolean): MachineStatus {
-  return hasNote ? { word: 'Filed', tone: 'ok' } : { word: 'Nothing written', tone: 'off' };
+/**
+ * The manifest — the run's own write-up, off `issue.retrospective`.
+ *
+ * It reads the retrospective rather than the working agent's conclusion note
+ * because the station's name is a claim about the *run*: a note saying "done" is a
+ * verdict on the goal, not an account of how it was reached. The note still draws,
+ * beneath the summary — two different claims, both worth having.
+ */
+export function manifestStatus(hasRetro: boolean): MachineStatus {
+  return hasRetro ? { word: 'Filed', tone: 'ok' } : { word: 'Nothing written', tone: 'off' };
 }
 
 /**

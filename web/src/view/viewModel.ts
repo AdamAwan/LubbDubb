@@ -60,6 +60,8 @@ export interface CockpitView {
 
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
+  /** The goal whose retrospective is open, as an `issue:<n>` ref. */
+  viewingRetro: string | null;
   /** Whether the settings modal is open. */
   settingsOpen: boolean;
 }
@@ -78,6 +80,8 @@ interface ViewInputs {
   lastPulseAt: number;
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
+  /** The goal whose retrospective is open, as an `issue:<n>` ref. */
+  viewingRetro: string | null;
   /** Whether the settings modal is open. */
   settingsOpen: boolean;
 }
@@ -134,6 +138,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
 
     taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,
     viewingPlan: input.viewingPlan,
+    viewingRetro: input.viewingRetro,
     settingsOpen: input.settingsOpen,
   };
 }
