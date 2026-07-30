@@ -10,12 +10,12 @@ import { BlueprintDesk, FaultLog, FindingsDesk, StampDesk } from './components/D
 import { TheLine } from './components/TheLine.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
-import { Launches } from './components/Launches.js';
+import { Inspection } from './components/Inspection.js';
 import { Modal, type FactoryModal } from './components/Modal.js';
 import { Production, ProductionTile } from './components/Production.js';
 import { Signals } from './components/Signals.js';
-import { Silos } from './components/Silos.js';
 import { GoalFloor } from './components/GoalFloor.js';
+import { rack } from './inspection.js';
 import { powerReading } from './power.js';
 import { productionReading } from './production.js';
 
@@ -59,6 +59,9 @@ export function FactoryRoot({ view, actions }: SkinProps) {
   const { state, now } = view;
   const [modal, setModal] = useState<FactoryModal | null>(null);
   const stopped = view.pulseHeld || state.control.paused;
+  // Off the same pure `rack` the panel draws, so the header count and the group it
+  // counts can never disagree.
+  const yoursCount = rack(state.world.pullRequests).yours.length;
   const power = powerReading(state.usage);
   const production = productionReading({
     decisions: state.decisions,
@@ -155,19 +158,28 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     </section>
   );
 
-  const launches = (
-    <section className="fx-card fx-bev" data-fx="launches">
+  // Above both rails rather than inside one, and that is a deliberate break of the
+  // rails' whose-turn split: a pull request is the world object you are most often
+  // the blocker for, so it outranks the split instead of living in it. It replaces
+  // two panels — the silo towers and the Launches log — and the log's one fact with
+  // any tension left in it, the merge count, rides in this header.
+  const inspection = (
+    <section className="fx-card fx-bev fx-insp" data-fx="inspection">
       <div className="fx-head">
         <div>
-          <Icon name="rocket" />
-          <h2>Launches</h2>
+          <Icon name="pr" />
+          <h2>Parts Inspection</h2>
         </div>
-        <p className="fx-note">a launch is a merge</p>
+        <p className="fx-note">
+          {yoursCount > 0 ? <b>{yoursCount} in your court</b> : 'nothing in your court'} ·{' '}
+          {state.world.pullRequests.length - yoursCount} in hand
+        </p>
       </div>
-      <p className="fx-sub">On the pad</p>
-      <Silos prs={state.world.pullRequests} refUrls={state.refUrls} />
-      <p className="fx-sub">Left the pad</p>
-      <Launches closed={state.world.closedPullRequests ?? []} now={now} refUrls={state.refUrls} />
+      <Inspection
+        prs={state.world.pullRequests}
+        closed={state.world.closedPullRequests ?? []}
+        refUrls={state.refUrls}
+      />
     </section>
   );
 
@@ -214,8 +226,12 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           {state.worldObservedAt ? `observed ${relTime(state.worldObservedAt, now)}` : 'not yet observed'}
         </p>
       </div>
+      {/* Issues and stories only. Pull requests are drawn in full above the rails,
+          and the argument is the one that dissolved the act rail into gauges: one
+          subject, one place. Classic keeps its own PR list — it has no strip. */}
       <WorldSummary
         state={state}
+        showPullRequests={false}
         onToggleExclude={(prNumber, excluded) => actions.setPrExcluded(prNumber, excluded)}
         onToggleIssueWatch={(issueNumber, watched) => actions.setIssueWatched(issueNumber, watched)}
         onToggleStoryWatch={(storyId, watched) => actions.setStoryWatched(storyId, watched)}
@@ -297,6 +313,8 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           order. Production heads the world rail rather than the floor: its
           subject is output, which is merges — the world's answer to the floor's
           effort. */}
+          {inspection}
+
           <div className="fx-rails">
             <div className="fx-rail fx-rail-floor">
               {line}
@@ -306,7 +324,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
             </div>
             <div className="fx-rail fx-rail-world">
               {productionPanel}
-              {launches}
               {signals}
               {shiftLog}
             </div>

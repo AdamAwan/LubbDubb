@@ -97,9 +97,13 @@ Three properties keep it a view rather than a costume, and they are what to pres
 it:
 
 - **Nothing is drawn that isn't in the snapshot.** Every bay is a live agent, every crate is a
-  `QueueItem`, every launch is a row in `closedPullRequests`. There is no progress bar, because
-  nothing reports progress — a bay shows elapsed time instead. The rocket fires only when the
-  retained window actually contains a merge.
+  `QueueItem`, every scanner cell is a check the CI policy classified. There is no progress bar,
+  because nothing reports progress — a bay shows elapsed time instead.
+- **The rocket means one thing: a goal closing.** `iconForStage('launch')` and
+  `iconForEventKind('issue_closed')` are the only two places it appears. It used to be spent on
+  `pr_merged` as well, which double-booked it and left the one event that _is_ a launch falling
+  through to a flask; `test/factorySkin.test.ts` now asserts that nothing about a pull request wears
+  it.
 - **The belt is the harness running, so it stops when the harness does** (paused, or held on
   recovery), as does the radar sweep. A belt still moving while no cycle will run is the one
   genuinely misleading thing this layout could draw, so `test/factorySkin.test.ts` asserts it rather
@@ -113,9 +117,10 @@ Red means exactly one thing on that floor: an agent parked on a question only yo
 #### The floor at width
 
 `FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
-it sits are separate edits. It renders **two rails** — `floor` (the line, bots, the goal floor, the
-yard) and `world` (production, launches, signals, shift log) — split on _whose turn it
-is_ rather than on subject. Production heads the world rail rather than the floor because its subject
+it sits are separate edits. It renders the Parts Inspection strip full width, then **two rails** — `floor` (the line, bots, the
+goal floor, the yard) and `world` (production, signals, shift log) — split on _whose turn it
+is_ rather than on subject. The strip is above both because a PR outranks that split: it is the one
+world object you are usually the blocker for. Production heads the world rail rather than the floor because its subject
 is output, and output is merges — the world's answer to the floor's effort.
 
 There were **three**. The first was `act`: what _you_ are the blocker for. It is gone, and what
@@ -281,10 +286,42 @@ argument for each is in its module's header, and the reason for the shape is wor
 - **Inserters swing on a transfer, not on occupancy** (`inserterPhase`). An arm that ran for the
   life of an agent was the one moving thing on the floor carrying no information. A swing is one
   heartbeat from the agent's `startedAt`, and it carries the item while it swings.
-- **Silos** (`silo.ts`) draw open PRs filling toward a launch, beside the Launches log of PRs that
-  already closed. The fill is a **fixed four gates** — `health.reasons` names only what is wrong, so
-  it is a numerator with no denominator — while `attention.status` names the court, read off the
-  server and never re-derived. `health.reasons` is quoted underneath, never parsed.
+- **Parts Inspection** (`inspection.ts` + `components/Inspection.tsx`) draws every open PR as one
+  row, **above both rails**. It replaced two panels — the silo towers and the Launches log — and the
+  reason is the analogy: a launch is a _goal closing_ (`iconForStage`), so a PR drawn as a silo topped
+  with a rocket claimed the merge was the ending. A merge loads one part into the silo. Five things
+  carry it:
+  - **It sits above the rails, breaking their whose-turn split on purpose.** A PR is the world object
+    an operator is most often the blocker for, so it outranks the split rather than living inside it.
+    It needs no breakpoint case: it is one full-width child above a grid that collapses to one column.
+  - **Two groups, on `attention.status` alone** (`rack`/`rackGroup`) — `you` and `stalled` are yours,
+    everything else is in hand, dimmed and **never collapsed** (a fold puts a click between an
+    operator and _is anything stuck_). A merge-ready PR needs no arm of its own: it is already `you`
+    through the pending-proposal arm, and under `autoSend` it reads `harness` and correctly drops to
+    _in hand_. Inside a group the order is PR number — the old sort was fullest-first, which put the
+    PRs you had to decide on below the ones the harness was already fixing.
+  - **The ladder is two groups, and the split is an argument about denominators.** The fixed four
+    existed because `health.reasons` names only what is wrong — a numerator with no bottom. That holds
+    for the three gates a _human_ moves (`mergeGates`: approved, comments, conflicts) and **fails for
+    CI**, because `ciVerdict` is an enumerable list of named checks with states. So CI became the
+    **scanner group**: one cell per check the policy classified, from the shared `scannersFor`
+    (`scanners.ts` — moved out of `goalFloor.ts` so the strip and the Goal Floor's PR machine cannot
+    disagree about which check is red). The scanner cells **share one fixed track**, so a big CI matrix
+    gives thin cells rather than pushing the three gates out of column.
+  - **Five scanner states, and none of them is red.** `damaged` is unlit — failing, a bot is coming;
+    `not_ours` is amber — failing and none is, which the old single CI cell could not say and which is
+    the whole reason per-check policy exists; `muted` is a dashed outline, `awaiting` blue, passing
+    green. Red is left to the court chip and the row stripe, so it keeps meaning _a question only you
+    can answer_ on a row with four failing checks. No check **name** is written in the skin; every one
+    comes off the verdict.
+  - **`attention.status` names the court, read off the server and never re-derived**
+    (`prCourt`); `attention.reasons`/`health.reasons` are quoted, never parsed. An empty rack still
+    draws — a surface that vanishes when quiet is indistinguishable from one that broke. The merge
+    count from `closedPullRequests` is all that survives of the Launches log, in the header.
+  - **The Yard gives up its PR list.** `WorldSummary` takes `showPullRequests` (default `true`, so
+    Classic — which has no strip — is unchanged, golden included); the factory passes `false`, and the
+    flag gates the tab counts and the recently-closed list as well as the rows, or the counts would
+    not match what the tab shows. One subject, one place: the argument that dissolved the act rail.
 - **Production** (`production.ts`) is the only panel that reads against time, which is the only way
   to answer whether the floor is producing rather than merely busy. Rates come from the timestamps
   already on `decisions` and `worldEvents`; a held or skipped dispatch is not counted, because it

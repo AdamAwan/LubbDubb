@@ -1353,6 +1353,9 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     rejectionSignals: signals ? store.listWorldEventsSince(signals.since, signals.refs) : [],
     recentDecisions: pickupCtx.recentDecisions,
     cooldown: DEFAULT_COOLDOWN,
+    // The same policy the dispatcher holds, so `attention` names the court rule 1
+    // will act in rather than promising an agent for a check the policy holds.
+    ci: config.ci,
     now: world.takenAt,
   };
   // The provider builds every URL (see CompositeConnector.resolveRefUrl); the

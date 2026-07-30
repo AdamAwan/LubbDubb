@@ -1,4 +1,5 @@
 import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../types.js';
+import { scannersFor, type Scanner } from './scanners.js';
 import {
   assayStatus,
   assemblerStatus,
@@ -9,7 +10,6 @@ import {
   patchStatus,
   prMachineStatus,
   satelliteStatus,
-  scannerStatus,
   signalPostStatus,
   siloStatus,
   type FloorStage,
@@ -18,7 +18,6 @@ import {
   type PartProgress,
   type PrMachineReading,
   type SatelliteReading,
-  type ScannerState,
   type StatusCommentReading,
 } from './vocabulary.js';
 
@@ -205,12 +204,6 @@ function isLive(part: PlanPart): boolean {
 }
 
 /* ------------------------------ the floor ----------------------------- */
-
-interface Scanner {
-  name: string;
-  state: ScannerState;
-  status: MachineStatus;
-}
 
 export interface Machine {
   ref: string;
@@ -499,7 +492,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
               }),
         // Checks on a settled pull request are history: the merge happened, and
         // a row of green scanners under it says nothing an operator can act on.
-        scanners: pr && progress !== 'shipped' ? scannersFor(pr) : [],
+        scanners: pr && progress !== 'shipped' ? scannersFor(pr, { withReview: true }) : [],
         prNumber: part.prNumber,
         link: null,
         fill: null,
@@ -530,7 +523,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       meta: [singlePr?.branch ? `branch ${singlePr.branch}` : 'no longer in the world'],
       presence: 'built',
       status: prMachineStatus(reading),
-      scanners: singlePr ? scannersFor(singlePr) : [],
+      scanners: singlePr ? scannersFor(singlePr, { withReview: true }) : [],
       prNumber: issue.linkedPrNumber,
       link: null,
       fill: null,
@@ -716,39 +709,6 @@ function prReading(pr: PullRequest): PrMachineReading {
     return 'repairing';
   }
   return pr.health?.blocked ? 'blocked' : 'on_the_pad';
-}
-
-/**
- * The scanner row: one per failing check from the classification verdict, plus
- * the two the aggregate needs, plus human review.
- *
- * **Human review is fed from `pr.approved`, not from the verdict**, and that is
- * the one thing to preserve here: reviewer policies deliberately do not fold into
- * `ciChecks` — they map to `approved` / `unresolvedComments` — so a scanner drawn
- * off `ciVerdict` would be permanently absent.
- *
- * No check *name* is written here. Every name comes off the verdict, so a floor
- * running against a config naming any check at all renders with no change.
- */
-function scannersFor(pr: PullRequest): Scanner[] {
-  const scanners: Scanner[] = [];
-  const add = (name: string, state: ScannerState) => scanners.push({ name, state, status: scannerStatus(state) });
-  const verdict = pr.ciVerdict;
-  const named = (verdict?.dispatch.length ?? 0) + (verdict?.escalate.length ?? 0) + (verdict?.ignored.length ?? 0);
-
-  for (const m of verdict?.dispatch ?? []) add(m.name, 'damaged');
-  for (const m of verdict?.escalate ?? []) add(m.name, 'not_ours');
-  for (const m of verdict?.ignored ?? []) add(m.name, 'muted');
-  if (named === 0) {
-    // The provider reported no per-check detail. That is missing detail rather
-    // than a clean bill of health, so the aggregate speaks for itself under the
-    // generic name the workflow doc uses for the whole row.
-    if (pr.ciStatus === 'passing') add('quality gates', 'pass');
-    else if (pr.ciStatus === 'failing') add('quality gates', 'damaged');
-    else if (pr.ciStatus === 'pending') add('quality gates', 'awaiting');
-  }
-  add('human review', pr.approved === true ? 'pass' : 'awaiting');
-  return scanners;
 }
 
 /** A blocked PR's plate quotes the server's health reasons; it composes none. */

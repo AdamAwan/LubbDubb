@@ -23,7 +23,9 @@ const {
   clip,
   crateMachineStatus,
   furnaceStatus,
+  iconForEventKind,
   iconForOrigin,
+  iconForStage,
   inserterPhase,
   launchStatus,
   manifestStatus,
@@ -42,7 +44,10 @@ const { buildGoalFloor, floorFixtures, layoutFloor, partProgress } = await impor
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
 const { BlueprintDesk, FaultLog, FindingsDesk } = await import('../web/src/skins/factory/components/Desks.js');
-const { siloFill, siloGates } = await import('../web/src/skins/factory/silo.js');
+const { ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await import(
+  '../web/src/skins/factory/inspection.js'
+);
+const { Inspection } = await import('../web/src/skins/factory/components/Inspection.js');
 const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
 
@@ -1119,11 +1124,14 @@ test('the goal floor belts stop with the harness', () => {
 });
 
 /**
- * The fill needs a denominator, and `health.reasons` cannot be one: it names
- * only what is wrong, so it is a numerator with no bottom. These four gates are
- * what every provider maps onto.
+ * The ladder is two groups, and the split is an argument about denominators.
+ *
+ * `siloGates`' fixed four existed because `health.reasons` names only what is
+ * wrong — a numerator with no bottom. That holds for the three gates a *human*
+ * moves and fails for CI, because `ciVerdict` is an enumerable list of named
+ * checks with states. So CI left the fixed set and became the scanner group.
  */
-test('a silo fills on a fixed four gates', () => {
+test('the ladder is the configured checks, then a fixed three a human moves', () => {
   const pr = (over: Partial<PullRequest>): PullRequest =>
     ({
       id: 'pr-1',
@@ -1138,17 +1146,200 @@ test('a silo fills on a fixed four gates', () => {
       ...over,
     }) as PullRequest;
 
-  assert.equal(siloGates(pr({})).length, 4, 'the denominator must not vary with what is wrong');
-  assert.equal(siloFill(siloGates(pr({}))), 1);
-  assert.equal(siloFill(siloGates(pr({ ciStatus: 'failing' }))), 0.75);
-  assert.equal(siloFill(siloGates(pr({ ciStatus: 'failing', approved: false }))), 0.5);
+  // The three never vary with what is wrong — every row's gate cells sit at the
+  // same x, which is what lets the strip be read downward.
+  assert.equal(mergeGates(pr({})).length, 3, 'the fixed group must not vary with what is wrong');
+  assert.equal(mergeGates(pr({ ciStatus: 'failing' })).length, 3, 'CI is not one of them any more');
+  assert.deepEqual(
+    mergeGates(pr({})).map((g) => g.met),
+    [true, true, true],
+  );
+  assert.deepEqual(
+    mergeGates(pr({ approved: false })).map((g) => g.met),
+    [false, true, true],
+  );
   // Behind the base is a conflict for merging purposes even when `mergeable` is
   // still true — it is the state rule 2 exists to clear.
-  assert.equal(siloFill(siloGates(pr({ mergeableState: 'behind' }))), 0.75);
-  assert.equal(
-    siloFill(siloGates(pr({ unresolvedComments: [{ id: 'c', author: 'r', body: 'b', handled: false }] }))),
-    0.75,
+  assert.deepEqual(
+    mergeGates(pr({ mergeableState: 'behind' })).map((g) => g.met),
+    [true, true, false],
   );
+  const commented = mergeGates(pr({ unresolvedComments: [{ id: 'c', author: 'r', body: 'b', handled: false }] }));
+  assert.equal(commented[1]!.met, false);
+  assert.match(commented[1]!.label, /1 unresolved comment/, 'an unmet gate is named for the state it is in');
+
+  // The scanner group is one cell per check the policy classified, in the states
+  // the verdict assigned — and *not* human review, which has its own gate here.
+  const classified = ladderFor(
+    pr({
+      ciStatus: 'failing',
+      ciVerdict: {
+        actionable: false,
+        dispatch: [],
+        escalate: [{ name: 'codeql', rule: null }],
+        ignored: [{ name: 'pages', rule: null }],
+        urgent: false,
+      },
+    }),
+  );
+  assert.deepEqual(
+    classified.scanners.map((s) => [s.name, s.state]),
+    [
+      ['codeql', 'not_ours'],
+      ['pages', 'muted'],
+    ],
+    'every name comes off the verdict, and review is not a scanner on this row',
+  );
+  assert.equal(classified.gates.length, 3);
+
+  // A provider with no per-check detail keeps the pre-policy reading: one cell.
+  assert.deepEqual(
+    ladderFor(pr({ ciStatus: 'failing' })).scanners.map((s) => s.state),
+    ['damaged'],
+  );
+  assert.deepEqual(
+    ladderFor(pr({ ciStatus: 'pending' })).scanners.map((s) => s.state),
+    ['awaiting'],
+  );
+});
+
+/**
+ * The panel's whole job is answering *what needs me*, so the order is the court
+ * and never the ladder. The old sort was fullest-first, which put the PRs a human
+ * had to decide on below the ones the harness was already fixing.
+ */
+test('the rack groups on the court, and a merge-ready PR needs no arm of its own', () => {
+  const at = (number: number, status: string, over: Partial<PullRequest> = {}): PullRequest =>
+    ({
+      id: `pr-${number}`,
+      number,
+      title: 't',
+      branch: `b${number}`,
+      ciStatus: 'passing',
+      unresolvedComments: [],
+      attention: { status, reasons: [`because ${status}`] },
+      ...over,
+    }) as PullRequest;
+
+  assert.equal(rackGroup(at(1, 'you')), 'yours');
+  assert.equal(rackGroup(at(2, 'stalled')), 'yours');
+  for (const status of ['harness', 'elsewhere', 'settled', 'ignored', 'done']) {
+    assert.equal(rackGroup(at(3, status)), 'in_hand', `${status} is not yours to act on`);
+  }
+  // No `attention` at all — an older snapshot. A blocked PR is still surfaced
+  // rather than filed under "in hand" by absence.
+  const noVerdict = { id: 'pr-9', number: 9, title: 't', branch: 'b9', ciStatus: 'passing', unresolvedComments: [] };
+  assert.equal(rackGroup({ ...noVerdict, health: { blocked: true, reasons: ['x'] } } as PullRequest), 'yours');
+  assert.equal(rackGroup({ ...noVerdict, health: { blocked: false, reasons: [] } } as PullRequest), 'in_hand');
+
+  // A merge-ready PR reaches your court through the server's *pending proposal*
+  // arm, so nothing client-side has to know what "ready" is. Under `autoSend` the
+  // same PR reads `harness` and correctly drops into "in hand".
+  const ready = at(4, 'you', { approved: true, mergeable: true, mergeableState: 'clean' });
+  assert.equal(rackGroup(ready), 'yours');
+  assert.equal(rackGroup({ ...ready, attention: { status: 'harness', reasons: ['merge-ready'] } }), 'in_hand');
+
+  const grouped = rack([at(8, 'harness'), at(3, 'you'), at(5, 'harness'), at(1, 'stalled')]);
+  assert.deepEqual(
+    grouped.yours.map((p) => p.number),
+    [1, 3],
+    'your court first, and by number inside it — never by how full the ladder is',
+  );
+  assert.deepEqual(
+    grouped.inHand.map((p) => p.number),
+    [5, 8],
+  );
+
+  // The chip is the server's word, never re-derived.
+  assert.equal(prCourt(at(1, 'you')).tone, 'bad');
+  assert.equal(prCourt(at(1, 'settled')).label, 'Settled — you said no');
+  assert.equal(loadedCount([{ merged: true } as PullRequest, { state: 'closed' } as PullRequest]), 1);
+});
+
+/**
+ * The rocket is the launch's and nothing else's. It was double-booked against
+ * `iconForStage`'s launch, which left the one event that *is* a launch — the goal
+ * closing — falling through to a flask.
+ */
+test('the rocket belongs to the goal closing, not to a merge', () => {
+  assert.equal(iconForEventKind('issue_closed'), 'rocket');
+  assert.equal(iconForEventKind('pr_merged'), 'pr');
+  assert.equal(iconForStage('launch'), 'rocket');
+  const marks = (['pr_ci', 'pr_opened', 'pr_comment', 'pr_approved', 'pr_closed'] as const).map(iconForEventKind);
+  assert.ok(!marks.includes('rocket'), 'nothing about a pull request wears the launch mark');
+});
+
+/**
+ * Empty still draws. A surface that vanishes when quiet is indistinguishable from
+ * one that broke — the rule the fault gauge is kept muted-but-present for.
+ */
+test('the rack says the rack is empty rather than drawing nothing', () => {
+  const html = renderToStaticMarkup(createElement(Inspection, { prs: [], closed: [], refUrls: {} }));
+  assert.match(html, /Nothing on the rack/);
+  // And a key is drawn only when there is something for it to explain.
+  assert.ok(!html.includes('policy holds it'), 'no legend for an empty rack');
+});
+
+test('a drawn rack carries the group split, the states and the check names', () => {
+  const mk = (n: number, over: Partial<PullRequest>): PullRequest =>
+    ({
+      id: `p${n}`,
+      number: n,
+      title: `PR ${n}`,
+      branch: `b${n}`,
+      ciStatus: 'passing',
+      unresolvedComments: [],
+      ...over,
+    }) as PullRequest;
+  const html = renderToStaticMarkup(
+    createElement(Inspection, {
+      prs: [
+        mk(139, {
+          ciStatus: 'failing',
+          attention: { status: 'you', reasons: ['codeql failing — the CI policy holds it'] },
+          ciVerdict: {
+            actionable: false,
+            dispatch: [],
+            escalate: [{ name: 'codeql', rule: null }],
+            ignored: [{ name: 'pages', rule: null }],
+            urgent: false,
+          },
+        }),
+        mk(151, {
+          ciStatus: 'failing',
+          attention: { status: 'harness', reasons: ['an agent is working this branch'] },
+          ciVerdict: {
+            actionable: true,
+            dispatch: [{ name: 'check', rule: null }],
+            escalate: [],
+            ignored: [],
+            urgent: false,
+          },
+        }),
+      ],
+      closed: [mk(140, { merged: true }), mk(141, { state: 'closed' })],
+      refUrls: {},
+    }),
+  );
+
+  assert.match(html, /Your court · 1/);
+  assert.match(html, /In hand · 1/);
+  // The row in your court carries the stripe; the one in hand is recessed instead.
+  assert.match(html, /class="fx-part you"/);
+  assert.match(html, /class="fx-part hand"/);
+  // Each cell names its own check and the word its state carries — the shape is
+  // scannable, the detail is one hover away, and the names come off the verdict.
+  assert.match(html, /title="codeql — not ours"/);
+  assert.match(html, /title="pages — muted"/);
+  assert.match(html, /title="check — damaged"/);
+  // The three fixed gates follow every scanner group, at the same three positions.
+  assert.match(html, /title="Approved — not met"/);
+  assert.match(html, /title="No conflicts with base — met"/);
+  // The court is the server's word, and the reason is quoted.
+  assert.match(html, /the CI policy holds it/);
+  assert.match(html, /Harness working it/);
+  // One merge in the window, and the abandoned PR is not counted as loaded.
+  assert.match(html, /1 part loaded into the silo/);
 });
 
 /**

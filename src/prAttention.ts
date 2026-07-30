@@ -44,6 +44,7 @@
  * the property rather than trusting the import graph to keep it.
  */
 
+import { ciNeedsHuman, classifyCiFailures, type CiPolicy } from './ci/ciPolicy.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatcher/dispatchCooldown.js';
 import { basePrOf, inheritedCiFailure, isPrExcluded, isStackedPr, needsBaseUpdate, prState } from './prHealth.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
@@ -94,6 +95,14 @@ export interface PrAttentionContext {
   /** The recent audit window, for the attempt cap. */
   recentDecisions: Decision[];
   cooldown: CooldownPolicy;
+  /**
+   * The per-check CI policy — the same `config.ci` the dispatcher holds, so this
+   * verdict names the court rule 1 will actually act in. Threaded as policy rather
+   * than as a pre-computed verdict so nothing depends on the snapshot having
+   * classified the PR first; `classifyCiFailures` is pure, so asking twice is one
+   * answer, not two.
+   */
+  ci: CiPolicy;
   /** "Now" — the world snapshot's `takenAt`, as everywhere else. */
   now: string;
 }
@@ -149,13 +158,32 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
     };
   }
 
+  // What the CI policy makes of the failing checks — asked once, here, and threaded
+  // into both the concern list and the tail, because rule 1 dispatches only when
+  // the verdict is `actionable` (`ruleDispatcher.ts`) and this verdict has to name
+  // the same court the rules will actually act in.
+  const ci = ciReading(pr, ctx);
+
+  // A failure the policy holds is *your* court, and it is asked here — after the
+  // staffed arm, beside the spent attempt cap — because those are the two ways a
+  // failing check stops being the harness's problem without being fixed. Rule
+  // `pr-ci-blocked` has already filed the escalation; what was missing was the PR
+  // row saying so instead of promising an agent that will never be sent.
+  if (ci.heldByPolicy.length > 0) {
+    const names = ci.heldByPolicy.join(', ');
+    return {
+      status: 'you',
+      reasons: [`${names} failing — the CI policy holds it, so no agent will be sent`],
+    };
+  }
+
   // The concerns rules 1/2/2b build, in their urgency order (CI > base > comment)
   // and off their own predicates. Re-derived here rather than shared with the
   // dispatcher because the rules build prompt-bearing concerns and this needs only
   // the labels and the top origin — the same relationship `issuePickupStatus` has
   // to rule 4, and the same drift risk, which is why 07-pull-requests.md states
   // the order once for both.
-  const concerns = prConcerns(pr, ctx);
+  const concerns = prConcerns(pr, ctx, ci);
   if (concerns.length > 0) {
     const top = concerns[0]!;
     const others = concerns.slice(1).map((c) => c.label);
@@ -228,7 +256,15 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   // reading — so no rule will ever act on it and no human has been asked to. Name
   // what is missing: this arm exists to be looked at, not to be a fallback.
   const missing: string[] = [];
-  if (pr.ciStatus !== 'passing') missing.push('CI has not reported');
+  if (ci.mutedOnly) {
+    // Red, and every failing check is one the operator told the harness to leave
+    // alone — so rule 1 will not dispatch and rule 1b will not escalate, and yet
+    // rule 3's merge test reads the *aggregate* `ciStatus`, which is still failing.
+    // Nothing will ever move this PR. "CI has not reported" would be a lie about a
+    // check that reported and was muted, and it is the one wording that hides the
+    // gap rather than naming it.
+    missing.push(`${ci.muted.join(', ')} failing but muted by policy — the merge gate still reads CI as failing`);
+  } else if (pr.ciStatus !== 'passing') missing.push('CI has not reported');
   if (pr.mergeable !== true) missing.push('the provider reports no mergeable state');
   return {
     status: 'stalled',
@@ -244,15 +280,62 @@ interface PrConcern {
 }
 
 /**
+ * What the per-check CI policy makes of this PR — the reading rule 1 makes before
+ * it dispatches, made once here and used by three arms.
+ *
+ * It exists because `ciStatus` is a fold and this verdict is about *courts*: a red
+ * check the policy dispatches for is the harness's, a red check it escalates is
+ * yours, and a red check it mutes is nobody's while still holding rule 3's merge
+ * test shut. Reading only the aggregate collapsed all three into "an agent will be
+ * dispatched", which is a promise the dispatcher does not keep for two of them.
+ *
+ * An **inherited** failure reads as no failure at all, exactly as `prConcerns` and
+ * rule 1 both already treat it: the fix belongs to the PR underneath, and the
+ * `elsewhere` arm names it. Checking that here rather than per-arm is what keeps a
+ * stacked PR from being handed to you for its parent's red build.
+ */
+interface CiReading {
+  /** Failing checks the policy hands to a human — rule `pr-ci-blocked`'s set. */
+  heldByPolicy: string[];
+  /** Failing checks the operator muted, when *every* failure is one. */
+  muted: string[];
+  /** True when the whole failure is muted, so nothing will act and nothing is owed. */
+  mutedOnly: boolean;
+  /** Whether rule 1 would dispatch — the gate the CI concern now rides on. */
+  actionable: boolean;
+}
+
+function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
+  const none: CiReading = { heldByPolicy: [], muted: [], mutedOnly: false, actionable: false };
+  if (pr.ciStatus !== 'failing' || inheritedCiFailure(pr, ctx.openPrs) !== null) return none;
+  const verdict = classifyCiFailures(pr.ciChecks, ctx.ci);
+  if (verdict.actionable) return { ...none, actionable: true };
+  const muted = verdict.ignored.map((m) => m.name);
+  return {
+    heldByPolicy: ciNeedsHuman(verdict) ? verdict.escalate.map((m) => m.name) : [],
+    muted,
+    // `actionable` is false and nothing escalates, so every failure the provider
+    // reported is muted. Guarded on the list being non-empty: a provider reporting
+    // no per-check detail yields `actionable: true` and never reaches here, but a
+    // policy could in principle classify a failure into no bucket at all.
+    mutedOnly: !ciNeedsHuman(verdict) && muted.length > 0,
+    actionable: false,
+  };
+}
+
+/**
  * The concerns rules 1/2/2b would raise for this PR, most urgent first. Same
  * predicates and same order as the dispatcher; the labels are the operator-facing
  * half only, so nothing here can drift into deciding what an agent is *told*.
  */
-function prConcerns(pr: PullRequest, ctx: PrAttentionContext): PrConcern[] {
+function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): PrConcern[] {
   const concerns: PrConcern[] = [];
-  // An inherited failure is suppressed here for the same reason rule 1 suppresses
-  // it: the fix belongs to the PR underneath, and the `elsewhere` arm below says so.
-  if (pr.ciStatus === 'failing' && inheritedCiFailure(pr, ctx.openPrs) === null) {
+  // Gated on the policy verdict, not on `ciStatus` alone: rule 1 dispatches only
+  // when the classification is actionable, so raising the concern off the aggregate
+  // promised an agent for a check the policy had already taken off the table. An
+  // inherited failure is excluded inside `ciReading` for the reason rule 1 excludes
+  // it — the fix belongs to the PR underneath, and the `elsewhere` arm says so.
+  if (ci.actionable) {
     concerns.push({ origin: `pr:${pr.number}:ci`, label: 'CI is failing' });
   }
   if (needsBaseUpdate(pr)) {

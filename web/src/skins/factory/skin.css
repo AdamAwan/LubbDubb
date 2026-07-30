@@ -878,7 +878,6 @@
     grid-column: span 2;
   }
   [data-fx='production'],
-  [data-fx='launches'],
   [data-fx='signals'] {
     grid-column: span 1;
   }
@@ -906,9 +905,6 @@
 }
 [data-fx='bots'] {
   order: 2;
-}
-[data-fx='launches'] {
-  order: 3;
 }
 [data-fx='goal-floor'] {
   order: 4;
@@ -1086,98 +1082,6 @@
   margin-top: 9px;
 }
 
-/* ============================ launches ============================ */
-
-.fx-launches {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-.fx-silo {
-  flex: 0 0 104px;
-  padding: 8px 6px 6px;
-  text-align: center;
-}
-/* Child, not descendant: as a descendant selector this also matched the nested
-   `<svg>` the rocket is drawn in, overriding its width/height attributes with
-   the silo's full viewport — which rescaled the rocket 2.5x, pushed it off
-   centre and out through the frame. */
-.fx-silo > svg {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-.fx-rocket {
-  animation: fx-launch 14s cubic-bezier(0.5, 0, 0.9, 0.4) infinite;
-  transform-box: fill-box;
-}
-@keyframes fx-launch {
-  0%,
-  62% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-  92%,
-  100% {
-    transform: translateY(-96px);
-    opacity: 0;
-  }
-}
-.fx-exhaust {
-  animation: fx-exhaust 14s linear infinite;
-  transform-box: fill-box;
-}
-@keyframes fx-exhaust {
-  0%,
-  62% {
-    opacity: 0;
-    transform: scaleY(0.2);
-  }
-  68% {
-    opacity: 0.85;
-    transform: scaleY(1);
-  }
-  88%,
-  100% {
-    opacity: 0;
-  }
-}
-.fx-silo-cap {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--grey);
-  margin: 6px 0 0;
-}
-.fx-launch-list {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: grid;
-  gap: 6px;
-}
-.fx-launch {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.fx-launch .fx-ic {
-  color: var(--green);
-  align-self: center;
-}
-.fx-launch.scrapped .fx-ic {
-  color: var(--grey);
-}
-.fx-launch .t {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
 /* ============================ event log ============================ */
 
 .fx-scroll {
@@ -1242,65 +1146,163 @@
   color: var(--red);
 }
 
-/* ============================ silos on the pad ============================ */
+/* ======================= the inspection rack ======================= */
 
-.fx-silos {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.fx-silo-card {
-  display: flex;
-  gap: 11px;
-  padding: 10px;
+/* One row per open pull request. The grid is the panel: a scanner group whose
+   width never varies, then three gate cells at a fixed x, so the strip can be
+   read downward. `minmax(0, …)` on both text columns is what stops a long title
+   pushing the court chip off the row. */
+.fx-rack {
   min-width: 0;
 }
-.fx-silo-tower {
-  flex: 0 0 62px;
-  width: 62px;
-  height: auto;
-  display: block;
-}
-.fx-silo-meta {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.fx-silo-meta .fx-job {
-  display: block;
-  margin: 2px 0 7px;
-}
-.fx-silo-ready {
-  animation: fx-charge 1.6s ease-in-out infinite;
-  transform-box: fill-box;
-}
-.fx-gates {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.fx-parts {
   display: grid;
-  gap: 2px;
+  gap: 3px;
 }
-.fx-gates li {
-  display: flex;
+.fx-part {
+  display: grid;
+  grid-template-columns: 3px 132px 46px minmax(0, 1fr) minmax(0, 34ch) 152px;
   align-items: center;
-  gap: 7px;
+  gap: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-lo);
+  padding: 6px 12px 6px 0;
+  min-width: 0;
+}
+/* In hand: same row, recessed. Not collapsed — a fold would put a click between
+   an operator and "is anything stuck", which is the reading this panel exists
+   for. */
+.fx-part.hand {
+  background: transparent;
+  opacity: 0.74;
+}
+.fx-part-stripe {
+  align-self: stretch;
+  background: transparent;
+}
+.fx-part.you .fx-part-stripe {
+  background: var(--red);
+}
+.fx-part.stalled .fx-part-stripe {
+  background: var(--amber);
+}
+.fx-part .fx-job {
+  margin: 0;
+}
+.fx-part-why {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--grey);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.fx-gates li.ok {
-  color: var(--muted);
+.fx-part .fx-court {
+  justify-self: end;
+  margin-top: 0;
 }
-.fx-gates li.no {
-  color: var(--red);
+
+/* The ladder. The scanner group is one grid cell holding a flex row, so its
+   cells *share* a fixed track — three checks give three fat cells, nine give
+   nine thin ones — and the three gates after it never leave their column. */
+.fx-lad {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7px repeat(3, 10px);
+  gap: 3px;
+  height: 20px;
 }
-.fx-gates .tick {
-  width: 11px;
-  text-align: center;
-  font-weight: 700;
+.fx-lad-scan {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
 }
-.fx-gates li.ok .tick {
-  color: var(--green);
+.fx-lad i {
+  display: block;
+  border: 1px solid var(--border-lo);
+  background: var(--fx-belt-dark);
+}
+.fx-lad-scan i {
+  flex: 1 1 0;
+  min-width: 3px;
+}
+.fx-lad-div {
+  border: 0 !important;
+  background: repeating-linear-gradient(var(--border) 0 2px, transparent 2px 4px) !important;
+  justify-self: center;
+  width: 1px;
+}
+/* Five states, and none of them is red: red is left to the court chip and the
+   row stripe, so it keeps meaning "a question only you can answer" even on a row
+   with four failing checks. `damaged` is unlit because a bot is already coming
+   for it; `not_ours` is amber because none is. */
+.fx-lad i.pass {
+  background: var(--green);
+  opacity: 0.85;
+}
+.fx-lad i.damaged,
+.fx-lad i.unmet {
+  background: var(--fx-belt-dark);
+}
+.fx-lad i.not_ours {
+  background: var(--amber);
+  opacity: 0.9;
+}
+.fx-lad i.muted {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--grey);
+  opacity: 0.55;
+}
+.fx-lad i.awaiting {
+  background: var(--blue);
+  opacity: 0.6;
+}
+.fx-lad-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 18px;
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--grey);
+}
+.fx-lad-key span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fx-lad-key i {
+  width: 8px;
+  height: 13px;
+  display: block;
+  flex: none;
+  border: 1px solid var(--border-lo);
+  background: var(--fx-belt-dark);
+}
+.fx-lad-key i.pass {
+  background: var(--green);
+  opacity: 0.85;
+}
+.fx-lad-key i.not_ours {
+  background: var(--amber);
+  opacity: 0.9;
+}
+.fx-lad-key i.muted {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--grey);
+  opacity: 0.55;
+}
+.fx-lad-key i.awaiting {
+  background: var(--blue);
+  opacity: 0.6;
+}
+.fx-lad-key-tail {
+  margin-left: auto;
 }
 
 /* Whose court, in one chip. The tones are the machine-status tones, so a silo
@@ -1848,7 +1850,7 @@
 .fx-brownout .fx-plan,
 .fx-brownout .fx-belt,
 .fx-brownout .fx-gf,
-.fx-brownout .fx-silo-tower {
+.fx-brownout .fx-lad {
   opacity: 0.62;
 }
 
@@ -1863,10 +1865,7 @@
   .fx-pad,
   .fx-flyer,
   .fx-sweep,
-  .fx-rocket,
-  .fx-exhaust,
   .fx-gf-belt,
-  .fx-silo-ready,
   .fx-act .fx-val.crit {
     animation: none !important;
   }
