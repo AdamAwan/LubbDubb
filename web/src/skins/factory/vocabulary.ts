@@ -23,9 +23,17 @@ export function iconForOrigin(origin: string | null): IconName {
   return 'chest';
 }
 
-/** Which machine a world event is about, so a signal wears the same icon as its work. */
+/**
+ * Which machine a world event is about, so a signal wears the same icon as its work.
+ *
+ * The rocket belongs to `issue_closed` and to nothing else. It used to be spent on
+ * `pr_merged`, which double-booked it against `iconForStage`'s launch and left the
+ * one event that *is* a launch — the goal closing — falling through to a flask. A
+ * merge loads a part into the silo; it wears the part's own mark.
+ */
 export function iconForEventKind(kind: WorldEventKind): IconName {
-  if (kind === 'pr_merged') return 'rocket';
+  if (kind === 'issue_closed') return 'rocket';
+  if (kind === 'pr_merged') return 'pr';
   if (kind === 'pr_comment') return 'chest';
   if (kind.startsWith('pr_')) return 'gear';
   if (kind.startsWith('story_')) return 'flask';

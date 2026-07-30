@@ -41,6 +41,7 @@ function ctx(over: Partial<PrAttentionContext> = {}): PrAttentionContext {
     proposals: [],
     recentDecisions: [],
     cooldown: DEFAULT_COOLDOWN,
+    ci: { checks: [] },
     now: NOW,
     ...over,
   };
@@ -153,6 +154,69 @@ test('a concern whose attempt cap is spent is handed back to you', () => {
   const verdict = prAttentionStatus(pr({ ciStatus: 'failing' }), ctx({ recentDecisions: spent }));
   assert.equal(verdict.status, 'you');
   assert.match(verdict.reasons[0]!, /CI is failing — the attempt cap is spent, escalated to a human/);
+});
+
+test('a failure the CI policy holds is your court, not a promise of an agent', () => {
+  // The whole point of a per-check policy: `codeql` is red, the operator has said a
+  // human owns it, so rule 1 does not dispatch and rule `pr-ci-blocked` escalates.
+  // Reading the aggregate `ciStatus` alone reported "an agent will be dispatched",
+  // which is a promise the dispatcher does not keep.
+  const held = pr({
+    ciStatus: 'failing',
+    ciChecks: [
+      { name: 'check', status: 'passing' },
+      { name: 'codeql', status: 'failing' },
+    ],
+  });
+  const policy = { checks: [{ match: 'codeql*', onFailure: 'escalate' as const }] };
+  const verdict = prAttentionStatus(held, ctx({ ci: policy }));
+  assert.equal(verdict.status, 'you');
+  assert.match(verdict.reasons[0]!, /codeql failing — the CI policy holds it, so no agent will be sent/);
+  // With no policy the same PR is the harness's, unchanged — the classification
+  // falls back to "no detail, act generically", which is the pre-policy behaviour.
+  assert.equal(prAttentionStatus(held, ctx()).status, 'harness');
+});
+
+test('a red check the policy dispatches for stays the harness’s', () => {
+  const actionable = pr({
+    ciStatus: 'failing',
+    ciChecks: [{ name: 'check', status: 'failing' }],
+  });
+  const policy = { checks: [{ match: 'check', onFailure: 'dispatch' as const }] };
+  const verdict = prAttentionStatus(actionable, ctx({ ci: policy }));
+  assert.deepEqual(verdict, { status: 'harness', reasons: ['CI is failing — an agent will be dispatched'] });
+});
+
+test('a failure that is only muted is stalled, and says the merge gate still reads it', () => {
+  // Nothing dispatches and nothing escalates — but rule 3's merge test reads the
+  // *aggregate*, which is still failing, so this PR can never move. The old wording
+  // was "CI has not reported", which is untrue of a check that reported and was muted.
+  const muted = mergeReadyPr({
+    ciStatus: 'failing',
+    ciChecks: [{ name: 'pages', status: 'failing' }],
+  });
+  const verdict = prAttentionStatus(muted, ctx({ ci: { checks: [{ match: 'pages', onFailure: 'ignore' }] } }));
+  assert.equal(verdict.status, 'stalled');
+  assert.match(verdict.reasons[0]!, /pages failing but muted by policy/);
+  assert.match(verdict.reasons[0]!, /the merge gate still reads CI as failing/);
+  assert.ok(
+    !verdict.reasons.some((r) => r.includes('CI has not reported')),
+    'the muted reading replaces the wording that hid this gap, not sits beside it',
+  );
+});
+
+test('an inherited failure is never handed to you, whatever the policy says', () => {
+  // The fix belongs to the PR underneath. `ciReading` excludes an inherited failure
+  // for the same reason rule 1 suppresses the concern, so a policy that would
+  // otherwise escalate cannot make a stacked PR your problem.
+  const base = pr({ id: 'p1', number: 1, branch: 'part/one', ciStatus: 'failing' });
+  const stacked = pr({ id: 'p2', number: 2, branch: 'part/two', baseBranch: 'part/one', ciStatus: 'failing' });
+  const verdict = prAttentionStatus(
+    stacked,
+    ctx({ openPrs: [base, stacked], ci: { checks: [{ match: '*', onFailure: 'escalate' }] } }),
+  );
+  assert.equal(verdict.status, 'elsewhere');
+  assert.equal(verdict.reasons[0], 'CI failing on base PR #1');
 });
 
 // --- the harness's court ----------------------------------------------------

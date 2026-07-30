@@ -227,6 +227,7 @@ const TAB_TITLE: Record<WatchBucket, string> = {
 
 export function WorldSummary({
   state,
+  showPullRequests = true,
   onToggleExclude,
   onToggleIssueWatch,
   onToggleStoryWatch,
@@ -235,6 +236,15 @@ export function WorldSummary({
   onViewPlan,
 }: {
   state: AppState;
+  /**
+   * Whether pull requests are listed here. A skin that draws them in full elsewhere
+   * passes `false` so one subject is drawn in one place; Classic, which has no other
+   * PR surface, leaves the default and is unchanged.
+   *
+   * It gates the counts and the recently-closed list as well as the rows — tab counts
+   * that included PRs nobody could see would not match what the tab shows.
+   */
+  showPullRequests?: boolean;
   onToggleExclude: (prNumber: number, excluded: boolean) => Promise<unknown> | unknown;
   onToggleIssueWatch: (issueNumber: number, watched: boolean) => Promise<unknown> | unknown;
   onToggleStoryWatch: (storyId: string, watched: boolean) => Promise<unknown> | unknown;
@@ -248,9 +258,9 @@ export function WorldSummary({
   const { pullRequests, issues, stories } = state.world;
   // Newest first: a PR you were watching disappears mid-session otherwise, with
   // nothing to say whether it landed or was abandoned.
-  const recentlyClosed = [...(state.world.closedPullRequests ?? [])].sort((a, b) =>
-    (b.closedAt ?? '').localeCompare(a.closedAt ?? ''),
-  );
+  const recentlyClosed = showPullRequests
+    ? [...(state.world.closedPullRequests ?? [])].sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? ''))
+    : [];
   const { refUrls } = state;
   const tag = state.config.ignoreLabel;
   const { watchLabel, ignoreLabel } = state.config;
@@ -270,11 +280,11 @@ export function WorldSummary({
   // news about work that has already ended, so counting it would have the Watched
   // number climb as things finish.
   const counts: Record<WatchBucket, number> = { watched: 0, unwatched: 0, ignored: 0 };
-  for (const pr of pullRequests) counts[prBucket(pr.labels)]++;
+  if (showPullRequests) for (const pr of pullRequests) counts[prBucket(pr.labels)]++;
   for (const i of issues) counts[itemBucket(i.labels)]++;
   for (const s of stories) counts[itemBucket(s.labels)]++;
 
-  const visiblePrs = pullRequests.filter((pr) => inTab(prBucket(pr.labels)));
+  const visiblePrs = showPullRequests ? pullRequests.filter((pr) => inTab(prBucket(pr.labels))) : [];
   const visibleIssues = issues.filter((i) => inTab(itemBucket(i.labels)));
   const visibleStories = stories.filter((s) => inTab(itemBucket(s.labels)));
   // "Recently closed" lives in the Watched tab alone: it exists so a PR you were
@@ -310,7 +320,9 @@ export function WorldSummary({
         </div>
       )}
       {counts[tab] === 0 && gated && (
-        <div className="world-empty">no {TAB_LABEL[tab].toLowerCase()} PRs, issues or stories</div>
+        <div className="world-empty">
+          no {TAB_LABEL[tab].toLowerCase()} {showPullRequests ? 'PRs, issues or stories' : 'issues or stories'}
+        </div>
       )}
       {visiblePrs.length > 0 && (
         <div className="world-row">

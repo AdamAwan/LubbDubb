@@ -107,15 +107,41 @@ folding them would make one of the two a lie every time they disagree.
 | ----------- | ---------------------------- | ---------------------------------------------------------------------------- |
 | `done`      | nobody — off the board       | `prState(pr) !== 'open'`.                                                   |
 | `ignored`   | nobody, by your instruction  | `isPrExcluded(pr, ignoreLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire. |
-| `you`       | yours                        | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; or a concern whose **attempt cap is spent** (rule `cooldown-escalate` handed it to a human). |
+| `you`       | yours                        | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human); or a concern whose **attempt cap is spent** (rule `cooldown-escalate` did). |
 | `harness`   | the harness's                | An agent is **running or queued** on the branch; an unstaffed **concern** (rules 1/2/2b) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window. |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left. |
 | `elsewhere` | outside the loop             | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews. |
-| `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule 3's reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing. |
+| `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule 3's reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below. |
 
 Because the first matching arm wins, the ones below it are moot — a PR with an agent on its branch
 reads `an agent is working this branch` whatever its CI says, which is the answer prose about health
 cannot give.
+
+### The CI policy decides the court, not `ciStatus`
+
+`ciStatus` is a fold, and this verdict is about courts, so reading the aggregate alone was wrong in
+two directions. `ciReading` (private, asked once and threaded into three arms) classifies the failure
+through the same `classifyCiFailures` the dispatcher calls, off the same `config.ci` — carried on the
+context as **policy** rather than as a pre-computed verdict, so nothing depends on the snapshot having
+classified the PR first, and asking a pure function twice is one answer rather than two.
+
+- *_Actionable_* → the CI concern is raised and the PR is the harness's, as before. Rule 1 dispatches
+  only when the verdict is actionable, so raising the concern off `ciStatus` promised an agent for a
+  check the policy had already taken off the table.
+- **Held by policy** (`ciNeedsHuman`: nothing to dispatch, something to escalate) → **`you`**, naming
+  the checks. Rule `pr-ci-blocked` has already filed the escalation; what was missing was the PR row
+  saying so instead of promising an agent that will never be sent. Asked after the staffed arm, beside
+  the spent attempt cap, because those are the two ways a failing check stops being the harness's
+  problem without being fixed.
+- **Muted only** (every failure `ignore`d) → falls through to **`stalled`**, and the reason says the
+  merge gate still reads CI as failing. Nothing dispatches and nothing escalates, yet rule 3's merge
+  test reads the aggregate, so nothing will ever move the PR. The old wording — `CI has not reported`
+  — was untrue of a check that reported and was muted, and it was the one phrasing that hid the gap
+  rather than naming it.
+- **An inherited failure reads as no failure at all**, checked inside `ciReading` rather than per arm,
+  for the reason rule 1 suppresses the concern: the fix belongs to the PR underneath and the
+  `elsewhere` arm names it. So a policy that would otherwise escalate cannot make a stacked PR your
+  problem for its parent's red build.
 
 ### What it reads, and what it deliberately does not
 
