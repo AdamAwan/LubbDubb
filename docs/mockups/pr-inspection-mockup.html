@@ -70,8 +70,6 @@
     --red-line: #5a231d;
     --red-fill: #2a1512;
     --blue-line: #2a4a5e;
-    --green-fill: #16240f;
-    --fx-belt: #f2c14e;
     --fx-belt-dark: #3b3530;
     --font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
     --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
@@ -104,7 +102,6 @@
   header.doc {
     border-bottom: 2px solid var(--doc-ink);
     padding-bottom: 20px;
-    margin-bottom: 12px;
   }
   .eyebrow {
     font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
@@ -118,15 +115,34 @@
     font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
     font-size: clamp(30px, 5vw, 46px);
     line-height: 1.04;
-    letter-spacing: 0.005em;
     margin: 0;
     text-wrap: balance;
   }
   .lede {
-    max-width: 66ch;
+    max-width: 68ch;
     font-size: 17px;
     color: var(--doc-ink-2);
     margin: 14px 0 0;
+  }
+  .locked {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .locked li {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border: 1px solid var(--doc-rule);
+    background: var(--doc-mark);
+    padding: 4px 9px;
+  }
+  .locked li b {
+    color: var(--doc-accent);
   }
 
   section {
@@ -143,7 +159,6 @@
   .sec-head h2 {
     font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
     font-size: 21px;
-    letter-spacing: 0.02em;
     margin: 0;
   }
   .sec-head .tag {
@@ -155,7 +170,7 @@
     margin-left: auto;
   }
   p.body {
-    max-width: 68ch;
+    max-width: 70ch;
     margin: 0 0 16px;
   }
   code {
@@ -163,6 +178,16 @@
     font-size: 0.88em;
     background: var(--doc-mark);
     padding: 1px 5px;
+  }
+  pre {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    background: var(--doc-mark);
+    border-left: 3px solid var(--doc-accent);
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0 0 18px;
   }
 
   /* ================= the mock screen ================= */
@@ -173,7 +198,7 @@
     padding: 16px;
   }
   .screen {
-    min-width: 1080px;
+    min-width: 1120px;
     background: var(--bg);
     color: var(--text);
     font-size: 13.5px;
@@ -221,10 +246,6 @@
     flex: none;
     color: var(--accent);
   }
-  .ic.sm {
-    width: 13px;
-    height: 13px;
-  }
   .note {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -246,9 +267,9 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--grey);
-    margin: 12px 0 6px;
+    margin: 13px 0 6px;
   }
-  .sub:first-of-type {
+  .sub.first {
     margin-top: 4px;
   }
   .sub .rule {
@@ -256,19 +277,15 @@
     height: 1px;
     background: var(--border);
   }
-  .sub .chev {
-    font-size: 11px;
-    letter-spacing: 0;
-  }
 
-  /* ---- the row: the whole proposal in one grid ---- */
+  /* ---- the row ---- */
   .rows {
     display: grid;
     gap: 3px;
   }
   .row {
     display: grid;
-    grid-template-columns: 3px 54px 46px minmax(0, 1fr) minmax(0, 22ch) 132px;
+    grid-template-columns: 3px 132px 46px minmax(0, 1fr) minmax(0, 30ch) 148px;
     align-items: center;
     gap: 12px;
     background: var(--panel-2);
@@ -287,31 +304,60 @@
   }
   .row.hand {
     background: transparent;
-    border-color: var(--border-lo);
-    opacity: 0.72;
+    opacity: 0.74;
   }
 
-  /* the inspection ladder: four gates, lit or unlit, never red */
+  /* ---- the ladder: N scanners on the left, the fixed three on the right ---- */
   .lad {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7px repeat(3, 10px);
     gap: 3px;
-    align-items: flex-end;
-  }
-  .lad i {
-    display: block;
-    width: 9px;
+    align-items: stretch;
     height: 20px;
-    background: var(--fx-belt-dark);
+  }
+  .scan {
+    display: flex;
+    gap: 2px;
+    min-width: 0;
+  }
+  .lad i,
+  .scan i {
+    display: block;
     border: 1px solid var(--border-lo);
+    background: var(--fx-belt-dark);
   }
-  .lad i.on {
+  .scan i {
+    flex: 1 1 0;
+    min-width: 3px;
+  }
+  .lad .div {
+    border: 0;
+    background: repeating-linear-gradient(var(--border) 0 2px, transparent 2px 4px);
+    justify-self: center;
+    width: 1px;
+  }
+  i.pass {
     background: var(--green);
-    opacity: 0.82;
+    opacity: 0.85;
   }
-  .lad i.full {
-    background: var(--green);
-    opacity: 1;
+  i.damaged {
+    background: var(--fx-belt-dark);
   }
+  i.notours {
+    background: var(--amber);
+    opacity: 0.9;
+  }
+  i.muted {
+    background: transparent;
+    border-style: dashed;
+    border-color: var(--grey);
+    opacity: 0.55;
+  }
+  i.awaiting {
+    background: var(--blue);
+    opacity: 0.6;
+  }
+
   .ref {
     font-family: var(--font-mono);
     font-size: 10.5px;
@@ -336,6 +382,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .why em {
+    color: var(--amber);
+    font-style: normal;
   }
   .court {
     justify-self: end;
@@ -365,15 +415,14 @@
     border-color: var(--blue-line);
     color: var(--blue);
   }
-  .court.off {
-    border-color: var(--border);
-    color: var(--grey);
-  }
 
   .legend {
     display: flex;
-    gap: 18px;
-    margin: 9px 0 0;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin: 10px 0 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--border);
     font-family: var(--font-mono);
     font-size: 9.5px;
     letter-spacing: 0.06em;
@@ -386,17 +435,13 @@
   }
   .legend i {
     width: 8px;
-    height: 12px;
+    height: 13px;
     display: block;
-    background: var(--fx-belt-dark);
     border: 1px solid var(--border-lo);
-  }
-  .legend i.on {
-    background: var(--green);
-    opacity: 0.82;
+    background: var(--fx-belt-dark);
+    flex: none;
   }
 
-  /* the header's one piece of art: the silo, loaded once, not per PR */
   .loadbar {
     display: flex;
     align-items: center;
@@ -409,7 +454,7 @@
     letter-spacing: 0.05em;
   }
 
-  /* stand-ins for the rest of the floor, so placement is legible */
+  /* stand-ins for the rest of the floor */
   .ghost {
     border: 1px dashed var(--border);
     color: var(--grey);
@@ -421,9 +466,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
   }
   .ghost.tall {
-    min-height: 92px;
+    min-height: 86px;
   }
   .rails {
     display: grid;
@@ -467,36 +513,12 @@
     color: var(--red);
   }
 
-  /* ================= placement schematics ================= */
-  .plans {
+  /* ================= placement ================= */
+  .place {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-  }
-  .plan {
-    background: var(--doc-panel);
-    border: 1px solid var(--doc-rule);
-    padding: 16px;
-  }
-  .plan h3 {
-    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
-    font-size: 14px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin: 0 0 4px;
-  }
-  .plan .verdict {
-    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--doc-accent);
-    margin: 0 0 12px;
-  }
-  .plan p {
-    font-size: 14px;
-    color: var(--doc-ink-2);
-    margin: 12px 0 0;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 26px;
+    align-items: start;
   }
   .wire {
     display: grid;
@@ -504,7 +526,8 @@
     background: var(--doc-mark);
     padding: 8px;
   }
-  .wire div {
+  .wire > div,
+  .wire .col > div {
     font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
     font-size: 9px;
     letter-spacing: 0.08em;
@@ -527,15 +550,9 @@
     background: none;
     padding: 0;
   }
-  .wire .two > div {
-    margin: 0;
-  }
   .wire .col {
     display: grid;
     gap: 5px;
-    border: 0;
-    background: none;
-    padding: 0;
   }
 
   /* ================= density comparison ================= */
@@ -545,19 +562,19 @@
     gap: 20px;
     align-items: start;
   }
-  .compare .pane {
+  .pane {
     background: var(--doc-panel);
     border: 1px solid var(--doc-rule);
     padding: 16px;
   }
-  .compare h3 {
+  .pane h3 {
     font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
     font-size: 13px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin: 0 0 12px;
   }
-  .compare .scale {
+  .pane .scale {
     font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
     font-size: 10px;
     color: var(--doc-ink-2);
@@ -582,7 +599,6 @@
   article.n h3 {
     font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
     font-size: 15px;
-    letter-spacing: 0.02em;
     margin: 0 0 7px;
   }
   article.n p {
@@ -619,14 +635,23 @@
     font-size: 12px;
     white-space: nowrap;
   }
-  .ask {
+  .flag {
     margin-top: 44px;
-    border-left: 3px solid var(--doc-accent);
-    padding: 4px 0 4px 18px;
+    border: 1px solid var(--doc-accent);
+    padding: 18px 20px;
+    background: var(--doc-mark);
   }
-  .ask p {
-    max-width: 66ch;
+  .flag h2 {
+    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
+    font-size: 19px;
     margin: 0 0 10px;
+  }
+  .flag p {
+    max-width: 72ch;
+    margin: 0 0 12px;
+  }
+  .flag p:last-child {
+    margin-bottom: 0;
   }
   @media (prefers-reduced-motion: reduce) {
     * {
@@ -646,24 +671,6 @@
       <circle cx="17" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6" />
       <path d="M7 8.4v7.2M17 15.6V9a2.6 2.6 0 0 0-2.6-2.6H10" fill="none" stroke="currentColor" stroke-width="1.6" />
     </symbol>
-    <symbol id="i-rocket" viewBox="0 0 24 24">
-      <path
-        d="M12 2c3.2 3 4.8 7 4.8 11.2L12 18l-4.8-4.8C7.2 9 8.8 5 12 2z"
-        fill="currentColor"
-        fill-opacity=".18"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linejoin="round"
-      />
-      <circle cx="12" cy="9.4" r="1.9" fill="none" stroke="currentColor" stroke-width="1.5" />
-      <path
-        d="M7.2 12.4 4.4 15.6l2.9.6M16.8 12.4l2.8 3.2-2.9.6"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linejoin="round"
-      />
-    </symbol>
     <symbol id="i-gear" viewBox="0 0 24 24">
       <path
         d="M12 2.8v3M12 18.2v3M21.2 12h-3M5.8 12h-3M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1M18.5 18.5l-2.1-2.1M7.6 7.6 5.5 5.5"
@@ -680,71 +687,57 @@
 
 <div class="wrap">
   <header class="doc">
-    <p class="eyebrow">Factory skin · mockup · follows the Goal Floor</p>
+    <p class="eyebrow">Factory skin · mockup · revision 2</p>
     <h1>Parts Inspection</h1>
     <p class="lede">
       The rocket is spent on the launch, and a launch is a goal closing. So a pull request stops being a silo topped
       with a rocket and becomes what the analogy already has a slot for: a <strong>part on the inspection rack</strong>,
-      four gates from being loaded. It moves out of the right-hand rail and sits full-width above the line, because it
-      is the one thing on this page that is usually waiting on <em>you</em>.
+      a row of scanners from being loaded. It sits full width above the line, because it is the one thing on this page
+      usually waiting on <em>you</em> — and its scanners are the checks <em>your</em> CI config names, not one folded
+      verdict.
     </p>
+    <ul class="locked">
+      <li><b>A</b> · full width, above both rails</li>
+      <li><b>In hand</b> · always expanded</li>
+      <li><b>Ready</b> · sits with the attention rows</li>
+      <li><b>Scanners</b> · one per configured check</li>
+    </ul>
   </header>
 
   <section>
     <div class="sec-head">
-      <h2>Where it goes</h2>
-      <span class="tag">two readings of “above the line”</span>
+      <h2>Placement</h2>
+      <span class="tag">decided · A</span>
     </div>
-    <div class="plans">
-      <div class="plan">
-        <h3>A · Full width, above both rails</h3>
-        <p class="verdict">drawn below</p>
-        <div class="wire">
-          <div>status bar · gauges</div>
-          <div class="hi">parts inspection</div>
-          <div class="two">
-            <div class="col">
-              <div>the line</div>
-              <div>bots in the field</div>
-              <div>goal floor</div>
-              <div>the yard</div>
-            </div>
-            <div class="col">
-              <div>production</div>
-              <div>signals</div>
-              <div>shift log</div>
-            </div>
+    <div class="place">
+      <div class="wire">
+        <div>status bar · gauges</div>
+        <div class="hi">parts inspection</div>
+        <div class="two">
+          <div class="col">
+            <div>the line</div>
+            <div>bots in the field</div>
+            <div>goal floor</div>
+            <div>the yard</div>
+          </div>
+          <div class="col">
+            <div>production</div>
+            <div>signals</div>
+            <div>shift log</div>
           </div>
         </div>
-        <p>
-          First thing under the gauges, ahead of the belt. A wide strip is what makes the one-row-per-PR reading work —
-          ladder, ref, title, reason and court all fit on one line at this width and nothing is clipped.
-        </p>
       </div>
-      <div class="plan">
-        <h3>B · Head of the world rail</h3>
-        <p class="verdict">the narrower alternative</p>
-        <div class="wire">
-          <div>status bar · gauges</div>
-          <div class="two">
-            <div class="col">
-              <div>the line</div>
-              <div>bots in the field</div>
-              <div>goal floor</div>
-              <div>the yard</div>
-            </div>
-            <div class="col">
-              <div class="hi">parts inspection</div>
-              <div>production</div>
-              <div>signals</div>
-              <div>shift log</div>
-            </div>
-          </div>
-        </div>
-        <p>
-          Keeps the rails’ split — the harness’s turn on the left, the world’s on the right — and a PR is the world’s
-          turn. But 360px means the reason text wraps or goes, and the strip reads as one panel among four rather than
-          the page’s headline.
+      <div>
+        <p class="body">
+          First thing under the gauges, ahead of the belt, spanning both rails. The width is what makes the reading
+          work: a scanner group, three fixed gates, ref, title, reason and court all fit on one line, so seven open PRs
+          are one glance rather than a scroll.
+        </p>
+        <p class="body">
+          It breaks the rails' <em>whose turn is it</em> split, and that is the point — a PR is the one world object you
+          are usually the blocker for, so it outranks the split rather than living inside it. Below the 1900px
+          breakpoint it needs no special case: it is already one full-width child above a grid that collapses to one
+          column.
         </p>
       </div>
     </div>
@@ -753,15 +746,29 @@
   <section>
     <div class="sec-head">
       <h2>The strip</h2>
-      <span class="tag">7 open · 3 waiting on you</span>
+      <span class="tag">8 open · 4 in your court</span>
     </div>
+    <p class="body">
+      Drawn against this repository's own workflows — <code>check</code>, <code>codeql</code>, <code>security</code>,
+      <code>pages</code> — under a policy that dispatches for <code>check</code>, escalates <code>codeql</code> and
+      mutes <code>pages</code>. No check name appears anywhere in the skin's code; every one of these comes off
+      <code>ciVerdict</code>.
+    </p>
+    <pre>
+ci: {
+  checks: [
+    { match: 'check',    onFailure: 'dispatch', guidance: 'run npm run check; the six stages are cached' },
+    { match: 'codeql*',  onFailure: 'escalate' },   // security team owns this one
+    { match: 'pages',    onFailure: 'ignore'   },    // docs deploy, never blocking
+  ],
+}</pre
+    >
     <div class="screen-frame">
       <div class="screen">
-        <!-- the status bar, abbreviated: it is context, not the subject -->
         <div class="bar bev">
           <span class="brand">LUBBDUBB</span>
           <span class="g"><b>4</b>/6 bots</span>
-          <span class="g hot"><b>2</b> alerts</span>
+          <span class="g hot"><b>3</b> alerts</span>
           <span class="g"><b>0</b> faults</span>
           <span class="g"><b>3</b> findings</span>
           <span class="g"><b>1</b> blueprint</span>
@@ -784,59 +791,126 @@
                 <span class="cap">2 loaded in 6h</span>
               </span>
             </div>
-            <p class="note"><b>3 need you</b> · 4 in hand</p>
+            <p class="note"><b>4 in your court</b> · 4 in hand</p>
           </div>
 
-          <p class="sub">Needs you · 3<span class="rule"></span></p>
+          <p class="sub first">Your court · 4<span class="rule"></span></p>
           <div class="rows">
+            <!-- merge-ready, so a merge proposal is pending: `you` by the server's
+                 own first arm. This is why "ready" belongs up here with no new rule. -->
             <div class="row you">
               <span class="stripe"></span>
-              <span class="lad" role="img" aria-label="3 of 4 gates met">
-                <i class="on"></i><i class="on"></i><i></i><i class="on"></i>
-              </span>
-              <span class="ref">#142</span>
-              <span class="job">Fix the flaky worktree reap test</span>
-              <span class="why">1 unresolved comment</span>
-              <span class="court bad">Your call</span>
-            </div>
-            <div class="row you">
-              <span class="stripe"></span>
-              <span class="lad" role="img" aria-label="4 of 4 gates met">
-                <i class="full"></i><i class="full"></i><i class="full"></i><i class="full"></i>
+              <span
+                class="lad"
+                role="img"
+                aria-label="all four checks passing; approved, comments resolved, no conflicts"
+              >
+                <span class="scan">
+                  <i class="pass"></i><i class="pass"></i><i class="pass"></i><i class="pass"></i>
+                </span>
+                <i class="div"></i>
+                <i class="pass"></i><i class="pass"></i><i class="pass"></i>
               </span>
               <span class="ref">#147</span>
               <span class="job">Ship the harness’s comments as refs</span>
-              <span class="why">passed inspection · ready to load</span>
-              <span class="court ok">Ready</span>
+              <span class="why">awaiting your accept / reject of merge (p_4f2)</span>
+              <span class="court bad">Your call</span>
             </div>
-            <div class="row stalled">
+
+            <!-- the row that exists only because a CI policy does: codeql is red,
+                 the policy says escalate, so no agent is coming and rule 1b filed it. -->
+            <div class="row you">
               <span class="stripe"></span>
-              <span class="lad" role="img" aria-label="1 of 4 gates met">
-                <i></i><i></i><i class="on"></i><i></i>
+              <span
+                class="lad"
+                role="img"
+                aria-label="codeql failing and held by policy; pages muted; approved, comments resolved, no conflicts"
+              >
+                <span class="scan">
+                  <i class="pass"></i><i class="notours"></i><i class="pass"></i><i class="muted"></i>
+                </span>
+                <i class="div"></i>
+                <i class="pass"></i><i class="pass"></i><i class="pass"></i>
               </span>
               <span class="ref">#139</span>
               <span class="job">Rework the assay hold expiry</span>
-              <span class="why">no agent, no change for 3d</span>
+              <span class="why"><em>codeql</em> failing · policy holds it — no agent will be sent</span>
+              <span class="court bad">Held — not ours</span>
+            </div>
+
+            <!-- actionable CI, but the origin's attempt cap is spent: the one way a
+                 concern stops being the harness's without being fixed. -->
+            <div class="row you">
+              <span class="stripe"></span>
+              <span
+                class="lad"
+                role="img"
+                aria-label="check failing; pages muted; approved; one unresolved comment; no conflicts"
+              >
+                <span class="scan">
+                  <i class="damaged"></i><i class="pass"></i><i class="pass"></i><i class="muted"></i>
+                </span>
+                <i class="div"></i>
+                <i class="pass"></i><i></i><i class="pass"></i>
+              </span>
+              <span class="ref">#142</span>
+              <span class="job">Fix the flaky worktree reap test</span>
+              <span class="why"><em>check</em> failing — attempt cap spent, escalated</span>
+              <span class="court bad">Your call</span>
+            </div>
+
+            <div class="row stalled">
+              <span class="stripe"></span>
+              <span
+                class="lad"
+                role="img"
+                aria-label="all four checks awaiting; not approved; comments resolved; no conflicts"
+              >
+                <span class="scan">
+                  <i class="awaiting"></i><i class="awaiting"></i><i class="awaiting"></i><i class="awaiting"></i>
+                </span>
+                <i class="div"></i>
+                <i></i><i class="pass"></i><i class="pass"></i>
+              </span>
+              <span class="ref">#136</span>
+              <span class="job">Widen the artifact confinement roots</span>
+              <span class="why">no agent, no signal and nothing to authorize</span>
               <span class="court warn">Stalled</span>
             </div>
           </div>
 
-          <p class="sub">In hand · 4<span class="rule"></span><span class="chev">▾ hide</span></p>
+          <p class="sub">In hand · 4<span class="rule"></span></p>
           <div class="rows">
             <div class="row hand">
               <span class="stripe"></span>
-              <span class="lad" role="img" aria-label="2 of 4 gates met">
-                <i class="on"></i><i></i><i class="on"></i><i></i>
+              <span
+                class="lad"
+                role="img"
+                aria-label="check failing; pages muted; not approved; comments resolved; no conflicts"
+              >
+                <span class="scan">
+                  <i class="damaged"></i><i class="pass"></i><i class="pass"></i><i class="muted"></i>
+                </span>
+                <i class="div"></i>
+                <i></i><i class="pass"></i><i class="pass"></i>
               </span>
               <span class="ref">#151</span>
               <span class="job">Plan part · store the shortfall route</span>
-              <span class="why">agent on the branch</span>
+              <span class="why">an agent is working this branch</span>
               <span class="court ok">Harness working it</span>
             </div>
             <div class="row hand">
               <span class="stripe"></span>
-              <span class="lad" role="img" aria-label="3 of 4 gates met">
-                <i class="on"></i><i class="on"></i><i class="on"></i><i></i>
+              <span
+                class="lad"
+                role="img"
+                aria-label="check failing, inherited from the base PR; not approved; comments resolved; conflicts with base"
+              >
+                <span class="scan">
+                  <i class="damaged"></i><i class="pass"></i><i class="pass"></i><i class="muted"></i>
+                </span>
+                <i class="div"></i>
+                <i></i><i class="pass"></i><i></i>
               </span>
               <span class="ref">#152</span>
               <span class="job">Plan part · the reconciler’s rejoin</span>
@@ -845,30 +919,49 @@
             </div>
             <div class="row hand">
               <span class="stripe"></span>
-              <span class="lad" role="img" aria-label="2 of 4 gates met">
-                <i class="on"></i><i></i><i class="on"></i><i></i>
+              <span
+                class="lad"
+                role="img"
+                aria-label="all four checks passing; approved, comments resolved, no conflicts"
+              >
+                <span class="scan">
+                  <i class="pass"></i><i class="pass"></i><i class="pass"></i><i class="pass"></i>
+                </span>
+                <i class="div"></i>
+                <i class="pass"></i><i class="pass"></i><i class="pass"></i>
               </span>
               <span class="ref">#144</span>
-              <span class="job">Widen the artifact confinement roots</span>
-              <span class="why">“needs a test for the symlink case”</span>
-              <span class="court off">You said no</span>
+              <span class="job">Give the assay its own prompt entry</span>
+              <span class="why">“needs a test for the symlink case” · nothing since</span>
+              <span class="court">You said no</span>
             </div>
             <div class="row hand">
               <span class="stripe"></span>
-              <span class="lad" role="img" aria-label="0 of 4 gates met"> <i></i><i></i><i></i><i></i> </span>
+              <span
+                class="lad"
+                role="img"
+                aria-label="check failing; pages muted; not approved; comments resolved; no conflicts"
+              >
+                <span class="scan">
+                  <i class="damaged"></i><i class="pass"></i><i class="pass"></i><i class="muted"></i>
+                </span>
+                <i class="div"></i>
+                <i></i><i class="pass"></i><i class="pass"></i>
+              </span>
               <span class="ref">#118</span>
               <span class="job">Spike · azure policy evaluations</span>
               <span class="why">lubbdubb-ignore</span>
-              <span class="court off">Left alone</span>
+              <span class="court">Left alone</span>
             </div>
           </div>
 
           <p class="legend">
-            <span><i class="on"></i><i class="on"></i><i></i><i class="on"></i> gates, left to right:</span>
-            <span>CI</span>
-            <span>approved</span>
-            <span>comments resolved</span>
-            <span>no conflicts</span>
+            <span><i class="pass"></i> passing</span>
+            <span><i class="damaged"></i> failing · an agent is coming</span>
+            <span><i class="notours"></i> failing · policy holds it</span>
+            <span><i class="muted"></i> muted by policy</span>
+            <span><i class="awaiting"></i> not reported yet</span>
+            <span style="margin-left: auto">scanners · then approved · comments · conflicts</span>
           </p>
         </section>
 
@@ -882,7 +975,7 @@
               <span
                 >The Yard · issues &amp; stories <em style="color: var(--red); font-style: normal">(PRs gone)</em></span
               >
-              <span>observed 12s ago</span>
+              <span>observed 12s</span>
             </div>
           </div>
           <div class="rail">
@@ -897,8 +990,98 @@
 
   <section>
     <div class="sec-head">
+      <h2>The ladder, and why it is two groups</h2>
+      <span class="tag">variable left, fixed right</span>
+    </div>
+    <p class="body">
+      <code>siloGates</code> is a fixed four because <code>health.reasons</code> is prose — a numerator with no
+      denominator. That argument holds for three of them and <em>fails</em> for CI, because <code>ciVerdict</code>
+      <em>is</em> an enumerable list: every check the policy classified, by name, with a state. So the ladder splits.
+    </p>
+    <div class="notes">
+      <article class="n">
+        <h3>Left · one cell per check</h3>
+        <p>
+          From <code>ciVerdict.dispatch</code> / <code>escalate</code> / <code>ignored</code> plus the passing ones —
+          the same fold <code>goalFloor.ts:scannersFor</code> already does, reused rather than rewritten. The cells
+          share one fixed-width track, so three checks give three fat cells and nine give nine thin ones, and the
+          ladder's total width never changes.
+        </p>
+      </article>
+      <article class="n">
+        <h3>Right · the fixed three</h3>
+        <p>
+          Approved, comments resolved, no conflicts — always the same three columns at the same x, which is what lets
+          you read <em>down</em> the strip. A dotted divider separates them from the scanners, because they are gates a
+          human moves, not checks a machine reports.
+        </p>
+      </article>
+      <article class="n">
+        <h3>Five states, and only one of them is “someone is on it”</h3>
+        <p>
+          <code>damaged</code> is unlit — failing, an agent is coming. <code>not_ours</code> is amber — failing and
+          nobody is coming, which the old single CI cell could not say and which is the entire reason per-check policy
+          exists. <code>muted</code> is a dashed outline, <code>awaiting</code> is blue, passing is green.
+        </p>
+      </article>
+      <article class="n">
+        <h3>Red stays out of the ladder</h3>
+        <p>
+          Every one of those states is amber, blue, green or unlit. Red is left to the court chip and the row stripe, so
+          the floor's rule — red means a question only you can answer — survives a row with four red checks on it.
+        </p>
+      </article>
+      <article class="n">
+        <h3>No provider detail, no scanner group</h3>
+        <p>
+          A provider that reports no <code>ciChecks</code> (and the <code>fake</code> one) leaves the group as a single
+          cell off <code>ciStatus</code> — the pre-policy behaviour, drawn as one wide scanner. Nothing regresses for a
+          project with no <code>ci</code> config.
+        </p>
+      </article>
+      <article class="n">
+        <h3>Names live in the reason, not the ladder</h3>
+        <p>
+          The <em>why</em> column names the check that matters — <code>codeql failing · policy holds it</code> — and the
+          ladder gives the shape. That keeps the row scannable and keeps every check name out of the skin's source,
+          which is the property <code>ScannerState</code> was written to protect.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <div class="flag">
+    <h2>This needs one server change, and it is a bug either way</h2>
+    <p>
+      <code>prAttention.ts:prConcerns</code> raises the CI concern on <code>pr.ciStatus === 'failing'</code> alone. It
+      never reads <code>ciVerdict</code>. But rule 1 dispatches only when
+      <code>ciVerdict.actionable</code> (<code>ruleDispatcher.ts:284</code>), and rule
+      <code>pr-ci-blocked</code> escalates to a human instead.
+    </p>
+    <p>
+      So a PR whose only red check is <code>escalate</code>d or <code>ignore</code>d reports
+      <strong>“harness · CI is failing — an agent will be dispatched”</strong> today, when no agent is coming and an
+      escalation has been filed for <em>you</em>. That is row #139 above, and it is the exact PR a custom CI policy
+      exists to hand you. The strip would render that verdict faithfully and be confidently wrong — worse than the
+      towers it replaces.
+    </p>
+    <p>
+      The fix belongs in <code>prConcerns</code>, not in the skin: it should raise the CI concern only when the verdict
+      is actionable, and the <code>you</code> arm should cover a policy-held failure the way it already covers a spent
+      attempt cap. One predicate, server-side, so the strip and the Goal Floor's <code>prReading</code> — which
+      <em>does</em> read the verdict, and already says <code>held</code> — stop disagreeing about the same PR.
+    </p>
+    <p>
+      Second, smaller: an all-<code>ignore</code>d red PR reaches the <code>stalled</code> arm and reports
+      <code>CI has not reported</code>, which is untrue — it reported and you muted it. Worth a reason string of its own
+      while that arm is open.
+    </p>
+  </div>
+
+  <section>
+    <div class="sec-head">
       <h2>What one PR costs, before and after</h2>
-      <span class="tag">same four gates, same verdicts</span>
+      <span class="tag">and the CI cell gains four states</span>
     </div>
     <div class="compare">
       <div class="pane">
@@ -927,26 +1110,32 @@
           </svg>
         </div>
         <p class="scale">
-          184px of tower + 86px of meta beside it, per PR, in a 360px rail. Seven open PRs is a column you scroll. The
-          rocket on a full silo is the word this change is trying to free.
+          184px of tower plus its meta, per PR, in a 360px rail — eight open PRs is a column you scroll. One CI cell,
+          two states, and the rocket on a full silo is the word this change frees.
         </p>
       </div>
       <div class="pane">
         <h3>After · a row each</h3>
         <div class="mini screen" style="min-width: 0; padding: 10px; display: block">
           <div class="rows">
-            <div class="row you" style="grid-template-columns: 3px 54px 46px minmax(0, 1fr) auto">
+            <div class="row you" style="grid-template-columns: 3px 132px 46px minmax(0, 1fr) auto">
               <span class="stripe"></span>
-              <span class="lad"><i class="on"></i><i class="on"></i><i></i><i class="on"></i></span>
-              <span class="ref">#142</span>
-              <span class="job">Fix the flaky reap test</span>
-              <span class="court bad">Your call</span>
+              <span class="lad">
+                <span class="scan">
+                  <i class="pass"></i><i class="notours"></i><i class="pass"></i><i class="muted"></i>
+                </span>
+                <i class="div"></i>
+                <i class="pass"></i><i class="pass"></i><i class="pass"></i>
+              </span>
+              <span class="ref">#139</span>
+              <span class="job">Assay hold expiry</span>
+              <span class="court bad">Not ours</span>
             </div>
           </div>
         </div>
         <p class="scale">
-          36px, and the ladder is the same <code>siloGates</code> fill read sideways. Seven PRs is 250px — the whole
-          open set at a glance, which is the thing the towers could never give.
+          36px, and it says more: which check, whether anyone is coming for it, and whose court the PR is in. Eight PRs
+          is 290px — the whole open set at a glance.
         </p>
       </div>
     </div>
@@ -954,64 +1143,8 @@
 
   <section>
     <div class="sec-head">
-      <h2>The five rules the drawing rests on</h2>
-      <span class="tag">what to preserve</span>
-    </div>
-    <div class="notes">
-      <article class="n">
-        <h3>Court decides the order, not fill</h3>
-        <p>
-          The current sort is fullest-first, so a PR you must decide on sits below three the harness is already fixing.
-          Order is <code>attention.status</code> — read off the server, never re-derived, exactly as
-          <code>siloCourt</code> already does it. Fill only breaks ties inside a group.
-        </p>
-      </article>
-      <article class="n">
-        <h3>Red is spent on your court, not on a failed gate</h3>
-        <p>
-          An unmet gate goes <em>unlit</em>, not red. The floor rations red for “a question only you can answer”, and
-          that is the court chip. Today <code>.fx-gates li.no</code> spends it four times per PR, which is why nothing
-          on the panel stands out.
-        </p>
-      </article>
-      <article class="n">
-        <h3>The rocket leaves the PR entirely</h3>
-        <p>
-          Icon <code>pr</code> here; <code>rocket</code> stays on the Goal Floor’s launch stage. In
-          <code>iconForEventKind</code>, <code>pr_merged</code> drops to <code>pr</code> and
-          <code>issue_closed</code> gains <code>rocket</code> — it currently falls through to a flask, so the one real
-          launch is the one event with no rocket on it.
-        </p>
-      </article>
-      <article class="n">
-        <h3>Reasons are quoted, never parsed</h3>
-        <p>
-          The <em>why</em> column is <code>health.reasons</code> joined, or the rejection note for a settled PR. It
-          supplies no count and no colour — the ladder's denominator stays the fixed four of <code>siloGates</code>.
-        </p>
-      </article>
-      <article class="n">
-        <h3>Empty still draws</h3>
-        <p>
-          No open PRs draws the strip with one line — <em>nothing on the rack</em> — never nothing at all. Same rule as
-          the fault gauge: a surface that vanishes when quiet is indistinguishable from a surface that broke.
-        </p>
-      </article>
-      <article class="n">
-        <h3>The Yard gives up its PR list</h3>
-        <p>
-          This strip is the only detailed PR surface, so the Yard becomes issues and stories, and carries the
-          <code>-ignore</code> toggle over. That is the simplification: one subject, one place, which is the same
-          argument that dissolved the act rail into gauges.
-        </p>
-      </article>
-    </div>
-  </section>
-
-  <section>
-    <div class="sec-head">
       <h2>Every mark, and where it is read from</h2>
-      <span class="tag">no new server field</span>
+      <span class="tag">one server change, no new field</span>
     </div>
     <div class="tbl">
       <table>
@@ -1024,45 +1157,42 @@
         </thead>
         <tbody>
           <tr>
-            <td>ladder, 4 cells</td>
-            <td><code>siloGates(pr)</code> · unchanged</td>
-            <td>CI, approved, comments, conflicts — a fixed denominator, so the fill has a top and a bottom</td>
+            <td>scanner cells</td>
+            <td><code>pr.ciVerdict</code> · already shipped by <code>app.ts:1439</code></td>
+            <td>Folded by the existing <code>scannersFor</code>; no check name enters the skin</td>
+          </tr>
+          <tr>
+            <td>the fixed three</td>
+            <td><code>siloGates(pr)</code>, minus its CI gate</td>
+            <td>Approved, comments, conflicts — the three with no enumerable detail behind them</td>
           </tr>
           <tr>
             <td>court chip</td>
             <td><code>pr.attention.status</code> via <code>siloCourt</code></td>
-            <td>Falls back to <code>health.blocked</code> on an older snapshot, as now</td>
+            <td>Needs the <code>prConcerns</code> fix above to be true of a policy-held failure</td>
           </tr>
           <tr>
             <td>group</td>
-            <td><code>you</code>, <code>stalled</code> → Needs you; the rest → In hand</td>
-            <td>Two groups, from the same verdict — no second opinion computed client-side</td>
+            <td><code>you</code> + <code>stalled</code> → your court; the rest → in hand</td>
+            <td>A merge-ready PR is <code>you</code> by the pending-proposal arm, so “ready” needs no rule</td>
           </tr>
           <tr>
             <td>why</td>
-            <td><code>pr.health.reasons</code> · <code>attention.reasons</code></td>
+            <td><code>attention.reasons[0]</code> · <code>health.reasons</code></td>
             <td>Quoted and clipped; the settled row quotes the note you left</td>
           </tr>
           <tr>
             <td>“2 loaded in 6h”</td>
             <td><code>closedPullRequests</code> filtered to merged</td>
-            <td>All that survives of the Launches log — the half with tension in it is above</td>
+            <td>All that survives of the Launches log</td>
           </tr>
           <tr>
             <td>ref link</td>
             <td><code>refUrls['pr:142']</code></td>
-            <td>Renders as plain text when the provider resolves no URL</td>
+            <td>Plain text when the provider resolves no URL</td>
           </tr>
         </tbody>
       </table>
     </div>
   </section>
-
-  <div class="ask">
-    <p>
-      <strong>Open questions for you.</strong> A — full width above the line, or B — head of the world rail? Should
-      <em>In hand</em> start collapsed, or open as drawn? And does <code>Ready</code> belong under “needs you” — it is
-      your court in the sense that only you can merge it, but it is also the one row that is good news.
-    </p>
-  </div>
 </div>
