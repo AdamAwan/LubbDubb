@@ -773,6 +773,28 @@ export interface ScratchEntry {
 }
 
 /**
+ * One goal's retrospective: what shipped, and how the run went.
+ *
+ * Nothing gates on it — a goal is delivered whether or not anybody wrote it up —
+ * which is what makes a missing one silence rather than a hold, and what makes the
+ * rule that produces it safe to fail open.
+ */
+export interface Retrospective {
+  /** The issue it is about, `issue:<n>` — the same key every other verdict uses. */
+  originRef: string;
+  /** One or two sentences: what an operator reads before opening the document. */
+  summary: string;
+  /** The write-up, markdown. Trimmed at submission rather than refused. */
+  document: string;
+  /** The writing agent and its task, from the credential. */
+  agentId: string;
+  taskId: string;
+  /** When the run was *first* written up; preserved across a revision. */
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * Which of the three failures an assessor's "not delivered" actually is (issue
  * #159).
  *
