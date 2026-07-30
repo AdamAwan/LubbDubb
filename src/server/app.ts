@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
-import type { Issue, IssueAssay, IssueDelivery, ShortfallCause, WorldSnapshot } from '../types.js';
+import type { Issue, IssueAssay, IssueDelivery, Retrospective, ShortfallCause, WorldSnapshot } from '../types.js';
 import { Hub } from './hub.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { describeRunningConfig } from './runningConfig.js';
@@ -1113,6 +1113,14 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // a write route would have to answer "when does this take effect", and the
   // honest answer — at the next restart — is worse than not offering it. `dir`
   // is what makes the panel actionable without one.
+  // The document itself, fetched when a reader opens it rather than shipped on
+  // every poll. Null rather than 404 for a goal nobody wrote up: "no retrospective"
+  // is an ordinary answer here, not a missing resource.
+  app.get('/api/retrospectives/:ref', async (req) => {
+    const { ref } = req.params as { ref: string };
+    return { retrospective: store.getRetrospective(ref) };
+  });
+
   app.get('/api/prompts', async () => ({
     dir: config.promptTemplatesDir ?? null,
     // The `claude` dispatcher composes its prompts via the LLM and reads none of
@@ -1499,6 +1507,11 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
         // discriminator is structural. `goalRef` is deliberately not shipped: it
         // is a fingerprint the hold is measured against, not a reading.
         assay: assayVerdictOf(assaysByOrigin.get(issueConclusionOrigin(issue.number))),
+        // The run's own write-up (rule 3h) — the **reading**, never the writing.
+        // This snapshot is polled continuously, so a document per issue would be
+        // paid for on every poll; `GET /api/retrospectives/:ref` serves the rest
+        // when a reader actually opens it, the `WorkTreePanel` pattern.
+        retrospective: retroReading(store.getRetrospective(issueConclusionOrigin(issue.number))),
       })),
     },
     // The plan graph, which until now existed only in the database: the per-issue
@@ -1597,6 +1610,15 @@ function standingDelivery(delivery: IssueDelivery | undefined, issue: Issue, ctx
   if (!held) return null;
   const { summary, by, decidedAt } = delivery;
   return { summary, by, decidedAt };
+}
+
+/**
+ * What the Goal Floor's Manifest station needs to draw itself: whether a goal was
+ * written up, the one line to show, and when. Deliberately not the document — see
+ * the call site.
+ */
+function retroReading(retro: Retrospective | null) {
+  return retro ? { summary: retro.summary, hasDocument: retro.document.length > 0, updatedAt: retro.updatedAt } : null;
 }
 
 function assayVerdictOf(assay: IssueAssay | undefined) {

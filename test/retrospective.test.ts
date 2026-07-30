@@ -10,6 +10,7 @@ import { MAX_RETRO_DOCUMENT, retroOrigin, retroSubmitOrigin, validateRetrospecti
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
+import { buildApp } from '../src/server/app.js';
 import type { Agent, Issue, IssueDelivery } from '../src/types.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
@@ -310,4 +311,41 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
   assert.doesNotMatch(retroTask.prompt, /\{dossier\}|\{pad\}|\{scratchpad\}/);
 
   store.close();
+});
+
+// -- what the cockpit is served ----------------------------------------------
+
+test('the snapshot ships the reading and the document is fetched on demand', async () => {
+  const system = build();
+  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
+  await system.harness.runCycle('manual');
+  system.store.recordRetrospective({
+    originRef: 'issue:12',
+    summary: 'Three parts; two agents on somebody else’s red CI.',
+    document: '# What shipped\n\nA long write-up nobody needs on every poll.',
+    agentId: 'a1',
+    taskId: 't1',
+  });
+
+  const built = await buildApp(system);
+  const app = built.app;
+  const state = await app.inject({ method: 'GET', url: '/api/state' });
+  const issues = state.json().world.issues as { number: number; retrospective: unknown }[];
+  assert.deepEqual(issues.find((i) => i.number === 12)?.retrospective, {
+    summary: 'Three parts; two agents on somebody else’s red CI.',
+    hasDocument: true,
+    updatedAt: system.store.getRetrospective('issue:12')?.updatedAt,
+  });
+  // The snapshot is polled continuously, so the writing itself must not ride on it.
+  assert.doesNotMatch(state.body, /A long write-up nobody needs/);
+
+  const one = await app.inject({ method: 'GET', url: '/api/retrospectives/issue:12' });
+  assert.equal(one.statusCode, 200);
+  assert.match(one.json().retrospective.document, /A long write-up nobody needs/);
+
+  const none = await app.inject({ method: 'GET', url: '/api/retrospectives/issue:99' });
+  assert.equal(none.json().retrospective, null, 'an unwritten goal is null, not a 404');
+
+  await app.close();
+  system.store.close();
 });
