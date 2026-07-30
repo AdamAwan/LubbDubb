@@ -30,6 +30,7 @@ export function useCockpit(): CockpitStatus {
   const [connected, setConnected] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [viewingPlan, setViewingPlan] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
   // Last output line per agent, fed by compact `agent:tail` frames — used for
@@ -160,6 +161,7 @@ export function useCockpit(): CockpitStatus {
 
       replan: (planId) => then(api.replan(planId)),
       viewPlan: (planId) => setViewingPlan(planId),
+      openSettings: (open) => setSettingsOpen(open),
       discussPlan: (planId) => then(api.discussPlan(planId)),
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -196,6 +198,7 @@ export function useCockpit(): CockpitStatus {
       tails: tails.current,
       lastPulseAt: lastPulse.current,
       viewingPlan,
+      settingsOpen,
     }),
   };
 }

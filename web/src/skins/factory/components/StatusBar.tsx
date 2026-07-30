@@ -4,7 +4,7 @@ import type { CockpitActions } from '../../../cockpit/actions.js';
 import { useAsyncAction } from '../../../components/AsyncButton.js';
 import { FleetControl } from '../../../components/FleetControl.js';
 import { UsageChip } from '../../../components/UsageChip.js';
-import { SkinPicker } from '../../SkinPicker.js';
+import { SettingsButton } from '../../SettingsButton.js';
 import { powerReading } from '../power.js';
 import type { ProductionReading } from '../production.js';
 import type { FactoryModal } from './Modal.js';
@@ -392,7 +392,7 @@ export function StatusBar({
         onOpen={() => onOpen('blueprints')}
       />
 
-      <SkinPicker />
+      <SettingsButton open={view.settingsOpen} onOpen={actions.openSettings} />
     </div>
   );
 }

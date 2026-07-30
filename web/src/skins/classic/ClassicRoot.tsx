@@ -11,7 +11,7 @@ import { RecoveryPanel } from '../../components/RecoveryPanel.js';
 import { WorldSummary } from '../../components/WorldSummary.js';
 import { AsyncButton } from '../../components/AsyncButton.js';
 import { relTime } from '../../components/util.js';
-import { SkinPicker } from '../SkinPicker.js';
+import { SettingsButton } from '../SettingsButton.js';
 import { AgentCard } from './components/AgentCard.js';
 import { Vitals } from './components/Vitals.js';
 import { DecisionLog } from './components/DecisionLog.js';
@@ -77,7 +77,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
           <span className="chip">dispatcher: {state.config.dispatcher}</span>
           {state.control.paused && <span className="chip warn">paused</span>}
           <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
-          <SkinPicker />
+          <SettingsButton open={view.settingsOpen} onOpen={actions.openSettings} />
           <AsyncButton className="primary" onClick={() => actions.pulse()}>
             Pulse now
           </AsyncButton>

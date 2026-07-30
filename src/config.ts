@@ -451,23 +451,16 @@ const DEFAULTS: Config = {
   auth: { enabled: true, tokenFile: '.lubbdubb/cockpit-token' },
 };
 
-export function loadConfig(overrides: Partial<Config> = {}): Config {
-  const filePath = resolve(process.cwd(), 'lubbdubb.config.json');
-  let fromFile: Partial<Config> = {};
-  if (existsSync(filePath)) {
-    try {
-      fromFile = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<Config>;
-    } catch (err) {
-      throw new Error(`Failed to parse ${filePath}: ${(err as Error).message}`);
-    }
-  }
-  const fromEnv: Partial<Config> = {};
-  if (process.env.PORT) fromEnv.port = Number(process.env.PORT);
-  if (process.env.LUBBDUBB_HOST) fromEnv.host = process.env.LUBBDUBB_HOST;
-  if (process.env.LUBBDUBB_DB) fromEnv.dbPath = process.env.LUBBDUBB_DB;
-  if (process.env.LUBBDUBB_REPO_ROOT) fromEnv.repoRoot = process.env.LUBBDUBB_REPO_ROOT;
-  const merged = { ...DEFAULTS, ...fromFile, ...fromEnv, ...overrides };
-
+/**
+ * Resolve the four path fields against the roots they belong to, in place.
+ *
+ * Lifted out of {@link loadConfig} so a *baseline* config can be built by the
+ * same rules (see {@link defaultConfig}). Comparing a running config against the
+ * raw {@link DEFAULTS} would report `repoRoot`, `worktreeRoot`, `deskRoot` and
+ * `promptTemplatesDir` as operator-customised on every deployment, since these
+ * four are literals there and absolute here.
+ */
+function resolveRootPaths(merged: Config): void {
   // The repo defaults to wherever the app is launched (`process.cwd()`). A
   // relative override (config file or env) is resolved to absolute here: git runs
   // with `cwd: repoRoot` and agents run in a worktree/scratch cwd, so a path left
@@ -488,6 +481,40 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // Prompt overrides belong to the repo being operated on, like the worktree
   // roots above — resolve relative to repoRoot, honour an absolute override.
   merged.promptTemplatesDir = resolve(merged.repoRoot, merged.promptTemplatesDir);
+}
+
+/**
+ * The config a deployment that configures nothing runs on — every built-in
+ * default, put through the same path resolution {@link loadConfig} applies.
+ *
+ * Deliberately not `DEFAULTS` itself: the caller is the running-config viewer,
+ * which reads this to decide which values an operator actually chose, and the
+ * raw literals would make four path fields read as chosen everywhere.
+ */
+export function defaultConfig(): Config {
+  const base: Config = { ...DEFAULTS };
+  resolveRootPaths(base);
+  return base;
+}
+
+export function loadConfig(overrides: Partial<Config> = {}): Config {
+  const filePath = resolve(process.cwd(), 'lubbdubb.config.json');
+  let fromFile: Partial<Config> = {};
+  if (existsSync(filePath)) {
+    try {
+      fromFile = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<Config>;
+    } catch (err) {
+      throw new Error(`Failed to parse ${filePath}: ${(err as Error).message}`);
+    }
+  }
+  const fromEnv: Partial<Config> = {};
+  if (process.env.PORT) fromEnv.port = Number(process.env.PORT);
+  if (process.env.LUBBDUBB_HOST) fromEnv.host = process.env.LUBBDUBB_HOST;
+  if (process.env.LUBBDUBB_DB) fromEnv.dbPath = process.env.LUBBDUBB_DB;
+  if (process.env.LUBBDUBB_REPO_ROOT) fromEnv.repoRoot = process.env.LUBBDUBB_REPO_ROOT;
+  const merged = { ...DEFAULTS, ...fromFile, ...fromEnv, ...overrides };
+
+  resolveRootPaths(merged);
 
   // autoSend is a nested object: deep-merge it so a config file (or override)
   // can set just one field (e.g. only `enabled`) without dropping the defaults

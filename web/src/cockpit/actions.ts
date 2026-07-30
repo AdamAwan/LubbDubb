@@ -37,6 +37,13 @@ export interface CockpitActions {
    * skin-side), and a skin may not reach `api.js` to open it another way.
    */
   viewPlan(planId: string | null): void;
+  /**
+   * Open or close the settings modal — the running config and the skin picker.
+   * On the seam for `viewPlan`'s reason: the modal is shared and hangs off the
+   * shell (it reaches `/api/config`, which a skin may not do), while the cog that
+   * opens it is embedded by each skin wherever that skin puts its chrome.
+   */
+  openSettings(open: boolean): void;
   discussPlan(planId: string): Promise<void>;
   endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;

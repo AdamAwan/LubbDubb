@@ -273,6 +273,30 @@ read once at boot, so re-sending the book every couple of seconds would be payin
 effect", and the honest answer is "at the next restart". `dispatcher` rides along so the panel can say
 that under `dispatcher: 'claude'` the LLM composes its own prompts and none of this book fires.
 
+### `GET /api/config`
+
+The configuration this process resolved at boot, for the cockpit's settings modal
+([17](17-cockpit.md)): `{ groups }`, each group a titled list of `{path, value, isDefault}` entries —
+dotted paths into the config object, with nested blocks expanded to leaves so one overridden member
+of `planning` does not make the other three read as chosen.
+
+`isDefault` is computed here rather than in the browser, against `defaultConfig()` — the built-in
+defaults put through the **same path resolution** `loadConfig` applies. That indirection is the whole
+point of the function: `repoRoot`, `worktreeRoot`, `deskRoot` and `promptTemplatesDir` are resolved
+to absolute paths after merging, so comparing against the raw literals would report four of the
+most-read keys as operator-chosen on every deployment — a viewer whose job is to say what you changed
+getting it wrong in the same four places every time. `test/runningConfig.test.ts` asserts a config
+that configures nothing reports nothing as configured.
+
+Keys with an `undefined` value are omitted entirely (an unset optional is not a configured value),
+arrays and label→weight maps are shipped whole (their shape is the thing worth reading, and expanding
+them would key rows on an array index), and a top-level key naming no group falls into **Other**
+rather than vanishing — the grouping is a display hint, never a filter, so a config field added later
+is visible on the day it is written.
+
+Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. Nothing is redacted: `Config`
+holds no secrets by construction ([02](02-configuration.md)).
+
 ### `POST /api/stories/:id/watch`
 
 The same, for a story id, routed to the fake backlog's `StoryLabelCapable`.

@@ -537,6 +537,37 @@ since a skin owns the whole tree and switching unmounts everything anyway.
 The choice is deliberately **not** in `Config` or `/api/state`. It is a per-viewer preference;
 shipping it in the snapshot would make one operator's taste global to every cockpit.
 
+The picker itself lives inside the **settings modal** below; what each skin embeds is the cog that
+opens it. That inherits the picker's own rule rather than weakening it — the cog is now the way _to_
+the picker, so a skin failing to draw one is still a skin you could not leave.
+
+### Settings
+
+A cog in each skin's chrome opens a shared modal carrying two things: the skin picker above, and the
+configuration this process is actually running on.
+
+The arrangement is `PlanModal`'s exactly. The modal reads `GET /api/config`, which a skin may not do,
+so it hangs off the shell in `App.tsx` and the skin-side cog only flips `settingsOpen` through
+`CockpitActions.openSettings` — the same seam `viewPlan` uses, for the same reason.
+
+The config half is **read-only and fetched on open**, both for the prompt book's reasons
+([16](16-http-api.md)): `loadConfig` runs once at boot so polling would be paying for a constant, and
+a write route's honest answer to "when does this take effect" is "at the next restart". Values are
+grouped, and each one that differs from the built-in default is marked — the question an operator
+opens this to ask is not "what are the values" but "what did I change", and answering it needs a
+baseline, which is why the server computes the comparison rather than shipping the object alone.
+
+Two values would make that block a lie, and are drawn separately above it: `maxConcurrentAgents` and
+`startPaused` are both shadowed at runtime by `RuntimeControl` ([09](09-execution.md)) and revert on
+restart. The modal shows the live cap and pause state from `control`, naming the configured value it
+is overriding where the two differ. Both halves of that pair are read out of the same fetched block,
+so they can never come from two readings that disagree.
+
+Nothing is redacted, and that is not an oversight: `Config` holds no secrets by construction
+([02](02-configuration.md)), which is the same rule that keeps `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT` and
+`LUBBDUBB_TOKEN` in the environment. `auth.tokenFile` is a path worth reading, and blanking it would
+hide a useful value while implying the invariant is not real.
+
 ### Tests
 
 `test/cockpitViewModel.test.ts` covers the derivations (untestable while they lived inside a

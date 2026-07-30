@@ -8,6 +8,7 @@ import type { System } from '../system.js';
 import type { IssueAssay, ShortfallCause, WorldSnapshot } from '../types.js';
 import { Hub } from './hub.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
+import { describeRunningConfig } from './runningConfig.js';
 import { prHealth } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
@@ -1119,6 +1120,19 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     dispatcher: config.dispatcher,
     templates: system.prompts.describe(),
   }));
+
+  // The configuration this process is actually running on, for the cockpit's
+  // settings modal. Fetched on open rather than polled, for the prompt book's
+  // reason exactly: `loadConfig` runs once at boot and the result cannot change
+  // while the harness is up, so shipping it on every `/api/state` poll would be
+  // paying for a constant.
+  //
+  // Read-only, and for the prompt book's reason again: a write route's honest
+  // answer to "when does this take effect" is "at the next restart". The two
+  // values that *are* live — the agent cap and the pause flag — are already on
+  // the snapshot as `control`, and the modal draws them beside their configured
+  // counterparts rather than letting this block claim a cap that is not in force.
+  app.get('/api/config', async () => ({ groups: describeRunningConfig(config) }));
 
   app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
 

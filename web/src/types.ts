@@ -371,6 +371,22 @@ export interface PromptTemplateView {
   template: string;
   overridden: boolean;
 }
+/**
+ * One configured value in the running config, from `/api/config` — fetched when
+ * the settings modal is opened, for the prompt book's reason: `loadConfig` runs
+ * once at boot, so polling it would be paying for a constant.
+ */
+interface RunningConfigEntry {
+  /** Dotted path into the config object, e.g. `planning.requireApproval`. */
+  path: string;
+  value: unknown;
+  /** Whether this is the built-in default — false means somebody chose it. */
+  isDefault: boolean;
+}
+export interface RunningConfigGroup {
+  title: string;
+  entries: RunningConfigEntry[];
+}
 export interface Job {
   id: string;
   title: string;
