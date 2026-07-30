@@ -62,6 +62,8 @@ export interface CiPolicy {
 interface CiMatch {
   name: string;
   rule: CiCheckRule | null;
+  /** False when the provider says this failure does not hold the merge. */
+  blocking?: boolean;
 }
 
 export interface CiVerdict {
@@ -129,9 +131,18 @@ export function validateCiPolicy(policy: CiPolicy): void {
  * actionable with empty lists: today's behaviour, unchanged. A check matching
  * **no rule** is actionable *and named*, so a CI job added next week is fixed by
  * the harness rather than silently parking every red PR forever.
+ *
+ * A third case is not a silence at all: an **advisory** check is dropped before
+ * anything is decided, so a PR whose only failure is advisory classifies into
+ * nothing. Rule 1 does not fire on one either — `ciNeedsAttention` excludes them
+ * by the same rule — so the two cannot disagree.
  */
 export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPolicy): CiVerdict {
-  const failing = (checks ?? []).filter((c) => c.status === 'failing');
+  // Advisory checks are dropped up front, so no rule — not even `match: '*'` —
+  // can claim one. They are reported for visibility and belong to whatever
+  // already models the signal at higher fidelity (a comment policy's threads are
+  // rule 2b's, with the author and body attached).
+  const failing = (checks ?? []).filter((c) => c.status === 'failing' && !c.advisory);
   if (failing.length === 0) {
     return { actionable: true, dispatch: [], escalate: [], ignored: [], urgent: false };
   }
@@ -143,7 +154,7 @@ export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPoli
 
   for (const check of failing) {
     const rule = policy.checks.find((r) => matchesCheckGlob(r.match, check.name)) ?? null;
-    const match: CiMatch = { name: check.name, rule };
+    const match: CiMatch = { name: check.name, rule, blocking: check.blocking };
     // No rule claimed it => the pre-config behaviour for that check: fix it.
     const action: CiFailureAction = rule ? (rule.onFailure ?? 'ignore') : 'dispatch';
     if (action === 'dispatch') {
@@ -191,6 +202,17 @@ export function ciFailureNote(verdict: CiVerdict): string {
   if (guided.length > 0) {
     lines.push('Guidance for the specific checks that are failing:');
     for (const m of guided) lines.push(`- ${m.name}: ${m.rule!.guidance!.trim()}`);
+  }
+
+  // A failure the provider says does not block completion is still a failure to
+  // fix, but the PR will merge with it red — so an agent that is not told cannot
+  // read "the PR is mergeable" as evidence its fix landed.
+  const optional = verdict.dispatch.filter((m) => m.blocking === false).map((m) => m.name);
+  if (optional.length > 0) {
+    lines.push(
+      `These failing checks do not block the merge — ${optional.join(', ')}. Fix them anyway; they are ` +
+        'named here so you do not read the pull request being mergeable as your fix having landed.',
+    );
   }
 
   const held = [...verdict.ignored, ...verdict.escalate].map((m) => m.name);

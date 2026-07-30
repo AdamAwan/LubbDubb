@@ -203,6 +203,54 @@ test('ciFailureNote: nothing to say adds nothing at all', () => {
 });
 
 // --------------------------------------------------------------------------
+// Advisory and non-blocking checks
+// --------------------------------------------------------------------------
+
+test('classifyCiFailures: an advisory failing check is never classified', () => {
+  // Not dispatched, not escalated, not muted — it is not the CI policy's business
+  // at all. Rule 2b owns the signal the Azure comment policy restates.
+  const v = classifyCiFailures([{ name: 'Comment requirements', status: 'failing', advisory: true }], policy());
+  assert.deepEqual(v.dispatch, []);
+  assert.deepEqual(v.escalate, []);
+  assert.deepEqual(v.ignored, []);
+});
+
+test('classifyCiFailures: no ci.checks rule can claim an advisory check', () => {
+  const v = classifyCiFailures(
+    [{ name: 'Comment requirements', status: 'failing', advisory: true }],
+    policy({ match: '*', onFailure: 'escalate' }),
+  );
+  assert.deepEqual(v.escalate, []);
+  assert.equal(ciNeedsHuman(v), false);
+});
+
+test('classifyCiFailures: an Optional failing check dispatches, carrying that it does not block', () => {
+  const v = classifyCiFailures(
+    [{ name: 'Dotnet Code Format Validation', status: 'failing', blocking: false }],
+    policy(),
+  );
+  assert.equal(v.actionable, true);
+  assert.deepEqual(
+    v.dispatch.map((m) => ({ name: m.name, blocking: m.blocking })),
+    [{ name: 'Dotnet Code Format Validation', blocking: false }],
+  );
+});
+
+test('ciFailureNote: a non-blocking failure is named as not holding the merge', () => {
+  const v = classifyCiFailures(
+    [{ name: 'Dotnet Code Format Validation', status: 'failing', blocking: false }],
+    policy(),
+  );
+  const note = ciFailureNote(v);
+  assert.match(note, /do not block the merge — Dotnet Code Format Validation/);
+});
+
+test('ciFailureNote: a blocking failure says nothing about blocking', () => {
+  const v = classifyCiFailures([{ name: 'Build-dotnet', status: 'failing', blocking: true }], policy());
+  assert.equal(ciFailureNote(v), '');
+});
+
+// --------------------------------------------------------------------------
 // Config validation — the load-time refusals
 // --------------------------------------------------------------------------
 
