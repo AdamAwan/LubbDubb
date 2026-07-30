@@ -547,7 +547,7 @@ test('the fleet and the pulse are each one control in the bar', () => {
   const markup = render((s) => {
     s.control.cap = 3;
   });
-  const bar = markup.slice(0, markup.indexOf('fx-rails'));
+  const bar = markup.slice(0, markup.indexOf('fx-grid'));
 
   assert.equal((bar.match(/2\/3|2<\/span>\s*<small>\/3/g) ?? []).length, 1, 'the fleet must be one reading in the bar');
   assert.match(bar, /class="fleet-control[^"]*"/, 'and it must be the one with the steppers on it');
@@ -558,6 +558,46 @@ test('the fleet and the pulse are each one control in the bar', () => {
     'the scan gauge must be the button that runs one',
   );
   assert.doesNotMatch(bar, /Run a scan/, 'so there must be no second button saying so');
+});
+
+/**
+ * One grid, and the document order is the reading order. The rails are gone —
+ * with them the independently scrolling columns — so placement is CSS alone, and
+ * the two things this asserts are the two a later edit could quietly undo: that
+ * every panel is a *direct child* of the one grid (a wrapper re-introduced round
+ * any of them takes it out of the grid, and its span rule then does nothing), and
+ * that Inspection and Bots are adjacent, which is what lets one row hold both.
+ * Asserted on the markup rather than on a computed width, since `order` no longer
+ * exists to rearrange it: what is next to what is decided here.
+ */
+test('every panel is a tile of one grid, inspection beside bots', () => {
+  const markup = render();
+
+  assert.doesNotMatch(markup, /class="fx-rail/, 'no rail may wrap a panel out of the grid');
+  const grid = markup.slice(markup.indexOf('class="fx-grid"'));
+
+  const order = [...grid.matchAll(/class="fx-line-wrap|data-fx="([a-z-]+)"/g)].map((m) => m[1] ?? 'line');
+  assert.deepEqual(
+    order,
+    ['line', 'inspection', 'bots', 'goal-floor', 'yard', 'shift-log', 'signals'],
+    'the grid must hold every panel, in reading order, with the two halves of the moment adjacent',
+  );
+});
+
+/**
+ * Ended shifts are the desks' argument one panel down: the count is worth having
+ * in the head, the cards are history, and history above the bots that are out now
+ * makes the panel read as longer than the fleet is. So the floor draws the count
+ * and the cards open in front of it — which means the assertion is that no *spent*
+ * bot is on the floor at all, since `renderToStaticMarkup` cannot open the modal.
+ */
+test('an ended shift is a count in the bots head, not a card on the floor', () => {
+  const markup = render();
+  const bots = markup.slice(markup.indexOf('data-fx="bots"'), markup.indexOf('data-fx="goal-floor"'));
+
+  assert.match(bots, /<button[^>]*>[1-9]\d* shifts? ended</, 'the head must carry the count, as the way in');
+  assert.doesNotMatch(markup, /fx-bot fx-sunk[^"]*spent/, 'and no bot whose shift ended may be drawn on the floor');
+  assert.doesNotMatch(markup, /class="fx-sub">Shifts/, 'nor the subheading the list stood under');
 });
 
 /**
@@ -572,7 +612,7 @@ test('a dropped link empties the floor rather than dating it', () => {
 
   const off = render(undefined, true, false);
   assert.match(off, /Off the air/, 'a dropped link must be stated');
-  assert.doesNotMatch(off, /class="fx-rails"/, 'and nothing the harness stopped confirming may be drawn');
+  assert.doesNotMatch(off, /class="fx-grid"/, 'and nothing the harness stopped confirming may be drawn');
   for (const gauge of ['Scan', 'Bots', 'Alerts', 'Faults']) {
     assert.doesNotMatch(off, new RegExp(`>${gauge}<`), `${gauge} is a number nobody is confirming`);
   }

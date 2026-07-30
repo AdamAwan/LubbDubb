@@ -45,12 +45,18 @@ import { productionReading } from './production.js';
  * rates, the spend and the truncation caveat, at the size they were drawn for.
  *
  * Every panel is bound to a `const` below and then *placed*, so what a panel
- * contains and where it sits stop being the same edit. There is one DOM for
- * every width: both rails are always here, and below 1900px `.fx-rail`
- * goes `display: contents` so its panels fall through into the page grid. The
- * breakpoint is therefore stated once, in CSS — matching it in React as well
- * would be a second definition to keep in step, bought with a resize listener.
- * See `docs/spec/17-cockpit.md`.
+ * contains and where it sits stop being the same edit. Placement is **one CSS
+ * grid**: every panel is a direct child of `.fx-grid`, in the order it reads, and
+ * an arrangement is only how many tracks there are and what each panel spans.
+ * There is one DOM for every width and the breakpoints live in CSS alone —
+ * matching them in React would be a second definition to keep in step, bought
+ * with a resize listener.
+ *
+ * The two rails that used to hold these panels above 1900px are gone, and with
+ * them the three scrollbars: a rail scrolling on its own means the page has no
+ * single reading position, and the panel beside the one you are reading does not
+ * travel with it. Document order is reading order now, so no panel carries an
+ * `order` either. See `docs/spec/17-cockpit.md`.
  *
  * Where a panel carries a refusal rule or an async flow it is the *shared*
  * component, unchanged and tinted through the tokens: the escalation card,
@@ -96,6 +102,11 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     />
   );
 
+  // Bounded, and the count says by how much — the shift log's own convention. A
+  // finished agent is kept in the store forever, so an unbounded list here is a
+  // panel that grows without limit for a reading nobody scrolls to the end of.
+  const shiftsShown = view.past.slice(0, 24);
+
   const bots = (
     <section className="fx-card fx-bev" data-fx="bots">
       <div className="fx-head">
@@ -103,10 +114,27 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           <Icon name="bot" />
           <h2>Bots in the Field</h2>
         </div>
-        <p className="fx-note">
-          {Math.max(0, state.control.cap - view.live.length)} pad
-          {state.control.cap - view.live.length === 1 ? '' : 's'} free
-        </p>
+        {/* Ended shifts are history, and history in front of the bots that are out
+            *now* is the panel reading as longer than the fleet is. So it is the
+            gauge treatment the desks got, panel-local: the count stays in the head
+            — a shift that ended is worth knowing about — and the cards it counts
+            open in front. */}
+        <div className="fx-head-act">
+          <p className="fx-note">
+            {Math.max(0, state.control.cap - view.live.length)} pad
+            {state.control.cap - view.live.length === 1 ? '' : 's'} free
+          </p>
+          {view.past.length > 0 && (
+            <button
+              type="button"
+              className="btn ghost small"
+              onClick={() => setModal('shifts')}
+              title="The bots whose shift has ended"
+            >
+              {view.past.length} shift{view.past.length === 1 ? '' : 's'} ended
+            </button>
+          )}
+        </div>
       </div>
       <div className="fx-body">
         {view.live.length === 0 && (
@@ -129,29 +157,32 @@ export function FactoryRoot({ view, actions }: SkinProps) {
             onComplete={() => actions.completeAgent(a.id)}
           />
         ))}
-
-        {view.past.length > 0 && <p className="fx-sub">Shifts ended</p>}
-        {view.past.slice(0, 6).map((a) => (
-          <BotCard
-            key={a.id}
-            agent={a}
-            task={view.taskFor(a)}
-            now={now}
-            flags={view.flagsByAgent.get(a.id)}
-            artifactUrls={state.artifactUrls ?? {}}
-            onOpen={() => actions.select(a.id)}
-            past
-          />
-        ))}
       </div>
     </section>
   );
 
-  // Above both rails rather than inside one, and that is a deliberate break of the
-  // rails' whose-turn split: a pull request is the world object you are most often
-  // the blocker for, so it outranks the split instead of living in it. It replaces
-  // two panels — the silo towers and the Launches log — and the log's one fact with
-  // any tension left in it, the merge count, rides in this header.
+  const shifts = (
+    <div className="fx-body">
+      {shiftsShown.map((a) => (
+        <BotCard
+          key={a.id}
+          agent={a}
+          task={view.taskFor(a)}
+          now={now}
+          flags={view.flagsByAgent.get(a.id)}
+          artifactUrls={state.artifactUrls ?? {}}
+          onOpen={() => actions.select(a.id)}
+          past
+        />
+      ))}
+    </div>
+  );
+
+  // Beside Bots from 1500px up, half the width each: the parts on the rack and the
+  // bots that will work them are one reading, and reading them as one is what the
+  // rails' whose-turn split used to cost. It replaces two panels — the silo towers
+  // and the Launches log — and the log's one fact with any tension left in it, the
+  // merge count, rides in this header.
   const inspection = (
     <section className="fx-card fx-bev fx-insp" data-fx="inspection">
       <div className="fx-head">
@@ -295,26 +326,20 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         <>
           {recovery}
 
-          {/* Two rails split on *whose turn it is*: what the harness is doing, and
-          what the world is doing back. What *you* are the blocker for is no
-          longer a rail — it is a count in the status bar, because that is how it
-          is read. Production headed the world rail and is no longer here at all,
-          for the same reason: it is consulted rather than watched, so it is a
-          gauge in the bar and the graph opens from it. Below 1900px these
-          dissolve and `order` restores the reading order. */}
-          {inspection}
-
-          <div className="fx-rails">
-            <div className="fx-rail fx-rail-floor">
-              {line}
-              {bots}
-              {goalFloor}
-              {yard}
-            </div>
-            <div className="fx-rail fx-rail-world">
-              {signals}
-              {shiftLog}
-            </div>
+          {/* One grid, in reading order: the line, then the two halves of the
+          moment (the parts on the rack, the bots out working them), then the
+          detail the line cannot hold, then the readings you consult rather than
+          watch. What *you* are the blocker for is no longer a column here — it is
+          a count in the status bar, because that is how it is read; Production
+          left the same way and its graph opens from its gauge. */}
+          <div className="fx-grid">
+            {line}
+            {inspection}
+            {bots}
+            {goalFloor}
+            {yard}
+            {shiftLog}
+            {signals}
           </div>
 
           {modal === 'production' && (
@@ -325,6 +350,21 @@ export function FactoryRoot({ view, actions }: SkinProps) {
               onClose={() => setModal(null)}
             >
               <Production reading={production} />
+            </Modal>
+          )}
+
+          {modal === 'shifts' && (
+            <Modal
+              title="Shifts Ended"
+              icon="bot"
+              note={
+                view.past.length > shiftsShown.length
+                  ? `last ${shiftsShown.length} of ${view.past.length}`
+                  : `${view.past.length} bot${view.past.length === 1 ? '' : 's'} in`
+              }
+              onClose={() => setModal(null)}
+            >
+              {shifts}
             </Modal>
           )}
 

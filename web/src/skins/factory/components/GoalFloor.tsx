@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useState, type CSSProperties, type JSX } from 'react';
 import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../../types.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
 import { refChip, refLink } from '../../../components/util.js';
@@ -306,7 +306,18 @@ function FloorPlan({
 
   return (
     <div className="fx-scroller">
-      <svg className="fx-gf" viewBox={`0 0 ${width} ${height}`} style={{ width: `${width}px` }} role="img">
+      {/* The drawing's own width goes in as a custom property rather than as the
+          element's width, the way the line's does: given a panel wider than the
+          floor it fills it and grows taller with it (the whole point of a
+          full-width panel — a four-machine plan drawn at 1:1 in a 1900px band is
+          a postage stamp), and given a narrower one it keeps its intrinsic size
+          and the scroller scrolls. See the CSS for the cap on how far it grows. */}
+      <svg
+        className="fx-gf"
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ '--fx-gf-w': `${width}px` } as CSSProperties}
+        role="img"
+      >
         <title>{`The production line for issue:${floor.issueNumber} — ${floor.title}`}</title>
 
         {/* Belts first, so a machine always covers its own join. */}
