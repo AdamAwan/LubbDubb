@@ -97,7 +97,9 @@ const realApi = {
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.
   getWorkRoots: () =>
-    authFetch('/api/work').then((r) => json<{ roots: WorkNodeView[]; unrecorded: UnrecordedWorkView[] }>(r)),
+    authFetch('/api/work').then((r) =>
+      json<{ roots: WorkNodeView[]; unrecorded: UnrecordedWorkView[]; refUrls: Record<string, string> }>(r),
+    ),
   getWorkSubtree: (ref: string) =>
     authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) =>
       json<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }>(r),

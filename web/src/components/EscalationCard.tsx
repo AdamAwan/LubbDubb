@@ -89,7 +89,7 @@ export function EscalationCard({
             agent resumed
           </span>
         )}
-        {signal && <span className="chip small">{signal}</span>}
+        {signal && <span className="chip small">{linkify(signal, refUrls)}</span>}
         <span className="muted small esc-time">{relTime(escalation.createdAt, now)}</span>
       </div>
       <div className="escalation-prompt">{linkify(escalation.prompt, refUrls)}</div>

@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import type { WorldEvent } from '../../../types.js';
-import { relTime } from '../../../components/util.js';
+import { linkify, refLink, relTime } from '../../../components/util.js';
 import { iconForEventKind, signalPolarity, type SignalPolarity } from '../vocabulary.js';
 import { Icon } from './Sprite.js';
 
@@ -43,7 +43,15 @@ function group(events: readonly WorldEvent[]): SignalRow[] {
   return [...rows.values()];
 }
 
-export function Signals({ events, now }: { events: WorldEvent[]; now: number }): JSX.Element {
+export function Signals({
+  events,
+  now,
+  refUrls,
+}: {
+  events: WorldEvent[];
+  now: number;
+  refUrls: Record<string, string>;
+}): JSX.Element {
   if (events.length === 0) {
     return <p className="fx-empty">The world has not moved.</p>;
   }
@@ -68,9 +76,9 @@ export function Signals({ events, now }: { events: WorldEvent[]; now: number }):
               </span>
             </span>
             <span className="fx-sig-txt">
-              <span className="r">{event.ref ?? event.kind}</span>
+              <span className="r">{event.ref ? refLink(event.ref, refUrls) : event.kind}</span>
               <span className="s" title={event.summary}>
-                {event.summary}
+                {linkify(event.summary, refUrls)}
               </span>
             </span>
             <span className="fx-ref">{relTime(event.createdAt, now)}</span>

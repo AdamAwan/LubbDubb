@@ -832,7 +832,8 @@ export const demoApi = {
   // The demo's world is built fresh in the browser each load, so nothing has ever
   // been recorded for it — an empty graph is the honest answer, and these exist to
   // keep the two API shapes interchangeable.
-  getWorkRoots: () => Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[] }),
+  getWorkRoots: () =>
+    Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
   getWorkSubtree: (_ref: string) => Promise.resolve({ nodes: [] as WorkNodeView[], refUrls: {} }),
   // The demo's one written-up goal, so the Manifest station has something to open.
   // Everything else answers null, which is the same thing the real route says for a

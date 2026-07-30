@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import type { Agent, AgentFlag, Task } from '../../../types.js';
 import { FlagChips } from '../../../components/FlagChips.js';
 import { ConfirmButton } from '../../../components/ConfirmButton.js';
-import { agentUsageLine, elapsed, relTime } from '../../../components/util.js';
+import { agentUsageLine, elapsed, refChip, relTime } from '../../../components/util.js';
 import { Icon } from './Sprite.js';
 import { botState, clip, iconForOrigin } from '../vocabulary.js';
 
@@ -22,6 +22,7 @@ export function BotCard({
   lastLine,
   flags,
   artifactUrls,
+  refUrls,
   onOpen,
   onKill,
   onComplete,
@@ -33,6 +34,7 @@ export function BotCard({
   lastLine?: string;
   flags?: AgentFlag[];
   artifactUrls: Record<string, string>;
+  refUrls: Record<string, string>;
   onOpen(): void;
   onKill?: () => Promise<void>;
   onComplete?: () => Promise<void>;
@@ -50,7 +52,12 @@ export function BotCard({
           {state === 'idle' ? 'Idle — needs you' : (task?.title ?? agent.id)}
         </span>
         <span className="fx-ref">
-          {origin ? clip(origin, 24) : agent.status} · {elapsed(agent.startedAt, agent.endedAt, now)}
+          {/* The origin links when the provider resolved it, else it stays the
+              plain clipped ref — refChip falls back to null, never a dead link. */}
+          {origin
+            ? (refChip(origin, clip(origin, 24), refUrls, { className: 'ext-ref', title: origin }) ?? clip(origin, 24))
+            : agent.status}{' '}
+          · {elapsed(agent.startedAt, agent.endedAt, now)}
         </span>
       </div>
 

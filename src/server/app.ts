@@ -1025,15 +1025,26 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // `unrecorded` rides on the roots read rather than taking a route of its own:
   // it is the same fetch-on-open the panel already makes, computed from rows it
   // is already reading. It is a lens — nothing in the dispatcher consults it.
-  app.get('/api/work', WORK_RATE_LIMIT, async () => ({
-    roots: store.listWorkRoots(),
-    unrecorded: unrecordedWork(
+  app.get('/api/work', WORK_RATE_LIMIT, async () => {
+    const roots = store.listWorkRoots();
+    const unrecorded = unrecordedWork(
       store.listWorkNodes(),
       store.listJobs(),
       store.listWorkItemFilings(),
       store.listWorkItemIgnores(),
-    ),
-  }));
+    );
+    // The panel draws each root and unrecorded item by its ref, so it needs a URL
+    // for each — resolved off the connector here (not the snapshot's `refUrls`,
+    // which this route doesn't ship) exactly as the subtree route does, because a
+    // PR the graph remembers merging left the world hours ago. Unresolvable refs
+    // are simply absent and the cockpit renders them as plain text.
+    const refUrls: Record<string, string> = {};
+    for (const ref of [...roots.map((r) => r.ref), ...unrecorded.map((u) => u.ref)]) {
+      const url = connector.resolveRefUrl(ref);
+      if (url) refUrls[ref] = url;
+    }
+    return { roots, unrecorded, refUrls };
+  });
 
   // The other verdict on the same row: no tracker item is wanted for this work.
   // A delete undoes it, so the panel can offer it back — an ignore that could only
@@ -1115,9 +1126,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // built from the world, and a PR the graph remembers merging left the world
     // hours ago — the connector can still name its URL.
     const refUrls: Record<string, string> = {};
-    for (const node of nodes) {
-      const url = connector.resolveRefUrl(node.ref);
-      if (url) refUrls[node.ref] = url;
+    // A node's own ref, and the `base_ref` it stacks on — the row draws both, so
+    // both get a URL (deduped; a base is another node's ref most of the time).
+    for (const ref of nodes.flatMap((node) => [node.ref, node.baseRef])) {
+      if (!ref || ref in refUrls) continue;
+      const url = connector.resolveRefUrl(ref);
+      if (url) refUrls[ref] = url;
     }
     return { nodes, refUrls };
   });
@@ -1406,6 +1420,12 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     ci: config.ci,
     now: world.takenAt,
   };
+  // The world's change history the Activity feed / Signals panels draw. Read here
+  // rather than at the snapshot literal below because its entries carry structured
+  // refs (`pr:42`, `issue:13`) the feed links, so they have to be fed into the ref
+  // map — and an event can name a PR that merged out of the open list, so its ref
+  // is resolved on its own rather than borrowed from a world item now gone.
+  const worldEvents = store.listWorldEvents(100);
   // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
   // cockpit only looks refs up in this map, so it stays provider-agnostic.
   const refUrls = buildRefUrls({
@@ -1428,6 +1448,15 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
       // that resolves neither leaves them absent, and the cockpit draws nothing.
       ...wirePlans.map((p) => p.statusCommentRef),
       ...assays.map((a) => issueCommentRef(a.originRef, a.commentRef)),
+      // Each Activity-feed / Signals entry's structured ref, so the feed can link
+      // it — the summaries embed `#n` (covered by the item lists), but the ref
+      // itself (`pr:42`, `issue:13`) is only keyed here.
+      ...worldEvents.map((e) => e.ref),
+      // Every tracked task's origin ref (`pr:142:ci`, `issue:13`, `issue:13:part:x`):
+      // the fleet card, the overlap panel and the recovery panel each link one, and
+      // the colon-form origin is not the `#n` the item lists are keyed by. A
+      // `job:<id>` origin resolves to nothing and is simply omitted.
+      ...tasks.map((t) => t.originRef),
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
@@ -1578,7 +1607,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     // headroom cut (issue #69). A per-pulse projection — null until a cycle
     // has run, or when the active dispatcher doesn't materialise a plan.
     upcoming: harness.upcoming,
-    worldEvents: store.listWorldEvents(100),
+    worldEvents,
     // Recorded failures (cycle exceptions, provider outages, agent crashes,
     // route 500s) for the cockpit's Errors panel.
     errors: store.listErrors(100),

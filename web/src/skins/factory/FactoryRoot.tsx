@@ -150,6 +150,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
             lastLine={view.tailByAgent.get(a.id)}
             flags={view.flagsByAgent.get(a.id)}
             artifactUrls={state.artifactUrls ?? {}}
+            refUrls={state.refUrls}
             onOpen={() => actions.select(a.id)}
             onKill={() => actions.killAgent(a.id)}
             onComplete={() => actions.completeAgent(a.id)}
@@ -169,6 +170,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           now={now}
           flags={view.flagsByAgent.get(a.id)}
           artifactUrls={state.artifactUrls ?? {}}
+          refUrls={state.refUrls}
           onOpen={() => actions.select(a.id)}
           past
         />
@@ -288,7 +290,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         </div>
         <p className="fx-note">what changed out there</p>
       </div>
-      <Signals events={state.worldEvents} now={now} />
+      <Signals events={state.worldEvents} now={now} refUrls={state.refUrls} />
     </section>
   );
 

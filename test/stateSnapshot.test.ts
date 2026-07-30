@@ -59,6 +59,49 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
   system.store.close();
 });
 
+test('buildStateSnapshot keys world-event refs so the activity feed can link them', async () => {
+  // The activity feed / signals panels draw each `WorldEvent`, whose structured
+  // `ref` (`pr:42`, `issue:13`) is the canonical vocabulary, not the `#n` the item
+  // lists are keyed by. A world event can also name a PR that has since left the
+  // world (merged out of the open list), so its ref must be resolved on its own
+  // rather than borrowed from a world item that is no longer there.
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
+  system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
+  system.store.recordWorldEvents([
+    { kind: 'pr_merged', ref: 'pr:91', summary: 'PR #91 merged' },
+    { kind: 'issue_linked', ref: 'issue:88', summary: 'Issue #88 linked to PR #91' },
+  ]);
+  system.store.setWorldBaseline(await system.connector.getState());
+
+  const snap = await buildStateSnapshot(system);
+
+  assert.equal(snap.refUrls['pr:91'], 'https://example.test/pr:91');
+  assert.equal(snap.refUrls['issue:88'], 'https://example.test/issue:88');
+  system.store.close();
+});
+
+test('buildStateSnapshot keys each task origin ref so agent/overlap/recovery cards can link it', async () => {
+  // The fleet card, the overlap panel and the recovery panel all draw a task's
+  // *origin* ref (`pr:142:ci`, `issue:13`) through `refLink`, which only links a
+  // key the map actually holds — the item lists key by `#n`, not the colon-form
+  // origin — so the origin must be resolved on its own.
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
+  system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
+  system.store.createTask({
+    kind: 'code',
+    title: 'Fix CI on PR #142',
+    prompt: 'p',
+    branch: 'feature/rate-limit',
+    originRef: 'pr:142:ci',
+  });
+  system.store.setWorldBaseline(await system.connector.getState());
+
+  const snap = await buildStateSnapshot(system);
+
+  assert.equal(snap.refUrls['pr:142:ci'], 'https://example.test/pr:142:ci');
+  system.store.close();
+});
+
 test('buildStateSnapshot attaches a pickup verdict to every issue', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'Bug' });
