@@ -3,7 +3,7 @@ import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView 
 import { AsyncButton } from '../../../components/AsyncButton.js';
 import { refChip, refLink } from '../../../components/util.js';
 import { ASSAY_EXPIRY } from '../../../components/WorldSummary.js';
-import { buildGoalFloor, type GoalFloorModel, type Machine } from '../goalFloor.js';
+import { buildGoalFloor, floorGoals, inProduction, type GoalFloorModel, type Machine } from '../goalFloor.js';
 import { clip, iconForStage, patchStatus, toneColor } from '../vocabulary.js';
 
 /**
@@ -72,20 +72,29 @@ interface GoalFloorProps {
   onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
   /** `GET /api/work/:ref`, routed through `CockpitActions` — a skin never reaches `api.js`. */
   onFetchWork: (ref: string) => Promise<{ nodes: WorkNodeView[] }>;
+  /**
+   * The watch gate, from `config` — what decides which goals get a floor at all.
+   * See {@link floorGoals}: a goal nothing has staked a claim to has no production
+   * line, so it is not drawn one, and both labels empty leaves every goal drawn.
+   */
+  watchLabel: string;
+  ignoreLabel: string;
 }
-
-const IN_PRODUCTION = new Set(['active', 'has_pr', 'planning', 'delivered']);
-const inProduction = (issue: Issue): boolean => IN_PRODUCTION.has(issue.pickup?.status ?? '');
 
 export function GoalFloor(props: GoalFloorProps): JSX.Element {
   const { issues, plans, parts, stopped, refUrls } = props;
   const [picked, setPicked] = useState<number | null>(null);
   const [recorded, setRecorded] = useState<WorkNodeView[]>([]);
 
+  // Every reading below is of the *staked* goals — the strip, the default pick and
+  // the pick that survives a poll alike. A goal un-watched while you were looking
+  // at its floor therefore falls back to another one rather than blanking.
+  const goals = floorGoals(issues, { watchLabel: props.watchLabel, ignoreLabel: props.ignoreLabel });
+
   // Opened on a goal the harness is actually working, rather than on whichever
   // ticket the provider listed first: the strip is right there to pick another,
   // and a floor with nothing moving on it is the least useful thing to land on.
-  const current = issues.find((i) => i.number === picked) ?? issues.find(inProduction) ?? issues[0] ?? null;
+  const current = goals.find((i) => i.number === picked) ?? goals.find(inProduction) ?? goals[0] ?? null;
   const ref = current ? `issue:${current.number}` : null;
 
   // Fetched on open, never polled — the graph only ever grows, and the panel it
@@ -107,8 +116,17 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ref]);
 
+  // Two empty states, because they are different facts and only one of them has
+  // something to do about it: nobody has staked a claim to anything, or the
+  // provider returned no goals at all.
   if (!current) {
-    return <p className="fx-empty">No goals in the world — nothing to lay a floor for.</p>;
+    return (
+      <p className="fx-empty">
+        {issues.length > 0
+          ? `No goals have a claim staked — tag one "${props.watchLabel}" in the Yard and its floor is laid here.`
+          : 'No goals in the world — nothing to lay a floor for.'}
+      </p>
+    );
   }
 
   const plan = plans.find((p) => p.originRef === `issue:${current.number}`) ?? null;
@@ -127,7 +145,7 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
   return (
     <>
       <div className="fx-gf-patches" role="tablist" aria-label="Goals">
-        {issues.map((issue) => {
+        {goals.map((issue) => {
           const status = patchStatus(issue.pickup?.status ?? 'eligible');
           const on = issue.number === current.number;
           return (

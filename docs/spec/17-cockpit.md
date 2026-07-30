@@ -141,10 +141,10 @@ gauge rather than a column
 
 There is **one DOM for every width**; the arrangement is chosen in CSS alone:
 
-| width    | arrangement                                                                       |
-| -------- | --------------------------------------------------------------------------------- |
-| < 940    | one column                                                                        |
-| 940–1499 | two columns; everything but the shift log and signals spans both                   |
+| width    | arrangement                                                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| < 940    | one column                                                                                                                                 |
+| 940–1499 | two columns; everything but the shift log and signals spans both                                                                           |
 | ≥ 1500   | four columns — the line, the goal floor and the yard span all four; Inspection and Bots take two each, and so do the shift log and signals |
 
 **The breakpoints are therefore stated once.** Matching them in React as well — rendering a
@@ -427,8 +427,25 @@ written against carries a node-by-node conformance table against the workflow do
 | Signal post          | Update the ticket — state and status comment       |
 | Launch               | `delivered`, or a launch that failed verification  |
 
-Six properties, and they are what to preserve:
+Seven properties, and they are what to preserve:
 
+- **The strip is the goals we have a claim staked to.** Issues are opt-in
+  ([06](06-issue-pickup.md)), so an untagged ticket has no production line and is drawn none:
+  `floorGoals(issues, {watchLabel, ignoreLabel})` keeps what `watchBucket` — the World panel's own
+  predicate, not a second reading of the same labels — calls `watched`. Two exceptions, and each is a
+  way the panel could otherwise go confidently blank. An **empty watch label** filters nothing
+  (`labelPrefix: ''` is the act-on-everything escape hatch, and issues default opt-out, so filtering
+  there would hide every goal on exactly the deployments that turned the gate off). And **anything in
+  flight is drawn whatever its tags say** (`inProduction`: `active` / `has_pr` / `planning` /
+  `delivered`) — a tag pulled mid-flight must not make a live plan, an open pull request or a running
+  agent invisible, which covers `ignored` as much as `unwatched`, because the reason is the visibility
+  of live work and not the tag's polarity. Order is **claimed first, then ascending issue number**: the
+  strip is a place positions are learned, so it is sorted on the two things that barely move rather
+  than on status or activity, which would shuffle it under an operator exactly while something is
+  going wrong. `inProduction` lives beside the filter because it is also the default pick's heuristic
+  — a floor with nothing moving on it is the least useful thing to land on — and nothing staked at all
+  gets its **own** empty line, since "nothing is tagged" and "the provider returned no goals" are
+  different facts and only one of them has an action.
 - **Every machine is a work item.** A splitter and a merger have no status, no agent and no origin
   ref — they are where the edge list branches — so they are belt _fixtures_. Drawing one as a machine
   also stretches it to the full height of the fan-out, which is the same mistake showing up as a

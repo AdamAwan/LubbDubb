@@ -1,4 +1,5 @@
 import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../types.js';
+import { watchBucket } from '../../worldBuckets.js';
 import { scannersFor, type Scanner } from './scanners.js';
 import {
   assayStatus,
@@ -47,6 +48,60 @@ import {
  *   it to the full height of the fan-out, which is the same mistake showing up as
  *   a visual bug.
  */
+
+/* ------------------------------ the strip ----------------------------- */
+
+/**
+ * The statuses that mean the harness has this goal in hand *now*, whatever its
+ * tags say. Also the default pick's heuristic — a floor with nothing moving on it
+ * is the least useful thing to land on — so the filter below and the pick read one
+ * set rather than two that agree by coincidence.
+ */
+const IN_PRODUCTION = new Set(['active', 'has_pr', 'planning', 'delivered']);
+
+export function inProduction(issue: Issue): boolean {
+  return IN_PRODUCTION.has(issue.pickup?.status ?? '');
+}
+
+/**
+ * Which goals get a floor, and in what order.
+ *
+ * Issues are **opt-in**, so an untagged ticket is one nothing has staked a claim
+ * to: it has no production line, and drawing a full one for it claims machines
+ * that were never built. The strip listed every open issue the provider returned,
+ * which on a real world is mostly those.
+ *
+ * Three things decide it, and each is why something here is not simply "filter on
+ * the tag":
+ *
+ * - **Gates off wins first.** An empty watch label is the documented
+ *   act-on-everything escape hatch (`labelPrefix: ''`), and issues default
+ *   *opt-out*, so filtering there would hide every goal on exactly the deployments
+ *   that turned the gate off. `WorldSummary`'s `gated` check exists for the same
+ *   reason, and reads *either* label because it files rows into three tabs; the
+ *   watch label alone is what decides this one, since with none there is nothing a
+ *   claim could be staked with.
+ * - **A claim is {@link watchBucket}'s answer**, the World panel's own predicate,
+ *   rather than a second reading of the same labels sitting nowhere near it.
+ * - **In-flight work is drawn whatever the tags say.** A `-watch` tag removed
+ *   mid-flight must not make a live plan, an open pull request or a running agent
+ *   invisible — the work carries on either way, and the floor is where it is seen.
+ *   That covers `ignored` as well as `unwatched`: the reason is the visibility of
+ *   live work, not the tag's polarity.
+ *
+ * Order is claimed goals first, then **ascending issue number** within each group.
+ * The strip is a place an operator learns positions in, so it is sorted on the two
+ * things that barely move; ordering by status or activity would shuffle it under
+ * them exactly while something is going wrong.
+ */
+export function floorGoals(issues: readonly Issue[], gate: { watchLabel: string; ignoreLabel: string }): Issue[] {
+  const gated = Boolean(gate.watchLabel);
+  const claimed = (issue: Issue): boolean =>
+    !gated || watchBucket(issue.labels, { ...gate, defaultWatched: false }) === 'watched';
+  return issues
+    .filter((issue) => claimed(issue) || inProduction(issue))
+    .sort((a, b) => Number(claimed(b)) - Number(claimed(a)) || a.number - b.number);
+}
 
 /* ------------------------------- layout ------------------------------- */
 

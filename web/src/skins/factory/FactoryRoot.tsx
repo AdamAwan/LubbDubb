@@ -227,6 +227,8 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         upcoming={state.upcoming?.items ?? []}
         refUrls={state.refUrls}
         stopped={stopped}
+        watchLabel={state.config.watchLabel}
+        ignoreLabel={state.config.ignoreLabel}
         onViewPlan={(id) => actions.viewPlan(id)}
         onReplan={(planId) => actions.replan(planId)}
         onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}

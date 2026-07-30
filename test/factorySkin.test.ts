@@ -39,7 +39,7 @@ const {
   toneColor,
   returnRoute,
 } = await import('../web/src/skins/factory/vocabulary.js');
-const { buildGoalFloor, floorFixtures, layoutFloor, partProgress } = await import(
+const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress } = await import(
   '../web/src/skins/factory/goalFloor.js'
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
@@ -846,6 +846,9 @@ test('a refused floor draws the override, and a workable one does not', () => {
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
+        // Gates off: these two assert the plan and assay controls, not visibility.
+        watchLabel: '',
+        ignoreLabel: '',
       }),
     );
   };
@@ -894,6 +897,9 @@ test('the floor opens its plan whatever the plan is doing', () => {
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
+        // Gates off: these two assert the plan and assay controls, not visibility.
+        watchLabel: '',
+        ignoreLabel: '',
       }),
     );
   };
@@ -1061,6 +1067,99 @@ test('an awaiting-approval plan draws ghosts', () => {
   assert.equal(assemblers.length, 2);
   assert.ok(assemblers.every((m) => m.presence === 'ghost' && m.status.word === 'Not connected'));
   assert.ok(floor.plates.some((p) => p.text === 'Signer first, then the route.'));
+});
+
+/**
+ * A goal nothing has staked a claim to gets no floor — and the three things that
+ * are not simply "filter on the tag" are each asserted, because each of them is a
+ * way the panel could go confidently blank.
+ */
+test('the floor draws the goals we have a claim staked to', () => {
+  const goal = (number: number, labels: string[], pickup = 'eligible'): Issue => ({
+    id: `iss-${number}`,
+    number,
+    title: `Goal ${number}`,
+    body: '',
+    labels,
+    state: 'open',
+    linkedPrNumber: null,
+    pickup: { eligible: pickup === 'eligible', status: pickup, reasons: [] },
+    assay: null,
+    shortfall: null,
+  });
+  const GATE = { watchLabel: 'lubbdubb-watch', ignoreLabel: 'lubbdubb-ignore' };
+  const numbers = (issues: Issue[]): number[] => floorGoals(issues, GATE).map((i) => i.number);
+
+  assert.deepEqual(numbers([goal(1, []), goal(2, ['lubbdubb-watch'])]), [2], 'an untagged goal has no production line');
+  assert.deepEqual(numbers([goal(3, ['lubbdubb-ignore'])]), [], 'leave-alone means leave off the floor too');
+
+  // Work in flight is drawn whatever the tags say: a tag pulled mid-flight must
+  // not make a live plan, an open PR or a running agent invisible.
+  assert.deepEqual(numbers([goal(4, [], 'planning'), goal(5, [], 'has_pr'), goal(6, [], 'eligible')]), [4, 5]);
+  assert.deepEqual(numbers([goal(7, ['lubbdubb-ignore'], 'active')]), [7], 'an ignored goal with an agent is seen');
+
+  // Claimed first, then by number — the strip is a place positions are learned,
+  // so it is ordered on the two things that barely move.
+  assert.deepEqual(
+    numbers([
+      goal(11, [], 'active'),
+      goal(9, ['lubbdubb-watch']),
+      goal(12, [], 'planning'),
+      goal(8, ['lubbdubb-watch']),
+    ]),
+    [8, 9, 11, 12],
+  );
+
+  // The act-on-everything escape hatch: issues default opt-out, so an empty watch
+  // label filtering anything would hide every goal on exactly the deployments that
+  // turned the gate off.
+  assert.deepEqual(
+    floorGoals([goal(2, []), goal(1, [])], { watchLabel: '', ignoreLabel: '' }).map((i) => i.number),
+    [1, 2],
+  );
+});
+
+/** And the panel reads that list, rather than the world's — including its empty state. */
+test('the goal floor strip is the staked goals', () => {
+  const base = floorInput({}).issue;
+  const open = (number: number, labels: string[]): Issue => ({
+    ...base,
+    id: `iss-${number}`,
+    number,
+    title: `Goal ${number}`,
+    labels,
+    pickup: { eligible: labels.length > 0, status: labels.length > 0 ? 'eligible' : 'unwatched', reasons: [] },
+  });
+  const render = (issues: Issue[]): string =>
+    renderToStaticMarkup(
+      createElement(GoalFloor, {
+        issues,
+        plans: [],
+        parts: [],
+        openPrs: [],
+        closedPrs: [],
+        tasks: [],
+        upcoming: [],
+        refUrls: {},
+        stopped: false,
+        watchLabel: 'lubbdubb-watch',
+        ignoreLabel: 'lubbdubb-ignore',
+        onViewPlan: () => undefined,
+        onReplan: () => undefined,
+        onSetAssay: () => undefined,
+        onFetchWork: () => Promise.resolve({ nodes: [] }),
+      }),
+    );
+
+  // The strip itself, not only the floor it opens on: mapping the world's own list
+  // here draws every ticket back with a floor one click away, which is the whole
+  // filter defeated by the one line that still reads `issues`.
+  const mixed = render([open(1, []), open(2, ['lubbdubb-watch'])]);
+  assert.deepEqual(mixed.match(/issue:\d+ · ore patch/g), ['issue:2 · ore patch'], 'the strip is the staked goals');
+
+  const unwatched = render([open(1, [])]);
+  assert.match(unwatched, /No goals have a claim staked/, 'nothing staked is a different fact from an empty world');
+  assert.doesNotMatch(unwatched, /ore patch/, 'and it draws no strip at all');
 });
 
 /**
