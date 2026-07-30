@@ -156,7 +156,7 @@ function render(
       tails: new Map(),
       lastPulseAt: now,
       viewingPlan: null,
-    viewingRetro: null,
+      viewingRetro: null,
       settingsOpen: false,
     });
     return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
@@ -192,7 +192,7 @@ function renderDesk(
       tails: new Map(),
       lastPulseAt: now,
       viewingPlan: null,
-    viewingRetro: null,
+      viewingRetro: null,
       settingsOpen: false,
     });
     return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));

@@ -683,7 +683,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     is sticky). **Nothing in the dispatcher reads it at all** — asserted structurally, like the work
     graph's own lens test.
   - **After it, `retrospectives`** — one document per goal. Not a plan part, though `expectedKind:
-    'report'` exists: a part is work the plan schedules, retired by a replan and available only to a
+'report'` exists: a part is work the plan schedules, retired by a replan and available only to a
     decomposed issue, while this is about the whole goal and must survive `plan_parts` being rewritten.
     Not a column on `issue_conclusions` either: a conclusion is a verdict a gate re-reads every pulse,
     this is prose nothing branches on. The document is stored on the row rather than surfaced as an

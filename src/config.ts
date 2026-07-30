@@ -1,9 +1,9 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
-import type { PlanningPolicy } from './plans/planning.js';
-import type { AssessmentPolicy } from './delivery/assessment.js';
-import type { AssayPolicy } from './intake/assay.js';
+import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
+import { DEFAULT_ASSESSMENT, type AssessmentPolicy } from './delivery/assessment.js';
+import { DEFAULT_ASSAY, type AssayPolicy } from './intake/assay.js';
 import { DEFAULT_RETROSPECTIVE, type RetrospectivePolicy } from './retro/retro.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
@@ -425,9 +425,11 @@ const DEFAULTS: Config = {
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
-  planning: { enabled: true, maxConcurrentPartsPerIssue: 2, requireApproval: true, gitFetchIntervalMs: 60_000 },
-  assessment: { enabled: true },
-  assay: { enabled: true },
+  // Each policy's own module owns the operator default; the dispatcher's fallback
+  // for an *omitted* policy is a separate answer (off) and lives with the rules.
+  planning: DEFAULT_PLANNING,
+  assessment: DEFAULT_ASSESSMENT,
+  assay: DEFAULT_ASSAY,
   retrospective: DEFAULT_RETROSPECTIVE,
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,

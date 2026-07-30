@@ -661,9 +661,7 @@ function retroBriefing(originRef: string | null | undefined, store: Store): stri
     conclusion: store.getIssueConclusion(issueOriginRef),
     // Null rather than 0 when nothing was reported: PTY mode reports no usage at
     // all, and a confident "$0.00" is the one reading that would be a lie.
-    costUsd: agents.some((a) => a.costUsd !== null)
-      ? agents.reduce((sum, a) => sum + (a.costUsd ?? 0), 0)
-      : null,
+    costUsd: agents.some((a) => a.costUsd !== null) ? agents.reduce((sum, a) => sum + (a.costUsd ?? 0), 0) : null,
   });
   return [padTestimony(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
 }

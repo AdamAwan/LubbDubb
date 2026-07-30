@@ -21,23 +21,9 @@ import { resolveIssueConclusion } from '../issueConclusion.js';
 import { jobBranch } from '../jobs.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { shortfallArm, shortfallRef } from '../delivery/shortfall.js';
-import {
-  DEFAULT_ASSAY,
-  assayBranch,
-  assayHold,
-  assayOrigin,
-  hasWorkStarted,
-  isAssayed,
-  type AssayPolicy,
-} from '../intake/assay.js';
-import { DEFAULT_RETROSPECTIVE, retroOrigin, type RetrospectivePolicy } from '../retro/retro.js';
-import {
-  DEFAULT_ASSESSMENT,
-  assessBranch,
-  assessOrigin,
-  hasPriorWork,
-  type AssessmentPolicy,
-} from '../delivery/assessment.js';
+import { assayBranch, assayHold, assayOrigin, hasWorkStarted, isAssayed, type AssayPolicy } from '../intake/assay.js';
+import { retroOrigin, type RetrospectivePolicy } from '../retro/retro.js';
+import { assessBranch, assessOrigin, hasPriorWork, type AssessmentPolicy } from '../delivery/assessment.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { PLAN_FILE } from '../plans/planDocument.js';
 import {

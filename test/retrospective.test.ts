@@ -224,9 +224,7 @@ test('an undelivered goal is not written up, and neither is one already written'
   const undelivered = await writer().decide(ctx());
   assert.deepEqual(retroDispatches(undelivered.actions), [], 'a run that is not over has nothing to write up');
 
-  const already = await writer().decide(
-    ctx({ deliveries: [delivered()], retrospectiveOrigins: ['issue:12'] }),
-  );
+  const already = await writer().decide(ctx({ deliveries: [delivered()], retrospectiveOrigins: ['issue:12'] }));
   assert.deepEqual(retroDispatches(already.actions), [], 'the row is what stops it firing every pulse');
 });
 

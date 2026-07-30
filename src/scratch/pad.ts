@@ -54,9 +54,7 @@ export function padOriginFor(originRef: string | null): string | null {
  * the tool it actually wants** — `partConclusionOrigin`'s discipline, because an
  * agent handed a silent success believes its note was recorded.
  */
-export function padWriteTarget(
-  originRef: string | null,
-): { ok: true; padRef: string } | { ok: false; error: string } {
+export function padWriteTarget(originRef: string | null): { ok: true; padRef: string } | { ok: false; error: string } {
   const padRef = padOriginFor(originRef);
   if (padRef) return { ok: true, padRef };
   return {
