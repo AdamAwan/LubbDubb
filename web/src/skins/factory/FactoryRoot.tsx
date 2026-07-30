@@ -1,29 +1,23 @@
 import { useState } from 'react';
 import type { SkinProps } from '../types.js';
 import { AgentDrawer } from '../../components/AgentDrawer.js';
-import { ConfirmButton } from '../../components/ConfirmButton.js';
-import { EscalationCard } from '../../components/EscalationCard.js';
-import { FindingsPanel } from '../../components/FindingsPanel.js';
-import { InjectPanel } from '../../components/InjectPanel.js';
-import { LaunchPanel } from '../../components/LaunchPanel.js';
 import { RecoveryPanel } from '../../components/RecoveryPanel.js';
 import { WorldSummary } from '../../components/WorldSummary.js';
 import { relTime } from '../../components/util.js';
 import { SpriteSheet, Icon } from './components/Sprite.js';
 import { StatusBar } from './components/StatusBar.js';
-import { AlertBay } from './components/AlertBay.js';
+import { BlueprintDesk, FaultLog, FindingsDesk, StampDesk } from './components/Desks.js';
 import { TheLine } from './components/TheLine.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
 import { Launches } from './components/Launches.js';
-import { Modal } from './components/Modal.js';
+import { Modal, type FactoryModal } from './components/Modal.js';
 import { Production, ProductionTile } from './components/Production.js';
 import { Signals } from './components/Signals.js';
 import { Silos } from './components/Silos.js';
 import { GoalFloor } from './components/GoalFloor.js';
 import { powerReading } from './power.js';
 import { productionReading } from './production.js';
-import { clip } from './vocabulary.js';
 
 /**
  * The cockpit as a production line.
@@ -39,9 +33,18 @@ import { clip } from './vocabulary.js';
  * reading a glance wants — the shape of the three series and the churn number —
  * and the axes, rates and caveats are behind the click.
  *
+ * The stamp desk, the fault log, the blueprint desk and the findings desk are the
+ * same shape of thing, and the first three used to be panels in a
+ * permanent left-hand rail. All four are read as a *count* far more often than as
+ * contents, so the count is a gauge in the status bar and the panel opens from
+ * it — which is what deleted the rail, and then the last panel on the floor that
+ * was read the same way. See
+ * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
+ * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
+ *
  * Every panel is bound to a `const` below and then *placed*, so what a panel
  * contains and where it sits stop being the same edit. There is one DOM for
- * every width: the three rails are always here, and below 1900px `.fx-rail`
+ * every width: both rails are always here, and below 1900px `.fx-rail`
  * goes `display: contents` so its panels fall through into the page grid. The
  * breakpoint is therefore stated once, in CSS — matching it in React as well
  * would be a second definition to keep in step, bought with a resize listener.
@@ -54,9 +57,8 @@ import { clip } from './vocabulary.js';
  */
 export function FactoryRoot({ view, actions }: SkinProps) {
   const { state, now } = view;
-  const [graphOpen, setGraphOpen] = useState(false);
+  const [modal, setModal] = useState<FactoryModal | null>(null);
   const stopped = view.pulseHeld || state.control.paused;
-  const overlaps = state.overlaps ?? [];
   const power = powerReading(state.usage);
   const production = productionReading({
     decisions: state.decisions,
@@ -73,16 +75,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       now={now}
       refUrls={state.refUrls}
       onDecide={(agentId, verdict) => actions.decideRecovery(agentId, verdict)}
-    />
-  );
-
-  const alerts = (
-    <AlertBay
-      escalations={view.openEscalations}
-      proposalFor={view.proposalFor}
-      errorCount={state.errors.length}
-      now={now}
-      onOpenAgent={(id) => actions.select(id)}
     />
   );
 
@@ -108,7 +100,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         </div>
         <p className="fx-note">{Math.round(production.windowMs / 3_600_000)}h · click to open</p>
       </div>
-      <ProductionTile reading={production} onOpen={() => setGraphOpen(true)} />
+      <ProductionTile reading={production} onOpen={() => setModal('production')} />
     </section>
   );
 
@@ -163,86 +155,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     </section>
   );
 
-  const offBlueprint =
-    (state.findings?.length ?? 0) > 0 || overlaps.length > 0 ? (
-      <section className="fx-card fx-bev" data-fx="off-blueprint">
-        <div className="fx-head">
-          <div>
-            <Icon name="chest" />
-            <h2>Off-Blueprint</h2>
-          </div>
-          <p className="fx-note">nothing schedules these</p>
-        </div>
-        {(state.findings?.length ?? 0) > 0 && (
-          <FindingsPanel
-            findings={state.findings ?? []}
-            now={now}
-            refUrls={state.refUrls}
-            canFileTickets={state.config.canFileTickets}
-            onPromote={(id) => actions.promoteFinding(id)}
-            onFile={(id) => actions.fileFinding(id)}
-            onDismiss={(id) => actions.dismissFinding(id)}
-          />
-        )}
-        {overlaps.length > 0 && (
-          <>
-            <p className="fx-sub">
-              Two bots, one part {view.liveOverlapCount > 0 && `· ${view.liveOverlapCount} live`}
-            </p>
-            <div className="fx-body">
-              {overlaps.map((o) => (
-                <article key={o.path} className={`fx-bot fx-sunk ${o.live ? 'idle' : 'spent'}`}>
-                  <div className="fx-bot-top">
-                    <Icon name="alert" />
-                    <span className="fx-job" title={o.path}>
-                      {clip(o.path.split(/[\\/]/).pop() ?? o.path, 28)}
-                    </span>
-                    <span className="fx-ref">{o.sameWorktree ? 'same worktree' : 'two branches'}</span>
-                  </div>
-                  <p>{o.path}</p>
-                  <p className="fx-empty">{o.writers.map((w) => w.branch ?? w.agentId).join(' · ')}</p>
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
-    ) : null;
-
-  const stamp = (
-    <section className="fx-card fx-bev" data-fx="stamp">
-      <div className="fx-head">
-        <div>
-          <Icon name="blueprint" />
-          <h2>Awaiting Your Stamp</h2>
-        </div>
-        <p className="fx-note">{view.openEscalations.length} pending</p>
-      </div>
-      <div className="fx-body">
-        {view.openEscalations.length === 0 && (
-          <p className="fx-empty">Nothing needs your judgment. The line runs itself.</p>
-        )}
-        {view.openEscalations.map((e) => (
-          <EscalationCard
-            key={e.id}
-            escalation={e}
-            proposal={view.proposalFor.get(e.id)}
-            resumedAt={e.agentId ? (view.agentById.get(e.agentId)?.resumedAt ?? null) : null}
-            now={now}
-            refUrls={state.refUrls}
-            onAnswer={(text) => actions.answerEscalation(e.id, text)}
-            onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
-            onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
-            onDismiss={(id, note) => actions.dismissEscalation(id, note)}
-            onOpenAgent={(id) => actions.select(id)}
-            onComplete={(id) => actions.completeAgent(id)}
-            onViewPlan={(id) => actions.viewPlan(id)}
-          />
-        ))}
-      </div>
-    </section>
-  );
-
   const launches = (
     <section className="fx-card fx-bev" data-fx="launches">
       <div className="fx-head">
@@ -256,24 +168,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       <Silos prs={state.world.pullRequests} refUrls={state.refUrls} />
       <p className="fx-sub">Left the pad</p>
       <Launches closed={state.world.closedPullRequests ?? []} now={now} refUrls={state.refUrls} />
-    </section>
-  );
-
-  // Injection is a *demo* control, not a provider one: it fakes a world change,
-  // which is only ever something the static Pages build needs — a real run with a
-  // fake provider is still a run, and the panel there is a way to lie to yourself
-  // about what the harness is reacting to.
-  const blueprints = (
-    <section className="fx-card fx-bev" data-fx="blueprints">
-      <div className="fx-head">
-        <div>
-          <Icon name="blueprint" />
-          <h2>Blueprints</h2>
-        </div>
-        <p className="fx-note">queued ahead of every rule</p>
-      </div>
-      <LaunchPanel jobs={state.jobs} onChanged={actions.refresh} />
-      {view.demo && <InjectPanel onInjected={actions.refresh} world={state.world} />}
     </section>
   );
 
@@ -360,110 +254,126 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     </section>
   );
 
-  const faults = (
-    <section className="fx-card fx-bev" data-fx="faults">
-      <div className="fx-head">
-        <div>
-          <Icon name="alert" />
-          <h2>Faults</h2>
-        </div>
-        <div className="fx-head-act">
-          <p className="fx-note">{state.errors.length} recorded</p>
-          {/* Two-step, because the rows go: nothing in the harness reads the fault
-              log back, so a clear costs nothing it decides on — but it costs the
-              only copy, and for every cockpit rather than this one. */}
-          {state.errors.length > 0 && (
-            <ConfirmButton
-              className="ghost small"
-              label="clear"
-              confirmLabel={`clear all ${state.errors.length}?`}
-              title="Delete every recorded fault — this cannot be undone"
-              onConfirm={() => actions.clearErrors()}
-            />
-          )}
-        </div>
-      </div>
-      <div className="fx-body">
-        {state.errors.length === 0 && <p className="fx-empty">No faults recorded.</p>}
-        {state.errors.slice(0, 8).map((err) => (
-          <article key={err.id} className="fx-bot fx-sunk idle">
-            <div className="fx-bot-top">
-              <Icon name="alert" />
-              <span className="fx-job">{err.source}</span>
-              <span className="fx-ref">{relTime(err.createdAt, now)}</span>
-            </div>
-            <p>{err.message}</p>
-            {err.detail && <p className="fx-empty">{err.detail}</p>}
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-
   return (
     // A brownout dims the machinery and nothing else — see the CSS. Reserve
     // running low is a real reading and worth showing on the floor itself, but
     // not at the cost of the text an operator needs in order to act on it.
     <div className={`fx ${power.brownout ? 'fx-brownout' : ''}`}>
       <SpriteSheet />
-      <StatusBar view={view} actions={actions} />
+      <StatusBar view={view} actions={actions} onOpen={setModal} />
 
-      {/* Three rails split on *whose turn it is*: what you are the blocker for,
-          what the harness is doing, what the world is doing back. Below 1900px
-          they dissolve and `order` restores the reading order. Recovery leads
-          the act rail because nothing below it runs while it is up: an
-          outstanding recovery decision holds every pulse. Production heads the
-          world rail rather than the floor: its subject is output, which is
-          merges — the world's answer to the floor's effort. */}
-      <div className="fx-rails">
-        <div className="fx-rail fx-rail-act">
-          {recovery}
-          {alerts}
-          {stamp}
-          {blueprints}
-          {faults}
-        </div>
-        <div className="fx-rail fx-rail-floor">
-          {line}
-          {bots}
-          {goalFloor}
-          {yard}
-          {offBlueprint}
-        </div>
-        <div className="fx-rail fx-rail-world">
-          {productionPanel}
-          {launches}
-          {signals}
-          {shiftLog}
-        </div>
-      </div>
-
-      {graphOpen && (
-        <Modal
-          title="Production"
-          icon="lamp"
-          note="dispatches are effort · merges are output"
-          onClose={() => setGraphOpen(false)}
-        >
-          <Production reading={production} />
-        </Modal>
+      {/* The socket is how this page learns anything changed. Without it every
+          panel below is a photograph of the moment the link dropped, drawn in
+          the same chrome as a live one — and the numbers that matter here (bots
+          out, alerts pending, what is on the belt) are the ones that go wrong
+          quietly. A "live/offline" chip in the corner asked the operator to
+          remember to check it, so the floor states it instead: nothing is shown
+          except the fact that nothing is known. The poll keeps running
+          underneath, so the floor returns by itself. */}
+      {!view.connected && (
+        <section className="fx-card fx-bev fx-offline">
+          <Icon name="alert" className="lg" />
+          <h2>Off the air</h2>
+          <p>
+            The cockpit has lost its link to the harness. Everything this floor draws is a reading the harness confirms,
+            so while the link is down there is nothing here worth showing.
+          </p>
+          <p className="fx-empty">The harness itself is unaffected — bots keep working. Reconnecting…</p>
+        </section>
       )}
 
-      {view.selectedAgent && (
-        <AgentDrawer
-          agent={view.selectedAgent}
-          task={view.taskFor(view.selectedAgent)}
-          refUrls={state.refUrls}
-          live={view.selectedOutput}
-          flags={view.flagsByAgent.get(view.selectedAgent.id)}
-          artifactUrls={state.artifactUrls ?? {}}
-          files={view.filesByAgent.get(view.selectedAgent.id)}
-          onClose={() => actions.select(null)}
-          onRespond={(text) => actions.respondAgent(view.selectedAgent!.id, text)}
-          onKill={() => actions.killAgent(view.selectedAgent!.id)}
-          onComplete={() => actions.completeAgent(view.selectedAgent!.id)}
-          onInterrupt={() => actions.interruptAgent(view.selectedAgent!.id)}
-        />
+      {/* Above the rails and outside the grid, because while it is up *no pulse
+          runs*: every other surface on this page is stale for the same reason, so
+          a card among the rails would leave an operator hunting for why their
+          fleet is frozen. */}
+      {view.connected && (
+        <>
+          {recovery}
+
+          {/* Two rails split on *whose turn it is*: what the harness is doing, and
+          what the world is doing back. What *you* are the blocker for is no
+          longer a rail — it is a count in the status bar, because that is how it
+          is read. Below 1900px these dissolve and `order` restores the reading
+          order. Production heads the world rail rather than the floor: its
+          subject is output, which is merges — the world's answer to the floor's
+          effort. */}
+          <div className="fx-rails">
+            <div className="fx-rail fx-rail-floor">
+              {line}
+              {bots}
+              {goalFloor}
+              {yard}
+            </div>
+            <div className="fx-rail fx-rail-world">
+              {productionPanel}
+              {launches}
+              {signals}
+              {shiftLog}
+            </div>
+          </div>
+
+          {modal === 'production' && (
+            <Modal
+              title="Production"
+              icon="lamp"
+              note="dispatches are effort · merges are output"
+              onClose={() => setModal(null)}
+            >
+              <Production reading={production} />
+            </Modal>
+          )}
+
+          {modal === 'alerts' && (
+            <Modal
+              title="Awaiting Your Stamp"
+              icon="alert"
+              note={`${view.openEscalations.length} pending`}
+              onClose={() => setModal(null)}
+            >
+              <StampDesk view={view} actions={actions} />
+            </Modal>
+          )}
+
+          {modal === 'faults' && (
+            <Modal
+              title="Faults"
+              icon="gear"
+              note={`${state.errors.length} recorded · nothing in the harness reads these back`}
+              onClose={() => setModal(null)}
+            >
+              <FaultLog view={view} actions={actions} />
+            </Modal>
+          )}
+
+          {modal === 'findings' && (
+            <Modal title="Findings" icon="chest" note="nothing schedules these" onClose={() => setModal(null)}>
+              <FindingsDesk view={view} actions={actions} />
+            </Modal>
+          )}
+
+          {modal === 'blueprints' && (
+            <Modal title="Blueprints" icon="blueprint" note="queued ahead of every rule" onClose={() => setModal(null)}>
+              <BlueprintDesk view={view} actions={actions} />
+            </Modal>
+          )}
+
+          {view.selectedAgent && (
+            <AgentDrawer
+              agent={view.selectedAgent}
+              task={view.taskFor(view.selectedAgent)}
+              refUrls={state.refUrls}
+              live={view.selectedOutput}
+              flags={view.flagsByAgent.get(view.selectedAgent.id)}
+              artifactUrls={state.artifactUrls ?? {}}
+              files={view.filesByAgent.get(view.selectedAgent.id)}
+              onClose={() => actions.select(null)}
+              onRespond={(text) => actions.respondAgent(view.selectedAgent!.id, text)}
+              onKill={() => actions.killAgent(view.selectedAgent!.id)}
+              onComplete={() => actions.completeAgent(view.selectedAgent!.id)}
+              onInterrupt={() => actions.interruptAgent(view.selectedAgent!.id)}
+            />
+          )}
+        </>
       )}
     </div>
   );

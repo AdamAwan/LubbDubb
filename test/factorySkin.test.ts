@@ -4,6 +4,7 @@ import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
+import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, WorldEvent } from '../web/src/types.js';
 
@@ -40,6 +41,7 @@ const { buildGoalFloor, floorFixtures, layoutFloor, partProgress } = await impor
   '../web/src/skins/factory/goalFloor.js'
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
+const { BlueprintDesk, FaultLog, FindingsDesk } = await import('../web/src/skins/factory/components/Desks.js');
 const { siloFill, siloGates } = await import('../web/src/skins/factory/silo.js');
 const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
@@ -125,7 +127,45 @@ function floorInput(over: {
   };
 }
 
-function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void, demo = true): string {
+function render(
+  mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void,
+  demo = true,
+  connected = true,
+): string {
+  const now = Date.parse('2026-01-01T12:00:00.000Z');
+  const realNow = Date.now;
+  Date.now = () => now;
+  try {
+    const { state } = buildDemoState();
+    mutate?.(state);
+    const view = buildViewModel({
+      state,
+      now,
+      connected,
+      demo,
+      selected: null,
+      liveOutput: new Map(),
+      tails: new Map(),
+      lastPulseAt: now,
+      viewingPlan: null,
+    });
+    return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
+  } finally {
+    Date.now = realNow;
+  }
+}
+
+/**
+ * The same, for a desk that opens from a status-bar gauge rather than sitting in a
+ * rail. `renderToStaticMarkup` cannot click, so a panel behind a modal is
+ * unreachable through `render()` — which is the reason the three desks are
+ * components and not JSX inlined into `FactoryRoot`.
+ */
+function renderDesk(
+  Desk: (props: { view: CockpitView; actions: CockpitActions }) => JSX.Element,
+  mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void,
+  demo = true,
+): string {
   const now = Date.parse('2026-01-01T12:00:00.000Z');
   const realNow = Date.now;
   Date.now = () => now;
@@ -143,7 +183,7 @@ function render(mutate?: (s: ReturnType<typeof buildDemoState>['state']) => void
       lastPulseAt: now,
       viewingPlan: null,
     });
-    return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
+    return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));
   } finally {
     Date.now = realNow;
   }
@@ -372,11 +412,11 @@ test('raising the cap widens the floor', () => {
  * is no panel for.
  */
 test('injection is a demo control, not a provider one', () => {
-  const demo = render((s) => (s.config.injectable = true));
+  const demo = renderDesk(BlueprintDesk, (s) => (s.config.injectable = true));
   assert.match(demo, /class="inject"/, 'the demo build must keep the inject panel');
 
   // `injectable` still true — a fake provider is configured — and still no panel.
-  const real = render((s) => (s.config.injectable = true), false);
+  const real = renderDesk(BlueprintDesk, (s) => (s.config.injectable = true), false);
   assert.doesNotMatch(real, /class="inject"/, 'a real run must not offer injection');
   assert.doesNotMatch(real, /Inject event/, 'nor its label');
 
@@ -388,14 +428,148 @@ test('injection is a demo control, not a provider one', () => {
 });
 
 /**
+ * The desks are behind a gauge, so the *way in* is the thing that can now go
+ * missing — and a count nothing can open is the dead `see the fault log at the
+ * foot of the floor` line this replaced. Each gauge is asserted to be a real
+ * button, and Faults is asserted to stay one at zero: it is the only way to the
+ * log, which carries the clear.
+ */
+test('every desk has a way in from the status bar', () => {
+  const markup = render();
+  for (const label of ['Alerts', 'Faults', 'Findings', 'Queued']) {
+    assert.match(
+      markup,
+      new RegExp(`<button[^>]*class="fx-read fx-act[^"]*"[^>]*>(?:(?!</button>).)*${label}`, 's'),
+      `${label} must be a button in the bar`,
+    );
+  }
+
+  // The rail is gone: nothing may still be placed as a panel.
+  assert.doesNotMatch(markup, /data-fx="stamp"/, 'the stamp desk must not also be a panel');
+  assert.doesNotMatch(markup, /data-fx="faults"/, 'the fault log must not also be a panel');
+  assert.doesNotMatch(markup, /data-fx="blueprints"/, 'the blueprint desk must not also be a panel');
+  assert.doesNotMatch(markup, /data-fx="off-blueprint"/, 'the findings desk must not also be a panel');
+  assert.doesNotMatch(markup, /fx-rail-act/, 'the act rail must be gone');
+
+  const quiet = render((s) => {
+    s.errors = [];
+    s.escalations = [];
+    s.jobs = [];
+    s.findings = [];
+  });
+  assert.match(quiet, /class="fx-read fx-act quiet"/, 'a zero count must mute a gauge, not remove it');
+  // Counted by the chevron rather than by `fx-act`: the scan gauge presses too
+  // and wears the same face, and the chevron is the bar's one word for "there is
+  // a panel behind this".
+  assert.equal(
+    (quiet.match(/class="fx-chev"/g) ?? []).length,
+    4,
+    'all four ways in must survive their counts being zero',
+  );
+});
+
+/** The number on a gauge's face, read off the markup rather than off the state. */
+function gaugeCount(markup: string, label: string): string | undefined {
+  const m = markup.match(new RegExp(`${label}</span><span class="fx-val[^"]*">(\\d+)`));
+  assert.ok(m, `${label} must draw a count`);
+  return m[1];
+}
+
+/**
+ * The findings gauge counts what a *click resolves*, which is open findings
+ * and nothing else. A promoted, filed or dismissed finding is done and a `filing`
+ * one is decided, so neither is waiting on anyone; an overlap is diagnostic —
+ * nothing here or in the harness actions one — so it can never light a gauge whose
+ * whole claim is that pressing it leads to a decision. Asserted on the number
+ * rather than on the markup that draws it, so the arrangement stays free.
+ */
+test('the findings gauge counts open findings, and only those', () => {
+  const now = '2026-01-01T00:00:00.000Z';
+  const finding = (id: string, status: string) => ({
+    id,
+    agentId: 'agent-a1',
+    taskId: 'task-a1',
+    originRef: 'pr:142:ci',
+    kind: 'out_of_scope' as const,
+    ref: null,
+    summary: `something ${id}`,
+    status: status as 'open',
+    jobId: null,
+    ticketRef: null,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const mixed = render((s) => {
+    s.findings = [finding('f1', 'open'), finding('f2', 'dismissed'), finding('f3', 'filing'), finding('f4', 'filed')];
+  });
+  assert.equal(gaugeCount(mixed, 'Findings'), '1', 'only an open finding is unactioned');
+
+  // Overlaps present, no findings: the gauge is muted, and the desk still lists
+  // the overlap — it is the *count* they stay out of, not the panel.
+  const overlapsOnly = render((s) => {
+    s.findings = [];
+  });
+  assert.equal(gaugeCount(overlapsOnly, 'Findings'), '0', 'an overlap must not light the gauge');
+  const desk = renderDesk(FindingsDesk, (s) => {
+    s.findings = [];
+  });
+  assert.match(desk, /Two bots, one part/, 'the desk must still draw an overlap the gauge does not count');
+  assert.match(desk, /restAzureDevOpsApi\.ts/, 'and the path both bots are writing');
+});
+
+/**
+ * One subject, stated once. The bar had grown two pairs of duplicates — the fleet
+ * as a Bots reading *and* as the `live/cap` inside the cap control, the pulse as a
+ * countdown *and* as a "Run a scan" button at the far end — and a bar that says
+ * everything twice is the one that runs out of room. Asserted on the number
+ * itself rather than on the markup that draws it, so a later re-arrangement is
+ * free and a re-introduced second copy is not.
+ */
+test('the fleet and the pulse are each one control in the bar', () => {
+  const markup = render((s) => {
+    s.control.cap = 3;
+  });
+  const bar = markup.slice(0, markup.indexOf('fx-rails'));
+
+  assert.equal((bar.match(/2\/3|2<\/span>\s*<small>\/3/g) ?? []).length, 1, 'the fleet must be one reading in the bar');
+  assert.match(bar, /class="fleet-control[^"]*"/, 'and it must be the one with the steppers on it');
+
+  assert.match(
+    bar,
+    /<button[^>]*class="fx-read fx-act fx-run[^"]*"[^>]*>(?:(?!<\/button>).)*Scan/s,
+    'the scan gauge must be the button that runs one',
+  );
+  assert.doesNotMatch(bar, /Run a scan/, 'so there must be no second button saying so');
+});
+
+/**
+ * Off the air. Every panel on this floor is a reading the harness confirms, and a
+ * stale one is drawn in exactly the chrome of a live one — so a "live/offline"
+ * chip in the corner asks an operator to remember to check it before believing
+ * anything else. The floor states it instead and draws nothing else.
+ */
+test('a dropped link empties the floor rather than dating it', () => {
+  const live = render();
+  assert.doesNotMatch(live, />live</, 'a connected cockpit must not spend bar width saying so');
+
+  const off = render(undefined, true, false);
+  assert.match(off, /Off the air/, 'a dropped link must be stated');
+  assert.doesNotMatch(off, /class="fx-rails"/, 'and nothing the harness stopped confirming may be drawn');
+  for (const gauge of ['Scan', 'Bots', 'Alerts', 'Faults']) {
+    assert.doesNotMatch(off, new RegExp(`>${gauge}<`), `${gauge} is a number nobody is confirming`);
+  }
+});
+
+/**
  * A clear deletes the rows, for every cockpit rather than this one — so it is two
  * clicks, and it is only offered when there is something to clear.
  */
 test('faults offer a clear only when there are faults', () => {
-  const withFaults = render();
+  const withFaults = renderDesk(FaultLog);
   assert.match(withFaults, /clear all \d+\?|>clear</, 'recorded faults must offer a clear');
 
-  const none = render((s) => (s.errors = []));
+  const none = renderDesk(FaultLog, (s) => (s.errors = []));
   assert.match(none, /No faults recorded\./);
   assert.doesNotMatch(none, />clear</, 'an empty log must not offer a clear');
 });

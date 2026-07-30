@@ -113,21 +113,24 @@ Red means exactly one thing on that floor: an agent parked on a question only yo
 #### The floor at width
 
 `FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
-it sits are separate edits. It renders **three rails** — `act` (recovery, alerts, awaiting your
-stamp, blueprints, faults), `floor` (the line, bots, research, the yard, off-blueprint) and `world`
-(production, launches, signals, shift log) — split on _whose turn it is_ rather than on subject, so
-a glance answers "is anything waiting on me" without moving. Production heads the world rail rather
-than the floor because its subject is output, and output is merges — the world's answer to the
-floor's effort.
+it sits are separate edits. It renders **two rails** — `floor` (the line, bots, the goal floor, the
+yard) and `world` (production, launches, signals, shift log) — split on _whose turn it
+is_ rather than on subject. Production heads the world rail rather than the floor because its subject
+is output, and output is merges — the world's answer to the floor's effort.
+
+There were **three**. The first was `act`: what _you_ are the blocker for. It is gone, and what
+replaced it is the next section — three of its panels are read as a count far more often than as
+contents, and a count is a gauge, not a column. Its design is
+[`2026-07-29-factory-two-rail-layout-design.md`](2026-07-29-factory-two-rail-layout-design.md).
 
 There is **one DOM for every width**; the arrangement is chosen in CSS alone:
 
-| width     | arrangement                                                                         |
-| --------- | ----------------------------------------------------------------------------------- |
-| < 940     | one column                                                                          |
-| 940–1499  | two columns; the line, research and the yard span both                              |
-| 1500–1899 | tiled — one four-column page grid, each panel spanning what it needs                |
-| ≥ 1900    | railed — the three rails, each scrolling on its own, the page fixed to the viewport |
+| width     | arrangement                                                                        |
+| --------- | ---------------------------------------------------------------------------------- |
+| < 940     | one column                                                                         |
+| 940–1499  | two columns; the line, the goal floor and the yard span both                       |
+| 1500–1899 | tiled — one four-column page grid, each panel spanning what it needs               |
+| ≥ 1900    | railed — the two rails, each scrolling on its own, the floor fixed to the viewport |
 
 Below 1900px `.fx-rail` is `display: contents`, so its panels fall through and become tiles of the
 page grid directly. **The breakpoint is therefore stated once.** Matching it in React as well —
@@ -135,7 +138,7 @@ rendering a different tree per width — buys nothing and costs a resize listene
 every drag, and a second definition of the boundary that will disagree with this one the first time
 either moves.
 
-Three consequences to preserve:
+Four consequences to preserve:
 
 - **The rails' document order is not the floor's reading order**, so the two dissolved arrangements
   set `order` per panel: the line, then the detail it cannot hold, then the readings you consult
@@ -150,6 +153,96 @@ Three consequences to preserve:
   ~500px-tall chart that ate the first screen. Their spans are what stop that, which is why widening
   the old centred ribbon without also tiling it made the skin worse rather than better. The graph is
   no longer on the floor at all (below), but the constraint is the line's too.
+- **Recovery is outside `.fx-rails` entirely**, above it, because while it is up no pulse runs and
+  every other surface is stale for the same reason. It is a banner, so it needs no `grid-column` to
+  span and no `order` to lead — it is a block at every width and a flex child of the railed column
+  at ≥1900. What the railed arrangement fixes to the viewport is therefore **`.fx`**, not the page:
+  the shell's `work-panel` is a sibling below it and stays scrollable, since `WorkTreePanel` fetches
+  on open and a skin may not reach `api.js`.
+
+#### The four desks
+
+Alerts, faults and blueprints stood in the act rail, and each is read as a **number** far more often
+than as contents. So the number is a gauge in the status bar and the panel opens from it as a
+[`Modal`](#what-the-floor-draws-beyond-the-queue) — `FactoryModal` is one value rather than a boolean
+per modal, because a boolean each admits far more states than there are, and two panels in front at
+once is not something this floor can draw. The desks themselves are `components/Desks.tsx`
+(`StampDesk` / `FaultLog` / `BlueprintDesk` / `FindingsDesk`), each taking `{ view, actions }`
+like `StatusBar`: a `ConfirmButton`, a forty-row log and a demo gate are _contents_, and the root's
+job is placement. Being components is also the only way `renderToStaticMarkup` can reach a panel
+behind a click, which is what keeps them tested.
+
+**Findings is the fourth**, and it was never in that rail — it stood in the floor rail as the
+`Off-Blueprint` panel, which drew nothing at all when there was nothing to report, so at zero
+there was no reading and at one the rail reflowed. The rename is to the harness's own word for
+these (the `findings` table, `report_finding`, `FindingsPanel`), so one subject has one name from
+the tool call to the gauge, and it is 35px narrower than `Off-blueprint` was. It does not buy the
+single-row bar back: five gauges plus the ident and the picker need 1603px, so the bar is one row
+above ~1654px and two below, and the duplicate-removal that fixed this last time has nothing left
+to remove. See the design's cost section. It belongs with the desks rather than on the floor because the floor
+rail is what the _harness_ is doing, and a finding is something nobody is doing: nothing in the
+dispatcher reads `findings`, so promote / file / dismiss is the only way one becomes anything. Its
+design is
+[`2026-07-30-factory-findings-gauge-design.md`](2026-07-30-factory-findings-gauge-design.md).
+
+Five rules hold them:
+
+- **A gauge that acts must look like it does.** `Power` is an inert reading, so an `onClick` on a
+  plain `.fx-read` is invisible — indistinguishable from a neighbour that does not respond, which is
+  exactly how it was first reported. A gauge that does something is `.fx-act`: a real `<button>` with
+  a raised face, a hover lift and a pointer. Icons are distinct per gauge (`alert`, `gear`, `chest`,
+  `blueprint`) so four adjacent buttons stay legible. **The chevron is the narrower word** — it says
+  _there is a panel behind this_ — so the four desks carry one and `Scan`, which runs a pulse rather
+  than opening anything, does not (`.fx-run`). `test/factorySkin.test.ts` counts the ways in by
+  chevron for that reason.
+- **Only Alerts is ever red**, and that is the skin's existing rule rather than a new one: red means
+  an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
+  finding is something a bot noticed on its way past rather than something it is stuck on (amber),
+  and a queued blueprint is waiting on a slot, not on you (neither).
+- **A gauge counts what a click resolves.** Findings counts findings at `open` and nothing
+  else: promoted, filed and dismissed are done, `filing` is decided (an agent is creating the
+  ticket), and **overlaps are excluded** — an overlap is diagnostic, with no button on it anywhere,
+  so a number a click could not move would be the dead `see the fault log at the foot of the floor`
+  line in a new place. They still show in the desk, because they answer the same question the
+  findings do. The consequence is honest and stated in the design: two agents editing one file is
+  the most urgent thing in that drawer and the one thing the face cannot advertise.
+- **A zero count mutes a gauge; it never removes it.** Faults is the only way to the fault log, which
+  carries the two-step `clear` — a control that must not become unreachable because the log happens
+  to be empty — and a gauge that vanished would reflow the bar every time its number left zero.
+  `test/factorySkin.test.ts` asserts all four survive a zero, counting the ways in by chevron.
+- **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
+  listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
+  answering still happens on the shared `EscalationCard`, which owns the refusal rules.
+
+#### One subject, once — and nothing at all when the link drops
+
+Absorbing the act rail made the bar the busiest surface on the floor, and it was carrying two of
+everything. The fleet was a `Bots` reading _and_ the `live/cap` inside the cap control an inch to its
+right; the pulse was a `Scan` countdown at one end _and_ a "Run a scan" button at the other. Three
+rules now hold it, and each removes a duplicate rather than shrinking a survivor — the bar's wrap
+point moved in by ~260px without a reading being lost:
+
+- **The reading and its control are one gauge.** `Bots` _is_ `FleetControl`, wearing the gauge's icon
+  and label; the shared component is unchanged, because a skin may not reach `api.js` and embedding it
+  is the sanctioned route to a control. Its own `cap` caption is hidden in the skin's CSS — a third
+  word for one number.
+- **The gauge is the button.** `ScanRead` presses, and the countdown on its face is what says whether
+  pressing it is worth anything. It stays pressable while paused or held: that is precisely when an
+  operator wants to confirm nothing moves. The radar still stops turning in both.
+- **Config is a hover, not a caption.** Which dispatcher is wired cannot change while the harness is
+  up, so it is the ident's `title`. `demo` stays on the face — it is the difference between a floor
+  and a picture of one.
+
+The **live/offline chip is gone entirely**, and this is the one change that is not only about width.
+Every panel on this floor is a reading the harness confirms, and a stale one is drawn in exactly the
+chrome of a live one, so a chip in the corner asked an operator to remember to check it before
+believing anything else — the same failure `capped` and `unapproved` were added to `QueueItem` to
+fix, one level up. So a dropped socket **empties the floor**: the bar is the ident plus a single
+`Link · offline` reading, and the rails, the recovery banner, the modals and the drawer are not
+rendered at all — one `Off the air` card in their place. Nothing is being polled into a lie, the
+harness is unaffected and says so, and the reconnect brings the floor back by itself.
+`test/factorySkin.test.ts` asserts both halves: one fleet reading and no second scan button while
+connected, and no gauge at all while not.
 
 #### What the floor draws beyond the queue
 
@@ -221,18 +314,20 @@ argument for each is in its module's header, and the reason for the shape is wor
   belongs on the floor, but not at the cost of the text needed to act on it. Both are absent
   entirely when the subscriber limits were never captured; there is no denominator on an API key.
 
-Two panels on the act rail carry a rule of their own:
+Two of the three desks carry a rule of their own:
 
-- **Blueprints** (`data-fx="blueprints"`) is the `LaunchPanel`, and on this skin the `InjectPanel`
-  hangs off **`view.demo`** — the static Pages build — rather than off `config.injectable`. Injection
-  fakes a world change, which is only ever something the demo needs: a real run against a fake
-  provider is still a real run, and a panel that lies to the harness there is a way to lie to yourself
-  about what it is reacting to. The empty-floor line reads from the same predicate, so it never offers
-  an injection there is no panel for. Classic keeps `config.injectable`.
-- **Faults** offers a two-step **clear** in its head whenever it has any, posting
-  `POST /api/errors/clear`. Two-step because the rows go: nothing in the harness reads the fault log
-  back, so a clear costs nothing anything decides on — but it costs the only copy, and for every
-  cockpit rather than this one.
+- **`BlueprintDesk`** is the `LaunchPanel`, and on this skin the `InjectPanel` hangs off
+  **`view.demo`** — the static Pages build — rather than off `config.injectable`. Injection fakes a
+  world change, which is only ever something the demo needs: a real run against a fake provider is
+  still a real run, and a panel that lies to the harness there is a way to lie to yourself about what
+  it is reacting to. The empty-floor line reads from the same predicate, so it never offers an
+  injection there is no panel for. Classic keeps `config.injectable`.
+- **`FaultLog`** offers a two-step **clear** whenever it has any, posting `POST /api/errors/clear`.
+  Two-step because the rows go: nothing in the harness reads the fault log back, so a clear costs
+  nothing anything decides on — but it costs the only copy, and for every cockpit rather than this
+  one. It sits _above_ the log rather than in the modal head beside `Close`: one misclick between
+  "leave" and "delete the only copy" is too few. The log draws forty rows, not the eight a rail had
+  room for — eight was a crop for a column, and this is the surface you went looking for.
 
 #### The Goal Floor
 
@@ -315,7 +410,7 @@ the dispatcher.
 one living status comment the plan reconciler keeps. Three things hold it together. **A plan with no
 comment says so rather than falling silent**, which is what having a writer on the wire buys: both
 states are readings rather than one reading and one blank. **No plan is not the same as no comment** —
-an unplanned issue has no plan row, so nothing *could* have written one, and that third reading gets
+an unplanned issue has no plan row, so nothing _could_ have written one, and that third reading gets
 its own words rather than being folded into the second. And **the reading and the way in are separate
 facts**: the meta line states which of the three it is and is drawn whatever the provider can resolve,
 while the machine's `link` — captioned `notice ↗`, never printing the ref, which is machinery —
@@ -661,10 +756,10 @@ builds no URLs are all one silence.
 Two records carry a comment the harness maintains by itself, and both reach the cockpit as canonical
 refs (see [15](15-integrations.md#comment-refs)):
 
-| Record      | Wire field               | Where it is drawn                                                                          |
-| ----------- | ------------------------ | ------------------------------------------------------------------------------------------ |
+| Record      | Wire field               | Where it is drawn                                                                             |
+| ----------- | ------------------------ | --------------------------------------------------------------------------------------------- |
 | Plan status | `plan.statusCommentRef`  | `PlanPanel`'s plan head (`status comment ↗`), and the Goal Floor's signal post (`notice ↗`) |
-| Goal assay  | `issue.assay.commentRef` | The shared `WorldSummary` issue row (`comment ↗`), beside the two assay overrides           |
+| Goal assay  | `issue.assay.commentRef` | The shared `WorldSummary` issue row (`comment ↗`), beside the two assay overrides            |
 
 The assay's is the sharper case of the two: that comment is the harness explaining, on somebody else's
 ticket, why it will not act — so it sits **beside** the overrides and not among them. The two buttons

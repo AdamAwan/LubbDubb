@@ -2,6 +2,15 @@ import { useEffect, type JSX, type ReactNode } from 'react';
 import { Icon, type IconName } from './Sprite.js';
 
 /**
+ * Which panel is in front, if any.
+ *
+ * One value rather than a boolean per modal: four booleans admit sixteen states,
+ * fifteen of which are wrong, and two panels in front at once is not something
+ * this floor can draw.
+ */
+export type FactoryModal = 'production' | 'alerts' | 'faults' | 'blueprints' | 'findings';
+
+/**
  * A panel opened over the floor.
  *
  * The floor's own panels are sized for a rail, which is the right size for the
