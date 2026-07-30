@@ -13,15 +13,7 @@
  */
 
 /** Every kind an evaluation can classify into, so config validation can't drift from the map. */
-export const POLICY_KINDS = [
-  'build',
-  'status',
-  'comments',
-  'workItems',
-  'reviewers',
-  'mergeStrategy',
-  'other',
-] as const;
+const POLICY_KINDS = ['build', 'status', 'comments', 'workItems', 'reviewers', 'mergeStrategy', 'other'] as const;
 
 type PolicyKind = (typeof POLICY_KINDS)[number];
 
@@ -35,7 +27,7 @@ type PolicyKind = (typeof POLICY_KINDS)[number];
  *   signal at far higher fidelity (thread ids, authors, bodies).
  * - `off` — not emitted.
  */
-export const POLICY_CHECK_MODES = ['check', 'advisory', 'off'] as const;
+const POLICY_CHECK_MODES = ['check', 'advisory', 'off'] as const;
 
 type PolicyCheckMode = (typeof POLICY_CHECK_MODES)[number];
 
@@ -69,7 +61,7 @@ const POLICY_TYPE_KINDS: ReadonlyMap<string, PolicyKind> = new Map([
  * moves no dispatch and no aggregate. Work items are off, because promoting them
  * means an agent making writes against a tracker, which is an opt-in.
  */
-export const DEFAULT_POLICY_CHECK_MODES: Record<PolicyKind, PolicyCheckMode> = {
+const DEFAULT_POLICY_CHECK_MODES: Record<PolicyKind, PolicyCheckMode> = {
   build: 'check',
   status: 'check',
   comments: 'advisory',
