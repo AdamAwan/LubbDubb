@@ -28,22 +28,34 @@ wall-clock at decision time, so a cycle is evaluated against when its world was 
 
 ## `PullRequest`
 
-| Field                | Meaning                                                                                                                                                                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`, `number`       | Provider id and PR number.                                                                                                                                                                                                                |
-| `title`, `branch`    | Title and head branch.                                                                                                                                                                                                                    |
-| `baseBranch?`        | The branch this PR targets. Absent means the provider did not report one.                                                                                                                                                                 |
-| `ciStatus`           | `passing` \| `failing` \| `pending` \| `unknown`. The fold of `ciChecks`, and the field every gate reads.                                                                                                                                 |
-| `ciChecks?`          | `CiCheck[]` — the individual checks behind `ciStatus`, each `{name, status}` where status is `passing`/`failing`/`pending`. Absent means the provider reported no per-check detail, which per-check CI policy reads as "act generically". |
-| `unresolvedComments` | `PrComment[]` — review comments waiting on the author, each with `handled`.                                                                                                                                                               |
-| `approved?`          | Approval folded from reviews/votes.                                                                                                                                                                                                       |
-| `mergeable?`         | Tri-state: `true`, `false`, or absent for unknown.                                                                                                                                                                                        |
-| `mergeableState?`    | `dirty` \| `behind` \| `blocked` \| `clean` \| `unknown` — GitHub's `mergeable_state`, normalised.                                                                                                                                        |
-| `merged?`            | Already merged. Once true, no rule acts on it.                                                                                                                                                                                            |
-| `state?`             | `open` \| `merged` \| `closed`. Set by providers that report closed PRs. Read it via `prState`, never directly.                                                                                                                           |
-| `closedAt?`          | ISO instant the PR left the open set. Only set on a closed/merged PR.                                                                                                                                                                     |
-| `labels?`            | Drives the provider-agnostic exclusion gate. Absent means no labels.                                                                                                                                                                      |
-| `url?`               | The provider's canonical web URL, when it supplies one.                                                                                                                                                                                   |
+| Field                | Meaning                                                                                                                                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `number`       | Provider id and PR number.                                                                                                                                                                                                                                      |
+| `title`, `branch`    | Title and head branch.                                                                                                                                                                                                                                          |
+| `baseBranch?`        | The branch this PR targets. Absent means the provider did not report one.                                                                                                                                                                                       |
+| `ciStatus`           | `passing` \| `failing` \| `pending` \| `unknown`. The fold of `ciChecks`, and the field every gate reads.                                                                                                                                                       |
+| `ciChecks?`          | `CiCheck[]` — the individual checks behind `ciStatus`, each `{name, status, blocking?, advisory?}` where status is `passing`/`failing`/`pending`. Absent means the provider reported no per-check detail, which per-check CI policy reads as "act generically". |
+| `unresolvedComments` | `PrComment[]` — review comments waiting on the author, each with `handled`.                                                                                                                                                                                     |
+| `approved?`          | Approval folded from reviews/votes.                                                                                                                                                                                                                             |
+| `mergeable?`         | Tri-state: `true`, `false`, or absent for unknown.                                                                                                                                                                                                              |
+| `mergeableState?`    | `dirty` \| `behind` \| `blocked` \| `clean` \| `unknown` — GitHub's `mergeable_state`, normalised.                                                                                                                                                              |
+| `merged?`            | Already merged. Once true, no rule acts on it.                                                                                                                                                                                                                  |
+| `state?`             | `open` \| `merged` \| `closed`. Set by providers that report closed PRs. Read it via `prState`, never directly.                                                                                                                                                 |
+| `closedAt?`          | ISO instant the PR left the open set. Only set on a closed/merged PR.                                                                                                                                                                                           |
+| `labels?`            | Drives the provider-agnostic exclusion gate. Absent means no labels.                                                                                                                                                                                            |
+| `url?`               | The provider's canonical web URL, when it supplies one.                                                                                                                                                                                                         |
+
+A `CiCheck` carries two optional flags, both absent-means-the-long-standing-behaviour so every
+provider and persisted row that predates them reads unchanged:
+
+- **`blocking`** — false when the provider says the check does not block completion (an Azure
+  "Optional" branch policy). Display and briefing only; nothing gates on it. Whether a _check_ blocks
+  and whether the _PR_ can merge are different questions, and the second is `ciStatus`'s alone.
+- **`advisory`** — the check is reported for visibility and nothing else. `classifyCiFailures` never
+  classifies it (no rule, not even `match: "*"`, can claim one) and `ciNeedsAttention` never counts
+  it, so it can neither dispatch an agent nor escalate. It is how a policy that merely _restates_ a
+  signal something else already owns at higher fidelity — the Azure comment policy against rule 2b —
+  is made visible without outranking the rule that owns it.
 
 `prState(pr)` (`src/prHealth.ts`) is the only correct way to read a PR's state. It returns `state`
 when present and otherwise folds back onto `merged`. It **never invents `closed`** — a PR nobody told
