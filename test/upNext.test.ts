@@ -11,6 +11,7 @@ import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { Store } from '../src/store/store.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // The "Up next" queue (issue #69): the dispatcher's ordered pickup plan with the
 // headroom cut — above-cut candidates dispatch this cycle, below-cut ones wait
@@ -320,7 +321,10 @@ function testConfig(over: Record<string, unknown> = {}) {
 test('buildStateSnapshot ships the last cycle plan as upcoming', async () => {
   // Paused → zero headroom → the whole plan sits below the cut, and nothing
   // dispatches (so the test never touches git worktrees).
-  const system = buildSystem(testConfig({ startPaused: true }), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig({ startPaused: true }), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+  });
   system.connector.inject({ kind: 'new_issue', number: 7101, title: 'A' });
   system.connector.inject({ kind: 'new_issue', number: 7102, title: 'B' });
 
@@ -365,7 +369,7 @@ test('a priority override holds after the next pulse and after a restart', async
       retrospective: { enabled: false } as never,
     });
 
-  const system = buildSystem(cfg(), { backend: new FakePtyBackend() });
+  const system = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 8101, title: 'A' });
   system.connector.inject({ kind: 'new_issue', number: 8102, title: 'B' });
   await system.harness.runCycle('manual');
@@ -388,7 +392,7 @@ test('a priority override holds after the next pulse and after a restart', async
   system.store.close();
 
   // Restart: a fresh system on the same DB file (the fake world survives too).
-  const restarted = buildSystem(cfg(), { backend: new FakePtyBackend() });
+  const restarted = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   await restarted.harness.runCycle('manual');
   snap = await buildStateSnapshot(restarted);
   assert.deepEqual(

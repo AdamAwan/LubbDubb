@@ -8,6 +8,7 @@ import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { ActionSink, SendResult, WorkItemStateInput } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -58,7 +59,11 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
 
 test('set_work_item_state routes to the sink and is audited (no auto-send gate)', async () => {
   const { sink, states } = recordingSink();
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    sink,
+  });
   await system.executor.execute('cyc', statePlan(101, 'In Review'));
 
   assert.deepEqual(states, [{ number: 101, state: 'In Review' }]);
@@ -92,7 +97,11 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
       return { ok: true };
     },
   };
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink: failingSink });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    sink: failingSink,
+  });
   await system.executor.execute('cyc', statePlan(7, 'In Review'));
 
   const decision = system.store.listDecisions().find((d) => d.action.type === 'set_work_item_state');

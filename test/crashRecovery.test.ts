@@ -14,6 +14,7 @@ import {
   restorability,
 } from '../src/agents/crashRecovery.js';
 import type { Agent, Task } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -40,7 +41,11 @@ async function systemWithCrashedAgent(overrides: Partial<Config> = {}): Promise<
   taskId: string;
 }> {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(overrides), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig(overrides), {
+    worktrees: new FakeWorktreeManager(),
+    backend,
+    errorMirror: () => {},
+  });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
@@ -60,6 +65,7 @@ async function systemWithCrashedAgent(overrides: Partial<Config> = {}): Promise<
 function systemWithOrphanedTask(): { system: System; taskId: string; origin: string; branch: string } {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
     backend,
     errorMirror: () => {},
     bootedAt: '2999-01-01T00:00:00.000Z',
@@ -295,7 +301,7 @@ test('a task dispatched by this run is not mistaken for an orphan of the last on
   // creates is on the near side of it — including the instant between `createTask`
   // and `spawn` that this whole feature exists to clean up after.
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Add login' });
   await system.harness.runCycle('manual');
 
@@ -344,7 +350,7 @@ test('POST /api/recovery/:id refuses an unknown verdict and a task it is not hol
 
 test("answering a crashed agent's escalation is refused, pointing at the recovery route", async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   system.connector.inject({ kind: 'new_issue', number: 904, title: 'Add login' });
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

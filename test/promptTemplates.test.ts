@@ -18,6 +18,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { overridePath } from '../web/src/components/PromptsPanel.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'lubbdubb-prompts-'));
@@ -173,7 +174,11 @@ test('GET /api/prompts serves the book the dispatcher renders from, overrides an
       startPaused: true,
       promptTemplatesDir: dir,
     });
-    const system = buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+    const system = buildSystem(config, {
+      worktrees: new FakeWorktreeManager(),
+      backend: new FakePtyBackend(),
+      errorMirror: () => {},
+    });
     const { app } = await buildApp(system);
     const res = await app.inject({ method: 'GET', url: '/api/prompts' });
     assert.equal(res.statusCode, 200);

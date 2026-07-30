@@ -16,6 +16,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import type { Store } from '../src/store/store.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -242,7 +243,11 @@ function testConfig(agentMode: 'raw' | 'pty' = 'raw', sessionTranscriptRoot?: st
 }
 
 test('a captured write records a file for every path and an artifact chip only for reports', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 
   // Drive a real spawn so the agent gets a spool key (a store.createAgent would not).
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Write a report' });
@@ -283,7 +288,11 @@ async function spawnedPtyAgent(sessionRoot?: string): Promise<{
   agent: NonNullable<ReturnType<Store['getAgent']>>;
 }> {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig('pty', sessionRoot), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig('pty', sessionRoot), {
+    worktrees: new FakeWorktreeManager(),
+    backend,
+    errorMirror: () => {},
+  });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Write a report' });
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0];

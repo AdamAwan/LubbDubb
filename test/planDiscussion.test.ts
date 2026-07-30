@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +13,7 @@ import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { isPlanInDiscussion } from '../src/plans/planDiscussion.js';
 import type { Plan } from '../src/types.js';
 import type { FastifyInstance } from 'fastify';
+import { gitRepo } from './support/gitRepo.js';
 
 test('discuss parks the plan for a planner and withdraws the pending approval', async () => {
   const { system, app } = await buildTestApp();
@@ -259,16 +259,6 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
   });
   const { app } = await buildApp(system);
   return { system, app };
-}
-
-function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
-  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  git(['init', '-q', '-b', 'main']);
-  git(['config', 'user.email', 'test@example.com']);
-  git(['config', 'user.name', 'Test']);
-  git(['commit', '-q', '--allow-empty', '-m', 'root']);
-  return dir;
 }
 
 /** An issue already decomposed into two parts, parked `awaiting_approval`. */

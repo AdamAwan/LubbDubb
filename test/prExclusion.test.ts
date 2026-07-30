@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,19 +9,7 @@ import { buildApp, buildStateSnapshot } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { isPrExcluded } from '../src/prHealth.js';
 import type { PullRequest } from '../src/types.js';
-
-/** A throwaway git repo with one commit, so real `git worktree add` works in isolation. */
-function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
-  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  // Named explicitly: agent branches are cut from `config.defaultBranch` ("main"),
-  // while bare `git init` takes whatever the host's init.defaultBranch says.
-  git(['init', '-q', '-b', 'main']);
-  git(['config', 'user.email', 'test@example.com']);
-  git(['config', 'user.name', 'Test']);
-  git(['commit', '-q', '--allow-empty', '-m', 'root']);
-  return dir;
-}
+import { gitRepo } from './support/gitRepo.js';
 
 function build(overrides: Partial<Config> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));

@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +14,7 @@ import { PLAN_FILE } from '../src/plans/planDocument.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, WorldSnapshot } from '../src/types.js';
+import { gitRepo } from './support/gitRepo.js';
 
 // -- the pure route ----------------------------------------------------------
 
@@ -245,17 +245,6 @@ test('the pickup verdict explains an issue parked in the funnel', () => {
 });
 
 // -- end to end --------------------------------------------------------------
-
-/** A throwaway git repo with one commit, so a real code dispatch can cut a worktree. */
-function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
-  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  git(['init', '-q', '-b', 'main']);
-  git(['config', 'user.email', 'test@example.com']);
-  git(['config', 'user.name', 'Test']);
-  git(['commit', '-q', '--allow-empty', '-m', 'root']);
-  return dir;
-}
 
 function systemWithPlanning(planningEnabled: boolean): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));

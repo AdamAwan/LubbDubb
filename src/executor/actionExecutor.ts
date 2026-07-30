@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
-import type { WorktreeManager } from '../worktree/worktreeManager.js';
+import type { Worktrees } from '../worktree/worktreeManager.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { AutoSendConfig } from '../config.js';
@@ -31,7 +31,7 @@ import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent 
 interface ExecutorDeps {
   store: Store;
   agents: AgentManager;
-  worktrees: WorktreeManager;
+  worktrees: Worktrees;
   escalations: EscalationInbox;
   /** Outbound seam for side-effectful actions the harness may auto-send. */
   sink: ActionSink;

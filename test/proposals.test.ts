@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +11,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
+import { gitRepo } from './support/gitRepo.js';
 
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -65,17 +65,6 @@ function mergeReadyPr(system: ReturnType<typeof buildSystem>, number: number): v
   system.connector.inject({ kind: 'ci_passed', prNumber: number });
   system.connector.inject({ kind: 'pr_approved', prNumber: number });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: number, mergeable: true, mergeableState: 'clean' });
-}
-
-/** A repo to cut agent worktrees from, for the rules that actually dispatch. */
-function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
-  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  git(['init', '-q', '-b', 'main']);
-  git(['config', 'user.email', 'test@example.com']);
-  git(['config', 'user.name', 'Test']);
-  git(['commit', '-q', '--allow-empty', '-m', 'root']);
-  return dir;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

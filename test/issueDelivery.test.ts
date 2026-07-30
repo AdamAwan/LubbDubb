@@ -7,6 +7,7 @@ import { Store } from '../src/store/store.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // The `issue_deliveries` table and the mutual exclusion it holds against
 // `issue_conclusions`. Mostly store-level: no world, no dispatcher, no agent —
@@ -30,7 +31,11 @@ function build(): System {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
   });
-  return buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  return buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 }
 
 test('a delivery round-trips and reads back as the standing verdict', () => {

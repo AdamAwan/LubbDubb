@@ -18,6 +18,7 @@ import { DEFAULT_PLANNING, resolvePlanRoute, plannerVerdict } from '../src/plans
 import { amendedPlanStatus, currentPlanSummary, partsToRetire, planProgress } from '../src/plans/parts.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
+import { gitRepo } from './support/gitRepo.js';
 
 const enabled = { ...DEFAULT_PLANNING, enabled: true };
 
@@ -442,17 +443,6 @@ function task(id: string, branch: string, originRef: string): DispatchContext['t
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
   };
-}
-
-/** A throwaway git repo with one commit, so a real code dispatch can cut a worktree. */
-function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
-  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  git(['init', '-q', '-b', 'main']);
-  git(['config', 'user.email', 'test@example.com']);
-  git(['config', 'user.name', 'Test']);
-  git(['commit', '-q', '--allow-empty', '-m', 'root']);
-  return dir;
 }
 
 function systemWithPlans(): { system: System; repoRoot: string } {

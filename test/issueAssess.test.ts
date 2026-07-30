@@ -14,6 +14,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { foldWorkGraph } from '../src/graph/workGraph.js';
 import type { Agent, Decision, Issue, IssueDelivery, Plan, Task } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // Rule 3e — the assessor. What makes it fire, what makes it stand down, and the
 // one thing it must never do: let a second agent onto an issue it is judging.
@@ -370,7 +371,11 @@ function testConfig(): ReturnType<typeof loadConfig> {
 }
 
 function build(): System {
-  return buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  return buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 }
 
 function spawnAgent(system: System, originRef: string): Agent {

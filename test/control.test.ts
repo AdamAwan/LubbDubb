@@ -9,6 +9,7 @@ import { loadConfig, type Config } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { WebSocket } from 'ws';
 import type { ServerEvent } from '../src/server/hub.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -28,7 +29,7 @@ function testConfig(overrides: Partial<Config> = {}): Config {
 }
 
 test('POST /api/control changes the cap and reflects it in /api/state', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
 
   const res = await app.inject({ method: 'POST', url: '/api/control', payload: { cap: 5 } });
@@ -44,7 +45,10 @@ test('POST /api/control changes the cap and reflects it in /api/state', async ()
 });
 
 test('POST /api/control toggles pause independently of the cap', async () => {
-  const system = buildSystem(testConfig({ maxConcurrentAgents: 4 }), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig({ maxConcurrentAgents: 4 }), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+  });
   const { app } = await buildApp(system);
 
   const res = await app.inject({ method: 'POST', url: '/api/control', payload: { paused: true } });
@@ -58,7 +62,7 @@ test('POST /api/control toggles pause independently of the cap', async () => {
 });
 
 test('POST /api/control rejects an invalid cap with 400 and does not mutate', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
 
   for (const cap of [-1, 2.5, 'nope'] as const) {
@@ -72,7 +76,7 @@ test('POST /api/control rejects an invalid cap with 400 and does not mutate', as
 });
 
 test('POST /api/control broadcasts control:changed to connected cockpits', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app, hub } = await buildApp(system);
 
   const sent: ServerEvent[] = [];

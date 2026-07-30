@@ -19,6 +19,7 @@ import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { buildApp } from '../src/server/app.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function obs(over: Partial<WorkNodeObservation> & Pick<WorkNodeObservation, 'ref' | 'kind'>): WorkNodeObservation {
   return { title: over.ref, status: 'open', terminal: false, parentRef: null, ...over };
@@ -417,7 +418,11 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
     // Nothing here needs an agent; a paused fleet keeps the pulse to the world.
     startPaused: true,
   });
-  const system = buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Widget' });
   system.connector.inject({ kind: 'new_pr', number: 40, title: 'Add the widget', branch: 'issue/12' });
@@ -464,7 +469,11 @@ test('the routes serve roots and one subtree, and refuse an unknown root', async
     heartbeatIntervalMs: 999_999,
     startPaused: true,
   });
-  const system = buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Widget' });
   system.connector.inject({ kind: 'new_pr', number: 40, title: 'Add the widget', branch: 'issue/12' });
   await system.harness.runCycle('manual');

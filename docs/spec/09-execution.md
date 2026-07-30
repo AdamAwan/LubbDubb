@@ -276,6 +276,13 @@ called by the plan reconciler rather than the executor.
 keyed by branch and **reused** if one already exists. Two tasks on the same branch therefore share a
 checkout rather than fighting over it. Desk tasks never call this.
 
+The executor depends on the `Worktrees` **interface**, not the class: `ensure`/`remove` is the whole
+of what it and the reap in `system.ts` ask for, and a seam wider than its consumer is a fake with
+behaviour nobody checks. `WorktreeManager` is the real implementation, wired by default;
+`FakeWorktreeManager` is the injected one (see [19](19-development.md)). This is git's **write** side
+given the treatment its read side already had in `GitObserver` — the asymmetry was load-bearing,
+because the write side is the half that mutates a repository.
+
 `ensure(branch, base?)`:
 
 1. An existing worktree for the branch is returned as-is.

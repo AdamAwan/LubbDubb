@@ -9,6 +9,7 @@ import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { parseSessionEntries } from '../src/agents/sessionTranscript.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /**
  * Two halves of one problem (the "stale alert" issue): an agent parks, the thing
@@ -62,7 +63,11 @@ async function parkedAgent() {
     children.push(c);
     return c;
   };
-  const system = buildSystem(streamConfig(), { streamSpawner: spawner, errorMirror: () => {} });
+  const system = buildSystem(streamConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: spawner,
+    errorMirror: () => {},
+  });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
   const child = children[0]!;

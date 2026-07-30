@@ -16,6 +16,7 @@ import { aggregatePolicyCiStatus, listPolicyCiChecks } from '../src/integrations
 import type { AzPolicyEvaluation } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { CiCheck, Decision, Escalation, PullRequest, WorldSnapshot } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // --------------------------------------------------------------------------
 // Fixtures
@@ -513,7 +514,7 @@ test('/api/state ships the classification verdict, from the same call the dispat
       heartbeatIntervalMs: 999_999,
       ci,
     }),
-    { backend: new FakePtyBackend(), errorMirror: () => {} },
+    { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
 
   // The baseline is seeded rather than pulsed: the verdict under test is the one
