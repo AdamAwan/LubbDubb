@@ -171,10 +171,12 @@ interface RawWorkItemUpdate {
 
 interface RawPolicyEvaluation {
   status?: string | null;
+  /** Build-validation evaluations carry the definition they ran here. */
+  context?: { buildDefinitionName?: string } | null;
   configuration?: {
     isBlocking?: boolean;
     isEnabled?: boolean;
-    type?: { id?: string };
+    type?: { id?: string; displayName?: string };
     /**
      * Policy-type-specific settings. A build-validation policy names itself with
      * `displayName`; a status policy is identified by its `statusGenre`/
@@ -184,12 +186,21 @@ interface RawPolicyEvaluation {
   };
 }
 
-/** The operator-facing name of a policy, however its type happens to carry one. */
-function policyDisplayName(e: RawPolicyEvaluation): string {
+/**
+ * The operator-facing name of a policy, however its type happens to carry one.
+ *
+ * The `context` and type-name arms are why a nameless policy is no longer skipped
+ * downstream: `settings.displayName` is null for every build-validation policy
+ * whose operator never typed one — which on a real repo is most of them, the
+ * required builds included — leaving the definition name in `context` as the only
+ * thing a `ci.checks` glob could ever match.
+ */
+export function policyDisplayName(e: RawPolicyEvaluation): string {
   const s = e.configuration?.settings;
   if (s?.displayName) return s.displayName;
   if (s?.statusName) return s.statusGenre ? `${s.statusGenre}/${s.statusName}` : s.statusName;
-  return '';
+  if (e.context?.buildDefinitionName) return e.context.buildDefinitionName;
+  return e.configuration?.type?.displayName ?? '';
 }
 
 /** Extra attempts after the first for a *transient* failure (sign-in HTML, 429, 5xx, network). */
@@ -446,6 +457,8 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return data.value.map((e) => ({
       typeId: e.configuration?.type?.id ?? '',
       displayName: policyDisplayName(e),
+      typeName: e.configuration?.type?.displayName ?? '',
+      buildDefinitionName: e.context?.buildDefinitionName,
       status: e.status ?? null,
       isBlocking: e.configuration?.isBlocking ?? false,
       isEnabled: e.configuration?.isEnabled ?? false,

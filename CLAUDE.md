@@ -1496,7 +1496,35 @@ so a stale `failed` from a superseded push poisons the PR forever (the false-"fa
 the `vstfs:///CodeReview/CodeReviewId/{projectId}/{prId}` artifact — so `RestAzureDevOpsApi` resolves
 the project GUID once) and folds only _enabled, blocking_ CI-type policies (build-validation +
 status; reviewer/comment/work-item policies are human gates that map to `approved`/`unresolvedComments`
-instead). Auth is unlike GitHub's single env token: `resolveAzureAuth`
+instead). **That fold is frozen, and three invariants keep it that way** — it is what `prHealth`'s
+blocked verdict and rule 3's merge test read, so anything an operator can widen must be structurally
+unable to claim a PR cannot merge when Azure would complete it:
+
+- **No configuration reaches `aggregatePolicyCiStatus`.** Widening happens in `listPolicyCiChecks`,
+  which is a **different, wider** list: it carries `blocking` per check and surfaces _Optional_
+  (non-blocking) policies too, plus whichever non-CI kinds `azureDevOps.policyChecks` names. Policy
+  kinds live in the pure `azure/policyKinds.ts` (`policyKindOf` + a kind→mode map, `check` /
+  `advisory` / `off`), which `config.ts` validates without importing the provider.
+- **Rule 1, `inheritedCiFailure` and `prAttention` all gate on `ciNeedsAttention`** (`prHealth.ts`) —
+  the aggregate _or_ any non-advisory failing check. A fourth reader added later must use it too, or
+  the cockpit tells an operator a PR is nobody's turn while an agent is being dispatched for it. The
+  `inheritedCiFailure` call site is load-bearing rather than tidy: a non-blocking check runs the
+  base's commits like any other, so reading the aggregate there would put a doomed agent on every PR
+  above one red format check.
+- **An `advisory` check is filtered out by both `classifyCiFailures` and `ciNeedsAttention`**, so no
+  `ci.checks` rule — not even `match: '*'` — can claim one. That is what keeps the comment policy
+  (advisory by default) from outranking rule 2b, which holds the same signal with the thread's author
+  and body attached. Known, deliberately unfixed: `buildUnresolvedComments` marks a thread handled
+  when the bot authored its last comment, so an agent's reply settles it for the harness while Azure
+  keeps the policy red — the advisory check is what makes that divergence visible.
+
+A policy's name resolves through `settings.displayName` → `statusGenre/statusName` →
+`context.buildDefinitionName` → the policy type's own (`policyDisplayName`, exported and unit-tested).
+The third arm is not cosmetic: `settings.displayName` is null for every build-validation policy whose
+operator never typed one, which on a real repo is most of them, so a repo's **required** builds were
+skipped as nameless and could not be reached by a `ci.checks` glob at all.
+
+Auth is unlike GitHub's single env token: `resolveAzureAuth`
 prefers `AZURE_DEVOPS_PAT` (Basic) and otherwise shells out to the logged-in `az` CLI (Bearer,
 cached), so it's the one place `az` is invoked. Work-item **tags** map onto `Issue.labels`, so the
 provider-agnostic pickup/priority gates work unchanged. Merging is Azure "complete PR", which

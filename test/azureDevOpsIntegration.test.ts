@@ -6,6 +6,7 @@ import {
   aggregatePolicyCiStatus,
   buildUnresolvedComments,
   computeApproved,
+  listPolicyCiChecks,
   mergeStrategyFor,
   mergeableFromStatus,
   normalizeMergeState,
@@ -21,6 +22,7 @@ import {
 import {
   buildOpenWorkItemQuery,
   isSignInHtml,
+  policyDisplayName,
   RestAzureDevOpsApi,
   type AzureAuth,
 } from '../src/integrations/azure/restAzureDevOpsApi.js';
@@ -35,6 +37,7 @@ import type {
   AzWorkItemUpdate,
   AzureDevOpsApi,
 } from '../src/integrations/azure/azureDevOpsApi.js';
+import { validatePolicyCheckModes, type PolicyCheckModes } from '../src/integrations/azure/policyKinds.js';
 import type { MergeMethod } from '../src/sink/actionSink.js';
 
 /** Everything a test wants to script. Every field defaults to empty/benign. */
@@ -191,10 +194,155 @@ test('mergeableFromStatus is tri-state: concrete for succeeded/conflicts, undefi
 const BUILD_TYPE = '0609b952-1397-4640-95ec-e00a01b2c241';
 const STATUS_TYPE = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
 const REVIEWERS_TYPE = 'fa4e907d-c16b-4a4c-9dfa-4906e5d171dd';
+const COMMENTS_TYPE = 'c6a1889d-b943-4856-b76f-9e46bb6b0df2';
+const WORK_ITEMS_TYPE = '40e92b44-2fe1-4dd6-b3d8-74a9c21d0c6e';
+const MERGE_STRATEGY_TYPE = 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab';
 
 function evalRec(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation {
-  return { typeId: BUILD_TYPE, displayName: 'build', status: 'approved', isBlocking: true, isEnabled: true, ...over };
+  return {
+    typeId: BUILD_TYPE,
+    typeName: 'Build',
+    displayName: 'build',
+    status: 'approved',
+    isBlocking: true,
+    isEnabled: true,
+    ...over,
+  };
 }
+
+test('policyDisplayName: a build policy with no settings name falls back to its build definition', () => {
+  // The regression this exists for. `settings.displayName` is null for a
+  // build-validation policy whose operator never typed one — on a real repo that
+  // is most of them, the required builds included — and a nameless check was
+  // skipped outright, so `ci.checks` could not reach Build UI or Build-dotnet.
+  assert.equal(
+    policyDisplayName({
+      configuration: { type: { id: BUILD_TYPE, displayName: 'Build' }, settings: {} },
+      context: { buildDefinitionName: 'Build-dotnet' },
+    }),
+    'Build-dotnet',
+  );
+});
+
+test('policyDisplayName: an operator-typed name still wins over the build definition', () => {
+  assert.equal(
+    policyDisplayName({
+      configuration: {
+        type: { id: BUILD_TYPE, displayName: 'Build' },
+        settings: { displayName: 'Hallway Traffic Light' },
+      },
+      context: { buildDefinitionName: 'hallway-traffic-light' },
+    }),
+    'Hallway Traffic Light',
+  );
+});
+
+test('policyDisplayName: a policy with neither falls back to its type name', () => {
+  assert.equal(
+    policyDisplayName({ configuration: { type: { id: COMMENTS_TYPE, displayName: 'Comment requirements' } } }),
+    'Comment requirements',
+  );
+});
+
+test('listPolicyCiChecks: a failing build is surfaced with its blocking flag', () => {
+  const checks = listPolicyCiChecks([evalRec({ displayName: 'Build-dotnet', status: 'rejected' })]);
+  assert.deepEqual(checks, [{ name: 'Build-dotnet', status: 'failing', blocking: true }]);
+});
+
+test('listPolicyCiChecks: an Optional build failure is surfaced as a non-blocking check', () => {
+  const checks = listPolicyCiChecks([
+    evalRec({ displayName: 'Dotnet Code Format Validation', status: 'rejected', isBlocking: false }),
+  ]);
+  assert.deepEqual(checks, [{ name: 'Dotnet Code Format Validation', status: 'failing', blocking: false }]);
+});
+
+test('aggregatePolicyCiStatus: an Optional failure still does not move the aggregate', () => {
+  // The decoupling the whole feature rests on: an agent may be dispatched for a
+  // check that cannot stop the merge, and `ciStatus` must not claim it can.
+  assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'rejected', isBlocking: false })]), 'unknown');
+});
+
+test('listPolicyCiChecks: the comment policy is advisory under the defaults', () => {
+  const checks = listPolicyCiChecks([
+    evalRec({
+      typeId: COMMENTS_TYPE,
+      typeName: 'Comment requirements',
+      displayName: 'Comment requirements',
+      status: 'rejected',
+    }),
+  ]);
+  assert.deepEqual(checks, [{ name: 'Comment requirements', status: 'failing', blocking: true, advisory: true }]);
+});
+
+test('listPolicyCiChecks: work-item, merge-strategy and reviewer policies are off under the defaults', () => {
+  const checks = listPolicyCiChecks([
+    evalRec({
+      typeId: WORK_ITEMS_TYPE,
+      typeName: 'Work item linking',
+      displayName: 'Work item linking',
+      status: 'rejected',
+    }),
+    evalRec({
+      typeId: MERGE_STRATEGY_TYPE,
+      typeName: 'Require a merge strategy',
+      displayName: 'Require a merge strategy',
+      status: 'rejected',
+    }),
+    evalRec({
+      typeId: REVIEWERS_TYPE,
+      typeName: 'Minimum number of reviewers',
+      displayName: 'Minimum number of reviewers',
+      status: 'rejected',
+    }),
+  ]);
+  assert.deepEqual(checks, []);
+});
+
+test('listPolicyCiChecks: an operator can promote work-item linking to an ordinary check', () => {
+  const checks = listPolicyCiChecks(
+    [
+      evalRec({
+        typeId: WORK_ITEMS_TYPE,
+        typeName: 'Work item linking',
+        displayName: 'Work item linking',
+        status: 'rejected',
+      }),
+    ],
+    { workItems: 'check' },
+  );
+  assert.deepEqual(checks, [{ name: 'Work item linking', status: 'failing', blocking: true }]);
+});
+
+test('listPolicyCiChecks: a disabled policy is dropped under every mode', () => {
+  assert.deepEqual(listPolicyCiChecks([evalRec({ status: 'rejected', isEnabled: false })], { build: 'check' }), []);
+  assert.deepEqual(
+    listPolicyCiChecks(
+      [
+        evalRec({
+          typeId: COMMENTS_TYPE,
+          typeName: 'Comment requirements',
+          status: 'rejected',
+          isEnabled: false,
+        }),
+      ],
+      { comments: 'advisory' },
+    ),
+    [],
+  );
+});
+
+test('validatePolicyCheckModes: an unknown kind or mode is refused at load', () => {
+  assert.throws(
+    () => validatePolicyCheckModes({ builds: 'check' } as unknown as PolicyCheckModes),
+    /"builds" is not a policy kind/,
+  );
+  assert.throws(
+    () => validatePolicyCheckModes({ build: 'dispatch' } as unknown as PolicyCheckModes),
+    /is not one of check \| advisory \| off/,
+  );
+  // A valid map passes silently.
+  validatePolicyCheckModes({ comments: 'check', workItems: 'off' });
+});
 
 test('aggregatePolicyCiStatus: a rejected required build policy is failing', () => {
   assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'approved' }), evalRec({ status: 'rejected' })]), 'failing');

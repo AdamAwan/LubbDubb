@@ -60,9 +60,16 @@ export function prHealth(pr: PullRequest, openPrs: PullRequest[] = []): PrHealth
  * leave alone still blocks the merge. Whose turn it is belongs to
  * `prAttentionStatus`, and what the harness will do about it to `ciPolicy`.
  * Capped so a matrix build of thirty jobs doesn't fill the cockpit row.
+ *
+ * By the same question, a check the provider says does **not** block completion
+ * has no place here, and neither does an advisory one, which is not a CI check
+ * at all. A *muted* check does belong: telling the harness to leave it alone
+ * does not stop the provider holding the PR on it.
  */
 function failingCheckSuffix(pr: PullRequest): string {
-  const failing = (pr.ciChecks ?? []).filter((c) => c.status === 'failing').map((c) => c.name);
+  const failing = (pr.ciChecks ?? [])
+    .filter((c) => c.status === 'failing' && !c.advisory && c.blocking !== false)
+    .map((c) => c.name);
   if (failing.length === 0) return '';
   const shown = failing.slice(0, MAX_NAMED_CHECKS);
   const rest = failing.length - shown.length;
@@ -123,6 +130,28 @@ export function basePrOf(pr: PullRequest, openPrs: PullRequest[]): PullRequest |
 }
 
 /**
+ * Is there a CI failure on this PR the harness should put an agent on?
+ *
+ * Deliberately *not* `ciStatus === 'failing'`, which is the **merge** question. A
+ * provider can report a check that fails without blocking completion — an Azure
+ * "Optional" branch policy — and the harness should still fix it. Folding that
+ * into the aggregate instead would claim the PR cannot merge when it can, and
+ * would stop the merge rule merging it.
+ *
+ * The aggregate is still an arm of the test, because a provider reporting no
+ * per-check detail at all (and every PR persisted before checks existed) has
+ * nothing else to answer from.
+ *
+ * Advisory checks are excluded for the reason `classifyCiFailures` excludes them:
+ * they restate a signal something else already owns at higher fidelity, and
+ * dispatching on one would outrank the rule that owns it.
+ */
+export function ciNeedsAttention(pr: PullRequest): boolean {
+  if (pr.ciStatus === 'failing') return true;
+  return (pr.ciChecks ?? []).some((c) => c.status === 'failing' && !c.advisory);
+}
+
+/**
  * The PR *below* this one whose red CI this PR's red CI is inheriting, or null
  * when the failure is genuinely its own.
  *
@@ -137,16 +166,21 @@ export function basePrOf(pr: PullRequest, openPrs: PullRequest[]): PullRequest |
  * Walks the whole chain, not just the immediate base, because a base whose own CI
  * is still `pending` must not read as "this failure is yours". Cycle-guarded: a
  * provider reporting a base loop can't spin this.
+ *
+ * Reads {@link ciNeedsAttention} rather than the aggregate, so a failure that
+ * dispatches without blocking the merge is attributed too — otherwise one red
+ * Optional check on a stack's base would put an agent on every PR above it,
+ * which is exactly the multiplication this exists to prevent.
  */
 export function inheritedCiFailure(pr: PullRequest, openPrs: PullRequest[]): PullRequest | null {
-  if (pr.ciStatus !== 'failing') return null;
+  if (!ciNeedsAttention(pr)) return null;
   const seen = new Set<number>([pr.number]);
   let current = pr;
   for (;;) {
     const base = basePrOf(current, openPrs);
     if (!base || seen.has(base.number)) return null;
     seen.add(base.number);
-    if (base.ciStatus === 'failing') return base;
+    if (ciNeedsAttention(base)) return base;
     current = base;
   }
 }

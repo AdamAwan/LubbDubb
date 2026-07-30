@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isStackedPr, prHealth, isConflicted, needsBaseUpdate } from '../src/prHealth.js';
+import { ciNeedsAttention, isStackedPr, prHealth, isConflicted, needsBaseUpdate } from '../src/prHealth.js';
 import type { PullRequest } from '../src/types.js';
 
 function pr(over: Partial<PullRequest> = {}): PullRequest {
@@ -11,6 +11,51 @@ test('a clean, green, comment-free PR is healthy', () => {
   const h = prHealth(pr({ mergeableState: 'clean', mergeable: true }));
   assert.equal(h.blocked, false);
   assert.deepEqual(h.reasons, []);
+});
+
+test('ciNeedsAttention: true for a PR failing only on a check outside the aggregate', () => {
+  // An Azure "Optional" branch policy: it really failed, and an agent really can
+  // fix it, but the provider will complete the PR with it red.
+  const p = pr({
+    ciStatus: 'passing',
+    ciChecks: [{ name: 'Dotnet Code Format Validation', status: 'failing', blocking: false }],
+  });
+  assert.equal(ciNeedsAttention(p), true);
+});
+
+test('ciNeedsAttention: false when the only failing check is advisory', () => {
+  const p = pr({
+    ciStatus: 'passing',
+    ciChecks: [{ name: 'Comment requirements', status: 'failing', blocking: true, advisory: true }],
+  });
+  assert.equal(ciNeedsAttention(p), false);
+});
+
+test('ciNeedsAttention: true off the aggregate alone, for a provider reporting no per-check detail', () => {
+  assert.equal(ciNeedsAttention(pr({ ciStatus: 'failing' })), true);
+  assert.equal(ciNeedsAttention(pr({ ciStatus: 'passing' })), false);
+});
+
+test('prHealth: an Optional failure alone leaves the PR unblocked', () => {
+  // `prHealth` answers "can this merge", and the provider would complete this PR.
+  // Dispatching a fix and reporting the PR unmergeable are different claims.
+  const p = pr({
+    ciStatus: 'passing',
+    ciChecks: [{ name: 'Dotnet Code Format Validation', status: 'failing', blocking: false }],
+  });
+  assert.deepEqual(prHealth(p), { blocked: false, reasons: [] });
+});
+
+test('prHealth: the failing-check suffix names only checks that hold the merge', () => {
+  const p = pr({
+    ciStatus: 'failing',
+    ciChecks: [
+      { name: 'Build-dotnet', status: 'failing', blocking: true },
+      { name: 'Dotnet Code Format Validation', status: 'failing', blocking: false },
+      { name: 'Comment requirements', status: 'failing', blocking: true, advisory: true },
+    ],
+  });
+  assert.deepEqual(prHealth(p).reasons, ['CI failing: Build-dotnet']);
 });
 
 test('a dirty PR is conflicted, blocked, and needs a base update', () => {

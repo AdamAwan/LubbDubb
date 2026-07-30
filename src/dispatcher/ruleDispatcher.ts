@@ -1,7 +1,7 @@
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
-import { inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../prHealth.js';
+import { ciNeedsAttention, inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../prHealth.js';
 import type { Agent, Decision, Issue, IssueAssay, Plan, PlanPart, PullRequest, Task } from '../types.js';
 import {
   isIssuePickupEligible,
@@ -280,7 +280,10 @@ export class RuleDispatcher implements Dispatcher {
       // unconfigured harness — and a provider that reports no per-check detail —
       // yields `actionable` with empty lists, i.e. exactly the behaviour above.
       const ciVerdict = classifyCiFailures(pr.ciChecks, this.ci);
-      const ciFailing = pr.ciStatus === 'failing' && inheritedFailure === null;
+      // The gate is `ciNeedsAttention`, not the aggregate: a check that fails
+      // without blocking completion still wants a fix, and folding it into
+      // `ciStatus` would have claimed the PR cannot merge when it can.
+      const ciFailing = ciNeedsAttention(pr) && inheritedFailure === null;
       if (ciFailing && ciVerdict.actionable) {
         const ciOrigin = `pr:${pr.number}:ci`;
         concerns.push({

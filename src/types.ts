@@ -25,6 +25,28 @@ export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 export interface CiCheck {
   name: string;
   status: Exclude<CiStatus, 'unknown'>;
+  /**
+   * False when the provider says this check does not block completion (an Azure
+   * "Optional" branch policy). Absent means blocking, so every provider and
+   * persisted row that predates this reads unchanged.
+   *
+   * Display and briefing only — nothing gates on it. Whether a *check* blocks and
+   * whether the *PR* can merge are different questions, and the second is
+   * {@link CiStatus}'s alone.
+   */
+  blocking?: boolean;
+  /**
+   * Reported for visibility only: `classifyCiFailures` never classifies it and
+   * `ciNeedsAttention` never counts it, so it cannot dispatch an agent, escalate,
+   * or be muted by a `ci.checks` rule.
+   *
+   * The Azure comment policy's mode. Surfacing it as an ordinary check would let
+   * rule 1 outrank rule 2b and send the generic CI-fix prompt in place of one
+   * carrying the comment's author and body — the same work with strictly less
+   * information. Structural rather than configurational, so the correct behaviour
+   * cannot be lost by forgetting a line of config.
+   */
+  advisory?: boolean;
 }
 
 /** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */

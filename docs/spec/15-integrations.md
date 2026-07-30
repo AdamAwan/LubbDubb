@@ -7,7 +7,9 @@ providers selected in config. Swapping a provider is a config change, not a code
 ## The two seams
 
 ```ts
-interface Connector { getState(): Promise<WorldSnapshot>; }
+interface Connector {
+  getState(): Promise<WorldSnapshot>;
+}
 ```
 
 ```ts
@@ -27,11 +29,11 @@ Every outbound method **throws** on failure; `SendResult` carries `ok` and an op
 
 ## Capabilities and providers
 
-| Capability      | Owns                     | Providers registered              |
-| --------------- | ------------------------ | --------------------------------- |
-| `sourceControl` | Pull requests            | `fake`, `github`, `azure`         |
-| `issues`        | Issues / work items      | `fake`, `github`, `azure`         |
-| `backlog`       | Stories                  | `fake`                            |
+| Capability      | Owns                | Providers registered      |
+| --------------- | ------------------- | ------------------------- |
+| `sourceControl` | Pull requests       | `fake`, `github`, `azure` |
+| `issues`        | Issues / work items | `fake`, `github`, `azure` |
+| `backlog`       | Stories             | `fake`                    |
 
 `src/integrations/registry.ts` maps capability → provider id → factory. Adding a provider is one line
 there. An unknown provider id throws at boot, listing the valid ids for that capability. The fake
@@ -69,19 +71,19 @@ survives restarts. `FakeGitHubIntegration` owns PRs, `FakeIssuesIntegration` iss
 
 They are the only `Injectable` providers. `POST /api/inject` accepts:
 
-| Kind             | Effect                                                                          |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `new_pr`         | Adds an open PR (optionally with `baseBranch`, `labels`).                        |
-| `ci_failed` / `ci_passed` | Sets `ciStatus`.                                                        |
-| `pr_comment`     | Appends an unhandled review comment.                                            |
-| `pr_approved`    | Sets `approved`.                                                                |
-| `pr_mergeable`   | Sets `mergeable` and optionally `mergeableState`.                               |
-| `pr_closed`      | **Moves** the PR from the open list to the closed list, merged or not.           |
-| `new_issue`      | Adds an open issue.                                                             |
-| `issue_state`    | Opens/closes an issue.                                                          |
-| `issue_linked_pr`| Sets `linkedPrNumber`.                                                          |
-| `new_story`      | Adds a story.                                                                   |
-| `story_state`    | Sets a story's state.                                                           |
+| Kind                      | Effect                                                                 |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `new_pr`                  | Adds an open PR (optionally with `baseBranch`, `labels`).              |
+| `ci_failed` / `ci_passed` | Sets `ciStatus`.                                                       |
+| `pr_comment`              | Appends an unhandled review comment.                                   |
+| `pr_approved`             | Sets `approved`.                                                       |
+| `pr_mergeable`            | Sets `mergeable` and optionally `mergeableState`.                      |
+| `pr_closed`               | **Moves** the PR from the open list to the closed list, merged or not. |
+| `new_issue`               | Adds an open issue.                                                    |
+| `issue_state`             | Opens/closes an issue.                                                 |
+| `issue_linked_pr`         | Sets `linkedPrNumber`.                                                 |
+| `new_story`               | Adds a story.                                                          |
+| `story_state`             | Sets a story's state.                                                  |
 
 `pr_closed` **moves** the row rather than copying it. `mergePr` still marks a PR merged in place so the
 deterministic loop settles; a PR present in both lists would have the world diff report one merge
@@ -103,16 +105,16 @@ file that imports octokit. Tests inject a scripted fake `GitHubApi` — **no net
 
 The field-mapping logic is exported as **pure functions** and tested directly:
 
-| Function                                    | Does                                                                                     |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `aggregateCiStatus(checkRuns, status)`      | Folds check runs and the combined status into one `CiStatus`.                            |
-| `computeApproved(reviews)`                  | Folds reviews into a single approval flag.                                               |
-| `buildUnresolvedComments(comments, viewer)` | Threads review comments and marks the ones the viewer already answered as handled.        |
-| `normalizeMergeState(state)`                | GitHub `mergeable_state` → `MergeableState`.                                             |
-| `mapClosedPull(p)`                          | A closed PR in domain shape.                                                             |
+| Function                                    | Does                                                                                               |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `aggregateCiStatus(checkRuns, status)`      | Folds check runs and the combined status into one `CiStatus`.                                      |
+| `computeApproved(reviews)`                  | Folds reviews into a single approval flag.                                                         |
+| `buildUnresolvedComments(comments, viewer)` | Threads review comments and marks the ones the viewer already answered as handled.                 |
+| `normalizeMergeState(state)`                | GitHub `mergeable_state` → `MergeableState`.                                                       |
+| `mapClosedPull(p)`                          | A closed PR in domain shape.                                                                       |
 | `linkedPrFromTimeline(events)`              | The last PR to cross-reference an issue. No open/merged filter — hence `linkedPrNumber` is sticky. |
-| `viewerAddedLabels(events, viewer, labels)` | Labels the viewer added, from `labeled`/`unlabeled` timeline events.                      |
-| `githubRefUrl(owner, repo, ref)`            | Canonical web URL for a ref, or null.                                                    |
+| `viewerAddedLabels(events, viewer, labels)` | Labels the viewer added, from `labeled`/`unlabeled` timeline events.                               |
+| `githubRefUrl(owner, repo, ref)`            | Canonical web URL for a ref, or null.                                                              |
 
 Behaviour worth knowing:
 
@@ -122,7 +124,7 @@ Behaviour worth knowing:
   log and the previous PR list (open and closed) is returned, so PRs do not flap in and out of the
   world on one bad response.
 - **Closed PRs carry no CI, review or comment signal** — blanked rather than fetched. The row exists to
-  be *seen*, never acted on, and the per-PR fan-out is exactly the cost the feature must not have.
+  be _seen_, never acted on, and the per-PR fan-out is exactly the cost the feature must not have.
   Pagination stops at the first entry outside the window: GitHub sorts by `updated` descending, and
   `updated_at >= closed_at` always holds, so the break is sound.
 - **A `prAuthor` filter** narrows the PR list client-side, for both open and closed PRs.
@@ -131,7 +133,7 @@ Behaviour worth knowing:
 ## The `azure` provider
 
 Azure DevOps Repos + Boards, the same shape: all HTTP behind the narrow `AzureDevOpsApi` seam,
-`RestAzureDevOpsApi` the only file that touches the network *and* resolves auth, and scripted fakes in
+`RestAzureDevOpsApi` the only file that touches the network _and_ resolves auth, and scripted fakes in
 tests (`test/azureDevOpsIntegration.test.ts`).
 
 Pure mapping functions: `aggregatePolicyCiStatus`, `computeApproved` (reviewer votes),
@@ -141,13 +143,24 @@ Pure mapping functions: `aggregatePolicyCiStatus`, `computeApproved` (reviewer v
 
 Behaviour worth knowing:
 
-- **CI status comes from branch-policy *evaluations*, not the PR `statuses` endpoint.** That endpoint
-  returns every status ever posted across *all* iterations, so a stale `failed` from a superseded push
+- **CI status comes from branch-policy _evaluations_, not the PR `statuses` endpoint.** That endpoint
+  returns every status ever posted across _all_ iterations, so a stale `failed` from a superseded push
   poisons the PR forever — the false-"failing" bug. `aggregatePolicyCiStatus` reads
   `listPolicyEvaluations` (`/_apis/policy/evaluations`, keyed by the
   `vstfs:///CodeReview/CodeReviewId/{projectId}/{prId}` artifact, so the project GUID is resolved once)
   and folds only **enabled, blocking, CI-type** policies: build-validation and status. Reviewer,
   comment and work-item policies are human gates and map to `approved` / `unresolvedComments` instead.
+- **A policy's operator-facing name resolves through four places**, in order: `settings.displayName`,
+  a status policy's `statusGenre/statusName`, the evaluation's `context.buildDefinitionName`, and the
+  policy type's own display name (`policyDisplayName`, exported and unit-tested). The third arm is
+  what makes most build policies nameable at all — `settings.displayName` is null unless an operator
+  typed one, so a repo's required builds carried no name the harness could see, and a nameless check
+  was skipped outright and could not be reached by a `ci.checks` glob.
+- **`listPolicyCiChecks` is wider than the fold, in both directions the operator needs.** It carries
+  `blocking` per check, taken from the policy's Required/Optional setting, and surfaces **Optional**
+  (non-blocking) policies too: such a check really does fail and an agent really can fix it, so the
+  harness dispatches for it while `aggregatePolicyCiStatus` stays frozen on the required ones. A
+  disabled policy is dropped whatever else is true of it.
 - **Merging is Azure "complete PR"**, which needs the head commit. The provider caches each PR's
   `lastMergeSourceCommit` from the last snapshot, so a `merge_pr` only works on a PR seen in a prior
   cycle.
@@ -185,7 +198,7 @@ The two comments the harness maintains on a ticket by itself — a plan's status
 assay's refusal — are stored as a **provider comment id** (`GhCommentRef` carries a number; Azure
 addresses an edit by work item + comment). That is the right value for `upsertIssueComment` to
 round-trip and the wrong one to put on the wire: an id resolves to nothing on its own, and a bare
-number is read as an *issue number* by `githubRefUrl`'s last-but-one arm — so shipping one would key a
+number is read as an _issue number_ by `githubRefUrl`'s last-but-one arm — so shipping one would key a
 confident link to an unrelated ticket.
 
 `issueCommentRef(originRef, commentId)` (pure, `src/server/refUrls.ts`) pairs the id with the issue it

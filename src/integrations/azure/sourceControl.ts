@@ -12,6 +12,7 @@ import type {
 } from '../integration.js';
 import { closedWindowStart } from '../closedWindow.js';
 import type { AzClosedPull, AzPolicyEvaluation, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
+import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKinds.js';
 
 interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
@@ -21,6 +22,8 @@ interface AzureSourceControlOpts {
   errors?: ErrorRecorder;
   /** Only surface PRs opened by this uniqueName. Unset = all active PRs. */
   prAuthor?: string;
+  /** Which branch-policy kinds become CI checks, and at what mode. Unset = the defaults. */
+  policyChecks?: PolicyCheckModes;
   /**
    * How far back to look for PRs that have left the active set
    * (`config.closedPrWindowMs`). 0 / unset skips the lookup entirely.
@@ -75,7 +78,7 @@ export class AzureDevOpsSourceControlIntegration
             branch: p.branch,
             baseBranch: p.baseBranch,
             ciStatus: aggregatePolicyCiStatus(policyEvals),
-            ciChecks: listPolicyCiChecks(policyEvals),
+            ciChecks: listPolicyCiChecks(policyEvals, this.opts.policyChecks),
             unresolvedComments: buildUnresolvedComments(threads, viewer),
             approved: computeApproved(p.reviewerVotes),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
@@ -206,30 +209,27 @@ export function mergeableFromStatus(mergeStatus: string): boolean | undefined {
 }
 
 /**
- * Azure's well-known branch-policy type GUIDs (stable across every organization).
- * Only these two are *automated checks* — build validation and external status
- * posts. Reviewer / comment / work-item / merge-strategy policies are human or
- * process gates and already map onto `approved` / `unresolvedComments` /
- * `mergeableState`, so folding them into `ciStatus` would spuriously report "CI
- * failing" for e.g. an unmet minimum-reviewers rule.
- */
-const BUILD_POLICY_TYPE = '0609b952-1397-4640-95ec-e00a01b2c241';
-const STATUS_POLICY_TYPE = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
-const CI_POLICY_TYPES: ReadonlySet<string> = new Set([BUILD_POLICY_TYPE, STATUS_POLICY_TYPE]);
-
-/**
  * Fold a PR's *branch-policy evaluations* into one {@link CiStatus} — the
  * authoritative "are the required checks passing?" signal.
+ *
+ * **Deliberately frozen** at enabled + blocking + build/status, with no
+ * configuration reaching it. `ciStatus` is what `prHealth`'s blocked verdict and
+ * the merge rule read, so anything an operator can widen must be unable to claim
+ * a PR cannot merge when Azure would complete it — or to stop the harness
+ * merging one it would. Widening happens in {@link listPolicyCiChecks} instead,
+ * and rule 1 reads that through `ciNeedsAttention`. Reviewer / comment /
+ * work-item / merge-strategy policies are human or process gates that already
+ * map onto `approved` / `unresolvedComments` / `mergeableState`, so folding them
+ * in here would report "CI failing" for an unmet minimum-reviewers rule.
  *
  * This replaces aggregating the PR *statuses* endpoint, which returns every
  * status ever posted across *all* iterations: one stale `failed` from a
  * superseded push permanently poisoned the PR to `failing`. Policy evaluations
  * instead reflect only the current state of the policies that apply now, so no
- * per-iteration de-dup is needed. We consider only *enabled, blocking* CI-type
- * policies: a `rejected`/`broken` one wins (`failing`), else a `queued`/`running`
- * one is `pending`, else an `approved` one is `passing`, else `unknown` (no CI
- * policy applies — a repo with no build/status branch policy has no required
- * check to gate on).
+ * per-iteration de-dup is needed. A `rejected`/`broken` one wins (`failing`),
+ * else a `queued`/`running` one is `pending`, else an `approved` one is
+ * `passing`, else `unknown` (no CI policy applies — a repo with no build/status
+ * branch policy has no required check to gate on).
  */
 export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
   let failing = false;
@@ -237,7 +237,8 @@ export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
   let passing = false;
 
   for (const e of evals) {
-    if (!e.isEnabled || !e.isBlocking || !CI_POLICY_TYPES.has(e.typeId)) continue;
+    const kind = policyKindOf(e.typeId);
+    if (!e.isEnabled || !e.isBlocking || (kind !== 'build' && kind !== 'status')) continue;
     switch (e.status) {
       case 'rejected':
       case 'broken': // the policy errored — it still blocks the merge, so treat it as failing.
@@ -261,22 +262,43 @@ export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
 }
 
 /**
- * The same enabled, blocking CI policies {@link aggregatePolicyCiStatus} folds,
- * kept individually so per-check policy can act on *which* one failed. A policy
- * whose type carries no name is skipped: an unnameable check cannot be matched
- * by a glob, and emitting it nameless would let one empty pattern claim several
- * unrelated checks at once.
+ * Every policy evaluation the operator asked to see, kept individually so
+ * per-check policy can act on *which* one failed.
+ *
+ * Wider than the fold above in both directions an operator needs: *Optional*
+ * (non-blocking) policies are included, carrying `blocking: false`, because such
+ * a check really does fail and an agent really can fix it; and the non-CI kinds
+ * are included at whatever mode they are configured at. A **disabled** policy is
+ * dropped whatever its mode — its evaluation is stale noise.
+ *
+ * A policy with no name is no longer skipped: `policyDisplayName` now falls back
+ * through the build definition name to the policy type's own, so "unnameable" has
+ * stopped being a state an evaluation can be in. The clause it replaces existed
+ * because a nameless check cannot be matched by a glob and emitting one would let
+ * a single empty pattern claim several unrelated checks at once.
  */
-export function listPolicyCiChecks(evals: AzPolicyEvaluation[]): CiCheck[] {
+export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCheckModes): CiCheck[] {
   const checks: CiCheck[] = [];
   for (const e of evals) {
-    if (!e.isEnabled || !e.isBlocking || !CI_POLICY_TYPES.has(e.typeId) || !e.displayName) continue;
-    if (e.status === 'rejected' || e.status === 'broken') checks.push({ name: e.displayName, status: 'failing' });
-    else if (e.status === 'queued' || e.status === 'running') checks.push({ name: e.displayName, status: 'pending' });
-    else if (e.status === 'approved') checks.push({ name: e.displayName, status: 'passing' });
-    // 'notApplicable' / null contribute no signal, exactly as in the fold.
+    if (!e.isEnabled) continue;
+    const mode = policyCheckMode(policyKindOf(e.typeId), modes);
+    if (mode === 'off') continue;
+    const status = checkStatusOf(e.status);
+    if (!status) continue;
+    const check: CiCheck = { name: e.displayName, status, blocking: e.isBlocking };
+    if (mode === 'advisory') check.advisory = true;
+    checks.push(check);
   }
   return checks;
+}
+
+/** A policy evaluation status as a {@link CiCheck} status, or null for no signal. */
+function checkStatusOf(status: string | null): CiCheck['status'] | null {
+  if (status === 'rejected' || status === 'broken') return 'failing';
+  if (status === 'queued' || status === 'running') return 'pending';
+  if (status === 'approved') return 'passing';
+  // 'notApplicable' / null contribute no signal, exactly as in the fold.
+  return null;
 }
 
 /**

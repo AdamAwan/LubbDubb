@@ -46,7 +46,15 @@
 
 import { ciNeedsHuman, classifyCiFailures, type CiPolicy } from './ci/ciPolicy.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatcher/dispatchCooldown.js';
-import { basePrOf, inheritedCiFailure, isPrExcluded, isStackedPr, needsBaseUpdate, prState } from './prHealth.js';
+import {
+  basePrOf,
+  ciNeedsAttention,
+  inheritedCiFailure,
+  isPrExcluded,
+  isStackedPr,
+  needsBaseUpdate,
+  prState,
+} from './prHealth.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
 import type { Decision, Proposal, PullRequest, Task, WorldEvent } from './types.js';
 
@@ -307,7 +315,10 @@ interface CiReading {
 
 function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
   const none: CiReading = { heldByPolicy: [], muted: [], mutedOnly: false, actionable: false };
-  if (pr.ciStatus !== 'failing' || inheritedCiFailure(pr, ctx.openPrs) !== null) return none;
+  // The same gate rule 1 rides, read from the same predicate: the lens telling an
+  // operator a PR is nobody's turn while an agent is being dispatched for it is
+  // the drift this whole file exists to avoid.
+  if (!ciNeedsAttention(pr) || inheritedCiFailure(pr, ctx.openPrs) !== null) return none;
   const verdict = classifyCiFailures(pr.ciChecks, ctx.ci);
   if (verdict.actionable) return { ...none, actionable: true };
   const muted = verdict.ignored.map((m) => m.name);
