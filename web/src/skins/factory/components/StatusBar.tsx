@@ -214,9 +214,7 @@ function Accumulators({ cells }: { cells: number[] }): JSX.Element {
  * the floor read the same way — `Off-Blueprint` there, renamed to the harness's
  * own word for it, which is also short enough not to wrap the bar. Output is the
  * fifth and the only one whose face is a picture, because its subject is a rate:
- * see `ProdRead`. See
- * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
- * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
+ * see `ProdRead`.
  *
  * Every gauge is one subject stated once, which is what the bar had stopped
  * being: the fleet was a Bots reading *and* a `2/3` inside the cap control a few

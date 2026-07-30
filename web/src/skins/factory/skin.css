@@ -832,8 +832,8 @@
    There were three rails before that. The first held what *you* were the
    blocker for, and its panels are read as a count far more often than as
    contents, so the count became a gauge in the status bar and the panel opens
-   from it — see `docs/spec/2026-07-29-factory-two-rail-layout-design.md`.
-   Production left the world rail the same way, and is the Output gauge now.
+   from it. Production left the world rail the same way, and is the Output gauge
+   now.
 
    Inspection and Bots share a row from 1500px up, half the width each: the
    parts on the rack and the bots that will work them are one reading, and at
