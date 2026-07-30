@@ -1,4 +1,5 @@
 import type { Task } from '../types.js';
+import { issueOriginRole } from '../issueOrigins.js';
 
 /**
  * The assessor's policy and its ref vocabulary.
@@ -65,9 +66,17 @@ export function assessBranch(issueNumber: number): string {
  * the work has not started, so rule 4 picks it up; prior tasks with nothing in
  * flight means it may be finished, so the assessor asks.
  *
+ * **Only an origin that could have delivered something counts** — the pickup root,
+ * a plan's parts, or an assessment (which is not work but only ever happens
+ * downstream of some). The origins where the harness is *deliberating* do not:
+ * matching the whole `issue:<n>:*` subtree meant a planner's own task read as work
+ * having been done, so an issue the planner routed to `single` was assessed instead
+ * of picked up and never got built at all. `issueOriginRole` is where that is
+ * decided, once, for every predicate that asks — see `src/issueOrigins.ts` for the
+ * full argument and for what an unrecognised origin does.
+ *
  * **Answered from the tasks the dispatcher already holds, never from the work
- * graph.** `issue:<n>` and `issue:<n>:*` is exactly the subtree's origin
- * vocabulary — the graph is keyed on these same strings, which is why this reads
+ * graph.** The graph is keyed on these same origin strings, which is why this reads
  * like a graph query. It is the same question, asked of the source that was always
  * there. Nothing in `src/dispatcher/` may read the graph (stage 1's structural
  * property, asserted in `test/workGraph.test.ts`): a rule consulting it would be a
@@ -76,7 +85,8 @@ export function assessBranch(issueNumber: number): string {
  * the assessing *agent* reads, through `world_read`.
  */
 export function hasPriorWork(issueNumber: number, tasks: Task[]): boolean {
-  const root = `issue:${issueNumber}`;
-  const prefix = `${root}:`;
-  return tasks.some((t) => t.originRef === root || (t.originRef?.startsWith(prefix) ?? false));
+  return tasks.some((t) => {
+    const role = issueOriginRole(issueNumber, t.originRef);
+    return role === 'work' || role === 'evidence';
+  });
 }

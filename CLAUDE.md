@@ -644,10 +644,14 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `deliveryHold`'s reason. The fingerprint is taken from the **task** (`originTitle`/`originSummary`)
     in `AgentManager.recordAssay`, never re-read from the world — re-reading would swallow an edit
     made while the assayer was running and stamp the verdict with text nobody assayed.
-  - **`hasWorkStarted` is `hasPriorWork` minus the assay's own tasks**, and the exclusion is
-    load-bearing rather than tidy: `issue:<n>:assay` is inside the subtree that predicate matches, so
-    without it one crashed assayer would retire the cooldown, the attempt cap and the assessor's arm
-    of the same discriminator in a single stroke.
+  - **`hasWorkStarted` is now exactly `hasPriorWork`, and the reason is the interesting part.** It
+    began as that predicate with the assay's **own** tasks filtered out, because `issue:<n>:assay` is
+    inside the subtree it then matched, and without the exclusion one crashed assayer would retire the
+    cooldown, the attempt cap and the assessor's arm of the same discriminator in a single stroke. The
+    exclusion was right and its scope was wrong — it was written one special case at a time, and the
+    next origin added (`issue:<n>:plan`) went unclassified and parked every `single`-routed issue in
+    the assessor. `issueOriginRole` makes the distinction for every deliberation origin now (see the
+    assessor bullet below), so this is a name for the question rather than a second answer to it.
   - **A comment on the ticket is the third decision, and it is what makes a blocking gate fair.**
     `AssayDesk` (pulse, beside the plan reconciler) keeps **one living comment** per refused goal
     through `IssueCommentCapable.upsertIssueComment` — mechanical bookkeeping like the plan status
@@ -803,10 +807,24 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     review state. **`hasPriorWork` does two jobs** — it stops every fresh issue getting an assessor
     that reports nothing was done, _and_ it is the discriminator that lets assess and pickup coexist
     on an issue both would claim (nothing started → pickup, something finished → ask). It is answered
-    from `ctx.tasks`, **never the graph**, even though `issue:<n>`/`issue:<n>:*` is the subtree's own
-    vocabulary. An assessed issue is **suppressed** from rule 4 that cycle or two agents land on it,
-    and the rule **fails open** like the planner (spent cap → ordinary pickup, no escalation), since
-    narrowing rule 4 without that turns an assessor crash into a permanently parked issue.
+    from `ctx.tasks`, **never the graph**, even though the graph is keyed on the same origin strings.
+    An assessed issue is **suppressed** from rule 4 that cycle or two agents land on it, and the rule
+    **fails open** like the planner (spent cap → ordinary pickup, no escalation), since narrowing
+    rule 4 without that turns an assessor crash into a permanently parked issue.
+  - **Which origins count as prior work is decided once, in `issueOriginRole` (`src/issueOrigins.ts`),
+    and matching the whole `issue:<n>:*` subtree was a real defect.** The subtree holds two
+    materially different things: the pickup root and a plan's parts are the **work**; `:assess` is not
+    work but only ever happens downstream of some, so it counts as **evidence**; `:plan` and `:assay`
+    are the harness **deliberating**, and a task on one says the issue has been thought about, never
+    that anything was built. Counting the planner's own task made every issue the planner routed to
+    `single` look worked, so rule 3e fired on an issue nothing had built and suppressed the pickup
+    that was the whole point of the verdict — the assessor then honestly reported nothing delivered,
+    rule 3g replanned, and the issue cycled the funnel forever with no PR ever written (observed on
+    three at once against Azure Boards). Two properties keep it from recurring: an **unrecognised**
+    suffix is its own answer rather than a silent default (an implicit "everything counts" is exactly
+    how `:plan` slipped through), and `hasPriorWork` does not count it — failing toward a redundant
+    pickup an operator can see rather than a parked issue they cannot. `test/issueAssess.test.ts`
+    asserts the whole known vocabulary, so the next origin has to be classified rather than inherited.
   - **`assess_issue` refuses every agent that is doing the work** — `conclusionOrigin`'s discipline
     pointed the other way, because judging your own delivery is not an assessment. **On by default**
     (`assessment.enabled`), and unlike `mcp` not purely additive: it gates pickup and spends an agent
