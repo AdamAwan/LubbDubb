@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import type { Worktrees } from './worktreeManager.js';
 
 /** One recorded call, so a test can assert on the branch and base a dispatch asked for. */
-export interface FakeWorktreeCall {
+interface FakeWorktreeCall {
   branch: string;
   base?: string;
 }
@@ -57,11 +57,6 @@ export class FakeWorktreeManager implements Worktrees {
     this.dirs.delete(branch);
     rmSync(dir, { recursive: true, force: true });
     return Promise.resolve();
-  }
-
-  /** The directory `ensure` handed out for a branch, or null — the fake's `findExisting`. */
-  pathFor(branch: string): string | null {
-    return this.dirs.get(branch) ?? null;
   }
 }
 

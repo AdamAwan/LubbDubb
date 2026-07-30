@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readdirSync, readFileSync } from 'node:fs';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function initRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
@@ -190,4 +193,75 @@ test('an omitted base still forks from HEAD', async () => {
   const dir = await wt.ensure('issue/12/schema');
 
   assert.equal(git(dir, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'HEAD']));
+});
+
+// ---------------------------------------------------------------------------
+// The fake, and the reason it exists.
+// ---------------------------------------------------------------------------
+
+test('the fake records what a dispatch asked for and touches no repository', async () => {
+  const wt = new FakeWorktreeManager();
+
+  const dir = await wt.ensure('issue/12/schema', 'main');
+
+  assert.deepEqual(wt.ensured, [{ branch: 'issue/12/schema', base: 'main' }]);
+  // A real directory, not a synthetic path: an agent's worktree is its cwd, and
+  // the file-events spool and the artifact route (which `realpath`s the root
+  // before serving) genuinely touch it.
+  assert.ok(existsSync(dir));
+  // No `base` at all is a distinct thing to have asked — the real manager forks
+  // from HEAD there rather than resolving anything.
+  await wt.ensure('job/j_1');
+  assert.deepEqual(wt.ensured[1], { branch: 'job/j_1' });
+});
+
+test('the fake is reuse-first, like the real one, and ignores base on reuse', async () => {
+  const wt = new FakeWorktreeManager();
+
+  const first = await wt.ensure('issue/12', 'main');
+  const second = await wt.ensure('issue/12', 'some/other/base');
+
+  // Reuse-first is load-bearing in production — `Store.findActiveTaskByBranch`
+  // exists because one branch is one directory — so a fake minting a fresh path
+  // per call would let a test assert behaviour the real manager does not have.
+  assert.equal(second, first);
+  assert.equal(wt.ensured.length, 2);
+});
+
+test('the fake removes what it made, and a removal of nothing is a no-op', async () => {
+  const wt = new FakeWorktreeManager();
+  const dir = await wt.ensure('issue/12', 'main');
+
+  await wt.remove('issue/12');
+  await wt.remove('never/existed');
+
+  assert.equal(existsSync(dir), false);
+  assert.deepEqual(wt.removed, ['issue/12', 'never/existed']);
+  // Removed, then asked for again: a fresh directory, exactly as the real one.
+  assert.ok(existsSync(await wt.ensure('issue/12', 'main')));
+});
+
+/**
+ * The regression guard for what the seam is *for*. `config.repoRoot` defaults to
+ * `process.cwd()`, so a test that dispatches a code agent without injecting the
+ * fake cuts a real branch in whichever checkout the suite is running in and never
+ * deletes it — and on a CI `pull_request` checkout, which is a detached HEAD with
+ * no `main` and no `origin/main`, `ensure` throws instead and the dispatch is
+ * audited as rejected, so the test fails on an empty agent list rather than on
+ * anything it was written to assert.
+ *
+ * Either answer is fine — inject the fake, or point `repoRoot` at a throwaway
+ * repository from `test/support/gitRepo.ts`. Naming neither is the bug.
+ */
+test('every test that builds a System either fakes worktrees or brings its own repo', async () => {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  const files = readdirSync(dir).filter((f) => f.endsWith('.test.ts'));
+
+  const offenders = files.filter((f) => {
+    const source = readFileSync(join(dir, f), 'utf8');
+    if (!source.includes('buildSystem(')) return false;
+    return !source.includes('FakeWorktreeManager') && !source.includes('repoRoot');
+  });
+
+  assert.deepEqual(offenders, []);
 });

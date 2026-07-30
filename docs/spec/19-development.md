@@ -130,9 +130,25 @@ Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
 | `streamSpawner`  | The real child process for the stream-JSON runtime.                            |
 | `sink`           | The outbound seam (defaults to the composite connector).                       |
 | `gitObserver`    | `GitCliObserver` → `FakeGitObserver`. Injecting one also turns the reconciler's `git fetch` off. |
+| `worktrees`      | `WorktreeManager` → `FakeWorktreeManager` (`src/worktree/fakeWorktreeManager.ts`). Records `ensure`/`remove` and hands back a real empty directory; touches no repository. |
 | `errorMirror`    | The stderr echo (tests silence it).                                            |
 
 Plus `dbPath: ':memory:'` for an in-memory database.
+
+### Why a test must not dispatch through the real worktree manager
+
+`config.repoRoot` defaults to `process.cwd()`, so a test that dispatches a code agent without
+injecting `worktrees` cuts a **real branch in whatever checkout the suite is running in** — the
+developer's own — and nothing ever deletes it. It also decides whether the suite passes at all:
+`ensure` resolves `base` through `resolveCommit` and **throws** when it names no commit, which the
+executor audits as a rejected dispatch, writing no agent row. A CI `pull_request` checkout is a
+detached HEAD with no `main` and no `origin/main`, so every such dispatch was rejected there and the
+tests reading `listAgentsByStatus(...)[0]!` failed with an opaque `TypeError`.
+
+Both go away at the source: a test with a fake worktree manager never resolves a base commit, so the
+checkout's shape stops mattering. Inject the fake unless git behaviour **is** the subject — reuse-first
+`ensure`, ref collisions, `hasCommitsBeyond`. Those tests point `repoRoot` at a throwaway repository
+from `test/support/gitRepo.ts` and use the real manager.
 
 That combination exercises the whole **inject → dispatch → agent → escalate → answer → done** loop
 without a model, a network or a real terminal. Prefer adding tests at that seam. Put new tests in
