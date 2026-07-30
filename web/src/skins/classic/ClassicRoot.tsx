@@ -92,7 +92,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
           crashed={view.crashed}
           now={now}
           refUrls={state.refUrls}
-          onDecide={(agentId, verdict) => actions.decideRecovery(agentId, verdict)}
+          onDecide={(taskId, verdict) => actions.decideRecovery(taskId, verdict)}
         />
       )}
 

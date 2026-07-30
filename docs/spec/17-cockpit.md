@@ -616,12 +616,16 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
 ### Above the grid
 
 - **`RecoveryPanel`** — rendered above everything else when `state.recovery` is non-empty: one card per
-  agent the previous run orphaned, with **Restore** / **Requeue** / **Remove**. A banner rather than a
+  piece of work the previous run orphaned, with **Restore** / **Requeue** / **Remove**, each keyed on the
+  task id (an orphan may never have had an agent). A banner rather than a
   panel because while it is up the harness runs **no cycles at all**, so every other surface on the page
   is stale for the same one reason — and the heartbeat countdown in the top bar reads `pulse held`
   instead of counting down to a pulse that will not fire. Restore is replaced by the reason it cannot be
-  offered (`restoreBlocked`) rather than hidden. Each card shows how the run ended (crashed vs shut
-  down), the agent's last progress note, and the question it was parked on if it was parked on one.
+  offered (`restoreBlocked`) rather than hidden. Each card shows how the run ended (crashed, shut down,
+  or `never started` — a task recorded before a restart caught it, which no agent ever ran), the agent's
+  last progress note, and the question it was parked on if it was parked on one. A `never started` card
+  says outright that no work was done and that the item is what is holding its origin and branch shut,
+  since that is the fact behind an otherwise unexplained idle fleet.
 - **`InjectPanel`** — rendered **only** when `state.config.injectable`, i.e. some capability uses the
   `fake` provider. A real-integration deployment does not see it, and the route refuses anyway. (The
   factory skin narrows this further to the demo build — see below.)

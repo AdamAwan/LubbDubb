@@ -1,4 +1,4 @@
-import type { AppState, Agent, Task, AgentFlag, AgentFile, CrashedAgent, Escalation, Proposal } from '../types.js';
+import type { AppState, Agent, Task, AgentFlag, AgentFile, OrphanedWork, Escalation, Proposal } from '../types.js';
 
 /**
  * Everything a skin draws, derived once per render and handed over as plain data.
@@ -19,8 +19,8 @@ export interface CockpitView {
   /** True when serving the bundled fixtures rather than a real harness. */
   demo: boolean;
 
-  /** Agents the previous run orphaned. Non-empty ⇒ the harness is holding every pulse. */
-  crashed: CrashedAgent[];
+  /** Work the previous run orphaned. Non-empty ⇒ the harness is holding every pulse. */
+  crashed: OrphanedWork[];
   /** Agents with a live process behind them. */
   live: Agent[];
   /** Terminal agents, newest first as the server ordered them. */

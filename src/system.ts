@@ -128,6 +128,12 @@ interface BuildOptions {
   gitObserver?: GitObserver;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
+  /**
+   * Override when crash recovery considers this process to have started (tests).
+   * Everything older is a previous run's orphan; everything newer is a dispatch
+   * this run is in the middle of. Defaults to module load.
+   */
+  bootedAt?: string;
 }
 
 /**
@@ -302,7 +308,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // Where a restart's orphaned agents wait for a verdict. `resumable` is the same
   // runtime fact `AgentManager` uses, threaded in so the desk can say *why* restore
   // isn't on offer rather than the cockpit guessing from a missing session id.
-  const recovery = new RecoveryDesk({ store, agents, escalations, resumable: agentSetup.resumable, errors });
+  const recovery = new RecoveryDesk({
+    store,
+    agents,
+    escalations,
+    resumable: agentSetup.resumable,
+    // The fence on the agentless arm. A test that wants a task read as an orphan of
+    // a previous run sets this ahead of the rows it built; production takes the
+    // module-load default.
+    bootedAt: opts.bootedAt,
+    errors,
+  });
 
   // Live, in-memory dispatch controls both the harness and executor read by
   // reference each cycle. Ephemeral by design: a restart reverts to config.

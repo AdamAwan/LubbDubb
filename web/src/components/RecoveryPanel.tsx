@@ -1,4 +1,4 @@
-import type { CrashedAgent, RecoveryVerdict } from '../types.js';
+import type { OrphanedWork, RecoveryVerdict } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { refLink, relTime } from './util.js';
 
@@ -13,9 +13,16 @@ const VERDICT_HELP: Record<RecoveryVerdict, string> = {
   remove: 'Abandon this work. The branch and worktree are left as they are, so nothing is lost from disk',
 };
 
+/** What the cause badge says, per way a run failed to end. */
+const DIED_LABEL: Record<OrphanedWork['died'], string> = {
+  crashed: 'crashed',
+  interrupted: 'shut down',
+  never_started: 'never started',
+};
+
 /**
- * The blocking recovery screen: every agent the last run left orphaned, and the
- * three things that can be done with each.
+ * The blocking recovery screen: every piece of work the last run left orphaned, and
+ * the three things that can be done with each.
  *
  * **It is a banner, not a panel, because the harness is doing nothing while it is
  * up.** A pulse held on an undecided fleet means no dispatch, no merges, no plan
@@ -26,7 +33,9 @@ const VERDICT_HELP: Record<RecoveryVerdict, string> = {
  *
  * Restore is offered only when it can actually be done, and when it cannot the card
  * says why (`restoreBlocked`) rather than hiding the button silently: "why is there
- * no restore here" is precisely the question this screen exists to pre-empt.
+ * no restore here" is precisely the question this screen exists to pre-empt. A
+ * `never_started` orphan is the case with no agent at all, so it always reads that
+ * way — there is no conversation to go back to, only requeue and remove.
  */
 export function RecoveryPanel({
   crashed,
@@ -34,16 +43,16 @@ export function RecoveryPanel({
   refUrls,
   onDecide,
 }: {
-  crashed: CrashedAgent[];
+  crashed: OrphanedWork[];
   now: number;
   refUrls: Record<string, string>;
-  onDecide: (agentId: string, verdict: RecoveryVerdict) => Promise<unknown> | unknown;
+  onDecide: (taskId: string, verdict: RecoveryVerdict) => Promise<unknown> | unknown;
 }) {
   return (
     <section className="recovery-banner">
       <header>
         <h2>
-          <span className="recovery-mark">⏻</span> {crashed.length} agent{crashed.length === 1 ? '' : 's'} did not
+          <span className="recovery-mark">⏻</span> {crashed.length} task{crashed.length === 1 ? '' : 's'} did not
           survive the last run
         </h2>
         <p>
@@ -52,7 +61,7 @@ export function RecoveryPanel({
         </p>
       </header>
       {crashed.map((c) => (
-        <CrashedCard key={c.agentId} crashed={c} now={now} refUrls={refUrls} onDecide={onDecide} />
+        <CrashedCard key={c.taskId} crashed={c} now={now} refUrls={refUrls} onDecide={onDecide} />
       ))}
     </section>
   );
@@ -64,16 +73,16 @@ function CrashedCard({
   refUrls,
   onDecide,
 }: {
-  crashed: CrashedAgent;
+  crashed: OrphanedWork;
   now: number;
   refUrls: Record<string, string>;
-  onDecide: (agentId: string, verdict: RecoveryVerdict) => Promise<unknown> | unknown;
+  onDecide: (taskId: string, verdict: RecoveryVerdict) => Promise<unknown> | unknown;
 }) {
   return (
     <div className="card crashed">
       <div className="crashed-head">
         <span className={`badge ${crashed.died}`} title={VERDICT_CAUSE[crashed.died]}>
-          {crashed.died === 'crashed' ? 'crashed' : 'shut down'}
+          {DIED_LABEL[crashed.died]}
         </span>
         <strong className="crashed-title">{crashed.title}</strong>
         {crashed.originRef && <span className="muted">{refLink(crashed.originRef, refUrls)}</span>}
@@ -81,9 +90,19 @@ function CrashedCard({
       </div>
 
       <div className="crashed-meta muted">
-        started {relTime(crashed.startedAt, now)}
+        {crashed.died === 'never_started' ? 'queued' : 'started'} {relTime(crashed.startedAt, now)}
         {crashed.detectedAt && ` · found ${relTime(crashed.detectedAt, now)}`}
       </div>
+
+      {/* The one thing an agentless orphan needs said outright: this is not a lost
+          conversation, it is a claim on an origin and a branch that nothing was ever
+          doing anything about — which is why the fleet has been idle. */}
+      {crashed.died === 'never_started' && (
+        <p className="crashed-parked">
+          No agent was ever started for this task, so no work was done — but while it stands, nothing else can be
+          dispatched for its origin{crashed.branch ? ' or its branch' : ''}.
+        </p>
+      )}
 
       {/* The two things that say how far it got: its own last account of itself,
           and the question it was parked on. A restore returns to both. */}
@@ -99,7 +118,7 @@ function CrashedCard({
           <AsyncButton
             className="primary"
             title={VERDICT_HELP.restore}
-            onClick={() => onDecide(crashed.agentId, 'restore')}
+            onClick={() => onDecide(crashed.taskId, 'restore')}
           >
             Restore
           </AsyncButton>
@@ -108,10 +127,10 @@ function CrashedCard({
             Can’t restore — {crashed.restoreBlocked}
           </span>
         )}
-        <AsyncButton title={VERDICT_HELP.requeue} onClick={() => onDecide(crashed.agentId, 'requeue')}>
+        <AsyncButton title={VERDICT_HELP.requeue} onClick={() => onDecide(crashed.taskId, 'requeue')}>
           Requeue
         </AsyncButton>
-        <AsyncButton className="danger" title={VERDICT_HELP.remove} onClick={() => onDecide(crashed.agentId, 'remove')}>
+        <AsyncButton className="danger" title={VERDICT_HELP.remove} onClick={() => onDecide(crashed.taskId, 'remove')}>
           Remove
         </AsyncButton>
       </div>
@@ -119,8 +138,10 @@ function CrashedCard({
   );
 }
 
-/** Why this agent is here at all — the tooltip on the cause badge. */
-const VERDICT_CAUSE: Record<CrashedAgent['died'], string> = {
+/** Why this work is here at all — the tooltip on the cause badge. */
+const VERDICT_CAUSE: Record<OrphanedWork['died'], string> = {
   crashed: 'The process disappeared without an ending — a crash, an OOM kill, or a machine that went away',
   interrupted: 'The harness was shut down cleanly and interrupted this agent mid-task',
+  never_started:
+    'The harness recorded this task and restarted before it could start an agent for it, so nothing ever ran',
 };

@@ -876,7 +876,7 @@ export const demoApi = {
   // The demo has no previous run to have crashed, so there is never anything to
   // decide — the panel is absent and this exists only to keep the two API shapes
   // interchangeable.
-  decideRecovery: (_agentId: string, _verdict: string) => Promise.resolve({ ok: true as const, remaining: 0 }),
+  decideRecovery: (_taskId: string, _verdict: string) => Promise.resolve({ ok: true as const, remaining: 0 }),
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),

@@ -1635,6 +1635,13 @@ body {
   background: rgba(123, 136, 161, 0.15);
   color: var(--muted);
 }
+/* An orphan with no agent behind it: amber rather than red, because nothing
+   failed — a dispatch was recorded and never started. What it costs is the same,
+   though, so it is not muted either. */
+.badge.never_started {
+  background: rgba(240, 173, 78, 0.15);
+  color: var(--amber);
+}
 /* A countdown that will not fire reads as a healthy harness doing nothing. */
 .heartbeat.held .heartbeat-fill {
   background: var(--amber);

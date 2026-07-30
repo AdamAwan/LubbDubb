@@ -23,13 +23,15 @@ A cycle's `source` is `'timer'`, `'manual'` or `'boot'`.
 ## The crash-recovery hold
 
 Before the coalescing guard, and **before the world is fetched**, `runCycle` asks
-`recovery.pendingCount()` (see [10](10-agent-runtimes.md#crash-recovery)). While any agent orphaned by
-the previous run is still awaiting an operator's restore / requeue / remove verdict, the call returns a
+`recovery.pendingCount()` (see [10](10-agent-runtimes.md#crash-recovery)). While any work orphaned by
+the previous run — a dead agent, or a task no agent was ever started for — is still awaiting an
+operator's restore / requeue / remove verdict, the call returns a
 report with `cycleId: 'held'`, a zeroed summary and a rationale naming the count — and nothing else
 happens: no snapshot, no reconciliation, no dispatch, no outbound act.
 
 It holds the whole pulse rather than dispatch alone because the harness's model of its own fleet is
-wrong while those rows are undecided — agent rows saying `running` with no process behind them — so
+wrong while those rows are undecided — agent rows saying `running` with no process behind them, and
+`queued` tasks holding an origin and a branch shut that nothing is working — so
 every verdict a pulse would reach is reached against a fiction, not just the dispatch ones. Work already
 in flight gets its decision before anything new is queued in front of it.
 
@@ -113,18 +115,18 @@ the connector directly, so an excluded PR stays fully visible with its health ve
 
 What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 
-| Field                 | Contents                                                                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------- |
-| `world`               | The snapshot with excluded PRs removed.                                                      |
-| `excludedPrs?`        | The removed ones, so "still open" stays knowable.                                            |
-| `tasks`, `agents`     | The full fleet, from the store.                                                              |
-| `openEscalations`     | Open escalations.                                                                            |
-| `queuedJobs`          | Operator jobs awaiting a slot, oldest first.                                                 |
-| `plans`, `planParts`  | The plan graph, already reconciled this cycle.                                               |
-| `recentDecisions`     | The last 200 decisions — the cooldown and notify-dedup memory.                               |
-| `priorityOverrides?`  | Operator "Up next" re-ordering, keyed on candidate origin (issue #128).                      |
-| `steeringPriorities`  | Operator hints.                                                                              |
-| `agentHeadroom`       | How many agents may still be started this cycle.                                             |
+| Field                | Contents                                                                |
+| -------------------- | ----------------------------------------------------------------------- |
+| `world`              | The snapshot with excluded PRs removed.                                 |
+| `excludedPrs?`       | The removed ones, so "still open" stays knowable.                       |
+| `tasks`, `agents`    | The full fleet, from the store.                                         |
+| `openEscalations`    | Open escalations.                                                       |
+| `queuedJobs`         | Operator jobs awaiting a slot, oldest first.                            |
+| `plans`, `planParts` | The plan graph, already reconciled this cycle.                          |
+| `recentDecisions`    | The last 200 decisions — the cooldown and notify-dedup memory.          |
+| `priorityOverrides?` | Operator "Up next" re-ordering, keyed on candidate origin (issue #128). |
+| `steeringPriorities` | Operator hints.                                                         |
+| `agentHeadroom`      | How many agents may still be started this cycle.                        |
 
 ## `CycleReport`
 
