@@ -3,12 +3,30 @@ import { resolve } from 'node:path';
 import { runGit, resolveCommit } from '../git/gitCli.js';
 
 /**
+ * Git's *write* side, as the one seam the executor depends on. Its read side has
+ * had {@link GitObserver} and a fake since plan reconciliation needed one; this
+ * half — the half that mutates the repo — had neither, so every test that
+ * dispatched a code agent cut a real branch in whatever checkout `repoRoot`
+ * happened to name (`process.cwd()` by default) and never deleted it.
+ *
+ * Deliberately two methods: `ensure`/`remove` is the whole of what
+ * {@link ActionExecutor} and the reap in `system.ts` ask for, and a seam wider
+ * than its consumer is a fake with behaviour nobody checks.
+ */
+export interface Worktrees {
+  /** Path to a worktree for `branch`, creating it if needed. */
+  ensure(branch: string, base?: string): Promise<string>;
+  /** Drop the worktree for `branch` if one exists; a no-op otherwise. */
+  remove(branch: string): Promise<void>;
+}
+
+/**
  * Creates git worktrees lazily — only when a code task needs one — keyed by
  * branch and reused if a worktree for that branch already exists. Desk tasks
  * never call this. Keeping worktrees per-branch means two tasks on the same
  * branch share a checkout instead of fighting over it.
  */
-export class WorktreeManager {
+export class WorktreeManager implements Worktrees {
   constructor(
     private readonly repoRoot: string,
     private readonly worktreeRoot: string,

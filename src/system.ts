@@ -7,7 +7,7 @@ import { buildIntegrations } from './integrations/registry.js';
 import type { ActionSink } from './sink/actionSink.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultSessionRoot } from './agents/sessionTranscript.js';
-import { WorktreeManager } from './worktree/worktreeManager.js';
+import { WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { PlanReconciler } from './plans/planReconciler.js';
@@ -126,6 +126,15 @@ interface BuildOptions {
    * `git fetch` off — a scripted observer has no remote to refresh.
    */
   gitObserver?: GitObserver;
+  /**
+   * Override the worktree manager code dispatch cuts branches through (tests
+   * inject `FakeWorktreeManager`). Without it a test's `repoRoot` defaults to
+   * `process.cwd()`, so every dispatched code agent leaves a real branch behind
+   * in the developer's own checkout — and on a CI `pull_request` checkout, where
+   * there is no `main` ref to resolve a base against, `ensure` throws and the
+   * dispatch is rejected instead.
+   */
+  worktrees?: Worktrees;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
   /**
@@ -155,7 +164,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const connector = new CompositeConnector(integrations, now);
   const backend = opts.backend ?? new NodePtyBackend();
 
-  const worktrees = new WorktreeManager(config.repoRoot, config.worktreeRoot);
+  const worktrees = opts.worktrees ?? new WorktreeManager(config.repoRoot, config.worktreeRoot);
   // Branch reality for plan reconciliation — read-only, and the seam a test swaps
   // to script "has this part pushed" without a repo.
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot);
