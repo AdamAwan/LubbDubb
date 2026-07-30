@@ -41,7 +41,7 @@ drawer, the escalation card, recovery and the plan panel are tinted through them
 palette shift in §8 re-tints those four panels for free — and equally, they are where a
 bad value shows up first, so they are checked as part of that change, not after it.
 
-## The eight changes
+## The changes
 
 ### 1. Status lamps
 
@@ -93,9 +93,13 @@ Queue pressure drives the belt's colour through the game's own speed hierarchy �
 red, blue — and an empty belt goes still, dark, and collapses from 62px to a 22px rail
 reading `belt clear`.
 
-The tier thresholds are a function of the queue length against the cap, computed in
-`production.ts` or beside the existing belt constants in `TheLine.tsx`; they are presentation
-and belong nowhere near `DISPATCH_RULES`.
+Cheaper than it looks, because the CSS was built for it: `skin.css` masks the chevrons rather
+than painting them precisely so that "the tier colour has to stay one token", and that token
+(`--fx-belt`) already exists. Tiering is a pure threshold function feeding two more token
+values; no belt markup changes.
+
+The thresholds read queue length against the cap, live beside the existing belt constants in
+`TheLine.tsx`, and are presentation — nowhere near `DISPATCH_RULES`.
 
 **Must not break:** `test/factorySkin.test.ts` already asserts the belt animates only while
 cycles run (paused or held on recovery stops it). Collapsing adds a second reason for a
@@ -113,30 +117,37 @@ timer, so a dispatch that happened between polls does not animate — which is c
 animation is decoration over a transition that has already occurred; nothing waits on it,
 and under `prefers-reduced-motion` the bay simply fills.
 
-### 5. Radar sweep for the pulse
+### 5. Radar sweep for the pulse — **already shipped, no work**
 
-`SCAN 55s` becomes a small rotating radar sweep with the digits demoted beside it. Factorio's
-radar literally sweeps. The animation is driven off `heartbeatIntervalMs` and **stalls** when
-the harness is paused or held on recovery, which gives that state a peripheral signal it does
-not currently have — today a held pulse is a word in a panel.
+Recorded so nobody builds it twice. `ScanRead` (`components/StatusBar.tsx`) already draws an
+`fx-radar` with an animated `fx-sweep`, already stalls it via a `held` class on both
+`view.pulseHeld` and `control.paused`, and `skin.css` already suspends the animation under
+`prefers-reduced-motion`. The reading beside it already says `held` / `paused` rather than a
+countdown in those states.
 
-The digits stay. A countdown you can read is worth keeping; it is the _prominence_ that was
-wrong, not the number.
+This was proposed from the screenshot, where the radar is present but small enough to read as
+a generic icon. On the code it is complete and correct. Nothing here.
 
-### 6. Alerts appear rather than persist
+### 6. Alerts recede further at zero
 
-A zero-count gauge is not drawn at all. When every count is zero the cluster reads `all clear`
-in one place. A non-zero count draws its chip: needs-you warm orange with a hand icon, a fault
-red and blinking.
+**Smaller than first proposed.** `DeskRead` (`components/StatusBar.tsx`) already takes a `lit`
+flag and applies a `quiet` class that dims the value and icon at zero. So the gauges do not
+currently read as four equal live chips in the markup — they read as four dim ones, and on the
+screenshot four dim chips at the same size still form a band.
 
-This is the `capped` / `unapproved` argument from `QueueItem` pointed at the status bar: an
-invisible condition and a visible zero are different failures, and four permanent zeros make
-the one chip that _does_ light up harder to see, not easier.
+Two changes, both small:
+
+- **`quiet` goes further than dimming**: at zero a gauge drops to its label alone, with the
+  count omitted rather than shown as `0`. A row of four labels is quieter than a row of four
+  labels each carrying a zero, and the gauge stays exactly where it was.
+- **The one gauge that means _you_ is warm.** Escalations get the accent treatment when lit,
+  matching §7's `prCourt` tone change, so the two surfaces that mean "your turn" agree.
 
 **Must not break:** the desks these gauges open (`Desks.tsx` — stamp, fault log, findings,
-blueprint) must stay reachable when their count is zero. An empty findings desk is a thing an
-operator opens deliberately. So the cluster keeps one always-present affordance — the
-`all clear` reading is itself the control that opens the desk drawer.
+blueprint) stay reachable at zero. An empty findings desk is a thing an operator opens
+deliberately, and `test/factorySkin.test.ts` already asserts every desk has a way in from the
+status bar. Hiding a zero gauge outright — the first proposal — would have broken that test,
+which is how the constraint was found.
 
 ### 7. Named marks on a PR row that is not green
 
@@ -158,15 +169,27 @@ alignment is unaffected — while making the one thing an operator wants from a 
 legible without a hover. No new derivation: if a condition cannot be named from the existing
 verdict, it does not get a mark.
 
-**The marks get a track of their own, and every track past the title is a fixed width.**
-Trailing the branch inline, two marks of differing widths start at a different x on every
-row — the exact non-alignment the ladder's fixed track exists to prevent, one column to the
-left. Two things are needed for the fix and the second is not obvious: each row is its own
-grid element, so an `auto` track sizes to _that row's_ content and the columns cannot line
-up down the rack however the cells are ordered. So the row is
-`26px minmax(0, 1fr) <marks> <ladder> <court>` with only the title flexing, and a row with
-no marks emits an **empty** marks cell rather than omitting it — an absent cell lets every
-track to its right slide left on that row alone.
+**There is no new column, and the alignment problem does not exist in the skin.** `.fx-part`
+is already `3px 132px 46px minmax(0, 1fr) minmax(0, 34ch) 152px 58px` — every track fixed but
+the title — and `fx-part-why` is already a dedicated 34ch track carrying `rackReason(pr)`,
+which is `attention.reasons` joined in the server's own words. The mockup drew its own row
+from scratch, hit the non-alignment, and fixed it; the skin never had it. Recorded because it
+is exactly the mistake this change must not make: **adding a marks column would put a second
+statement of the blocking condition beside the first.**
+
+So the change is to **iconise the track that already exists**. `conditionMarks(pr)` maps the
+leading reasons onto the game's status glyphs (warning triangle, speech bubble, down-arrows,
+cross, chain-link for a stacked PR) and `fx-part-why` renders glyph + text instead of text.
+The cap is the **track**, not a count: 34ch truncates as it does today, so a row with four
+conditions shows what fits and keeps the full sentence in its `title`. Nothing about the grid
+moves.
+
+**A coupling to fix first, or the tone change breaks the stripe.** `Row` derives its severity
+stripe from `court.tone === 'bad'` — it reads a *colour* to answer "is this yours". Change
+`prCourt`'s `you` to `next` and every your-call row silently loses its stripe. So the stripe
+moves onto `rackGroup(pr)` — the function that already answers that exact question — **before**
+the tone changes. That is a strict improvement independent of the palette: a row's severity
+should not be inferred from what colour something else happens to be.
 
 **One tone change, using a tone that already exists.** `prCourt` returns tone `bad` (red) for
 `Your call`. Red is the fault colour everywhere else on the floor, and "the harness is asking
@@ -206,7 +229,7 @@ purpose.
 **Sprite art.** The icons are thin line glyphs where Factorio is chunky shaded pixel art, and
 this is the other half of "why doesn't it feel like the game". It is deliberately **not** in
 this design: it is a different kind of work (asset production, licensing questions, a sprite
-pipeline) and none of the eight changes above depend on it. Worth its own spec later.
+pipeline) and none of the changes above depend on it. Worth its own spec later.
 
 ## Testing
 
@@ -218,9 +241,11 @@ structurally rather than by snapshot, which is what makes these changes testable
 - **Structural assertions for the properties that must survive**: the belt animates only
   while cycles run (existing, extended for the collapsed case); the ladder's cell count still
   equals `scannersFor(pr).length` regardless of marks; a demoted caption is still present in
-  the markup; **every row emits the same five grid cells**, marks included and empty when
-  there are none — the alignment property is a markup invariant, so it is asserted on the
-  markup rather than left to a width that a later CSS edit could quietly break.
+  the markup; **the row's grid track count is unchanged** — iconising `fx-part-why` must not
+  add or remove a cell, so the assertion counts the row's children before and after.
+- **The stripe survives the tone change**: a `you` row still carries its stripe once
+  `prCourt` returns `next`, asserted directly, since that coupling is invisible until the
+  colour moves.
 - **The Alt overlay renders no value not already on the row** — asserted by rendering with
   and without the class and diffing the text content against the source data, so the overlay
   cannot become a second source.
@@ -232,15 +257,18 @@ structurally rather than by snapshot, which is what makes these changes testable
 Sequenced so each step is independently viewable against live data and independently
 revertable:
 
+Seven changes, not eight — §5 is already shipped.
+
 1. **Palette (§8)** — smallest, touches only tokens, and every later step is judged against
    the ground it establishes.
 2. **Lamps + caption demotion (§1)** and the `prCourt` tone (§7, second half) — the largest
    read change, and it is what makes the rest legible.
-3. **Alerts (§6)** and **radar (§5)** — status bar, independent of the floor.
+3. **Alerts (§6)** — status bar, independent of the floor, and it depends on the tone from 2.
 4. **Belt tiers and collapse (§3)**.
-5. **Named marks (§7, first half)** — the most constrained, done once the tone work is in.
-6. **Alt mode (§2)** — last, because it removes inline detail and should only do so once
-   everything it hides has a lamp carrying its state.
+5. **Named marks and fixed row tracks (§7, first half)** — the most constrained, done once
+   the tone work is in.
+6. **Alt mode (§2)** — last of the substantive steps, because it removes inline detail and
+   should only do so once everything it hides has a lamp carrying its state.
 7. **Bot flight (§4)** — pure decoration, safe to land or drop at any point.
 
 `docs/spec/17-cockpit.md` is updated in the same change as the step that alters what it
