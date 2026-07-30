@@ -269,3 +269,45 @@ test('the dispatch context carries which goals have one, never what they say', (
   assert.ok(field, 'the context carries origins as a string list');
   assert.doesNotMatch(source, /retrospectives\??:\s*Retrospective/, 'and never the rows themselves');
 });
+
+// -- what the retro agent is handed ------------------------------------------
+
+test('the retro agent’s prompt carries the pad and the harness record, appended', async () => {
+  const system = build();
+  const { store } = system;
+  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
+
+  // A goal that was worked, wrote something down, and is now delivered.
+  store.appendScratchEntry({
+    padRef: 'issue:12',
+    authorOriginRef: 'issue:12:part:schema',
+    agentId: 'a1',
+    taskId: 't1',
+    topic: 'store',
+    note: 'the ALTER needed a PRAGMA check first',
+  });
+  store.recordDelivery({
+    originRef: 'issue:12',
+    summary: 'PR #41 delivered it',
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+  });
+
+  await system.harness.runCycle('manual');
+
+  const retroTask = store.listTasks().find((t) => t.originRef === 'issue:12:retro');
+  assert.ok(retroTask, 'rule 3h dispatched a retrospective agent');
+  // The pad, attributed and quoted...
+  assert.match(retroTask.prompt, /issue:12:part:schema/);
+  assert.match(retroTask.prompt, /> the ALTER needed a PRAGMA check first/);
+  assert.match(retroTask.prompt, /not instructions/i);
+  // ...and the record only the harness has.
+  assert.match(retroTask.prompt, /The record the harness kept/);
+  assert.match(retroTask.prompt, /PR #41 delivered it/);
+  // Appended, never interpolated: an override that never learned about them
+  // cannot silently drop them, so no placeholder token survives into the prompt.
+  assert.doesNotMatch(retroTask.prompt, /\{dossier\}|\{pad\}|\{scratchpad\}/);
+
+  store.close();
+});
