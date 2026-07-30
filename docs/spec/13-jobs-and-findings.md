@@ -41,6 +41,46 @@ Desk jobs skip the check entirely: rule 0 ignores a desk job's branch.
 The route creates the job, broadcasts `world:changed`, and kicks a cycle so a job dispatches
 immediately when there is headroom.
 
+### Blueprints become tickets — `POST /api/jobs`, the code arm
+
+A code job injected from the cockpit is a **blueprint**, and it enters the workflow through the same
+door as a ticket rather than being dispatched straight onto a branch (issue #198). When a tracker is
+configured (`trackerCoordinates(config) !== null`), the route does not queue a code job on the raw
+prompt; it files a **watched ticket** so the work flows through the whole planning funnel — the goal
+assay, the planning agent, the plan's parts — exactly like a picked-up issue. The workflow's two entry
+points ("start with a prompt", "start with a ticket") are drawn converging on _find-or-create a ticket,
+then the funnel_; this is the prompt arm wired to that convergence.
+
+- **The whole transform is at route time; rule 0 is untouched.** That is a clean recursion boundary:
+  only an operator-injected code blueprint via this route becomes a ticket, and the **desk** filing job
+  it becomes never does (a desk job is never itself a code blueprint). No new dispatcher wiring — the
+  funnel already picks up watched issues.
+- **A desk job, not a code one**, for `finding-ticket`'s reason: filing touches no repository, so a
+  worktree and a branch would be pure cost. It renders the overridable `blueprint-ticket` template
+  (`src/dispatcher/promptTemplates.ts`), whose pure fields come from `blueprintTicketFields(request,
+  tracker, watchLabel)` (`src/blueprintTicket.ts`) — the operator's prompt carried verbatim, the
+  tracker coordinates, and the label instruction.
+- **The ticket must be `-watch`-tagged, unlike a finding-filed one.** A finding's ticket lands in the
+  backlog unwatched on purpose (it is deferred, not scheduled); a blueprint's ticket is the work the
+  operator asked for, so the prompt instructs the agent to add the effective `${labelPrefix}-watch`
+  label or the watch gate never picks it up. The empty case is decided in the pure fields, not the
+  template: `labelPrefix: ''` turns the watch gate off (the harness acts on every open issue), so there
+  is no label to add and the prompt says so.
+- **A `WorkItemFiling` row keyed on the desk job is how `link_ticket` resolves the created issue back**
+  (`agent → task → job:<id> origin → the filing`). A blueprint has no prior work node to file _for_,
+  so `targetRef` is the desk job's own ref (`job:<id>`) — unique by construction, skipped by the
+  unrecorded-work lens (which is code-kind only), and handled by the fold, which stands the issue node
+  up and hangs the desk job under it. Reusing the filing table rather than a parallel record is safe
+  because no reader misreads it: the row surfaces nowhere as "unrecorded work" and `link_ticket`'s
+  existing `issue:`-ref guard is exactly right. See [11](11-mcp-tools.md).
+
+**Fallbacks are today's behaviour.** A **desk** blueprint (a direct answer, a report) is dispatched as
+asked. A code blueprint with **no tracker** (`fake`/unconfigured) has nowhere to file, so it too
+dispatches directly — and the branch-collision 409 above applies only on this arm, since a filed
+blueprint's branch is meaningless (the funnel works `issue/<n>` branches later).
+
+Tests: `test/blueprintTicket.test.ts`.
+
 ### Dispatch — rule 0
 
 `DispatchContext.queuedJobs` is wired from `store.listQueuedJobs()` (oldest first). The dispatcher

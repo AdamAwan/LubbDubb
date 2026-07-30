@@ -158,6 +158,23 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     **no-op for every world-driven rule** — that is the point, and `test/jobQueue.test.ts` asserts it
     (a broad world, then: the gate never fired, yet no two live tasks share a branch), so a later
     rule that broke the 1:1 property fails a test instead of quietly sharing a checkout.
+  - **A code blueprint files a ticket instead of dispatching (#198), entirely at route time — rule 0 is
+    untouched.** An operator-injected **code** job is a _blueprint_, and when a tracker is configured
+    (`trackerCoordinates(config) !== null`) `POST /api/jobs` does not queue a code job on the raw prompt:
+    it renders the overridable `blueprint-ticket` template (pure fields from `blueprintTicketFields`,
+    `src/blueprintTicket.ts`) into a **desk** ticket-filing job so the work enters the planning funnel
+    (assay → plan → parts → work) like a picked-up issue — the prompt arm of the workflow's
+    find-or-create-a-ticket convergence. Keeping the transform at the route is the clean recursion
+    boundary: the desk filing job it becomes is never itself a code blueprint. Two things carry it. **The
+    ticket must be `-watch`-tagged** (unlike a finding-filed ticket, which lands unwatched on purpose —
+    it is deferred, not scheduled): the prompt instructs the agent to add `${labelPrefix}-watch`, and the
+    empty-prefix case (watch gate off, act on all) is decided in the pure fields so no `''` label is ever
+    instructed. **`link_ticket` resolves via a reused `WorkItemFiling`** keyed on the desk job's own ref
+    (`targetRef: job:<id>`) — a blueprint files _for_ no prior work node, and reuse is safe because no
+    reader misreads it (the unrecorded-work lens is code-kind only; the fold stands the issue node up and
+    hangs the desk job under it). **Fallbacks are today's behaviour**: a desk blueprint, and a code
+    blueprint with no tracker, both dispatch directly, and the branch-collision 409 applies only on that
+    arm. Tests: `test/blueprintTicket.test.ts`.
   - Tests: `test/jobQueue.test.ts`.
 - **Human decisions (`src/proposals/`, the `proposals` table, issue #109 phase 1).** "Something
   proposes an act; a human accepts or rejects it; the accepted act happens" occurred three times

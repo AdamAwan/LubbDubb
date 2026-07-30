@@ -19,6 +19,7 @@ import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../mcp/findings.js';
 import { unrecordedWork, workItemTicketFields } from '../graph/unrecorded.js';
+import { blueprintTicketFields } from '../blueprintTicket.js';
 import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { planOrigin } from '../plans/planning.js';
@@ -663,6 +664,44 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       return reply.code(400).send({ error: 'branch must be a string' });
     const prompt = body.prompt.trim();
     const branch = (body.branch as string | undefined) ?? null;
+    const providedTitle = (typeof body.title === 'string' && body.title.trim()) || null;
+
+    // A code blueprint enters the workflow through the *same* door as a ticket
+    // (issue #198): when a tracker is configured, it is not dispatched onto a
+    // branch but filed as a **watched ticket**, so it flows through the planning
+    // funnel (assay → plan → parts → work) exactly like a picked-up issue rather
+    // than being coded straight off this prompt. The whole transform is here, at
+    // route time — rule 0 is untouched, which keeps a clean recursion boundary:
+    // only operator-injected code blueprints via this route become tickets, and
+    // the desk filing job they become never does.
+    //
+    // Fallbacks are today's behaviour: a *desk* blueprint dispatches directly, and
+    // a code blueprint with no tracker (`fake`/unconfigured) has nowhere to file,
+    // so it too dispatches directly.
+    const tracker = kind === 'code' ? trackerCoordinates(system.config) : null;
+    if (tracker) {
+      const { watchLabel } = watchLabelsFor(config.labelPrefix);
+      const derived = blueprintTicketFields(prompt, tracker, watchLabel);
+      // Desk, not code: filing touches no repository, so a worktree and a branch
+      // would be cut for a task that never writes a file. It is also what stops
+      // this recursing — a desk job is never itself an injected code blueprint.
+      const job = store.createJob({
+        title: providedTitle ?? derived.title,
+        prompt: system.prompts.render('blueprint-ticket', derived.vars),
+        kind: 'desk',
+      });
+      // The desk job's own ref is what it files *for* — there is no prior work
+      // node behind a blueprint, unlike an unrecorded-work filing. The row is how
+      // `link_ticket` resolves the created issue back from the agent's credential
+      // (agent → task → `job:<id>` origin → this filing); the fold then stands the
+      // issue node up and hangs this desk job under it. Job first, then the row, so
+      // a failed create leaves nothing dangling.
+      const filing = store.createWorkItemFiling({ targetRef: `job:${job.id}`, jobId: job.id });
+      hub.broadcast({ type: 'world:changed' });
+      const report = await harness.runCycle('manual');
+      return { ok: true, job, filing, report };
+    }
+
     // Refuse a branch a live task already holds, up front (issue #116). The
     // executor's identical check is the real gate and stays — a branch can go busy
     // between queueing and dispatch, so this one can't be the only one — but a 409
@@ -680,7 +719,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
         });
     }
     // Fall back to a title derived from the prompt's first line when none is given.
-    const title = (typeof body.title === 'string' && body.title.trim()) || deriveTitle(prompt);
+    const title = providedTitle ?? deriveTitle(prompt);
     const job = store.createJob({ title, prompt, kind, branch });
     hub.broadcast({ type: 'world:changed' });
     const report = await harness.runCycle('manual');

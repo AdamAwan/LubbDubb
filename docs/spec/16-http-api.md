@@ -309,7 +309,10 @@ holds no secrets by construction ([02](02-configuration.md)).
 
 Queue an operator job. See [13](13-jobs-and-findings.md). 400 on a missing/empty prompt, a bad `kind`,
 a non-string `title` or `branch`; **409** when a code job names a branch a live task holds. Returns
-`{ ok: true, job, report }`.
+`{ ok: true, job, report }`. A **code** job with a tracker configured is a _blueprint_: it is filed as
+a watched ticket (a desk job + a `WorkItemFiling`) that enters the planning funnel, and returns
+`{ ok: true, job, filing, report }` with `job.kind === 'desk'` — the branch-collision 409 applies only
+to the direct-dispatch arm (a desk job, or a code job with no tracker).
 
 ### `POST /api/upnext/order`
 

@@ -202,15 +202,20 @@ Checked against [`spec/`](README.md), which describes what the code does now.
 plan approval, the plan's dependency-chained parts, per-check CI classification and its hold arm,
 the self-review step, the reply/fix-or-defend loop, stacked-PR attribution and the bottom-up merge
 rule, non-code terminals for a part, the "did this deliver the goal" check, and the tracker state
-update on the way into review.
+update on the way into review. The prompt arm's convergence too: an injected **code blueprint** with
+a tracker configured is filed as a *watched* ticket at route time (a desk agent creates it with
+`gh`/`az`, tagged with the effective `-watch` label) and enters the funnel like any picked-up issue,
+rather than being coded straight off the prompt.
 
 The environment-readiness stage needs no mechanism of its own: it is a check like any other, and the
 rule that holds on it is the same rule that holds on any red check nobody here can fix.
 
 **Narrower than drawn:**
 
-- **Start with a prompt.** An ad-hoc prompt runs as a job and produces work, but it does not find or
-  create a ticket for itself first — the tracker is the operator's click, not the workflow's step.
+- **Start with a prompt.** A *code* blueprint now files a watched ticket and joins the funnel (above).
+  The arms still narrower than drawn: a **desk** blueprint (a direct answer or a report) is dispatched
+  as asked without a ticket, and a code blueprint with **no tracker** configured (`fake`/unconfigured)
+  has nowhere to file, so it too runs straight off the prompt.
 - **Stop working it.** A refused goal is held and the reason is written on the ticket. The watch tag
   itself is left alone.
 - **Update the ticket.** State moves and status comments are written. There is no step that folds a
