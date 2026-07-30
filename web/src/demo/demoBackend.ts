@@ -10,6 +10,7 @@ import type {
   AppState,
   Decision,
   PromptTemplateView,
+  RunningConfigGroup,
   Proposal,
   UnrecordedWorkView,
   WorkNodeView,
@@ -842,6 +843,11 @@ export const demoApi = {
   // to fill the demo panel would be a duplicate free to drift from the originals
   // with nothing to catch it, so the demo shows an empty book and says so.
   getPrompts: () => Promise.resolve({ dir: null, dispatcher: 'rule', templates: [] as PromptTemplateView[] }),
+  // Same answer as the prompt book, for the same reason: the running config is
+  // resolved by `loadConfig` on the server, and the web bundle imports no server
+  // code — so a demo copy would be a duplicate free to drift with nothing to
+  // catch it. The demo shows an empty config and says so.
+  getConfig: () => Promise.resolve({ groups: [] as RunningConfigGroup[] }),
   // Nothing to file into either: the demo has no tracker, which is the same
   // reason the real route refuses when the issues provider is `fake`.
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),

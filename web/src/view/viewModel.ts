@@ -60,6 +60,8 @@ export interface CockpitView {
 
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
+  /** Whether the settings modal is open. */
+  settingsOpen: boolean;
 }
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
@@ -76,6 +78,8 @@ interface ViewInputs {
   lastPulseAt: number;
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
+  /** Whether the settings modal is open. */
+  settingsOpen: boolean;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -130,5 +134,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
 
     taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,
     viewingPlan: input.viewingPlan,
+    settingsOpen: input.settingsOpen,
   };
 }

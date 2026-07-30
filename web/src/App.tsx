@@ -4,6 +4,7 @@ import { readStoredSkinId, resolveSkin } from './skins/registry.js';
 import { PlanModal } from './components/PlanModal.js';
 import { WorkTreePanel } from './components/WorkTreePanel.js';
 import { PromptsPanel } from './components/PromptsPanel.js';
+import { SettingsModal } from './components/SettingsModal.js';
 
 /**
  * What the cockpit shows when the harness refuses its credential. Worth a screen
@@ -94,6 +95,9 @@ export function App() {
     <>
       <Root view={status.view} actions={status.actions} />
       {planModal}
+      {status.view.settingsOpen && (
+        <SettingsModal control={state.control} onClose={() => status.actions.openSettings(false)} />
+      )}
       <section className="work-panel">
         <h2>Work</h2>
         <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />

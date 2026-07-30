@@ -1,4 +1,11 @@
-import type { AppState, PromptTemplateView, RecoveryVerdict, UnrecordedWorkView, WorkNodeView } from './types.js';
+import type {
+  AppState,
+  PromptTemplateView,
+  RecoveryVerdict,
+  RunningConfigGroup,
+  UnrecordedWorkView,
+  WorkNodeView,
+} from './types.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 /**
@@ -100,6 +107,9 @@ const realApi = {
     authFetch('/api/prompts').then((r) =>
       json<{ dir: string | null; dispatcher: string; templates: PromptTemplateView[] }>(r),
     ),
+  // The running config, fetched on open for the same reason as the prompt book:
+  // `loadConfig` runs once at boot, so this can never change while the tab is up.
+  getConfig: () => authFetch('/api/config').then((r) => json<{ groups: RunningConfigGroup[] }>(r)),
   // Ask an agent to create a tracker item for work nothing external accounts for.
   // An operator's click, never a rule: see src/graph/unrecorded.ts.
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),

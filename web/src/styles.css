@@ -1657,6 +1657,13 @@ body {
   color: var(--muted);
   cursor: pointer;
 }
+/* The cog that opens the settings modal, which is where the picker above now
+   lives. Skin-embedded for the picker's own reason: it is the way back to it. */
+.settings-cog {
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -2124,4 +2131,96 @@ body {
   font: inherit;
   font-size: 12px;
   padding: 5px 7px;
+}
+
+/*
+ * Settings modal — the running config, and the skin picker that used to sit in
+ * each skin's chrome. Reuses the plan modal's backdrop and head (`.pm-*`): it is
+ * the same kind of object, a document to read rather than a stream to watch.
+ */
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 28px 16px;
+  overflow-y: auto;
+  z-index: 50;
+}
+.settings-modal {
+  width: min(760px, 96vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--text);
+}
+.settings-section {
+  margin-top: 12px;
+}
+.settings-hint {
+  font-size: 12px;
+  margin: 4px 0 8px;
+}
+.settings-filter {
+  margin-left: auto;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 7px;
+  width: 160px;
+}
+.settings-live {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-live-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.settings-group {
+  margin-bottom: 10px;
+}
+.settings-group-title {
+  display: block;
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.settings-table td {
+  padding: 3px 6px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+.settings-key {
+  width: 40%;
+  color: var(--muted);
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  word-break: break-word;
+}
+/* A value somebody chose, against one that was inherited. The whole reason the
+   server computes `isDefault` rather than shipping the object alone. */
+.settings-table tr.chosen .settings-key,
+.settings-table tr.chosen .settings-value {
+  color: var(--text);
+  font-weight: 600;
+}
+.settings-value {
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  word-break: break-word;
 }
