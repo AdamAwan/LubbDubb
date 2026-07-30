@@ -33,6 +33,7 @@ type PromptId =
   | 'issue-pickup-escalation'
   | 'issue-assess'
   | 'issue-assay'
+  | 'issue-retro'
   | 'pr-ci-fix'
   | 'pr-base-update-behind'
   | 'pr-base-update-conflict'
@@ -224,6 +225,12 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'Nothing has been started for issue #{number} ("{title}"). Before anything is, decide whether there is a goal here an agent could work from.\n\n{body}\n\nYou are on branch {branch}, cut from the default branch, so what you can see is the repository as it stands. Read the ticket against it: do the things it names exist, does it say what "done" would look like, does it contradict itself or something already true of the code? Call world_read("issue", "issue:{number}") for the harness\'s own record of the issue, and read anything it points you at.\n\nThen call assay_issue:\n\n- "workable" if there is an identifiable goal to start on. The bar is *actionable*, not *good* or *small* — an opinionated, large or awkward ticket is still workable, and saying so schedules nothing by itself.\n- "unclear" if starting would be guessing. Say exactly what you would need, addressed to the person who wrote the ticket: the specific question, not "it is vague". Nothing is dispatched for this issue while that stands, so a wrong "unclear" stops real work — but it is undone by an edit, a comment, or an operator clearing it.\n\nDo not implement anything, do not open a pull request, and do not edit the ticket. If you are torn, say "workable": the agent that picks it up can escalate to a human from inside the work, which is a better place to ask from than here.',
     doc: 'Sent to a code agent for a watched open issue nothing has been started for (rule 3f). It reads the ticket against the default branch and casts a verdict with assay_issue. Placeholders: {number} {title} {body} {branch}.',
+  },
+  'issue-retro': {
+    placeholders: ['number', 'title', 'body'],
+    template:
+      'Issue #{number} ("{title}") has been delivered. Write the retrospective for it — the account of what shipped, and of how the work actually went.\n\n{body}\n\nYou have no worktree and you are not implementing anything. What you have is the scratchpad the agents on this goal left and the record the harness kept, both appended below, plus world_read if you need the state of a pull request or the issue itself.\n\nWrite one document, in markdown, for two readers:\n\n1. **What shipped** — for someone reviewing this goal who did not watch it happen: the pull requests, what each part delivered or decided, what was concluded to need no code or to be out of scope, and anything still outstanding.\n2. **How the run went** — for the operator: where agents were spent and on what, which gates, escalations or retries cost time, what surprised the agents, and what you would change about the process — a prompt, a gate, a config, a habit of decomposition. Be specific and name the evidence; "it went well" helps nobody, and neither does a list of everything that happened.\n\nQuote the scratchpad where it earns it and attribute it, and say plainly where the pad and the harness\'s record disagree — that disagreement is usually the most useful thing in the document. Then call retro_submit with a summary of one or two sentences and the document itself. Nothing you write is posted to the tracker, nothing is closed, and nothing is scheduled from it: a human reads it and decides what to change.',
+    doc: 'Sent to a desk agent when an issue the harness parked as delivered has no retrospective yet (rule 3h). The issue\'s scratchpad and the harness dossier are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop them. Placeholders: {number} {title} {body}.',
   },
   'pr-ci-fix': {
     placeholders: ['number', 'title', 'branch'],

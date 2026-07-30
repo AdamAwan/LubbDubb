@@ -382,6 +382,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           // Same again: the goal assay is a rule in front of the funnel, and the
           // LLM dispatcher has no branch it narrows.
           config.assay,
+          // And the retrospective: rule 3h writes a delivered goal up. The LLM
+          // dispatcher reasons in prose and has no equivalent branch.
+          config.retrospective,
         );
 
   // The store holds scheduling intent; this folds git + provider reality back onto

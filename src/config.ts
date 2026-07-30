@@ -4,6 +4,7 @@ import type { IntegrationSelection } from './integrations/integration.js';
 import type { PlanningPolicy } from './plans/planning.js';
 import type { AssessmentPolicy } from './delivery/assessment.js';
 import type { AssayPolicy } from './intake/assay.js';
+import { DEFAULT_RETROSPECTIVE, type RetrospectivePolicy } from './retro/retro.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 
@@ -144,6 +145,16 @@ export interface Config {
    * exactly as it does today. Deep-merged. Only the `rule` dispatcher implements it.
    */
   assay: AssayPolicy;
+  /**
+   * The retrospective (rule 3h) — one desk agent writing up a goal the harness has
+   * parked as delivered: what shipped, and what came out of the process of
+   * shipping it, from the issue's scratchpad plus the record the harness kept.
+   * **On by default**, unlike its three neighbours above: it runs once, after the
+   * work is over, and it gates nothing, so it can neither park an issue nor delay
+   * anything. Off, the Goal Floor's Manifest station reads *Nothing written* and
+   * no agent is spent. Deep-merged. Only the `rule` dispatcher implements it.
+   */
+  retrospective: RetrospectivePolicy;
   /**
    * The typed tool channel back to the harness — the `lubbdubb` MCP server every
    * spawned agent is wired to (issue #108).
@@ -414,6 +425,7 @@ const DEFAULTS: Config = {
   planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: true, gitFetchIntervalMs: 60_000 },
   assessment: { enabled: false },
   assay: { enabled: false },
+  retrospective: DEFAULT_RETROSPECTIVE,
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
@@ -531,6 +543,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   merged.planning = { ...DEFAULTS.planning, ...fromFile.planning, ...overrides.planning };
   merged.assessment = { ...DEFAULTS.assessment, ...fromFile.assessment, ...overrides.assessment };
   merged.assay = { ...DEFAULTS.assay, ...fromFile.assay, ...overrides.assay };
+  merged.retrospective = { ...DEFAULTS.retrospective, ...fromFile.retrospective, ...overrides.retrospective };
 
   // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
   // than an accidental off.

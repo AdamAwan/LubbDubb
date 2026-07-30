@@ -30,6 +30,7 @@ import {
   isAssayed,
   type AssayPolicy,
 } from '../intake/assay.js';
+import { DEFAULT_RETROSPECTIVE, retroOrigin, type RetrospectivePolicy } from '../retro/retro.js';
 import {
   DEFAULT_ASSESSMENT,
   assessBranch,
@@ -104,6 +105,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly planning: PlanningPolicy;
   private readonly assessment: AssessmentPolicy;
   private readonly assay: AssayPolicy;
+  private readonly retrospective: RetrospectivePolicy;
   private readonly ci: CiPolicy;
 
   /**
@@ -123,7 +125,9 @@ export class RuleDispatcher implements Dispatcher {
    * per failing check; omitted/empty means every failure is acted on generically,
    * which is what the rule did before per-check policy existed. `assay` turns the
    * goal assay (rule 3f) on; omitted/disabled means no assayer fires, no verdict is
-   * written, and nothing in front of an issue changes.
+   * written, and nothing in front of an issue changes. `retrospective` turns rule 3h
+   * on; omitted/disabled means no delivered goal is written up, which changes no
+   * dispatch and no gate — it only leaves the Manifest station with nothing to read.
    */
   constructor(
     pickup: Partial<IssuePickupPolicy> = {},
@@ -134,8 +138,10 @@ export class RuleDispatcher implements Dispatcher {
     assessment: Partial<AssessmentPolicy> = {},
     ci: Partial<CiPolicy> = {},
     assay: Partial<AssayPolicy> = {},
+    retrospective: Partial<RetrospectivePolicy> = {},
   ) {
     this.assay = { enabled: assay.enabled ?? DEFAULT_ASSAY.enabled };
+    this.retrospective = { enabled: retrospective.enabled ?? DEFAULT_RETROSPECTIVE.enabled };
     this.defaultBranch = defaultBranch;
     this.ci = { checks: ci.checks ?? [] };
     this.planning = {
@@ -992,6 +998,69 @@ export class RuleDispatcher implements Dispatcher {
           `Issue #${issueNumber} was assessed as not delivered, with "${cause}" named as what fell short; ` +
           `acting on it spends agents, so it goes to you first.`,
       } satisfies RawAction);
+    }
+
+    // 3h: Write up a goal the harness has parked as delivered.
+    //
+    // The Goal Floor's Manifest station has always named this step and the harness
+    // has never taken it: the station drew `issue.conclusion?.note` or an em dash,
+    // and nothing anywhere produced an account of the run. This is that account.
+    //
+    // Ranked after the assessor — an issue whose delivery is still being judged is
+    // not one to write up — and it suppresses nothing, because a delivered issue is
+    // already out of rule 4 through `deliveryHold`. It gates nothing at all: a goal
+    // is delivered whether or not anybody wrote it up, which is what makes the
+    // fail-open below cost only the report.
+    if (this.retrospective.enabled) {
+      const written = new Set(ctx.retrospectiveOrigins ?? []);
+      for (const issue of ctx.world.issues) {
+        if (issueWatchGateReason(issue, this.pickup) !== null) continue;
+        const root = issueOrigin(issue.number);
+        if (written.has(root)) continue;
+        // The harness's *own* park is the signal, not the tracker's `closed`: it is
+        // what `deliveryHold` reads, and it exists precisely for the providers that
+        // have no review state to move an item into.
+        if (!deliveryParked(issue)) continue;
+        // Anything live under the issue — a part, a late pickup, a previous retro
+        // agent — means the run is not over yet.
+        if ([...activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
+
+        const origin = retroOrigin(issue.number);
+        const verdict = dispatchVerdict(origin, now, ctx.recentDecisions, this.cooldown);
+        // Fails open and *silent*, for the assayer's reason and more cheaply than
+        // any of them: nothing is gated on a retrospective, so a spent cap costs the
+        // write-up and nothing else. No escalation — there is nothing a human can do
+        // about a report that did not happen that they cannot do by reading the issue.
+        if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
+
+        const title = `Write up issue #${issue.number}`;
+        const reason = `Issue #${issue.number} is delivered and has no retrospective; write the run up.`;
+        candidates.push({
+          origin,
+          rule: 'issue-retro',
+          title,
+          kind: 'desk',
+          // No branch and no worktree: it writes no files, and a checkout would only
+          // be a temptation to start work on a goal that is finished.
+          branch: null,
+          reason,
+          held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
+          action: {
+            type: 'dispatch_desk_agent',
+            title,
+            prompt: this.templates.render('issue-retro', {
+              number: issue.number,
+              title: issue.title,
+              body: issue.body,
+            }),
+            originRef: origin,
+            originTitle: issue.title,
+            originSummary: issue.body,
+            rule: 'issue-retro',
+            reason,
+          } satisfies RawAction,
+        });
+      }
     }
 
     // 4a: Schedule the parts of a decomposed issue — what makes a `parts` verdict

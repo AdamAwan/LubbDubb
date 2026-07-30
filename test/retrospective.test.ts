@@ -1,14 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { MAX_RETRO_DOCUMENT, retroOrigin, retroSubmitOrigin, validateRetrospective } from '../src/retro/retro.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
-import type { Agent } from '../src/types.js';
+import type { Agent, Issue, IssueDelivery } from '../src/types.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -153,4 +155,117 @@ test('a submission with no summary is refused, and an over-long document is kept
   assert.match(long.text, /"trimmed":\s*true/);
   assert.equal(system.store.getRetrospective('issue:9')?.document.length, MAX_RETRO_DOCUMENT);
   system.store.close();
+});
+
+// -- rule 3h -----------------------------------------------------------------
+
+const NOW = '2026-07-30T12:00:00.000Z';
+
+function issue(over: Partial<Issue> = {}): Issue {
+  return {
+    id: 'i12',
+    number: 12,
+    title: 'Add the thing',
+    body: 'please add the thing',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+    ...over,
+  };
+}
+
+function delivered(number = 12): IssueDelivery {
+  return {
+    originRef: `issue:${number}`,
+    summary: 'every part merged',
+    by: 'assessor',
+    agentId: 'a1',
+    taskId: 't1',
+    decidedAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
+  return {
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    tasks: [],
+    agents: [],
+    openEscalations: [],
+    queuedJobs: [],
+    recentDecisions: [],
+    steeringPriorities: [],
+    agentHeadroom: 3,
+    ...over,
+  };
+}
+
+/** The dispatcher with the retrospective on — everything else default. */
+function writer(): RuleDispatcher {
+  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, { enabled: true });
+}
+
+function retroDispatches(actions: { type: string }[]): string[] {
+  return actions
+    .filter((a) => a.type.startsWith('dispatch_'))
+    .map((a) => ('originRef' in a ? ((a as { originRef?: string | null }).originRef ?? '') : ''))
+    .filter((o) => o.endsWith(':retro'));
+}
+
+test('a delivered goal with no retrospective gets one desk agent', async () => {
+  const plan = await writer().decide(ctx({ deliveries: [delivered()] }));
+  assert.deepEqual(retroDispatches(plan.actions), ['issue:12:retro']);
+  const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:retro');
+  assert.equal(action?.type, 'dispatch_desk_agent', 'it writes no files, so it gets no worktree and no branch');
+});
+
+test('an undelivered goal is not written up, and neither is one already written', async () => {
+  const undelivered = await writer().decide(ctx());
+  assert.deepEqual(retroDispatches(undelivered.actions), [], 'a run that is not over has nothing to write up');
+
+  const already = await writer().decide(
+    ctx({ deliveries: [delivered()], retrospectiveOrigins: ['issue:12'] }),
+  );
+  assert.deepEqual(retroDispatches(already.actions), [], 'the row is what stops it firing every pulse');
+});
+
+test('nothing is written up while anything is still live under the goal', async () => {
+  const live = await writer().decide(
+    ctx({
+      deliveries: [delivered()],
+      tasks: [
+        {
+          id: 't9',
+          kind: 'code',
+          title: 'Part',
+          prompt: 'do it',
+          branch: 'issue/12/schema',
+          originRef: 'issue:12:part:schema',
+          originTitle: null,
+          originSummary: null,
+          dispatchReason: null,
+          status: 'running',
+          agentId: 'a9',
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(retroDispatches(live.actions), []);
+});
+
+test('off by config, no retrospective agent is ever dispatched', async () => {
+  const off = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, { enabled: false });
+  const plan = await off.decide(ctx({ deliveries: [delivered()] }));
+  assert.deepEqual(retroDispatches(plan.actions), []);
+});
+
+test('the dispatch context carries which goals have one, never what they say', () => {
+  // Structural: a rule branching on retrospective prose would let one agent's
+  // account of a run change what the harness schedules next.
+  const source = readFileSync(join(process.cwd(), 'src', 'dispatcher', 'dispatcher.ts'), 'utf8');
+  const field = /retrospectiveOrigins\??:\s*string\[\]/.test(source);
+  assert.ok(field, 'the context carries origins as a string list');
+  assert.doesNotMatch(source, /retrospectives\??:\s*Retrospective/, 'and never the rows themselves');
 });

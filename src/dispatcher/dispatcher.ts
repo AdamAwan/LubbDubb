@@ -103,6 +103,15 @@ export interface DispatchContext {
    */
   assays?: IssueAssay[];
   /**
+   * The issues that already have a retrospective — **origins only, never the
+   * writing**. Rule 3h needs to know whether to dispatch one and that is the whole
+   * of what it may know: a rule branching on retrospective prose would let one
+   * agent's account of a run change what the harness schedules next, which is the
+   * reason nothing reads the scratchpad at all. Absent/empty means none has been
+   * written, which holds nothing.
+   */
+  retrospectiveOrigins?: string[];
+  /**
    * World transitions on the issues carrying a standing `unclear` verdict, since
    * the oldest of them. One of the two things that ends such a hold (the other is
    * the ticket's own text changing, which needs no read). Narrowed by
