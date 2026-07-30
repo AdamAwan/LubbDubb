@@ -279,9 +279,10 @@ checkout rather than fighting over it. Desk tasks never call this.
 `ensure(branch, base?)`:
 
 1. An existing worktree for the branch is returned as-is.
-2. An existing **local branch** gets a worktree added at it.
-3. With no `base`, `git worktree add -b <branch> <dir>` forks from the repo root's HEAD.
-4. With a `base`, it is resolved through `resolveCommit`; a base that resolves to nothing **throws**
+2. A stale target directory is **reclaimed** (below).
+3. An existing **local branch** gets a worktree added at it.
+4. With no `base`, `git worktree add -b <branch> <dir>` forks from the repo root's HEAD.
+5. With a `base`, it is resolved through `resolveCommit`; a base that resolves to nothing **throws**
    rather than quietly falling back to HEAD — silently picking an incidental base is the bug the
    parameter exists to fix. The executor's `catch` audits it as a rejected dispatch.
 
@@ -291,6 +292,30 @@ move an in-flight agent's branch out from under it.
 
 The directory name is the branch with every character outside `[a-zA-Z0-9._-]` replaced by `-`.
 `remove(branch)` runs `git worktree remove --force` when a worktree exists.
+
+### Reclaiming an orphaned directory
+
+An interrupted or killed agent can leave its checkout **de-registered but present** — the
+`.git/worktrees/<name>` admin entry gone, the folder still on disk. `findExisting` reads
+`git worktree list --porcelain`, so it cannot see one; the deterministic path is then computed and
+`git worktree add` refuses it with `fatal: '<dir>' already exists`. Because the path is
+deterministic, every retry hits the same wall: the branch is wedged for good, the issue never gets
+an agent, and the decision log shows nothing but repeated `rejected` dispatches. `git worktree
+prune` does **not** clean it — prune is the mirror case, an admin entry whose directory vanished.
+
+So before every `worktree add`, `ensure` prunes (cheap and idempotent, clearing that mirror-case
+cruft) and then, if the target path exists on disk and is **not** in the porcelain list, removes it
+(`git worktree remove --force` first, its failure ignored, in case git still half-tracks it).
+
+- **Registered is untouchable.** The guard is the porcelain list, not the presence of a `.git` file:
+  a directory git still knows about is some agent's live checkout, and yanking it mid-run is far
+  worse than the collision. Two branches can sanitize onto one directory — when a live worktree
+  stands there the `add` fails loudly, which is the honest answer.
+- Reclaiming **discards** whatever the dead orphan still held. With no admin entry there is no
+  branch or commit behind those files and no workflow that could recover them; they are unreachable
+  either way.
+- Porcelain paths are forward-slashed even on Windows, so they are `resolve`d before comparison —
+  an unresolved path would never compare equal to the resolved target.
 
 ### Removal
 

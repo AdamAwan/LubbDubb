@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runGit, resolveCommit } from '../git/gitCli.js';
 
@@ -36,6 +36,7 @@ export class WorktreeManager {
 
     const dir = resolve(this.worktreeRoot, sanitize(branch));
     mkdirSync(this.worktreeRoot, { recursive: true });
+    await this.reclaim(dir);
 
     if (await this.branchExists(branch)) {
       await this.git(['worktree', 'add', dir, branch]);
@@ -55,8 +56,7 @@ export class WorktreeManager {
 
   /** Path of an existing worktree for the branch, or null. */
   async findExisting(branch: string): Promise<string | null> {
-    const { stdout } = await this.git(['worktree', 'list', '--porcelain']);
-    const entries = parseWorktreeList(stdout);
+    const entries = await this.registered();
     const match = entries.find((e) => e.branch === branch || e.branch === `refs/heads/${branch}`);
     if (match && existsSync(match.path)) return match.path;
     return null;
@@ -66,6 +66,50 @@ export class WorktreeManager {
     const dir = await this.findExisting(branch);
     if (!dir) return;
     await this.git(['worktree', 'remove', '--force', dir]);
+  }
+
+  /**
+   * Free a target path that a *dead* checkout is squatting on. An interrupted or
+   * killed agent can leave its worktree de-registered-but-present — the
+   * `.git/worktrees/<name>` admin entry gone, the folder still on disk — which
+   * `findExisting` cannot see (it reads the porcelain list) and
+   * `git worktree add` then refuses with `fatal: '<dir>' already exists`. Since
+   * the path is deterministic, every retry hits the same wall: the branch is
+   * wedged for good and the issue never gets an agent.
+   *
+   * `git worktree prune` does *not* cover it — prune is the mirror case, an
+   * admin entry whose directory vanished — so it runs first only to clear that
+   * cruft cheaply before the porcelain list is read.
+   *
+   * **Registered is untouchable.** The guard is the porcelain list, not the
+   * presence of a `.git` file: a directory git still knows about is some agent's
+   * live checkout, and yanking it mid-run is far worse than the collision. When
+   * one stands here (two branches can sanitize onto one directory) the `add`
+   * below fails loudly, which is the honest answer.
+   *
+   * Reclaiming discards whatever the dead orphan still held. That is acceptable:
+   * with no admin entry there is no branch or commit behind those files and no
+   * workflow that could recover them — they are unreachable either way.
+   */
+  private async reclaim(dir: string): Promise<void> {
+    await this.git(['worktree', 'prune']).catch(() => {});
+    if (!existsSync(dir)) return;
+    const entries = await this.registered();
+    if (entries.some((e) => e.path === dir)) return;
+    // git may still half-track it; the removal below is the real reclaim, so a
+    // refusal here ("not a working tree") is expected rather than a failure.
+    await this.git(['worktree', 'remove', '--force', dir]).catch(() => {});
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  /**
+   * The live worktrees, paths resolved: git's porcelain output is
+   * forward-slashed even on Windows, so an unresolved path would never compare
+   * equal to the `resolve`d target `reclaim` guards on.
+   */
+  private async registered(): Promise<WorktreeEntry[]> {
+    const { stdout } = await this.git(['worktree', 'list', '--porcelain']);
+    return parseWorktreeList(stdout).map((e) => ({ ...e, path: resolve(e.path) }));
   }
 
   private async branchExists(branch: string): Promise<boolean> {
