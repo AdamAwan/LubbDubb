@@ -37,7 +37,7 @@ Current entries:
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`, `priority_overrides`, `work_nodes`,
+`agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`, `scratch_entries`, `retrospectives`, `priority_overrides`, `work_nodes`,
 `work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
 migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
 has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the six fields above, which
@@ -64,6 +64,8 @@ introduced.
 | `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
 | `issue_shortfalls`   | The negative mirror: an issue worked whose goal is still not reached, with the cause that routes it. Gates **nothing**; lives until the arm it named is performed. | `origin_ref` is `PRIMARY KEY`; `cause` is nullable |
 | `issue_assays`       | Whether an issue's goal text can be worked from at all, judged before anything is dispatched. Gates the funnel; expires when the text changes or the world moves. | `origin_ref` is `PRIMARY KEY`; `goal_ref` fingerprints the text judged |
+| `scratch_entries`    | The shared per-issue scratchpad: what the agents working one goal left for whoever works it next, and for the retrospective. **Append-only** — no update and no delete exists above the table. | keyed on `pad_ref` (`issue:<n>`); ties on `created_at` break on `rowid`, which is insertion order |
+| `retrospectives`     | One write-up per goal, produced after delivery. Gates nothing; nothing in the dispatcher reads it beyond whether a row exists. | `origin_ref` is `PRIMARY KEY`; upserted, so `created_at` dates the first write-up |
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.       | `ref` is `PRIMARY KEY`        |
 | `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                  | `target_ref` is `PRIMARY KEY` |
 | `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.      | `target_ref` is `PRIMARY KEY` |

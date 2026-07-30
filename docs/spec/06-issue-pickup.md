@@ -316,7 +316,7 @@ decomposition of a question nobody could answer; with it off, rule 4 puts an age
 and the first signal that anything was wrong is an agent spending its attempt cap and escalating in a
 way that reads as its own failure.
 
-The goal assay (issue #158, `src/intake/assay.ts`, config `assay.enabled`, **off by default**) is
+The goal assay (issue #158, `src/intake/assay.ts`, config `assay.enabled`, **on by default**) is
 that missing gate. Rule 3f dispatches a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`,
 cut from the default branch) for a watched open issue nothing has been started for, and the agent
 casts a verdict with the `assay_issue` tool. It is the mirror of the assessor: `hasPriorWork` is the
@@ -403,5 +403,5 @@ that the operator ends by editing the ticket, replying to it, or clearing the ve
 ### Cost
 
 With `planning`, `assessment` and `assay` all on, one issue can spend **three agents** before a line
-of its work is written. That is the reason all three are off by default, and it is named here rather
+of its work is written. All three are on by default and each is one switch away from off; the cost is named here rather
 than discovered.

@@ -118,31 +118,34 @@ export interface Config {
    */
   issueInReviewState?: string;
   /**
-   * The planning funnel for multi-PR issues. **Off by default**, and off leaves it
-   * out entirely: rule 4 stays un-narrowed, no planner is ever dispatched, and
-   * behaviour is exactly what it is without plans. On, every watched open issue
-   * gets a planning agent before any implementation work — a real change in what
-   * the fleet spends its slots on. Deep-merged, so one field can be set alone.
-   * Only the `rule` dispatcher implements the funnel.
+   * The planning funnel for multi-PR issues. **On by default**: every watched open
+   * issue gets a planning agent before any implementation work, and a `parts`
+   * verdict is put to you before its agents are spent (`requireApproval`). Off
+   * leaves it out entirely — rule 4 un-narrowed, no planner ever dispatched,
+   * behaviour exactly what it is without plans. Deep-merged, so one field can be
+   * set alone. Only the `rule` dispatcher implements the funnel.
    */
   planning: PlanningPolicy;
   /**
    * The assessor (rule 3e) — the harness asking whether an issue that has had work
    * and has nothing in flight is actually finished, and parking it as `delivered`
-   * if so. **Off by default**, like `planning` and unlike `mcp`: it is not purely
-   * additive, since it gates pickup and spends an agent per assessed issue. Off,
-   * no assessor is dispatched, no verdict is written, and rule 4 behaves exactly
-   * as it does today. Deep-merged. Only the `rule` dispatcher implements it.
+   * if so. **On by default**, with the cost stated: it spends an agent per assessed
+   * issue and its `delivered` verdict gates pickup. Off, no assessor is dispatched,
+   * no verdict is written, and rule 4 behaves as it did before the assessor
+   * existed — which on GitHub means a merged PR's issue is picked up again.
+   * Deep-merged. Only the `rule` dispatcher implements it.
    */
   assessment: AssessmentPolicy;
   /**
    * The goal assay (rule 3f) — the harness asking whether a fresh issue's *text*
    * can be worked from at all, before anything is dispatched against it (issue
-   * #158). **Off by default**, for `assessment`'s reason and with a cost worth
-   * naming: with `planning`, `assessment` and this all on, one issue can spend
-   * three agents before a line of its work is written. Off, no assayer is
-   * dispatched, no verdict is written, and every gate in front of an issue behaves
-   * exactly as it does today. Deep-merged. Only the `rule` dispatcher implements it.
+   * #158). **On by default**, with the cost named rather than discovered: with
+   * `planning`, `assessment`, this and the retrospective all on, one issue can
+   * spend an assayer, a planner, its part agents, an assessor and a writer. Only
+   * an explicit `unclear` verdict holds anything, and it ends the moment the
+   * ticket is edited or anyone comments. Off, no assayer is dispatched and every
+   * gate in front of an issue behaves as it did. Deep-merged. Only the `rule`
+   * dispatcher implements it.
    */
   assay: AssayPolicy;
   /**
@@ -422,9 +425,9 @@ const DEFAULTS: Config = {
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
-  planning: { enabled: false, maxConcurrentPartsPerIssue: 2, requireApproval: true, gitFetchIntervalMs: 60_000 },
-  assessment: { enabled: false },
-  assay: { enabled: false },
+  planning: { enabled: true, maxConcurrentPartsPerIssue: 2, requireApproval: true, gitFetchIntervalMs: 60_000 },
+  assessment: { enabled: true },
+  assay: { enabled: true },
   retrospective: DEFAULT_RETROSPECTIVE,
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,

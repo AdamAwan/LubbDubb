@@ -224,6 +224,14 @@ resolved through the connector's own `resolveRefUrl` rather than read off the sn
 that map is built from the world, and a PR the graph remembers merging left the world hours ago.
 Returns `{ nodes, refUrls }`.
 
+### `GET /api/retrospectives/:ref`
+
+One goal's write-up in full, by `issue:<n>` ref. Fetched when a reader opens it rather than shipped
+on `/api/state`, which is polled continuously — a document per issue would be paid for on every poll
+by every open cockpit; the snapshot carries the summary and `hasDocument`, which is all the Manifest
+station needs to draw itself. Returns `{ retrospective }`, and `null` rather than a 404 for a goal
+nobody wrote up: "no retrospective" is an ordinary answer here, not a missing resource.
+
 ### `POST /api/work/:ref/file`
 
 Ask an agent to create a tracker item for unrecorded work. The mirror of

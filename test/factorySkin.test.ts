@@ -156,6 +156,7 @@ function render(
       tails: new Map(),
       lastPulseAt: now,
       viewingPlan: null,
+    viewingRetro: null,
       settingsOpen: false,
     });
     return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
@@ -191,6 +192,7 @@ function renderDesk(
       tails: new Map(),
       lastPulseAt: now,
       viewingPlan: null,
+    viewingRetro: null,
       settingsOpen: false,
     });
     return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));
@@ -848,6 +850,7 @@ test('a refused floor draws the override, and a workable one does not', () => {
         refUrls: {},
         stopped: false,
         onViewPlan: () => undefined,
+        onViewRetro: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
@@ -899,6 +902,7 @@ test('the floor opens its plan whatever the plan is doing', () => {
         refUrls: {},
         stopped: false,
         onViewPlan: () => undefined,
+        onViewRetro: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
@@ -1150,6 +1154,7 @@ test('the goal floor strip is the staked goals', () => {
         watchLabel: 'lubbdubb-watch',
         ignoreLabel: 'lubbdubb-ignore',
         onViewPlan: () => undefined,
+        onViewRetro: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),

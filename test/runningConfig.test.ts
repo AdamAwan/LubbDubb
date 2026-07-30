@@ -43,7 +43,9 @@ test('an overridden value is marked, and only it', () => {
  * behind that an operator must be able to tell apart from their own choice.
  */
 test('a nested override marks the leaf, not the block', () => {
-  const config = loadConfig({ planning: { enabled: true } as Config['planning'] });
+  // `enabled: false` is the override now that the funnel defaults on — the test
+  // is about which row is marked, so it needs a value that differs from the default.
+  const config = loadConfig({ planning: { enabled: false } as Config['planning'] });
   assert.equal(entry(config, 'planning.enabled')?.isDefault, false);
   assert.equal(entry(config, 'planning.requireApproval')?.isDefault, true);
   assert.equal(entry(config, 'planning.maxConcurrentPartsPerIssue')?.isDefault, true);

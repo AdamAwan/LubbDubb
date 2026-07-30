@@ -232,6 +232,12 @@ export interface IssuePickupContext {
   plans?: Plan[];
   /** Every plan's parts, so a `parts` verdict can report progress rather than a flat string. */
   planParts?: PlanPart[];
+  /**
+   * Omitted means the funnel is **out**, matching `RuleDispatcher`'s own fallback
+   * for an unnamed policy — the chip and the rule have to disagree about nothing,
+   * and the operator default (on, in `src/config.ts`) reaches both through the
+   * composition root rather than through either of these fallbacks.
+   */
   planning?: PlanningPolicy;
   /**
    * Standing `delivered` verdicts and the world transitions that may have ended
@@ -275,7 +281,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
   const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
   const planVerdict = resolvePlanRoute({
-    planning: ctx.planning ?? DEFAULT_PLANNING,
+    planning: ctx.planning ?? { ...DEFAULT_PLANNING, enabled: false },
     plan,
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,

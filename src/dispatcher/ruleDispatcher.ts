@@ -75,11 +75,12 @@ import {
  *   2b. A PR has an unhandled comment -> spin up a code agent to address it
  *   3. A PR is green/approved/mergeable -> merge it in (gated by auto-send)
  *   3b. A work item's state lags its PR -> move it to/from the review state
- *   3c. A watched open issue has no plan -> planning agent (funnel, off by default)
- *   3d. A decomposition awaits approval  -> put it to a human (opt-in, off by default)
- *   3e. An issue has had work and nothing is in flight -> assessor (off by default)
- *   3f. A fresh issue's goal has never been checked -> goal assay (off by default)
+ *   3c. A watched open issue has no plan -> planning agent (funnel, on by default)
+ *   3d. A decomposition awaits approval  -> put it to a human (on with the funnel)
+ *   3e. An issue has had work and nothing is in flight -> assessor (on by default)
+ *   3f. A fresh issue's goal has never been checked -> goal assay (on by default)
  *   3g. An assessment said the goal was not reached -> route what fell short
+ *   3h. A delivered goal has no write-up -> retrospective agent (on by default)
  *   4. An open issue has no open PR   -> code agent to resolve it into a PR
  *
  * At most one code agent works a given PR branch: when a fresh signal lands on a
@@ -140,18 +141,25 @@ export class RuleDispatcher implements Dispatcher {
     assay: Partial<AssayPolicy> = {},
     retrospective: Partial<RetrospectivePolicy> = {},
   ) {
-    this.assay = { enabled: assay.enabled ?? DEFAULT_ASSAY.enabled };
-    this.retrospective = { enabled: retrospective.enabled ?? DEFAULT_RETROSPECTIVE.enabled };
+    // An **omitted** policy means the feature is out, for every one of the four
+    // below — the contract `pickup` already states two paragraphs up ("omitted =>
+    // no gate"), and deliberately not the same thing as the operator default in
+    // `src/config.ts`, which turns all four on. The composition root always passes
+    // config explicitly, so the two never both answer for one deployment: this
+    // fallback exists for a caller that has named no policy at all, and such a
+    // caller is asking for the rule not to fire.
+    this.assay = { enabled: assay.enabled ?? false };
+    this.retrospective = { enabled: retrospective.enabled ?? false };
     this.defaultBranch = defaultBranch;
     this.ci = { checks: ci.checks ?? [] };
     this.planning = {
-      enabled: planning.enabled ?? DEFAULT_PLANNING.enabled,
+      enabled: planning.enabled ?? false,
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
       requireApproval: planning.requireApproval ?? DEFAULT_PLANNING.requireApproval,
       // Reconciliation's knob, not the dispatcher's; carried so the policy stays one object.
       gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
     };
-    this.assessment = { enabled: assessment.enabled ?? DEFAULT_ASSESSMENT.enabled };
+    this.assessment = { enabled: assessment.enabled ?? false };
     this.templates = templates;
     this.pickup = {
       watchLabel: pickup.watchLabel,

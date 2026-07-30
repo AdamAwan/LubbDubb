@@ -26,6 +26,9 @@ discover what a synchronous error would have said in one turn.
 | `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                          |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                   |
 | `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                     |
+| `scratch_append`     | Leave a note on the shared scratchpad for the issue this agent is working. Append-only, attributed from the credential. Refused outside an issue subtree.                                                                                 |
+| `scratch_read`       | Read that pad — every note left by every agent on the goal, oldest first. Same access rule as the write.                                                                                                                                  |
+| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, and how the run went. Fenced to `issue:<n>:retro` origins.                                                                                                                   |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
 
 ### The `_status` envelope

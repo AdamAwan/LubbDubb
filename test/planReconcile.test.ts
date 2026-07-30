@@ -266,7 +266,7 @@ test('reconciliation is inert with the funnel off', async () => {
     store,
     git: new FakeGitObserver(),
     sink,
-    planning: DEFAULT_PLANNING,
+    planning: { ...DEFAULT_PLANNING, enabled: false },
     defaultBranch: 'main',
   });
   await reconciler.reconcile(world());

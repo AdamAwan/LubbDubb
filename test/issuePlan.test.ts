@@ -41,7 +41,7 @@ test('the funnel is out entirely when planning is disabled', () => {
   // Off must mean off: no plan row, no cooldown state and a spent attempt cap all
   // route straight to `single`, so rule 4 is un-narrowed and today's path holds.
   for (const verdict of [{ kind: 'dispatch' }, { kind: 'cooldown' }, { kind: 'hold' }] as const) {
-    assert.deepEqual(resolvePlanRoute({ planning: DEFAULT_PLANNING, plan: null, verdict }), {
+    assert.deepEqual(resolvePlanRoute({ planning: { ...DEFAULT_PLANNING, enabled: false }, plan: null, verdict }), {
       route: 'single',
       failedOpen: false,
     });
@@ -268,6 +268,12 @@ function systemWithPlanning(planningEnabled: boolean): System {
     worktreeRoot: join(dir, 'wt'),
     repoRoot: gitRepo(),
     planning: { enabled: planningEnabled } as never,
+    // Pinned off: all three default **on** now, and this file is about something
+    // else — an extra agent in front of each issue would change what these
+    // assertions see. Each has its own tests.
+    assessment: { enabled: false } as never,
+    assay: { enabled: false } as never,
+    retrospective: { enabled: false } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });

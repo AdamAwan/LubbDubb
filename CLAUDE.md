@@ -407,7 +407,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     is bounded by the existing `dispatchVerdict` attempt cap on `issue:<n>`; nothing new was added.
     Tests: `test/issueConclusion.test.ts`, and the `return-from-review` block in `test/ruleDispatcher.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
-  (config, **off by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
+  (config, **on by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
   on branch **`plan/issue/<n>`**, origin `issue:<n>:plan`. That branch namespace is not
   cosmetic: git stores refs as files, so `refs/heads/issue/12` and `refs/heads/issue/12/plan`
@@ -660,11 +660,51 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   - **It second-guesses the watch tag, deliberately and only there.** It never filters an untagged
     backlog; it applies to issues the operator asked for, and its answer is not _no_ but _with what?_.
     The operator's own arm and escape hatch is `POST /api/issues/:number/assay`
-    (`workable`/`unclear`/`null`). Cost, named rather than discovered: with `planning`, `assessment`
-    and `assay` all on, one issue can spend **three agents** before a line of its work is written —
-    which is why all three are off by default. `QueueItem`/`issuePickupStatus` gained the `assay`
+    (`workable`/`unclear`/`null`). Cost, named rather than discovered: with `planning`, `assessment`,
+    `assay` and `retrospective` all on — the defaults — one issue can spend an assayer, a planner, its
+    part agents, an assessor and a writer. Each is bounded by the same attempt cap and each fails
+    open; the four switches are the way to stop paying for them. `QueueItem`/`issuePickupStatus` gained the `assay`
     status for `capped`'s reason (an issue waiting a cycle for a verdict must not look like an idle
     fleet). Tests: `test/goalAssay.test.ts`.
+- **The retrospective and the scratchpad (`src/retro/`, `src/scratch/`, rule 3h).** The Goal Floor drew a
+  station called **Manifest**, _Report what was done_, immediately before Launch — and it reported
+  nothing: its content was `issue.conclusion?.note` or an em dash, its `link` was null, and nothing
+  downstream read it. The floor named a step the harness never took. What was missing was two
+  different things, and they are kept apart:
+  - **During a run, `scratch_entries`** — the shared per-issue pad. `note_progress` is one overwritten
+    line for a fleet card and `report_finding` is testimony about work _outside_ the caller's task;
+    neither is "here is what I learned doing this, for whoever works this goal next", which is what
+    five part agents rediscovering one constraint costs. **Append-only**, because
+    `maxConcurrentPartsPerIssue` permits concurrent part agents and a mutable document would have them
+    overwrite each other with no merge anywhere — the loss `detectFileOverlaps` exists to expose. The
+    pad is **never named by argument**: `padOriginFor` maps `issue:12`, `:plan`, `:assay`, `:assess`,
+    `:retro` and `:part:<slug>` to `issue:12` and everything else to null, so an agent cannot reach
+    another goal's record, and a `pr:<m>:*` agent is refused even when the PR is linked (`linkedPrNumber`
+    is sticky). **Nothing in the dispatcher reads it at all** — asserted structurally, like the work
+    graph's own lens test.
+  - **After it, `retrospectives`** — one document per goal. Not a plan part, though `expectedKind:
+    'report'` exists: a part is work the plan schedules, retired by a replan and available only to a
+    decomposed issue, while this is about the whole goal and must survive `plan_parts` being rewritten.
+    Not a column on `issue_conclusions` either: a conclusion is a verdict a gate re-reads every pulse,
+    this is prose nothing branches on. The document is stored on the row rather than surfaced as an
+    artifact chip for `plan.document`'s reason — `GET /artifacts/:id` serves out of a worktree the reap
+    removes.
+  - **Rule `issue-retro` (3h) is on by default**, unlike its three neighbours, because it runs once
+    after the work is over and **gates nothing**: a spent attempt cap costs the write-up and nothing
+    else, so it fails open _and silent_ with no escalation. A **desk** agent (no branch, no worktree —
+    it writes no files), fenced so only `issue:<n>:retro` may `retro_submit`, which keeps the agent that
+    did the work from writing the account of it.
+  - **What it is handed is appended, never interpolated** (`padTestimony` + `retroDossier`, assembled in
+    `ActionExecutor.materializeTask` for the branch gate's reason): an override that never learned about
+    a `{dossier}` token would silently drop the whole briefing. The dossier **reads rows the pulse
+    already wrote and derives no verdicts**. Spend is `null` rather than `0` when nothing was reported —
+    PTY mode reports none, and a confident `$0.00` is the one reading that would be a lie.
+  - **The dispatcher reads existence, never prose**: `DispatchContext.retrospectiveOrigins` is a list of
+    origins, so a rule cannot branch on one agent's account of a run. `/api/state` ships the summary and
+    `hasDocument`; the document itself comes from `GET /api/retrospectives/:ref` on open, the
+    `WorkTreePanel` pattern, because the snapshot is polled. The cockpit control hangs off **the
+    retrospective existing**, never off the floor's status — the plan modal's lesson. Tests:
+    `test/scratchPad.test.ts`, `test/retrospective.test.ts`, `test/retroDossier.test.ts`.
 - **`src/graph/` is the durable work graph (stages 1 and 3 of 3) — the only thing here that outlives
   the world.** `closedPrWindowMs` bounds how long the _world snapshot_ remembers a merge (6h); every
   panel and predicate reading that snapshot forgets with it, and the edge from an issue to the PR
@@ -768,9 +808,9 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     and the rule **fails open** like the planner (spent cap → ordinary pickup, no escalation), since
     narrowing rule 4 without that turns an assessor crash into a permanently parked issue.
   - **`assess_issue` refuses every agent that is doing the work** — `conclusionOrigin`'s discipline
-    pointed the other way, because judging your own delivery is not an assessment. Off by default
-    (`assessment.enabled`), like `planning` and unlike `mcp`: it gates pickup and spends an agent, so
-    it is not purely additive. Tests: `test/delivery.test.ts`, `test/issueAssess.test.ts`,
+    pointed the other way, because judging your own delivery is not an assessment. **On by default**
+    (`assessment.enabled`), and unlike `mcp` not purely additive: it gates pickup and spends an agent
+    per assessed issue. Tests: `test/delivery.test.ts`, `test/issueAssess.test.ts`,
     `test/issueDelivery.test.ts`.
   - **The negative verdict, and what it drives (#159).** Stage 2 shipped the assessor able to say
     "not delivered" and nothing able to hear it. The intended loop is Plan → Work → is the goal
