@@ -1,5 +1,5 @@
 {
-  "//": "LubbDubb example config. Copy to lubbdubb.config.json (gitignored). Every key is OPTIONAL — omit any to take its default. The '//'-prefixed keys are inline docs; they are ignored at load, so this file stays copy-and-run. As shipped it drives the mock agent (agentMode 'raw' + fake integrations), so `npm start` works with no model or provider auth. Precedence: explicit overrides > this file > defaults, plus env overrides (PORT, LUBBDUBB_DB, LUBBDUBB_REPO_ROOT).",
+  "//": "LubbDubb example config. Copy to lubbdubb.config.json (gitignored). Every key is OPTIONAL — omit any to take its default. The '//'-prefixed keys are inline docs; they are ignored at load, so this file stays copy-and-run. As shipped it drives the mock agent (agentMode 'raw' + fake integrations), so `npm start` works with no model or provider auth. Precedence: explicit overrides > env (PORT, LUBBDUBB_HOST, LUBBDUBB_DB, LUBBDUBB_REPO_ROOT) > this file > defaults. Seven keys are DEEP-MERGED rather than replaced, so you can set one field of them alone: autoSend, integrations, planning, assessment, assay, retrospective, mcp, auth. Everything else — including issuePriorityLabels and ci.checks — is replaced wholesale. Full reference: docs/spec/02-configuration.md.",
 
   "// heartbeatIntervalMs": "How often (ms) the heartbeat fires a dispatch cycle. Default 300000 (5 min).",
   "heartbeatIntervalMs": 300000,
@@ -10,7 +10,7 @@
   "// startPaused": "Boot with dispatch paused (no new agents until resumed). The only config-level pause knob — live pause/resume is runtime-only and ephemeral. Default false.",
   "startPaused": false,
 
-  "// dispatcher": "Which dispatcher decides each cycle. 'rule' = deterministic, no model calls. 'claude' = an LLM decides (output still schema-validated), driven over a PTY. Default 'rule'.",
+  "// dispatcher": "Which dispatcher decides each cycle. 'rule' = deterministic, no model calls; the only one that implements prompt templates, the planning funnel, the assessor/assay/retrospective and the Up next queue. 'claude' = an LLM decides (output still schema-validated), driven over a PTY. Default 'rule'.",
   "dispatcher": "rule",
 
   "// agentMode": "How agents are launched. 'stream' = real Claude Code over headless stream-JSON (production default, runs unattended, supports the waiting/answer loop). 'pty' = real Claude Code as an interactive terminal (needs first-run onboarding done; this is the runtime that resumes across restarts). 'raw' = run claudeCommand/claudeArgs verbatim, prompt passed via LUBBDUBB_PROMPT (mock-agent demo + tests). Default 'stream'.",
@@ -19,42 +19,62 @@
   "// claudeCommand": "The agent binary to launch. Default 'claude'. Here it's 'bash' so the example can run the mock agent.",
   "claudeCommand": "bash",
 
-  "// claudeArgs": "Extra args appended to the agent command. A relative script path is resolved to absolute at load (agents run in a worktree cwd). Default [].",
+  "// claudeArgs": "Extra args appended AFTER the harness's own, so an explicit flag here has the last word — which is why you must NOT pass --allowedTools here (it would silently drop the mcp__lubbdubb__* grants; use agentAllowedTools instead). A relative path naming an existing file is resolved to absolute at load (agents run in a worktree cwd). Default [].",
   "claudeArgs": ["scripts/mock-agent.sh"],
 
-  "// agentPermissionMode": "Passed to `claude --permission-mode` so unattended tool calls don't hang. Default 'acceptEdits'. Note: 'bypassPermissions' maps to --dangerously-skip-permissions, which claude refuses under root.",
+  "// agentPermissionMode": "Passed to `claude --permission-mode` so unattended tool calls don't hang. Default 'acceptEdits', which auto-accepts FILE EDITS ONLY — shell commands are covered by agentAllowedTools + the permission backstop below, so you should rarely need 'bypassPermissions' (which maps to --dangerously-skip-permissions and is refused by claude under root).",
   "agentPermissionMode": "acceptEdits",
 
-  "// agentPromptDelayMs": "PTY only. Wait this long (ms) after spawn before typing the task in, giving the interactive TUI time to boot. Ignored by stream/raw. Default 1200.",
+  "// agentAllowedTools": "Tool allow rules handed to every agent as a `permissions.allow` fragment in --settings, in Claude Code rule syntax. These pre-approve the mechanical validate/commit/push commands an agent must run to take an issue through to an opened PR unattended. Anything NOT listed still hits the permission prompt, which the backstop (mcp.permissionEscalation) routes to you rather than hanging. Replaced wholesale. Default: the JS toolchain + git + gh, as shown.",
+  "agentAllowedTools": [
+    "Bash(npm:*)",
+    "Bash(npx:*)",
+    "Bash(pnpm:*)",
+    "Bash(yarn:*)",
+    "Bash(node:*)",
+    "Bash(git:*)",
+    "Bash(gh:*)"
+  ],
+
+  "// agentPromptDelayMs": "Wait this long (ms) after spawn before delivering the task, giving an interactive REPL time to boot. Stream mode uses 0. Default 1200.",
   "agentPromptDelayMs": 1200,
 
   "// agentSubmitDelayMs": "PTY only. Gap (ms) between typing a message and sending its submitting carriage return — the claude TUI folds a burst into a paste and treats a glued-on CR as a literal newline, leaving the text unsubmitted. Set 0 to write both at once. Default 60.",
   "agentSubmitDelayMs": 60,
 
-  "// agentWaitingPatterns": "Extra literal substrings that mean 'the CLI is waiting for input' (backup escalation heuristic). Default [].",
+  "// agentIdleWaitMs": "PTY only. Safety net for a turn that ends without a sentinel: after this long (ms) with no terminal output at all, the session is parked as waiting so it reaches the inbox instead of sitting 'running' forever. Unlatched — output resuming un-parks it. 0 disables. Default 90000.",
+  "agentIdleWaitMs": 90000,
+
+  "// agentWaitingPatterns": "Extra literal substrings that mean 'the CLI is waiting for input' (backup escalation heuristic, PTY). Default [].",
   "agentWaitingPatterns": [],
 
   "// whitelistedApprovals": "PTY waiting prompts the harness may auto-answer instead of escalating. Each rule: { match: <substring of the waiting prompt>, response: <text typed back> }. Default [].",
   "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
 
-  "// steeringPriorities": "Optional ordered hints injected into the LLM dispatcher's prompt (only meaningful with dispatcher 'claude'). Default [].",
+  "// sessionTranscriptRoot": "Where Claude Code keeps per-project session transcripts, which PTY mode tails for its legible transcript. Default '~/.claude/projects'. Override only if the agent runs with a different HOME than the server.",
+  "sessionTranscriptRoot": "~/.claude/projects",
+
+  "// steeringPriorities": "Optional ordered hints injected into the LLM dispatcher's prompt (only meaningful with dispatcher 'claude'); carried in the state snapshot for display either way. Default [].",
   "steeringPriorities": [],
 
-  "// docsFolderPrefix": "Folder(s) the file-events hook treats as the artifacts area: any file an agent writes UNDER a prefix is promoted to an artifact chip regardless of extension, on top of the built-in report/doc heuristic (report extensions + any reports/ folder). Accepts a string or an array; a file promotes under ANY entry. A relative entry is worktree-relative; an ABSOLUTE entry (e.g. D:/docs) also matches files written under that real directory OUTSIDE the worktree and lets the cockpit serve them. Unset = heuristic only.",
+  "// promptTemplatesDir": "Directory of operator overrides for the rule dispatcher's agent/escalation prompts. Each <prompt-id>.md replaces that prompt's built-in default; ids without a file keep theirs. A leading <!-- ... --> doc header is stripped before the prompt reaches the agent. A relative path resolves against repoRoot. Absent directory = all built-in defaults. Default '.lubbdubb/prompts'.",
+  "promptTemplatesDir": ".lubbdubb/prompts",
+
+  "// docsFolderPrefix": "Folder(s) the file-events hook treats as the artifacts area: any file an agent writes UNDER a prefix is promoted to an artifact chip regardless of extension, on top of the built-in report/doc heuristic (report extensions + any reports/ folder). Accepts a string or an array; a file promotes under ANY entry. A relative entry is worktree-relative; an ABSOLUTE entry (e.g. D:/docs) also matches files written under that real directory OUTSIDE the worktree and widens the artifact-serving boundary to include it. Unset = heuristic only.",
   "docsFolderPrefix": ["docs", "D:/shared/reports"],
 
-  "// autoSend": "Confidence-gated autonomy for side-effectful actions. Off by default: with enabled=false the harness always drafts + escalates for sign-off. Enabled, it sends an action itself only when the dispatcher's confidence >= confidenceThreshold AND the action type is in allowedActions; anything below still escalates, and a failed send falls back to an escalation. Deep-merged, so you can set just one field.",
+  "// autoSend": "Confidence-gated autonomy for side-effectful actions. Off by default: with enabled=false the harness always drafts + proposes for sign-off. Enabled, it authorizes an action itself only when the dispatcher's confidence >= confidenceThreshold AND the action type is in allowedActions; anything below still becomes a pending proposal, and a failed send escalates. Deep-merged, so you can set just one field.",
   "autoSend": {
     "// enabled": "Master switch. Default false.",
     "enabled": false,
-    "// confidenceThreshold": "Minimum dispatcher confidence (0..1) required to send instead of escalate. Default 0.85.",
+    "// confidenceThreshold": "Minimum dispatcher confidence (0..1) required to send instead of asking you. Default 0.85.",
     "confidenceThreshold": 0.85,
     "// allowedActions": "Action types eligible for auto-send. Default ['reply_on_pr'].",
     "allowedActions": ["reply_on_pr"]
   },
 
-  "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' + 'azure' (real, for sourceControl/issues). Capabilities: sourceControl (pull requests), issues (issues/work items), backlog (stories).",
-  "integrations": { "sourceControl": "fake", "issues": "fake", "backlog": "fake" },
+  "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' and 'azure' (real). Capabilities: sourceControl (pull requests), issues (issues / work items).",
+  "integrations": { "sourceControl": "fake", "issues": "fake" },
 
   "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
   "github": {
@@ -68,10 +88,13 @@
     "organization": "acme",
     "project": "app",
     "repository": "app",
-    "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent", "workItemAssignedTo": "bot@acme.com" }
+    "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent", "workItemAssignedTo": "bot@acme.com" },
+
+    "// policyChecks": "Which Azure BRANCH-POLICY kinds become CI checks, and how. Kinds: build, status, comments, workItems, reviewers, mergeStrategy, other. Modes: 'check' (an ordinary CiCheck — visible, routable by a ci.checks rule, dispatchable), 'advisory' (visible and structurally unable to dispatch or escalate), 'off' (not emitted). Unset kinds take the defaults: build + status are 'check', comments is 'advisory' (rule 2b already models threads at higher fidelity), everything else 'off'. An unknown kind or mode throws at load. Nothing here can reach the aggregate ciStatus, so widening it can never make a PR read as unable to merge. The example promotes work-item linking so an agent fixes it — paired with the ci.checks guidance below.",
+    "policyChecks": { "workItems": "check" }
   },
 
-  "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs, issues and stories. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues/stories are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues/stories acted on).",
+  "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs and issues. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues acted on).",
   "labelPrefix": "lubbdubb",
 
   "// issuePickupRequireOwnLabel": "Tighten the issue WATCH gate so '<labelPrefix>-watch' only counts when the account the harness authenticates as added it (anti-abuse). Only meaningful with a real provider (github/azure) that can resolve tag authorship; the fake provider fails the gate closed. Default false (any tagger counts).",
@@ -89,43 +112,93 @@
   "// issueInReviewState": "The state a work item is moved to once a PR is open for it, so agents stop re-picking work already awaiting review/CI (e.g. 'In Review'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Unset = no automatic transition.",
   "issueInReviewState": "In Review",
 
-  "// planning": "The planning funnel for multi-PR issues. OFF by default, and off leaves it out entirely — no planner is dispatched, no plan is reconciled, and issue pickup behaves exactly as it does without plans. Turned on, every watched open issue first gets a PLANNING agent (rule 3c, on branch plan/issue/<n>) that reads the repo and writes a verdict to .lubbdubb/plan.json: 'single' (one PR — falls through to normal pickup, unchanged) or 'parts' (a decomposition the part scheduler owns: rule 4a puts one agent per part on issue/<n>/<slug>, stacked on its dependency's branch while that dependency's PR is open). Ranking is planners, then parts (bottom of a stack first), then pickups. Progress is mirrored to the tracker as ONE status comment per plan, edited in place; completion never closes the issue. A planner that crashes or writes no plan fails OPEN after the usual attempt cap: the issue routes to 'single' and gets worked as it does today, so a planner failure can never park an issue. Only the 'rule' dispatcher implements the funnel. Deep-merged, so you can set just one field.",
+  "// planning": "The planning funnel for multi-PR issues. ON by default. Every watched open issue first gets a PLANNING agent (rule 3c, on branch plan/issue/<n>) that reads the repo and submits a verdict through the plan_submit tool (or .lubbdubb/plan.json as the fallback): 'single' (one PR — falls through to normal pickup, unchanged) or 'parts' (a decomposition the part scheduler owns: rule 4a puts one agent per part on issue/<n>/<slug>, stacked on its dependency's branch while that dependency's PR is open). Progress is mirrored to the tracker as ONE status comment per plan, edited in place; completion never closes the issue. A planner that crashes or writes no plan fails OPEN after the usual attempt cap: the issue routes to 'single' and is worked as it would be without plans, so a planner failure can never park an issue. OFF leaves the funnel out entirely — rule 4 un-narrowed, no planner ever dispatched. Only the 'rule' dispatcher implements it. Deep-merged.",
   "planning": {
-    "// enabled": "Master switch. Default false.",
-    "enabled": false,
+    "// enabled": "Master switch. Default true.",
+    "enabled": true,
     "// maxConcurrentPartsPerIssue": "How many parts of one plan may have agents at once — a cap rather than fanning the whole graph out as soon as dependencies are satisfied. These slots come out of maxConcurrentAgents, so one issue can occupy several of them. Default 2.",
     "maxConcurrentPartsPerIssue": 2,
-    "// gitFetchIntervalMs": "Floor on how often plan reconciliation runs `git fetch` before reading branch reality. The git observer is fetch-free by design, so without a fetch it never sees a branch pushed from another machine — and 'has the dependency actually pushed' is what a stacked part waits on. Fetching on the pulse is the intent; this only stops a deliberately fast heartbeat becoming a fetch storm. 0 = every pulse. Default 60000.",
+    "// requireApproval": "Put a 'parts' verdict to you before anything is scheduled from it — approve-before rather than replan-after. On, ingestion persists the decomposition as 'awaiting_approval', rule 3d proposes it once, and rule 4a schedules nothing (its ready parts queue as 'unapproved' in Up next) until you accept. Rejecting retires the parts nothing was started for and works the issue as one PR. A 'single' verdict is never gated. Default true.",
+    "requireApproval": true,
+    "// gitFetchIntervalMs": "Floor on how often plan reconciliation runs `git fetch` before reading branch reality. The git observer is fetch-free by design, so without a fetch it never sees a branch pushed from another machine — and 'has the dependency actually pushed' is what a stacked part waits on. This only stops a deliberately fast heartbeat becoming a fetch storm. 0 = every pulse. Default 60000.",
     "gitFetchIntervalMs": 60000
   },
 
-  "// mcp": "The agents' typed channel BACK to the harness: a tools-only MCP server (a Unix socket / named pipe, never a port) wired into every launch via --mcp-config. Today it exposes plan_submit (a planning agent's verdict, validated synchronously so a rejection comes back with its reason instead of silently costing an attempt) and escalate (a question with a kind and concrete options the cockpit renders as one-click answers). Identity rides on a per-agent credential, not a tool argument, so an agent can only ever write its own work. ON by default because it is purely additive — the @@LUBBDUBB_DONE@@/@@LUBBDUBB_WAITING@@ sentinels and the .lubbdubb/plan.json file path both stay wired, and are exactly what an agent falls back to when the tools are off, unavailable, or simply unused.",
+  "// assessment": "The assessor (rule 3e) — the harness asking whether an issue that has HAD work and has nothing in flight is actually finished, and parking it as 'delivered' if so. ON by default, with the cost stated: it spends an agent per assessed issue and its verdict gates pickup (reversibly — moving the ticket in the tracker, or any comment/transition on it, releases the hold, and there is an operator clear). It is what stops a merged PR's issue being picked up again on GitHub, which has no 'In Review' state to park it in. A negative verdict names a cause and routes it: a plan shortfall proposes a replan, a part shortfall proposes one follow-up part, a goal shortfall escalates. Off, no assessor is dispatched and rule 4 behaves as it did before it existed. Deep-merged; 'rule' dispatcher only.",
+  "assessment": {
+    "// enabled": "Master switch. Default true.",
+    "enabled": true
+  },
+
+  "// assay": "The goal assay (rule 3f) — the harness asking whether a fresh issue's TEXT can be worked from at all, before anything is dispatched against it. Every other gate in front of a ticket asks about policy; this one asks whether there is anything to act on. ON by default. Only an explicit 'unclear' verdict holds anything: an assayer that crashes, is killed or spends its attempt cap writes no row and the issue falls through to ordinary pickup with no escalation. A hold ends the moment the ticket's title/body is edited or anyone comments, and the refusal is kept as ONE living comment on the thread, retracted when the hold ends. There is an operator override (POST /api/issues/:number/assay). Off, no assayer runs and every gate in front of an issue behaves as it did. Deep-merged; 'rule' dispatcher only.",
+  "assay": {
+    "// enabled": "Master switch. Default true.",
+    "enabled": true
+  },
+
+  "// retrospective": "The retrospective (rule 3h) — one DESK agent writing up a goal the harness has parked as delivered: what shipped, and what came out of the process of shipping it, from the issue's scratchpad plus the record the harness kept. ON by default, and unlike its three neighbours above it gates nothing: it runs once, after the work is over, so it can neither park an issue nor delay anything. Off, the Goal Floor's Manifest station reads 'Nothing written' and no agent is spent. Deep-merged; 'rule' dispatcher only.",
+  "retrospective": {
+    "// enabled": "Master switch. Default true.",
+    "enabled": true
+  },
+
+  "// COST NOTE": "planning + assessment + assay + retrospective are all on by default, so one issue can spend an assayer, a planner, its part agents, an assessor and a writer before and after the work itself. That is the intended full funnel; set any 'enabled' to false to drop that stage.",
+
+  "// mcp": "The agents' typed channel BACK to the harness: a tools-only MCP server (a Unix socket / named pipe, never a port) wired into every launch via --mcp-config. Tools: plan_submit (a planner's verdict, validated synchronously so a rejection comes back with its reason instead of silently costing an attempt), escalate (a question with a kind and concrete options the cockpit renders as one-click answers), world_read (the harness's own view of a PR/issue, out of the store — no provider fan-out, no `gh` shell-out), report_finding (something noticed that isn't the task; queues nothing, you promote or file it), note_progress (the agent's own one-line 'what am I doing'), conclude_work / conclude_part (a terminal for work that produced no PR) and link_ticket. Identity rides on a per-agent credential, not a tool argument, so an agent can only ever write its own work. ON by default because it is purely additive — the @@LUBBDUBB_DONE@@/@@LUBBDUBB_WAITING@@ sentinels and the .lubbdubb/plan.json side channel both stay wired, and are exactly what an agent falls back to when the tools are off, unavailable, or simply unused. Deep-merged.",
   "mcp": {
     "// enabled": "Master switch. Default true. Off = agents run on the sentinels alone, which is a supported configuration rather than a degraded one.",
-    "enabled": true
+    "enabled": true,
+    "// permissionEscalation": "The permission backstop, via `claude --permission-prompt-tool`. A tool call that agentAllowedTools doesn't cover would otherwise hang a headless agent on a prompt no human can answer; with this on it files an escalation in 'Needs you' and blocks that one agent until you allow or deny. Gated by mcp.enabled — the tool lives on this server. Off falls back to Claude's default headless behaviour (a silent deny). Default true.",
+    "permissionEscalation": true
+  },
+
+  "// closedPrWindowMs": "How far back a provider looks for pull requests that have LEFT the open set, so a merged or abandoned PR is observed rather than inferred from its disappearance. Feeds the cockpit's 'Recently closed' list, the pr_merged/pr_closed world events, and plan reconciliation's ability to tell a merge from an abandonment. Costs one extra list request per snapshot per provider (no per-PR fan-out). Default 21600000 (6h); 0 disables the lookup, and every consumer falls back to the older 'absence means merged' reading.",
+  "closedPrWindowMs": 21600000,
+
+  "// upNextOverrideTtlMs": "How long an operator 'Up next' priority override survives after the harness stops tracking its origin. The override is refreshed every pulse its origin is still queued or staffed, so a long-running item keeps its priority; once the work is gone (merged, closed, abandoned) for this long the stale override is pruned. Default 604800000 (7d); 0 disables pruning entirely.",
+  "upNextOverrideTtlMs": 604800000,
+
+  "// ci": "Per-check CI policy: what rule 1 does about WHICH check went red. Rules are ordered and matched by glob against the check name (* = any run of characters, ? = exactly one, case-insensitive); the first match wins. REPLACED wholesale by an override, not merged. Empty (the default) — and any check matching no rule — is the pre-policy behaviour: dispatch a code agent with the generic fix prompt. So this is purely a way to carve exceptions. onFailure: 'dispatch' (fix it), 'ignore' (somebody else's wall — the DEFAULT for a rule you write, since the usual reason to name a check is to stop acting on it), 'escalate' (worth a human's eye). 'guidance' is appended to the agent's prompt and 'urgent' sorts this PR's concern ahead of every other PR concern this cycle — loadConfig THROWS if either is attached to a rule that never dispatches. The verdict is per PR, not per check: one agent works the branch, all matched guidance is appended to its one prompt, and held checks are NAMED to it so it doesn't chase them. When nothing is actionable but something escalates, rule 1b asks you once.",
+  "ci": {
+    "checks": [
+      { "match": "lint", "onFailure": "dispatch", "guidance": "Run the lint-fix skill; do not touch unrelated files." },
+      {
+        "match": "e2e (*)",
+        "onFailure": "dispatch",
+        "guidance": "These are flaky. Reproduce locally before editing test code."
+      },
+      { "match": "security-*", "onFailure": "dispatch", "urgent": true },
+      { "match": "deploy-preview*", "onFailure": "ignore" },
+      { "match": "infra-*", "onFailure": "escalate" },
+      {
+        "match": "Work item linking",
+        "onFailure": "dispatch",
+        "guidance": "Link the work item with `az repos pr work-item add --id <pr> --work-items <n>`. The work item number is the `<n>` in the branch name `issue/<n>`."
+      }
+    ]
   },
 
   "// repoRoot": "The git repo the harness operates on; per-branch worktrees are cut from it. Defaults to the launch directory (process.cwd()), so the common case needs nothing. Set it (or the LUBBDUBB_REPO_ROOT env override) to point at a repo elsewhere; a relative path resolves against the launch dir.",
   "repoRoot": ".",
 
-  "// defaultBranch": "The repository's integration branch. A NEW agent branch is cut from it (origin/<defaultBranch> preferred over the local ref), and it's the base named in a PR's base-update prompt when the provider reports none. Previously a hardcoded 'main' fallback, so new branches actually forked from whatever repoRoot was checked out on. Existing branches/worktrees are reused untouched and never re-based. Default 'main'.",
+  "// defaultBranch": "The repository's integration branch. A NEW agent branch is cut from it (origin/<defaultBranch> preferred over the local ref), it is the base named in a PR's base-update prompt when the provider reports none, and a PR targeting anything else is treated as stacked. Existing branches/worktrees are reused untouched and never re-based. Not auto-detected — the harness may run against a clone whose HEAD is anywhere, and a wrong guess silently mis-bases work. Default 'main'.",
   "defaultBranch": "main",
 
   "// worktreeRoot": "Root under which per-branch worktrees are created. A relative value resolves against repoRoot (not the launch dir). Default '.lubbdubb/worktrees'.",
   "worktreeRoot": ".lubbdubb/worktrees",
 
-  "// deskRoot": "Root under which desk (no-code) scratch dirs are created. Relative resolves against repoRoot. Default '.lubbdubb/desk'.",
+  "// deskRoot": "Root under which desk (no-code) scratch dirs are created — one per task id. Relative resolves against repoRoot. Default '.lubbdubb/desk'.",
   "deskRoot": ".lubbdubb/desk",
 
-  "// dbPath": "SQLite file. Overridable via the LUBBDUBB_DB env var. Default '.lubbdubb/lubbdubb.sqlite'.",
+  "// dbPath": "SQLite file. Overridable via the LUBBDUBB_DB env var. ':memory:' is supported (tests). Default '.lubbdubb/lubbdubb.sqlite'.",
   "dbPath": ".lubbdubb/lubbdubb.sqlite",
 
   "// port": "HTTP/WS port for the server + cockpit. Overridable via the PORT env var. Default 4300.",
   "port": 4300,
 
-  "// host": "Bind address. Default '127.0.0.1' — this machine only, because the cockpit can queue jobs and a job spawns an agent with write access to your repo. Set '0.0.0.0' to expose it on your network; doing that with auth.enabled false is refused at startup. Overridable via LUBBDUBB_HOST.",
+  "// host": "Bind address. Default '127.0.0.1' — this machine only, because the cockpit can queue jobs and a job spawns an agent with write access to your repo. Set '0.0.0.0' to expose it on your network; doing that with auth.enabled false is REFUSED at startup. Overridable via LUBBDUBB_HOST.",
   "host": "127.0.0.1",
 
-  "// auth": "Cockpit access control. 'enabled' (default true) requires a bearer token on every /api/* route and on /ws. There is deliberately no token key here — a secret must not live in a committable file: set LUBBDUBB_TOKEN, or let the harness mint one into 'tokenFile' (0600) and print it as the #t= link at startup.",
+  "// auth": "Cockpit access control. 'enabled' (default true) requires a bearer token on every /api/* route and on /ws. There is deliberately no token key here — a secret must not live in a committable file: set LUBBDUBB_TOKEN, or let the harness mint one into 'tokenFile' (0600) and print it as the #t= link at startup. Deep-merged, so setting tokenFile alone does not silently disable it.",
   "auth": { "enabled": true, "tokenFile": ".lubbdubb/cockpit-token" }
 }
