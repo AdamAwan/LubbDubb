@@ -1,7 +1,6 @@
 /**
  * The retrospective's pure layer — the policy, the origin, and what a submission is
- * allowed to be. The full argument is in
- * `docs/superpowers/specs/2026-07-30-retrospective-and-scratchpad-design.md`.
+ * allowed to be.
  *
  * ## The gap this closes
  *

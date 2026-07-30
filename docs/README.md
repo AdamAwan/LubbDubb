@@ -11,17 +11,17 @@ off by default is described as off by default, and what turning it on does.
 
 ## Layout
 
-| Path                | What it holds                                                                                       |
-| ------------------- | --------------------------------------------------------------------------------------------------- |
-| `spec/`             | The specification, one document per subsystem. Numbered by the order they build on each other.      |
-| `workflow.md`       | The end-to-end workflow the harness is built to run, and where a different one slots in. Not spec.  |
-| `prompt-templates/` | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id.      |
-| `superpowers/`      | Historical design records — the proposals that preceded features. Superseded by `spec/`; see below. |
+| Path                | What it holds                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `spec/`             | The specification, one document per subsystem. Numbered by the order they build on each other. |
+| `workflow.md`       | The end-to-end workflow the harness is built to run, and where a different one slots in.       |
+| `prompt-templates/` | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id. |
 
-`superpowers/specs/*.md` and `superpowers/plans/*.md` are **dated design documents written before the
-work landed**. They record why a feature was shaped the way it was, and they are kept for that
-reason, but they are not authoritative about current behaviour and they are not maintained as the
-code moves. When they and `spec/` disagree, `spec/` wins.
+`spec/` holds the specification and nothing else. Dated design documents — the proposals that
+preceded a feature, recording the options weighed at the time — are **not** kept here: they age out
+of agreement with the code the moment it moves, and a reader cannot tell by looking which of two
+documents describes the application. The reasoning that is still load-bearing lives in the spec
+document that owns the behaviour, or beside the code in `CLAUDE.md`; the rest is in the git history.
 
 ## The specification
 

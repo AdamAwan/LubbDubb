@@ -136,8 +136,7 @@ page has no single reading position: what you are looking for can be out of sigh
 itself has not moved, and the panel beside the one you are reading does not travel with it. One grid
 scrolls as one page. A third rail went earlier for a different reason — `act`, what _you_ are the
 blocker for, whose panels are read as a count far more often than as contents, and a count is a
-gauge rather than a column
-([`2026-07-29-factory-two-rail-layout-design.md`](2026-07-29-factory-two-rail-layout-design.md)).
+gauge rather than a column.
 
 There is **one DOM for every width**; the arrangement is chosen in CSS alone:
 
@@ -197,11 +196,9 @@ now, so it is one row above ~1900px and two below, and the duplicate-removal tha
 time has nothing left to remove. That is the cost of the spark — 213px against a counted gauge's
 ~122px — and it is paid knowingly: the alternative is a gauge whose face is a number that cannot
 say what the panel was for. The threshold landing on the railed breakpoint is a coincidence, not a
-rule; nothing keys on it. See the findings design's cost section. It belongs with the desks rather than on the floor because the floor
+rule; nothing keys on it. It belongs with the desks rather than on the floor because the floor
 rail is what the _harness_ is doing, and a finding is something nobody is doing: nothing in the
-dispatcher reads `findings`, so promote / file / dismiss is the only way one becomes anything. Its
-design is
-[`2026-07-30-factory-findings-gauge-design.md`](2026-07-30-factory-findings-gauge-design.md).
+dispatcher reads `findings`, so promote / file / dismiss is the only way one becomes anything.
 
 **Output is the fifth**, and it is the one that was never a count. Production had already been
 reduced to a panel at the head of the world rail whose entire content was a tile you clicked to open
@@ -409,9 +406,8 @@ Two of the three desks carry a rule of their own:
 `TheLine` draws the **dispatcher** — bays, belt, headroom gate, subject: agents. The Goal Floor draws
 the **work**: one ticket's whole production line, in the order
 [`docs/workflow.md`](../workflow.md) describes it. Ticket → is there enough here to act on → plan →
-do the work → checks → merge → is the goal achieved → report → update the ticket → done. Its design
-is [`2026-07-29-goal-floor-design.md`](2026-07-29-goal-floor-design.md), and the mockup it was
-written against carries a node-by-node conformance table against the workflow doc.
+do the work → checks → merge → is the goal achieved → report → update the ticket → done. Every node
+below corresponds to a stage of that document, which is what the floor is checked against.
 
 | Factory              | Harness                                            |
 | -------------------- | -------------------------------------------------- |

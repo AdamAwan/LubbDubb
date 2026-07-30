@@ -32,9 +32,7 @@ import { productionReading } from './production.js';
  * permanent left-hand rail. All four are read as a *count* far more often than as
  * contents, so the count is a gauge in the status bar and the panel opens from
  * it — which is what deleted the rail, and then the last panel on the floor that
- * was read the same way. See
- * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
- * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
+ * was read the same way.
  *
  * Production is the fifth and last, and the one that was not a count. It reads
  * against time rather than reporting the moment, which makes it the panel an

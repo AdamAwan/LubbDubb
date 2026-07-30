@@ -78,7 +78,7 @@ function systemWithOrphanedTask(): { system: System; taskId: string; origin: str
 
 test('the pulse is held while a crashed agent awaits a decision, and resumes once it lands', async () => {
   const { system, taskId } = await systemWithCrashedAgent();
-  system.connector.inject({ kind: 'new_issue', number: 902, title: 'Second story' });
+  system.connector.inject({ kind: 'new_issue', number: 902, title: 'Second issue' });
 
   const held = await system.harness.runCycle('timer');
   assert.equal(held.cycleId, 'held');

@@ -463,7 +463,7 @@ test('sourceControl resolves refs to canonical URLs using its owner/repo', () =>
   const sc = new GitHubSourceControlIntegration({ api, owner: 'octo', repo: 'demo' });
   assert.equal(sc.resolveRefUrl('pr:42:ci'), 'https://github.com/octo/demo/pull/42');
   assert.equal(sc.resolveRefUrl('issue:13'), 'https://github.com/octo/demo/issues/13');
-  assert.equal(sc.resolveRefUrl('story:s1:groom'), null);
+  assert.equal(sc.resolveRefUrl('epic:e1:groom'), null);
   store.close();
 });
 

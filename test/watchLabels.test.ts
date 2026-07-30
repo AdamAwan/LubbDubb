@@ -25,7 +25,7 @@ test('resolveWatchState: an explicit watch tag wins over the default', () => {
 });
 
 test('resolveWatchState: no tag falls through to the type default', () => {
-  // PR (opt-out) → watched; issue/story (opt-in) → ignored.
+  // PR (opt-out) → watched; issue (opt-in) → ignored.
   assert.equal(resolveWatchState([], { ...labels, defaultWatched: true }), 'watched');
   assert.equal(resolveWatchState([], { ...labels, defaultWatched: false }), 'ignored');
   assert.equal(resolveWatchState(['bug'], { ...labels, defaultWatched: false }), 'ignored');
