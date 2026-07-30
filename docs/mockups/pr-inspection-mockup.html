@@ -1,0 +1,1068 @@
+<title>Parts Inspection — the PR strip above the line</title>
+
+<style>
+  /* ============================================================
+     Page chrome. Warm neutrals biased toward the floor's amber, so
+     the document reads as the same world as the screen sitting
+     inside it. Same token set as goal-floor-mockup.html — this is
+     the second drawing in that series, not a new house style.
+     ============================================================ */
+  :root {
+    --doc-bg: #f6f2ec;
+    --doc-panel: #fffdfa;
+    --doc-ink: #221f1c;
+    --doc-ink-2: #6b6259;
+    --doc-rule: #ddd5c9;
+    --doc-accent: #b4620a;
+    --doc-mark: #f0e3d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --doc-bg: #191716;
+      --doc-panel: #211f1d;
+      --doc-ink: #ece6dc;
+      --doc-ink-2: #9d9488;
+      --doc-rule: #35302b;
+      --doc-accent: #ff9c1a;
+      --doc-mark: #2e2519;
+    }
+  }
+  :root[data-theme='light'] {
+    --doc-bg: #f6f2ec;
+    --doc-panel: #fffdfa;
+    --doc-ink: #221f1c;
+    --doc-ink-2: #6b6259;
+    --doc-rule: #ddd5c9;
+    --doc-accent: #b4620a;
+    --doc-mark: #f0e3d0;
+  }
+  :root[data-theme='dark'] {
+    --doc-bg: #191716;
+    --doc-panel: #211f1d;
+    --doc-ink: #ece6dc;
+    --doc-ink-2: #9d9488;
+    --doc-rule: #35302b;
+    --doc-accent: #ff9c1a;
+    --doc-mark: #2e2519;
+  }
+
+  /* The floor's own tokens, lifted verbatim from
+     web/src/skins/factory/skin.css. The mock screen is dark in every
+     theme on purpose: it is a picture of a dark-only skin, not a
+     surface the reader is meant to re-theme. */
+  .screen {
+    --bg: #1c1b1a;
+    --panel: #2a2827;
+    --panel-2: #201f1e;
+    --border: #383431;
+    --text: #e8e3da;
+    --muted: #9a9288;
+    --accent: #ff9c1a;
+    --blue: #5b9ec9;
+    --green: #6fbf5a;
+    --amber: #f2c14e;
+    --red: #d9483b;
+    --grey: #6d665e;
+    --well: #171615;
+    --border-hi: #403c38;
+    --border-lo: #121110;
+    --amber-line: #5a4413;
+    --red-line: #5a231d;
+    --red-fill: #2a1512;
+    --blue-line: #2a4a5e;
+    --green-fill: #16240f;
+    --fx-belt: #f2c14e;
+    --fx-belt-dark: #3b3530;
+    --font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--doc-bg);
+    color: var(--doc-ink);
+    font-family:
+      'Segoe UI',
+      system-ui,
+      -apple-system,
+      'Helvetica Neue',
+      Arial,
+      sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+  }
+
+  header.doc {
+    border-bottom: 2px solid var(--doc-ink);
+    padding-bottom: 20px;
+    margin-bottom: 12px;
+  }
+  .eyebrow {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--doc-accent);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
+    font-size: clamp(30px, 5vw, 46px);
+    line-height: 1.04;
+    letter-spacing: 0.005em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .lede {
+    max-width: 66ch;
+    font-size: 17px;
+    color: var(--doc-ink-2);
+    margin: 14px 0 0;
+  }
+
+  section {
+    margin-top: 52px;
+  }
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-bottom: 1px solid var(--doc-rule);
+    padding-bottom: 8px;
+    margin-bottom: 22px;
+  }
+  .sec-head h2 {
+    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
+    font-size: 21px;
+    letter-spacing: 0.02em;
+    margin: 0;
+  }
+  .sec-head .tag {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--doc-ink-2);
+    margin-left: auto;
+  }
+  p.body {
+    max-width: 68ch;
+    margin: 0 0 16px;
+  }
+  code {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 0.88em;
+    background: var(--doc-mark);
+    padding: 1px 5px;
+  }
+
+  /* ================= the mock screen ================= */
+  .screen-frame {
+    overflow-x: auto;
+    background: var(--doc-panel);
+    border: 1px solid var(--doc-rule);
+    padding: 16px;
+  }
+  .screen {
+    min-width: 1080px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13.5px;
+    padding: 12px;
+    display: grid;
+    gap: 12px;
+  }
+  .bev {
+    background: var(--panel);
+    border-top: 1px solid var(--border-hi);
+    border-left: 1px solid var(--border-hi);
+    border-right: 1px solid var(--border-lo);
+    border-bottom: 1px solid var(--border-lo);
+  }
+  .card {
+    padding: 11px 14px 13px;
+    min-width: 0;
+  }
+  .fx-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fx-head > div {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .fx-head h2 {
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0;
+    font-weight: 600;
+  }
+  .ic {
+    width: 17px;
+    height: 17px;
+    flex: none;
+    color: var(--accent);
+  }
+  .ic.sm {
+    width: 13px;
+    height: 13px;
+  }
+  .note {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--grey);
+    margin: 0;
+    white-space: nowrap;
+  }
+  .note b {
+    color: var(--red);
+    font-weight: 600;
+  }
+  .sub {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--grey);
+    margin: 12px 0 6px;
+  }
+  .sub:first-of-type {
+    margin-top: 4px;
+  }
+  .sub .rule {
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--border);
+  }
+  .sub .chev {
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+
+  /* ---- the row: the whole proposal in one grid ---- */
+  .rows {
+    display: grid;
+    gap: 3px;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 3px 54px 46px minmax(0, 1fr) minmax(0, 22ch) 132px;
+    align-items: center;
+    gap: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border-lo);
+    padding: 7px 12px 7px 0;
+  }
+  .row .stripe {
+    align-self: stretch;
+    background: transparent;
+  }
+  .row.you .stripe {
+    background: var(--red);
+  }
+  .row.stalled .stripe {
+    background: var(--amber);
+  }
+  .row.hand {
+    background: transparent;
+    border-color: var(--border-lo);
+    opacity: 0.72;
+  }
+
+  /* the inspection ladder: four gates, lit or unlit, never red */
+  .lad {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+  }
+  .lad i {
+    display: block;
+    width: 9px;
+    height: 20px;
+    background: var(--fx-belt-dark);
+    border: 1px solid var(--border-lo);
+  }
+  .lad i.on {
+    background: var(--green);
+    opacity: 0.82;
+  }
+  .lad i.full {
+    background: var(--green);
+    opacity: 1;
+  }
+  .ref {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .job {
+    font-family: var(--font-display);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .why {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--grey);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .court {
+    justify-self: end;
+    padding: 2px 7px;
+    border: 1px solid var(--border);
+    color: var(--grey);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .court.bad {
+    border-color: var(--red-line);
+    color: var(--red);
+    background: var(--red-fill);
+  }
+  .court.warn {
+    border-color: var(--amber-line);
+    color: var(--amber);
+  }
+  .court.ok {
+    border-color: #2f4a22;
+    color: var(--green);
+  }
+  .court.idle {
+    border-color: var(--blue-line);
+    color: var(--blue);
+  }
+  .court.off {
+    border-color: var(--border);
+    color: var(--grey);
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    margin: 9px 0 0;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    color: var(--grey);
+  }
+  .legend span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend i {
+    width: 8px;
+    height: 12px;
+    display: block;
+    background: var(--fx-belt-dark);
+    border: 1px solid var(--border-lo);
+  }
+  .legend i.on {
+    background: var(--green);
+    opacity: 0.82;
+  }
+
+  /* the header's one piece of art: the silo, loaded once, not per PR */
+  .loadbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .loadbar .cap {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* stand-ins for the rest of the floor, so placement is legible */
+  .ghost {
+    border: 1px dashed var(--border);
+    color: var(--grey);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 14px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ghost.tall {
+    min-height: 92px;
+  }
+  .rails {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 12px;
+    align-items: start;
+  }
+  .rail {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 12px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--grey);
+  }
+  .bar .brand {
+    font-family: var(--font-display);
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+  }
+  .bar .g {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+  }
+  .bar .g b {
+    font-family: var(--font-display);
+    font-size: 15px;
+    color: var(--text);
+  }
+  .bar .g.hot b {
+    color: var(--red);
+  }
+
+  /* ================= placement schematics ================= */
+  .plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  .plan {
+    background: var(--doc-panel);
+    border: 1px solid var(--doc-rule);
+    padding: 16px;
+  }
+  .plan h3 {
+    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0 0 4px;
+  }
+  .plan .verdict {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--doc-accent);
+    margin: 0 0 12px;
+  }
+  .plan p {
+    font-size: 14px;
+    color: var(--doc-ink-2);
+    margin: 12px 0 0;
+  }
+  .wire {
+    display: grid;
+    gap: 5px;
+    background: var(--doc-mark);
+    padding: 8px;
+  }
+  .wire div {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--doc-ink-2);
+    border: 1px solid var(--doc-rule);
+    background: var(--doc-panel);
+    padding: 5px 7px;
+  }
+  .wire .hi {
+    border-color: var(--doc-accent);
+    color: var(--doc-accent);
+    font-weight: 700;
+  }
+  .wire .two {
+    display: grid;
+    grid-template-columns: 1fr 96px;
+    gap: 5px;
+    border: 0;
+    background: none;
+    padding: 0;
+  }
+  .wire .two > div {
+    margin: 0;
+  }
+  .wire .col {
+    display: grid;
+    gap: 5px;
+    border: 0;
+    background: none;
+    padding: 0;
+  }
+
+  /* ================= density comparison ================= */
+  .compare {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+  .compare .pane {
+    background: var(--doc-panel);
+    border: 1px solid var(--doc-rule);
+    padding: 16px;
+  }
+  .compare h3 {
+    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .compare .scale {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 10px;
+    color: var(--doc-ink-2);
+    margin: 12px 0 0;
+    letter-spacing: 0.06em;
+  }
+  .mini {
+    background: var(--bg);
+    padding: 10px;
+  }
+
+  /* ================= notes + table ================= */
+  .notes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 18px;
+  }
+  article.n {
+    border-top: 2px solid var(--doc-ink);
+    padding-top: 12px;
+  }
+  article.n h3 {
+    font-family: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', system-ui, sans-serif;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    margin: 0 0 7px;
+  }
+  article.n p {
+    font-size: 14.5px;
+    color: var(--doc-ink-2);
+    margin: 0;
+  }
+  .tbl {
+    overflow-x: auto;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 14px;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--doc-rule);
+    vertical-align: top;
+  }
+  th {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--doc-ink-2);
+    border-bottom: 1px solid var(--doc-ink);
+    white-space: nowrap;
+  }
+  td:first-child {
+    font-family: 'Cascadia Mono', Consolas, ui-monospace, Menlo, monospace;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .ask {
+    margin-top: 44px;
+    border-left: 3px solid var(--doc-accent);
+    padding: 4px 0 4px 18px;
+  }
+  .ask p {
+    max-width: 66ch;
+    margin: 0 0 10px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+</style>
+
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+  <defs>
+    <!-- Lifted from web/src/skins/factory/components/Sprite.tsx so the marks
+         here are the marks on the floor, not lookalikes. -->
+    <symbol id="i-pr" viewBox="0 0 24 24">
+      <circle cx="7" cy="6" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6" />
+      <circle cx="7" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6" />
+      <circle cx="17" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6" />
+      <path d="M7 8.4v7.2M17 15.6V9a2.6 2.6 0 0 0-2.6-2.6H10" fill="none" stroke="currentColor" stroke-width="1.6" />
+    </symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24">
+      <path
+        d="M12 2c3.2 3 4.8 7 4.8 11.2L12 18l-4.8-4.8C7.2 9 8.8 5 12 2z"
+        fill="currentColor"
+        fill-opacity=".18"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linejoin="round"
+      />
+      <circle cx="12" cy="9.4" r="1.9" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path
+        d="M7.2 12.4 4.4 15.6l2.9.6M16.8 12.4l2.8 3.2-2.9.6"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+      />
+    </symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24">
+      <path
+        d="M12 2.8v3M12 18.2v3M21.2 12h-3M5.8 12h-3M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1M18.5 18.5l-2.1-2.1M7.6 7.6 5.5 5.5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+      />
+      <circle cx="12" cy="12" r="5" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-width="1.6" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="doc">
+    <p class="eyebrow">Factory skin · mockup · follows the Goal Floor</p>
+    <h1>Parts Inspection</h1>
+    <p class="lede">
+      The rocket is spent on the launch, and a launch is a goal closing. So a pull request stops being a silo topped
+      with a rocket and becomes what the analogy already has a slot for: a <strong>part on the inspection rack</strong>,
+      four gates from being loaded. It moves out of the right-hand rail and sits full-width above the line, because it
+      is the one thing on this page that is usually waiting on <em>you</em>.
+    </p>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>Where it goes</h2>
+      <span class="tag">two readings of “above the line”</span>
+    </div>
+    <div class="plans">
+      <div class="plan">
+        <h3>A · Full width, above both rails</h3>
+        <p class="verdict">drawn below</p>
+        <div class="wire">
+          <div>status bar · gauges</div>
+          <div class="hi">parts inspection</div>
+          <div class="two">
+            <div class="col">
+              <div>the line</div>
+              <div>bots in the field</div>
+              <div>goal floor</div>
+              <div>the yard</div>
+            </div>
+            <div class="col">
+              <div>production</div>
+              <div>signals</div>
+              <div>shift log</div>
+            </div>
+          </div>
+        </div>
+        <p>
+          First thing under the gauges, ahead of the belt. A wide strip is what makes the one-row-per-PR reading work —
+          ladder, ref, title, reason and court all fit on one line at this width and nothing is clipped.
+        </p>
+      </div>
+      <div class="plan">
+        <h3>B · Head of the world rail</h3>
+        <p class="verdict">the narrower alternative</p>
+        <div class="wire">
+          <div>status bar · gauges</div>
+          <div class="two">
+            <div class="col">
+              <div>the line</div>
+              <div>bots in the field</div>
+              <div>goal floor</div>
+              <div>the yard</div>
+            </div>
+            <div class="col">
+              <div class="hi">parts inspection</div>
+              <div>production</div>
+              <div>signals</div>
+              <div>shift log</div>
+            </div>
+          </div>
+        </div>
+        <p>
+          Keeps the rails’ split — the harness’s turn on the left, the world’s on the right — and a PR is the world’s
+          turn. But 360px means the reason text wraps or goes, and the strip reads as one panel among four rather than
+          the page’s headline.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>The strip</h2>
+      <span class="tag">7 open · 3 waiting on you</span>
+    </div>
+    <div class="screen-frame">
+      <div class="screen">
+        <!-- the status bar, abbreviated: it is context, not the subject -->
+        <div class="bar bev">
+          <span class="brand">LUBBDUBB</span>
+          <span class="g"><b>4</b>/6 bots</span>
+          <span class="g hot"><b>2</b> alerts</span>
+          <span class="g"><b>0</b> faults</span>
+          <span class="g"><b>3</b> findings</span>
+          <span class="g"><b>1</b> blueprint</span>
+          <span class="g" style="margin-left: auto">scan 0:41</span>
+        </div>
+
+        <!-- ============ the panel this mockup is about ============ -->
+        <section class="card bev">
+          <div class="fx-head">
+            <div>
+              <svg class="ic"><use href="#i-pr" /></svg>
+              <h2>Parts Inspection</h2>
+              <span class="loadbar">
+                <svg width="17" height="22" viewBox="0 0 24 30" aria-hidden="true">
+                  <rect x="4" y="8" width="16" height="20" fill="var(--well)" stroke="var(--border-hi)" />
+                  <rect x="5" y="21" width="14" height="6" fill="var(--green)" opacity=".3" />
+                  <path d="M5 21h14" stroke="var(--green)" stroke-width="1.4" />
+                  <path d="M12 1 19 8H5Z" fill="var(--panel)" stroke="var(--border-hi)" />
+                </svg>
+                <span class="cap">2 loaded in 6h</span>
+              </span>
+            </div>
+            <p class="note"><b>3 need you</b> · 4 in hand</p>
+          </div>
+
+          <p class="sub">Needs you · 3<span class="rule"></span></p>
+          <div class="rows">
+            <div class="row you">
+              <span class="stripe"></span>
+              <span class="lad" role="img" aria-label="3 of 4 gates met">
+                <i class="on"></i><i class="on"></i><i></i><i class="on"></i>
+              </span>
+              <span class="ref">#142</span>
+              <span class="job">Fix the flaky worktree reap test</span>
+              <span class="why">1 unresolved comment</span>
+              <span class="court bad">Your call</span>
+            </div>
+            <div class="row you">
+              <span class="stripe"></span>
+              <span class="lad" role="img" aria-label="4 of 4 gates met">
+                <i class="full"></i><i class="full"></i><i class="full"></i><i class="full"></i>
+              </span>
+              <span class="ref">#147</span>
+              <span class="job">Ship the harness’s comments as refs</span>
+              <span class="why">passed inspection · ready to load</span>
+              <span class="court ok">Ready</span>
+            </div>
+            <div class="row stalled">
+              <span class="stripe"></span>
+              <span class="lad" role="img" aria-label="1 of 4 gates met">
+                <i></i><i></i><i class="on"></i><i></i>
+              </span>
+              <span class="ref">#139</span>
+              <span class="job">Rework the assay hold expiry</span>
+              <span class="why">no agent, no change for 3d</span>
+              <span class="court warn">Stalled</span>
+            </div>
+          </div>
+
+          <p class="sub">In hand · 4<span class="rule"></span><span class="chev">▾ hide</span></p>
+          <div class="rows">
+            <div class="row hand">
+              <span class="stripe"></span>
+              <span class="lad" role="img" aria-label="2 of 4 gates met">
+                <i class="on"></i><i></i><i class="on"></i><i></i>
+              </span>
+              <span class="ref">#151</span>
+              <span class="job">Plan part · store the shortfall route</span>
+              <span class="why">agent on the branch</span>
+              <span class="court ok">Harness working it</span>
+            </div>
+            <div class="row hand">
+              <span class="stripe"></span>
+              <span class="lad" role="img" aria-label="3 of 4 gates met">
+                <i class="on"></i><i class="on"></i><i class="on"></i><i></i>
+              </span>
+              <span class="ref">#152</span>
+              <span class="job">Plan part · the reconciler’s rejoin</span>
+              <span class="why">CI failing on base PR #151</span>
+              <span class="court idle">Waiting on #151</span>
+            </div>
+            <div class="row hand">
+              <span class="stripe"></span>
+              <span class="lad" role="img" aria-label="2 of 4 gates met">
+                <i class="on"></i><i></i><i class="on"></i><i></i>
+              </span>
+              <span class="ref">#144</span>
+              <span class="job">Widen the artifact confinement roots</span>
+              <span class="why">“needs a test for the symlink case”</span>
+              <span class="court off">You said no</span>
+            </div>
+            <div class="row hand">
+              <span class="stripe"></span>
+              <span class="lad" role="img" aria-label="0 of 4 gates met"> <i></i><i></i><i></i><i></i> </span>
+              <span class="ref">#118</span>
+              <span class="job">Spike · azure policy evaluations</span>
+              <span class="why">lubbdubb-ignore</span>
+              <span class="court off">Left alone</span>
+            </div>
+          </div>
+
+          <p class="legend">
+            <span><i class="on"></i><i class="on"></i><i></i><i class="on"></i> gates, left to right:</span>
+            <span>CI</span>
+            <span>approved</span>
+            <span>comments resolved</span>
+            <span>no conflicts</span>
+          </p>
+        </section>
+
+        <!-- the rest of the floor, as stand-ins: placement, not redesign -->
+        <div class="rails">
+          <div class="rail">
+            <div class="ghost bev tall"><span>The Line · belt, gate, bays</span><span>4 / 6</span></div>
+            <div class="ghost bev"><span>Bots in the Field</span><span>2 pads free</span></div>
+            <div class="ghost bev tall"><span>Goal Floor · patch → launch</span><span>#136</span></div>
+            <div class="ghost bev">
+              <span
+                >The Yard · issues &amp; stories <em style="color: var(--red); font-style: normal">(PRs gone)</em></span
+              >
+              <span>observed 12s ago</span>
+            </div>
+          </div>
+          <div class="rail">
+            <div class="ghost bev tall"><span>Production</span><span>6h</span></div>
+            <div class="ghost bev"><span>Signals</span><span>what changed</span></div>
+            <div class="ghost bev tall"><span>Shift Log</span><span>14 of 96</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What one PR costs, before and after</h2>
+      <span class="tag">same four gates, same verdicts</span>
+    </div>
+    <div class="compare">
+      <div class="pane">
+        <h3>Now · a silo tower each</h3>
+        <div class="mini">
+          <svg width="86" height="184" viewBox="0 0 86 184" role="img" aria-label="Current silo: 3 of 4 gates met">
+            <path d="M43 4 L70 52 H16 Z" fill="#2a2827" stroke="#403c38" stroke-width="1.5" />
+            <rect x="16" y="52" width="54" height="112" fill="#171615" stroke="#403c38" stroke-width="1.5" />
+            <rect x="18" y="80" width="50" height="84" fill="#f2c14e" opacity=".24" />
+            <path d="M18 80h50" stroke="#f2c14e" stroke-width="1.6" />
+            <g stroke="#121110" stroke-width="1" opacity=".5"><path d="M16 79h54M16 106h54M16 133h54" /></g>
+            <g style="color: #f2c14e" opacity=".5">
+              <svg x="29" y="116" width="28" height="28" viewBox="0 0 24 24"><use href="#i-gear" /></svg>
+            </g>
+            <rect x="10" y="164" width="66" height="14" fill="#2a2827" stroke="#403c38" stroke-width="1.4" />
+            <text
+              x="43"
+              y="174"
+              text-anchor="middle"
+              fill="#f2c14e"
+              font-family="Cascadia Mono, monospace"
+              font-size="9"
+            >
+              3 / 4
+            </text>
+          </svg>
+        </div>
+        <p class="scale">
+          184px of tower + 86px of meta beside it, per PR, in a 360px rail. Seven open PRs is a column you scroll. The
+          rocket on a full silo is the word this change is trying to free.
+        </p>
+      </div>
+      <div class="pane">
+        <h3>After · a row each</h3>
+        <div class="mini screen" style="min-width: 0; padding: 10px; display: block">
+          <div class="rows">
+            <div class="row you" style="grid-template-columns: 3px 54px 46px minmax(0, 1fr) auto">
+              <span class="stripe"></span>
+              <span class="lad"><i class="on"></i><i class="on"></i><i></i><i class="on"></i></span>
+              <span class="ref">#142</span>
+              <span class="job">Fix the flaky reap test</span>
+              <span class="court bad">Your call</span>
+            </div>
+          </div>
+        </div>
+        <p class="scale">
+          36px, and the ladder is the same <code>siloGates</code> fill read sideways. Seven PRs is 250px — the whole
+          open set at a glance, which is the thing the towers could never give.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>The five rules the drawing rests on</h2>
+      <span class="tag">what to preserve</span>
+    </div>
+    <div class="notes">
+      <article class="n">
+        <h3>Court decides the order, not fill</h3>
+        <p>
+          The current sort is fullest-first, so a PR you must decide on sits below three the harness is already fixing.
+          Order is <code>attention.status</code> — read off the server, never re-derived, exactly as
+          <code>siloCourt</code> already does it. Fill only breaks ties inside a group.
+        </p>
+      </article>
+      <article class="n">
+        <h3>Red is spent on your court, not on a failed gate</h3>
+        <p>
+          An unmet gate goes <em>unlit</em>, not red. The floor rations red for “a question only you can answer”, and
+          that is the court chip. Today <code>.fx-gates li.no</code> spends it four times per PR, which is why nothing
+          on the panel stands out.
+        </p>
+      </article>
+      <article class="n">
+        <h3>The rocket leaves the PR entirely</h3>
+        <p>
+          Icon <code>pr</code> here; <code>rocket</code> stays on the Goal Floor’s launch stage. In
+          <code>iconForEventKind</code>, <code>pr_merged</code> drops to <code>pr</code> and
+          <code>issue_closed</code> gains <code>rocket</code> — it currently falls through to a flask, so the one real
+          launch is the one event with no rocket on it.
+        </p>
+      </article>
+      <article class="n">
+        <h3>Reasons are quoted, never parsed</h3>
+        <p>
+          The <em>why</em> column is <code>health.reasons</code> joined, or the rejection note for a settled PR. It
+          supplies no count and no colour — the ladder's denominator stays the fixed four of <code>siloGates</code>.
+        </p>
+      </article>
+      <article class="n">
+        <h3>Empty still draws</h3>
+        <p>
+          No open PRs draws the strip with one line — <em>nothing on the rack</em> — never nothing at all. Same rule as
+          the fault gauge: a surface that vanishes when quiet is indistinguishable from a surface that broke.
+        </p>
+      </article>
+      <article class="n">
+        <h3>The Yard gives up its PR list</h3>
+        <p>
+          This strip is the only detailed PR surface, so the Yard becomes issues and stories, and carries the
+          <code>-ignore</code> toggle over. That is the simplification: one subject, one place, which is the same
+          argument that dissolved the act rail into gauges.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Every mark, and where it is read from</h2>
+      <span class="tag">no new server field</span>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead>
+          <tr>
+            <th>Mark</th>
+            <th>Source</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ladder, 4 cells</td>
+            <td><code>siloGates(pr)</code> · unchanged</td>
+            <td>CI, approved, comments, conflicts — a fixed denominator, so the fill has a top and a bottom</td>
+          </tr>
+          <tr>
+            <td>court chip</td>
+            <td><code>pr.attention.status</code> via <code>siloCourt</code></td>
+            <td>Falls back to <code>health.blocked</code> on an older snapshot, as now</td>
+          </tr>
+          <tr>
+            <td>group</td>
+            <td><code>you</code>, <code>stalled</code> → Needs you; the rest → In hand</td>
+            <td>Two groups, from the same verdict — no second opinion computed client-side</td>
+          </tr>
+          <tr>
+            <td>why</td>
+            <td><code>pr.health.reasons</code> · <code>attention.reasons</code></td>
+            <td>Quoted and clipped; the settled row quotes the note you left</td>
+          </tr>
+          <tr>
+            <td>“2 loaded in 6h”</td>
+            <td><code>closedPullRequests</code> filtered to merged</td>
+            <td>All that survives of the Launches log — the half with tension in it is above</td>
+          </tr>
+          <tr>
+            <td>ref link</td>
+            <td><code>refUrls['pr:142']</code></td>
+            <td>Renders as plain text when the provider resolves no URL</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="ask">
+    <p>
+      <strong>Open questions for you.</strong> A — full width above the line, or B — head of the world rail? Should
+      <em>In hand</em> start collapsed, or open as drawn? And does <code>Ready</code> belong under “needs you” — it is
+      your court in the sense that only you can merge it, but it is also the one row that is good news.
+    </p>
+  </div>
+</div>
