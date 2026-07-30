@@ -1,0 +1,19 @@
+%% Source for docs/assets/flow-of-work.svg. Regenerate after editing:
+%%   npx -y @mermaid-js/mermaid-cli -i docs/assets/flow-of-work.mmd -o docs/assets/flow-of-work.svg -b white
+flowchart TD
+    P([Start with a prompt]) --> G[Goal is stated]
+    T([Start with a ticket]) --> TK
+    G -- find or create --> TK[Ticket]
+    TK --> V{Enough information<br/>to proceed?}
+    V -- no --> AL[Say what is missing,<br/>on the ticket]
+    AL --> UW([Stop working it])
+    UW -. the goal text changes .-> TK
+    V -- yes --> PL[Plan the work]
+    PL --> AP{Plan accepted?}
+    AP -- no, revise --> PL
+    AP -- yes --> WK[/Do the work/]
+    WK --> GC{Goal achieved?}
+    GC -- no --> PL
+    GC -- yes --> RP[Report what was done]
+    RP --> UP[Update the ticket]
+    UP --> D([Done])

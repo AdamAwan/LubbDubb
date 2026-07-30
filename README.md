@@ -35,25 +35,10 @@ Two entry points, one path. A prompt states a goal and a ticket is found or crea
 states its own. Everything downstream keys on the ticket, so work started from a prompt is as
 recoverable, reviewable and reportable as work started from the tracker.
 
-```mermaid
-flowchart TD
-    P([Start with a prompt]) --> G[Goal is stated]
-    T([Start with a ticket]) --> TK
-    G -- find or create --> TK[Ticket]
-    TK --> V{Enough information<br/>to proceed?}
-    V -- no --> AL[Say what is missing,<br/>on the ticket]
-    AL --> UW([Stop working it])
-    UW -. the goal text changes .-> TK
-    V -- yes --> PL[Plan the work]
-    PL --> AP{Plan accepted?}
-    AP -- no, revise --> PL
-    AP -- yes --> WK[/Do the work/]
-    WK --> GC{Goal achieved?}
-    GC -- no --> PL
-    GC -- yes --> RP[Report what was done]
-    RP --> UP[Update the ticket]
-    UP --> D([Done])
-```
+<!-- Rendered from docs/assets/flow-of-work.mmd — see that file for the regeneration command. -->
+<p align="center">
+  <img src="docs/assets/flow-of-work.svg" alt="Flow of work: a prompt states a goal or a ticket states its own; both converge on a ticket, which is gated on whether there is enough information to proceed, then planned, accepted, worked, checked against the goal, reported and written back to the ticket." width="560">
+</p>
 
 ### The standard steps
 
