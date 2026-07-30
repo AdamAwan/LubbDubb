@@ -40,7 +40,8 @@ type PromptId =
   | 'pr-review-comment'
   | 'pr-concern-escalation'
   | 'finding-ticket'
-  | 'work-item-ticket';
+  | 'work-item-ticket'
+  | 'blueprint-ticket';
 
 interface TemplateDef {
   /** The placeholder names this template may reference (validated on override). */
@@ -280,6 +281,31 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'GitHub/Azure DevOps and report the ref back via link_ticket. Override this to control how ' +
       'tickets are worded, labelled, or typed in your tracker. Placeholders: {kind} {kindHelp} {ref} ' +
       '{summary} {originRef} {tracker}.',
+  },
+  'blueprint-ticket': {
+    placeholders: ['request', 'tracker', 'watchLabel', 'labelling'],
+    template:
+      'An operator asked for a piece of work. Before it is done, it needs a ticket, so it flows ' +
+      'through the same planning funnel as any other issue rather than being coded straight off this ' +
+      'prompt. **File the ticket — do not do the work.**\n\n' +
+      'The request, verbatim:\n\n{request}\n\n' +
+      'File it in {tracker}\n\n' +
+      '{labelling}\n\n' +
+      'Before you create anything, search the existing open items for one that already covers this. ' +
+      'If one does, do not file a second — link the existing one instead (and if it is not already ' +
+      'watched, the operator can tag it). Write the ticket for someone who was not there: a title ' +
+      'that names the work, and a body carrying the request above and any scope or acceptance you can ' +
+      'infer from it. Do not begin the work yourself, and do not open a pull request — the harness ' +
+      'will plan and dispatch it once the ticket exists.\n\n' +
+      'When the ticket exists, call the link_ticket tool with its ref ("issue:314"). That call is what ' +
+      'finishes this task: without it the operator sees a filing that never completed. If you decided ' +
+      'not to file because a suitable item already exists, call link_ticket with that item’s ref.',
+    doc:
+      'Sent to a desk agent when an operator injects a **code blueprint** and a tracker is configured ' +
+      '(issue #198). Instead of coding the prompt directly, the agent files a watched ticket so the ' +
+      'work enters the planning funnel like any picked-up issue. Override this to control how such ' +
+      'tickets are worded, labelled, or typed in your tracker. Placeholders: {request} {tracker} ' +
+      '{watchLabel} {labelling}.',
   },
   'work-item-ticket': {
     placeholders: ['ref', 'workTitle', 'produced', 'tracker'],

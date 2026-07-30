@@ -158,10 +158,13 @@ plain `dirty` (unlike `agent:tail`, the payload is already on the row the refetc
 ### `link_ticket`
 
 Argument `{ref}`. The other half of filing something as a tracker item: the agent dispatched to file
-one reports back what it created. **Two things can be filed**, resolved the same way and never both at
+one reports back what it created. What can be filed all resolves the same way and never more than one at
 once — a finding an agent reported (see [13](13-jobs-and-findings.md)), or a **work item** for work the
 harness did that nothing external accounted for (see
-[14](14-persistence.md#work-item-filings)).
+[14](14-persistence.md#work-item-filings)), or a **blueprint** the operator injected as a code job,
+which files a watched ticket to enter the planning funnel (see [13](13-jobs-and-findings.md)). The last
+two share the work-item-filing arm: a blueprint's filing is keyed on the desk job's own ref, since it
+files _for_ no prior work node.
 
 - **It is what completes the filing.** The route leaves the finding `filing`; this call is the only
   thing that moves it to `filed` and gives the cockpit a ticket to link. An agent that never calls it
