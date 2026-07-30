@@ -82,6 +82,11 @@ export class Hub {
     // reason: the verdict is shipped per-issue inside /api/state, so the refetch
     // a `dirty` triggers is the whole delivery.
     agents.on('conclusion', () => this.broadcast({ type: 'dirty' }));
+    // A pad note and a finished retrospective are both shipped inside /api/state
+    // (the retro as its per-issue reading; the pad through the retro that quotes
+    // it), so a coarse dirty is the whole delivery for each.
+    agents.on('scratch', () => this.broadcast({ type: 'dirty' }));
+    agents.on('retrospective', () => this.broadcast({ type: 'dirty' }));
     // The file-events hook recorded a written file; a coarse dirty repaints the
     // drawer's "files changed" list via the /api/state refetch (report-like ones
     // also arrive as an agent:flag above).

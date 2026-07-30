@@ -38,6 +38,7 @@ import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
 import { assayerOrigin, type GoalAssayVerdictName } from '../mcp/goalAssay.js';
 import { goalFingerprint } from '../intake/assay.js';
 import { padWriteTarget } from '../scratch/pad.js';
+import { retroSubmitOrigin } from '../retro/retro.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
@@ -167,6 +168,8 @@ interface AgentManagerEvents {
   partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
   /** The agent left a note on its issue's shared pad (already persisted, append-only). */
   scratch: [{ agentId: string; taskId: string; entry: ScratchEntry }];
+  /** The retrospective for a delivered goal was written (already persisted against the issue origin). */
+  retrospective: [{ agentId: string; taskId: string; issueOrigin: string }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -557,6 +560,39 @@ export class AgentManager extends EventEmitter {
     const target = padWriteTarget(task.originRef);
     if (!target.ok) return { ok: false, error: target.error };
     return { ok: true, padRef: target.padRef, entries: this.store.listScratchEntries(target.padRef) };
+  }
+
+  /**
+   * Record the retrospective this agent was dispatched to write (the `retro_submit`
+   * tool).
+   *
+   * {@link retroSubmitOrigin} resolves the issue from the credential and refuses
+   * every other caller by name, so the agent that *did* the work cannot write the
+   * account of it. Idempotence is in the store's upsert: a second submission
+   * revises one row.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  recordRetrospective(
+    agentId: string,
+    summary: string,
+    document: string,
+  ): { ok: true; issueOrigin: string } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const origin = retroSubmitOrigin(task.originRef);
+    if (!origin.ok) return { ok: false, error: origin.error };
+    this.store.recordRetrospective({
+      originRef: origin.issueOrigin,
+      summary,
+      document,
+      agentId,
+      taskId: task.id,
+    });
+    this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
+    return { ok: true, issueOrigin: origin.issueOrigin };
   }
 
   /**
