@@ -1075,13 +1075,20 @@
 }
 .fx-part {
   display: grid;
-  grid-template-columns: 3px 132px 46px minmax(0, 1fr) minmax(0, 34ch) 152px;
+  grid-template-columns: 3px 132px 46px minmax(0, 1fr) minmax(0, 34ch) 152px 58px;
   align-items: center;
   gap: 12px;
   background: var(--panel-2);
   border: 1px solid var(--border-lo);
   padding: 6px 12px 6px 0;
   min-width: 0;
+}
+/* The watch/ignore toggle, in the row's last column. Ghost so it recedes until
+   hovered — the court chip is what the eye lands on, this is the action beside it. */
+.fx-part-toggle {
+  justify-self: end;
+  padding: 1px 8px;
+  font-size: 11px;
 }
 /* In hand: same row, recessed. Not collapsed — a fold would put a click between
    an operator and "is anything stuck", which is the reading this panel exists

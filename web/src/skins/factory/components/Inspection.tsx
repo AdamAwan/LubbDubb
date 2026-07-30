@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { PullRequest } from '../../../types.js';
 import { refLink } from '../../../components/util.js';
+import { AsyncButton } from '../../../components/AsyncButton.js';
 import { ladderFor, loadedCount, prCourt, rack, rackReason } from '../inspection.js';
 import { clip } from '../vocabulary.js';
 import type { Scanner } from '../scanners.js';
@@ -49,7 +50,19 @@ function Ladder({ scanners, gates }: { scanners: Scanner[]; gates: MergeGate[] }
   );
 }
 
-function Row({ pr, refUrls, inHand }: { pr: PullRequest; refUrls: Record<string, string>; inHand: boolean }) {
+function Row({
+  pr,
+  refUrls,
+  inHand,
+  ignoreLabel,
+  onToggleExclude,
+}: {
+  pr: PullRequest;
+  refUrls: Record<string, string>;
+  inHand: boolean;
+  ignoreLabel: string;
+  onToggleExclude: (prNumber: number, excluded: boolean) => void;
+}) {
   const court = prCourt(pr);
   const ladder = ladderFor(pr);
   const reason = rackReason(pr);
@@ -58,6 +71,7 @@ function Row({ pr, refUrls, inHand }: { pr: PullRequest; refUrls: Record<string,
   // keeps red meaning "a question only you can answer" on a row with four red
   // checks on it.
   const tone = inHand ? '' : court.tone === 'bad' ? ' you' : ' stalled';
+  const isExcluded = (pr.labels ?? []).includes(ignoreLabel);
   return (
     <div className={`fx-part${inHand ? ' hand' : ''}${tone}`}>
       <span className="fx-part-stripe" />
@@ -70,6 +84,27 @@ function Row({ pr, refUrls, inHand }: { pr: PullRequest; refUrls: Record<string,
         {reason}
       </span>
       <span className={`fx-court ${court.tone}`}>{court.label}</span>
+      {/* The watch/ignore toggle — the same label write `WorldSummary` carries in
+          the classic skin, restored here because the factory skin draws PRs on the
+          rack instead of in The Yard, so this is their only home. Disabled with no
+          configured ignore label (the gate is off), for the reason the button reads
+          nothing to toggle. */}
+      {!pr.merged && (
+        <AsyncButton
+          className="ghost fx-part-toggle"
+          disabled={ignoreLabel === ''}
+          onClick={() => onToggleExclude(pr.number, !isExcluded)}
+          title={
+            ignoreLabel === ''
+              ? 'No ignore label configured — the watch/ignore gate is off'
+              : isExcluded
+                ? `Remove the "${ignoreLabel}" tag and let the harness work this PR again`
+                : `Tag this PR "${ignoreLabel}" so the harness leaves it alone (for a PR blocked on something it can't fix)`
+          }
+        >
+          {isExcluded ? 'watch' : 'ignore'}
+        </AsyncButton>
+      )}
     </div>
   );
 }
@@ -78,10 +113,14 @@ export function Inspection({
   prs,
   closed,
   refUrls,
+  ignoreLabel,
+  onToggleExclude,
 }: {
   prs: PullRequest[];
   closed: PullRequest[];
   refUrls: Record<string, string>;
+  ignoreLabel: string;
+  onToggleExclude: (prNumber: number, excluded: boolean) => void;
 }): JSX.Element {
   const { yours, inHand } = rack(prs);
   const loaded = loadedCount(closed);
@@ -97,7 +136,14 @@ export function Inspection({
           <p className="fx-sub">Your court · {yours.length}</p>
           <div className="fx-parts">
             {yours.map((pr) => (
-              <Row key={pr.id} pr={pr} refUrls={refUrls} inHand={false} />
+              <Row
+                key={pr.id}
+                pr={pr}
+                refUrls={refUrls}
+                inHand={false}
+                ignoreLabel={ignoreLabel}
+                onToggleExclude={onToggleExclude}
+              />
             ))}
           </div>
         </>
@@ -108,7 +154,14 @@ export function Inspection({
           <p className="fx-sub">In hand · {inHand.length}</p>
           <div className="fx-parts">
             {inHand.map((pr) => (
-              <Row key={pr.id} pr={pr} refUrls={refUrls} inHand />
+              <Row
+                key={pr.id}
+                pr={pr}
+                refUrls={refUrls}
+                inHand
+                ignoreLabel={ignoreLabel}
+                onToggleExclude={onToggleExclude}
+              />
             ))}
           </div>
         </>
