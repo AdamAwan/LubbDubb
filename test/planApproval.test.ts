@@ -18,6 +18,7 @@ import { PLAN_FILE, parsePlanDocument } from '../src/plans/planDocument.js';
 import { Store } from '../src/store/store.js';
 import type { DispatchVerdict } from '../src/dispatcher/dispatchCooldown.js';
 import type { Agent, Plan, PlanPart, Proposal } from '../src/types.js';
+import { gitRepo } from './support/gitRepo.js';
 
 // -- the pure half -----------------------------------------------------------
 
@@ -464,16 +465,6 @@ function plannerAgent(system: System, originRef: string): Agent {
     originTitle: 'Big thing',
   });
   return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
-}
-
-function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
-  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  git(['init', '-q', '-b', 'main']);
-  git(['config', 'user.email', 'test@example.com']);
-  git(['config', 'user.name', 'Test']);
-  git(['commit', '-q', '--allow-empty', '-m', 'root']);
-  return dir;
 }
 
 /** An issue that has already been planned into two independent parts. */

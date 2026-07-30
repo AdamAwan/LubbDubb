@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +8,7 @@ import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Decision } from '../src/types.js';
+import { gitRepo } from './support/gitRepo.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -28,17 +28,6 @@ function testConfig(maxConcurrentAgents = 1, repoRoot?: string) {
     maxConcurrentAgents,
     ...(repoRoot ? { repoRoot } : {}),
   });
-}
-
-/** A throwaway git repo with one commit, so real `git worktree` commands work for code jobs. */
-function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-jobs-repo-'));
-  const git = (args: string[]): void => void execFileSync('git', args, { cwd: dir });
-  git(['init', '-q', '-b', 'main']);
-  git(['config', 'user.email', 'test@example.com']);
-  git(['config', 'user.name', 'Test']);
-  git(['commit', '-q', '--allow-empty', '-m', 'root']);
-  return dir;
 }
 
 /** The executor's branch-collision deferrals, identified by their audited reason. */
@@ -176,7 +165,7 @@ test('a queued job can be cancelled and is then never dispatched', async () => {
 
 test('a code job naming a branch a live task holds is deferred, then dispatches once the branch frees', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(3, gitRepo()), { backend });
+  const system = buildSystem(testConfig(3, gitRepo('lubbdubb-jobs-repo-')), { backend });
 
   // Two operator jobs, distinct origins, one branch — the exact hole.
   const holder = system.store.createJob({
@@ -233,7 +222,7 @@ test('a code job naming a branch a live task holds is deferred, then dispatches 
 
 test('POST /api/jobs refuses a colliding branch at queue time', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(3, gitRepo()), { backend });
+  const system = buildSystem(testConfig(3, gitRepo('lubbdubb-jobs-repo-')), { backend });
   const { app } = await buildApp(system);
 
   const post = (payload: { prompt: string; kind: string; branch: string }) =>
@@ -264,7 +253,7 @@ test('POST /api/jobs refuses a colliding branch at queue time', async () => {
 
 test('the branch gate is a no-op for world-driven rules, whose origins already determine their branches', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(6, gitRepo()), { backend });
+  const system = buildSystem(testConfig(6, gitRepo('lubbdubb-jobs-repo-')), { backend });
 
   // A world broad enough to fire the PR rules and issue pickup at once.
   system.connector.inject({ kind: 'new_pr', number: 500, title: 'Red CI', branch: 'feature/a' });
