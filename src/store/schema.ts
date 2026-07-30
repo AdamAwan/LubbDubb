@@ -437,6 +437,27 @@ CREATE TABLE IF NOT EXISTS work_item_ignores (
   created_at TEXT NOT NULL
 );
 
+-- A goal the operator keeps on the Goal Floor after it finished, until they
+-- dismiss it (issue #203). The floor is otherwise built from the live world, and
+-- a completed goal leaves it the moment the tracker stops returning the issue
+-- (closed by hand) or its watch tag comes off — taking with it the one way in to
+-- the run's report. So a completed goal is recorded here while it is still live,
+-- and shown from this row even once the world has forgotten it.
+--
+-- Not a column on retrospectives/issue_conclusions: retention is a cockpit
+-- verdict re-read every snapshot, those are the run's own records, and a
+-- dismissal must not depend on which report a goal happened to produce. Keyed on
+-- the issue origin, so recording twice is one row (completed_at frozen) and
+-- dismissing is a one-way write. Fresh CREATE TABLE, so no migrate() entry.
+CREATE TABLE IF NOT EXISTS floor_completions (
+  origin_ref   TEXT PRIMARY KEY,     -- "issue:12"
+  issue_number INTEGER NOT NULL,
+  title        TEXT NOT NULL,        -- captured while the issue is still live
+  completed_at TEXT NOT NULL,        -- first observed complete; frozen across re-records
+  dismissed_at TEXT,                 -- null until the operator dismisses; one-way
+  updated_at   TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);

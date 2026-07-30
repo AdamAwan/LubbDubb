@@ -167,6 +167,10 @@ const realApi = {
   // have; `null` clears it, which is a delete and not a synonym for `workable`.
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/assay`, { verdict }),
+  // Take a finished goal off the Goal Floor (issue #203). A completed goal is
+  // retained there so its report stays reachable; this is the one thing that
+  // removes it, and it persists across a restart.
+  dismissFloorCompletion: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/floor-dismiss`),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   // Talk it through with an agent instead of accepting or rejecting. Server-side
   // this is a replan whose planner converses first — see the route.

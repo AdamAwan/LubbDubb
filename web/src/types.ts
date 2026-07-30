@@ -169,6 +169,21 @@ export interface Issue {
    * draws as such: a retrospective nobody wrote is silence, never an error.
    */
   retrospective?: { summary: string; hasDocument: boolean; updatedAt: string } | null;
+  /**
+   * Whether the operator is keeping this finished goal on the Goal Floor, and
+   * whether they have dismissed it (issue #203). Three states off one optional
+   * field: **absent** is a live goal (retention has said nothing), **present and
+   * not dismissed** is a finished goal held on the floor until the operator clears
+   * it, **present and dismissed** is one they have cleared — hidden unless it
+   * re-enters production, which draws as live work regardless.
+   *
+   * The floor is otherwise built from the live world, so a completed goal would
+   * drop off it the moment the tracker stops returning the issue (closed by hand)
+   * or its watch tag comes off — taking the one way in to the run's report with
+   * it. A goal whose issue the world has forgotten arrives in
+   * {@link CockpitState.floorCompletions} instead, rebuilt from its stored record.
+   */
+  completion?: { at: string; dismissed: boolean };
 }
 
 /** A goal's retrospective in full, fetched on open. */
@@ -681,6 +696,15 @@ export interface AppState {
    */
   plans?: Plan[];
   planParts?: PlanPart[];
+  /**
+   * Finished goals the operator is keeping on the Goal Floor whose issue the world
+   * has forgotten (issue #203) — closed by hand, or the watch tag removed. Shipped
+   * beside `world.issues` rather than mixed into it, so the Yard and world panels
+   * stay a view of the live world while the floor merges these in to keep the way
+   * in to a run's report. Each carries `completion` (never dismissed here — a
+   * dismissed one is not retained). Optional so an older server draws none.
+   */
+  floorCompletions?: Issue[];
   /** Operator-launched jobs, newest first — the queue (and its recent history). */
   jobs: Job[];
   agents: Agent[];

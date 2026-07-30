@@ -492,6 +492,28 @@ _add_ settled machines the world has forgotten — a PR merged past `closedPrWin
 the whole of the merge: two sources each partly owning a field is how they start disagreeing. The
 fetch goes through `fetchWorkSubtree` on `CockpitActions`, because a skin may not import `api.js`.
 
+**A finished goal is kept until the operator dismisses it (#203).** The floor is otherwise built from
+the live world, so a completed goal — and the Manifest's way in to its retrospective — dropped off the
+moment the tracker stopped returning the issue (closed by hand) or its watch tag came off. So a goal
+observed complete is recorded server-side while it is still live (`floor_completions`, keyed on the
+issue origin, title captured then so it outlives the world forgetting the issue). "Complete" is any of
+the four signals the floor already draws completion from — a write-up, a `delivered` verdict, a `done`
+conclusion, or a `complete` plan (`isGoalComplete`, `src/floor/completions.ts`) — recorded each pulse
+in `harness.ts`. The snapshot then does two things: it stamps a still-present finished issue with a
+`completion` field, and it **synthesizes** the ones the world has forgotten into a separate
+`floorCompletions` list (rebuilt from the stored records through the _same_ `enrichIssue` path a live
+issue takes, so a retained card and a live one cannot disagree), which the floor merges in — the
+world's copy winning for a goal still present, so the Yard and world panels stay a view of the live
+world. `floorGoals` gains a third way onto the strip beside claimed and in-flight: a **retained
+completion**, drawn until dismissed. The order of its checks is load-bearing — in-flight is tested
+first, so a dismissed goal that re-enters production is drawn as live work and a dismissal can never
+hide it. **Dismissal is the one thing that removes a completed goal** (`POST
+/api/issues/:n/floor-dismiss` → `Store.dismissFloorCompletion`): no pulse or poll drops one, it is
+one-way and persists across a restart, and the report itself is untouched — the row is the card, not
+the write-up, which `GET /api/retrospectives/:ref` still serves. The Dismiss control hangs off the
+completion **existing and not yet cleared** (`retainedCompletion`), never off the floor's state — the
+lesson `planId` and `retroRef` learned.
+
 **It replaced the tech tree rather than joining it.** The tree's one unique claim — depth is how many
 merges must land before a part can start — survives intact as the floor's column, and `stateOf` /
 `depths` moved into `goalFloor.ts` as `partProgress` and `layoutFloor`. Keeping both would have left
