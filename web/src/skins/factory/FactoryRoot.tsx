@@ -12,7 +12,7 @@ import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
 import { Inspection } from './components/Inspection.js';
 import { Modal, type FactoryModal } from './components/Modal.js';
-import { Production, ProductionTile } from './components/Production.js';
+import { Production } from './components/Production.js';
 import { Signals } from './components/Signals.js';
 import { GoalFloor } from './components/GoalFloor.js';
 import { rack } from './inspection.js';
@@ -27,20 +27,22 @@ import { productionReading } from './production.js';
  * decision — the dispatcher's — and Classic's three columns make you rebuild it
  * every time you look. Everything else is the detail that picture cannot hold.
  *
- * Production reads against time rather than reporting the moment, so it is the
- * one panel an operator consults rather than watches: it sits as a tile in the
- * world rail and opens into a modal on a click. The tile carries the whole
- * reading a glance wants — the shape of the three series and the churn number —
- * and the axes, rates and caveats are behind the click.
- *
- * The stamp desk, the fault log, the blueprint desk and the findings desk are the
- * same shape of thing, and the first three used to be panels in a
+ * The stamp desk, the fault log, the blueprint desk and the findings desk are all
+ * the same shape of thing, and the first three used to be panels in a
  * permanent left-hand rail. All four are read as a *count* far more often than as
  * contents, so the count is a gauge in the status bar and the panel opens from
  * it — which is what deleted the rail, and then the last panel on the floor that
  * was read the same way. See
  * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
  * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
+ *
+ * Production is the fifth and last, and the one that was not a count. It reads
+ * against time rather than reporting the moment, which makes it the panel an
+ * operator most clearly *consults* rather than watches — and it had already been
+ * reduced to a rail panel whose entire content was a tile you clicked to open the
+ * graph. So the tile is a gauge in the bar now (`ProdRead`, the spark carrying
+ * the shape a count cannot) and the graph is the modal it opens: the axes, the
+ * rates, the spend and the truncation caveat, at the size they were drawn for.
  *
  * Every panel is bound to a `const` below and then *placed*, so what a panel
  * contains and where it sits stop being the same edit. There is one DOM for
@@ -92,19 +94,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       stopped={stopped}
       onOpen={(id) => actions.select(id)}
     />
-  );
-
-  const productionPanel = (
-    <section className="fx-card fx-bev" data-fx="production">
-      <div className="fx-head">
-        <div>
-          <Icon name="lamp" />
-          <h2>Production</h2>
-        </div>
-        <p className="fx-note">{Math.round(production.windowMs / 3_600_000)}h · click to open</p>
-      </div>
-      <ProductionTile reading={production} onOpen={() => setModal('production')} />
-    </section>
   );
 
   const bots = (
@@ -276,7 +265,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
     // not at the cost of the text an operator needs in order to act on it.
     <div className={`fx ${power.brownout ? 'fx-brownout' : ''}`}>
       <SpriteSheet />
-      <StatusBar view={view} actions={actions} onOpen={setModal} />
+      <StatusBar view={view} actions={actions} production={production} onOpen={setModal} />
 
       {/* The socket is how this page learns anything changed. Without it every
           panel below is a photograph of the moment the link dropped, drawn in
@@ -309,10 +298,10 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           {/* Two rails split on *whose turn it is*: what the harness is doing, and
           what the world is doing back. What *you* are the blocker for is no
           longer a rail — it is a count in the status bar, because that is how it
-          is read. Below 1900px these dissolve and `order` restores the reading
-          order. Production heads the world rail rather than the floor: its
-          subject is output, which is merges — the world's answer to the floor's
-          effort. */}
+          is read. Production headed the world rail and is no longer here at all,
+          for the same reason: it is consulted rather than watched, so it is a
+          gauge in the bar and the graph opens from it. Below 1900px these
+          dissolve and `order` restores the reading order. */}
           {inspection}
 
           <div className="fx-rails">
@@ -323,7 +312,6 @@ export function FactoryRoot({ view, actions }: SkinProps) {
               {yard}
             </div>
             <div className="fx-rail fx-rail-world">
-              {productionPanel}
               {signals}
               {shiftLog}
             </div>

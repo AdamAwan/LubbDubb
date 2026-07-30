@@ -6,12 +6,31 @@ import { FleetControl } from '../../../components/FleetControl.js';
 import { UsageChip } from '../../../components/UsageChip.js';
 import { SkinPicker } from '../../SkinPicker.js';
 import { powerReading } from '../power.js';
+import type { ProductionReading } from '../production.js';
 import type { FactoryModal } from './Modal.js';
+import { ProductionSpark } from './Production.js';
 import { Icon, type IconName } from './Sprite.js';
 
 /** One labelled gauge. */
 function Read({ children }: { children: React.ReactNode }): JSX.Element {
   return <div className="fx-read">{children}</div>;
+}
+
+/**
+ * This bar's one word for "there is a panel behind this".
+ *
+ * Bound once because it is a claim rather than a decoration: `Scan` presses and
+ * wears the same raised face, and the chevron is the entire difference between a
+ * gauge that opens something and a gauge that acts. Two copies of the mark would
+ * be two places for that claim to drift, and the test that counts the ways in
+ * counts these.
+ */
+function Chev(): JSX.Element {
+  return (
+    <svg className="fx-chev" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 /**
@@ -57,9 +76,57 @@ function ActRead({
       <Icon name={icon} className="sm" />
       <span className="fx-lbl">{label}</span>
       <span className={`fx-val ${lit && tone ? tone : ''}`}>{count}</span>
-      <svg className="fx-chev" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-      </svg>
+      <Chev />
+    </button>
+  );
+}
+
+/**
+ * Output: the gauge whose subject is a shape rather than a count.
+ *
+ * Production was a panel at the head of the world rail carrying a tile you
+ * clicked to open the graph — which is a panel whose whole content is a way in,
+ * standing in a rail, above two panels an operator actually watches. It is read
+ * the way the four desks are read: consulted, not watched. So it is a gauge, and
+ * the graph opens from it. Same argument that dissolved the act rail, applied to
+ * the one panel on the world rail it also fitted.
+ *
+ * What a count cannot carry is the reason the graph exists: whether effort is
+ * turning into output is a question about *time*, and one number for a 6h window
+ * is a snapshot again. So the face is the spark, and the value beside it is the
+ * output rate alone — merges per hour, the series this floor is judged on.
+ * Dispatches per merge is the number that puts the two together, and it is
+ * one sentence rather than a glyph, so it is the hover and the graph's own note.
+ *
+ * Muted at nothing merged, like every other gauge at zero, and for the same
+ * reason it is never removed: the graph is the only place the truncation caveat
+ * and the spend rate are stated, and a quiet floor is exactly when an operator
+ * goes looking for why.
+ */
+function ProdRead({ reading, onOpen }: { reading: ProductionReading; onOpen: () => void }): JSX.Element {
+  const merges = reading.series.find((s) => s.key === 'merges')?.perHour ?? 0;
+  const hours = Math.round(reading.windowMs / 3_600_000);
+  const title =
+    reading.churnRatio === null
+      ? `Nothing has merged in ${hours}h — every dispatch so far is effort without output. Open the production graph`
+      : `${merges.toFixed(1)} merges an hour over ${hours}h, ${reading.churnRatio.toFixed(1)} dispatches per merge — open the production graph`;
+
+  return (
+    <button
+      type="button"
+      className={`fx-read fx-act fx-prod-read ${merges > 0 ? '' : 'quiet'}`}
+      onClick={onOpen}
+      title={title}
+      aria-label={title}
+    >
+      <Icon name="lamp" className="sm" />
+      <span className="fx-lbl">Output</span>
+      <ProductionSpark reading={reading} />
+      <span className="fx-val">
+        {merges.toFixed(1)}
+        <small>/h</small>
+      </span>
+      <Chev />
     </button>
   );
 }
@@ -138,14 +205,16 @@ function Accumulators({ cells }: { cells: number[] }): JSX.Element {
 }
 
 /**
- * The control-room strip: scan, power, bots, and the four ways in.
+ * The control-room strip: scan, power, bots, output, and the five ways in.
  *
  * Alerts, Faults and Blueprints used to be three panels standing in a permanent
  * left-hand rail, and all three are read as a *number* far more often than as
  * contents. A number is a gauge, so each is one here and its panel opens from it.
  * That is what deleted the rail. Findings is the fourth and was the last panel on
  * the floor read the same way — `Off-Blueprint` there, renamed to the harness's
- * own word for it, which is also short enough not to wrap the bar. See
+ * own word for it, which is also short enough not to wrap the bar. Output is the
+ * fifth and the only one whose face is a picture, because its subject is a rate:
+ * see `ProdRead`. See
  * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
  * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
  *
@@ -165,10 +234,13 @@ function Accumulators({ cells }: { cells: number[] }): JSX.Element {
 export function StatusBar({
   view,
   actions,
+  production,
   onOpen,
 }: {
   view: CockpitView;
   actions: CockpitActions;
+  /** Derived once by the root, which needs the same reading for the graph itself. */
+  production: ProductionReading;
   onOpen: (modal: FactoryModal) => void;
 }): JSX.Element {
   const { state } = view;
@@ -252,6 +324,13 @@ export function StatusBar({
         <span className="fx-lbl">Bots</span>
         <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
       </div>
+
+      {/* Last of the readings and first of the ways in, which is what it is: the
+          floor's own output, read against time. It sits beside Bots because
+          those two are the same subject a beat apart — bots out is effort now,
+          Output is what the effort came to — and before the desks, which are
+          all things waiting on you rather than readings of the floor. */}
+      <ProdRead reading={production} onOpen={() => onOpen('production')} />
 
       {/* Alerts is red and the other three never are: on this floor red means one
           thing, an agent parked on a question only you can answer. A fault blocks

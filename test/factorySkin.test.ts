@@ -441,7 +441,7 @@ test('injection is a demo control, not a provider one', () => {
  */
 test('every desk has a way in from the status bar', () => {
   const markup = render();
-  for (const label of ['Alerts', 'Faults', 'Findings', 'Queued']) {
+  for (const label of ['Alerts', 'Faults', 'Findings', 'Queued', 'Output']) {
     assert.match(
       markup,
       new RegExp(`<button[^>]*class="fx-read fx-act[^"]*"[^>]*>(?:(?!</button>).)*${label}`, 's'),
@@ -455,12 +455,16 @@ test('every desk has a way in from the status bar', () => {
   assert.doesNotMatch(markup, /data-fx="blueprints"/, 'the blueprint desk must not also be a panel');
   assert.doesNotMatch(markup, /data-fx="off-blueprint"/, 'the findings desk must not also be a panel');
   assert.doesNotMatch(markup, /fx-rail-act/, 'the act rail must be gone');
+  // Production went the same way, off the world rail rather than the act one:
+  // its panel was a tile whose only content was a way in to the graph.
+  assert.doesNotMatch(markup, /data-fx="production"/, 'the production graph must not also be a panel');
 
   const quiet = render((s) => {
     s.errors = [];
     s.escalations = [];
     s.jobs = [];
     s.findings = [];
+    s.worldEvents = [];
   });
   assert.match(quiet, /class="fx-read fx-act quiet"/, 'a zero count must mute a gauge, not remove it');
   // Counted by the chevron rather than by `fx-act`: the scan gauge presses too
@@ -468,8 +472,16 @@ test('every desk has a way in from the status bar', () => {
   // a panel behind this".
   assert.equal(
     (quiet.match(/class="fx-chev"/g) ?? []).length,
-    4,
-    'all four ways in must survive their counts being zero',
+    5,
+    'all five ways in must survive their counts being zero',
+  );
+  // Output's is the reading most likely to be zero — a floor that has merged
+  // nothing in six hours is exactly when the graph is worth opening, since it
+  // is the only place the spend rate and the truncation caveat are stated.
+  assert.match(
+    quiet,
+    /class="fx-read fx-act fx-prod-read quiet"/,
+    'a floor with no merges must mute the Output gauge, not remove the way to the graph',
   );
 });
 
