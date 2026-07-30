@@ -100,11 +100,13 @@ function floorInput(over: {
   parts?: PlanPart[];
   openPrs?: PullRequest[];
   pickup?: string;
+  pickupReasons?: string[];
   workItemState?: string;
   linkedPrNumber?: number;
   assay?: Issue['assay'];
   conclusion?: Issue['conclusion'];
   shortfall?: Issue['shortfall'];
+  delivery?: Issue['delivery'];
 }) {
   const issue: Issue = {
     id: 'iss-9',
@@ -115,10 +117,11 @@ function floorInput(over: {
     state: 'open',
     workItemState: over.workItemState,
     linkedPrNumber: over.linkedPrNumber ?? null,
-    pickup: { eligible: false, status: over.pickup ?? 'planning', reasons: [] },
+    pickup: { eligible: false, status: over.pickup ?? 'planning', reasons: over.pickupReasons ?? [] },
     assay: over.assay ?? null,
     conclusion: over.conclusion,
     shortfall: over.shortfall ?? null,
+    delivery: over.delivery ?? null,
   };
   return {
     issue,
@@ -955,7 +958,7 @@ test('every goal-floor stage has a word', () => {
     assert.ok(prMachineStatus(r).word.length > 0, `pr ${r} rendered no word`);
   for (const s of ['pass', 'damaged', 'not_ours', 'muted', 'awaiting'] as const)
     assert.ok(scannerStatus(s).word.length > 0, `scanner ${s} rendered no word`);
-  for (const r of ['unbuilt', 'verified', 'more_work', 'returned'] as const)
+  for (const r of ['unbuilt', 'verified', 'returned'] as const)
     assert.ok(satelliteStatus(r).word.length > 0, `satellite ${r} rendered no word`);
   for (const c of ['plan', 'part', 'goal', null] as const) assert.ok(returnRoute(c).length > 0);
   assert.ok(siloStatus(0, 0).word.length > 0);
@@ -1182,7 +1185,14 @@ test('the loop reaches an end, and the end is drawn', () => {
     floorInput({
       pickup: 'delivered',
       workItemState: 'Done',
-      conclusion: { verdict: 'done', by: 'assessor', note: 'retry wraps both call sites', at: NOW },
+      // The verdict is the *delivery* row, not a conclusion: `resolveIssueConclusion`
+      // cannot return `{by: 'assessor', verdict: 'done'}` — that arm went to
+      // `issue_deliveries` in the two-record split — so a fixture asserting one was
+      // asserting against a shape the server never sends. The conclusion beside it
+      // is what the server really resolves for a merged plan, and it is here to
+      // prove the satellite is not reading it.
+      delivery: { summary: 'retry wraps both call sites', by: 'assessor', decidedAt: NOW },
+      conclusion: { verdict: 'done', by: 'plan', note: 'every part of the plan merged', at: null },
       parts: [planPart('a', [], 'merged', 1)],
     }),
   );
@@ -1257,6 +1267,78 @@ test('the loop reaches an end, and the end is drawn', () => {
   const plate = short.plates.find((p) => p.route);
   assert.equal(plate?.route, 'plan');
   assert.equal(plate?.text, 'The retry-after header is never set.');
+});
+
+/**
+ * The reported bug, which is a *decomposed* delivered issue and only that.
+ *
+ * The tail used to be read off `pickup.status`, and `issuePickupStatus` answers
+ * its plan `parts` arm before the delivery park — so the one shape that reaches
+ * the end of the workflow, a plan whose parts all merged and whose goal the
+ * assessor then verified, reported `planning` and drew no goal check, no
+ * manifest, no signal post and no launch. Every input here is what the server
+ * really sends for that issue: the plan arm's status and its reason, the
+ * plan-derived conclusion, and the delivery beside them.
+ */
+test('a delivered goal draws its check and its tail even while the plan arm owns the pickup status', () => {
+  const floor = buildGoalFloor(
+    floorInput({
+      plan: { ...PLAN, status: 'complete' },
+      parts: [planPart('a', [], 'merged', 1), planPart('b', [], 'merged', 2)],
+      pickup: 'planning',
+      pickupReasons: ['plan complete — all 2 parts finished; close the issue or replan'],
+      conclusion: { verdict: 'done', by: 'plan', note: 'every part of the plan merged', at: null },
+      delivery: { summary: 'both call sites retry', by: 'assessor', decidedAt: NOW },
+    }),
+  );
+
+  const satellite = floor.machines.find((m) => m.kind === 'satellite');
+  assert.equal(satellite?.status.word, 'Verified', 'the goal check ran and passed; the floor must say so');
+  assert.equal(satellite?.presence, 'built');
+  // Credited to the assessor, never to the plan roll-up beside it.
+  assert.ok(satellite?.meta.includes('by assessor'), `satellite credited ${satellite?.meta.join(', ')}`);
+
+  assert.deepEqual(
+    floor.machines.map((m) => m.kind),
+    ['patch', 'furnace', 'assembler', 'assembler', 'silo', 'satellite', 'manifest', 'signal', 'launch'],
+    'the whole yes arm draws, not just the satellite',
+  );
+  assert.equal(floor.machines.find((m) => m.kind === 'launch')?.status.word, 'Away');
+
+  // The patch keeps the plan's word and the plan's plate: "delivered" and "plan
+  // complete" are two true readings of two different questions, and the operator
+  // still has to close the issue or replan.
+  assert.equal(floor.machines.find((m) => m.kind === 'patch')?.status.word, 'Being mined');
+  assert.ok(
+    floor.plates.some((p) => p.text === 'plan complete — all 2 parts finished; close the issue or replan'),
+    'the way out of a complete plan is still quoted',
+  );
+});
+
+/**
+ * A verdict the world has overtaken is not shipped at all, so absence has to
+ * read as "no standing goal check" rather than "there was never one" — and the
+ * floor must fall back to unbuilt rather than remembering.
+ */
+test('a goal floor with no standing delivery draws no goal check', () => {
+  const released = buildGoalFloor(
+    floorInput({
+      plan: { ...PLAN, status: 'complete' },
+      parts: [planPart('a', [], 'merged', 1)],
+      pickup: 'eligible',
+      // The plan roll-up still says done. It is not a goal check and must not be
+      // read as one, or the fix trades its bug for the inverse.
+      conclusion: { verdict: 'done', by: 'plan', note: 'every part of the plan merged', at: null },
+      delivery: null,
+    }),
+  );
+  assert.equal(released.machines.find((m) => m.kind === 'satellite')?.status.word, 'Not yet built');
+  assert.equal(released.machines.find((m) => m.kind === 'satellite')?.presence, 'unbuilt');
+  assert.equal(
+    released.machines.some((m) => m.kind === 'launch'),
+    false,
+    'a released issue is back in play, so nothing has launched',
+  );
 });
 
 /**

@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
-import type { IssueAssay, ShortfallCause, WorldSnapshot } from '../types.js';
+import type { Issue, IssueAssay, IssueDelivery, ShortfallCause, WorldSnapshot } from '../types.js';
 import { Hub } from './hub.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { prHealth } from '../prHealth.js';
@@ -23,7 +23,7 @@ import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js
 import { planOrigin } from '../plans/planning.js';
 import { planIssueNumber } from '../plans/parts.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
-import { deliverySignalQuery } from '../delivery/delivery.js';
+import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { SHORTFALL_CAUSES } from '../delivery/shortfall.js';
 import { assaySignalQuery, goalFingerprint } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
@@ -1301,6 +1301,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // same rows rule 3b reads, so the chip and the rule can't disagree.
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
   const deliveries = store.listDeliveries();
+  const deliveriesByOrigin = new Map(deliveries.map((d) => [d.originRef, d]));
   const deliveryWindow = deliverySignalQuery(deliveries);
   // The negative mirror, keyed the same way — the rows rule `issue-shortfall`
   // reads, so the chip and the rule cannot disagree about what fell short.
@@ -1467,6 +1468,14 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
         // what the harness has offered to do about it, which neither of the other
         // two can say.
         shortfall: shortfallsByOrigin.get(issueConclusionOrigin(issue.number)) ?? null,
+        // The positive mirror, and the one verdict that reached no surface at all
+        // until now. It cannot ride on either of its neighbours: after the
+        // two-record split the assessor's `delivered` lives in its own table, so
+        // `resolveIssueConclusion` above resolves a delivered *decomposed* issue to
+        // `{by: 'plan'}`, and `issuePickupStatus` answers its plan `parts` arm
+        // before the delivery park, so the same issue reports `planning`. Both are
+        // honest about the questions they were asked; neither answers this one.
+        delivery: standingDelivery(deliveriesByOrigin.get(issueConclusionOrigin(issue.number)), issue, pickupCtx),
         // The intake verdict, beside the other two for their reason and inside
         // `pickup` for none: pickup answers "would an agent start next cycle",
         // the assay answers "is there anything here to start on". `pickup.reasons`
@@ -1549,6 +1558,33 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
  * opening the tracker and reading the thread. `goalRef` is still deliberately not
  * shipped: it is a fingerprint the hold is measured against, not a reading.
  */
+/**
+ * A delivery verdict, shipped **only while it still stands**.
+ *
+ * The row is not the reading. `deliveryHold` is what rule 4 gates on, and it
+ * answers null for a verdict the world has overtaken — the operator moved the
+ * ticket back into a pickup state, or a transition landed after `decidedAt`. So
+ * the standing-ness is asked here, off the same predicate and the same context
+ * `issuePickupStatus` is handed, rather than shipping the row and leaving the
+ * cockpit to re-derive an answer from inputs it does not have. A released verdict
+ * going null is the point: the issue is back in play and rule 3e will assess it
+ * again, so a cockpit still reporting it delivered would be promising a park that
+ * has ended.
+ *
+ * The hold *reason* is deliberately not shipped. It is prose already carried by
+ * `pickup.reasons` in every case that surface can report, and a second copy is a
+ * second answer to the one question. What this adds is the structural fact —
+ * that there is a standing verdict at all — which is exactly what neither
+ * `conclusion` nor `pickup.status` can say for a decomposed issue.
+ */
+function standingDelivery(delivery: IssueDelivery | undefined, issue: Issue, ctx: IssuePickupContext) {
+  if (!delivery) return null;
+  const held = deliveryHold(delivery, issue, { pickupStates: ctx.policy.pickupStates, signals: ctx.deliverySignals });
+  if (!held) return null;
+  const { summary, by, decidedAt } = delivery;
+  return { summary, by, decidedAt };
+}
+
 function assayVerdictOf(assay: IssueAssay | undefined) {
   if (!assay) return null;
   const { verdict, summary, by, decidedAt } = assay;

@@ -617,15 +617,28 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   // -- the goal check, and the tail on its yes arm -----------------------
   const shortfall = issue.shortfall ?? null;
   const conclusion = issue.conclusion ?? null;
-  const delivered = pickupStatus === 'delivered' || pickupStatus === 'done';
-  const reading = satelliteReading(conclusion, shortfall);
+  // The standing delivery is asked *first* and on its own, not read off the
+  // pickup status. `issuePickupStatus` answers its plan `parts` arm before the
+  // delivery park, so a delivered *decomposed* issue reports `planning` — and
+  // reading the tail off that status left the whole yes arm undrawn for exactly
+  // the floors that had reached the end. The two pickup arms stay beside it: a
+  // closed issue is `done`, and an unplanned delivered one is `delivered`, which
+  // the field agrees with rather than replaces.
+  const delivery = issue.delivery ?? null;
+  const delivered = delivery !== null || pickupStatus === 'delivered' || pickupStatus === 'done';
+  const reading = satelliteReading(delivery, shortfall);
   const satRef = `${patchRef}:assess`;
   machines.push({
     ref: satRef,
     kind: 'satellite',
     kindLabel: 'Satellite',
     name: reading === 'unbuilt' ? 'Goal check' : 'Goal checked',
-    meta: [`rule 3e · assessment`, ...(conclusion?.by ? [`by ${conclusion.by}`] : [])],
+    // Attributed to whoever cast the verdict this machine is *reading* — the
+    // delivery or the shortfall — and to nothing else. `conclusion.by` was the
+    // wrong author for the same reason it was the wrong reading: for a decomposed
+    // issue it resolves to `plan`, so a satellite saying *Verified · by plan*
+    // would credit the goal check to a roll-up that never made one.
+    meta: [`rule 3e · assessment`, ...(satelliteAuthor(delivery, shortfall) ?? [])],
     presence: reading === 'unbuilt' ? 'unbuilt' : 'built',
     status: satelliteStatus(reading),
     scanners: [],
@@ -777,11 +790,32 @@ function prPlates(pr: PullRequest): FloorPlate[] {
   }));
 }
 
-function satelliteReading(
-  conclusion: Issue['conclusion'] | null,
-  shortfall: Issue['shortfall'] | null,
-): SatelliteReading {
+/**
+ * What the goal check has said, read off the two rows it actually writes.
+ *
+ * Never off `conclusion`. That is a *fold* — operator toggle, then shortfall,
+ * then the working agent, then the plan roll-up — and only one of its four arms
+ * is the assessor's. Reading a fold to answer about one of its inputs gave both
+ * of the wrong answers at once here: `{by: 'assessor', verdict: 'done'}` is a
+ * shape the fold cannot produce (the positive verdict lives in `issue_deliveries`,
+ * not `issue_conclusions`), so the built arm was unreachable; while a plan-derived
+ * `done` would have claimed a goal check off a roll-up that says every part
+ * merged and says nothing about whether the goal was reached.
+ *
+ * A plan-derived `done` therefore still reads `unbuilt`, deliberately: an issue
+ * whose parts all merged and which nobody has assessed has not had its goal
+ * checked, and saying otherwise is the inverse of the bug this fixes.
+ */
+function satelliteReading(delivery: Issue['delivery'] | null, shortfall: Issue['shortfall'] | null): SatelliteReading {
+  // Asked first: the two rows are mutually exclusive in the store, so this
+  // ordering only decides a world where they somehow are not — and there the
+  // negative is the one an operator has to see.
   if (shortfall) return 'returned';
-  if (!conclusion || conclusion.by !== 'assessor') return 'unbuilt';
-  return conclusion.verdict === 'done' ? 'verified' : 'more_work';
+  return delivery ? 'verified' : 'unbuilt';
+}
+
+/** Who cast the verdict the satellite is reading, or nothing if it read none. */
+function satelliteAuthor(delivery: Issue['delivery'] | null, shortfall: Issue['shortfall'] | null): string[] | null {
+  const by = shortfall?.by ?? delivery?.by ?? null;
+  return by ? [`by ${by}`] : null;
 }
