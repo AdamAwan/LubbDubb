@@ -867,6 +867,20 @@ base)` cuts a **new** branch from `config.defaultBranch` (threaded through `Exec
   decides where a branch that didn't exist starts. An unresolvable `base` throws (the
   executor's existing `catch` audits it as a rejected dispatch) rather than falling back to
   HEAD — silently picking an incidental base is the bug the parameter exists to fix.
+  **`ensure` reclaims a stale target directory before every `worktree add`.** An interrupted or
+  killed agent leaves its checkout de-registered-but-present (admin entry gone, folder on disk),
+  which `findExisting` cannot see (it reads the porcelain list) and `worktree add` refuses with
+  `fatal: '<dir>' already exists` — and since the path is deterministic, **every retry hits the same
+  wall**: the branch is wedged for good and the issue never gets an agent (observed on several at
+  once). `git worktree prune` does not cover it — prune is the mirror case, an admin entry whose
+  directory vanished — so it runs first only to clear that cruft, and the reclaim then removes a
+  path that exists on disk and is absent from `git worktree list --porcelain`. **The porcelain list
+  is the guard, not the presence of a `.git` file**: reuse-first is sacred, so a directory git still
+  knows about is a live agent's checkout and is never touched (two branches can `sanitize` onto one
+  directory; there the `add` fails loudly, which is the honest answer). Reclaiming discards whatever
+  the dead orphan held — with no admin entry there is no branch or commit behind those files, so
+  nothing could recover them anyway. Porcelain paths are forward-slashed even on Windows, hence
+  `registered()` resolves them; an unresolved path would never compare equal to the target.
   `gitObserver.ts` is the read-only `GitObserver` seam (branch presence, ahead/behind,
   `hasCommitsBeyond`) with `fakeGitObserver.ts` alongside; it is deliberately **fetch-free**, and
   its one consumer is plan reconciliation. Refreshing the remote is therefore the _caller's_ half

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
@@ -134,6 +134,52 @@ test('an unresolvable base fails loudly instead of falling back to HEAD', async 
 
   await assert.rejects(() => wt.ensure('issue/12/schema', 'no-such-branch'), /no commit/);
   assert.equal(await wt.findExisting('issue/12/schema'), null);
+});
+
+test('an orphaned worktree directory is reclaimed instead of wedging the branch forever', async () => {
+  const repo = initRepo();
+  commitOn(repo, 'trunk', 'trunk.txt');
+  const root = join(repo, '.wt');
+  // What an interrupted agent leaves behind: the admin entry is gone while the
+  // folder is still on disk, so `git worktree list` cannot see it and
+  // `git worktree add` refuses the path — every retry, forever.
+  mkdirSync(join(root, 'issue-35377'), { recursive: true });
+  writeFileSync(join(root, 'issue-35377', 'stray.txt'), 'left over');
+
+  const wt = new WorktreeManager(repo, root);
+  const dir = await wt.ensure('issue/35377', 'trunk');
+
+  assert.equal(dir, join(root, 'issue-35377'));
+  assert.equal(git(dir, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'trunk']));
+  assert.equal(await wt.findExisting('issue/35377'), dir);
+});
+
+test('a de-registered worktree whose branch still exists is reclaimed too', async () => {
+  const repo = initRepo();
+  const root = join(repo, '.wt');
+  const wt = new WorktreeManager(repo, root);
+  const dir = await wt.ensure('issue/35225');
+  // Exactly the observed damage: the .git/worktrees admin entry went, the
+  // checkout did not. `git worktree prune` is for the opposite case.
+  rmSync(join(repo, '.git', 'worktrees'), { recursive: true, force: true });
+  assert.equal(await wt.findExisting('issue/35225'), null);
+
+  assert.equal(await wt.ensure('issue/35225'), dir);
+});
+
+test('a registered worktree standing on the target path is never reclaimed', async () => {
+  const repo = initRepo();
+  const root = join(repo, '.wt');
+  const wt = new WorktreeManager(repo, root);
+  // `sanitize` maps both branches onto one directory, so a live agent's checkout
+  // is what stands where the second one wants to go. Reclaiming it would yank a
+  // running agent's work; failing loudly is the only honest answer.
+  const live = await wt.ensure('feature/x');
+  writeFileSync(join(live, 'work-in-progress.txt'), 'unpushed');
+
+  await assert.rejects(() => wt.ensure('feature-x'), /already exists/);
+  assert.ok(existsSync(join(live, 'work-in-progress.txt')), "a live agent's checkout must survive");
+  assert.equal(await wt.findExisting('feature/x'), live);
 });
 
 test('an omitted base still forks from HEAD', async () => {
