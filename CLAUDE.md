@@ -168,7 +168,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     boundary: the desk filing job it becomes is never itself a code blueprint. Two things carry it. **The
     ticket must be `-watch`-tagged** (unlike a finding-filed ticket, which lands unwatched on purpose —
     it is deferred, not scheduled): the prompt instructs the agent to add `${labelPrefix}-watch`, and the
-    empty-prefix case (watch gate off, act on all) is decided in the pure fields so no `` label is ever
+    empty-prefix case (watch gate off, act on all) is decided in the pure fields so no `''` label is ever
     instructed. **`link_ticket` resolves via a reused `WorkItemFiling`** keyed on the desk job's own ref
     (`targetRef: job:<id>`) — a blueprint files _for_ no prior work node, and reuse is safe because no
     reader misreads it (the unrecorded-work lens is code-kind only; the fold stands the issue node up and
