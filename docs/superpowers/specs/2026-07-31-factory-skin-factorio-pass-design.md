@@ -158,6 +158,16 @@ alignment is unaffected — while making the one thing an operator wants from a 
 legible without a hover. No new derivation: if a condition cannot be named from the existing
 verdict, it does not get a mark.
 
+**The marks get a track of their own, and every track past the title is a fixed width.**
+Trailing the branch inline, two marks of differing widths start at a different x on every
+row — the exact non-alignment the ladder's fixed track exists to prevent, one column to the
+left. Two things are needed for the fix and the second is not obvious: each row is its own
+grid element, so an `auto` track sizes to _that row's_ content and the columns cannot line
+up down the rack however the cells are ordered. So the row is
+`26px minmax(0, 1fr) <marks> <ladder> <court>` with only the title flexing, and a row with
+no marks emits an **empty** marks cell rather than omitting it — an absent cell lets every
+track to its right slide left on that row alone.
+
 **One tone change, using a tone that already exists.** `prCourt` returns tone `bad` (red) for
 `Your call`. Red is the fault colour everywhere else on the floor, and "the harness is asking
 you a question" is not a fault. It becomes `next`, which `toneColor` already maps to
@@ -208,7 +218,9 @@ structurally rather than by snapshot, which is what makes these changes testable
 - **Structural assertions for the properties that must survive**: the belt animates only
   while cycles run (existing, extended for the collapsed case); the ladder's cell count still
   equals `scannersFor(pr).length` regardless of marks; a demoted caption is still present in
-  the markup.
+  the markup; **every row emits the same five grid cells**, marks included and empty when
+  there are none — the alignment property is a markup invariant, so it is asserted on the
+  markup rather than left to a width that a later CSS edit could quietly break.
 - **The Alt overlay renders no value not already on the row** — asserted by rendering with
   and without the class and diffing the text content against the source data, so the overlay
   cannot become a second source.
