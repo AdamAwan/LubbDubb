@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { hasPriorWork } from '../src/delivery/assessment.js';
+import { issueOriginRole } from '../src/issueOrigins.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -75,6 +76,38 @@ function assessor(): RuleDispatcher {
   return new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true }, {}, {}, { enabled: false });
 }
 
+/** The funnel and the assessor both on — what a `single` verdict actually meets. */
+function planningAssessor(): RuleDispatcher {
+  return new RuleDispatcher(
+    {},
+    {},
+    undefined,
+    'main',
+    { enabled: true },
+    { enabled: true },
+    {},
+    { enabled: false },
+    { enabled: false },
+  );
+}
+
+function plan(status: Plan['status']): Plan {
+  return {
+    id: 'pl1',
+    originRef: 'issue:12',
+    title: 'Split it',
+    status,
+    reason: 'because',
+    risks: null,
+    outOfScope: null,
+    document: null,
+    discussing: false,
+    statusCommentRef: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
 function origins(actions: { type: string; originRef?: string | null }[]): string[] {
   return actions.filter((a) => a.type.startsWith('dispatch_')).map((a) => a.originRef ?? '');
 }
@@ -117,14 +150,81 @@ test('a fresh issue is picked up, not assessed', async () => {
   assert.deepEqual(origins(actions), ['issue:12']);
 });
 
-test('prior work is any origin in the issue subtree, and nothing outside it', () => {
+test('prior work is an origin that could have delivered something, and nothing else', () => {
   assert.equal(hasPriorWork(12, []), false);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12' })]), true);
-  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:plan' })]), true);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:part:schema' })]), true);
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:assess' })]), true, 'downstream evidence work happened');
+  // The harness deliberating about an issue is not work having been done on it.
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:plan' })]), false);
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:assay' })]), false);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:120' })]), false, 'a prefix match must not span numbers');
   assert.equal(hasPriorWork(12, [task({ originRef: 'pr:40:ci' })]), false);
   assert.equal(hasPriorWork(12, [task({ originRef: null })]), false);
+});
+
+test('every origin the harness dispatches under an issue is classified deliberately', () => {
+  // The defect this replaces existed precisely because `issue:<n>:plan` was added
+  // and nothing forced a decision about which side of the discriminator it fell.
+  // An unrecognised suffix is the one case that cannot be enumerated, so it is
+  // named: it does not count, which fails toward pickup — a redundant agent, which
+  // is visible — rather than toward a parked issue, which is not.
+  assert.deepEqual(
+    Object.fromEntries(
+      [
+        'issue:12',
+        'issue:12:part:schema',
+        'issue:12:assess',
+        'issue:12:retro',
+        'issue:12:plan',
+        'issue:12:assay',
+        'issue:12:something-added-later',
+        'issue:120',
+        'pr:40:ci',
+      ].map((ref) => [ref, issueOriginRole(12, ref)]),
+    ),
+    {
+      'issue:12': 'work',
+      'issue:12:part:schema': 'work',
+      'issue:12:assess': 'evidence',
+      'issue:12:retro': 'evidence',
+      'issue:12:plan': 'deliberation',
+      'issue:12:assay': 'deliberation',
+      'issue:12:something-added-later': 'unrecognised',
+      'issue:120': null,
+      'pr:40:ci': null,
+    },
+  );
+  assert.equal(issueOriginRole(12, null), null);
+});
+
+// -- the funnel's `single` arm -----------------------------------------------
+
+test('an issue the planner routed to `single` is picked up, not assessed', async () => {
+  // The bug: the planner's own task sits at `issue:12:plan`, which counted as work
+  // having been done, so rule 3e fired on an issue nothing had ever built — and
+  // suppressed the pickup that was the whole point of the `single` verdict. The
+  // assessor then honestly reported nothing delivered, the shortfall replanned,
+  // and the loop closed with no PR ever written.
+  const { actions } = await planningAssessor().decide(
+    ctx({
+      plans: [plan('single')],
+      tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12', title: 'Plan issue #12' })],
+    }),
+  );
+  assert.deepEqual(origins(actions), ['issue:12'], 'a plan that says "one PR will do" releases the work');
+});
+
+test('once the single PR has been worked, the assessor gets its turn', async () => {
+  // The other half: the fix must not cost the assessor the case it exists for. A
+  // pickup agent ran and its PR left the open world, so the question is live again.
+  const { actions } = await planningAssessor().decide(
+    ctx({
+      plans: [plan('single')],
+      tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12' }), task({ id: 't2', originRef: 'issue:12' })],
+    }),
+  );
+  assert.deepEqual(origins(actions), ['issue:12:assess']);
 });
 
 // -- suppression -------------------------------------------------------------
@@ -161,21 +261,6 @@ test('anything live under the issue stands the assessor down', async () => {
 });
 
 test('a plan that still schedules something owns the issue', async () => {
-  const plan = (status: Plan['status']): Plan => ({
-    id: 'pl1',
-    originRef: 'issue:12',
-    title: 'Split it',
-    status,
-    reason: 'because',
-    risks: null,
-    outOfScope: null,
-    document: null,
-    discussing: false,
-    statusCommentRef: null,
-    createdAt: NOW,
-    updatedAt: NOW,
-  });
-
   for (const status of ['planning', 'active', 'awaiting_approval'] as const) {
     const { actions } = await assessor().decide(ctx({ plans: [plan(status)] }));
     assert.ok(!origins(actions).includes('issue:12:assess'), `a ${status} plan is not a finished one`);

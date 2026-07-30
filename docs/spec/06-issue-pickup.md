@@ -321,7 +321,11 @@ that missing gate. Rule 3f dispatches a code agent on `assay/issue/<n>` (origin 
 cut from the default branch) for a watched open issue nothing has been started for, and the agent
 casts a verdict with the `assay_issue` tool. It is the mirror of the assessor: `hasPriorWork` is the
 discriminator for both, one taking each arm — nothing started means the goal is all there is to
-judge, something started means the question was answered by someone acting on it.
+judge, something started means the question was answered by someone acting on it. "Started" means an
+origin that could have delivered something, which is the pickup root, a plan's parts, or an
+assessment — never the origins where the harness is merely deliberating (`:plan`, `:assay`). That
+distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
+[`05-dispatcher.md`](05-dispatcher.md) for what counting a planner's own task as work cost.
 
 | Verdict    | Effect                                                                              |
 | ---------- | ----------------------------------------------------------------------------------- |

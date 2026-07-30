@@ -224,8 +224,10 @@ hold are in [06](06-issue-pickup.md); the dispatcher's half is:
 - Driven off `eligibleIssues` (unlike rules 3e and 4a), because an issue the state gate or the watch
   gate excludes is not going to be worked and so has nothing to assay.
 - Fires only when nothing has been started: no verdict against the issue's *current* text, no prior
-  work (`hasWorkStarted` — `hasPriorWork` with the assay's own tasks excluded, or a crashed assayer
-  would retire its own retry), no plan row, and nothing live on `issue:N` or any `issue:N:*`.
+  work (`hasWorkStarted`, now exactly `hasPriorWork` — it began as that predicate with the assay's
+  own tasks filtered out, or a crashed assayer would retire its own retry, and `issueOriginRole` now
+  makes that exclusion for every deliberation origin), no plan row, and nothing live on `issue:N` or
+  any `issue:N:*`.
 - **Suppresses rule 3c and rule 4 for that issue this cycle**, from a set built once, so the three
   rules cannot hold different opinions about which issues are in it.
 - **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation, exactly as
@@ -259,7 +261,8 @@ It fires for issue N when all of:
 - No `delivered` verdict stands, no open PR, and no plan still scheduling something
   (`planning`/`active`/`awaiting_approval`).
 - Nothing live on `issue:N` or any `issue:N:*` origin.
-- **At least one task has ever existed** on `issue:N` or a descendant origin (`hasPriorWork`).
+- **At least one task has ever existed** on an origin that could have _delivered_ something
+  (`hasPriorWork`).
 - `dispatchVerdict('issue:N:assess')` says dispatch.
 
 The prior-work condition does two jobs. It stops the assessor being noise — without it a brand-new
@@ -269,10 +272,23 @@ otherwise claim: no prior tasks means the work has not started, so rule 4 picks 
 with nothing in flight means it may be finished, so the assessor asks. An issue the assessor claims
 this cycle is **suppressed** from rule 4, or two agents land on it — one judging, one redoing.
 
-It is answered from `ctx.tasks`, **never from the work graph**. `issue:<n>` and `issue:<n>:*` is
-exactly the subtree's origin vocabulary, which is why it reads like a graph query; it is the same
-question asked of the source the dispatcher already holds. Nothing in `src/dispatcher/` reads the
-graph — see [`14-persistence.md`](14-persistence.md).
+**Which origins count is decided in one place**, `issueOriginRole` (`src/issueOrigins.ts`), because
+the `issue:N:*` subtree holds two materially different things. The pickup root and a plan's parts are
+the **work**; `issue:N:assess` is not work but only ever happens downstream of some, so it counts as
+**evidence**; `issue:N:plan` and `issue:N:assay` are the harness **deliberating**, and a task on one
+of those says the issue has been thought about, never that anything was built. Matching the whole
+subtree was a real defect: the planner's own task made every issue routed to `single` look worked, so
+it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule 3g
+replanned, and the issue cycled the funnel without a line of its work ever being written. An
+**unrecognised** suffix is its own answer rather than a silent default — that is exactly how `:plan`
+slipped through — and `hasPriorWork` does not count it, failing toward a redundant pickup an operator
+can see rather than a parked issue they cannot. `test/issueAssess.test.ts` asserts the whole known
+vocabulary, so the next origin added has to be classified rather than inherited.
+
+It is answered from `ctx.tasks`, **never from the work graph**. The graph is keyed on these same
+origin strings, which is why it reads like a graph query; it is the same question asked of the source
+the dispatcher already holds. Nothing in `src/dispatcher/` reads the graph — see
+[`14-persistence.md`](14-persistence.md).
 
 **It fails open**, exactly as the planner does: a spent attempt cap returns the issue to ordinary
 pickup with **no escalation**, because narrowing rule 4 without that turns any assessor crash into a
