@@ -13,6 +13,11 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+// The arbitration is about *ordering* — which detector spoke first — not about the
+// real 5s window, so these drive a short one. Sleeping out the production value
+// made this the slowest file in the suite by 3x for no extra coverage.
+const BACKSTOP_MS = 120;
+
 function fixture(sessionId: string): { root: string; file: string } {
   const root = mkdtempSync(join(tmpdir(), 'lubbdubb-backstop-'));
   const dir = join(root, 'project');
@@ -38,6 +43,7 @@ test('the session file claiming a sentinel cancels the terminal backstop, even w
     args: [],
     cwd: '/tmp',
     submitDelayMs: 0,
+    sentinelBackstopMs: BACKSTOP_MS,
     sessionTranscript: { root, sessionId: 'bs-1', pollMs: 5 },
     onWarning: (m) => warnings.push(m),
   });
@@ -65,6 +71,7 @@ test('the backstop applies a sentinel the session file never reports, and says s
     args: [],
     cwd: '/tmp',
     submitDelayMs: 0,
+    sentinelBackstopMs: BACKSTOP_MS,
     sessionTranscript: { root, sessionId: 'bs-2', pollMs: 5 },
     onWarning: (m) => warnings.push(m),
   });
@@ -76,7 +83,7 @@ test('the backstop applies a sentinel the session file never reports, and says s
   backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
   assert.equal(session.status, 'running', 'the terminal sighting is deferred, not applied immediately');
 
-  await tick(5_200); // past SENTINEL_BACKSTOP_MS
+  await tick(BACKSTOP_MS + 80); // past the backstop window
   assert.equal(session.status, 'waiting', 'the backstop still drives the transition');
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /missed a waiting sentinel/);
@@ -92,6 +99,7 @@ test('with no session file located, terminal detection applies immediately', asy
     args: [],
     cwd: '/tmp',
     submitDelayMs: 0,
+    sentinelBackstopMs: BACKSTOP_MS,
     sessionTranscript: { root, sessionId: 'never-appears', pollMs: 5 },
   });
   session.start();
