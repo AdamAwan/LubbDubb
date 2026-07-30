@@ -134,16 +134,16 @@ them silently is the failure worth catching at boot.
 
 ### Feature policies
 
-| Key                                   | Type      | Default | Behaviour                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `planning.enabled`                    | `boolean` | `false` | The multi-PR planning funnel. **Off by default**, and off leaves it out entirely — rule 4 is un-narrowed and no planner ever runs.                                                                                                                                                                                                                           |
-| `planning.maxConcurrentPartsPerIssue` | `number`  | `2`     | How many parts of one plan may have live agents at once.                                                                                                                                                                                                                                                                                                     |
-| `planning.requireApproval`            | `boolean` | `false` | Put a `parts` verdict to a human before anything is scheduled from it. Off leaves an enabled funnel byte-for-byte as it was: a decomposition commits the moment the planner writes it.                                                                                                                                                                       |
-| `planning.gitFetchIntervalMs`         | `number`  | `60000` | Floor on how often plan reconciliation runs `git fetch`. `0` = every pulse.                                                                                                                                                                                                                                                                                  |
-| `assessment.enabled`                  | `boolean` | `false` | Rule 3e, the assessor: ask whether an issue that has had work and has nothing in flight is finished, and park it as `delivered` if so. **Off by default** — unlike `mcp` it is not purely additive, since it gates pickup and spends an agent per assessed issue. Off, no assessor runs, no verdict is written, and rule 4 behaves exactly as it does today. |
-| `assay.enabled`                       | `boolean` | `false` | Rule 3f, the goal assay: ask whether a fresh issue's *text* can be worked from at all before anything is dispatched against it, and hold it out of planning and pickup while the answer is `unclear`. **Off by default** for `assessment`'s reason, and with a cumulative cost worth naming — with `planning`, `assessment` and this all on, one issue can spend three agents before a line of its work is written. Off, no assayer runs, no verdict is written, and every gate in front of an issue behaves exactly as today. |
-| `mcp.enabled`                         | `boolean` | `true`  | The agent tool channel. **On by default**, because it is purely additive; off leaves agents on the sentinels alone.                                                                                                                                                                                                                                          |
-| `mcp.permissionEscalation`            | `boolean` | `true`  | The permission backstop (`--permission-prompt-tool`). A tool call the `agentAllowedTools` list doesn't cover is routed to the operator (allow/deny in "Needs you") instead of hanging. Gated by `mcp.enabled` — the tool lives on the MCP server. Off falls back to Claude's default headless deny.                                                          |
+| Key                                   | Type      | Default | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `planning.enabled`                    | `boolean` | `false` | The multi-PR planning funnel. **Off by default**, and off leaves it out entirely — rule 4 is un-narrowed and no planner ever runs.                                                                                                                                                                                                                                                                                                                                                                                             |
+| `planning.maxConcurrentPartsPerIssue` | `number`  | `2`     | How many parts of one plan may have live agents at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `planning.requireApproval`            | `boolean` | `false` | Put a `parts` verdict to a human before anything is scheduled from it. Off leaves an enabled funnel byte-for-byte as it was: a decomposition commits the moment the planner writes it.                                                                                                                                                                                                                                                                                                                                         |
+| `planning.gitFetchIntervalMs`         | `number`  | `60000` | Floor on how often plan reconciliation runs `git fetch`. `0` = every pulse.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `assessment.enabled`                  | `boolean` | `false` | Rule 3e, the assessor: ask whether an issue that has had work and has nothing in flight is finished, and park it as `delivered` if so. **Off by default** — unlike `mcp` it is not purely additive, since it gates pickup and spends an agent per assessed issue. Off, no assessor runs, no verdict is written, and rule 4 behaves exactly as it does today.                                                                                                                                                                   |
+| `assay.enabled`                       | `boolean` | `false` | Rule 3f, the goal assay: ask whether a fresh issue's _text_ can be worked from at all before anything is dispatched against it, and hold it out of planning and pickup while the answer is `unclear`. **Off by default** for `assessment`'s reason, and with a cumulative cost worth naming — with `planning`, `assessment` and this all on, one issue can spend three agents before a line of its work is written. Off, no assayer runs, no verdict is written, and every gate in front of an issue behaves exactly as today. |
+| `mcp.enabled`                         | `boolean` | `true`  | The agent tool channel. **On by default**, because it is purely additive; off leaves agents on the sentinels alone.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `mcp.permissionEscalation`            | `boolean` | `true`  | The permission backstop (`--permission-prompt-tool`). A tool call the `agentAllowedTools` list doesn't cover is routed to the operator (allow/deny in "Needs you") instead of hanging. Gated by `mcp.enabled` — the tool lives on the MCP server. Off falls back to Claude's default headless deny.                                                                                                                                                                                                                            |
 
 ### Agent launch
 
@@ -164,17 +164,65 @@ them silently is the failure worth catching at boot.
 
 ### Provider targets
 
-| Key                                           | Type                            | Default  | Behaviour                                                     |
-| --------------------------------------------- | ------------------------------- | -------- | ------------------------------------------------------------- |
-| `integrations.sourceControl`                  | `'fake' \| 'github' \| 'azure'` | `'fake'` | Who supplies pull requests.                                   |
-| `integrations.issues`                         | `'fake' \| 'github' \| 'azure'` | `'fake'` | Who supplies issues / work items.                             |
-| `integrations.backlog`                        | `'fake'`                        | `'fake'` | Who supplies stories. `fake` is the only registered provider. |
-| `github.owner`, `github.repo`                 | `string`                        | unset    | Required when any capability uses `github`.                   |
-| `github.filters.prAuthor`                     | `string` (optional)             | unset    | Only surface PRs opened by this login.                        |
-| `azureDevOps.organization/project/repository` | `string`                        | unset    | Required when any capability uses `azure`.                    |
-| `azureDevOps.filters.prAuthor`                | `string` (optional)             | unset    | Only surface PRs opened by this UPN.                          |
-| `azureDevOps.filters.workItemTag`             | `string` (optional)             | unset    | Only surface work items carrying this tag.                    |
-| `azureDevOps.filters.workItemAssignedTo`      | `string` (optional)             | unset    | Only surface work items assigned to this UPN.                 |
+| Key                                           | Type                            | Default   | Behaviour                                                     |
+| --------------------------------------------- | ------------------------------- | --------- | ------------------------------------------------------------- |
+| `integrations.sourceControl`                  | `'fake' \| 'github' \| 'azure'` | `'fake'`  | Who supplies pull requests.                                   |
+| `integrations.issues`                         | `'fake' \| 'github' \| 'azure'` | `'fake'`  | Who supplies issues / work items.                             |
+| `integrations.backlog`                        | `'fake'`                        | `'fake'`  | Who supplies stories. `fake` is the only registered provider. |
+| `github.owner`, `github.repo`                 | `string`                        | unset     | Required when any capability uses `github`.                   |
+| `github.filters.prAuthor`                     | `string` (optional)             | unset     | Only surface PRs opened by this login.                        |
+| `azureDevOps.organization/project/repository` | `string`                        | unset     | Required when any capability uses `azure`.                    |
+| `azureDevOps.filters.prAuthor`                | `string` (optional)             | unset     | Only surface PRs opened by this UPN.                          |
+| `azureDevOps.filters.workItemTag`             | `string` (optional)             | unset     | Only surface work items carrying this tag.                    |
+| `azureDevOps.filters.workItemAssignedTo`      | `string` (optional)             | unset     | Only surface work items assigned to this UPN.                 |
+| `azureDevOps.policyChecks`                    | kind → mode map (optional)      | see below | Which branch-policy kinds become CI checks, and how.          |
+
+### `azureDevOps.policyChecks`
+
+Azure gates a PR with **branch policies**, only some of which are automated checks. Each policy
+classifies into a kind — `build`, `status`, `comments`, `workItems`, `reviewers`, `mergeStrategy`,
+`other` — and each kind is surfaced in one of three modes:
+
+| Mode       | Effect                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| `check`    | An ordinary `CiCheck`: visible, routable by a `ci.checks` rule, dispatchable.                |
+| `advisory` | Visible, and structurally unable to dispatch or escalate — no `ci.checks` rule can claim it. |
+| `off`      | Not emitted.                                                                                 |
+
+Defaults: `build` and `status` are `check`, `comments` is `advisory`, everything else is `off`. An
+unknown kind or mode throws at load. A **disabled** policy is dropped whatever its mode.
+
+`build`/`status` at `check` include **Optional** (non-blocking) policies, which carry
+`blocking: false`. Such a check really does fail and an agent really can fix it, so rule 1 dispatches
+for it — while `aggregatePolicyCiStatus` folds enabled, blocking build/status policies only, so
+`prHealth`'s blocked verdict and the merge rule are untouched. **No value here can reach `ciStatus`**,
+which is what keeps "the harness will fix this" from ever becoming "the PR cannot merge".
+
+`comments` defaults to `advisory` rather than `check` because the harness already models that signal
+at higher fidelity: rule 2b acts per unresolved thread, with the author and body in the prompt. As an
+ordinary check it would let rule 1 outrank rule 2b and send the generic CI-fix prompt instead — the
+same work with strictly less information.
+
+Work-item linking is `off` by default; promoting it means an agent making writes against a tracker.
+To have an agent fix it:
+
+```jsonc
+{
+  "azureDevOps": { "policyChecks": { "workItems": "check" } },
+  "ci": {
+    "checks": [
+      {
+        "match": "Work item linking",
+        "onFailure": "dispatch",
+        "guidance": "Link the work item with `az repos pr work-item add --id <pr> --work-items <n>`. The work item number is the `<n>` in the branch name `issue/<n>`.",
+      },
+    ],
+  },
+}
+```
+
+No outbound capability is involved: the agent makes the link with a tool it already has, and
+`guidance` is the channel that tells it how.
 
 ## Secrets
 

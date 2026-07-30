@@ -5,6 +5,7 @@ import type { PlanningPolicy } from './plans/planning.js';
 import type { AssessmentPolicy } from './delivery/assessment.js';
 import type { AssayPolicy } from './intake/assay.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
+import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 
 /** Operator control over the MCP tool channel. See {@link Config.mcp}. */
 interface McpPolicy {
@@ -358,6 +359,20 @@ export interface AzureDevOpsConfig {
     /** Only surface work items assigned to this uniqueName (UPN). Unset = all assignees. */
     workItemAssignedTo?: string;
   };
+  /**
+   * Which branch-policy kinds become CI checks, and how.
+   *
+   * `check` makes a kind an ordinary check — visible, routable by a `ci.checks`
+   * rule, dispatchable. `advisory` makes it visible and structurally unable to
+   * dispatch or escalate. `off` drops it. Unset kinds take the defaults: `build`
+   * and `status` are `check` (Optional policies included), `comments` is
+   * `advisory`, everything else is `off`.
+   *
+   * Widening this can never make a PR read as unable to merge: the aggregate
+   * `ciStatus` folds enabled, blocking build/status policies only, and nothing
+   * here reaches it.
+   */
+  policyChecks?: PolicyCheckModes;
 }
 
 export interface WhitelistRule {
@@ -502,6 +517,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // `ci` means the list it wrote.
   merged.ci = { checks: overrides.ci?.checks ?? fromFile.ci?.checks ?? DEFAULTS.ci.checks };
   validateCiPolicy(merged.ci);
+
+  // A typo'd policy kind would otherwise be silently ignored, and the operator
+  // would watch a check they believed they had configured behave as if they had not.
+  if (merged.azureDevOps?.policyChecks) validatePolicyCheckModes(merged.azureDevOps.policyChecks);
 
   // The one configuration that is never what anyone means. Turning auth off is a
   // supported local choice (it is how the test suite runs); binding a routable

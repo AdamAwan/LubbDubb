@@ -42,6 +42,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         store: ctx.store,
         errors: ctx.errors,
         prAuthor: az.filters?.prAuthor,
+        policyChecks: az.policyChecks,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
       });
     },
