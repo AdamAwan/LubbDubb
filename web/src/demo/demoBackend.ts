@@ -830,6 +830,34 @@ function getServer(): DemoServer {
   return server;
 }
 
+/**
+ * The demo's retrospective: written after the goal was delivered, and deliberately
+ * about the *process* rather than the diff — that is what the station is for.
+ */
+const DEMO_RETROSPECTIVE = {
+  originRef: 'issue:205',
+  summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
+  document: [
+    '## What shipped',
+    '',
+    'PR #140 documents the sentinel protocol and where detection lives, including the cross-chunk case in the PTY runtime. Nothing was left outstanding.',
+    '',
+    '## How the run went',
+    '',
+    '- Three agents were spawned; one of them did the work.',
+    '- Two were spent on CI that was failing on the base branch, not on this PR. The scratchpad records the second agent working that out from scratch, an hour after the first had already established it.',
+    '- One escalation, answered in four minutes.',
+    '',
+    '## What to change',
+    '',
+    'The inherited-failure suppression covers the dispatch path, but nothing tells an agent *why* its CI is red once it is already running. A line in the CI-fix prompt naming the failing ancestor would have saved the second agent entirely.',
+  ].join('\n'),
+  agentId: 'agent-7',
+  taskId: 'task-7',
+  createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+  updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
+};
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
@@ -838,6 +866,11 @@ export const demoApi = {
   // keep the two API shapes interchangeable.
   getWorkRoots: () => Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[] }),
   getWorkSubtree: (_ref: string) => Promise.resolve({ nodes: [] as WorkNodeView[], refUrls: {} }),
+  // The demo's one written-up goal, so the Manifest station has something to open.
+  // Everything else answers null, which is the same thing the real route says for a
+  // goal nobody wrote up — silence, not an error.
+  getRetrospective: (ref: string) =>
+    Promise.resolve({ retrospective: ref === 'issue:205' ? DEMO_RETROSPECTIVE : null }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals

@@ -230,6 +230,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         watchLabel={state.config.watchLabel}
         ignoreLabel={state.config.ignoreLabel}
         onViewPlan={(id) => actions.viewPlan(id)}
+        onViewRetro={(issueRef) => actions.viewRetro(issueRef)}
         onReplan={(planId) => actions.replan(planId)}
         onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
         onFetchWork={(ref) => actions.fetchWorkSubtree(ref)}

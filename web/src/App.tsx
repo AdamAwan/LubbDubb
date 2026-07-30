@@ -1,6 +1,7 @@
 import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
 import { readStoredSkinId, resolveSkin } from './skins/registry.js';
+import { RetroModal } from './components/RetroModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { WorkTreePanel } from './components/WorkTreePanel.js';
 import { PromptsPanel } from './components/PromptsPanel.js';
@@ -95,6 +96,9 @@ export function App() {
     <>
       <Root view={status.view} actions={status.actions} />
       {planModal}
+      {status.view.viewingRetro && (
+        <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />
+      )}
       {status.view.settingsOpen && (
         <SettingsModal control={state.control} onClose={() => status.actions.openSettings(false)} />
       )}

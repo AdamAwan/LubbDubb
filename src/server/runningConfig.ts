@@ -82,7 +82,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'issueInReviewState',
     ],
   },
-  { title: 'Features', keys: ['planning', 'assessment', 'assay', 'mcp', 'autoSend', 'ci'] },
+  { title: 'Features', keys: ['planning', 'assessment', 'assay', 'retrospective', 'mcp', 'autoSend', 'ci'] },
   {
     title: 'Paths',
     keys: ['repoRoot', 'defaultBranch', 'worktreeRoot', 'deskRoot', 'promptTemplatesDir', 'docsFolderPrefix', 'dbPath'],

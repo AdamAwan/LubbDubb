@@ -45,6 +45,14 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
+    // The funnel, the assessor and the assay are pinned off: they default **on**
+    // now, and this file is about something else — leaving them on would put an
+    // extra agent in front of every issue these assertions dispatch. Each has its
+    // own tests.
+    planning: { enabled: false } as never,
+    assessment: { enabled: false } as never,
+    assay: { enabled: false } as never,
+    retrospective: { enabled: false } as never,
     auth: { enabled: false } as never,
   });
   const backend = new FakePtyBackend();

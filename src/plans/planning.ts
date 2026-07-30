@@ -4,12 +4,12 @@ import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../d
 /**
  * The planning funnel: every watched, open issue passes a planning agent that
  * emits one of two verdicts — `single` (today's one-agent / one-PR path) or
- * `parts` (a decomposition into stacked PRs). Off by default, and off leaves the
+ * `parts` (a decomposition into stacked PRs). On by default; off leaves the
  * funnel out entirely: every issue routes straight to `single`, so rule 4 is
  * un-narrowed and behaviour is exactly what it is today.
  */
 export interface PlanningPolicy {
-  /** Master switch. Off by default. */
+  /** Master switch. On by default (`src/config.ts`); an omitted policy means off. */
   enabled: boolean;
   /**
    * How many parts of one plan may have agents at once. A cap rather than fanning
@@ -47,7 +47,7 @@ export interface PlanningPolicy {
 }
 
 export const DEFAULT_PLANNING: PlanningPolicy = {
-  enabled: false,
+  enabled: true,
   maxConcurrentPartsPerIssue: 2,
   requireApproval: true,
   gitFetchIntervalMs: 60_000,

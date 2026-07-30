@@ -159,7 +159,30 @@ export interface Issue {
      */
     commentRef?: string | null;
   } | null;
+  /**
+   * The run's own write-up (rule 3h), once a goal has been delivered and written
+   * up — the **reading**, not the writing. The document is fetched when a reader
+   * opens it (`api.getRetrospective`), because this snapshot is polled and a
+   * write-up per issue would be paid for on every poll.
+   *
+   * Absent and null both mean *nothing was written*, which the Manifest station
+   * draws as such: a retrospective nobody wrote is silence, never an error.
+   */
+  retrospective?: { summary: string; hasDocument: boolean; updatedAt: string } | null;
 }
+
+/** A goal's retrospective in full, fetched on open. */
+export interface RetrospectiveView {
+  originRef: string;
+  summary: string;
+  /** Markdown. */
+  document: string;
+  agentId: string;
+  taskId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Story {
   id: string;
   title: string;

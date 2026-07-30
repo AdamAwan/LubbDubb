@@ -61,6 +61,8 @@ interface GoalFloorProps {
   /** Paused, or held on recovery: no cycle will run, so no belt may move. */
   stopped: boolean;
   onViewPlan: (planId: string) => void;
+  /** Open the run's write-up, keyed on the goal — `onViewPlan`'s pattern. */
+  onViewRetro: (issueRef: string) => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
   /**
    * Override a refused intake verdict. A second entry point onto the same action
@@ -191,6 +193,25 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
             >
               Replan
             </AsyncButton>
+          </span>
+        </div>
+      )}
+
+      {/* The retrospective's way in, beside the plan's and for the same reason:
+          drawn while there is one to read, never while the floor is in a
+          particular state. The Manifest station names this document; before it
+          existed the station named a step the harness never took. */}
+      {floor.retroRef && (
+        <div className="fx-gf-plan fx-sunk">
+          <span className="fx-gf-who">Manifest</span>
+          <span className="fx-gf-act">
+            <button
+              className="fx-btn"
+              onClick={() => props.onViewRetro(floor.retroRef!)}
+              title="What shipped, and how the run went — written after the goal was delivered"
+            >
+              Open retrospective
+            </button>
           </span>
         </div>
       )}

@@ -143,7 +143,10 @@ test('a standing verdict stops rule 4, and lifting it lets pickup through', asyn
     issues: [issue()],
     stories: [],
   };
-  const d = new RuleDispatcher();
+  // The retrospective is pinned off: this test is about rule 4 standing down for a
+  // parked issue, and rule 3h legitimately writes a delivered goal up (covered in
+  // test/retrospective.test.ts). Leaving it on would assert two rules at once.
+  const d = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, { enabled: false });
 
   const parked = await d.decide({
     world,

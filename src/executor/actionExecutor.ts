@@ -24,6 +24,8 @@ import {
 import { actOnShortfall, releasePlan } from '../plans/planApproval.js';
 import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
+import { retroSubmitOrigin } from '../retro/retro.js';
+import { padTestimony, retroDossier } from '../retro/dossier.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
 interface ExecutorDeps {
@@ -545,7 +547,12 @@ export class ActionExecutor {
     // and putting it in front of an agent dispatched for anything else would be
     // the same widening mistake as showing a merge refusal to a CI-fix agent.
     const outstanding = outstandingForOrigin(action.originRef, store);
-    const prompt = [action.prompt, guidance, outstanding].filter(Boolean).join('\n\n');
+    // A retrospective agent has no worktree and no world of its own, so what it can
+    // say is entirely what it is handed: the pad the working agents left, and the
+    // record only the harness kept. Appended for the same reason as the two notes
+    // above, and the pad goes first — it is the half nothing else could supply.
+    const briefing = retroBriefing(action.originRef, store);
+    const prompt = [action.prompt, guidance, outstanding, briefing].filter(Boolean).join('\n\n');
     if (action.type === 'dispatch_code_agent') {
       const task = store.createTask({
         kind: 'code',
@@ -594,6 +601,69 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
   const stored = store.getIssueConclusion(originRef);
   if (!stored || stored.verdict !== 'more_work' || stored.by !== 'agent') return null;
   return outstandingWorkNote(stored.note, stored.updatedAt);
+}
+
+/**
+ * Everything a retrospective agent is given beyond its prompt: the issue's
+ * scratchpad, then the record the harness kept — or null for every other dispatch.
+ *
+ * It lives in the executor for the branch gate's reason: every dispatch passes
+ * through here, so nothing can route around it. Keyed on the **exact** retro
+ * origin, because this is a briefing about one finished goal and putting a whole
+ * run's audit trail in front of an agent dispatched to fix CI is the widening
+ * mistake `outstandingForOrigin` names.
+ *
+ * The lists are read here rather than threaded through the action: the action is
+ * validated data and this is a page of prose assembled at dispatch time, which is
+ * also why it is appended to the rendered prompt rather than interpolated into it.
+ */
+function actionOrigin(action: Action): string | null {
+  const ref = (action as { originRef?: unknown }).originRef;
+  return typeof ref === 'string' ? ref : null;
+}
+
+function retroBriefing(originRef: string | null | undefined, store: Store): string | null {
+  const target = originRef ? retroSubmitOrigin(originRef) : { ok: false as const, error: '' };
+  if (!target.ok) return null;
+  const issueOriginRef = target.issueOrigin;
+  const issueNumber = Number(issueOriginRef.slice('issue:'.length));
+  const world = store.getWorldBaseline();
+  const issue = world?.issues.find((i) => i.number === issueNumber) ?? null;
+  const plan = store.getPlanByOrigin(issueOriginRef);
+  const parts = plan ? store.listPlanParts(plan.id) : [];
+  const prNumbers = new Set<number>(parts.flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])));
+  if (issue?.linkedPrNumber) prNumbers.add(issue.linkedPrNumber);
+  // The issue's own subtree — the predicate every gate in the dispatcher keys on.
+  const mine = (ref: string | null | undefined): boolean =>
+    ref === issueOriginRef || (ref?.startsWith(`${issueOriginRef}:`) ?? false);
+  const tasks = store.listTasks().filter((t) => mine(t.originRef));
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const agents = store.listAgents().filter((a) => taskIds.has(a.taskId));
+
+  const dossier = retroDossier({
+    issueNumber,
+    issueTitle: issue?.title ?? issueOriginRef,
+    plan,
+    parts,
+    pullRequests: (world?.pullRequests ?? []).filter((pr) => prNumbers.has(pr.number)),
+    closedPullRequests: (world?.closedPullRequests ?? []).filter((pr) => prNumbers.has(pr.number)),
+    decisions: store
+      .listDecisions()
+      .filter((d) => mine(actionOrigin(d.action)))
+      .reverse(),
+    escalations: store.listEscalations().filter((e) => (e.taskId ? taskIds.has(e.taskId) : false)),
+    proposals: store.listProposals().filter((p) => p.ref.startsWith(`issue:${issueNumber}`)),
+    findings: store.listFindings().filter((f) => mine(f.originRef)),
+    agentCount: agents.length,
+    delivery: store.getDelivery(issueOriginRef),
+    shortfall: store.getShortfall(issueOriginRef),
+    assay: store.getAssay(issueOriginRef),
+    conclusion: store.getIssueConclusion(issueOriginRef),
+    // Null rather than 0 when nothing was reported: PTY mode reports no usage at
+    // all, and a confident "$0.00" is the one reading that would be a lie.
+    costUsd: agents.some((a) => a.costUsd !== null) ? agents.reduce((sum, a) => sum + (a.costUsd ?? 0), 0) : null,
+  });
+  return [padTestimony(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
 }
 
 /**

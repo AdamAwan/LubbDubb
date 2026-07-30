@@ -1,6 +1,6 @@
 # 08 — The planning funnel
 
-`src/plans/`. Off by default (`planning.enabled: false`), and off leaves the funnel out entirely:
+`src/plans/`. On by default (`planning.enabled: true`); off leaves the funnel out entirely:
 every issue routes straight to `single`, rule 4 is un-narrowed, no planner is ever dispatched, and
 behaviour is exactly what it is without plans. Only the `rule` dispatcher implements it.
 

@@ -46,11 +46,21 @@ test('autoSend is deep-merged: a partial override keeps the other defaults', () 
   assert.deepEqual(cfg.autoSend.allowedActions, ['reply_on_pr']);
 });
 
-test('the planning funnel is off by default and deep-merged when overridden', () => {
-  // Off must be the default: on, every watched issue gains a planner ahead of any
-  // implementation work, which is a real change in what the fleet spends slots on.
+test('the funnel, the assessor, the assay and the retrospective are on by default', () => {
+  const cfg = loadConfig();
+  assert.equal(cfg.planning.enabled, true);
+  assert.equal(cfg.assessment.enabled, true);
+  assert.equal(cfg.assay.enabled, true);
+  assert.equal(cfg.retrospective.enabled, true);
+  // Unchanged, and deliberately: the three above spend an agent, while this one
+  // sends things out into the world with no human in the loop. Different class of
+  // switch, different default.
+  assert.equal(cfg.autoSend.enabled, false);
+});
+
+test('the planning funnel is deep-merged when overridden', () => {
   assert.deepEqual(loadConfig().planning, {
-    enabled: false,
+    enabled: true,
     maxConcurrentPartsPerIssue: 2,
     // On by default (issue #109 phase 3): a deployment that never turns the
     // funnel on sees no difference, since `enabled` gates the whole thing —
@@ -58,8 +68,8 @@ test('the planning funnel is off by default and deep-merged when overridden', ()
     requireApproval: true,
     gitFetchIntervalMs: 60_000,
   });
-  const cfg = loadConfig({ planning: { enabled: true } as never });
-  assert.equal(cfg.planning.enabled, true);
+  const cfg = loadConfig({ planning: { enabled: false } as never });
+  assert.equal(cfg.planning.enabled, false);
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 2, 'untouched fields keep their defaults');
   // Turning the funnel on must not also change how a verdict lands: this default
   // is carried over unmerged, the same as the other untouched fields above.

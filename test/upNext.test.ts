@@ -339,6 +339,13 @@ function testConfig(over: Record<string, unknown> = {}) {
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
     ...over,
+    // Pinned off: all four default **on** now, and this file is about the queue —
+    // a planner ahead of each pickup would change every origin these assertions
+    // read. Each has its own tests.
+    planning: { enabled: false } as never,
+    assessment: { enabled: false } as never,
+    assay: { enabled: false } as never,
+    retrospective: { enabled: false } as never,
   });
 }
 
@@ -382,6 +389,12 @@ test('a priority override holds after the next pulse and after a restart', async
       // Paused → zero headroom → everything waits below the cut, so the test
       // never spawns an agent or touches a git worktree.
       startPaused: true,
+      // Pinned off, as in this file's other config: they default on, and each
+      // would add a queue item in front of the two pickups under test.
+      planning: { enabled: false } as never,
+      assessment: { enabled: false } as never,
+      assay: { enabled: false } as never,
+      retrospective: { enabled: false } as never,
     });
 
   const system = buildSystem(cfg(), { backend: new FakePtyBackend() });

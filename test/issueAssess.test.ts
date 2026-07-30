@@ -65,9 +65,14 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-/** The dispatcher with the assessor on — everything else default. */
+/**
+ * The dispatcher with the assessor on — everything else default, and the
+ * retrospective explicitly off: rule 3h fires on exactly the issues rule 3e has
+ * finished with, so leaving it on would put a second dispatch in every assertion
+ * here about a parked issue. It has its own tests (test/retrospective.test.ts).
+ */
 function assessor(): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true });
+  return new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true }, {}, {}, { enabled: false });
 }
 
 function origins(actions: { type: string; originRef?: string | null }[]): string[] {

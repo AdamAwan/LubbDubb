@@ -59,6 +59,7 @@ expand a row into the rule that fired and why that rule exists.
 | `issue-assess`             | 3e   | Issue may be finished    | With assessment on, a watched open issue has had work, has nothing in flight and no open PR.                                                              |
 | `issue-assay`              | 3f   | Issue goal needs checking | With the assay on, a watched open issue nothing has been started for has no verdict on its goal text.                                                    |
 | `issue-shortfall`          | 3g   | Assessment says the goal was missed | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                             |
+| `issue-retro`              | 3h   | Delivered goal needs a retrospective | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up.         |
 | `plan-part`                | 4a   | Plan part ready          | A part of an active plan is `ready` and unstaffed.                                                                                                        |
 | `issue-pickup`             | 4    | Open issue without a PR  | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                                                                 |
 | `cooldown-escalate`        | 1–4  | Attempt cap reached      | An origin spent its dispatch attempts without clearing.                                                                                                   |
@@ -212,7 +213,7 @@ to "Ready" in every gap between parts.
 
 ## Rule 3f — the goal assay
 
-`assay.enabled` (**off by default**) puts an assaying agent in front of the whole funnel. Every other
+`assay.enabled` (**on by default**) puts an assaying agent in front of the whole funnel. Every other
 gate an issue passes asks whether the harness is *allowed* to act; this is the only one that asks
 whether the ticket says anything to act on. Full argument, the verdict's lifetime and what ends a
 hold are in [06](06-issue-pickup.md); the dispatcher's half is:
@@ -237,7 +238,7 @@ verdict with the fingerprint of an empty goal.
 
 ## Rule 3e — the assessor
 
-`assessment.enabled` (**off by default**) puts an assessing agent in front of re-pickup. It exists
+`assessment.enabled` (**on by default**) puts an assessing agent in front of re-pickup. It exists
 because rule 3b's park is a **tracker state**, so it only protects providers that have one: on
 GitHub there is no review state, `openPrForIssue` reads only the open list, and the moment a
 delivering PR merges the issue is again "open, watched, no open PR" — rule 4's entire precondition.
@@ -345,6 +346,48 @@ Rejecting acts on nothing and **leaves the row standing**: the verdict is still 
 act on it, and the cockpit chip should keep saying so. That is the asymmetry with `refusePlan`, which
 exists only because a plan is the sole thing that schedules anything for a decomposed issue. A
 shortfall gates nothing, so refusing one leaves the issue exactly where it was.
+
+## Rule 3h — the retrospective
+
+`retrospective.enabled` (**on by default**) puts one **desk** agent on a goal the harness has already
+parked as delivered, to write the run up: what shipped, and what came out of the process of shipping
+it. It is the consumer of a step the cockpit had always named and the harness had never taken — the
+Goal Floor's Manifest station, *Report what was done*, which drew the working agent's conclusion note
+or an em dash and was read by nothing.
+
+It fires when the issue passes the watch gate, has a standing delivery (or resolves `done`), has no
+`retrospectives` row, and has nothing live anywhere under `issue:<n>`. The origin is
+`issue:<n>:retro`, its own for `assessOrigin`'s reason: the cooldown and attempt cap that throttle
+write-ups must not eat the budget that gets work done. There is no branch and no worktree — the agent
+writes no files, and a checkout would only tempt it to start work on a finished goal.
+
+**It gates nothing, and that is what makes the fail-open cheap.** A goal is delivered whether or not
+anybody wrote it up, so an agent that crashes, is killed or spends its attempt cap leaves no row, no
+escalation and no hold: the station reads *Nothing written*. No escalation is raised because there is
+nothing a human can do about a report that did not happen that they cannot do by reading the issue.
+
+### What the agent is handed
+
+Two things, both **appended** to the rendered `issue-retro` prompt rather than interpolated into it —
+`loadPromptTemplates` rejects only *unknown* placeholders, so a `{dossier}` token would be silently
+dropped by exactly the overrides that customised most:
+
+1. **The scratchpad** for its issue, attributed and quoted (`padTestimony`). This is the half nothing
+   else could supply: what the agents that did the work chose to record for whoever came next.
+2. **The dossier** (`retroDossier`, `src/retro/dossier.ts`), the record only the harness kept — the
+   plan and its parts with their outcomes, the pull requests open and closed, the decisions with the
+   rule ids that fired, escalations and how they were answered, proposals, the assay, the delivery,
+   any shortfall, the conclusion, findings, agents spawned and reported spend. It **reads rows the
+   pulse already wrote and derives no verdicts**: a fold that computed one would be a second opinion
+   about a decision made somewhere else.
+
+Assembled in `ActionExecutor.materializeTask` for the branch gate's reason — every dispatch passes
+through it — and keyed on the exact retro origin, so a finished goal's audit trail never lands in
+front of an agent dispatched to fix CI.
+
+The agent submits with `retro_submit`; the summary is required, the document is trimmed rather than
+refused, and the write upserts on the issue so a revision is one row. Nothing is posted to the
+tracker and nothing is scheduled from what it says.
 
 ## Rule 3 — the merge gate
 

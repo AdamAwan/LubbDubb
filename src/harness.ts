@@ -251,6 +251,9 @@ export class Harness extends EventEmitter {
         shortfalls,
         assays,
         assaySignals,
+        // Which goals already have a write-up — origins only. Rule 3h needs to know
+        // whether to dispatch one; what it says is deliberately out of its reach.
+        retrospectiveOrigins: store.listRetrospectiveOrigins(),
         recentDecisions,
         proposals,
         rejectionSignals,

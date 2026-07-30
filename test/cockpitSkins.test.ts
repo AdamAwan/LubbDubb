@@ -82,6 +82,7 @@ function frozenView() {
     tails: new Map(),
     lastPulseAt: NOW,
     viewingPlan: null,
+    viewingRetro: null,
     settingsOpen: false,
   });
 }
