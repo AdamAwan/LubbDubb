@@ -15,10 +15,25 @@ edges — and the specs carry the full description.
 One command is the source of truth, and CI enforces the same thing on every PR:
 
 ```bash
-npm run check   # = format:check && lint && typecheck && typecheck:web && knip && test
+npm run check   # format:check, lint, typecheck, typecheck:web, knip, test
 ```
 
-Run it before committing. Notable failure modes that aren't obvious:
+Run it before committing. Two things about how it runs, since neither matches the `&&` chain it
+used to be (`scripts/check.ts` is the runner):
+
+- **The six stages run concurrently, and _all_ of them run even when one fails.** A chain stopped
+  at the first failure, so a formatting slip hid a type error until the next run; you now get every
+  failure in one pass. Output is buffered per stage and printed under its own heading — six
+  concurrent writers to one terminal is unreadable — so nothing streams live except a progress line
+  per stage and the timing summary at the end.
+- **Every static stage is cached** (`node_modules/.cache/`, so `npm ci` invalidates it and no
+  `.gitignore` entry is needed): prettier and eslint `--cache`, both typecheckers `--incremental`
+  with an explicit `--tsBuildInfoFile`, knip `--cache`. A warm run is ~28s against ~64s for the old
+  chain, and the whole static half now finishes inside the time the test suite takes — so the test
+  suite _is_ the wall time, and the static stages are effectively free. Cold (right after
+  `npm ci`) it's ~39s. If you ever need to rule the cache out, `rm -rf node_modules/.cache`.
+
+Notable failure modes that aren't obvious:
 
 - **knip runs with every rule at `error`** — there is no `warn` tier, so no class of dead code
   accumulates unnoticed. An `export` nothing imports, a **type** nothing names, a dependency you

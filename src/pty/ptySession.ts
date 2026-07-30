@@ -87,7 +87,22 @@ interface PtySessionOptions {
   exitOnDone?: boolean;
   /** How long a graceful `/exit` gets before the SIGTERM backstop. */
   exitGraceMs?: number;
+  /**
+   * Override the sentinel backstop window (see {@link DEFAULT_SENTINEL_BACKSTOP_MS}).
+   * Exists so a test can exercise the arbitration without sleeping out the real
+   * window — the same reason `submitDelayMs` and `pollMs` are settable.
+   */
+  sentinelBackstopMs?: number;
 }
+
+/**
+ * How long a sentinel seen on the *terminal* waits for the session file to report
+ * the same one before it is applied anyway. The session file is the primary
+ * detector (clean text, no styling to match through); the terminal scan is the
+ * backstop that keeps status transitions working if the tail breaks entirely.
+ * Sized well past the file's per-block write latency.
+ */
+const DEFAULT_SENTINEL_BACKSTOP_MS = 5_000;
 
 const DEFAULTS = {
   doneSentinel: '@@LUBBDUBB_DONE@@',
@@ -104,16 +119,8 @@ const DEFAULTS = {
   initialSubmitAttempts: 8,
   exitOnDone: false,
   exitGraceMs: 5_000,
+  sentinelBackstopMs: DEFAULT_SENTINEL_BACKSTOP_MS,
 };
-
-/**
- * How long a sentinel seen on the *terminal* waits for the session file to report
- * the same one before it is applied anyway. The session file is the primary
- * detector (clean text, no styling to match through); the terminal scan is the
- * backstop that keeps status transitions working if the tail breaks entirely.
- * Sized well past the file's per-block write latency.
- */
-const SENTINEL_BACKSTOP_MS = 5_000;
 
 /**
  * How long the session file gets to appear before the terminal is used as a
@@ -223,6 +230,7 @@ export class PtySession extends EventEmitter implements AgentSession {
       initialSubmitAttempts: DEFAULTS.initialSubmitAttempts,
       exitOnDone: DEFAULTS.exitOnDone,
       exitGraceMs: DEFAULTS.exitGraceMs,
+      sentinelBackstopMs: DEFAULTS.sentinelBackstopMs,
       sessionTranscript: undefined,
       onWarning: () => {},
       ...options,
@@ -522,7 +530,7 @@ export class PtySession extends EventEmitter implements AgentSession {
 
   /**
    * Apply a sentinel, arbitrating between the two detectors. The session file is
-   * primary; a terminal sighting is deferred by {@link SENTINEL_BACKSTOP_MS} so the
+   * primary; a terminal sighting is deferred by `sentinelBackstopMs` so the
    * file can claim it first, and only applied if that never happens — in which case
    * the drift is *reported*, because two detectors that quietly disagree is exactly
    * the failure mode this design is meant to make impossible. Both paths converge
@@ -552,12 +560,12 @@ export class PtySession extends EventEmitter implements AgentSession {
     // window for a source that may never speak — so act now.
     if (source === 'terminal' && this.transcript?.located()) {
       const applied = this.appliedAt.get(key);
-      if (applied !== undefined && Date.now() - applied < SENTINEL_BACKSTOP_MS) return;
+      if (applied !== undefined && Date.now() - applied < this.opts.sentinelBackstopMs) return;
       const t = setTimeout(() => {
         this.backstopTimers.delete(key);
         this.opts.onWarning(`session transcript missed a ${kind} sentinel; applied from the terminal backstop instead`);
         this.applySentinel(kind, payload, key, parsed);
-      }, SENTINEL_BACKSTOP_MS);
+      }, this.opts.sentinelBackstopMs);
       t.unref?.();
       this.backstopTimers.set(key, t);
       return;
@@ -574,7 +582,7 @@ export class PtySession extends EventEmitter implements AgentSession {
     this.appliedAt.set(key, Date.now());
     if (this.appliedAt.size > 64) {
       // Bounded: only the recent past matters for de-duping the two sources.
-      const cutoff = Date.now() - SENTINEL_BACKSTOP_MS;
+      const cutoff = Date.now() - this.opts.sentinelBackstopMs;
       for (const [k, at] of this.appliedAt) if (at < cutoff) this.appliedAt.delete(k);
     }
 

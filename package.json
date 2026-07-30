@@ -19,16 +19,16 @@
     "web:dev:demo": "vite --config web/vite.config.ts --mode demo",
     "web:build": "vite --config web/vite.config.ts build",
     "web:build:demo": "vite --config web/vite.config.ts build --mode demo --base=/LubbDubb/",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "typecheck:web": "tsc -p web/tsconfig.json --noEmit",
-    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/server.tsbuildinfo",
+    "typecheck:web": "tsc -p web/tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/web.tsbuildinfo",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"web/**/*.{ts,tsx}\" \"scripts/*.ts\" \"*.{json,md}\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"web/**/*.{ts,tsx}\" \"scripts/*.ts\" \"*.{json,md}\"",
-    "knip": "knip",
+    "format:check": "prettier --cache --check \"src/**/*.ts\" \"test/**/*.ts\" \"web/**/*.{ts,tsx}\" \"scripts/*.ts\" \"*.{json,md}\"",
+    "knip": "knip --cache",
     "audit": "npm audit --omit=dev --audit-level=high",
     "audit:all": "npm audit --audit-level=high",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run typecheck:web && npm run knip && npm test"
+    "check": "node --import tsx scripts/check.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^10.3.0",

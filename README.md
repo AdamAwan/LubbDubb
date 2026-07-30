@@ -334,8 +334,13 @@ npm run format         # Prettier write
 npm run format:check   # Prettier check (what CI enforces)
 npm run knip           # unused files / exports / types / dependencies / class members (all fatal)
 npm run audit          # npm audit at the "high" threshold
-npm run check          # format:check + lint + typecheck (x2) + knip + test, in one shot
+npm run check          # all of the above + test, concurrently, in one shot
 ```
+
+`check` runs its six stages in parallel rather than as a chain, and reports every failure instead
+of stopping at the first. Each static stage is cached under `node_modules/.cache/`, so a warm run
+costs about as long as the test suite alone (~28s) — `rm -rf node_modules/.cache` to force a cold
+one.
 
 ### Continuous integration
 

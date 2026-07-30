@@ -11,10 +11,38 @@ Node 20 or newer (`engines.node: ">=20"`). CI runs Node 22.
 ## The one gate
 
 ```bash
-npm run check   # = format:check && lint && typecheck && typecheck:web && knip && test
+npm run check   # format:check, lint, typecheck, typecheck:web, knip, test
 ```
 
-CI enforces exactly the same thing on every PR. Failure modes that are not obvious:
+CI enforces exactly the same six commands on every PR, as separate steps across two jobs — CI stays
+the source of truth for _what_ is verified. Locally `scripts/check.ts` runs them concurrently and
+cached, which changes only the scheduling and the reporting:
+
+- **A weighted pool, sized to the core count.** Each static stage counts as one job; `test` counts
+  as `availableParallelism() - 1`, because node's test runner spawns its own worker pool and
+  counting it as a single job oversubscribes the box badly enough to be slower than the chain.
+  Stages are declared slowest-first and admitted in that order, so the long poles (`knip`, then the
+  typecheckers) start while there is still room and the cheap stages fill in behind them. On a
+  single core the pool admits one at a time, i.e. the old behaviour.
+- **Every stage runs even when one fails**, and each failure is reported. The chain stopped at the
+  first, so a formatting slip hid a type error until the next run.
+- **Output is buffered per stage** and printed under its own heading, failures first, then a timing
+  summary. Six concurrent writers to one terminal is unreadable, so only a progress line per stage
+  streams live.
+- **Every static stage is cached**, under `node_modules/.cache/` — which means `npm ci` invalidates
+  the lot and no `.gitignore` entry is needed. Prettier and ESLint take `--cache`; both typecheckers
+  run `--incremental` with an explicit `--tsBuildInfoFile` (explicit so the `build` script, which
+  emits, cannot share a `.tsbuildinfo` with a `--noEmit` pass); knip takes `--cache`, which helps
+  least of the five because its analysis is whole-graph by nature. Caches are correctness-neutral
+  and tested as such — each one catches an error introduced after a clean run. `rm -rf
+node_modules/.cache` forces cold.
+
+The shape of the cost, which is why the above is worth having: the test suite is **startup-bound**,
+not work-bound. Roughly half its files finish in under half a second, and each worker pays tsx's
+transpile boot (~230ms against ~30ms for bare node). So the suite is the floor on wall time, and the
+entire static half now finishes inside it — a warm run costs about what `test` alone costs.
+
+Failure modes that are not obvious:
 
 - **knip** fails the build on **every** class of unused code it can find. Adding an `export` nothing
   imports, a type nothing names, a dependency you do not end up using, or a public method nothing
@@ -60,6 +88,7 @@ CI additionally runs `npm run smoke` and coverage, and there are CodeQL and secu
 | `npm run web:build`   | Production bundle into `web/dist`.                                            |
 | `npm run web:build:demo` | The demo bundle for GitHub Pages.                                          |
 | `npm run audit`       | `npm audit --audit-level=high`.                                               |
+| `npm run check`       | The one gate: the six stages above, concurrently, via `scripts/check.ts`.      |
 
 **`npm start` builds the cockpit first, and that is not a convenience.** The server needs no
 build step — tsx runs it from source — but the SPA does, and `web/dist` is gitignored, so it is
