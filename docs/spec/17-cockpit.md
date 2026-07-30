@@ -117,53 +117,63 @@ Red means exactly one thing on that floor: an agent parked on a question only yo
 #### The floor at width
 
 `FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
-it sits are separate edits. It renders the Parts Inspection strip full width, then **two rails** — `floor` (the line, bots, the
-goal floor, the yard) and `world` (signals, shift log) — split on _whose turn it
-is_ rather than on subject. The strip is above both because a PR outranks that split: it is the one
-world object you are usually the blocker for. Production used to head the world rail and is no
-longer a panel at all: it is the **Output** gauge in the status bar, and the graph opens from it.
+it sits are separate edits. Placement is **one CSS grid**: every panel is a direct child of
+`.fx-grid`, in the order it reads — the line, then Parts Inspection and Bots in the Field side by
+side, then the goal floor, the yard, the shift log and signals. Production is not a panel at all: it
+is the **Output** gauge in the status bar, and the graph opens from it.
 
-There were **three**. The first was `act`: what _you_ are the blocker for. It is gone, and what
-replaced it is the next section — three of its panels are read as a count far more often than as
-contents, and a count is a gauge, not a column. Its design is
-[`2026-07-29-factory-two-rail-layout-design.md`](2026-07-29-factory-two-rail-layout-design.md).
+**Inspection and Bots share a row from 1500px up, half the width each.** The parts on the rack and
+the bots that will work them are one reading, and the old arrangement made you join them by eye —
+the strip full-width above two rails, Bots partway down the left one. At four tracks each half is
+still wider than either panel gets in the two-column arrangement below; below 1500 they stack,
+because an inspection row's fixed columns (the scanner ladder, the court chip) squeeze the title to
+nothing at half of 940px.
+
+There were **two rails** here — `floor` (the line, bots, the goal floor, the yard) and `world`
+(signals, shift log) — split on _whose turn it is_, each scrolling on its own with `.fx` pinned to
+`100dvh`. They are gone, and so are their scrollbars. A column that scrolls independently means the
+page has no single reading position: what you are looking for can be out of sight inside a box that
+itself has not moved, and the panel beside the one you are reading does not travel with it. One grid
+scrolls as one page. A third rail went earlier for a different reason — `act`, what _you_ are the
+blocker for, whose panels are read as a count far more often than as contents, and a count is a
+gauge rather than a column
+([`2026-07-29-factory-two-rail-layout-design.md`](2026-07-29-factory-two-rail-layout-design.md)).
 
 There is **one DOM for every width**; the arrangement is chosen in CSS alone:
 
-| width     | arrangement                                                                        |
-| --------- | ---------------------------------------------------------------------------------- |
-| < 940     | one column                                                                         |
-| 940–1499  | two columns; the line, the goal floor and the yard span both                       |
-| 1500–1899 | tiled — one four-column page grid, each panel spanning what it needs               |
-| ≥ 1900    | railed — the two rails, each scrolling on its own, the floor fixed to the viewport |
+| width    | arrangement                                                                       |
+| -------- | --------------------------------------------------------------------------------- |
+| < 940    | one column                                                                        |
+| 940–1499 | two columns; everything but the shift log and signals spans both                   |
+| ≥ 1500   | four columns — the line, the goal floor and the yard span all four; Inspection and Bots take two each, and so do the shift log and signals |
 
-Below 1900px `.fx-rail` is `display: contents`, so its panels fall through and become tiles of the
-page grid directly. **The breakpoint is therefore stated once.** Matching it in React as well —
-rendering a different tree per width — buys nothing and costs a resize listener, a re-render on
-every drag, and a second definition of the boundary that will disagree with this one the first time
-either moves.
+**The breakpoints are therefore stated once.** Matching them in React as well — rendering a
+different tree per width — buys nothing and costs a resize listener, a re-render on every drag, and
+a second definition of the boundary that will disagree with this one the first time either moves.
 
 Four consequences to preserve:
 
-- **The rails' document order is not the floor's reading order**, so the two dissolved arrangements
-  set `order` per panel: the line, then the detail it cannot hold, then the readings you consult
-  rather than watch. `order` is reset to `0` inside a rail at ≥1900, or those same values would
-  reshuffle each rail internally.
-- **A rail must stretch to its row, not to its content.** `.fx-rails` carries `align-items: start`
-  for the tiled arrangement, which is right for a tile and wrong for a rail: a rail sized to its
-  content is tall enough to hold everything, so its `overflow-y` never engages and the _page_
-  scrolls instead. The railed block sets `align-items: stretch` back.
+- **Document order is reading order**, so no panel carries an `order`. The `order` values that used
+  to restore the reading order when the rails dissolved are gone with them; a panel moved in
+  `FactoryRoot` moves on the floor, which is the point. `test/factorySkin.test.ts` pins the sequence
+  and pins every panel as a _direct_ child of the grid — a wrapper re-introduced round any of them
+  takes it out of the grid and its span rule then does nothing.
+- **The goal floor and the yard span the full width, and the goal floor's drawing grows into it.**
+  Both are laid out left to right across a goal's whole span, so a half-width column turns the patch
+  belt into something you scroll sideways — the reading the panel exists to give at a glance. The
+  floor SVG therefore takes its intrinsic width as a custom property and carries
+  `width: 100%; min-width: <intrinsic>; max-width: <intrinsic> * 1.8`: it scales up to the panel
+  (which is where its height comes from — height follows the viewBox), keeps 1:1 and scrolls when the
+  panel is narrower, and stops at 1.8× so a two-machine goal on a 3440px display is not blown up into
+  a poster. It is the pattern `.fx-line` already used for the belt.
 - **The full-bleed pictures need a container that caps them.** The line and the production graph
   scale with their container; given the whole of a 3440px display, the graph alone became a
-  ~500px-tall chart that ate the first screen. Their spans are what stop that, which is why widening
-  the old centred ribbon without also tiling it made the skin worse rather than better. The graph is
-  no longer on the floor at all (below), but the constraint is the line's too.
-- **Recovery is outside `.fx-rails` entirely**, above it, because while it is up no pulse runs and
+  ~500px-tall chart that ate the first screen. Spans are what stop that, which is why widening the
+  old centred ribbon without also tiling it made the skin worse rather than better. The graph is no
+  longer on the floor at all (below), but the constraint is the line's too.
+- **Recovery is outside `.fx-grid` entirely**, above it, because while it is up no pulse runs and
   every other surface is stale for the same reason. It is a banner, so it needs no `grid-column` to
-  span and no `order` to lead — it is a block at every width and a flex child of the railed column
-  at ≥1900. What the railed arrangement fixes to the viewport is therefore **`.fx`**, not the page:
-  the shell's `work-panel` is a sibling below it and stays scrollable, since `WorkTreePanel` fetches
-  on open and a skin may not reach `api.js`.
+  span — it is a block at every width.
 
 #### The five ways in
 
@@ -234,6 +244,16 @@ Five rules hold them:
 - **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
   listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
   answering still happens on the shared `EscalationCard`, which owns the refusal rules.
+
+**Shifts Ended is a sixth panel behind a click, and the one that does _not_ open from the bar.** The
+bots whose shift has ended are history, and a list of them under the bots that are out _now_ makes
+the panel read as longer than the fleet is — with a tail that never empties, since a finished agent
+is kept forever. So the treatment is the desks' and the placement is not: the count is a button in
+the **Bots panel's own head** (`.fx-head-act`, beside the pads-free reading) and the cards open in
+front of it. Panel-local because the reading is only meaningful against a fleet — "3 shifts ended"
+among the bar's gauges says nothing the Bots panel does not say better — and because the bar is
+already two rows below ~1900px. The list is **bounded at 24** with the note naming the total, the
+shift log's convention.
 
 #### One subject, once — and nothing at all when the link drops
 
