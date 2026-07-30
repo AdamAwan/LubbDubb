@@ -15,9 +15,7 @@ import { Icon } from './Sprite.js';
  * Three were panels standing in a permanent left-hand rail, and the fourth —
  * findings — was the last panel on the floor read the same way. All four are
  * read as a *count* far more often than as contents, so the count is a gauge in
- * the status bar and the desk opens from it as a `Modal`. See
- * `docs/spec/2026-07-29-factory-two-rail-layout-design.md` and
- * `docs/spec/2026-07-30-factory-findings-gauge-design.md`.
+ * the status bar and the desk opens from it as a `Modal`.
  *
  * They are components rather than JSX inlined into `FactoryRoot` for the reason
  * `StatusBar` is: a `ConfirmButton`, a forty-row log and a demo gate are
