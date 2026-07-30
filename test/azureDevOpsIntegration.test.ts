@@ -6,6 +6,7 @@ import {
   aggregatePolicyCiStatus,
   buildUnresolvedComments,
   computeApproved,
+  listPolicyCiChecks,
   mergeStrategyFor,
   mergeableFromStatus,
   normalizeMergeState,
@@ -21,6 +22,7 @@ import {
 import {
   buildOpenWorkItemQuery,
   isSignInHtml,
+  policyDisplayName,
   RestAzureDevOpsApi,
   type AzureAuth,
 } from '../src/integrations/azure/restAzureDevOpsApi.js';
@@ -191,10 +193,58 @@ test('mergeableFromStatus is tri-state: concrete for succeeded/conflicts, undefi
 const BUILD_TYPE = '0609b952-1397-4640-95ec-e00a01b2c241';
 const STATUS_TYPE = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
 const REVIEWERS_TYPE = 'fa4e907d-c16b-4a4c-9dfa-4906e5d171dd';
+const COMMENTS_TYPE = 'c6a1889d-b943-4856-b76f-9e46bb6b0df2';
 
 function evalRec(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation {
-  return { typeId: BUILD_TYPE, displayName: 'build', status: 'approved', isBlocking: true, isEnabled: true, ...over };
+  return {
+    typeId: BUILD_TYPE,
+    typeName: 'Build',
+    displayName: 'build',
+    status: 'approved',
+    isBlocking: true,
+    isEnabled: true,
+    ...over,
+  };
 }
+
+test('policyDisplayName: a build policy with no settings name falls back to its build definition', () => {
+  // The regression this exists for. `settings.displayName` is null for a
+  // build-validation policy whose operator never typed one — on a real repo that
+  // is most of them, the required builds included — and a nameless check was
+  // skipped outright, so `ci.checks` could not reach Build UI or Build-dotnet.
+  assert.equal(
+    policyDisplayName({
+      configuration: { type: { id: BUILD_TYPE, displayName: 'Build' }, settings: {} },
+      context: { buildDefinitionName: 'Build-dotnet' },
+    }),
+    'Build-dotnet',
+  );
+});
+
+test('policyDisplayName: an operator-typed name still wins over the build definition', () => {
+  assert.equal(
+    policyDisplayName({
+      configuration: {
+        type: { id: BUILD_TYPE, displayName: 'Build' },
+        settings: { displayName: 'Hallway Traffic Light' },
+      },
+      context: { buildDefinitionName: 'hallway-traffic-light' },
+    }),
+    'Hallway Traffic Light',
+  );
+});
+
+test('policyDisplayName: a policy with neither falls back to its type name', () => {
+  assert.equal(
+    policyDisplayName({ configuration: { type: { id: COMMENTS_TYPE, displayName: 'Comment requirements' } } }),
+    'Comment requirements',
+  );
+});
+
+test('listPolicyCiChecks: a failing build is surfaced with its blocking flag', () => {
+  const checks = listPolicyCiChecks([evalRec({ displayName: 'Build-dotnet', status: 'rejected' })]);
+  assert.deepEqual(checks, [{ name: 'Build-dotnet', status: 'failing', blocking: true }]);
+});
 
 test('aggregatePolicyCiStatus: a rejected required build policy is failing', () => {
   assert.equal(aggregatePolicyCiStatus([evalRec({ status: 'approved' }), evalRec({ status: 'rejected' })]), 'failing');

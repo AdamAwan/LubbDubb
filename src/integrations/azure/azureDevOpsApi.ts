@@ -159,12 +159,23 @@ export interface AzPolicyEvaluation {
    */
   typeId: string;
   /**
-   * The policy's operator-facing name — a build-validation policy's display
-   * name, or a status policy's `genre/name`. Empty when the policy carries
-   * neither, which is what a nameless check reads as downstream. Carried so
-   * per-check CI policy can act on *which* check failed.
+   * The policy's operator-facing name, resolved through every place a policy
+   * type happens to carry one (see `policyDisplayName`). Carried so per-check CI
+   * policy can act on *which* check failed.
    */
   displayName: string;
+  /**
+   * The policy *type*'s own display name ("Build", "Comment requirements",
+   * "Work item linking"). Carried because it classifies the evaluation for the
+   * operator and is the last-resort name for a policy whose settings carry none.
+   */
+  typeName: string;
+  /**
+   * The build definition a build-validation evaluation ran, from its `context`.
+   * The real name of most build policies: `settings.displayName` is null unless
+   * an operator typed one, and a nameless check cannot be matched by a glob.
+   */
+  buildDefinitionName?: string;
   /** queued | running | approved | rejected | notApplicable | broken | null. */
   status: string | null;
   /** True when the policy blocks completion — i.e. a *required* check. */

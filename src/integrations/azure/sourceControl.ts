@@ -261,22 +261,35 @@ export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
 }
 
 /**
- * The same enabled, blocking CI policies {@link aggregatePolicyCiStatus} folds,
- * kept individually so per-check policy can act on *which* one failed. A policy
- * whose type carries no name is skipped: an unnameable check cannot be matched
- * by a glob, and emitting it nameless would let one empty pattern claim several
- * unrelated checks at once.
+ * The CI policies {@link aggregatePolicyCiStatus} folds, kept individually so
+ * per-check policy can act on *which* one failed — plus the ones it deliberately
+ * doesn't: an *Optional* (non-blocking) policy still fails, and the harness can
+ * still fix it, so it is surfaced here with `blocking: false` while the fold
+ * above stays frozen on the required checks.
+ *
+ * A policy with no name is no longer skipped: `policyDisplayName` now falls back
+ * through the build definition name to the policy type's own, so "unnameable" has
+ * stopped being a state an evaluation can be in. The clause it replaces existed
+ * because a nameless check cannot be matched by a glob and emitting one would let
+ * a single empty pattern claim several unrelated checks at once.
  */
 export function listPolicyCiChecks(evals: AzPolicyEvaluation[]): CiCheck[] {
   const checks: CiCheck[] = [];
   for (const e of evals) {
-    if (!e.isEnabled || !e.isBlocking || !CI_POLICY_TYPES.has(e.typeId) || !e.displayName) continue;
-    if (e.status === 'rejected' || e.status === 'broken') checks.push({ name: e.displayName, status: 'failing' });
-    else if (e.status === 'queued' || e.status === 'running') checks.push({ name: e.displayName, status: 'pending' });
-    else if (e.status === 'approved') checks.push({ name: e.displayName, status: 'passing' });
-    // 'notApplicable' / null contribute no signal, exactly as in the fold.
+    if (!e.isEnabled || !CI_POLICY_TYPES.has(e.typeId)) continue;
+    const status = checkStatusOf(e.status);
+    if (status) checks.push({ name: e.displayName, status, blocking: e.isBlocking });
   }
   return checks;
+}
+
+/** A policy evaluation status as a {@link CiCheck} status, or null for no signal. */
+function checkStatusOf(status: string | null): CiCheck['status'] | null {
+  if (status === 'rejected' || status === 'broken') return 'failing';
+  if (status === 'queued' || status === 'running') return 'pending';
+  if (status === 'approved') return 'passing';
+  // 'notApplicable' / null contribute no signal, exactly as in the fold.
+  return null;
 }
 
 /**

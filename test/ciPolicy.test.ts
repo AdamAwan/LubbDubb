@@ -384,20 +384,55 @@ test('listCiChecks: github check-runs and commit statuses, named and folded cons
   assert.equal(aggregateCiStatus(runs, status), 'failing');
 });
 
-test('listPolicyCiChecks: azure counts only enabled, blocking, named CI policies', () => {
+test('listPolicyCiChecks: azure surfaces every enabled CI policy, Optional ones included', () => {
   const BUILD = '0609b952-1397-4640-95ec-e00a01b2c241';
   const REVIEWERS = 'fa4e907d-c16b-4a4c-9dfa-4906e5d171dd';
   const evals: AzPolicyEvaluation[] = [
-    { typeId: BUILD, displayName: 'CI build', status: 'rejected', isBlocking: true, isEnabled: true },
-    { typeId: BUILD, displayName: 'optional build', status: 'rejected', isBlocking: false, isEnabled: true },
-    { typeId: REVIEWERS, displayName: 'two reviewers', status: 'rejected', isBlocking: true, isEnabled: true },
-    // A policy whose type carries no name can't be matched by a glob, so it is
-    // left out rather than emitted as an empty name one pattern could claim.
-    { typeId: BUILD, displayName: '', status: 'rejected', isBlocking: true, isEnabled: true },
+    {
+      typeId: BUILD,
+      typeName: 'Build',
+      displayName: 'CI build',
+      status: 'rejected',
+      isBlocking: true,
+      isEnabled: true,
+    },
+    {
+      typeId: BUILD,
+      typeName: 'Build',
+      displayName: 'optional build',
+      status: 'rejected',
+      isBlocking: false,
+      isEnabled: true,
+    },
+    {
+      typeId: REVIEWERS,
+      typeName: 'Minimum number of reviewers',
+      displayName: 'two reviewers',
+      status: 'rejected',
+      isBlocking: true,
+      isEnabled: true,
+    },
+    {
+      typeId: BUILD,
+      typeName: 'Build',
+      displayName: 'stale build',
+      status: 'rejected',
+      isBlocking: true,
+      isEnabled: false,
+    },
   ];
 
-  assert.deepEqual(listPolicyCiChecks(evals), [{ name: 'CI build', status: 'failing' }]);
+  // An Optional policy is a real failing check the harness can fix, so it is
+  // listed — with `blocking: false`, which is the only thing that stops it being
+  // mistaken for a reason the PR cannot merge. A reviewers policy is a human gate
+  // and a disabled one is stale noise; neither is CI.
+  assert.deepEqual(listPolicyCiChecks(evals), [
+    { name: 'CI build', status: 'failing', blocking: true },
+    { name: 'optional build', status: 'failing', blocking: false },
+  ]);
+  // The fold is frozen on the required checks: `ciStatus` is the merge question.
   assert.equal(aggregatePolicyCiStatus(evals), 'failing');
+  assert.equal(aggregatePolicyCiStatus([evals[1]!]), 'unknown');
 });
 
 // --------------------------------------------------------------------------
