@@ -106,7 +106,7 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 
 test('the tracker is named from the provider actually serving issues', () => {
   const gh = {
-    integrations: { issues: 'github', sourceControl: 'fake', backlog: 'fake' },
+    integrations: { issues: 'github', sourceControl: 'fake' },
     github: { owner: 'AdamAwan', repo: 'LubbDubb' },
   } as unknown as Config;
   assert.match(trackerCoordinates(gh)!, /GitHub repository AdamAwan\/LubbDubb/);
@@ -115,7 +115,7 @@ test('the tracker is named from the provider actually serving issues', () => {
   assert.match(trackerCoordinates(gh)!, /gh issue create -R AdamAwan\/LubbDubb/);
 
   const az = {
-    integrations: { issues: 'azure', sourceControl: 'azure', backlog: 'fake' },
+    integrations: { issues: 'azure', sourceControl: 'azure' },
     azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
   } as unknown as Config;
   assert.match(trackerCoordinates(az)!, /Azure DevOps project "Platform"/);

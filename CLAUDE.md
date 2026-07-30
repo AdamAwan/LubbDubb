@@ -773,7 +773,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
       not — a ticket closed at once, or filed into another project, is never fetched, and the adopted
       job would be reachable from nowhere. `link_ticket` gained a second resolution arm (finding _or_
       filing, never both) and requires an `issue:` ref, since both trackers make a work item an issue
-      and guessing a node kind off `pr:`/`story:` is a case worth removing.
+      and guessing a node kind off a `pr:` ref is a case worth removing.
     - Consequence, stated rather than mechanised: a filed ticket is a fresh open issue, and the issue
       watch gate is **opt-in** (`labelPrefix` defaults to `lubbdubb`), so nothing picks it up. Under
       `labelPrefix: ''` — the documented "act on everything" escape hatch — it **is** immediately
@@ -1137,7 +1137,7 @@ preserve:
   the `gh`-shell-out gap: an agent that needed a PR's CI status or review comments had to shell out,
   which is provider-coupled (nothing works under `azure`) and re-fetches what the pulse already holds.
   Things that make it what it is:
-  - **`kind` is `pr` / `issue` / `story`** (`WORLD_READ_KINDS`, `src/mcp/worldRead.ts`) — the three
+  - **`kind` is `pr` / `issue`** (`WORLD_READ_KINDS`, `src/mcp/worldRead.ts`) — the two
     lists a `WorldSnapshot` carries and the three ref prefixes everything else writes, not a new
     taxonomy to keep in step with the rules.
   - **The source is `Store.getWorldBaseline()`**, which is exactly what `Harness.recordWorldChanges`
@@ -1183,7 +1183,7 @@ preserve:
     mouth in front of an operator and is read as testimony about work its author actually did. So
     the schema is `{kind, summary, ref}` and nothing else; attribution
     (`agentId`/`taskId`/`originRef`) comes from the credential.
-  - **`ref` is optional and kind-strict**: the same `pr:`/`issue:`/`story:` vocabulary, suffix-
+  - **`ref` is optional and kind-strict**: the same `pr:`/`issue:` vocabulary, suffix-
     tolerant so an origin ref passes back verbatim, but a **bare number is refused** — unlike
     `world_read` there is no `kind` argument to say whether `41` is an issue or a PR, and a duplicate
     report must not guess. Anything off-vocabulary is refused with "omit ref, describe it in the
@@ -1322,7 +1322,7 @@ mcp__lubbdubb__…, but you haven't granted it yet."` with no human at the promp
   five tools above are the whole surface, and a sixth should not be added back for symmetry. The
   reasoning, so it isn't re-derived: **origin and branch are 1:1 for every world-driven dispatch
   rule** (`pr:<n>:*`→`pr.branch`, `issue:<n>`→`issue/<n>`, `issue:<n>:plan`→`plan/issue/<n>`,
-  `issue:<n>:part:<slug>`→`issue/<n>/<slug>`, `story:<id>:work`→`story/<id>`), so the
+  `issue:<n>:part:<slug>`→`issue/<n>/<slug>`), so the
   `activeOrigins` / `findActiveTaskByOrigin` gate already _is_ a branch gate and the three existing
   gates leave no dispatch-time collision for a claim to prevent. What they can't see is what an
   agent does once running — and a claim can't fix that either: **advisory** makes it documentation
@@ -1744,15 +1744,14 @@ so the executor runs it directly.
   "leave it alone"/"work this" signal, resolved by `src/watchLabels.ts` (see the Gotchas note). PR
   side: `harness.ts` filters `-ignore`-tagged PRs out of the world it hands the dispatcher (via
   `isPrExcluded`), so **both** dispatchers ignore them uniformly, while the cockpit snapshot (reads
-  the connector directly) still shows them with their health. Issue/story side: the opt-in watch
+  the connector directly) still shows them with their health. Issue side: the opt-in watch
   gate leaves un-watched items visible but unacted-on. The cockpit's per-row toggle writes the tags
   back through outbound capabilities on the `ActionSink` seam, routed by `CompositeConnector`:
   `PrLabelCapable.setPrLabel` (fake + `github` + `azure` sourceControl, `setPullLabel` on each `*Api`),
   `IssueLabelCapable.setIssueLabel` (fake + `github` + `azure` issues; GitHub reuses the labels API,
-  Azure read-modify-writes `System.Tags` via `setWorkItemTag`), and `StoryLabelCapable.setStoryLabel`
-  (fake backlog only). Add to the seam + its scripted fake together, same as the other outbound
-  actions. Endpoints: `POST /api/prs/:n/exclude` (`{excluded}`), `POST /api/issues/:n/watch` and
-  `POST /api/stories/:id/watch` (`{watched}` — writes the `-watch`/`-ignore` pair, mutually
+  Azure read-modify-writes `System.Tags` via `setWorkItemTag`). Add to the seam + its scripted fake
+  together, same as the other outbound actions. Endpoints: `POST /api/prs/:n/exclude` (`{excluded}`)
+  and `POST /api/issues/:n/watch` (`{watched}` — writes the `-watch`/`-ignore` pair, mutually
   exclusive). They're label writes, **not** dispatcher actions.
 - **`IssueCommentCapable.upsertIssueComment`** is the same pattern for the plan's status comment
   (fake + `github` issues via the issue-comments API + `azure` work items via
@@ -1864,7 +1863,7 @@ structured field, feed it into `buildRefUrls`.
   single source: `watchLabelsFor(prefix)` derives `${prefix}-watch` / `${prefix}-ignore`, and
   the pure `resolveWatchState(labels, {watchLabel, ignoreLabel, defaultWatched})` folds the
   precedence — **ignore wins, then watch, else the type default**. The default differs by kind:
-  PRs are opt-out (`defaultWatched: true` → worked unless `-ignore`), issues/stories are opt-in
+  PRs are opt-out (`defaultWatched: true` → worked unless `-ignore`), issues are opt-in
   (`defaultWatched: false` → left alone unless `-watch`). An **empty prefix** yields empty labels =
   both gates off (the escape hatch tests use via `labelPrefix: ''`). There is **no ingest filter**
   anymore — every open issue is fetched and displayed; the gate only decides what's _acted on_.
@@ -1875,8 +1874,6 @@ structured field, feed it into `buildRefUrls`.
     (explicit `-ignore`) vs `unwatched` (no `-watch` / state-gated) so the cockpit marks them apart.
     An **empty `watchLabel` leaves the watch gate off** (act on all) — that's how the no-arg
     `RuleDispatcher` and `labelPrefix: ''` keep the old act-on-all behaviour.
-  - Story side: the pure `watchGateReason(labels, policy)` gates the story rules the same way
-    (fake-backlog-only; `Story.labels` is optional).
   - Priority stays label-encoded (`issuePriorityLabels`/`issueDefaultPriority`, pure `issuePriority`).
     `issuePickupRequireOwnLabel` refines the **watch** gate: when on, the watch check reads
     `issue.labelsAddedByViewer` instead of `labels`, so a `-watch` tag someone else added is ignored

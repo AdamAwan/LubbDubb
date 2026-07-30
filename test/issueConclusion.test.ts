@@ -84,7 +84,7 @@ test("the operator's toggle beats everything", () => {
 
 test('only a whole-issue origin may conclude', () => {
   assert.equal(conclusionOrigin('issue:12').ok, true);
-  for (const ref of ['issue:12:part:schema', 'issue:12:plan', 'pr:42:ci', 'job:abc', 'story:s1:work', null, '']) {
+  for (const ref of ['issue:12:part:schema', 'issue:12:plan', 'pr:42:ci', 'job:abc', 'epic:e1:work', null, '']) {
     assert.equal(conclusionOrigin(ref).ok, false, `${ref} must not conclude an issue`);
   }
 });

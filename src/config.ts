@@ -73,12 +73,12 @@ export interface Config {
    */
   azureDevOps?: AzureDevOpsConfig;
   /**
-   * The prefix behind the cockpit's watch/ignore toggle, shared by PRs, issues and
-   * stories. It derives two labels — `${labelPrefix}-watch` ("work this") and
+   * The prefix behind the cockpit's watch/ignore toggle, shared by PRs and
+   * issues. It derives two labels — `${labelPrefix}-watch` ("work this") and
    * `${labelPrefix}-ignore` ("leave this alone") — read by the dispatcher gates and
    * written by the toggle (see {@link watchLabelsFor}/{@link resolveWatchState}).
    * The no-tag default differs by type: PRs are opt-out (watched unless ignored),
-   * issues/stories are opt-in (ignored unless watched). Defaults to `"lubbdubb"`,
+   * issues are opt-in (ignored unless watched). Defaults to `"lubbdubb"`,
    * so `lubbdubb-ignore` keeps its historical meaning as the PR exclusion tag.
    */
   labelPrefix: string;
@@ -420,7 +420,7 @@ const DEFAULTS: Config = {
   whitelistedApprovals: [],
   steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
-  integrations: { sourceControl: 'fake', issues: 'fake', backlog: 'fake' },
+  integrations: { sourceControl: 'fake', issues: 'fake' },
   labelPrefix: 'lubbdubb',
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },

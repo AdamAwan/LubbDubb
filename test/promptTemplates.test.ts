@@ -53,7 +53,7 @@ test('sampleTemplateFile carries a doc header that strips back to the default', 
 
 test('loadPromptTemplates: absent dir yields defaults', () => {
   const t = loadPromptTemplates(join(tmpDir(), 'does-not-exist'));
-  assert.match(t.render('story-waf', { title: 'S' }), /Well-Architected/);
+  assert.match(t.render('issue-pickup', { number: 7, title: 'T', body: 'B', branch: 'issue/7' }), /#7/);
 });
 
 test('loadPromptTemplates: an override file (with doc header) replaces the default', () => {
@@ -86,7 +86,7 @@ test('loadPromptTemplates: unknown filename throws', () => {
 test('loadPromptTemplates: unknown placeholder throws', () => {
   const dir = tmpDir();
   try {
-    writeFileSync(join(dir, 'story-waf.md'), 'Do {title} for {sprint}');
+    writeFileSync(join(dir, 'pr-ci-fix.md'), 'Fix {number} for {sprint}');
     assert.throws(() => loadPromptTemplates(dir), /unknown placeholder\(s\) \{sprint\}/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -96,7 +96,7 @@ test('loadPromptTemplates: unknown placeholder throws', () => {
 test('loadPromptTemplates: empty-after-header throws', () => {
   const dir = tmpDir();
   try {
-    writeFileSync(join(dir, 'story-waf.md'), '<!-- just docs, no body -->\n');
+    writeFileSync(join(dir, 'pr-ci-fix.md'), '<!-- just docs, no body -->\n');
     assert.throws(() => loadPromptTemplates(dir), /empty after its doc header/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -128,14 +128,14 @@ test('describe: every id carries its doc, placeholders and effective text', () =
 test('describe: overridden is true only for ids the loader actually replaced', () => {
   const dir = tmpDir();
   try {
-    writeFileSync(join(dir, 'story-waf.md'), '<!-- ours -->\n\nPick pillars for {title}.');
+    writeFileSync(join(dir, 'pr-ci-fix.md'), '<!-- ours -->\n\nFix CI on PR #{number}.');
     const book = loadPromptTemplates(dir).describe();
     const overridden = book.filter((t) => t.overridden).map((t) => t.id);
-    assert.deepEqual(overridden, ['story-waf']);
+    assert.deepEqual(overridden, ['pr-ci-fix']);
     // The *effective* text, so the panel shows what the dispatcher will send.
-    assert.equal(book.find((t) => t.id === 'story-waf')?.template, 'Pick pillars for {title}.');
+    assert.equal(book.find((t) => t.id === 'pr-ci-fix')?.template, 'Fix CI on PR #{number}.');
     // An untouched id still reports its built-in.
-    assert.match(book.find((t) => t.id === 'story-groom')?.template ?? '', /Draft them/);
+    assert.match(book.find((t) => t.id === 'issue-pickup')?.template ?? '', /issue/i);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -154,10 +154,10 @@ test('the panel names the override file in the server\u2019s own path dialect', 
     '/srv/repo/.lubbdubb/prompts/issue-pickup.md',
   );
   // A trailing separator is not doubled, either way round.
-  assert.equal(overridePath('/srv/prompts/', 'story-waf'), '/srv/prompts/story-waf.md');
-  assert.equal(overridePath('C:\\prompts\\', 'story-waf'), 'C:\\prompts\\story-waf.md');
+  assert.equal(overridePath('/srv/prompts/', 'pr-ci-fix'), '/srv/prompts/pr-ci-fix.md');
+  assert.equal(overridePath('C:\\prompts\\', 'pr-ci-fix'), 'C:\\prompts\\pr-ci-fix.md');
   // No dir configured: the panel still says what to create, generically.
-  assert.equal(overridePath(null, 'story-waf'), '<promptTemplatesDir>/story-waf.md');
+  assert.equal(overridePath(null, 'pr-ci-fix'), '<promptTemplatesDir>/pr-ci-fix.md');
 });
 
 test('GET /api/prompts serves the book the dispatcher renders from, overrides and all', async () => {
@@ -206,7 +206,7 @@ test('GET /api/prompts serves the book the dispatcher renders from, overrides an
 
 function ctx(world: Partial<WorldSnapshot>): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],

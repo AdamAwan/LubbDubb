@@ -127,6 +127,12 @@ function claudeModeConfig() {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
+    // The funnel in front of pickup defaults **on**; these tests are about the
+    // agent transport, so pin it off and let rule 4 dispatch directly.
+    planning: { enabled: false } as never,
+    assessment: { enabled: false } as never,
+    assay: { enabled: false } as never,
+    retrospective: { enabled: false } as never,
   });
 }
 
@@ -134,7 +140,7 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
   const backend = new FakePtyBackend();
   const system = buildSystem(claudeModeConfig(), { backend });
 
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
 
   // Spawned with our injected system prompt.
@@ -145,7 +151,7 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
   // The task prompt is typed into the session (delay 0 -> next tick).
   await new Promise((r) => setTimeout(r, 5));
   assert.ok(
-    backend.last().writes.some((w) => w.includes('missing')),
+    backend.last().writes.some((w) => w.includes('issue #901')),
     'expected the task prompt to be typed in',
   );
   system.store.close();
@@ -154,7 +160,7 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
 test('claude-mode still detects the protocol sentinels from real output', async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(claudeModeConfig(), { backend });
-  system.connector.inject({ kind: 'new_story', title: 'X', wafPillars: ['Cost'] });
+  system.connector.inject({ kind: 'new_issue', number: 902, title: 'X' });
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

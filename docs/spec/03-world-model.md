@@ -13,7 +13,6 @@ interface WorldSnapshot {
   pullRequests: PullRequest[]; // OPEN pull requests, and only those
   closedPullRequests?: PullRequest[]; // PRs that left the open set within closedPrWindowMs
   issues: Issue[];
-  stories: Story[];
 }
 ```
 
@@ -64,8 +63,7 @@ exactly the bug the closed-PR list exists to fix.
 
 ## `Issue`
 
-A tracker issue or work item. Distinct from a `Story`: an issue becomes a PR, a story is a backlog
-item to groom.
+A tracker issue or work item — the thing that becomes a PR.
 
 | Field                     | Meaning                                                                                                                                    |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -76,13 +74,6 @@ item to groom.
 | `workItemState?`          | The provider's **native** workflow state (e.g. Azure `System.State`: "New"/"Ready"/"In Review"). `undefined` for GitHub and the fake.      |
 | `linkedPrNumber`          | The last PR that cross-referenced this issue. **Sticky** — it stays set after that PR merges, so no gate may treat it as "has an open PR". |
 | `url?`                    | Provider web URL.                                                                                                                          |
-
-## `Story`
-
-`id`, `title`, `description`, `acceptanceCriteria`, `wafPillars` (Well-Architected pillars),
-`state` (`ready` \| `in_progress` \| `blocked` \| `done`), `priority` (higher is more important), and
-optional `labels` for the same watch/ignore gate. Stories are supplied by the `fake` backlog provider
-only.
 
 ## The ref vocabulary
 
@@ -99,10 +90,6 @@ cockpit's link map.
 | `issue:<n>`                  | An issue, and its plan row's `origin_ref` | `issue/<n>`                |
 | `issue:<n>:plan`             | A planning agent for that issue           | `plan/issue/<n>`           |
 | `issue:<n>:part:<slug>`      | One part of a decomposed issue            | `issue/<n>/<slug>`         |
-| `story:<id>`                 | A story (world events, link map)          | —                          |
-| `story:<id>:groom`           | Grooming that story                       | — (desk task)              |
-| `story:<id>:waf`             | Filling that story's WAF pillars          | — (desk task)              |
-| `story:<id>:work`            | Implementing that story                   | `story/<id>`               |
 | `job:<id>`                   | An operator-launched job                  | `job.branch` or `job/<id>` |
 
 **Origin and branch are 1:1 for every world-driven rule.** That is why the origin de-duplication gate
@@ -136,8 +123,6 @@ Object identity is by domain `id`. Two standing rules:
 | `issue_opened` | An issue id appears.                                                                           |
 | `issue_closed` | `state` went open→closed.                                                                      |
 | `issue_linked` | `linkedPrNumber` went null→set.                                                                |
-| `story_added`  | A story id appears.                                                                            |
-| `story_state`  | `state` changed.                                                                               |
 
 Because the second rule (removals are silent) is absolute, `pr_merged` **cannot** be observed on the
 open list against a real provider — GitHub (`state: 'open'`) and Azure (`status: 'active'`) both drop

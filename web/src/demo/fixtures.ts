@@ -216,28 +216,6 @@ export function buildDemoState(): DemoSeed {
           pickup: { eligible: false, status: 'planning', reasons: ['0/3 parts merged'] },
         },
       ],
-      stories: [
-        {
-          id: 'st-12',
-          title: 'Password reset flow',
-          description: null,
-          acceptanceCriteria: null,
-          wafPillars: [],
-          state: 'new',
-          priority: 2,
-          labels: [],
-        },
-        {
-          id: 'st-9',
-          title: 'Per-agent cost accounting in the cockpit',
-          description: 'Surface token + wall-clock cost per agent on the fleet card.',
-          acceptanceCriteria: 'Cost shown live and persisted; visible in history.',
-          wafPillars: ['operational-excellence', 'cost-optimization'],
-          state: 'ready',
-          priority: 1,
-          labels: ['lubbdubb-watch'],
-        },
-      ],
     },
     tasks: [
       {
@@ -757,7 +735,7 @@ export function buildDemoState(): DemoSeed {
     ],
     // The dispatcher's ranked pickup plan from the "last pulse": cap 3 with two
     // live agents leaves headroom 1, so the top candidate dispatches and the
-    // story pickup sits below the cut waiting for a slot.
+    // rest sit below the cut.
     upcoming: {
       cycleId: 'cycle-103',
       at: ago(0),
@@ -783,15 +761,6 @@ export function buildDemoState(): DemoSeed {
           status: 'capped',
           reason:
             'Part "writes" of issue #212 is ready and stacks on issue/212/reads. Held: issue #212 is already at its 2-part concurrency cap.',
-        },
-        {
-          origin: 'story:st-9:work',
-          rule: 'story-pickup',
-          title: 'Implement "Per-agent cost accounting in the cockpit"',
-          kind: 'code',
-          branch: 'story/st-9',
-          status: 'waiting',
-          reason: 'Idle capacity; "Per-agent cost accounting in the cockpit" is the highest-priority ready story.',
         },
         {
           // Queued but held, same as `writes` above — this time by the plan's own
@@ -899,14 +868,8 @@ export function buildDemoState(): DemoSeed {
         description:
           'An open, pickup-eligible issue with no linked PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority.',
       },
-      'story-pickup': {
-        number: '7',
-        name: 'Idle capacity pickup',
-        description:
-          'With headroom left and nothing urgent, the highest-priority ready story (already groomed) is picked up by a code agent — idle capacity should always pull work.',
-      },
       idle: {
-        number: '8',
+        number: '5',
         name: 'Nothing actionable',
         description:
           'No rule matched this cycle, so a no-op is recorded — idleness is a decision too, and stays auditable.',

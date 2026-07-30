@@ -91,7 +91,7 @@ function part(slug: string, seq: number, over: Partial<PlanPart> = {}): PlanPart
 }
 
 function world(issues: Issue[], pullRequests: PullRequest[] = []): WorldSnapshot {
-  return { takenAt: '2026-07-25T12:00:00.000Z', pullRequests, issues, stories: [] };
+  return { takenAt: '2026-07-25T12:00:00.000Z', pullRequests, issues };
 }
 
 function context(issues: Issue[], extra: Partial<DispatchContext> = {}): DispatchContext {

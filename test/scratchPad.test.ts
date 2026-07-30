@@ -66,7 +66,7 @@ test('padOriginFor maps every origin in an issue subtree to the issue', () => {
 test('padOriginFor refuses everything outside one issue', () => {
   assert.equal(padOriginFor('pr:42:ci'), null);
   assert.equal(padOriginFor('job:job_abc'), null);
-  assert.equal(padOriginFor('story:s-1:work'), null);
+  assert.equal(padOriginFor('epic:e-1:work'), null);
   assert.equal(padOriginFor(null), null);
   assert.equal(padOriginFor('issue:notanumber'), null);
 });
@@ -169,7 +169,7 @@ test('the pad is shared across one issue and reached only through the credential
 
 test('an agent outside an issue subtree is refused, and told which tool it wants', async () => {
   const system = build();
-  for (const origin of ['pr:42:ci', 'job:job_abc', 'story:s-1:work']) {
+  for (const origin of ['pr:42:ci', 'job:job_abc', 'epic:e-1:work']) {
     const agent = spawnAgent(system, origin);
     const res = await callTool(system, agent, 'scratch_append', { note: 'anything' });
     assert.equal(res.isError, true, `${origin} must not reach a pad`);

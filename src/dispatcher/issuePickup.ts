@@ -173,21 +173,6 @@ export function issueWatchGateReason(issue: Issue, policy: IssuePickupPolicy): s
   return issueIgnoreReason(issue, policy) ?? issueWatchReason(issue, policy);
 }
 
-/**
- * The label half of the opt-in gate, shared by stories (which have no state gate
- * or ownership refinement). Returns the blocking reason, or `null` when the item
- * may be worked. Ignore wins; then an unset/empty watch label leaves the gate off
- * (act on all), matching the issue gate above.
- */
-export function watchGateReason(
-  labels: string[],
-  policy: Pick<IssuePickupPolicy, 'watchLabel' | 'ignoreLabel'>,
-): string | null {
-  if (policy.ignoreLabel && labels.includes(policy.ignoreLabel)) return `ignored ("${policy.ignoreLabel}")`;
-  if (policy.watchLabel && !labels.includes(policy.watchLabel)) return `no watch label "${policy.watchLabel}"`;
-  return null;
-}
-
 /** What LubbDubb is doing (or not) with one issue, and why. */
 type IssuePickupStatusKind =
   | 'done' // closed — nothing to do

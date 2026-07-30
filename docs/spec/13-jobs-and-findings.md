@@ -124,7 +124,7 @@ the summary is free text already.
 - `kind` must be one of the three; the error lists all three with their help text.
 - `summary` is required and at most 2000 characters — long enough for a paragraph, short enough to read
   in a list.
-- `ref` is optional. `parseFindingRef` accepts the closed `pr:` / `issue:` / `story:` vocabulary,
+- `ref` is optional. `parseFindingRef` accepts the closed `pr:` / `issue:` vocabulary,
   suffix-tolerant so an origin ref passes back verbatim. A **bare number is refused** — unlike
   `world_read` there is no `kind` argument to disambiguate issue #41 from PR #41, and a duplicate
   report must not guess. Anything else is refused with "omit ref and describe it in the summary": an

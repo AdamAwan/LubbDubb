@@ -9,14 +9,14 @@
  * ignored/unwatched split `issuePickupStatus` already reports and the difference
  * between a row that is settled and a row that is waiting on a triage pass. The
  * precedence is the server's, though: ignore wins, then watch, else the type
- * default (PRs opt-out, issues/stories opt-in).
+ * default (PRs opt-out, issues opt-in).
  */
 export type WatchBucket = 'watched' | 'unwatched' | 'ignored';
 
 interface WatchBucketOpts {
   watchLabel: string;
   ignoreLabel: string;
-  /** What an untagged item defaults to: `true` for PRs, `false` for issues/stories. */
+  /** What an untagged item defaults to: `true` for PRs, `false` for issues. */
   defaultWatched: boolean;
 }
 

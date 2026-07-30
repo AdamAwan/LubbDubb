@@ -1316,17 +1316,11 @@ body {
 .audit.activity.issues {
   border-color: var(--accent);
 }
-.audit.activity.stories {
-  border-color: var(--green);
-}
 .badge.prs {
   color: var(--blue);
 }
 .badge.issues {
   color: var(--accent);
-}
-.badge.stories {
-  color: var(--green);
 }
 .filter-chip.prs.active {
   border-color: var(--blue);
@@ -1335,10 +1329,6 @@ body {
 .filter-chip.issues.active {
   border-color: var(--accent);
   background: var(--accent-fill);
-}
-.filter-chip.stories.active {
-  border-color: var(--green);
-  background: var(--green-fill);
 }
 
 /* "Up next" queue — the dispatcher's ranked pickup plan with the headroom cut. */

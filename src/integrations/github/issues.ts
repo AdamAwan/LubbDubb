@@ -1,4 +1,3 @@
-import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { IssueCommentInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
 import type { Issue, IssueState } from '../../types.js';
@@ -16,7 +15,6 @@ import { githubRefUrl } from './refUrl.js';
 interface GitHubIssuesOpts {
   /** The GitHub client, already bound to a single owner/repo. */
   api: GitHubApi;
-  store: Store;
   /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
   errors?: ErrorRecorder;
   /** Repo identity for building web URLs. When unset, ref resolution returns null. */
@@ -53,7 +51,6 @@ export class GitHubIssuesIntegration implements Integration, RefResolvable, Issu
   /** The outbound side of the cockpit's watch/ignore toggle. PRs and issues share the labels API. */
   async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
     await this.opts.api.setIssueLabel(input.number, input.label, input.present);
-    this.opts.store.recordConnectorEvent('issue_label_set', { ...input });
     return { ok: true };
   }
 
@@ -68,7 +65,6 @@ export class GitHubIssuesIntegration implements Integration, RefResolvable, Issu
       existing !== null && Number.isInteger(existing)
         ? await this.opts.api.updateIssueComment(existing, input.body)
         : await this.opts.api.createIssueComment(input.number, input.body);
-    this.opts.store.recordConnectorEvent('issue_comment_sent', { number: input.number, ref: ref.url });
     return { ok: true, ref: String(ref.id) };
   }
 

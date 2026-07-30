@@ -19,7 +19,6 @@ export function iconForOrigin(origin: string | null): IconName {
   if (origin.includes(':plan')) return 'blueprint';
   if (origin.includes(':part:')) return 'assembler';
   if (origin.startsWith('issue:')) return 'flask';
-  if (origin.startsWith('story:')) return 'flask';
   return 'chest';
 }
 
@@ -36,7 +35,6 @@ export function iconForEventKind(kind: WorldEventKind): IconName {
   if (kind === 'pr_merged') return 'pr';
   if (kind === 'pr_comment') return 'chest';
   if (kind.startsWith('pr_')) return 'gear';
-  if (kind.startsWith('story_')) return 'flask';
   return 'flask';
 }
 

@@ -183,17 +183,6 @@ export interface RetrospectiveView {
   updatedAt: string;
 }
 
-interface Story {
-  id: string;
-  title: string;
-  description: string | null;
-  acceptanceCriteria: string | null;
-  wafPillars: string[];
-  state: string;
-  priority: number;
-  /** Labels/tags on the story, carrying the watch/ignore tag when the operator toggles it. */
-  labels?: string[];
-}
 export interface WorldSnapshot {
   takenAt: string;
   /** Open PRs, and only those. */
@@ -205,7 +194,6 @@ export interface WorldSnapshot {
    */
   closedPullRequests?: PullRequest[];
   issues: Issue[];
-  stories: Story[];
 }
 
 export interface Task {
@@ -601,9 +589,7 @@ export type WorldEventKind =
   | 'pr_comment'
   | 'issue_opened'
   | 'issue_closed'
-  | 'issue_linked'
-  | 'story_added'
-  | 'story_state';
+  | 'issue_linked';
 
 export interface WorldEvent {
   id: string;

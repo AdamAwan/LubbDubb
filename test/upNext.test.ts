@@ -18,7 +18,7 @@ import { Store } from '../src/store/store.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: 'now', pullRequests: [], issues: [], stories: [], ...world },
+    world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
     tasks: [],
     agents: [],
     openEscalations: [],
@@ -155,38 +155,6 @@ test('a cooling-down origin shows in the queue as cooldown and is not dispatched
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status]),
     [['pr:42:mergeable', 'cooldown']],
-  );
-});
-
-test('the rule-8 story pickup appears below the cut instead of vanishing', async () => {
-  const d = new RuleDispatcher();
-  const result = await d.decide(
-    ctx(
-      {
-        issues: [issue(9)],
-        stories: [
-          {
-            id: 'hi',
-            title: 'High',
-            description: 'd',
-            acceptanceCriteria: 'ac',
-            wafPillars: ['x'],
-            state: 'ready',
-            priority: 9,
-          },
-        ],
-      },
-      { agentHeadroom: 1 },
-    ),
-  );
-  // Headroom 1: the issue takes the slot; the story pickup queues behind it
-  // (today it is silently dropped once headroom hits zero).
-  assert.deepEqual(
-    result.upcoming?.map((q) => [q.origin, q.status]),
-    [
-      ['issue:9', 'dispatching'],
-      ['story:hi:work', 'waiting'],
-    ],
   );
 });
 

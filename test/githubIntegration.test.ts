@@ -249,7 +249,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
     checkRuns: { sha7: [{ name: 'build', status: 'completed', conclusion: 'success' }] },
   });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const slice = await sc.snapshot();
   const pr = slice.pullRequests![0]!;
   assert.equal(pr.number, 7);
@@ -271,7 +271,7 @@ test('snapshot leaves mergeable undefined when GitHub is still computing (null)'
     detail: { 7: { mergeable: null, mergeableState: null, merged: false } },
   });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.mergeable, undefined);
   store.close();
@@ -340,7 +340,7 @@ test('snapshot maps baseBranch and normalises mergeable_state', async () => {
     detail: { 7: { mergeable: false, mergeableState: 'dirty', merged: false } },
   });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.baseBranch, 'develop');
   assert.equal(pr.mergeableState, 'dirty');
@@ -354,7 +354,7 @@ test('an unrecognised mergeable_state normalises to unknown', async () => {
     detail: { 7: { mergeable: true, mergeableState: 'unstable', merged: false } },
   });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const pr = (await sc.snapshot()).pullRequests![0]!;
   assert.equal(pr.mergeableState, 'unknown');
   store.close();
@@ -365,7 +365,7 @@ test('snapshot applies the prAuthor filter client-side', async () => {
     pulls: [pull({ number: 7, authorLogin: 'alice' }), pull({ number: 8, authorLogin: 'bob' })],
   });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store, prAuthor: 'alice' });
+  const sc = new GitHubSourceControlIntegration({ api, prAuthor: 'alice' });
   const prs = (await sc.snapshot()).pullRequests!;
   assert.deepEqual(
     prs.map((p) => p.number),
@@ -380,11 +380,11 @@ test('snapshot returns the last-good slice and records an error event on failure
     pulls: [pull({ number: 7 })],
     detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
   });
-  const sc = new GitHubSourceControlIntegration({ api: good.api, store });
+  const sc = new GitHubSourceControlIntegration({ api: good.api });
   await sc.snapshot(); // warm the last-good cache
 
   const bad = fakeApi({ throwOn: 'listOpenPulls' });
-  const sc2 = new GitHubSourceControlIntegration({ api: bad.api, store });
+  const sc2 = new GitHubSourceControlIntegration({ api: bad.api });
   await sc2.snapshot(); // cold + failing → empty, and it must not throw
   const slice = await sc2.snapshot();
   assert.deepEqual(slice.pullRequests, []);
@@ -398,7 +398,7 @@ test('snapshot returns the last-good slice and records an error event on failure
 test('postPrReply threads under a review comment when commentId is set', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const res = await sc.postPrReply({ prNumber: 7, commentId: '100', body: 'because X' });
   assert.equal(res.ok, true);
   assert.match(res.ref!, /discussion_r100/);
@@ -410,7 +410,7 @@ test('postPrReply threads under a review comment when commentId is set', async (
 test('postPrReply posts a top-level comment when commentId is null', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const res = await sc.postPrReply({ prNumber: 7, commentId: null, body: 'ping' });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.issueComments, [{ number: 7, body: 'ping' }]);
@@ -421,7 +421,7 @@ test('postPrReply posts a top-level comment when commentId is null', async () =>
 test('mergePr merges with the requested method and returns the merge sha', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const res = await sc.mergePr({ prNumber: 7, method: 'squash' });
   assert.equal(res.ok, true);
   assert.equal(res.ref, 'mergedsha');
@@ -432,7 +432,7 @@ test('mergePr merges with the requested method and returns the merge sha', async
 test('snapshot maps the PR labels through (the exclusion-tag signal)', async () => {
   const { api } = fakeApi({ pulls: [pull({ number: 7, labels: ['lubbdubb-ignore', 'bug'] })] });
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
   const prSlice = (await sc.snapshot()).pullRequests![0]!;
   assert.deepEqual(prSlice.labels, ['lubbdubb-ignore', 'bug']);
   store.close();
@@ -441,7 +441,7 @@ test('snapshot maps the PR labels through (the exclusion-tag signal)', async () 
 test('setPrLabel adds or removes a label through the API', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store });
+  const sc = new GitHubSourceControlIntegration({ api });
 
   const added = await sc.setPrLabel({ prNumber: 7, label: 'lubbdubb-ignore', present: true });
   assert.equal(added.ok, true);
@@ -460,17 +460,17 @@ test('setPrLabel adds or removes a label through the API', async () => {
 test('sourceControl resolves refs to canonical URLs using its owner/repo', () => {
   const { api } = fakeApi();
   const store = new Store(':memory:');
-  const sc = new GitHubSourceControlIntegration({ api, store, owner: 'octo', repo: 'demo' });
+  const sc = new GitHubSourceControlIntegration({ api, owner: 'octo', repo: 'demo' });
   assert.equal(sc.resolveRefUrl('pr:42:ci'), 'https://github.com/octo/demo/pull/42');
   assert.equal(sc.resolveRefUrl('issue:13'), 'https://github.com/octo/demo/issues/13');
-  assert.equal(sc.resolveRefUrl('story:s1:groom'), null);
+  assert.equal(sc.resolveRefUrl('epic:e1:groom'), null);
   store.close();
 });
 
 test('issues provider is also a ref resolver', () => {
   const { api } = fakeApi();
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store, owner: 'octo', repo: 'demo' });
+  const issues = new GitHubIssuesIntegration({ api, owner: 'octo', repo: 'demo' });
   assert.equal(issues.resolveRefUrl('#7'), 'https://github.com/octo/demo/issues/7');
   store.close();
 });
@@ -496,7 +496,7 @@ test('issues snapshot drops PRs and maps state / labels / linked PR', async () =
     timeline: { 101: [{ event: 'cross-referenced', sourcePrNumber: 55, label: null, actorLogin: null }] },
   });
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store });
+  const issues = new GitHubIssuesIntegration({ api });
   const slice = await issues.snapshot();
   assert.equal(slice.issues!.length, 1);
   const issue = slice.issues![0]!;
@@ -556,7 +556,7 @@ test('issues snapshot resolves tag ownership when the ownership gate is on', asy
     },
   });
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store, ownershipLabel: 'agent-ready' });
+  const issues = new GitHubIssuesIntegration({ api, ownershipLabel: 'agent-ready' });
   const slice = await issues.snapshot();
   const byNumber = new Map(slice.issues!.map((i) => [i.number, i]));
   // Both tagged issues carry the label, but only #1's was added by the viewer.
@@ -574,7 +574,7 @@ test('issues snapshot leaves ownership untracked when the gate is off', async ()
     ],
   });
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store });
+  const issues = new GitHubIssuesIntegration({ api });
   const slice = await issues.snapshot();
   assert.equal(slice.issues![0]!.labelsAddedByViewer, undefined);
   store.close();
@@ -583,7 +583,7 @@ test('issues snapshot leaves ownership untracked when the gate is off', async ()
 test('issues snapshot fetches every open issue (no ingest label filter)', async () => {
   const { api, recorded } = fakeApi({ issues: [] });
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store });
+  const issues = new GitHubIssuesIntegration({ api });
   await issues.snapshot();
   assert.deepEqual(recorded.issueLabelQueries, [undefined], 'no label is passed — all open issues are ingested');
   store.close();
@@ -592,7 +592,7 @@ test('issues snapshot fetches every open issue (no ingest label filter)', async 
 test('setIssueLabel adds/removes a label through the labels API', async () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store });
+  const issues = new GitHubIssuesIntegration({ api });
   await issues.setIssueLabel({ number: 7, label: 'lubbdubb-watch', present: true });
   await issues.setIssueLabel({ number: 7, label: 'lubbdubb-ignore', present: false });
   assert.deepEqual(recorded.labelSets, [
@@ -605,7 +605,7 @@ test('setIssueLabel adds/removes a label through the labels API', async () => {
 test('issues snapshot returns the last-good slice and records an error event on failure', async () => {
   const store = new Store(':memory:');
   const bad = fakeApi({ throwOn: 'listOpenIssues' });
-  const issues = new GitHubIssuesIntegration({ api: bad.api, store });
+  const issues = new GitHubIssuesIntegration({ api: bad.api });
   const slice = await issues.snapshot();
   assert.deepEqual(slice.issues, []);
   store.close();
@@ -614,7 +614,7 @@ test('issues snapshot returns the last-good slice and records an error event on 
 test('the plan status comment is created once, then edited in place', () => {
   const { api, recorded } = fakeApi();
   const store = new Store(':memory:');
-  const issues = new GitHubIssuesIntegration({ api, store });
+  const issues = new GitHubIssuesIntegration({ api });
   return issues
     .upsertIssueComment({ number: 12, body: 'first', commentRef: null })
     .then((created) => {

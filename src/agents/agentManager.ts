@@ -445,8 +445,8 @@ export class AgentManager extends EventEmitter {
     if (filing) {
       // A work item is an issue in both trackers the harness reads (a GitHub issue,
       // an Azure work item), and the graph stands a placeholder node up under that
-      // ref when the world never lists it — so guessing a node kind off `pr:`/
-      // `story:` is a case worth removing rather than answering.
+      // ref when the world never lists it — so guessing a node kind off a `pr:`
+      // ref is a case worth removing rather than answering.
       if (!ticketRef.startsWith('issue:')) {
         return {
           ok: false,

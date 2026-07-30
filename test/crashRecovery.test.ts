@@ -41,7 +41,7 @@ async function systemWithCrashedAgent(overrides: Partial<Config> = {}): Promise<
 }> {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(overrides), { backend, errorMirror: () => {} });
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
   const taskId = system.store.getAgent(agentId)!.taskId;
@@ -78,7 +78,7 @@ function systemWithOrphanedTask(): { system: System; taskId: string; origin: str
 
 test('the pulse is held while a crashed agent awaits a decision, and resumes once it lands', async () => {
   const { system, taskId } = await systemWithCrashedAgent();
-  system.connector.inject({ kind: 'new_story', title: 'Second story', wafPillars: ['Security'] });
+  system.connector.inject({ kind: 'new_issue', number: 902, title: 'Second issue' });
 
   const held = await system.harness.runCycle('timer');
   assert.equal(held.cycleId, 'held');
@@ -296,7 +296,7 @@ test('a task dispatched by this run is not mistaken for an orphan of the last on
   // and `spawn` that this whole feature exists to clean up after.
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 903, title: 'Add login' });
   await system.harness.runCycle('manual');
 
   assert.ok(system.store.listOutstandingTasks().length > 0, 'there is live work to be wrong about');
@@ -345,7 +345,7 @@ test('POST /api/recovery/:id refuses an unknown verdict and a task it is not hol
 test("answering a crashed agent's escalation is refused, pointing at the recovery route", async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
-  system.connector.inject({ kind: 'new_story', title: 'Add login', wafPillars: ['Reliability'] });
+  system.connector.inject({ kind: 'new_issue', number: 904, title: 'Add login' });
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
   const taskId = system.store.getAgent(agentId)!.taskId;

@@ -22,7 +22,6 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
       mergePr: unused,
       setPrLabel: unused,
       setIssueLabel: unused,
-      setStoryLabel: unused,
       setWorkItemState: unused,
       async upsertIssueComment(input): Promise<SendResult> {
         comments.push(input);
@@ -34,7 +33,7 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
 }
 
 function world(pullRequests: PullRequest[] = []): WorldSnapshot {
-  return { takenAt: '2026-07-25T12:00:00.000Z', pullRequests, issues: [], stories: [] };
+  return { takenAt: '2026-07-25T12:00:00.000Z', pullRequests, issues: [] };
 }
 
 function pr(number: number, branch: string, overrides: Partial<PullRequest> = {}): PullRequest {

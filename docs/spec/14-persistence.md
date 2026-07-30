@@ -73,7 +73,6 @@ introduced.
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                | —                             |
 | `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                       | —                             |
 | `connector_state`    | The fake provider's editable world, so injected events survive restarts.                       | —                             |
-| `connector_events`   | Injected events, for diagnostics.                                                              | —                             |
 | `world_events`       | Observed world transitions — the activity feed's backing store.                                | —                             |
 | `world_baseline`     | The last snapshot the harness diffed against.                                                  | Single row: `CHECK (id = 1)`  |
 | `error_events`       | Recorded failures — the Errors panel's backing store.                                          | —                             |

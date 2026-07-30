@@ -18,7 +18,7 @@ discover what a synchronous error would have said in one turn.
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                   |
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                |
-| `world_read`         | Read the harness's own view of a PR, issue or story.                                                                                                                                                                                      |
+| `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                             |
 | `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                      |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                   |
 | `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                 |
@@ -69,7 +69,7 @@ auto-answered it and the agent was never parked — said explicitly, rather than
 
 ### `world_read`
 
-Arguments `{kind: 'pr'|'issue'|'story', ref?}`. Closes the `gh`-shell-out gap: an agent that needed a
+Arguments `{kind: 'pr'|'issue', ref?}`. Closes the `gh`-shell-out gap: an agent that needed a
 PR's CI status or review comments had to shell out, which is provider-coupled (nothing works under
 `azure`) and re-fetches what the pulse already holds.
 
@@ -176,8 +176,8 @@ harness did that nothing external accounted for (see
   is an issue or a PR, and a ticket link pointing at the wrong one is worse than none.
 - **A work item must be an `issue:` ref**, unlike a finding's ticket. Both trackers the harness reads
   make a work item an issue — a GitHub issue, an Azure work item — and the fold stands a placeholder
-  node up under that ref when the world never lists the ticket, so accepting `pr:` or `story:` would
-  mean guessing a node kind. The case is removed rather than answered.
+  node up under that ref when the world never lists the ticket, so accepting a `pr:` ref would mean
+  guessing a node kind. The case is removed rather than answered.
 - **Idempotence is in the write.** `linkFindingTicket` updates `WHERE id=? AND status='filing'` and
   `linkWorkItemFiling` updates `WHERE job_id=? AND status='filing'`, so a second call links nothing and
   is reported as an error rather than overwriting the first item.

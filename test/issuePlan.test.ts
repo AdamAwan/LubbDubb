@@ -96,7 +96,7 @@ function issue(number: number, overrides: Partial<Issue> = {}): Issue {
 }
 
 function world(issues: Issue[]): WorldSnapshot {
-  return { takenAt: '2026-07-25T12:00:00.000Z', pullRequests: [], issues, stories: [] };
+  return { takenAt: '2026-07-25T12:00:00.000Z', pullRequests: [], issues };
 }
 
 function context(issues: Issue[], extra: Partial<DispatchContext> = {}): DispatchContext {

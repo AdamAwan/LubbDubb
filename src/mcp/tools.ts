@@ -315,7 +315,7 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
     {
       name: MCP_TOOL_NAMES[2],
       description:
-        "Read the harness's own view of a pull request, issue or story — CI status, review " +
+        "Read the harness's own view of a pull request or issue — CI status, review " +
         'comments, merge state, labels, an issue body and its plan graph. Prefer this over ' +
         'shelling out to `gh`/`az`: it is the same snapshot the dispatcher decided on (so it ' +
         'explains why you were dispatched), it works whichever provider is configured, and it ' +
@@ -332,7 +332,7 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
           ref: {
             type: 'string',
             description:
-              'The item, in the ref shape used everywhere else: "pr:42", "issue:12", "story:abc". ' +
+              'The item, in the ref shape used everywhere else: "pr:42", "issue:12". ' +
               'An origin ref with a suffix ("pr:42:ci", "issue:12:part:schema") names the same item, ' +
               'and a bare number works too. Defaults to your own origin.',
           },
@@ -369,7 +369,7 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
           ref: {
             type: 'string',
             description:
-              'The item this is about, if there is one: "issue:41", "pr:42", "story:abc". For a ' +
+              'The item this is about, if there is one: "issue:41", "pr:42". For a ' +
               'duplicate, the item you believe it duplicates. Omit it when the finding is about ' +
               'something the harness does not track.',
           },
@@ -497,7 +497,7 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
             type: 'string',
             description:
               'The ticket, in the ref shape used everywhere else: "issue:314" for a GitHub issue or an ' +
-              'Azure DevOps work item, "pr:42", "story:abc". A bare number is not accepted — say which.',
+              'Azure DevOps work item, or "pr:42". A bare number is not accepted — say which.',
           },
         },
         required: ['ref'],

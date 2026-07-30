@@ -33,7 +33,6 @@ function world(over: Partial<WorldSnapshot> = {}): WorldSnapshot {
     pullRequests: [],
     closedPullRequests: [],
     issues: [],
-    stories: [],
     ...over,
   };
 }
@@ -507,7 +506,7 @@ test('filing queues a desk job and opens the filing, and a second click is refus
   // `fake` has no tracker to file into, so this is the github-configured path.
   await withGithubToken(async () => {
     const system = buildServed({
-      integrations: { source: 'fake', issues: 'github', backlog: 'fake' },
+      integrations: { source: 'fake', issues: 'github' },
       github: { owner: 'a', repo: 'b' },
     });
     const job = await dispatchedJob(system);
@@ -596,7 +595,7 @@ test('ignoring a node clears it from the list, survives a re-read, and refuses a
 test('a filing agent links its work item, and the next pulse parents the work to it', async () => {
   await withGithubToken(async () => {
     const system = buildServed({
-      integrations: { source: 'fake', issues: 'github', backlog: 'fake' },
+      integrations: { source: 'fake', issues: 'github' },
       github: { owner: 'a', repo: 'b' },
     });
     const worked = await dispatchedJob(system);
@@ -632,7 +631,7 @@ test('a filing agent links its work item, and the next pulse parents the work to
 test('a work item must be an issue ref — there is no node kind to guess at', async () => {
   await withGithubToken(async () => {
     const system = buildServed({
-      integrations: { source: 'fake', issues: 'github', backlog: 'fake' },
+      integrations: { source: 'fake', issues: 'github' },
       github: { owner: 'a', repo: 'b' },
     });
     const worked = await dispatchedJob(system);

@@ -23,7 +23,7 @@ import { escalationTypeForAsk } from '../src/escalation/context.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
-import type { Agent, Issue, PullRequest, Story, WorldSnapshot } from '../src/types.js';
+import type { Agent, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -189,21 +189,8 @@ function fakeIssue(number: number, extra: Partial<Issue> = {}): Issue {
   };
 }
 
-function fakeStory(id: string, extra: Partial<Story> = {}): Story {
-  return {
-    id,
-    title: `Story ${id}`,
-    description: null,
-    acceptanceCriteria: null,
-    wafPillars: [],
-    state: 'ready',
-    priority: 1,
-    ...extra,
-  };
-}
-
 function fakeWorld(overrides: Partial<WorldSnapshot> = {}): WorldSnapshot {
-  return { takenAt: TAKEN_AT, pullRequests: [], issues: [], stories: [], ...overrides };
+  return { takenAt: TAKEN_AT, pullRequests: [], issues: [], ...overrides };
 }
 
 /** A parsed target, asserting the parse succeeded — for tests about the *read*. */
@@ -214,9 +201,9 @@ function target(kind: string, ref: string) {
 }
 
 test('the kind vocabulary is the one the dispatcher already models', () => {
-  // Not a new taxonomy: exactly the three lists a WorldSnapshot carries and the
-  // three ref prefixes the rest of the system writes.
-  assert.deepEqual([...WORLD_READ_KINDS], ['pr', 'issue', 'story']);
+  // Not a new taxonomy: exactly the lists a WorldSnapshot carries and the ref
+  // prefixes the rest of the system writes.
+  assert.deepEqual([...WORLD_READ_KINDS], ['pr', 'issue']);
 });
 
 test('a ref is accepted in every shape the harness itself writes', () => {
@@ -230,8 +217,6 @@ test('a ref is accepted in every shape the harness itself writes', () => {
     ['issue', 'issue:12', 'issue:12'],
     ['issue', 'issue:12:plan', 'issue:12'],
     ['issue', 'issue:12:part:schema', 'issue:12'],
-    ['story', 'story:st_1', 'story:st_1'],
-    ['story', 'st_1', 'story:st_1'],
   ];
   for (const [kind, ref, canonical] of cases) {
     const parsed = parseWorldRef(kind, ref);
@@ -247,7 +232,7 @@ test('a ref that disagrees with its kind is reported rather than guessed at', ()
 
   const badKind = parseWorldRef('epic', '12');
   assert.equal(badKind.ok, false);
-  assert.match(!badKind.ok ? badKind.error : '', /kind must be one of pr, issue, story/);
+  assert.match(!badKind.ok ? badKind.error : '', /kind must be one of pr, issue/);
 
   const noNumber = parseWorldRef('pr', 'pr:main');
   assert.equal(noNumber.ok, false);
@@ -308,13 +293,13 @@ test('a recently-closed PR is still readable, so a stacked agent can tell a merg
 });
 
 test('a miss names what the harness is tracking instead of just saying no', () => {
-  const world = fakeWorld({ pullRequests: [fakePr(7), fakePr(12)], issues: [fakeIssue(3)], stories: [fakeStory('a')] });
+  const world = fakeWorld({ pullRequests: [fakePr(7), fakePr(12)], issues: [fakeIssue(3)] });
   const missPr = readWorldItem(world, target('pr', '99'));
   assert.equal(missPr.ok, false);
   assert.match(!missPr.ok ? missPr.error : '', /no PR pr:99\. PRs the harness is tracking: #7, #12\./);
 
-  const empty = readWorldItem(fakeWorld(), target('story', 'x'));
-  assert.match(!empty.ok ? empty.error : '', /tracking no Stories/);
+  const empty = readWorldItem(fakeWorld(), target('issue', '404'));
+  assert.match(!empty.ok ? empty.error : '', /tracking no Issues/);
 });
 
 // -- report_finding's pure layer ---------------------------------------------
@@ -335,7 +320,6 @@ test('a finding ref is the harness vocabulary, suffix-tolerant, and optional', (
     // The origin ref an agent holds names its item, so it can be passed back as-is.
     ['pr:42:ci', 'pr:42'],
     ['issue:12:part:schema', 'issue:12'],
-    ['story:st_1', 'story:st_1'],
   ];
   for (const [input, expected] of cases) {
     const parsed = parseFindingRef(input);
@@ -795,7 +779,6 @@ test('world_read is deliberately a general read, not one fenced to the caller or
         fakePr(12, { branch: 'issue/12/reader', baseBranch: 'issue/12/schema', ciStatus: 'failing' }),
       ],
       issues: [fakeIssue(3)],
-      stories: [fakeStory('st_1', { labels: ['later'] })],
     }),
   );
   const agent = spawnAgent(system, 'pr:12:ci');
@@ -808,8 +791,6 @@ test('world_read is deliberately a general read, not one fenced to the caller or
   // ever name what the harness already holds: there is no query and no passthrough.
   const issue = await callTool(system, agent, 'world_read', { kind: 'issue', ref: '3' });
   assert.equal((JSON.parse(issue.text) as { item: { title: string } }).item.title, 'Issue 3');
-  const story = await callTool(system, agent, 'world_read', { kind: 'story', ref: 'story:st_1' });
-  assert.deepEqual((JSON.parse(story.text) as { item: { labels: string[] } }).item.labels, ['later']);
   system.store.close();
 });
 

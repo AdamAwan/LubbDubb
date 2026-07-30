@@ -1,5 +1,4 @@
 import { nanoid } from 'nanoid';
-import type { Store } from '../../store/store.js';
 import type { InjectableEvent } from '../../connector/connector.js';
 import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
 import type { PullRequest } from '../../types.js';
@@ -38,7 +37,6 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
 
   constructor(
     private readonly world: FakeWorldStore,
-    private readonly store: Store,
     /** Base an injected `new_pr` targets when the event doesn't name one. */
     private readonly defaultBranch = 'main',
   ) {}
@@ -124,32 +122,30 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
   /**
    * The outbound side of the fake source-control world. "Sends" a PR reply by
    * reflecting it back into the fake world — marking the answered comment handled
-   * so the loop settles — and logging a connector event. Nothing leaves the
-   * machine; a real GitHub sink would POST here instead.
+   * so the loop settles. Nothing leaves the machine; a real GitHub sink would POST
+   * here instead.
    */
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
     if (input.commentId) this.markCommentHandled(input.prNumber, input.commentId);
     const ref = `fake-reply_${nanoid(6)}`;
-    this.store.recordConnectorEvent('pr_reply_sent', { ...input, ref });
     return { ok: true, ref };
   }
 
   /**
    * The outbound side of PR monitoring: "merges" a PR by reflecting it back into
-   * the fake world (marking it merged so the loop settles) and logging a connector
-   * event. Nothing leaves the machine; a real GitHub sink would call the merge API.
+   * the fake world, marking it merged so the loop settles. Nothing leaves the
+   * machine; a real GitHub sink would call the merge API.
    */
   async mergePr(input: PrMergeInput): Promise<SendResult> {
     this.world.mutate((world) => mutatePr(world, input.prNumber, (pr) => (pr.merged = true)));
     const ref = `fake-merge_${nanoid(6)}`;
-    this.store.recordConnectorEvent('pr_merge_sent', { ...input, ref });
     return { ok: true, ref };
   }
 
   /**
    * The outbound side of the exclusion-tag toggle: add/remove a label on the fake
-   * PR and log a connector event. Idempotent — adding a present label or removing
-   * an absent one is a no-op. A real GitHub sink would call the labels API here.
+   * PR. Idempotent — adding a present label or removing an absent one is a no-op.
+   * A real GitHub sink would call the labels API here.
    */
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {
     this.world.mutate((world) => {
@@ -161,7 +157,6 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
       });
     });
     const ref = `fake-label_${nanoid(6)}`;
-    this.store.recordConnectorEvent('pr_label_set', { ...input, ref });
     return { ok: true, ref };
   }
 

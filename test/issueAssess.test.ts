@@ -54,7 +54,7 @@ function task(over: Partial<Task> = {}): Task {
 
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
-    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
     tasks: [task()],
     agents: [],
     openEscalations: [],
@@ -245,7 +245,6 @@ test('an open PR means the answer is not yet knowable', async () => {
       { id: 'p', number: 40, title: 'X', branch: 'issue/12', ciStatus: 'passing' as const, unresolvedComments: [] },
     ],
     issues: [issue()],
-    stories: [],
   };
   const { actions } = await assessor().decide(ctx({ world }));
   assert.ok(!origins(actions).includes('issue:12:assess'));
@@ -291,7 +290,7 @@ test('the watch gate applies, evaluated once on the issue', async () => {
   assert.deepEqual(origins(unwatched.actions), [], 'opt-in: an untagged issue is left alone');
 
   const watched = await d.decide(
-    ctx({ world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['agent-ready'] })], stories: [] } }),
+    ctx({ world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['agent-ready'] })] } }),
   );
   assert.deepEqual(origins(watched.actions), ['issue:12:assess']);
 });
@@ -506,7 +505,6 @@ test('world_read carries the work subtree, including a PR the world has forgotte
     takenAt: NOW,
     pullRequests: [],
     issues: [issue()],
-    stories: [],
   });
 
   const agent = spawnAgent(system, 'issue:12:assess');
@@ -528,7 +526,7 @@ test('an assessment appears in the graph under its issue, and is never terminal'
   const t = system.store.getTask(system.store.getAgent(agent.id)!.taskId)!;
 
   const nodes = foldWorkGraph({
-    world: { takenAt: NOW, pullRequests: [], issues: [issue()], stories: [] },
+    world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
     tasks: [t],
     plans: [],
     parts: [],

@@ -103,9 +103,6 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     async setIssueLabel() {
       return { ok: true };
     },
-    async setStoryLabel() {
-      return { ok: true };
-    },
     async setWorkItemState() {
       return { ok: true };
     },

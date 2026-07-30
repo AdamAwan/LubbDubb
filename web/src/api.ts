@@ -165,8 +165,6 @@ const realApi = {
   // have; `null` clears it, which is a delete and not a synonym for `workable`.
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/assay`, { verdict }),
-  setStoryWatched: (storyId: string, watched: boolean) =>
-    post<{ ok: true; watched: boolean }>(`/api/stories/${storyId}/watch`, { watched }),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   // Talk it through with an agent instead of accepting or rejecting. Server-side
   // this is a replan whose planner converses first — see the route.

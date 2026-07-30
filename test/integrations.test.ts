@@ -7,19 +7,19 @@ import { loadConfig } from '../src/config.js';
 import type { IntegrationSelection } from '../src/integrations/integration.js';
 
 const FIXED = () => '2026-01-01T00:00:00.000Z';
-const FAKES: IntegrationSelection = { sourceControl: 'fake', issues: 'fake', backlog: 'fake' };
+const FAKES: IntegrationSelection = { sourceControl: 'fake', issues: 'fake' };
 
 function build(selection: IntegrationSelection = FAKES) {
   const store = new Store(':memory:');
   const integrations = buildIntegrations(selection, { store, config: loadConfig(), now: FIXED });
-  const connector = new CompositeConnector(integrations, store, FIXED);
+  const connector = new CompositeConnector(integrations, FIXED);
   return { store, connector };
 }
 
 test('buildIntegrations resolves the default fake providers into one per capability', () => {
   const store = new Store(':memory:');
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED });
-  assert.deepEqual(integrations.map((i) => i.capability).sort(), ['backlog', 'issues', 'sourceControl']);
+  assert.deepEqual(integrations.map((i) => i.capability).sort(), ['issues', 'sourceControl']);
   store.close();
 });
 
@@ -35,12 +35,12 @@ test('buildIntegrations throws a clear error on an unknown provider', () => {
 test('CompositeConnector merges slices from every integration into one world', async () => {
   const { store, connector } = build();
   connector.inject({ kind: 'new_pr', number: 42, title: 'Add widget', branch: 'feat/widget' });
-  connector.inject({ kind: 'new_story', title: 'Login', priority: 5 });
+  connector.inject({ kind: 'new_issue', number: 901, title: 'Login' });
 
   const world = await connector.getState();
   assert.equal(world.takenAt, '2026-01-01T00:00:00.000Z');
   assert.equal(world.pullRequests.length, 1);
-  assert.equal(world.stories.length, 1);
+  assert.equal(world.issues.length, 1);
   store.close();
 });
 
@@ -54,12 +54,12 @@ test('inject routes each event kind to the integration that owns it', async () =
 });
 
 test('inject with no owning integration is recorded as unhandled, not thrown', () => {
-  // Only the backlog fake is enabled, so a PR event has no owner.
+  // Only the issues fake is enabled, so a PR event has no owner.
   const store = new Store(':memory:');
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
-    (i) => i.capability === 'backlog',
+    (i) => i.capability === 'issues',
   );
-  const connector = new CompositeConnector(integrations, store, FIXED);
+  const connector = new CompositeConnector(integrations, FIXED);
   assert.doesNotThrow(() => connector.inject({ kind: 'new_pr', number: 1, title: 'X', branch: 'b' }));
   store.close();
 });
@@ -85,7 +85,7 @@ test('postPrReply throws when no PrReplyCapable integration is enabled', async (
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
     (i) => i.capability !== 'sourceControl',
   );
-  const connector = new CompositeConnector(integrations, store, FIXED);
+  const connector = new CompositeConnector(integrations, FIXED);
   await assert.rejects(
     () => connector.postPrReply({ prNumber: 1, commentId: null, body: 'x' }),
     /no integration can post PR replies/,
@@ -97,7 +97,6 @@ test('loadConfig deep-merges a single swapped capability over the fake defaults'
   const config = loadConfig({ integrations: { sourceControl: 'github' } as IntegrationSelection });
   assert.equal(config.integrations.sourceControl, 'github');
   assert.equal(config.integrations.issues, 'fake');
-  assert.equal(config.integrations.backlog, 'fake');
 });
 
 test('the issues connector surfaces injected issues in the world', async () => {
@@ -170,7 +169,7 @@ test('mergePr throws when no PrMergeCapable integration is enabled', async () =>
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
     (i) => i.capability !== 'sourceControl',
   );
-  const connector = new CompositeConnector(integrations, store, FIXED);
+  const connector = new CompositeConnector(integrations, FIXED);
   await assert.rejects(() => connector.mergePr({ prNumber: 1, method: 'squash' }), /no integration can merge PRs/);
   store.close();
 });
@@ -192,7 +191,7 @@ test('setPrLabel throws when no PrLabelCapable integration is enabled', async ()
   const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
     (i) => i.capability !== 'sourceControl',
   );
-  const connector = new CompositeConnector(integrations, store, FIXED);
+  const connector = new CompositeConnector(integrations, FIXED);
   await assert.rejects(
     () => connector.setPrLabel({ prNumber: 1, label: 'x', present: true }),
     /no integration can label PRs/,

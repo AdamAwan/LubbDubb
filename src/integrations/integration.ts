@@ -9,7 +9,6 @@ import type {
   PrMergeInput,
   PrReplyInput,
   SendResult,
-  StoryLabelInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { WorldSnapshot } from '../types.js';
@@ -20,7 +19,7 @@ import type { WorldSnapshot } from '../types.js';
  * The harness reads the world through a single {@link Connector} and writes
  * through a single {@link ActionSink}, but behind those seams the world is
  * assembled from many small integrations — one per **capability** (source
- * control, backlog, …). Each capability has interchangeable
+ * control, issues, …). Each capability has interchangeable
  * **provider** implementations (a fake one here; a real GitHub / Azure DevOps one
  * later) selected in config, so swapping the provider for a
  * capability is a config change, not a code change. See {@link CompositeConnector}
@@ -29,13 +28,13 @@ import type { WorldSnapshot } from '../types.js';
  */
 
 /** The kinds of integration the harness understands. Mirrors {@link WorldSnapshot}. */
-export type Capability = 'sourceControl' | 'issues' | 'backlog';
+export type Capability = 'sourceControl' | 'issues';
 
 /** One provider chosen per capability. This is the swap switch (set in config). */
 export type IntegrationSelection = Record<Capability, string>;
 
 /** One integration's contribution to the world — only the domains it owns. */
-export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'closedPullRequests' | 'issues' | 'stories'>>;
+export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'closedPullRequests' | 'issues'>>;
 
 /** Everything a provider factory needs to build an integration. */
 export interface IntegrationContext {
@@ -113,15 +112,6 @@ export interface IssueLabelCapable {
 
 export function isIssueLabelCapable(x: Integration): x is Integration & IssueLabelCapable {
   return typeof (x as Partial<IssueLabelCapable>).setIssueLabel === 'function';
-}
-
-/** An integration that can add/remove a label on a story — the watch/ignore toggle (fake backlog). */
-export interface StoryLabelCapable {
-  setStoryLabel(input: StoryLabelInput): Promise<SendResult>;
-}
-
-export function isStoryLabelCapable(x: Integration): x is Integration & StoryLabelCapable {
-  return typeof (x as Partial<StoryLabelCapable>).setStoryLabel === 'function';
 }
 
 /** An integration that can move a work item to a provider-native state — the "in review" back-off. */

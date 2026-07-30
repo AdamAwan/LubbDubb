@@ -89,7 +89,6 @@ The dispatcher ranks every candidate, then applies the concurrency cut. Roughly,
 3. A PR that is ready to merge.
 4. Planning, approval, assay and assessment for issues.
 5. Plan parts, then fresh issue pickup.
-6. Story grooming and idle-capacity pickup.
 
 PR work runs _before_ new issue pickup, so a PR in trouble is always worked ahead of starting new
 tickets. The full ordered plan ships to the cockpit as **Up next**, with a cut-line at the current

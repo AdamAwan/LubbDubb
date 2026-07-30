@@ -35,7 +35,7 @@ function pr(number: number, over: Partial<PullRequest> = {}): PullRequest {
 }
 
 function world(pullRequests: PullRequest[]): WorldSnapshot {
-  return { takenAt: '2026-07-28T12:00:00.000Z', pullRequests, issues: [], stories: [] };
+  return { takenAt: '2026-07-28T12:00:00.000Z', pullRequests, issues: [] };
 }
 
 function context(pullRequests: PullRequest[], extra: Partial<DispatchContext> = {}): DispatchContext {

@@ -67,6 +67,11 @@ function testConfig() {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
+    // The funnel in front of pickup would spawn an assayer/planner first; this
+    // test is about what rule 4 puts on the task row.
+    planning: { enabled: false } as never,
+    assessment: { enabled: false } as never,
+    assay: { enabled: false } as never,
   });
 }
 
@@ -74,13 +79,14 @@ test('a dispatched task carries the source item title, summary and dispatch reas
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
 
-  // A ready story with a description but no acceptance criteria is groomed by a
-  // desk agent — a dispatch path that needs no git worktree.
+  // Straight to rule 4: the deliberation rules in front of pickup are off here, so
+  // the agent that spawns is the one working the issue and its task carries the
+  // issue's own title and body.
   system.connector.inject({
-    kind: 'new_story',
+    kind: 'new_issue',
+    number: 901,
     title: 'Add login',
-    description: 'Let users sign in with email and password.',
-    wafPillars: ['Security'],
+    body: 'Let users sign in with email and password.',
   });
   await system.harness.runCycle('manual');
 
@@ -88,6 +94,6 @@ test('a dispatched task carries the source item title, summary and dispatch reas
   const task = system.store.getTask(agent.taskId)!;
   assert.equal(task.originTitle, 'Add login', 'source item title should be captured');
   assert.equal(task.originSummary, 'Let users sign in with email and password.');
-  assert.match(task.dispatchReason!, /acceptance criteria/, 'the dispatch reason should be persisted');
+  assert.match(task.dispatchReason!, /issue #901/, 'the dispatch reason should be persisted');
   system.store.close();
 });

@@ -35,7 +35,7 @@ test('isRefResolvable detects the capability', () => {
 
 test('CompositeConnector.resolveRefUrl delegates to the first resolvable integration', () => {
   const store = new Store(':memory:');
-  const composite = new CompositeConnector([new PlainIntegration(), new StubResolver()], store);
+  const composite = new CompositeConnector([new PlainIntegration(), new StubResolver()]);
   assert.equal(composite.resolveRefUrl('pr:1'), 'https://x/pull/1');
   assert.equal(composite.resolveRefUrl('pr:999'), null);
   store.close();
@@ -43,7 +43,7 @@ test('CompositeConnector.resolveRefUrl delegates to the first resolvable integra
 
 test('CompositeConnector.resolveRefUrl returns null when no integration can resolve', () => {
   const store = new Store(':memory:');
-  const composite = new CompositeConnector([new PlainIntegration()], store);
+  const composite = new CompositeConnector([new PlainIntegration()]);
   assert.equal(composite.resolveRefUrl('pr:1'), null);
   store.close();
 });

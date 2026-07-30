@@ -124,8 +124,7 @@ export type IssueState = 'open' | 'closed';
 
 /**
  * A tracker issue (GitHub Issues in v1) the harness may pick up and resolve into
- * a pull request. Distinct from a {@link Story}: an issue is a bug/feature report
- * that becomes a PR, not a backlog item to groom.
+ * a pull request.
  */
 export interface Issue {
   id: string;
@@ -158,27 +157,6 @@ export interface Issue {
   url?: string;
 }
 
-type StoryState = 'ready' | 'in_progress' | 'blocked' | 'done';
-
-export interface Story {
-  id: string;
-  title: string;
-  description: string | null;
-  acceptanceCriteria: string | null;
-  /** WAF pillars documented on the work item (Azure DevOps convention). */
-  wafPillars: string[];
-  state: StoryState;
-  /** Higher = more important. */
-  priority: number;
-  /**
-   * Labels/tags on the story, driving the same opt-in watch/ignore gate as issues
-   * (`${labelPrefix}-watch` / `-ignore`). Optional — a story with no labels (older
-   * row / provider that predates this) is treated as untagged. Stories are
-   * fake-backlog-only today, so this is exercised via the fake provider.
-   */
-  labels?: string[];
-}
-
 /** The full picture of the outside world at one instant. */
 export interface WorldSnapshot {
   takenAt: string; // ISO
@@ -203,7 +181,6 @@ export interface WorldSnapshot {
    */
   closedPullRequests?: PullRequest[];
   issues: Issue[];
-  stories: Story[];
 }
 
 // ---------------------------------------------------------------------------
@@ -220,9 +197,7 @@ export type WorldEventKind =
   | 'pr_comment'
   | 'issue_opened'
   | 'issue_closed'
-  | 'issue_linked'
-  | 'story_added'
-  | 'story_state';
+  | 'issue_linked';
 
 /**
  * One observed world state transition, derived by diffing consecutive
@@ -232,7 +207,7 @@ export type WorldEventKind =
 export interface WorldEvent {
   id: string;
   kind: WorldEventKind;
-  /** The world object this concerns, e.g. "pr:42", "story:abc", "issue:12". Null if global. */
+  /** The world object this concerns, e.g. "pr:42", "issue:12". Null if global. */
   ref: string | null;
   /** Human-readable one-line summary, e.g. "PR #42 CI passing". */
   summary: string;
@@ -294,7 +269,7 @@ export interface Task {
    * Human-readable context about the originating item, captured at dispatch
    * time so the cockpit can explain a running agent without re-fetching from
    * the source provider (issue #17). `originTitle` is the source item's own
-   * title (issue/PR/story title), `originSummary` a body excerpt or state
+   * title (issue/PR title), `originSummary` a body excerpt or state
    * summary, and `dispatchReason` the reason the dispatcher started this task.
    */
   originTitle: string | null;

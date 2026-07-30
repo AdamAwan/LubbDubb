@@ -530,23 +530,6 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, shortfall };
   });
 
-  // Toggle a story's watch/ignore state — same opt-in model as issues. Stories are
-  // fake-backlog-only today, so this routes to the `StoryLabelCapable` fake provider.
-  app.post('/api/stories/:id/watch', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { watched } = (req.body ?? {}) as { watched?: unknown };
-    if (typeof watched !== 'boolean') return reply.code(400).send({ error: 'watched must be a boolean' });
-    try {
-      await connector.setStoryLabel({ id, label: watchLabel, present: watched });
-      await connector.setStoryLabel({ id, label: ignoreLabel, present: !watched });
-      hub.broadcast({ type: 'world:changed' });
-      await harness.runCycle('manual');
-      return { ok: true, watched };
-    } catch (err) {
-      return reply.code(400).send({ error: (err as Error).message });
-    }
-  });
-
   // Send a plan back for replanning. The mechanism already exists —
   // `resolvePlanRoute` routes a plan row in `planning` status to rule 3c — so this
   // is only the operator's way in: flip the status, and the next cycle dispatches a
@@ -1287,7 +1270,6 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     pullRequests: [],
     closedPullRequests: [],
     issues: [],
-    stories: [],
   };
   const tasks = store.listTasks();
   const control = runtimeControl.snapshot();
