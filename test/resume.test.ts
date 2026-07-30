@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // A file-backed db so a second buildSystem on the same path sees the first run's
 // state — i.e. a real server restart, not a fresh in-memory store.
@@ -30,7 +31,7 @@ function tmp(): string {
 /** Bring up a system, dispatch one desk agent, and return its live handle. */
 async function spawnAgent(dir: string) {
   const backend = new FakePtyBackend();
-  const system = buildSystem(ptyConfig(dir), { backend, errorMirror: () => {} });
+  const system = buildSystem(ptyConfig(dir), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
@@ -44,7 +45,7 @@ async function spawnAgent(dir: string) {
  */
 function reboot(dir: string) {
   const backend = new FakePtyBackend();
-  const system = buildSystem(ptyConfig(dir), { backend, errorMirror: () => {} });
+  const system = buildSystem(ptyConfig(dir), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   const crashed = system.recovery.detect();
   return { backend, system, crashed };
 }
@@ -133,7 +134,7 @@ test('a cockpit kill is NOT offered for recovery on the next boot', async () => 
 test('an orphan with no usable session id is offered requeue and remove, not restore', () => {
   const dir = tmp();
   const backend = new FakePtyBackend();
-  const system = buildSystem(ptyConfig(dir), { backend, errorMirror: () => {} });
+  const system = buildSystem(ptyConfig(dir), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
 
   // A legacy/partial agent row with no session id (e.g. died before one existed).
   const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: 'b', originRef: 'r' });

@@ -10,6 +10,7 @@ import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildStateSnapshot } from '../src/server/app.js';
 import type { Decision, Proposal, PullRequest, Task, WorldEvent } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 const NOW = '2026-07-26T12:00:00.000Z';
 /** `mins` minutes before {@link NOW}, for cooldown and settle-window arithmetic. */
@@ -407,7 +408,11 @@ function testConfig(overrides: Record<string, unknown> = {}) {
 }
 
 test('/api/state ships an attention verdict per PR, beside health rather than instead of it', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   system.connector.inject({ kind: 'new_pr', number: 11, title: 'Add the widget', branch: 'feat/widget' });
   system.connector.inject({ kind: 'ci_failed', prNumber: 11 });
   // The snapshot draws the world the *pulse* observed, never a fresh provider
@@ -425,7 +430,11 @@ test('/api/state ships an attention verdict per PR, beside health rather than in
 });
 
 test('a pending proposal and a standing rejection read differently through the whole seam', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   system.connector.inject({ kind: 'new_pr', number: 12, title: 'Add the widget', branch: 'feat/widget' });
   system.connector.inject({ kind: 'ci_passed', prNumber: 12 });
   system.connector.inject({ kind: 'pr_approved', prNumber: 12 });
@@ -472,8 +481,16 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
       .map((d) => `${d.action.type}:${d.outcome}`)
       .sort();
 
-  const control = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
-  const observed = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const control = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  const observed = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   world(control);
   world(observed);
   await control.harness.runCycle('manual');

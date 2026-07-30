@@ -12,6 +12,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { buildApp } from '../src/server/app.js';
 import type { Agent, Issue, IssueDelivery } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -34,7 +35,7 @@ function build(overrides: Record<string, unknown> = {}): System {
       maxConcurrentAgents: 3,
       ...overrides,
     }),
-    { backend: new FakePtyBackend(), errorMirror: () => {} },
+    { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
 }
 

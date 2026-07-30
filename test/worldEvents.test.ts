@@ -7,6 +7,7 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { WorldEvent } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-we-'));
@@ -24,7 +25,7 @@ function testConfig() {
 
 test('injected world changes are recorded as world events across cycles', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(), { backend });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend });
   const emitted: WorldEvent[] = [];
   system.harness.on('world:events', ({ events }) => emitted.push(...events));
 
@@ -65,7 +66,7 @@ test('injected world changes are recorded as world events across cycles', async 
 
 test('the first cycle over a fresh store only sets the baseline (no spurious events)', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(), { backend });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend });
 
   // Seed the world before the very first cycle, then run once.
   system.connector.inject({ kind: 'new_pr', number: 1, title: 'Seed', branch: 'seed' });
@@ -92,7 +93,7 @@ test('the persisted baseline survives a restart, so no re-flood on the next boot
   const dbPath = join(mkdtempSync(join(tmpdir(), 'lubbdubb-restart-')), 'db.sqlite');
   config.dbPath = dbPath;
 
-  const first = buildSystem(config, { backend });
+  const first = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend });
   first.connector.inject({ kind: 'new_pr', number: 7, title: 'Persist', branch: 'p' });
   await first.harness.runCycle('manual'); // baseline set, no events
   assert.deepEqual(first.store.listWorldEvents(), []);
@@ -100,7 +101,7 @@ test('the persisted baseline survives a restart, so no re-flood on the next boot
 
   // Reboot against the same DB and world; the persisted baseline means the
   // unchanged PR is not re-emitted as new.
-  const second = buildSystem(config, { backend });
+  const second = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend });
   await second.harness.runCycle('manual');
   assert.deepEqual(second.store.listWorldEvents(), [], 'restart must not re-flood the feed');
   second.store.close();

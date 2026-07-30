@@ -8,6 +8,7 @@ import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig(autoSend?: Partial<AutoSendConfig>) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -76,7 +77,7 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
 }
 
 test('auto-send is off by default: even a 1.0-confidence reply is drafted and escalated', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   await system.executor.execute('cyc', replyPlan(1.0));
 
   const open = system.store.listOpenEscalations();
@@ -94,7 +95,7 @@ test('auto-send is off by default: even a 1.0-confidence reply is drafted and es
 test('enabled + confidence at/above threshold auto-sends through the sink', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
   const sink = countingSink();
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(0.9));
 
   assert.equal(system.store.listOpenEscalations().length, 0, 'nothing to escalate — it was sent');
@@ -107,7 +108,7 @@ test('enabled + confidence at/above threshold auto-sends through the sink', asyn
 test('an auto-sent act is recorded as an accepted proposal decided by auto_send', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
   const sink = countingSink();
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', mergePlan(0.9));
 
   // The machine verdict is the same object the human verdict is, which is the
@@ -126,7 +127,11 @@ test('an auto-sent act is recorded as an accepted proposal decided by auto_send'
 
 test('an auto-sent act stays under its cycle and is never attributed to the operator', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink: countingSink() });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    sink: countingSink(),
+  });
   await system.executor.execute('cyc-7', mergePlan(0.9));
 
   const audited = system.store.listDecisions().find((d) => d.action.type === 'merge_pr')!;
@@ -147,7 +152,7 @@ test('an auto-sent act stays under its cycle and is never attributed to the oper
 test('a settled act is not re-proposed every pulse', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
   const sink = countingSink();
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), sink });
 
   // The same merge-ready world three pulses running: the world has not caught up
   // with the merge yet, which is the normal case for a pulse or two. An accepted
@@ -182,7 +187,7 @@ function assertNothingSentAndAsked(system: ReturnType<typeof buildSystem>, sink:
 test('enabled but below threshold falls back to draft + escalate', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
   const sink = countingSink();
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(0.5));
 
   assertNothingSentAndAsked(system, sink);
@@ -193,7 +198,7 @@ test('enabled but below threshold falls back to draft + escalate', async () => {
 test('missing confidence is treated as 0 and never auto-sends', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
   const sink = countingSink();
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(undefined));
 
   assertNothingSentAndAsked(system, sink);
@@ -204,7 +209,7 @@ test('missing confidence is treated as 0 and never auto-sends', async () => {
 test('action type not in the allow-list is escalated even when confident', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: [] });
   const sink = countingSink();
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc', replyPlan(0.99));
 
   assertNothingSentAndAsked(system, sink);
@@ -215,7 +220,7 @@ test('action type not in the allow-list is escalated even when confident', async
 test('a blocked gate is still not a rejection — and phase 4 is no back door to one', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
   const sink = countingSink();
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), sink });
   await system.executor.execute('cyc-1', mergePlan(0.5));
 
   // "Blocked" means "not mine to authorize", which is what a *pending* proposal
@@ -263,7 +268,11 @@ test('a send failure never drops the reply — it falls back to escalation', asy
       return { ok: true };
     },
   };
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink: failingSink });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    sink: failingSink,
+  });
   await system.executor.execute('cyc', replyPlan(0.95));
 
   const open = system.store.listOpenEscalations();
@@ -302,7 +311,7 @@ function mergeDecision(system: ReturnType<typeof buildSystem>) {
 }
 
 test('merge_pr is escalated for approval by default (nothing merges autonomously)', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   await system.executor.execute('cyc', mergePlan(1.0));
 
   const open = system.store.listOpenEscalations();
@@ -315,7 +324,7 @@ test('merge_pr is escalated for approval by default (nothing merges autonomously
 
 test('merge_pr auto-merges when enabled, allow-listed and confident', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['merge_pr'] });
-  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
 
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat' });
   await system.executor.execute('cyc', mergePlan(0.9));
@@ -348,7 +357,11 @@ test('a merge failure never merges silently — it escalates for approval', asyn
       return { ok: true };
     },
   };
-  const system = buildSystem(config, { backend: new FakePtyBackend(), sink: failingSink });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    sink: failingSink,
+  });
   await system.executor.execute('cyc', mergePlan(0.95));
 
   const open = system.store.listOpenEscalations();
@@ -361,7 +374,7 @@ test('a merge failure never merges silently — it escalates for approval', asyn
 
 test('auto-sending a threaded reply marks the answered comment handled (world settles)', async () => {
   const config = testConfig({ enabled: true, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] });
-  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
 
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat' });
   system.connector.inject({ kind: 'pr_comment', prNumber: 42, author: 'bob', body: 'why this?' });

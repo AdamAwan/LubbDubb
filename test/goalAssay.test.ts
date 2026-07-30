@@ -16,6 +16,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Agent, Decision, Issue, IssueAssay, Plan, Task, WorldEvent, WorldSnapshot } from '../src/types.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // Rule 3f — the goal assay. The one gate in front of an issue that asks about its
 // *content*. What makes it fire, what it must never do (park an issue for good),
@@ -388,7 +389,11 @@ function build(): System {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
   });
-  return buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  return buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 }
 
 function spawnAgent(system: System, originRef: string, over: Partial<Task> = {}): Agent {

@@ -11,6 +11,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig, type Config } from '../src/config.js';
 import type { Agent, Finding } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /**
  * Filing a finding as a **ticket** — the defer arm beside promotion's "work it
@@ -48,7 +49,11 @@ function testConfig(overrides: Record<string, unknown> = {}) {
  * standing up a provider that would want a token and a network.
  */
 function build(withTracker = true): System {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   if (withTracker) {
     system.config.integrations.issues = 'github';
     system.config.github = { owner: 'AdamAwan', repo: 'LubbDubb' };

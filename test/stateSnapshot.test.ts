@@ -7,6 +7,7 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -31,7 +32,7 @@ function testConfig() {
 }
 
 test('buildStateSnapshot ships a refUrls map covering world items and task branches', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat/x' });
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
   // The fake provider builds no real URLs; stand in a resolver so the wiring is
@@ -59,7 +60,7 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
 });
 
 test('buildStateSnapshot attaches a pickup verdict to every issue', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'Bug' });
   system.connector.inject({ kind: 'new_issue', number: 8, title: 'Staffed' });
   // Issue 8 has an active task on its origin → 'active', not 'eligible'.
@@ -81,7 +82,7 @@ test('buildStateSnapshot attaches a pickup verdict to every issue', async () => 
 });
 
 test('buildStateSnapshot pickup verdict reflects paused dispatch', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 9, title: 'Bug' });
   system.runtimeControl.apply({ paused: true });
   system.store.setWorldBaseline(await system.connector.getState());
@@ -106,7 +107,7 @@ test('buildStateSnapshot pickup verdict reflects paused dispatch', async () => {
  * Asserted rather than intended: the count is what a later change would trip.
  */
 test('buildStateSnapshot never reads the provider — the pulse is the only reader', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_pr', number: 77, title: 'X', branch: 'feat/x' });
   system.connector.inject({ kind: 'new_issue', number: 78, title: 'Bug' });
   await system.harness.runCycle('manual');
@@ -138,7 +139,7 @@ test('buildStateSnapshot never reads the provider — the pulse is the only read
  * Unbounded, and worst exactly when the provider is already refusing us.
  */
 test('buildStateSnapshot with no baseline ships an empty world, not a live fetch', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_pr', number: 79, title: 'X', branch: 'feat/y' });
 
   let reads = 0;

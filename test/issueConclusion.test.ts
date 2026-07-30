@@ -11,6 +11,7 @@ import { conclusionOrigin, issueConclusionOrigin, resolveIssueConclusion } from 
 import { outstandingWorkNote, validateConclusion } from '../src/mcp/conclusion.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import type { Agent, IssueConclusion, Plan } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // -- the pure resolver -------------------------------------------------------
 
@@ -140,7 +141,11 @@ function testConfig(overrides: Record<string, unknown> = {}) {
 }
 
 function build(overrides: Record<string, unknown> = {}): System {
-  return buildSystem(testConfig(overrides), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  return buildSystem(testConfig(overrides), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 }
 
 function spawnAgent(system: System, originRef: string): Agent {

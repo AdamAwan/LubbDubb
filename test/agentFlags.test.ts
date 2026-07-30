@@ -12,6 +12,7 @@ import { Store } from '../src/store/store.js';
 import { buildApp, absolutePrefixes } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // -- pure protocol helpers ---------------------------------------------------
 
@@ -193,7 +194,7 @@ function testConfig() {
 }
 
 test('GET /artifacts/:id serves a confined file by flag id and refuses traversal', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
   const wt = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
   writeFileSync(join(wt, 'design.html'), '<h1>Design</h1>');
@@ -239,7 +240,7 @@ test('GET /artifacts/:id serves an out-of-worktree file under a configured absol
   const shared = mkdtempSync(join(tmpdir(), 'lubbdubb-shared-'));
   writeFileSync(join(shared, 'plan.md'), '# Plan');
   const config = loadConfig({ ...testConfig(), docsFolderPrefix: shared });
-  const system = buildSystem(config, { backend: new FakePtyBackend() });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
 
   // The agent's worktree is a *different* dir; the flag ref is the absolute path

@@ -7,6 +7,7 @@ import { buildApp, isWorldInjectable } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -32,7 +33,7 @@ test('isWorldInjectable: true only when a fake provider is configured', () => {
 });
 
 test('/api/inject works and the snapshot advertises injectable with fake integrations', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend() });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   const { app } = await buildApp(system);
 
   const state = await (await app.inject({ method: 'GET', url: '/api/state' })).json();

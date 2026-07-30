@@ -10,6 +10,7 @@ import { goalFingerprint } from '../src/intake/assay.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
 import { buildRefUrls, issueCommentRef } from '../src/server/refUrls.js';
 import type { Issue } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // Issue #171 — the two comments the harness maintains on a ticket by itself: the
 // plan's status comment and the goal assay's refusal. Both are written without
@@ -36,7 +37,11 @@ function build(): System {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
   });
-  return buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  return buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 }
 
 async function withIssue(system: System): Promise<Issue> {

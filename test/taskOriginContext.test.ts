@@ -7,6 +7,7 @@ import { Store } from '../src/store/store.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // The cockpit needs enough of the originating item's context to understand a
 // running agent at a glance (issue #17). These tests pin the thread that
@@ -77,7 +78,7 @@ function testConfig() {
 
 test('a dispatched task carries the source item title, summary and dispatch reason', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(), { backend });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend });
 
   // Straight to rule 4: the deliberation rules in front of pickup are off here, so
   // the agent that spawns is the one working the issue and its task carries the

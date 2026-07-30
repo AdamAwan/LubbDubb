@@ -12,6 +12,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { GitHubSourceControlIntegration } from '../src/integrations/github/sourceControl.js';
 import type { GitHubApi } from '../src/integrations/github/githubApi.js';
 import type { ErrorLogEntry, WorldSnapshot } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -31,7 +32,7 @@ function testConfig() {
 
 /** A system with the stderr mirror silenced so failing-path tests stay quiet. */
 function quietSystem(backend = new FakePtyBackend()): System {
-  return buildSystem(testConfig(), { backend, errorMirror: () => {} });
+  return buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
 }
 
 test('store round-trips error entries, newest first', () => {

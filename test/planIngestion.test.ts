@@ -17,6 +17,7 @@ import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store/store.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import type { Agent } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // -- the reserved filename ---------------------------------------------------
 
@@ -225,7 +226,11 @@ function writeThroughHook(system: System, agent: Agent, relPath: string, body: s
 }
 
 test('a planner writing plan.json persists the verdict at drain time, for both outcomes', () => {
-  const system = buildSystem(planningConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(planningConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 
   // A `parts` verdict: the plan row *and* its parts land, even though nothing
   // reads the parts yet — the data only ever arrives here.
@@ -268,7 +273,11 @@ test('a planner writing plan.json persists the verdict at drain time, for both o
 
 test('an invalid or non-planner plan.json records no plan (and an invalid one is surfaced)', () => {
   const errors: string[] = [];
-  const system = buildSystem(planningConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(planningConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   system.errors.on('logged', (e) => errors.push(e.message));
 
   // Malformed: no plan row, so the funnel keeps the issue and the attempt cap
@@ -293,7 +302,11 @@ test('an invalid or non-planner plan.json records no plan (and an invalid one is
 });
 
 test('the plan file is tracked as a written file but never promoted to an artifact chip', () => {
-  const system = buildSystem(planningConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(planningConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const agent = plannerAgent(system, 'issue:12:plan');
   writeThroughHook(system, agent, PLAN_FILE, '{"version":1,"verdict":"single","reason":"One PR."}');
 

@@ -24,6 +24,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import type { Agent, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -435,7 +436,11 @@ function testConfig(overrides: Record<string, unknown> = {}) {
 }
 
 function build(overrides: Record<string, unknown> = {}): System {
-  return buildSystem(testConfig(overrides), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  return buildSystem(testConfig(overrides), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 }
 
 /** Spawn an agent on `originRef`. A temp cwd is enough — nothing here touches git. */
@@ -632,7 +637,7 @@ test('escalate and the WAITING sentinel converge on one park, in either order', 
   // The two detectors of one transition. Whichever arrives first owns it.
   for (const toolFirst of [true, false]) {
     const backend = new FakePtyBackend();
-    const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
+    const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
     const agent = spawnAgent(system, 'issue:12');
 
     const sentinel = (): void => backend.last().emit('@@LUBBDUBB_WAITING:Which auth provider?@@');
@@ -671,6 +676,7 @@ test('answering releases the park, so the next question is a fresh one', async (
 
 test('a whitelisted escalate is auto-answered and says so rather than implying a human saw it', async () => {
   const system = buildSystem(testConfig({ whitelistedApprovals: [{ match: 'run the tests', response: 'yes' }] }), {
+    worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
     errorMirror: () => {},
   });
@@ -1070,7 +1076,7 @@ test('an over-long note is stored trimmed and the agent is told, rather than los
 
 test('silence is not "no progress": an agent that never notes leaves the card as it was', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   const { app } = await buildApp(system);
   const agent = spawnAgent(system, 'issue:12');
 
@@ -1272,7 +1278,11 @@ test('with the backstop disabled, the tool denies rather than blocking', async (
 
 test('with the channel off, no launch carries it and the sentinels still park and finish', () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ mcp: { enabled: false } }), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig({ mcp: { enabled: false } }), {
+    worktrees: new FakeWorktreeManager(),
+    backend,
+    errorMirror: () => {},
+  });
   const agent = spawnAgent(system, 'issue:12');
 
   assert.equal(system.mcp.session(agent.id), null, 'no credential is minted at all');
@@ -1297,7 +1307,7 @@ test('with the channel off, no launch carries it and the sentinels still park an
 
 test('a system that never listened still mints credentials but wires no config path', () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig(), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
   const agent = spawnAgent(system, 'issue:12');
   // Identity exists (this is the path tests drive), but with no socket there is
   // nothing for an agent to connect to, so the launch is left alone.
@@ -1312,7 +1322,11 @@ test('a listening channel is actually threaded onto the launch (--mcp-config + b
   // that lives on that server) never reach the agent — invisible to every test
   // that drives `mcp.session()` in-process. Exercised in pty mode with a fake PTY.
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ agentMode: 'pty' }), { backend, errorMirror: () => {} });
+  const system = buildSystem(testConfig({ agentMode: 'pty' }), {
+    worktrees: new FakeWorktreeManager(),
+    backend,
+    errorMirror: () => {},
+  });
   assert.equal(await system.mcp.listen(), true);
   try {
     spawnAgent(system, 'issue:12');

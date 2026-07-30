@@ -18,6 +18,7 @@ import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // ---------------------------------------------------------------------------
 // Store: cumulative usage folds onto the agent; deltas feed the rolling window
@@ -189,7 +190,7 @@ test('pty mode exports LUBBDUBB_STATUS_FILE keyed by the chosen session id', asy
     heartbeatIntervalMs: 999_999,
   });
   const backend = new FakePtyBackend();
-  const system = buildSystem(config, { backend });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend });
   assert.ok(system.rateLimits, 'pty mode wires the rate-limit capture');
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
@@ -242,7 +243,7 @@ test('stream mode: result usage lands on the agent row and in the snapshot windo
     children.push(c);
     return c;
   };
-  const system = buildSystem(config, { streamSpawner: spawner });
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), streamSpawner: spawner });
   assert.equal(system.rateLimits, null, 'no status-line capture headless');
 
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });

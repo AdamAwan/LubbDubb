@@ -21,6 +21,7 @@ import { buildApp } from '../src/server/app.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // Stage 3: the roots that had no work item behind them. Adoption first (this
 // file's opening block) — the two arms that make "unparented PR" name one
@@ -458,7 +459,11 @@ function buildServed(over: Record<string, unknown> = {}) {
     startPaused: true,
     ...over,
   });
-  return buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  return buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
 }
 
 /**

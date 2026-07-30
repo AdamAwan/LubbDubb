@@ -9,6 +9,7 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { authorizeRequest, describeAuthAttempt, resolveCockpitToken } from '../src/server/auth.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-auth-'));
@@ -60,7 +61,11 @@ test('every API route declared in app.ts refuses an unauthenticated request', as
   assert.ok(routes.length >= 20, `expected to find the route table, found ${routes.length} routes`);
   assert.ok(routes.some((r) => r.url === '/api/jobs'));
 
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app } = await buildApp(system);
 
   for (const route of routes) {
@@ -92,7 +97,11 @@ test('every API route declared in app.ts refuses an unauthenticated request', as
 });
 
 test('the same routes answer normally once the token is presented', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -119,7 +128,11 @@ test('the same routes answer normally once the token is presented', async () => 
 });
 
 test('a wrong token is refused, and the comparison survives a length mismatch', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -136,7 +149,11 @@ test('a wrong token is refused, and the comparison survives a length mismatch', 
 });
 
 test('the SPA shell is deliberately not guarded — the token arrives in a fragment the browser never sends', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app } = await buildApp(system);
 
   // No `web/dist` in a test checkout, so the shell 404s rather than 200s. What
@@ -158,7 +175,11 @@ test('the SPA shell is deliberately not guarded — the token arrives in a fragm
 // ---------------------------------------------------------------------------
 
 test('a flagged artifact opens by navigation with only the capability the snapshot minted', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -192,7 +213,11 @@ test('a flagged artifact opens by navigation with only the capability the snapsh
 });
 
 test('an artifact capability is scoped to one flag and is not a cockpit credential', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -235,7 +260,11 @@ test('an artifact capability is scoped to one flag and is not a cockpit credenti
 // ---------------------------------------------------------------------------
 
 test('a non-loopback Host is refused even with a valid token (DNS rebinding)', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -262,7 +291,11 @@ test('a non-loopback Host is refused even with a valid token (DNS rebinding)', a
 });
 
 test('a cross-origin request is refused even with a valid token', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -288,7 +321,11 @@ test('a cross-origin request is refused even with a valid token', async () => {
 });
 
 test('a loopback origin on another port is allowed, so the Vite dev proxy keeps working', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -348,7 +385,11 @@ test('the Bearer header is parsed without a backtracking regex', () => {
 });
 
 test('a caller is shut out after repeated refusals, and successes never count toward it', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -377,7 +418,11 @@ test('a caller is shut out after repeated refusals, and successes never count to
 });
 
 test('a busy cockpit never throttles itself — successes are not counted', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
 
@@ -445,7 +490,11 @@ async function upgradeResult(port: number, query: string): Promise<'upgraded' | 
 }
 
 test('the WebSocket upgrade is refused without a token and accepted with one', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app, cockpitUrl } = await buildApp(system);
   const token = tokenOf(cockpitUrl);
   await app.listen({ port: 0, host: '127.0.0.1' });
@@ -552,7 +601,11 @@ test('auth.enabled survives a partial auth block in the config file', () => {
 // ---------------------------------------------------------------------------
 
 test('the first refusal of a run is recorded and names the credential channel', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app } = await buildApp(system);
 
   await app.inject({ method: 'GET', url: '/api/state' });
@@ -567,7 +620,11 @@ test('the first refusal of a run is recorded and names the credential channel', 
 });
 
 test('later refusals are not recorded, and no refusal ever logs the presented token', async () => {
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
   const { app } = await buildApp(system);
 
   // A locked-out cockpit polls, so recording every refusal would bury the first

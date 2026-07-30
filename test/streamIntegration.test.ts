@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /** Fake claude stream-JSON process, shared across the harness wiring. */
 class FakeChild extends EventEmitter implements StreamChild {
@@ -53,7 +54,7 @@ test('stream-mode: persisted transcript is clean and structured (no leaked senti
     children.push(c);
     return c;
   };
-  const system = buildSystem(streamConfig(), { streamSpawner: spawner });
+  const system = buildSystem(streamConfig(), { worktrees: new FakeWorktreeManager(), streamSpawner: spawner });
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
@@ -91,7 +92,7 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
     children.push(c);
     return c;
   };
-  const system = buildSystem(streamConfig(), { streamSpawner: spawner });
+  const system = buildSystem(streamConfig(), { worktrees: new FakeWorktreeManager(), streamSpawner: spawner });
 
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   await system.harness.runCycle('manual');

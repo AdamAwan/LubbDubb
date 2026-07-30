@@ -8,6 +8,7 @@ import { loadConfig, type Config } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -85,7 +86,7 @@ test('RuntimeControl.apply rejects a non-integer cap', () => {
 
 test('buildSystem seeds RuntimeControl from config (cap + unpaused by default)', () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ maxConcurrentAgents: 2 }), { backend });
+  const system = buildSystem(testConfig({ maxConcurrentAgents: 2 }), { worktrees: new FakeWorktreeManager(), backend });
   assert.equal(system.runtimeControl.cap, 2);
   assert.equal(system.runtimeControl.paused, false);
   system.store.close();
@@ -93,7 +94,7 @@ test('buildSystem seeds RuntimeControl from config (cap + unpaused by default)',
 
 test('raising the cap at runtime lets more agents spawn on the next execute', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ maxConcurrentAgents: 1 }), { backend });
+  const system = buildSystem(testConfig({ maxConcurrentAgents: 1 }), { worktrees: new FakeWorktreeManager(), backend });
 
   // Cap 1: two dispatches → one spawns, one defers.
   const first = await system.executor.execute('cyc_1', deskPlan('A', 'B'));
@@ -111,7 +112,7 @@ test('raising the cap at runtime lets more agents spawn on the next execute', as
 
 test('lowering the cap below live count defers new dispatch but kills nothing', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ maxConcurrentAgents: 2 }), { backend });
+  const system = buildSystem(testConfig({ maxConcurrentAgents: 2 }), { worktrees: new FakeWorktreeManager(), backend });
 
   await system.executor.execute('cyc_1', deskPlan('A', 'B'));
   assert.equal(system.store.countLiveAgents(), 2);
@@ -127,7 +128,7 @@ test('lowering the cap below live count defers new dispatch but kills nothing', 
 
 test('pausing stops new dispatch while leaving live agents running', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { backend });
+  const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { worktrees: new FakeWorktreeManager(), backend });
 
   await system.executor.execute('cyc_1', deskPlan('A'));
   assert.equal(system.store.countLiveAgents(), 1);
@@ -147,7 +148,7 @@ test('pausing stops new dispatch while leaving live agents running', async () =>
 
 test('unpausing resumes dispatch at the previously chosen cap', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { backend });
+  const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { worktrees: new FakeWorktreeManager(), backend });
 
   system.runtimeControl.apply({ paused: true });
   let summary = await system.executor.execute('cyc_1', deskPlan('A'));
@@ -162,7 +163,7 @@ test('unpausing resumes dispatch at the previously chosen cap', async () => {
 
 test('startPaused: true boots the system paused', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ startPaused: true }), { backend });
+  const system = buildSystem(testConfig({ startPaused: true }), { worktrees: new FakeWorktreeManager(), backend });
   assert.equal(system.runtimeControl.paused, true);
 
   const summary = await system.executor.execute('cyc_1', deskPlan('A'));
@@ -173,7 +174,7 @@ test('startPaused: true boots the system paused', async () => {
 
 test('while paused the harness keeps cycling: audit, escalations and answers still work', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { backend });
+  const system = buildSystem(testConfig({ maxConcurrentAgents: 3 }), { worktrees: new FakeWorktreeManager(), backend });
 
   // Spawn a live agent before pausing.
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });

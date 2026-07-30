@@ -13,6 +13,7 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Task } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 test('buildClaudeArgs injects the protocol system prompt and permission mode', () => {
   const args = buildClaudeArgs({ permissionMode: 'acceptEdits', extraArgs: ['--model', 'x'] });
@@ -138,7 +139,7 @@ function claudeModeConfig() {
 
 test('claude-mode agents launch with protocol args and get the task typed in', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(claudeModeConfig(), { backend });
+  const system = buildSystem(claudeModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
   await system.harness.runCycle('manual');
@@ -159,7 +160,7 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
 
 test('claude-mode still detects the protocol sentinels from real output', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(claudeModeConfig(), { backend });
+  const system = buildSystem(claudeModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'X' });
   await system.harness.runCycle('manual');
 

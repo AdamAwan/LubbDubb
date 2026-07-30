@@ -9,6 +9,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import type { Agent } from '../src/types.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -30,7 +31,7 @@ function build(): System {
       heartbeatIntervalMs: 999_999,
       maxConcurrentAgents: 3,
     }),
-    { backend: new FakePtyBackend(), errorMirror: () => {} },
+    { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
 }
 

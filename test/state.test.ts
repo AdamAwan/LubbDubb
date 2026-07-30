@@ -7,12 +7,13 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildStateSnapshot } from '../src/server/app.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 test('the state snapshot reports per-PR health', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const system = buildSystem(
     loadConfig({ dbPath: ':memory:', dispatcher: 'rule', deskRoot: join(dir, 'd'), worktreeRoot: join(dir, 'w') }),
-    { backend: new FakePtyBackend() },
+    { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() },
   );
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat', baseBranch: 'main' });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 42, mergeable: false, mergeableState: 'dirty' });
