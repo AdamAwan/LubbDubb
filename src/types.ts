@@ -635,6 +635,31 @@ export interface IssueConclusion {
   updatedAt: string;
 }
 
+/**
+ * A finished goal the operator has kept on the Goal Floor, until they dismiss it
+ * (issue #203).
+ *
+ * The floor is built from the live world, so a completed goal drops off it the
+ * moment the tracker stops returning the issue (a human closes the ticket) or its
+ * watch tag comes off — and with it the one way in to the run's report. The row is
+ * written while the goal is still live, so its `title` survives the world
+ * forgetting the issue, and the floor draws a retained completion from it either
+ * way until `dismissedAt` is set. Dismissal is one-way and persists across a
+ * restart, so the same finished goals do not reappear.
+ */
+export interface FloorCompletion {
+  /** The issue, as `issue:<n>` — the same origin every record and gate keys on. */
+  originRef: string;
+  issueNumber: number;
+  /** The goal's title, captured while the issue was still in the world. */
+  title: string;
+  /** When it was first observed complete; frozen across re-records. */
+  completedAt: string;
+  /** Null until the operator dismisses it — the one thing that removes it. */
+  dismissedAt: string | null;
+  updatedAt: string;
+}
+
 /** Who decided an issue was delivered: the assessing agent, or the operator directly. */
 export type DeliveryAuthor = 'assessor' | 'operator';
 

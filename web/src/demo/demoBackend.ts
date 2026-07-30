@@ -227,6 +227,24 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * Dismiss a finished goal from the Goal Floor — the demo mirror of #203's one
+   * way to remove a retained completion. Marks the completion dismissed wherever it
+   * rides (a still-present issue, or a forgotten-issue entry in `floorCompletions`),
+   * which is what the floor filters on.
+   */
+  async dismissFloorCompletion(issueNumber: number): Promise<{ ok: true }> {
+    const present = this.state.world.issues.find((i) => i.number === issueNumber);
+    const forgotten = (this.state.floorCompletions ?? []).find((i) => i.number === issueNumber);
+    const target = present ?? forgotten;
+    if (target?.completion) {
+      target.completion = { ...target.completion, dismissed: true };
+      this.addDecision('floor_completion_dismissed', 'ok', `issue #${issueNumber} dismissed from the floor`);
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   /** Toggle an issue's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
   async setIssueWatched(issueNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
@@ -868,6 +886,7 @@ export const demoApi = {
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     getServer().setIssueAssay(issueNumber, verdict),
+  dismissFloorCompletion: (issueNumber: number) => getServer().dismissFloorCompletion(issueNumber),
   replan: (planId: string) => getServer().replan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),
   endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),

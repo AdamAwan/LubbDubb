@@ -3,7 +3,14 @@ import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView 
 import { AsyncButton } from '../../../components/AsyncButton.js';
 import { refChip, refLink } from '../../../components/util.js';
 import { ASSAY_EXPIRY } from '../../../components/WorldSummary.js';
-import { buildGoalFloor, floorGoals, inProduction, type GoalFloorModel, type Machine } from '../goalFloor.js';
+import {
+  buildGoalFloor,
+  floorGoals,
+  inProduction,
+  retainedCompletion,
+  type GoalFloorModel,
+  type Machine,
+} from '../goalFloor.js';
 import { clip, iconForStage, patchStatus, toneColor } from '../vocabulary.js';
 
 /**
@@ -51,6 +58,14 @@ const SCAN_ROW = 15;
 
 interface GoalFloorProps {
   issues: Issue[];
+  /**
+   * Finished goals kept on the floor whose issue the live world has forgotten
+   * (issue #203). Merged with {@link GoalFloorProps.issues} here — the world's copy
+   * wins for a goal still present — so a completed goal, and its report, stay
+   * reachable until the operator dismisses it. Optional so an older server (which
+   * ships none) degrades to today's live-only floor.
+   */
+  floorCompletions?: Issue[];
   plans: Plan[];
   parts: PlanPart[];
   openPrs: PullRequest[];
@@ -72,6 +87,12 @@ interface GoalFloorProps {
    * something they do not mean.
    */
   onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
+  /**
+   * Remove a finished goal from the floor (issue #203). The only thing that takes
+   * a retained completion off — a pulse or poll never does — and it persists, so
+   * the goal does not reappear. Its report stays readable until this is clicked.
+   */
+  onDismissCompletion: (issueNumber: number) => Promise<unknown> | unknown;
   /** `GET /api/work/:ref`, routed through `CockpitActions` — a skin never reaches `api.js`. */
   onFetchWork: (ref: string) => Promise<{ nodes: WorkNodeView[] }>;
   /**
@@ -88,10 +109,18 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
   const [picked, setPicked] = useState<number | null>(null);
   const [recorded, setRecorded] = useState<WorkNodeView[]>([]);
 
+  // The live world plus the finished goals it has forgotten (issue #203), the
+  // world's copy winning for one still present, so a completed goal and its report
+  // stay reachable until dismissed. `floorGoals` then decides which are drawn.
+  const allIssues = [
+    ...issues,
+    ...(props.floorCompletions ?? []).filter((c) => !issues.some((i) => i.number === c.number)),
+  ];
+
   // Every reading below is of the *staked* goals — the strip, the default pick and
   // the pick that survives a poll alike. A goal un-watched while you were looking
   // at its floor therefore falls back to another one rather than blanking.
-  const goals = floorGoals(issues, { watchLabel: props.watchLabel, ignoreLabel: props.ignoreLabel });
+  const goals = floorGoals(allIssues, { watchLabel: props.watchLabel, ignoreLabel: props.ignoreLabel });
 
   // Opened on a goal the harness is actually working, rather than on whichever
   // ticket the provider listed first: the strip is right there to pick another,
@@ -212,6 +241,27 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
             >
               Open retrospective
             </button>
+          </span>
+        </div>
+      )}
+
+      {/* The dismiss control (issue #203). Drawn while this goal is a retained
+          completion the operator has not yet cleared — keyed on the completion
+          existing, never on the floor's state, the lesson `planId` and `retroRef`
+          learned. It sits below the Manifest so the way in to the report is right
+          above the button that ends it. Removing it is one-way: nothing else takes
+          a finished goal off the floor. */}
+      {retainedCompletion(current) && (
+        <div className="fx-gf-plan fx-sunk">
+          <span className="fx-gf-who">Completed</span>
+          <span className="fx-gf-act">
+            <AsyncButton
+              className="fx-btn"
+              onClick={() => props.onDismissCompletion(current.number)}
+              title="Take this finished goal off the floor. Its retrospective and records stay in the store; this only stops drawing the card."
+            >
+              Dismiss
+            </AsyncButton>
           </span>
         </div>
       )}

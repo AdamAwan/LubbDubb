@@ -64,6 +64,16 @@ export function inProduction(issue: Issue): boolean {
 }
 
 /**
+ * A finished goal the operator is keeping on the floor until they dismiss it
+ * (issue #203) — the retention that stops a completed goal (and the one way in to
+ * its report) vanishing when the tracker forgets the issue or its watch tag comes
+ * off. `dismissed` is what removes it, and only that: no pulse or poll drops one.
+ */
+export function retainedCompletion(issue: Issue): boolean {
+  return Boolean(issue.completion) && !issue.completion!.dismissed;
+}
+
+/**
  * Which goals get a floor, and in what order.
  *
  * Issues are **opt-in**, so an untagged ticket is one nothing has staked a claim
@@ -98,9 +108,21 @@ export function floorGoals(issues: readonly Issue[], gate: { watchLabel: string;
   const gated = Boolean(gate.watchLabel);
   const claimed = (issue: Issue): boolean =>
     !gated || watchBucket(issue.labels, { ...gate, defaultWatched: false }) === 'watched';
-  return issues
-    .filter((issue) => claimed(issue) || inProduction(issue))
-    .sort((a, b) => Number(claimed(b)) - Number(claimed(a)) || a.number - b.number);
+  // Four ways onto the strip, and the order of the checks is the point:
+  // - **in-flight work is always drawn** (see the docstring), and a dismissed
+  //   completion that re-enters production is exactly that, so this comes first
+  //   and a dismissal can never hide live work;
+  // - a **dismissed** completion that is *not* back in production is hidden — the
+  //   operator cleared it, and that is the one thing that removes a finished goal;
+  // - otherwise a **claimed** goal or a **retained completion** is drawn: the
+  //   former is today's rule, the latter is #203's retention keeping a finished
+  //   goal (and its report) on the floor after the world forgot it.
+  const show = (issue: Issue): boolean => {
+    if (inProduction(issue)) return true;
+    if (issue.completion?.dismissed) return false;
+    return claimed(issue) || retainedCompletion(issue);
+  };
+  return issues.filter(show).sort((a, b) => Number(claimed(b)) - Number(claimed(a)) || a.number - b.number);
 }
 
 /* ------------------------------- layout ------------------------------- */

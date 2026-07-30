@@ -207,6 +207,16 @@ it, so it expires on the next edit exactly as an agent's does; an issue absent f
 a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
 no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict.
 
+### `POST /api/issues/:number/floor-dismiss`
+
+Take a finished goal off the Goal Floor (issue #203). A completed goal is otherwise retained there —
+recorded server-side while it is still live, and drawn even once the tracker has forgotten the issue —
+so the operator can still open its report; this is the **one** thing that removes it. No body. The
+write is one-way and idempotent: dismissing a goal with no retained completion, or one already
+dismissed, is a **409** rather than an error state, and the dismissal persists across a restart so the
+goal does not reappear. The report itself is untouched — the row is the card, not the write-up. 400 on
+a non-integer issue number.
+
 ### `GET /api/work`
 
 The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did
@@ -464,7 +474,8 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`.                                                |
 | `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                   |
 | `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                               |
-| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall` and `assay` per issue.                                         |
+| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                           |
+| `floorCompletions`   | Finished goals kept on the Goal Floor whose issue the world has forgotten (#203), synthesized from their stored records through the same per-issue enrichment a live one takes. |
 | `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                        |
 | `tasks`              | Every task.                                                                                                                                                                 |
 | `jobs`               | Operator jobs, newest first.                                                                                                                                                |

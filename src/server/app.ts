@@ -5,7 +5,15 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
-import type { Issue, IssueAssay, IssueDelivery, Retrospective, ShortfallCause, WorldSnapshot } from '../types.js';
+import type {
+  FloorCompletion,
+  Issue,
+  IssueAssay,
+  IssueDelivery,
+  Retrospective,
+  ShortfallCause,
+  WorldSnapshot,
+} from '../types.js';
 import { Hub } from './hub.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { describeRunningConfig } from './runningConfig.js';
@@ -830,6 +838,22 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, finding };
   });
 
+  // Dismiss a finished goal from the Goal Floor (issue #203). The only thing that
+  // removes a retained completion — a pulse or world refresh never drops one — and
+  // it persists across a restart, so the same goals do not reappear. Idempotent:
+  // dismissing an already-dismissed or unrecorded completion is a no-op 409, not an
+  // error state. One-way; an accidental dismissal is undone by the goal re-entering
+  // production, which the floor draws as live work regardless.
+  app.post('/api/issues/:number/floor-dismiss', async (req, reply) => {
+    const { number } = req.params as { number: string };
+    const n = Number(number);
+    if (!Number.isInteger(n)) return reply.code(400).send({ error: 'invalid issue number' });
+    const dismissed = store.dismissFloorCompletion(issueConclusionOrigin(n));
+    if (!dismissed) return reply.code(409).send({ error: 'no retained completion to dismiss' });
+    hub.broadcast({ type: 'dirty' });
+    return { ok: true };
+  });
+
   app.post('/api/escalations/:id/answer', async (req, reply) => {
     const { id } = req.params as { id: string };
     const { response } = (req.body ?? {}) as { response?: string };
@@ -1360,6 +1384,12 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   const deliveries = store.listDeliveries();
   const deliveriesByOrigin = new Map(deliveries.map((d) => [d.originRef, d]));
   const deliveryWindow = deliverySignalQuery(deliveries);
+  // Finished goals the operator is keeping on the Goal Floor (issue #203), keyed
+  // on the issue origin the completion field below reads off. Retained until
+  // dismissed, and shown even once the tracker has forgotten the issue — see the
+  // synthesis after the issue map.
+  const floorCompletions = store.listFloorCompletions();
+  const completionByOrigin = new Map(floorCompletions.map((c) => [c.originRef, c]));
   // The negative mirror, keyed the same way — the rows rule `issue-shortfall`
   // reads, so the chip and the rule cannot disagree about what fell short.
   const shortfalls = store.listShortfalls();
@@ -1460,6 +1490,55 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
+  // The per-issue enrichment, hoisted so a live world issue and a retained
+  // completion synthesized below go through one path — the reasons the pickup and
+  // conclusion verdicts are computed here rather than in the browser apply to both,
+  // and two enrichment paths would drift exactly on a finished goal.
+  const enrichIssue = (issue: Issue) => {
+    const origin = issueConclusionOrigin(issue.number);
+    const completion = completionByOrigin.get(origin);
+    return {
+      ...issue,
+      pickup: issuePickupStatus(issue, pickupCtx),
+      // `conclusion` sits beside `pickup` and does not feed it — the same
+      // relationship `attention` has to `health`. Pickup answers "would an agent
+      // start next cycle", conclusion answers "has anyone said this is finished".
+      conclusion: resolveIssueConclusion(
+        conclusions.get(origin) ?? null,
+        plans.find((p) => p.originRef === origin) ?? null,
+        shortfallsByOrigin.get(origin) ?? null,
+      ),
+      // Beside the conclusion and the pickup verdict, never inside either: what
+      // fell short and what the harness has offered to do about it.
+      shortfall: shortfallsByOrigin.get(origin) ?? null,
+      // The positive mirror — the assessor's "this goal is reached" — present only
+      // while it still stands (`standingDelivery`).
+      delivery: standingDelivery(deliveriesByOrigin.get(origin), issue, pickupCtx),
+      // The intake verdict, beside the other two and inside `pickup` for none.
+      assay: assayVerdictOf(assaysByOrigin.get(origin)),
+      // The run's own write-up (rule 3h) — the reading, never the writing.
+      retrospective: retroReading(store.getRetrospective(origin)),
+      // Whether the operator is keeping this finished goal on the floor, and
+      // whether they have dismissed it (issue #203). Absent when nothing has
+      // recorded a completion, so the floor's retention gate reads three states —
+      // live, retained, dismissed — off one optional field.
+      completion: completion ? { at: completion.completedAt, dismissed: completion.dismissedAt !== null } : undefined,
+    };
+  };
+  // A finished goal the world has forgotten, rebuilt from its stored completion so
+  // `enrichIssue` can draw it exactly as it would a live one. `state: 'closed'` is
+  // what makes `issuePickupStatus` report `done`; the records it needs
+  // (conclusion, delivery, retrospective) are keyed on the origin and survive the
+  // world, so they are read there, not carried on this stub.
+  const synthCompletedIssue = (c: FloorCompletion): Issue => ({
+    id: `issue-${c.issueNumber}`,
+    number: c.issueNumber,
+    title: c.title,
+    body: '',
+    labels: [],
+    state: 'closed',
+    linkedPrNumber: null,
+  });
   return {
     config: {
       heartbeatIntervalMs: config.heartbeatIntervalMs,
@@ -1525,45 +1604,18 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
       // what rule 3b reads and what the operator toggles. Folding the second into
       // the first would make a `done` verdict silently veto an item the operator
       // had deliberately moved back to a pickup state.
-      issues: world.issues.map((issue) => ({
-        ...issue,
-        pickup: issuePickupStatus(issue, pickupCtx),
-        conclusion: resolveIssueConclusion(
-          conclusions.get(issueConclusionOrigin(issue.number)) ?? null,
-          plans.find((p) => p.originRef === issueConclusionOrigin(issue.number)) ?? null,
-          shortfallsByOrigin.get(issueConclusionOrigin(issue.number)) ?? null,
-        ),
-        // Beside the conclusion and the pickup verdict, never inside either, for
-        // the reason `attention` sits beside `health`: pickup answers "would an
-        // agent start on this next cycle", and a shortfall's answer to that is
-        // "yes, and that is the point". What this adds is *what fell short* and
-        // what the harness has offered to do about it, which neither of the other
-        // two can say.
-        shortfall: shortfallsByOrigin.get(issueConclusionOrigin(issue.number)) ?? null,
-        // The positive mirror, and the one verdict that reached no surface at all
-        // until now. It cannot ride on either of its neighbours: after the
-        // two-record split the assessor's `delivered` lives in its own table, so
-        // `resolveIssueConclusion` above resolves a delivered *decomposed* issue to
-        // `{by: 'plan'}`, and `issuePickupStatus` answers its plan `parts` arm
-        // before the delivery park, so the same issue reports `planning`. Both are
-        // honest about the questions they were asked; neither answers this one.
-        delivery: standingDelivery(deliveriesByOrigin.get(issueConclusionOrigin(issue.number)), issue, pickupCtx),
-        // The intake verdict, beside the other two for their reason and inside
-        // `pickup` for none: pickup answers "would an agent start next cycle",
-        // the assay answers "is there anything here to start on". `pickup.reasons`
-        // already carries the refusal *text*, but "refused" and "awaiting a
-        // verdict" differ only in that prose — and telling them apart by reading
-        // a human-facing string is what `signalPolarity` refuses to do. So the
-        // discriminator is structural. `goalRef` is deliberately not shipped: it
-        // is a fingerprint the hold is measured against, not a reading.
-        assay: assayVerdictOf(assaysByOrigin.get(issueConclusionOrigin(issue.number))),
-        // The run's own write-up (rule 3h) — the **reading**, never the writing.
-        // This snapshot is polled continuously, so a document per issue would be
-        // paid for on every poll; `GET /api/retrospectives/:ref` serves the rest
-        // when a reader actually opens it, the `WorkTreePanel` pattern.
-        retrospective: retroReading(store.getRetrospective(issueConclusionOrigin(issue.number))),
-      })),
+      issues: world.issues.map(enrichIssue),
     },
+    // Finished goals kept on the Goal Floor after the tracker forgot the issue
+    // (issue #203) — closed by hand, or the watch tag removed. Synthesized from
+    // the stored completion so the floor keeps the one way in to the run's report,
+    // and enriched through the *same* path as a live issue so a retained card and
+    // a live one cannot disagree about what a goal's records say. Dismissed and
+    // still-present completions are not here: the former is not retained, the
+    // latter already rides the world list above (with its `completion` field).
+    floorCompletions: floorCompletions
+      .filter((c) => c.dismissedAt === null && !world.issues.some((i) => i.number === c.issueNumber))
+      .map((c) => enrichIssue(synthCompletedIssue(c))),
     // The plan graph, which until now existed only in the database: the per-issue
     // chip could say "2/5 parts merged" and nothing could say *which* five. The
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.

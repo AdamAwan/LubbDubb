@@ -39,7 +39,7 @@ const {
   toneColor,
   returnRoute,
 } = await import('../web/src/skins/factory/vocabulary.js');
-const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress } = await import(
+const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress, retainedCompletion } = await import(
   '../web/src/skins/factory/goalFloor.js'
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
@@ -852,6 +852,7 @@ test('a refused floor draws the override, and a workable one does not', () => {
         onViewRetro: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
+        onDismissCompletion: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
         // Gates off: these two assert the plan and assay controls, not visibility.
         watchLabel: '',
@@ -904,6 +905,7 @@ test('the floor opens its plan whatever the plan is doing', () => {
         onViewRetro: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
+        onDismissCompletion: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
         // Gates off: these two assert the plan and assay controls, not visibility.
         watchLabel: '',
@@ -1127,6 +1129,55 @@ test('the floor draws the goals we have a claim staked to', () => {
   );
 });
 
+test('a completed goal is retained on the floor until dismissed (#203)', () => {
+  const T = '2026-07-31T00:00:00.000Z';
+  const goal = (over: Partial<Issue> = {}): Issue => ({
+    id: 'iss-1',
+    number: 1,
+    title: 'Goal 1',
+    body: '',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+    // A finished goal: 'done' is not in production, and with no watch tag it would
+    // otherwise drop straight off the floor.
+    pickup: { eligible: false, status: 'done', reasons: [] },
+    assay: null,
+    shortfall: null,
+    ...over,
+  });
+  const GATE = { watchLabel: 'lubbdubb-watch', ignoreLabel: 'lubbdubb-ignore' };
+  const numbers = (issues: Issue[]): number[] => floorGoals(issues, GATE).map((i) => i.number);
+
+  assert.deepEqual(numbers([goal()]), [], 'an untagged, un-retained finished goal is not drawn');
+  assert.deepEqual(
+    numbers([goal({ completion: { at: T, dismissed: false } })]),
+    [1],
+    'retention keeps it until dismissed',
+  );
+  assert.deepEqual(
+    numbers([goal({ completion: { at: T, dismissed: true } })]),
+    [],
+    'dismissal is the one thing that removes it',
+  );
+
+  // A dismissal can never hide live work: a dismissed completion back in production
+  // is drawn like any other in-flight goal.
+  assert.deepEqual(
+    numbers([
+      goal({ pickup: { eligible: false, status: 'active', reasons: [] }, completion: { at: T, dismissed: true } }),
+    ]),
+    [1],
+    'a dismissal never hides live work',
+  );
+
+  // The predicate the dismiss control keys on — on the completion existing and not
+  // yet cleared, never on the floor's state.
+  assert.equal(retainedCompletion(goal({ completion: { at: T, dismissed: false } })), true);
+  assert.equal(retainedCompletion(goal({ completion: { at: T, dismissed: true } })), false);
+  assert.equal(retainedCompletion(goal()), false);
+});
+
 /** And the panel reads that list, rather than the world's — including its empty state. */
 test('the goal floor strip is the staked goals', () => {
   const base = floorInput({}).issue;
@@ -1156,6 +1207,7 @@ test('the goal floor strip is the staked goals', () => {
         onViewRetro: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
+        onDismissCompletion: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
       }),
     );

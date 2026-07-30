@@ -12,6 +12,7 @@ import { isPrExcluded } from './prHealth.js';
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
 import { assaySignalQuery } from './intake/assay.js';
+import { completionsToRecord } from './floor/completions.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
@@ -202,6 +203,27 @@ export class Harness extends EventEmitter {
       // before `decide` only because everything else on the pulse is — it changes no
       // decision, and a failure is recorded rather than thrown.
       await this.deps.assays?.announce(world, assaySignals);
+      // Which goals already have a write-up — origins only. Rule 3h reads this to
+      // know whether to dispatch one; the Goal Floor's retention (below) reads it
+      // as one of the signals that a goal is finished.
+      const retrospectiveOrigins = store.listRetrospectiveOrigins();
+      // Keep a finished goal on the Goal Floor until the operator dismisses it
+      // (issue #203). Recorded while the issue is still in the world so its title
+      // survives the tracker forgetting it (closed by hand, or its watch tag
+      // removed) — which is exactly when the floor would otherwise lose the one
+      // way in to the run's report. A store write, not a decision, and idempotent
+      // per pulse, so a failure is recorded and the next pulse retries rather than
+      // failing the whole cycle.
+      try {
+        for (const c of completionsToRecord(world.issues, { retrospectiveOrigins, conclusions, deliveries, plans }))
+          store.recordFloorCompletion(c);
+      } catch (err) {
+        this.deps.errors.record({
+          source: 'cycle',
+          message: `Recording floor completions failed: ${(err as Error).message}`,
+          detail: (err as Error).stack ?? null,
+        });
+      }
       const recentDecisions = store.listDecisions(200);
       // Acts already put to a human: a rule that proposed one holds off while the
       // verdict stands, so one question is asked once (issue #109).
@@ -253,7 +275,7 @@ export class Harness extends EventEmitter {
         assaySignals,
         // Which goals already have a write-up — origins only. Rule 3h needs to know
         // whether to dispatch one; what it says is deliberately out of its reach.
-        retrospectiveOrigins: store.listRetrospectiveOrigins(),
+        retrospectiveOrigins,
         recentDecisions,
         proposals,
         rejectionSignals,

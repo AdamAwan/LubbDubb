@@ -74,6 +74,14 @@ export interface CockpitActions {
   setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
 
   /**
+   * Take a finished goal off the Goal Floor (issue #203). A completed goal is
+   * retained on the floor — no pulse or poll drops it — so the operator can still
+   * open its report; this is the one thing that removes it, and it persists. On the
+   * seam for every mutation's reason: a skin may not reach `api.js`.
+   */
+  dismissCompletion(issueNumber: number): Promise<void>;
+
+  /**
    * One work item's durable subtree (`GET /api/work/:ref`), fetched on demand.
    *
    * A read rather than a mutation, and on this seam for the same reason every
