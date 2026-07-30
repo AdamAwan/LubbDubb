@@ -27,7 +27,8 @@ export interface CockpitActions {
   dismissEscalation(id: string, note?: string): Promise<void>;
   decideProposal(id: string, verdict: 'accept' | 'reject', note?: string): Promise<void>;
   decidePermission(id: string, allow: boolean, note?: string): Promise<void>;
-  decideRecovery(agentId: string, verdict: RecoveryVerdict): Promise<void>;
+  /** Keyed on the task: orphaned work may never have had an agent. */
+  decideRecovery(taskId: string, verdict: RecoveryVerdict): Promise<void>;
 
   replan(planId: string): Promise<void>;
   /**

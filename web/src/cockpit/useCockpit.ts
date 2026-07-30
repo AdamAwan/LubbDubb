@@ -156,7 +156,7 @@ export function useCockpit(): CockpitStatus {
       decideProposal: (id, verdict, note) =>
         then(verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)),
       decidePermission: (id, allow, note) => then(api.decidePermission(id, allow, note)),
-      decideRecovery: (agentId, verdict) => then(api.decideRecovery(agentId, verdict)),
+      decideRecovery: (taskId, verdict) => then(api.decideRecovery(taskId, verdict)),
 
       replan: (planId) => then(api.replan(planId)),
       viewPlan: (planId) => setViewingPlan(planId),

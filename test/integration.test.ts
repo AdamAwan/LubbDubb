@@ -188,7 +188,7 @@ test('boot detection parks an orphaned agent for a decision instead of burying i
   assert.equal(crashed[0]!.restorable, false);
   assert.match(crashed[0]!.restoreBlocked!, /cannot resume/);
 
-  const decided = system.recovery.decide(agentId, 'remove');
+  const decided = system.recovery.decide(crashed[0]!.taskId, 'remove');
   assert.equal(decided.ok, true);
   assert.equal(system.store.getAgent(agentId)!.status, 'interrupted');
   assert.equal(system.store.getTask(system.store.getAgent(agentId)!.taskId)!.status, 'interrupted');
@@ -245,7 +245,7 @@ test("a crashed agent's open escalation survives detection and is dismissed only
   system.recovery.detect();
   assert.equal(system.store.getEscalation(escalationId)!.status, 'open');
 
-  system.recovery.decide(agentId, 'remove');
+  system.recovery.decide(system.store.getAgent(agentId)!.taskId, 'remove');
   const after = system.store.getEscalation(escalationId)!;
   assert.equal(after.status, 'dismissed');
   assert.equal((after.context.dismissal as { reason: string }).reason, 'agent crashed; work dropped');

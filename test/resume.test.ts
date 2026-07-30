@@ -75,7 +75,7 @@ test('a restored agent re-attaches to the same session in the same worktree', as
   assert.equal(backend.spawned.length, 0, 'nothing relaunches before a verdict');
   assert.equal(crashed[0]!.restorable, true);
 
-  const result = s2.recovery.decide(id, 'restore');
+  const result = s2.recovery.decide(crashed[0]!.taskId, 'restore');
   assert.equal(result.ok, true);
 
   const spawn = backend.spawned[0]!;
@@ -108,7 +108,7 @@ test('a crash (DB still marks the agent live) is offered for restore on the next
   assert.equal(crashed[0]!.died, 'crashed', 'a fallen-over process is distinguished from a clean shutdown');
   assert.equal(s2.store.getAgent(agent.id)!.status, 'crashed');
 
-  s2.recovery.decide(agent.id, 'restore');
+  s2.recovery.decide(crashed[0]!.taskId, 'restore');
   assert.equal(backend.spawned[0]!.args[backend.spawned[0]!.args.indexOf('--resume') + 1], agent.sessionId);
   assert.equal(s2.store.getAgent(agent.id)!.status, 'running');
   s2.store.close();
@@ -145,7 +145,7 @@ test('an orphan with no usable session id is offered requeue and remove, not res
   assert.equal(crashed[0]!.restorable, false);
   assert.match(crashed[0]!.restoreBlocked!, /session id/);
 
-  const refused = system.recovery.decide(agent.id, 'restore');
+  const refused = system.recovery.decide(crashed[0]!.taskId, 'restore');
   assert.equal(refused.ok, false, 'restore is refused rather than half-attempted');
   assert.equal(system.store.getAgent(agent.id)!.status, 'crashed', 'a refusal leaves the decision outstanding');
   assert.equal(backend.spawned.length, 0);
@@ -166,7 +166,7 @@ test("a waiting agent's escalation is restored with it and answers route into th
 
   const { backend: b2, system: s2, crashed } = reboot(dir);
   assert.equal(crashed[0]!.waitingReason, 'Which database should I use?', 'the park is carried onto the card');
-  assert.equal(s2.recovery.decide(agent.id, 'restore').ok, true);
+  assert.equal(s2.recovery.decide(crashed[0]!.taskId, 'restore').ok, true);
 
   // Restored to waiting, with the same still-open escalation.
   assert.equal(s2.store.getAgent(agent.id)!.status, 'waiting');
@@ -197,9 +197,10 @@ test('detection is idempotent: a second detect does not re-park or double-count'
   assert.equal(backend.spawned.length, 0, 'still nothing relaunched');
 
   // And a restore is applied exactly once: the second call finds nothing pending.
-  assert.equal(s2.recovery.decide(agent.id, 'restore').ok, true);
+  const taskId = s2.store.getAgent(agent.id)!.taskId;
+  assert.equal(s2.recovery.decide(taskId, 'restore').ok, true);
   assert.equal(backend.spawned.length, 1);
-  assert.equal(s2.recovery.decide(agent.id, 'restore').ok, false);
+  assert.equal(s2.recovery.decide(taskId, 'restore').ok, false);
   assert.equal(backend.spawned.length, 1, 'already-live agent is not re-spawned');
   s2.store.close();
 });

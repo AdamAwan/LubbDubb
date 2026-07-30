@@ -167,11 +167,12 @@ const realApi = {
   // back, so the work waits its turn there rather than on the fleet.
   fileFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/file`),
   dismissFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/dismiss`),
-  // Decide what happens to an agent the last run left orphaned. Until every one of
+  // Decide what happens to work the last run left orphaned. Until every one of
   // these is answered the harness runs no cycles, so this is the one call that can
-  // un-stick a cockpit whose fleet looks frozen.
-  decideRecovery: (agentId: string, verdict: RecoveryVerdict) =>
-    post<{ ok: true; remaining: number }>(`/api/recovery/${agentId}`, { verdict }),
+  // un-stick a cockpit whose fleet looks frozen. Keyed on the **task**: an orphan
+  // may never have had an agent at all.
+  decideRecovery: (taskId: string, verdict: RecoveryVerdict) =>
+    post<{ ok: true; remaining: number }>(`/api/recovery/${taskId}`, { verdict }),
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   completeAgent: (id: string) => post(`/api/agents/${id}/complete`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),

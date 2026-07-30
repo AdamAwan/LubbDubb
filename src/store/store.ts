@@ -202,6 +202,19 @@ export class Store {
     return rows.map(rowToTask);
   }
 
+  /**
+   * Every task whose work is still outstanding — the same `queued`/`running`/`waiting`
+   * set the two `findActiveTask*` gates below treat as active, asked as a list rather
+   * than as a lookup. Crash recovery is the caller: an outstanding task with no agent
+   * row behind it is work the harness is holding a claim on and doing nothing about.
+   */
+  listOutstandingTasks(): Task[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM tasks WHERE status IN ('queued','running','waiting') ORDER BY created_at ASC`)
+      .all() as TaskRow[];
+    return rows.map(rowToTask);
+  }
+
   /** Is there already an active (queued/running/waiting) task for this origin? */
   findActiveTaskByOrigin(originRef: string): Task | null {
     const row = this.db

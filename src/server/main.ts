@@ -49,11 +49,14 @@ async function main(): Promise<void> {
     // operator who reads this as a warning rather than a stop sign will conclude
     // the heartbeat is broken.
     console.log(
-      `[lubbdubb] ${crashed.length} agent(s) did not survive the last run — the pulse is HELD until you ` +
-        'restore, requeue or remove each of them in the cockpit',
+      `[lubbdubb] ${crashed.length} piece(s) of work did not survive the last run — the pulse is HELD until ` +
+        'you restore, requeue or remove each of them in the cockpit',
     );
     for (const c of crashed)
-      console.log(`[lubbdubb]   ${c.agentId} — ${c.title}${c.originRef ? ` (${c.originRef})` : ''}`);
+      console.log(
+        `[lubbdubb]   ${c.taskId}${c.agentId ? ` (${c.agentId})` : ' — no agent ever started'} — ${c.title}` +
+          `${c.originRef ? ` (${c.originRef})` : ''}`,
+      );
   }
 
   system.harness.start();

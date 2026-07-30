@@ -832,11 +832,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // recovery verdict, so there is nothing to type into. Answering would route
     // nowhere and settle the item, losing the question — which the operator would
     // want back if they choose to restore.
-    if (item?.agentId && recovery.isPending(item.agentId))
+    const orphaned = item?.agentId ? recovery.pendingForAgent(item.agentId) : null;
+    if (orphaned)
       return reply.code(409).send({
         error:
           `the agent that asked this crashed — decide its recovery via ` +
-          `/api/recovery/${item.agentId} first (restore keeps this question open)`,
+          `/api/recovery/${orphaned.taskId} first (restore keeps this question open)`,
       });
     try {
       const result = escalations.answer(id, response);
@@ -928,7 +929,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, ...result };
   });
 
-  // Decide what happens to an agent the previous run left orphaned. **Until every
+  // Decide what happens to work the previous run left orphaned. **Until every
   // one of these is answered the harness runs no cycles at all**, so this route is
   // the only thing that can un-stick a booted-after-a-crash harness — which is why
   // it settles the verdict inline (like a proposal accept) rather than emitting an
@@ -938,6 +939,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // runtime declines is not a decision, and the operator still has requeue and
   // remove. The cycle is kicked only once the *last* decision lands, since one
   // kicked while others are outstanding would just return the hold.
+  //
+  // `:id` is the **task** id, not the agent id: a restart can orphan a task before
+  // its agent was ever spawned, and the task is the only identity every candidate has.
   app.post('/api/recovery/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const { verdict } = (req.body ?? {}) as { verdict?: unknown };

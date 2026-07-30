@@ -557,24 +557,32 @@ export interface ErrorLogEntry {
   createdAt: string;
 }
 
-/** What an operator can do with an agent that did not survive the last run. */
+/** What an operator can do with work that did not survive the last run. */
 export type RecoveryVerdict = 'restore' | 'requeue' | 'remove';
 
-/** One agent orphaned by a crash or a shutdown, awaiting a verdict. */
-export interface CrashedAgent {
-  agentId: string;
+/** One piece of work orphaned by a crash or a shutdown, awaiting a verdict. */
+export interface OrphanedWork {
+  /** The identity everywhere: the route, the card key, the verdict. Every candidate has one. */
   taskId: string;
+  /** Null when the restart landed before an agent was ever spawned for the task. */
+  agentId: string | null;
   title: string;
   kind: string;
   originRef: string | null;
   branch: string | null;
-  cwd: string;
-  /** `crashed` — the process fell over; `interrupted` — it was shut down cleanly. */
-  died: 'crashed' | 'interrupted';
+  /** The agent's working directory; null when no agent ever started. */
+  cwd: string | null;
+  /**
+   * `crashed` — the process fell over; `interrupted` — it was shut down cleanly;
+   * `never_started` — a task recorded by a dispatch the restart caught before its
+   * agent was spawned, which left its origin and branch held shut.
+   */
+  died: 'crashed' | 'interrupted' | 'never_started';
   /** The question it was parked on when it went, if it was parked on one. */
   waitingReason: string | null;
   /** Its last `note_progress` line — the best account there is of how far it got. */
   note: string | null;
+  /** When the agent started, or when the task was recorded if none ever did. */
   startedAt: string;
   detectedAt: string | null;
   restorable: boolean;
@@ -640,7 +648,7 @@ export interface AppState {
    * the cockpit draws it as a blocking banner rather than one more panel. Optional
    * so an older server simply shows none.
    */
-  recovery?: CrashedAgent[];
+  recovery?: OrphanedWork[];
   /** Acts put to a human, newest first. Optional so an older server degrades to plain escalations. */
   proposals?: Proposal[];
   decisions: Decision[];

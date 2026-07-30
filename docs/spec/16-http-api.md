@@ -385,17 +385,18 @@ item; the same live agent then continues (allow) or reads the denial (deny). 400
 boolean; **409 when no pending permission request is attached** (already decided, or the agent died
 first). Returns `{ ok: true, allowed }`.
 
-### `POST /api/recovery/:agentId`
+### `POST /api/recovery/:taskId`
 
-Body `{verdict}`, one of `restore` / `requeue` / `remove` — what happens to an agent the previous run
-left orphaned (see [10](10-agent-runtimes.md#crash-recovery)). **While any of these is outstanding the
+Body `{verdict}`, one of `restore` / `requeue` / `remove` — what happens to work the previous run
+left orphaned. **Keyed on the task, not the agent**: a restart can orphan a task before its agent was
+ever spawned, so the task is the only identity every candidate has (see [10](10-agent-runtimes.md#crash-recovery)). **While any of these is outstanding the
 harness runs no cycles at all**, so this route is the only thing that can un-hold a booted-after-a-crash
 harness; it therefore applies the verdict inline rather than emitting an action for a pulse that cannot
 run to pick it up.
 
-400 on an unknown verdict. **409 when the agent is not awaiting a decision** (already decided, or never
-a candidate), and **409 when the verdict cannot be applied** — a `restore` for an agent with no session
-id, no worktree, or on a runtime that cannot resume. A refusal is not a decision: the item stays
+400 on an unknown verdict. **409 when the task is not awaiting a decision** (already decided, or never
+a candidate), and **409 when the verdict cannot be applied** — a `restore` for work with no agent at all,
+or for an agent with no session id, no worktree, or on a runtime that cannot resume. A refusal is not a decision: the item stays
 pending, so `requeue` and `remove` are still available. Returns
 `{ ok: true, verdict, agentId, taskId, detail, job?, remaining, report? }`, where `job` is the job a
 `requeue` filed and `report` is the cycle run when `remaining` reaches 0.
@@ -424,29 +425,29 @@ anything that is not `/api` or `/ws` — so client-side routing works.
 `buildStateSnapshot(system)` assembles everything the cockpit needs in one response. Several values are
 read **once** and shared, so two parts of the UI cannot disagree.
 
-| Key                  | Contents                                                                                                                            |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`.        |
-| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                           |
-| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                       |
-| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall` and `assay` per issue. |
-| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref. |
-| `tasks`              | Every task.                                                                                                                         |
-| `jobs`               | Operator jobs, newest first.                                                                                                        |
-| `agents`             | Every agent row, including usage and the progress note.                                                                             |
-| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                            |
-| `files`              | Every file every agent wrote.                                                                                                       |
-| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                      |
-| `findings`           | Every finding.                                                                                                                      |
-| `escalations`        | Every escalation.                                                                                                                   |
-| `recovery`           | Agents the previous run orphaned, each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.       |
-| `decisions`          | The last 100 decisions.                                                                                                             |
-| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher.                       |
-| `worldEvents`        | The last 100 world events.                                                                                                          |
-| `errors`             | The last 100 recorded failures.                                                                                                     |
-| `refUrls`            | The `ref → URL` map.                                                                                                                |
-| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                    |
-| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                        |
+| Key                  | Contents                                                                                                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`.                                                |
+| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                   |
+| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                               |
+| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall` and `assay` per issue.                                         |
+| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                        |
+| `tasks`              | Every task.                                                                                                                                                                 |
+| `jobs`               | Operator jobs, newest first.                                                                                                                                                |
+| `agents`             | Every agent row, including usage and the progress note.                                                                                                                     |
+| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                    |
+| `files`              | Every file every agent wrote.                                                                                                                                               |
+| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                                                              |
+| `findings`           | Every finding.                                                                                                                                                              |
+| `escalations`        | Every escalation.                                                                                                                                                           |
+| `recovery`           | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**. |
+| `decisions`          | The last 100 decisions.                                                                                                                                                     |
+| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher.                                                               |
+| `worldEvents`        | The last 100 world events.                                                                                                                                                  |
+| `errors`             | The last 100 recorded failures.                                                                                                                                             |
+| `refUrls`            | The `ref → URL` map.                                                                                                                                                        |
+| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                            |
+| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                                                                |
 
 Seven consistency points:
 

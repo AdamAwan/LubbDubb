@@ -1355,7 +1355,9 @@ buried the rest as `interrupted`, and then the boot cycle dispatched new work ov
 three decisions an operator has an opinion about, none of which was ever put to anyone. Worse,
 it went on staffing the fleet while its own model of that fleet was a lie: rows saying `running`
 with no process behind them. So detection no longer decides, and the pulse **holds** until it
-has been decided. What carries it:
+has been decided. **What is orphaned is the _work_, not the process** — the unit of recovery is
+the task and the agent is optional throughout (`decide(taskId, …)`, `POST /api/recovery/:taskId`,
+`OrphanedWork.agentId` nullable), because a restart orphans work two ways. What carries it:
 
 - **The pending set is the rows, not a field.** `RecoveryDesk.detect()` (`recoveryDesk.ts`,
   boot, before `runCycle('boot')`) stamps each orphan `crashed` — a new `AgentStatus` that is
@@ -1366,7 +1368,32 @@ has been decided. What carries it:
   candidate set — restore makes it live, requeue and remove settle its task — so "already
   decided" needs no separate record, which is the same property the old task check relied on
   to keep a cockpit kill dead. An already-`interrupted` row is left **unstamped**: that is what
-  preserves crash-vs-clean-shutdown (`CrashedAgent.died`) with no column to hold it.
+  preserves crash-vs-clean-shutdown (`OrphanedWork.died`) with no column to hold it.
+- **The second arm is a task with no agent row at all, and it is the worse one.** The executor
+  writes the task row and _then_ spawns, so a restart between the two leaves a `queued` task
+  nothing is working — and `queued` is _active_ to `activeOrigins`, `findActiveTaskByOrigin` and
+  `findActiveTaskByBranch` alike, so its origin and branch are held shut **permanently** while the
+  dispatcher reports "nothing actionable" against an idle fleet. `isRecoveryCandidate` is keyed on
+  an _agent_ row, so nothing saw it; the hazard was already written down in `crashRecovery.ts` as
+  the reason requeue files a job, and now it is also detected. `isAgentlessCandidate` (pure): an
+  outstanding task, no agent row pointing at it, **created before this process booted**.
+  - **Nothing is stamped, deliberately.** `crashed` exists because an agent row _lied_ (claimed
+    `running` with no process), so something had to be written to stop it counting as live. A
+    `queued` task with no agent tells the truth about itself; what was missing was a reader. And
+    there is no honest status to move it to — every task status that is not outstanding is
+    _terminal_ to the three gates, so a new one would either go on wedging the origin or force
+    every gate, present and future, to learn a fourth state. The set is computed, and both verdicts
+    available to it settle the task, which is what removes it and keeps `detect()` idempotent.
+  - **`bootedAt` is the one input not read off a row, and it is load-bearing.** The set is
+    re-derived on _every pulse_ (the hold asks for it) and a live dispatch is transiently agentless
+    for exactly the window this arm cleans up after; a task older than this process cannot be one.
+    Constant per process, so two readings never disagree; `buildSystem`'s `bootedAt` option is the
+    test seam. `hasAgent` is asked of the agent **rows**, not `task.agentId` — `spawn` writes the
+    row first and back-fills the column, so reading the column lists one piece of work twice.
+  - **The window itself is left open, and should stay open.** It cannot be closed, only moved:
+    `spawn` needs the task row, and a transaction cannot span a process spawn. Reversing the order
+    trades an agentless task for an agentless _process_ — a live `claude` with no row, invisible to
+    the cap, to `kill` and to recovery itself — which is strictly worse.
 - **The hold is the whole pulse, and it is asked before the world fetch.** Not dispatch alone:
   with undecided orphans every verdict a cycle reaches — merges, replies, plan reconciliation —
   is reached against a fiction, so fetching the world at all is wasted. `runCycle` returns
@@ -1385,9 +1412,15 @@ has been decided. What carries it:
   pure) carries the original prompt verbatim under a preamble naming the origin, the branch that
   may already carry commits, and the crashed agent's last `note_progress`. Cost, stated: the
   origin becomes `job:<id>`, so the link back to `pr:42:ci` is provenance in prose, not a ref a
-  gate keys on.
+  gate keys on. Its signature is `(task, prior)`, `prior` being null when no agent ever ran — the
+  two arms say materially different things and must not be collapsed: a task whose agent never
+  spawned has had **nothing** done to it, and telling a fresh agent its branch may carry commits
+  sends it looking for work that was never started. Settling the task is the load-bearing half of
+  both terminal verdicts, and the only half an agentless orphan has; it has no escalations by
+  construction, since an escalation is raised by a process and none ever ran.
 - **A refused restore is not a decision.** `restorability` (pure) decides whether it is on offer
-  and carries _why not_ (no session id / worktree gone / runtime can't resume) so the cockpit
+  and carries _why not_ (**no agent ever started** — answered first, since it makes the rest moot —
+  then no session id / worktree gone / runtime can't resume) so the cockpit
   shows the reason instead of a missing button; a refusal or a `resume()` that returns false
   leaves the row `crashed`, so requeue and remove stay available and the hold stands.
 - There is deliberately **no config knob to auto-restore**. It would be the old behaviour under
