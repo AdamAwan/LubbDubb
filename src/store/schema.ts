@@ -218,6 +218,28 @@ CREATE TABLE IF NOT EXISTS issue_assays (
   updated_at  TEXT NOT NULL
 );
 
+-- The shared per-issue scratchpad: what the agents working one goal leave for
+-- whoever works it next, and for the retrospective written at the end.
+--
+-- Append-only by design. maxConcurrentPartsPerIssue permits concurrent part
+-- agents, so a pad shaped as one mutable document would have them overwrite each
+-- other with no merge anywhere — the silent loss detectFileOverlaps exists to
+-- expose, reintroduced deliberately. Per-agent sections would avoid the clobber and
+-- let an agent quietly rewrite its own history, and *when* something was learned is
+-- half of what a retrospective is reading for. Attribution is written from the
+-- credential, never from an argument (see padOriginFor).
+CREATE TABLE IF NOT EXISTS scratch_entries (
+  id                TEXT PRIMARY KEY,
+  pad_ref           TEXT NOT NULL,    -- always "issue:12"
+  author_origin_ref TEXT NOT NULL,    -- "issue:12:part:schema"
+  agent_id          TEXT NOT NULL,
+  task_id           TEXT NOT NULL,
+  topic             TEXT,             -- optional scannable tag
+  note              TEXT NOT NULL,
+  created_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scratch_pad ON scratch_entries (pad_ref, created_at);
+
 -- One delivery plan per issue — the planning agent's verdict. Written for *both*
 -- outcomes ('single' as much as a decomposition), so the planner never re-runs on
 -- the same issue. The graph lives here and nowhere else: it is scheduling intent,

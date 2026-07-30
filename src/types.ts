@@ -750,6 +750,29 @@ export interface IssueAssay {
 }
 
 /**
+ * One entry on an issue's shared scratchpad — what an agent working the goal left
+ * for whoever works it next, and for the retrospective at the end.
+ *
+ * Append-only: there is no update and no delete anywhere above this type. The pad
+ * is a trail, and a retrospective reads *when* something was learned as much as
+ * what.
+ */
+export interface ScratchEntry {
+  id: string;
+  /** The pad, always an `issue:<n>` ref — see `padOriginFor`. */
+  padRef: string;
+  /** The origin of the agent that wrote it: a part, the planner, the assessor. */
+  authorOriginRef: string;
+  /** Attribution, taken from the credential rather than from an argument. */
+  agentId: string;
+  taskId: string;
+  /** An optional scannable tag the author chose. */
+  topic: string | null;
+  note: string;
+  createdAt: string;
+}
+
+/**
  * Which of the three failures an assessor's "not delivered" actually is (issue
  * #159).
  *

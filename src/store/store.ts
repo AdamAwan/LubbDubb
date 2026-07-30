@@ -36,6 +36,7 @@ import type {
   Plan,
   PlanPart,
   PlanPartInput,
+  ScratchEntry,
   PlanStatus,
   PriorityOverride,
   Proposal,
@@ -855,6 +856,45 @@ export class Store {
    */
   clearAssay(originRef: string): boolean {
     return this.db.prepare(`DELETE FROM issue_assays WHERE origin_ref=?`).run(originRef).changes > 0;
+  }
+
+  /**
+   * Append one entry to an issue's shared pad.
+   *
+   * There is deliberately no update and no delete beside this: an agent able to
+   * revise its own entries would leave a tidied record rather than a true one, and
+   * a retrospective reads the trail for *when* something was learned. The pad ref
+   * is resolved from the caller's credential upstream (`padWriteTarget`), never
+   * from an argument.
+   */
+  appendScratchEntry(input: {
+    padRef: string;
+    authorOriginRef: string;
+    agentId: string;
+    taskId: string;
+    topic: string | null;
+    note: string;
+  }): ScratchEntry {
+    const row: ScratchEntry = { id: `scr_${nanoid(10)}`, ...input, createdAt: this.now() };
+    this.db
+      .prepare(
+        `INSERT INTO scratch_entries (id, pad_ref, author_origin_ref, agent_id, task_id, topic, note, created_at)
+         VALUES (@id, @padRef, @authorOriginRef, @agentId, @taskId, @topic, @note, @createdAt)`,
+      )
+      .run(row);
+    return row;
+  }
+
+  /**
+   * One pad, oldest first — the order the trail is read in. Unbounded on purpose:
+   * a pad is already bounded by one goal's agents, and dropping the early entries
+   * would lose exactly the ones a late retrospective has no other way to hear.
+   */
+  listScratchEntries(padRef: string): ScratchEntry[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM scratch_entries WHERE pad_ref=? ORDER BY created_at ASC, id ASC`)
+      .all(padRef) as ScratchEntryRow[];
+    return rows.map(rowToScratchEntry);
   }
 
   /**
@@ -1889,6 +1929,16 @@ interface IssueAssayRow {
   decided_at: string;
   updated_at: string;
 }
+interface ScratchEntryRow {
+  id: string;
+  pad_ref: string;
+  author_origin_ref: string;
+  agent_id: string;
+  task_id: string;
+  topic: string | null;
+  note: string;
+  created_at: string;
+}
 interface PlanPartRow {
   id: string;
   plan_id: string;
@@ -2150,6 +2200,18 @@ function rowToAssay(r: IssueAssayRow): IssueAssay {
     commentRef: r.comment_ref,
     decidedAt: r.decided_at,
     updatedAt: r.updated_at,
+  };
+}
+function rowToScratchEntry(r: ScratchEntryRow): ScratchEntry {
+  return {
+    id: r.id,
+    padRef: r.pad_ref,
+    authorOriginRef: r.author_origin_ref,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    topic: r.topic,
+    note: r.note,
+    createdAt: r.created_at,
   };
 }
 function rowToPlanPart(r: PlanPartRow): PlanPart {
