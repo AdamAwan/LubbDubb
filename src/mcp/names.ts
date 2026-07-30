@@ -34,6 +34,8 @@ export const MCP_TOOL_NAMES = [
   'assess_issue',
   'conclude_part',
   'assay_issue',
+  'scratch_append',
+  'scratch_read',
 ] as const;
 
 /**

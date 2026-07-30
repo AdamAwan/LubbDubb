@@ -889,10 +889,14 @@ export class Store {
    * One pad, oldest first — the order the trail is read in. Unbounded on purpose:
    * a pad is already bounded by one goal's agents, and dropping the early entries
    * would lose exactly the ones a late retrospective has no other way to hear.
+   *
+   * Ties on `created_at` break on **rowid**, which is insertion order. The id
+   * cannot do it — it is a nanoid, so two entries written in the same millisecond
+   * would come back in a random order, and this pad is read as a sequence.
    */
   listScratchEntries(padRef: string): ScratchEntry[] {
     const rows = this.db
-      .prepare(`SELECT * FROM scratch_entries WHERE pad_ref=? ORDER BY created_at ASC, id ASC`)
+      .prepare(`SELECT * FROM scratch_entries WHERE pad_ref=? ORDER BY created_at ASC, rowid ASC`)
       .all(padRef) as ScratchEntryRow[];
     return rows.map(rowToScratchEntry);
   }

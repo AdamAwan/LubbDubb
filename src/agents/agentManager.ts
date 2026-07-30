@@ -18,6 +18,7 @@ import type {
   IssueConclusionVerdict,
   PartOutcomeKind,
   PlanPart,
+  ScratchEntry,
   ShortfallCause,
   Task,
   WorkItemFiling,
@@ -36,6 +37,7 @@ import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
 import { assayerOrigin, type GoalAssayVerdictName } from '../mcp/goalAssay.js';
 import { goalFingerprint } from '../intake/assay.js';
+import { padWriteTarget } from '../scratch/pad.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
@@ -163,6 +165,8 @@ interface AgentManagerEvents {
   assay: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAssayVerdictName }];
   /** The agent closed its plan part without a pull request (already persisted on the part row). */
   partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
+  /** The agent left a note on its issue's shared pad (already persisted, append-only). */
+  scratch: [{ agentId: string; taskId: string; entry: ScratchEntry }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -495,6 +499,64 @@ export class AgentManager extends EventEmitter {
     const notedAt = this.store.recordAgentNote(agentId, note);
     this.emit('progress', { agentId, taskId: task.id, note, notedAt });
     return { ok: true, notedAt };
+  }
+
+  /**
+   * Append to the shared pad for the issue this agent is working (the
+   * `scratch_append` tool).
+   *
+   * The pad is resolved from the credential by {@link padWriteTarget} — an agent
+   * cannot name it, so it cannot reach another goal's record — and it is refused
+   * outright outside an issue subtree rather than scoped down, because an agent
+   * handed a silent success believes its note was recorded.
+   *
+   * Routed through the manager rather than straight to the store for
+   * {@link recordProgress}'s reason: the event is what lets a reader hear about
+   * this now rather than on the next pulse.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  appendScratch(
+    agentId: string,
+    note: string,
+    topic: string | null,
+  ): { ok: true; entry: ScratchEntry } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const target = padWriteTarget(task.originRef);
+    if (!target.ok) return { ok: false, error: target.error };
+    const entry = this.store.appendScratchEntry({
+      padRef: target.padRef,
+      authorOriginRef: task.originRef ?? target.padRef,
+      agentId,
+      taskId: task.id,
+      topic,
+      note,
+    });
+    this.emit('scratch', { agentId, taskId: task.id, entry });
+    return { ok: true, entry };
+  }
+
+  /**
+   * Read the whole pad for this agent's issue — every agent on the goal, in the
+   * order they wrote (the `scratch_read` tool).
+   *
+   * Same access rule as the write, and a caller outside an issue subtree is
+   * **refused** rather than handed an empty pad: an empty pad reads as "nobody has
+   * written anything", which is a different and untrue answer.
+   *
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * class satisfies structurally; knip's member analysis is name-based.
+   */
+  readScratch(agentId: string): { ok: true; padRef: string; entries: ScratchEntry[] } | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    const target = padWriteTarget(task.originRef);
+    if (!target.ok) return { ok: false, error: target.error };
+    return { ok: true, padRef: target.padRef, entries: this.store.listScratchEntries(target.padRef) };
   }
 
   /**
