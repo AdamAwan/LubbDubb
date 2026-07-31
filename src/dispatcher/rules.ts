@@ -80,6 +80,12 @@ export const DISPATCH_RULES = {
     description:
       'With `planning.requireApproval` on, a `parts` verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and rule 4a schedules none of its parts until you accept. Accepting releases the plan; rejecting retires the parts nothing has started for and falls the issue back to a single pull request, so a "no" leaves it a route instead of parking it. A replan asks again — the amended decomposition is a new proposal, and the old verdict cannot release it. On by default, and only meaningful with the funnel on: without the flag a decomposition commits the moment the planner writes it.',
   },
+  'plan-blocked': {
+    number: '3i',
+    name: 'Approved plan is going nowhere',
+    description:
+      'Every part of a released plan is blocked, so no agent has been dispatched for it and none will be. The only thing that blocks a part is the ref collision — a flat `issue/<n>` branch, which git will not let the part branches sit beneath — and a branch does not clear itself. No agent is dispatched, because none could help; a human is asked once, and told the two ways out: clear the branch, or abandon the decomposition and work the issue as one pull request. Only released plans, since an unapproved one is already in front of you with the same warning on the ask.',
+  },
   'issue-assess': {
     number: '3e',
     name: 'Issue may be finished',

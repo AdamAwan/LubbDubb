@@ -674,6 +674,25 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
   for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
   get none). Tests: `test/planReconcile.test.ts`.
+  - **A plan approved into that wall had no exit (`src/plans/planWedge.ts`).** An issue worked `single`,
+    replanned and then _approved_ blocks every part instantly, and every way out is shut: `refusePlan`
+    compare-and-sets against `awaiting_approval` (correctly — refusing is a verdict on an unanswered
+    question), so the fall-back-to-`single` arm is gone once released, and `resolvePlanRoute` fails a
+    spent replan back to `parts`, never open to `single`. Three jobs, kept apart. **Notice**:
+    `planIsWedged` — _every_ live part blocked, not any, since the collision blocks them together or
+    not at all — drives rule `plan-blocked` (3i), which escalates once, deduped on an open escalation
+    for `issue:<n>:plan` **and** a recent executed one exactly as rule 1b, and dispatches nobody
+    because nobody could help. `active` plans only: an unapproved one is already in front of a human.
+    **Warn**: `planApprovalWarnings` is **appended** to rule 3d's ask (never interpolated, for
+    `ciFailureNote`'s reason) and names the blocked parts plus any open PR for the issue no part
+    claims. It warns and does **not** block — refusing approval would put a git fact in front of a
+    judgement about _shape_, for a branch one command from being gone. **Exit**:
+    `abandonDecomposition` (`POST /api/plans/:id/abandon`) retires the parts and collapses to `single`;
+    a separate act rather than a loosened guard because it is a different sentence, and gated on
+    `partHasWork` so nothing with an agent, branch or PR is retired — which is also what makes the
+    collapse safe. **Nothing attaches the existing PR to a part**: it claims to resolve the whole
+    issue, which is the claim the decomposition overruled, so deriving an owner would infer a positive
+    terminal from incidental evidence. Tests: `test/planApproval.test.ts`, `test/planPart.test.ts`.
 - **The goal assay (`src/intake/`, the `issue_assays` table, the `assay_issue` tool, issue #158).**
   Every gate in front of a fresh issue asks about **policy** — the watch tag, the workflow state, the
   cooldown, the attempt cap, headroom, `resolvePlanRoute`. None asks whether the ticket says anything

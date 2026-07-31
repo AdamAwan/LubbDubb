@@ -162,6 +162,7 @@ export function useCockpit(): CockpitStatus {
       decideRecovery: (taskId, verdict) => then(api.decideRecovery(taskId, verdict)),
 
       replan: (planId) => then(api.replan(planId)),
+      abandonPlan: (planId) => then(api.abandonPlan(planId)),
       viewPlan: (planId) => setViewingPlan(planId),
       viewRetro: (issueRef) => setViewingRetro(issueRef),
       viewScratchpad: (issueRef) => setViewingScratchpad(issueRef),

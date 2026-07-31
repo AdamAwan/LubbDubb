@@ -1,6 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { PlanPart } from '../types.js';
 import { amendedPlanStatus, liveParts, partsToRetire } from './parts.js';
+import { abandonBlockers } from './planWedge.js';
 import { followupPartInput } from '../delivery/shortfall.js';
 
 /**
@@ -87,6 +88,56 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
  * The operator who wants a *different* decomposition rather than either of these
  * has Replan, which is reachable from the same panel.
  */
+/**
+ * Abandon a **released** decomposition and work the issue as one pull request.
+ *
+ * `refusePlan` is the same collapse and cannot serve here: it compare-and-sets
+ * against `awaiting_approval`, correctly, because refusing is a verdict on a
+ * question you have not yet answered. That left an approved plan with no way back
+ * — and a plan approved onto an issue whose flat `issue/<n>` branch was already
+ * taken is approved into a wall. Its parts block instantly, `resolvePlanRoute`
+ * fails a spent replan back to `parts` rather than open to `single`, and the only
+ * remaining exit was editing the database.
+ *
+ * A separate act rather than a loosened guard, because it is a different sentence.
+ * Refusing says *I will not authorize this*; this says *I authorized it, it cannot
+ * run, work the issue whole instead*. Collapsing them would have one control mean
+ * two things depending on a status the operator cannot see.
+ *
+ * **The bar is `partHasWork`**, so nothing with an agent, a branch or a PR behind
+ * it is ever retired — the rule `partsToRetire` already enforces for an amendment,
+ * asked here through the pure {@link abandonBlockers} so the route's refusal and
+ * the cockpit's control cannot disagree. That bar is also what makes the collapse
+ * to `single` safe: a part that never pushed has no branch to strand, so the flat
+ * `issue/<n>` branch git refused to create beside them is exactly the one rule 4
+ * now wants — and on the wedged path it already exists, carrying the work that
+ * caused the collision.
+ */
+export function abandonDecomposition(store: Store, planId: string, originRef: string): PlanSettlement {
+  const plan = store.getPlan(planId);
+  if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
+  if (plan.status !== 'active')
+    return { ok: false, detail: `plan ${planId} is "${plan.status}", not active — nothing changed` };
+
+  const parts = store.listPlanParts(planId);
+  const blockers = abandonBlockers(parts);
+  if (blockers.length > 0)
+    return {
+      ok: false,
+      detail:
+        `work has already started on this decomposition (${blockers.join(', ')}), so it cannot be collapsed onto ` +
+        `the flat branch — replan instead, or let those parts finish`,
+    };
+
+  const retire = liveParts(parts);
+  for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
+  store.setPlanStatus(planId, 'single');
+  return {
+    ok: true,
+    detail: `retired ${retire.length} unstarted part(s); ${originRef} falls back to a single pull request`,
+  };
+}
+
 export function refusePlan(store: Store, planId: string, originRef: string): PlanSettlement {
   const plan = store.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
