@@ -823,6 +823,35 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `WorkTreePanel` pattern, because the snapshot is polled. The cockpit control hangs off **the
     retrospective existing**, never off the floor's status — the plan modal's lesson. Tests:
     `test/scratchPad.test.ts`, `test/retrospective.test.ts`, `test/retroDossier.test.ts`.
+- **Handing a goal's knowledge forward (`src/briefing/priorWork.ts`).** Every stage of a goal is a
+  fresh agent with no memory of the last: the assayer read the ticket against the repo, the planner
+  read the repo and argued for a shape, a part agent wrote a constraint on the pad — and the next
+  agent started from a title, a body and a branch name, paying again for all of it. The pad's own doc
+  says it is written "for whoever works this goal next"; its only reader was the **retrospective**, the
+  one agent on a goal that does none of the work. `materializeTask` now appends
+  `priorWorkBriefing(...)` beside the rejection and outstanding-work notes. What carries it:
+  - **The rule is "only what no prompt already renders"**, which is what stops it becoming a second
+    account of things the harness already says. So: the pad; the planner's `document`/`risks`/
+    `outOfScope` (which reach the plan modal and no agent — and on a `single` verdict are the entire
+    product of a code agent that read the whole repository, against rule 4's title-and-body prompt); a
+    part's `rationale`/`acceptance`, stored and rendered **nowhere at all**; and the prose behind each
+    standing verdict. It therefore omits `plan.reason` (`currentPlanSummary` and `{plan}` render it)
+    and a part's status/branch/PR number (`currentPlanSummary`, `siblingContext`).
+  - **No world facts, deliberately.** A PR's state is live through `world_read`; in a prompt it is a
+    stale second reading of something the agent can ask about properly. The briefing is testimony.
+  - **Scoped by `padOriginFor`, not a fresh predicate** — already the harness's answer to "which goal
+    is this agent working". Everything outside one issue's subtree is handed nothing, which is
+    `outstandingForOrigin`'s widening rule at the level of a whole goal. The **retro origin is
+    excluded** though `padOriginFor` accepts it, or `retroBriefing` renders the pad twice; a **part
+    agent gets no parts section**, because `siblingContext` owns it; and the conclusion is dropped when
+    the outstanding-work note already carries it. One fact, one place, per prompt.
+  - **Bounded, and it names what it dropped.** Appended text lands _after_ the cached prefix, so it is
+    fresh input tokens on every dispatch and only pays when it displaces more rediscovery than it
+    costs. An untouched goal renders `''`, so a first agent's prompt is byte-identical to one composed
+    before this existed — that is what makes it safe on every dispatch. The pad caps at the 15 most
+    recent entries and the write-up at 4 000 characters, both stating the elision (`scratch_read`
+    named), for the no-silent-caps reason. In the **executor** and appended rather than interpolated,
+    for the reasons the rejection note is. Tests: `test/priorWorkBriefing.test.ts`.
 - **`src/graph/` is the durable work graph (stages 1 and 3 of 3) — the only thing here that outlives
   the world.** `closedPrWindowMs` bounds how long the _world snapshot_ remembers a merge (6h); every
   panel and predicate reading that snapshot forgets with it, and the edge from an issue to the PR

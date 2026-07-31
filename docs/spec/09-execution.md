@@ -90,7 +90,9 @@ A throw from either step is caught and audited as `rejected: Failed to start age
 The task carries `originTitle`, `originSummary` and `dispatchReason` from the action, so the cockpit
 can explain a running agent without re-fetching from the provider. Its **prompt** is the action's plus
 anything an operator said when they refused an act for the same origin — see
-[A rejection's reason reaches the next agent](#a-rejections-reason-reaches-the-next-agent).
+[A rejection's reason reaches the next agent](#a-rejections-reason-reaches-the-next-agent) — plus what
+the earlier agents on the same goal worked out, see
+[What earlier agents worked out reaches the next one](#what-earlier-agents-worked-out-reaches-the-next-one).
 
 ## Authorizing an outbound act
 
@@ -247,6 +249,45 @@ no agent at all, so refusing a draft with *"too defensive — just fix the lint"
   as *their* words about what was refused, never as the harness's own instruction, because an agent
   will act on it. An **empty note appends nothing**: the prompt is byte-identical to one with no
   rejection behind it.
+
+## What earlier agents worked out reaches the next one
+
+Every stage of a goal is a fresh agent with no memory of the last. The assayer read the ticket against
+the repository, the planner read the repository and argued for a shape, a part agent hit a constraint
+and wrote it on the pad — and the agent dispatched after them started from a template holding a title,
+a body and a branch name, paying again for what the one before it learned. The knowledge was not
+missing; it was in the store, and nothing handed it over. The scratchpad's own doc says it is written
+"for whoever works this goal next", and its only reader was the retrospective — the one agent on a goal
+that does none of the work.
+
+`materializeTask` appends `priorWorkBriefing(...)` (`src/briefing/priorWork.ts`, pure) to the dispatch
+prompt.
+
+- **Only what no prompt already renders.** The rule that stops it becoming a second account of things
+  the harness already says. It carries the **pad**; the planner's **`document` / `risks` /
+  `outOfScope`**, which reach the plan modal and no agent — and on a `single` verdict are the entire
+  product of a code agent that read the whole repository, while rule 4's prompt is the issue title and
+  body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; and the **prose
+  behind each standing verdict** (assay, conclusion, delivery, shortfall). It therefore omits
+  `plan.reason` (rendered by `currentPlanSummary` to a replanner and as `{plan}` to a part agent) and a
+  part's status, branch and PR number (`currentPlanSummary`, `siblingContext`).
+- **No world facts.** A pull request's state is live through `world_read`; pasted into a prompt it would
+  be a stale second reading of something the agent can ask about properly.
+- **Scoped by `padOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
+  this agent working": the `issue:<n>` root plus its `:plan`, `:assay`, `:assess` and `:part:<slug>`
+  arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
+  widening rule at the level of a whole goal. The **retro origin is excluded** though `padOriginFor`
+  accepts it: `retroBriefing` already hands it the pad and the whole dossier.
+- **A part agent gets no parts section**, because `plan-part` renders every sibling through
+  `siblingContext`; and the conclusion is omitted when the outstanding-work note already carries it, so
+  one fact is never rendered twice in one prompt.
+- **Appended, not filled in**, for the rejection note's reason, and **it derives nothing** — every line
+  is a stored field quoted back, `retroDossier`'s rule.
+- **Bounded, and it names what it dropped.** Appended text lands after the cached prefix, so a briefing
+  is fresh input tokens on every dispatch. An untouched goal renders the empty string, so a first
+  agent's prompt is byte-identical to one composed before this existed; the pad is capped at the most
+  recent 15 entries and the write-up at 4 000 characters, with the elision stated and `scratch_read`
+  named, or a partial record reads as the whole one.
 
 ## `set_work_item_state` — not authorized, just done
 
