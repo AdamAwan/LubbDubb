@@ -93,6 +93,34 @@ The four PR-concern rules and `pr-merge-ready` run as **one pass** over the open
 because at most one agent works a branch and the fold that picks the top concern has to see them
 together. Their relative urgency is still their pipeline order — `concernUrgency` looks up the index.
 
+### Where a rule's body lives
+
+One module per rule under `src/dispatcher/rules/`, each exporting a single
+`(s: StageContext) => void`. `RuleDispatcher.decide` keeps only the walk: it builds the context once,
+looks each rule up in the `STAGES` map by id, and applies the cut. The bodies were closures inside
+that one method, capturing some twenty of its locals without naming any of them, so what a rule read —
+and, for the two sets below, what it _wrote_ for a later rule to read — was discoverable only by
+reading every other rule.
+
+`StageContext` (`rules/context.ts`) is that seam, and it carries the operator's policy objects
+(`pickup`, `cooldown`, `templates`, `planning`, `ci`, `defaultBranch`, `workItemStates`) rather than a
+handle on the dispatcher — a stage that could reach the class could reach anything on it, which would
+relocate the coupling rather than remove it. Everything on it is derived once, before the first stage
+runs: a projection of the world, an append-only collector (`raw`, `candidates`), or a predicate
+several rules must answer identically (`partsPlanFor`, `deliveryParked`, `assayParked`, `consider`).
+Deriving one of those twice is exactly how two rules come to disagree about an issue.
+
+**Two fields are written by one stage and read by later ones, and that ordering is load-bearing.**
+`assaying` and `assessing` are outputs of `issue-assay` and `issue-assess` and inputs to the stages
+after them (`issue-plan` reads the first; `issue-pickup` reads both) — the whole mechanism behind
+`superseded`. It works because `DISPATCH_PIPELINE` runs the writers first; moving either rule below
+its readers would not fail to compile, it would silently stop suppressing and put two agents on one
+issue.
+
+Adding a rule is still two things and not three: a registry entry in the position it should run, and a
+module registered in `STAGES` under that id. An id with no entry was covered by an earlier pass (the
+PR pass above), and nothing anywhere renders a position.
+
 ### Not rules
 
 | Id                  | Kind        | What it is                                                                                                                 |
