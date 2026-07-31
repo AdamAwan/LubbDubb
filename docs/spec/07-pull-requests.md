@@ -341,5 +341,10 @@ takes the **list** of refs a dispatch names — its origin plus its signals — 
 That is not a widening to the world item, which must never happen there: matching the origin alone
 would have silently stopped every operator refusal reaching an agent.
 
+What makes a thread stop being unhandled is the provider's business, and both providers read the
+tracker's real resolution verdict first — see [15](15-integrations.md). Resolving a thread in the
+GitHub or Azure UI is therefore the ordinary way to tell the harness a comment is dealt with; the
+harness's own reply is the fallback for a thread nobody resolved.
+
 Independently of all that, rule 3 evaluates merge-readiness (see [05](05-dispatcher.md)) and emits
 `merge_pr`, which claims no headroom and goes through the executor's auto-send gate.

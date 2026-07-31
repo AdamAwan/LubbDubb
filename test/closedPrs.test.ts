@@ -182,6 +182,9 @@ function ghApi(closed: GhClosedPull[], recorded: string[]): GitHubApi {
     async listOpenPulls() {
       return [];
     },
+    async listPullReviewThreads() {
+      return [];
+    },
     async listRecentlyClosedPulls(since) {
       recorded.push(since);
       return closed.filter((p) => p.closedAt >= since);

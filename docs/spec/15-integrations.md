@@ -128,21 +128,32 @@ Behaviour worth knowing:
   Pagination stops at the first entry outside the window: GitHub sorts by `updated` descending, and
   `updated_at >= closed_at` always holds, so the break is sound.
 - **A `prAuthor` filter** narrows the PR list client-side, for both open and closed PRs.
-- **Only a reply settles a review thread, and that is positional rather than an identity test.**
-  `viewer` is whoever holds `GITHUB_TOKEN`, which on a single-operator deployment is the operator
-  themselves — so comparing a thread _root's_ author against it marked every review comment the
-  operator left as handled the instant they wrote it, and rule 2b never saw it. The harness was
-  silently ignoring exactly the reviews a human took the time to write, and no author comparison can
-  fix it: the two identities are the same string. The position test needs none — the harness only ever
-  posts _replies_ under a root (`createPullReviewReply`; a `commentId: null` reply is an issue comment,
-  which this list never contains), so "the newest reply is ours" is the whole of what `handled` can
-  honestly mean, and it holds whether the token belongs to a bot account or to the operator. Azure has
-  the same rule, with its native `resolved` status as the primary arm.
+- **A review thread is handled when the reviewer resolved it, or when the harness posted its newest
+  reply — in that order.** The same two arms as the Azure provider, which is the point: both trackers
+  carry a real resolution verdict, so both read it.
 
-  Consequence, stated rather than discovered: nothing else marks a thread handled, so a thread an
-  agent addressed _in code_ stays open until a reply goes out (the `reply_on_pr` path) or the reviewer
-  answers. That loop is bounded — every thread on a PR shares one dispatch origin, so it is one
-  attempt cap and one escalation, not one per comment.
+  Resolution costs a **GraphQL** read (`listPullReviewThreads`), because `PullRequestReviewThread`
+  has no REST equivalent — `pulls/{n}/comments` returns no resolution state at all, which is the
+  entire reason `handled` was ever inferred from authorship. Only `isResolved` and the root comment's
+  `databaseId` are selected; the comment bodies keep coming from REST, so the query stays small and
+  the two reads join on an id both already have. It is the **one call in the snapshot allowed to fail
+  on its own** — it is reachable for reasons the REST reads are not (a token without GraphQL access,
+  an Enterprise Server answering the schema differently, a proxy that passes `/repos` and not
+  `/graphql`), and letting it throw would freeze the whole world on `lastGood` over a field that only
+  refines a verdict. A failure is recorded to the error log and degrades to arm 2.
+
+- **Arm 2 is positional rather than an identity test, and has to be.** `viewer` is whoever holds
+  `GITHUB_TOKEN`, which on a single-operator deployment is the operator themselves — so comparing a
+  thread _root's_ author against it marked every review comment the operator left as handled the
+  instant they wrote it, and rule 2b never saw it. The harness was silently ignoring exactly the
+  reviews a human took the time to write, and no author comparison can fix it: the two identities are
+  the same string. The position test needs none — the harness only ever posts _replies_ under a root
+  (`createPullReviewReply`; a `commentId: null` reply is an issue comment, which this list never
+  contains), so "the newest reply is ours" holds whether the token belongs to a bot account or to the
+  operator.
+
+  Both arms, and a missing resolution read, fail toward a thread staying **open** — an agent
+  dispatched for a comment already dealt with is visible and cheap, where a dropped review is neither.
 - Auth is `GITHUB_TOKEN` only; `github.owner`/`github.repo` are required. See [02](02-configuration.md).
 
 ## The `azure` provider

@@ -12,9 +12,43 @@ import type {
   GhPullSummary,
   GhReview,
   GhReviewComment,
+  GhReviewThread,
   GhTimelineEvent,
   GitHubApi,
 } from './githubApi.js';
+
+/**
+ * Review-thread resolution. GraphQL-only on GitHub — `PullRequestReviewThread`
+ * has no REST equivalent — and deliberately narrow: the root comment's
+ * `databaseId` to join against the REST comments read, and the reviewer's verdict.
+ */
+const REVIEW_THREADS_QUERY = `
+  query ($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        reviewThreads(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            isResolved
+            comments(first: 1) { nodes { databaseId } }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** Only the fields {@link REVIEW_THREADS_QUERY} selects; everything is nullable per the GraphQL schema. */
+interface GqlReviewThreadPage {
+  repository?: {
+    pullRequest?: {
+      reviewThreads?: {
+        pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+        nodes?: Array<{ isResolved?: boolean; comments?: { nodes?: Array<{ databaseId?: number | null }> } } | null>;
+      };
+    };
+  };
+}
 
 /**
  * The real {@link GitHubApi}: one `Octokit` instance, bound to a single
@@ -169,6 +203,41 @@ export class OctokitGitHubApi implements GitHubApi {
       body: c.body,
       inReplyToId: c.in_reply_to_id ?? null,
     }));
+  }
+
+  /**
+   * The one GraphQL read in this file, and it is not a preference: thread
+   * resolution has no REST representation at all, so `octokit.pulls` cannot
+   * answer whether a reviewer marked their comment resolved.
+   *
+   * Only `isResolved` and the root comment's `databaseId` are selected — the
+   * comment bodies keep coming from REST, so this query stays small and a
+   * GraphQL outage costs the resolution verdict rather than the comments
+   * themselves. Paginated by hand because `octokit.graphql` has no `paginate`.
+   */
+  async listPullReviewThreads(number: number): Promise<GhReviewThread[]> {
+    const threads: GhReviewThread[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: GqlReviewThreadPage = await this.octokit.graphql(REVIEW_THREADS_QUERY, {
+        ...this.base,
+        number,
+        cursor,
+      });
+      const connection = page.repository?.pullRequest?.reviewThreads;
+      if (!connection) break;
+      for (const node of connection.nodes ?? []) {
+        if (!node) continue;
+        // A thread always has a first comment; a null databaseId would be a
+        // thread we cannot join to the REST read, so it is dropped rather than
+        // guessed at — it degrades to the reply arm, which is the safe direction.
+        const rootCommentId = node.comments?.nodes?.[0]?.databaseId;
+        if (typeof rootCommentId !== 'number') continue;
+        threads.push({ rootCommentId, isResolved: node.isResolved === true });
+      }
+      cursor = connection.pageInfo?.hasNextPage ? (connection.pageInfo.endCursor ?? null) : null;
+    } while (cursor !== null);
+    return threads;
   }
 
   async getCombinedStatus(sha: string): Promise<GhCombinedStatus> {

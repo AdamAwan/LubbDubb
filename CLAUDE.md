@@ -1918,18 +1918,25 @@ so the executor runs it directly.
     `rejectionGuidance` takes a **list** of refs (origin + signals): a refused `reply_draft` is filed
     against one thread, so matching the origin alone would have silently stopped every operator
     refusal reaching an agent — that feature's own opening failure, restored by a rename.
-  - **`handled` is positional, never an identity test.** `viewerLogin` is whoever holds
-    `GITHUB_TOKEN`, which on a single-operator deployment is the operator — so comparing a thread
-    _root's_ author against it marked every review comment the operator left as handled the instant
-    they wrote it, and the harness silently ignored exactly the reviews a human took the time to
-    write. No author comparison fixes it; the two identities are one string. The harness only ever
-    posts _replies_ under a root (a `commentId: null` reply is an issue comment, absent from this
-    list), so "the newest **reply** is ours" is the whole of what `handled` can honestly mean, and it
-    is right for a bot account too. Azure keeps its native `resolved` status as the primary arm.
-    Consequence: nothing else settles a thread, so one an agent fixed _in code_ stays open until a
-    reply goes out or the reviewer answers — bounded, because the whole review now shares one attempt
-    cap and escalates once. Tests: `test/reviewThreads.test.ts`, the review blocks in
-    `test/ruleDispatcher.test.ts`, and the operator-thread cases in the two integration tests.
+  - **`handled` reads the reviewer's resolution first, and its fallback is positional — never an
+    identity test.** Both providers now have the same two arms, because both trackers carry a real
+    verdict. On GitHub that verdict costs a **GraphQL** read (`listPullReviewThreads`):
+    `PullRequestReviewThread.isResolved` has no REST form, which is the entire reason `handled` was
+    ever inferred. Only `isResolved` + the root comment's `databaseId` are selected, so the join key
+    is one REST already has, and it is **the one snapshot call allowed to fail alone** — it can be
+    unreachable for reasons the REST reads are not (token scope, Enterprise schema, a proxy passing
+    `/repos` and not `/graphql`), and throwing would freeze the world on `lastGood` over a field that
+    only refines a verdict. A failure records an error and degrades to arm 2.
+    Arm 2: `viewerLogin` is whoever holds `GITHUB_TOKEN`, which on a single-operator deployment is
+    the operator — so comparing a thread _root's_ author against it marked every review comment the
+    operator left as handled the instant they wrote it, and the harness silently ignored exactly the
+    reviews a human took the time to write. No author comparison fixes it; the two identities are one
+    string. The harness only ever posts _replies_ under a root (a `commentId: null` reply is an issue
+    comment, absent from this list), so "the newest **reply** is ours" is what it can honestly mean,
+    and it is right for a bot account too. **Every arm fails toward the thread staying open** —
+    a redundant agent is visible and cheap, a dropped review is neither. Tests:
+    `test/reviewThreads.test.ts`, the review blocks in `test/ruleDispatcher.test.ts`, and the
+    resolution / operator-thread / degraded-read cases in the two integration tests.
 - **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
   already has an active task. When the branch's agent is **running**, a fresh signal is delivered
   via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's

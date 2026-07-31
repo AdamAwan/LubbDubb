@@ -20,6 +20,7 @@ import type {
   GhPullSummary,
   GhReview,
   GhReviewComment,
+  GhReviewThread,
   GhTimelineEvent,
   GitHubApi,
 } from '../src/integrations/github/githubApi.js';
@@ -33,11 +34,12 @@ interface Script {
   detail?: Record<number, GhPullDetail>;
   reviews?: Record<number, GhReview[]>;
   reviewComments?: Record<number, GhReviewComment[]>;
+  reviewThreads?: Record<number, GhReviewThread[]>;
   combinedStatus?: Record<string, GhCombinedStatus>;
   checkRuns?: Record<string, GhCheckRun[]>;
   issues?: GhIssue[];
   timeline?: Record<number, GhTimelineEvent[]>;
-  throwOn?: 'listOpenPulls' | 'listOpenIssues';
+  throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads';
   createdPullNumber?: number;
 }
 
@@ -97,6 +99,10 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async listPullReviewComments(number) {
       return script.reviewComments?.[number] ?? [];
+    },
+    async listPullReviewThreads(number) {
+      if (script.throwOn === 'listPullReviewThreads') throw new Error('graphql unavailable');
+      return script.reviewThreads?.[number] ?? [];
     },
     async getCombinedStatus(sha) {
       return script.combinedStatus?.[sha] ?? { state: '', totalCount: 0 };
@@ -235,17 +241,50 @@ test('buildUnresolvedComments: not handled while the human commented last', () =
   assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot')[0]!.handled, false);
 });
 
+test('buildUnresolvedComments: the reviewer resolving the thread settles it', () => {
+  // The primary arm, and the reviewer's own verdict. GitHub exposes it only in
+  // GraphQL, which is the entire reason this function ever had to infer anything.
+  const comments: GhReviewComment[] = [{ id: 100, authorLogin: 'bob', body: 'rename this', inReplyToId: null }];
+  const threads: GhReviewThread[] = [{ rootCommentId: 100, isResolved: true }];
+  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot', threads)[0]!.handled, true);
+});
+
+test('buildUnresolvedComments: an unresolved thread the bot already replied to is still handled', () => {
+  // The arms are independent: an unresolved verdict does not reopen a thread the
+  // harness has answered, or every reply would be re-litigated until a human
+  // clicked resolve.
+  const comments: GhReviewComment[] = [
+    { id: 100, authorLogin: 'bob', body: 'why?', inReplyToId: null },
+    { id: 101, authorLogin: 'lubbdubb-bot', body: 'because X', inReplyToId: 100 },
+  ];
+  const threads: GhReviewThread[] = [{ rootCommentId: 100, isResolved: false }];
+  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot', threads)[0]!.handled, true);
+});
+
 test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
-  // The bug this closes: `viewerLogin` is whoever holds GITHUB_TOKEN, which on a
-  // single-operator deployment is the operator. Comparing the *root's* author
-  // against it marked every review comment they left as handled the instant they
-  // wrote it, so the harness silently ignored exactly the reviews a human took
-  // the time to write. Only a reply can settle a thread — the harness posts
-  // nothing but replies, so the position test needs no identity to work.
+  // The bug this closes, on the fallback arm: `viewerLogin` is whoever holds
+  // GITHUB_TOKEN, which on a single-operator deployment is the operator.
+  // Comparing the *root's* author against it marked every review comment they
+  // left as handled the instant they wrote it, so the harness silently ignored
+  // exactly the reviews a human took the time to write. The harness posts nothing
+  // but replies, so the position test needs no identity to work.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
   ];
   assert.equal(buildUnresolvedComments(comments, 'the-operator')[0]!.handled, false);
+  // And unchanged when resolution was read and said nothing about it.
+  assert.equal(
+    buildUnresolvedComments(comments, 'the-operator', [{ rootCommentId: 100, isResolved: false }])[0]!.handled,
+    false,
+  );
+});
+
+test('buildUnresolvedComments: missing resolution degrades to the reply arm, never to handled', () => {
+  // `threads` is empty when the GraphQL read failed or a caller supplied none.
+  // Absence means "no verdict", never "resolved" — a thread must fail open.
+  const comments: GhReviewComment[] = [{ id: 100, authorLogin: 'bob', body: 'rename this', inReplyToId: null }];
+  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot', [])[0]!.handled, false);
+  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot')[0]!.handled, false);
 });
 
 test('buildUnresolvedComments: the operator reviewing under their own token still settles on a reply', () => {
@@ -428,6 +467,34 @@ test('snapshot returns the last-good slice and records an error event on failure
   await sc2.snapshot(); // cold + failing → empty, and it must not throw
   const slice = await sc2.snapshot();
   assert.deepEqual(slice.pullRequests, []);
+  store.close();
+});
+
+test('a failing resolution read costs the verdict, not the snapshot', async () => {
+  // The GraphQL read is the one call in the snapshot allowed to fail alone: it is
+  // reachable for reasons the REST reads are not (token scope, Enterprise schema,
+  // a proxy that passes /repos and not /graphql), and letting it throw would
+  // freeze the whole world on `lastGood` over a field that only refines a verdict.
+  const store = new Store(':memory:');
+  const errors: string[] = [];
+  const { api } = fakeApi({
+    throwOn: 'listPullReviewThreads',
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
+    reviewComments: { 7: [{ id: 100, authorLogin: 'bob', body: 'rename this', inReplyToId: null }] },
+  });
+  const sc = new GitHubSourceControlIntegration({
+    api,
+    errors: { record: (e: { message: string }) => errors.push(e.message) } as never,
+  });
+  const slice = await sc.snapshot();
+  const prs = slice.pullRequests ?? [];
+
+  assert.equal(prs.length, 1, 'the PR is still in the world');
+  // Degraded to the reply arm — which fails toward the thread staying open.
+  assert.equal(prs[0]!.unresolvedComments[0]!.handled, false);
+  assert.equal(errors.length, 1, 'and the operator is told the verdict is degraded');
+  assert.match(errors[0]!, /review-thread resolution/);
   store.close();
 });
 
