@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { FakeConnector } from '../src/connector/fakeConnector.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { buildStacks } from '../src/stacks/stack.js';
+import type { Plan, PlanPart, PullRequest } from '../src/types.js';
 
 function connector(): FakeConnector {
   return new FakeConnector(new Store(':memory:'));
@@ -52,3 +55,177 @@ test('opened pull requests take distinct numbers', async () => {
   const b = await c.createPullRequest({ branch: 'b', base: 'main', title: 'b', body: '' });
   assert.notEqual(a.ref, b.ref);
 });
+
+// ---------------------------------------------------------------------------
+// The derived stack model
+// ---------------------------------------------------------------------------
+
+function pr(over: Partial<PullRequest> & { number: number; branch: string }): PullRequest {
+  return {
+    id: `pr_${over.number}`,
+    title: `PR ${over.number}`,
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    baseBranch: 'main',
+    ...over,
+  };
+}
+
+function part(over: Partial<PlanPart> & { slug: string; planId: string }): PlanPart {
+  return {
+    id: `${over.planId}:${over.slug}`,
+    seq: 1,
+    title: over.slug,
+    scope: '',
+    rationale: null,
+    acceptance: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    dependsOn: [],
+    branch: null,
+    prNumber: null,
+    status: 'dispatched',
+    blockedReason: null,
+    taskId: null,
+    createdAt: '2026-07-31T00:00:00.000Z',
+    updatedAt: '2026-07-31T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function plan(over: Partial<Plan> & { id: string; originRef: string }): Plan {
+  return {
+    title: 'Ticket sync rewrite',
+    status: 'active',
+    reason: null,
+    risks: null,
+    outOfScope: null,
+    document: null,
+    discussing: false,
+    statusCommentRef: null,
+    createdAt: '2026-07-31T00:00:00.000Z',
+    updatedAt: '2026-07-31T00:00:00.000Z',
+    ...over,
+  };
+}
+
+test('a hand-made chain is a stack, with no plan behind it', () => {
+  const stacks = buildStacks(
+    [
+      pr({ number: 38, branch: 'issue/164/prune', baseBranch: 'main' }),
+      pr({ number: 39, branch: 'issue/164/reclaim', baseBranch: 'issue/164/prune' }),
+    ],
+    [],
+    [],
+    'main',
+  );
+  assert.equal(stacks.length, 1);
+  assert.equal(stacks[0]?.planId, null, 'no plan produced this one');
+  assert.equal(stacks[0]?.issueNumber, null);
+  assert.deepEqual(
+    stacks[0]?.rungs.map((r) => [r.prNumber, r.position]),
+    [
+      [38, 1],
+      [39, 2],
+    ],
+    'bottom-first',
+  );
+});
+
+test('a plan adopts the stack its parts opened', () => {
+  const stacks = buildStacks(
+    [
+      pr({ number: 44, branch: 'issue/182/migrations', baseBranch: 'main' }),
+      pr({ number: 45, branch: 'issue/182/cursor', baseBranch: 'issue/182/migrations' }),
+    ],
+    [plan({ id: 'p1', originRef: 'issue:182' })],
+    [
+      part({ planId: 'p1', slug: 'migrations', prNumber: 44 }),
+      part({ planId: 'p1', slug: 'cursor', prNumber: 45, seq: 2 }),
+    ],
+    'main',
+  );
+  assert.equal(stacks[0]?.planId, 'p1');
+  assert.equal(stacks[0]?.issueNumber, 182);
+  assert.equal(stacks[0]?.issueTitle, 'Ticket sync rewrite');
+  assert.deepEqual(
+    stacks[0]?.rungs.map((r) => r.partSlug),
+    ['migrations', 'cursor'],
+  );
+});
+
+test('a lone PR is not a stack of one', () => {
+  assert.deepEqual(buildStacks([pr({ number: 5, branch: 'feat/x', baseBranch: 'main' })], [], [], 'main'), []);
+});
+
+test('an ignored rung does not put a hole in the chain', () => {
+  // The caller passes the *unfiltered* open list for exactly this reason: filtering
+  // the middle rung out would leave the top one reading as its own bottom.
+  const stacks = buildStacks(
+    [
+      pr({ number: 44, branch: 'a', baseBranch: 'main' }),
+      pr({ number: 45, branch: 'b', baseBranch: 'a', labels: ['lubbdubb-ignore'] }),
+      pr({ number: 46, branch: 'c', baseBranch: 'b' }),
+    ],
+    [],
+    [],
+    'main',
+  );
+  assert.equal(stacks.length, 1);
+  assert.deepEqual(stacks[0]?.rungs.map((r) => r.prNumber), [44, 45, 46]);
+});
+
+test('a merged rung is not a base — the chain stops rather than resurrecting it', () => {
+  const stacks = buildStacks(
+    [
+      pr({ number: 44, branch: 'a', baseBranch: 'main', merged: true }),
+      pr({ number: 45, branch: 'b', baseBranch: 'a' }),
+    ],
+    [],
+    [],
+    'main',
+  );
+  assert.deepEqual(stacks, [], 'PR 45 is a lone PR once its base has merged');
+});
+
+test('a cycle in the base edges terminates rather than hanging the pulse', () => {
+  const stacks = buildStacks(
+    [pr({ number: 1, branch: 'a', baseBranch: 'b' }), pr({ number: 2, branch: 'b', baseBranch: 'a' })],
+    [],
+    [],
+    'main',
+  );
+  // Neither is a bottom, so nothing is walked at all — the point is that it returns.
+  assert.deepEqual(stacks, []);
+});
+
+test('the stack model is a lens: nothing in the dispatcher reads it', () => {
+  const dispatcherFiles = srcFiles('src/dispatcher');
+  for (const file of dispatcherFiles) {
+    assert.ok(
+      !readFileSync(file, 'utf8').includes('stacks/'),
+      `${file} must not read the stack model — a rule consulting it is a second opinion about a gate elsewhere`,
+    );
+  }
+  assert.ok(dispatcherFiles.length > 0, 'the walk must actually have files to check');
+});
+
+test('the stack model has exactly one importer, and it is the snapshot', () => {
+  const importers = srcFiles('src')
+    .filter((f) => !f.startsWith('src/stacks/'))
+    .filter((f) => readFileSync(f, 'utf8').includes('stacks/stack.js'));
+  assert.deepEqual(importers, ['src/server/app.ts'], 'the stack model must stay cockpit-only');
+});
+
+/** Every `.ts` under a source directory, recursively, as repo-relative paths. */
+function srcFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...srcFiles(path));
+    else if (entry.name.endsWith('.ts')) out.push(path);
+  }
+  return out.sort();
+}

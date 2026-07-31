@@ -18,6 +18,7 @@ import type {
 import { Hub } from './hub.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { describeRunningConfig } from './runningConfig.js';
+import { buildStacks } from '../stacks/stack.js';
 import { prHealth } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
@@ -1675,6 +1676,11 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
     plans: wirePlans,
     planParts,
+    // Chains of stacked pull requests, derived from the world rather than stored:
+    // a plan *adopts* a stack, so a chain a human opened by hand is drawn on the
+    // same terms as one a plan produced. The unfiltered open list, for the reason
+    // `inheritedCiFailure` takes it — an -ignore'd rung would hole the chain.
+    stacks: buildStacks(world.pullRequests, plans, planParts, config.defaultBranch),
     tasks,
     // Operator-launched jobs (newest first) — the cockpit shows the queued
     // ones and their place in line, plus recently-dispatched/cancelled history.
