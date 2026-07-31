@@ -1,14 +1,25 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
-import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
+import type {
+  PrBaseInput,
+  PrCreateInput,
+  PrLabelInput,
+  PrMergeInput,
+  PrReplyInput,
+  PrTitleInput,
+  SendResult,
+} from '../../sink/actionSink.js';
 import type { PullRequest } from '../../types.js';
 import type {
   Capability,
   Injectable,
   Integration,
+  PrBaseCapable,
+  PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
+  PrTitleCapable,
   WorldSlice,
 } from '../integration.js';
 import type { FakeWorld, FakeWorldStore } from './fakeWorld.js';
@@ -31,7 +42,17 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
  * {@link PrReplyCapable} + {@link PrMergeCapable} seams and gets registered under
  * `sourceControl` instead of this one.
  */
-export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable, Injectable {
+export class FakeGitHubIntegration
+  implements
+    Integration,
+    PrReplyCapable,
+    PrMergeCapable,
+    PrLabelCapable,
+    PrCreateCapable,
+    PrTitleCapable,
+    PrBaseCapable,
+    Injectable
+{
   readonly id = 'sourceControl:fake';
   readonly capability: Capability = 'sourceControl';
 
@@ -158,6 +179,43 @@ export class FakeGitHubIntegration implements Integration, PrReplyCapable, PrMer
     });
     const ref = `fake-label_${nanoid(6)}`;
     return { ok: true, ref };
+  }
+
+  async createPullRequest(input: PrCreateInput): Promise<SendResult> {
+    let number = 0;
+    this.world.mutate((world) => {
+      // Same shape an injected `new_pr` builds, so a harness-opened PR is
+      // indistinguishable downstream from one that arrived from the world.
+      number = world.pullRequests.reduce((max, p) => Math.max(max, p.number), 0) + 1;
+      world.pullRequests.push({
+        id: `pr_${nanoid(6)}`,
+        number,
+        title: input.title,
+        branch: input.branch,
+        baseBranch: input.base,
+        ciStatus: 'pending',
+        unresolvedComments: [],
+        approved: false,
+        mergeableState: 'unknown',
+        merged: false,
+        labels: [],
+      });
+    });
+    return { ok: true, ref: String(number) };
+  }
+
+  async setPullTitle(input: PrTitleInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      mutatePr(world, input.prNumber, (pr) => (pr.title = input.title));
+    });
+    return { ok: true, ref: `fake-title_${nanoid(6)}` };
+  }
+
+  async setPullBase(input: PrBaseInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      mutatePr(world, input.prNumber, (pr) => (pr.baseBranch = input.base));
+    });
+    return { ok: true, ref: `fake-base_${nanoid(6)}` };
   }
 
   /** Reflect harness progress back so the deterministic dispatcher stops re-triggering. */

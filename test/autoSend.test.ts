@@ -73,6 +73,15 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     async upsertIssueComment() {
       return { ok: true };
     },
+    async createPullRequest() {
+      return { ok: true };
+    },
+    async setPullTitle() {
+      return { ok: true };
+    },
+    async setPullBase() {
+      return { ok: true };
+    },
   };
 }
 
@@ -267,6 +276,15 @@ test('a send failure never drops the reply — it falls back to escalation', asy
     async upsertIssueComment() {
       return { ok: true };
     },
+    async createPullRequest() {
+      return { ok: true };
+    },
+    async setPullTitle() {
+      return { ok: true };
+    },
+    async setPullBase() {
+      return { ok: true };
+    },
   };
   const system = buildSystem(config, {
     worktrees: new FakeWorktreeManager(),
@@ -354,6 +372,15 @@ test('a merge failure never merges silently — it escalates for approval', asyn
       throw new Error('unused');
     },
     async upsertIssueComment() {
+      return { ok: true };
+    },
+    async createPullRequest() {
+      return { ok: true };
+    },
+    async setPullTitle() {
+      return { ok: true };
+    },
+    async setPullBase() {
       return { ok: true };
     },
   };

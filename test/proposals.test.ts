@@ -98,6 +98,15 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     async upsertIssueComment() {
       return { ok: true };
     },
+    async createPullRequest() {
+      return { ok: true };
+    },
+    async setPullTitle() {
+      return { ok: true };
+    },
+    async setPullBase() {
+      return { ok: true };
+    },
   };
 }
 
