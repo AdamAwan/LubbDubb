@@ -234,6 +234,7 @@ test('the escalate arm asks once — deduped on the inbox and on the audit log a
           action: { type: 'escalate_to_human', reason: 'x', context: { originRef: ref } },
           outcome: 'executed',
           rule: 'issue-shortfall',
+          admission: null,
           detail: '',
           createdAt: NOW,
         },

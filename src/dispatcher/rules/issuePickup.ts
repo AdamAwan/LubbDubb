@@ -69,7 +69,8 @@ export function issuePickup(s: StageContext): void {
         attempts,
       }),
       context: { originRef: origin, taskTitle: `Resolve issue #${issue.number}` },
-      rule: 'cooldown-escalate',
+      rule: 'issue-pickup',
+      admission: 'cooldown-escalate',
       reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
     }));
   }

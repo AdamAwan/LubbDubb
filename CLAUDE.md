@@ -146,6 +146,28 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   pickup for the assay's turn. `askedAlready` is the shared "has this been put to a human" predicate
   the three escalating rules (`pr-ci-blocked`, `plan-blocked`, `issue-shortfall`'s escalate arm) had
   three copies of; both of its readings are load-bearing, and the doc comment there says why.
+  - **The split reaches the audit row as a second column, `decisions.admission`.** The registry's
+    `kind` made the two vocabularies distinct while `decisions.rule` went on storing **one** id, so a
+    throttled pickup still recorded `cooldown-escalate` and still lost that `issue-pickup` was what
+    got throttled — the exact defect the split was named to end, surviving one layer down. `rule` now
+    names the **proposer** and `admission` what **became** of it; both ride on the action (optional
+    fields on every zod schema) and `Store.recordDecision` lifts each into its own column. It is an
+    `ensureColumns('decisions', …)` entry, not a fresh table, so it is invisible on an older database
+    without one. Four things to preserve: - **`AdmissionId` is derived, never written out** — `Extract<(typeof RULES)[number],
+{kind: 'admission'}>['id']` — so a rule id structurally cannot land in the outcome column. A
+    hand-written union would let the conflation back in the day somebody added an id. - **Only `branch-notify` and `cooldown-escalate` reach it.** The other held reasons (`cooldown`,
+    `capped`, `unapproved`, `superseded`, `waiting`) hold a candidate that was **never executed**,
+    so there is no decision row for them at all — they are queue statuses and nothing more. - **The branch note's `rule` is null, deliberately.** Its `fresh` set is a flatMap over every
+    concern on the PR, so one note can carry a CI signal and a review thread at once and no single
+    rule proposed it. Attributing it to `concerns[0]` would name a proposer chosen by the _urgency_
+    order — which exists to decide who gets the one agent when the branch is **free** — for a note
+    whose other half that rule never asked for. Nothing is lost: `originRefs` already lists every
+    concern the note covers, finer than a rule id could. The reason is written at the emission site. - **Old rows are never rewritten**, so two shapes coexist forever: an outcome id in `rule` with
+    `admission` NULL, and the proposer gone for good. Both cockpit renderers (classic `DecisionLog`,
+    factory `EventLog`) resolve a row through the one shared `decisionAttribution`
+    (`web/src/components/util.tsx`), which labels such an id **Outcome** rather than a proposer and
+    states the gap — two renderers reaching that judgement independently is how they would come to
+    disagree about the same row. Tests: `test/decisionAttribution.test.ts`.
 - **The "Up next" queue (issue #69)** is a rank-then-slice inside `RuleDispatcher.decide`:
   agent-dispatch rules collect ordered `Candidate`s (PR concerns get a cross-PR urgency
   sort — CI > base-update > comment, then PR number), and only the final walk applies the

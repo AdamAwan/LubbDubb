@@ -1,5 +1,5 @@
 import type { DispatchContext } from '../dispatcher.js';
-import type { DispatchRuleId } from '../rules.js';
+import type { AdmissionId, DispatchRuleId } from '../rules.js';
 import type { CooldownPolicy } from '../dispatchCooldown.js';
 import type { IssuePickupPolicy } from '../issuePickup.js';
 import type { PromptTemplates } from '../promptTemplates.js';
@@ -130,8 +130,22 @@ export interface StageContext {
   workItemStates: { inReviewState: string; pickupStates: string[] } | null;
 }
 
-/** One thing a stage emits that isn't routed through the candidate list. */
-export type RawAction = Record<string, unknown> & { type: string; reason: string; rule: DispatchRuleId };
+/**
+ * One thing a stage emits that isn't routed through the candidate list.
+ *
+ * `rule` names what **proposed** the action and `admission` what **became** of
+ * it; they are separate because one field answering both is what made a
+ * throttled pickup audit as `cooldown-escalate` with no trace of the pickup.
+ * `rule` is nullable for exactly one emission — the branch note, which folds
+ * signals from several concerns and so has no single proposer (see
+ * `prCiFailing`); everything else names one.
+ */
+export type RawAction = Record<string, unknown> & {
+  type: string;
+  reason: string;
+  rule: DispatchRuleId | null;
+  admission?: AdmissionId;
+};
 
 /** A ranked agent-dispatch candidate awaiting the headroom cut. */
 export interface Candidate {

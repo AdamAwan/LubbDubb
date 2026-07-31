@@ -316,16 +316,20 @@ test('each part gets its own throttle, and a repeatedly failing one escalates', 
     outcome: 'executed',
     detail: '',
     rule: 'plan-part',
+    admission: null,
     createdAt: '2026-07-25T00:00:00.000Z',
   }));
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
     context([issue(12)], { plans: [plan()], planParts: [part('a', 1), part('b', 2)], recentDecisions: attempts }),
   );
   assert.deepEqual(
-    result.actions.map((a) => [a.rule, a.type]),
+    result.actions.map((a) => [a.rule, a.admission, a.type]),
     [
-      ['cooldown-escalate', 'escalate_to_human'],
-      ['plan-part', 'dispatch_code_agent'],
+      // The escalation names *both*: `plan-part` proposed the dispatch, the
+      // attempt cap turned it into a question. One column carrying only the
+      // second is what lost the proposer (issue #213 follow-up).
+      ['plan-part', 'cooldown-escalate', 'escalate_to_human'],
+      ['plan-part', null, 'dispatch_code_agent'],
     ],
     'the failing part escalates rather than looping; its sibling is untouched by that origin',
   );

@@ -155,3 +155,54 @@ export function elapsed(fromIso: string, toIso: string | null, now: number = Dat
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
 }
+
+/**
+ * What proposed a decision, and what became of it — the two readings the audit
+ * row keeps in separate columns (`rule` / `admission`), resolved against the
+ * rule book for display.
+ *
+ * One function for both skins rather than the fold written twice: the old-row
+ * case below is a judgement about what a row *means*, and two renderers reaching
+ * it independently is how they come to disagree about the same row.
+ *
+ * Three shapes reach here, and telling them apart is the whole job:
+ *
+ * - **Proposer, and an outcome that transformed it.** Both columns set: a
+ *   throttled `issue-pickup` that became a `cooldown-escalate`.
+ * - **An outcome with no proposer.** Only the branch note, which folds signals
+ *   from several concerns and so was never any single rule's proposal.
+ * - **An old row.** Written before the split, when one column carried both: the
+ *   *outcome* sits in `rule` and there is nothing in `admission`. Which rule was
+ *   throttled is not recorded and cannot be recovered, so it is named as an
+ *   outcome and the gap is stated rather than filled.
+ */
+export function decisionAttribution(
+  d: { rule: string | null; admission?: string | null },
+  rules: Record<string, { name: string; description: string; kind: string }>,
+): {
+  entries: { label: string; id: string; rule?: { name: string; description: string } }[];
+  note?: string;
+} {
+  const entries: { label: string; id: string; rule?: { name: string; description: string } }[] = [];
+  const proposer = d.rule ? rules[d.rule] : undefined;
+  const outcome = d.admission ? rules[d.admission] : undefined;
+
+  // The pre-split shape: an admission id sitting in the proposer's column with
+  // nothing beside it. Reading it as a proposer would assert something the row
+  // never said.
+  const preSplit = !d.admission && proposer?.kind === 'admission';
+
+  if (d.rule && !preSplit) entries.push({ label: 'Proposed by', id: d.rule, rule: proposer });
+  if (d.admission) entries.push({ label: 'Admitted as', id: d.admission, rule: outcome });
+  if (preSplit) entries.push({ label: 'Outcome', id: d.rule!, rule: proposer });
+
+  if (preSplit)
+    return {
+      entries,
+      note: 'Recorded before proposer and outcome were separate columns — which rule was throttled is not in this row.',
+    };
+  if (entries.length === 0) return { entries, note: 'No dispatcher rule recorded for this decision.' };
+  if (!d.rule)
+    return { entries, note: 'No single proposing rule: this action folds signals from more than one concern.' };
+  return { entries };
+}

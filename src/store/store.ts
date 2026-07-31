@@ -108,6 +108,10 @@ export class Store {
     });
     this.ensureColumns('decisions', {
       rule: 'TEXT',
+      // Split out of `rule` rather than replacing it: an old row keeps the
+      // *outcome* in `rule` with this NULL, and nothing rewrites history, so the
+      // two shapes coexist for good.
+      admission: 'TEXT',
     });
     this.ensureColumns('findings', {
       ticket_ref: 'TEXT',
@@ -1575,17 +1579,22 @@ export class Store {
 
   // -- Decisions (audit) ---------------------------------------------------
 
-  recordDecision(input: Omit<Decision, 'id' | 'createdAt' | 'rule'>): Decision {
-    // The rule id rides on the action (its transport from the dispatcher); lift
-    // it into its own column here so it's first-class on the decision row.
+  recordDecision(input: Omit<Decision, 'id' | 'createdAt' | 'rule' | 'admission'>): Decision {
+    // Both ids ride on the action (its transport from the dispatcher); lift them
+    // into their own columns here so the row answers "what proposed this" and
+    // "what became of it" separately — one column answering both is what lost
+    // `issue-pickup` behind `cooldown-escalate`.
     const decision: Decision = {
       id: `dec_${nanoid(10)}`,
       createdAt: this.now(),
       rule: input.action.rule ?? null,
+      admission: input.action.admission ?? null,
       ...input,
     };
     this.db
-      .prepare(`INSERT INTO decisions (id, cycle_id, action, outcome, detail, rule, created_at) VALUES (?,?,?,?,?,?,?)`)
+      .prepare(
+        `INSERT INTO decisions (id, cycle_id, action, outcome, detail, rule, admission, created_at) VALUES (?,?,?,?,?,?,?,?)`,
+      )
       .run(
         decision.id,
         decision.cycleId,
@@ -1593,6 +1602,7 @@ export class Store {
         decision.outcome,
         decision.detail,
         decision.rule,
+        decision.admission,
         decision.createdAt,
       );
     return decision;
@@ -2186,6 +2196,7 @@ interface DecisionRow {
   outcome: string;
   detail: string;
   rule: string | null;
+  admission: string | null;
   created_at: string;
 }
 interface WorldEventRow {
@@ -2504,6 +2515,11 @@ function rowToDecision(r: DecisionRow): Decision {
     outcome: r.outcome as Decision['outcome'],
     detail: r.detail,
     rule: r.rule,
+    // `?? null` rather than a bare read: a database created before the column
+    // existed has just had it added by `migrate()`, so every historical row
+    // reads NULL here — but a row read through a path that predates the
+    // migration would be `undefined`, and the two must not differ downstream.
+    admission: r.admission ?? null,
     createdAt: r.created_at,
   };
 }

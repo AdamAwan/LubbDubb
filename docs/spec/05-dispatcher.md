@@ -30,7 +30,10 @@ is rejected and audited rather than executed.
 | `no_op`               | `reason`                                  | `rule`                                                                         |
 
 `reason` is mandatory on every action — it is what the audit log shows. `rule` defaults to `null`,
-because the LLM dispatcher reasons freely and emits none.
+because the LLM dispatcher reasons freely and emits none. Every action also accepts an optional
+**`admission`** beside it, defaulting to `null`: `rule` names what proposed the act, `admission` what
+became of it, and both are lifted into their own decision columns (see
+[Two columns on the decision row](#two-columns-on-the-decision-row)).
 
 `parseActions(raw)` validates an array, partitioning into `actions` and `rejected` (each rejected item
 keeps its raw value and a joined zod error path/message). Absent `confidence` is treated as **0**:
@@ -39,7 +42,8 @@ keeps its raw value and a joined zod error path/message). Absent `confidence` is
 ## The rule book
 
 `src/dispatcher/rules.ts` holds the registry as data. Every action the `RuleDispatcher` emits carries
-a `rule` id from it; `Store.recordDecision` lifts the id into the `decisions.rule` column; and
+a `rule` id from it (and, when an admission transformed it, an `admission` id too);
+`Store.recordDecision` lifts each into its own column, `decisions.rule` and `decisions.admission`; and
 `/api/state` ships the whole registry so the cockpit's Decision log can expand a row into the rule
 that fired and why that rule exists.
 
@@ -137,7 +141,8 @@ proposal in the same way whichever rule made it.
 
 These were four representations of one idea, none of which knew about the others: `branch-notify` and
 `cooldown-escalate` were rule ids (so a throttled pickup audited as `cooldown-escalate` and lost that
-it was `issue-pickup` that got throttled); `cooldown`/`capped`/`unapproved` were a `held` string on
+it was `issue-pickup` that got throttled — closed by the `admission` column below);
+`cooldown`/`capped`/`unapproved` were a `held` string on
 the candidate; `waiting` was decided inline by the headroom cut; and **suppression was not
 represented at all** — a rule superseded by an earlier one `continue`d, so its candidate vanished with
 no queue entry and no reason anywhere. That is the same invisibility `capped` was introduced to fix.
@@ -155,6 +160,39 @@ no queue entry and no reason anywhere. That is the same invisibility `capped` wa
 
 **Every held reason reaches the queue.** That is the contract, and it is what makes "nothing happened
 and nobody can say why" unrepresentable.
+
+### Two columns on the decision row
+
+The vocabularies are split in the registry, and they are split on the audit row too: `decisions.rule`
+names **what proposed** an act, `decisions.admission` **what became of it**. Both ride on the action —
+`rule` and `admission` are optional fields on every action schema — and `Store.recordDecision` lifts
+each into its own column. `AdmissionId` (`Extract<…, {kind: 'admission'}>` off the registry) types the
+second, so a rule id structurally cannot land there.
+
+| Emission                                | `rule`                  | `admission`         |
+| --------------------------------------- | ----------------------- | ------------------- |
+| An ordinary dispatch, merge, escalation  | the rule that proposed it | null              |
+| The PR-concern attempt cap               | the top concern's rule  | `cooldown-escalate` |
+| `plan-part`'s attempt cap                | `plan-part`             | `cooldown-escalate` |
+| `issue-pickup`'s attempt cap             | `issue-pickup`          | `cooldown-escalate` |
+| The branch note                          | **null**                | `branch-notify`     |
+
+**Only these two admissions ever reach the column.** The rest (`cooldown`, `capped`, `unapproved`,
+`superseded`, `waiting`) hold a candidate that was never executed, so there is no decision row for
+them at all — they are queue statuses on the Up next projection and nothing more.
+
+**The branch note's `rule` is null deliberately.** Its `fresh` set is a flatMap over every concern on
+the PR, so one note can carry a CI signal and a review thread at once and no single rule proposed it.
+Attributing it to the top concern would name a proposer picked by the *urgency* order — which exists
+to decide who gets the one agent when the branch is **free** — for a note whose other half that rule
+never asked for. Nothing is lost by refusing: `originRefs` already lists every concern the note
+covers, which is a finer answer than a rule id.
+
+**Rows written before the split keep their shape, forever.** They carry the *outcome* in `rule` with
+`admission` NULL, and which rule was throttled on one is not recoverable — history is not rewritten.
+Both cockpit renderers resolve a row through the shared `decisionAttribution`, which names such an id
+as an **Outcome** rather than a proposer and states the gap, so the two shapes are told apart instead
+of one being guessed into the other.
 
 `askedAlready(origin, openEscalations, recentDecisions)` is the shared "has this already been put to a
 human" predicate the three escalating rules (`pr-ci-blocked`, `plan-blocked`, `issue-shortfall`'s
@@ -268,16 +306,17 @@ missing memory, purely from the audit log:
 
 `DEFAULT_COOLDOWN` is `{ maxAttempts: 3, cooldownMs: 900000 }` (15 minutes). Only **executed**
 dispatches count as attempts: a deferred one (paused, or no headroom) never ran. "Now" is the world
-snapshot's `takenAt`. An `escalate` verdict emits `escalate_to_human` tagged `cooldown-escalate`,
-which claims no headroom.
+snapshot's `takenAt`. An `escalate` verdict emits `escalate_to_human` carrying the throttled rule as
+its `rule` and `cooldown-escalate` as its `admission`, and claims no headroom.
 
 ## One agent per branch
 
 For a PR whose branch already has an active task, `resolveBranchAgent` returns:
 
 - **`running`** — the branch's agent is live. Every fresh, not-yet-notified concern is collapsed into a
-  single `respond_to_agent` note listing them, tagged `branch-notify`, carrying the concern origins in
-  `originRefs`.
+  single `respond_to_agent` note listing them, carrying the concern origins in `originRefs`. It is
+  recorded with `admission: 'branch-notify'` and **no** `rule`: it folds several concerns, so no one
+  rule proposed it (see "Two columns on the decision row").
 - **`busy`** (queued / starting / **waiting**) — every note is held. Injecting into a waiting agent
   would call `agents.respond`, which flips `waiting → running` and would derail a pending human
   escalation. The signals persist, so a later cycle delivers them once the agent is running.

@@ -589,8 +589,20 @@ export interface Decision {
   action: { type: string; reason?: string };
   outcome: string;
   detail: string;
-  /** The dispatcher rule that produced the action (a `dispatchRules` key), or null. */
+  /** The dispatcher rule that **proposed** the action (a `dispatchRules` key), or null. */
   rule: string | null;
+  /**
+   * What **became** of that proposal, when an admission transformed it rather
+   * than letting it through — also a `dispatchRules` key, of `kind: 'admission'`.
+   *
+   * Optional as well as nullable, and the two mean different things. Null is a
+   * proposal admitted unchanged. *Absent* is an older server, which is also the
+   * shape of every row written before the column existed: those carry the
+   * outcome in `rule` with nothing here, and which rule was throttled on one is
+   * gone for good. A renderer must say which of the two it is showing rather
+   * than filling the gap.
+   */
+  admission?: string | null;
   createdAt: string;
 }
 

@@ -89,7 +89,8 @@ export function planPart(s: StageContext): void {
             attempts: verdict.attempts,
           }),
           context: { originRef: origin, taskTitle: part.title },
-          rule: 'cooldown-escalate',
+          rule: 'plan-part',
+          admission: 'cooldown-escalate',
           reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without producing a PR — escalating instead of looping.`,
         } satisfies RawAction);
         continue;

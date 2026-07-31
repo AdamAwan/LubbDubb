@@ -191,7 +191,19 @@ export function prCiFailing(s: StageContext): void {
                 ? '\n\nRead them together before changing anything — they may resolve or contradict one another.'
                 : ''),
             originRefs: fresh.map((sig) => sig.ref),
-            rule: 'branch-notify',
+            // **The one action with no proposing rule, and it is left null
+            // deliberately.** `fresh` is a flatMap over *every* concern on this
+            // PR, so one note can carry a CI signal and a review thread at once
+            // — there is no single rule that proposed it. The tempting
+            // attribution is `concerns[0]`, and it would be wrong twice over:
+            // that entry is picked by the urgency order, which exists to decide
+            // who gets the one agent when the branch is *free*, and reusing it
+            // here would name a proposer for a note whose other half it never
+            // asked for. Nothing is lost by refusing to guess — `originRefs`
+            // already lists every concern the note covers, which is a finer
+            // answer than any one rule id could give.
+            rule: null,
+            admission: 'branch-notify',
             reason: `New PR signal(s) for a branch already staffed by agent ${branch.agent.id}.`,
           } satisfies RawAction);
         }
@@ -294,7 +306,12 @@ export function prCiFailing(s: StageContext): void {
           attempts,
         }),
         context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
-        rule: 'cooldown-escalate',
+        // The concern that was throttled, then what throttling did to it. This
+        // escalation stands in for exactly one proposal — `top`, the concern the
+        // dispatch would have gone out for — so it has a proposer, unlike the
+        // branch note above.
+        rule: top.rule,
+        admission: 'cooldown-escalate',
         reason: `Origin ${top.origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
       }),
     );
