@@ -26,6 +26,8 @@ import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { padTestimony, retroDossier } from '../retro/dossier.js';
+import { priorWorkBriefing } from '../briefing/priorWork.js';
+import { padOriginFor } from '../scratch/pad.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
 interface ExecutorDeps {
@@ -547,12 +549,17 @@ export class ActionExecutor {
     // and putting it in front of an agent dispatched for anything else would be
     // the same widening mistake as showing a merge refusal to a CI-fix agent.
     const outstanding = outstandingForOrigin(action.originRef, store);
+    // What the earlier agents on this goal worked out. Appended for the reason the
+    // two notes above are, and passed the outstanding note's own verdict so the two
+    // never both render it: `outstandingForOrigin` owns an agent's `more_work`
+    // declaration on an exact origin match.
+    const prior = priorWorkFor(action.originRef, store, outstanding !== null);
     // A retrospective agent has no worktree and no world of its own, so what it can
     // say is entirely what it is handed: the pad the working agents left, and the
     // record only the harness kept. Appended for the same reason as the two notes
     // above, and the pad goes first — it is the half nothing else could supply.
     const briefing = retroBriefing(action.originRef, store);
-    const prompt = [action.prompt, guidance, outstanding, briefing].filter(Boolean).join('\n\n');
+    const prompt = [action.prompt, guidance, outstanding, prior, briefing].filter(Boolean).join('\n\n');
     if (action.type === 'dispatch_code_agent') {
       const task = store.createTask({
         kind: 'code',
@@ -601,6 +608,45 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
   const stored = store.getIssueConclusion(originRef);
   if (!stored || stored.verdict !== 'more_work' || stored.by !== 'agent') return null;
   return outstandingWorkNote(stored.note, stored.updatedAt);
+}
+
+/**
+ * The rows behind {@link priorWorkBriefing}, gathered for the goal this dispatch
+ * belongs to — or null for every dispatch that is not on one.
+ *
+ * **Scoped by `padOriginFor`, not by a fresh predicate.** That is already the
+ * harness's answer to "which goal is this agent working", written for the pad and
+ * asked here for the same population: the `issue:<n>` root plus its `:plan`,
+ * `:assay`, `:assess` and `:part:<slug>` arms. Everything else — a PR concern, a
+ * job, a filing — resolves to null and is handed nothing, which is
+ * `outstandingForOrigin`'s widening rule at the level of a whole goal: an agent
+ * fixing CI on `pr:42` has no use for a planner's write-up about `issue:12` and
+ * cannot tell it apart from its own task.
+ *
+ * **The retro origin is excluded**, though `padOriginFor` accepts it: a
+ * retrospective is handed the pad and the whole dossier by {@link retroBriefing},
+ * and would otherwise read its own goal's testimony twice in one prompt.
+ *
+ * In the executor, and for the branch gate's reason: every dispatch passes through
+ * here whatever composed it, the LLM dispatcher's included.
+ */
+function priorWorkFor(originRef: string | null | undefined, store: Store, outstandingShown: boolean): string | null {
+  const ref = originRef ?? '';
+  const issueOriginRef = padOriginFor(ref);
+  if (!issueOriginRef) return null;
+  if (retroSubmitOrigin(ref).ok) return null;
+  const plan = store.getPlanByOrigin(issueOriginRef);
+  const briefing = priorWorkBriefing({
+    plan,
+    parts: plan ? store.listPlanParts(plan.id) : [],
+    assay: store.getAssay(issueOriginRef),
+    conclusion: outstandingShown ? null : store.getIssueConclusion(issueOriginRef),
+    delivery: store.getDelivery(issueOriginRef),
+    shortfall: store.getShortfall(issueOriginRef),
+    entries: store.listScratchEntries(issueOriginRef),
+    forPart: /^issue:\d+:part:/.test(ref),
+  });
+  return briefing || null;
 }
 
 /**
