@@ -919,12 +919,19 @@ testimony, and rendering it would let a stray backtick or hash change what that 
 `planId`/`retroRef`'s lesson, applied rather than relearned:
 
 - a **`notepad · <n>`** chip on the issue's row in the **shared** `WorldSummary`, so both skins get it;
-- the Goal Floor's **Logbook** bar, above the Manifest, because it is what the manifest was written
-  from — the raw testimony first, the account of it second.
+- a **Notepad** button in the Goal Floor's readings cluster, before Retrospective, because the pad is
+  what the write-up was made from — the raw testimony first, the account of it second.
 
 The floor draws it off `GoalFloorModel.padRef`, beside `retroRef` and on the same terms. It appears on
 goals with no retrospective at all, which is the case it exists for: a run still going, or one nobody
 ever wrote up.
+
+**The floor's two readings are a pair of ordinary buttons pinned to the top right**, not a full-width
+plate each. A plate carries something with a sentence to say — a stopped machine's reason, or a plan
+that can also be sent back — while these only open a document, so a bar apiece spent a band of the
+panel to hold one button and read as though each were making a claim. They sit above the patch strip
+rather than in the card's own head, which belongs to the panel and not to whichever goal is picked.
+The Blueprint bar keeps its plate: Replan is an act, not a reading.
 
 ## Links
 
