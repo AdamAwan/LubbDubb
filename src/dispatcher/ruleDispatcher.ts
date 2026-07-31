@@ -36,6 +36,7 @@ import {
   type PlanRouteVerdict,
 } from '../plans/planning.js';
 import { describeProposedParts } from '../plans/planApproval.js';
+import { planApprovalWarnings, planIsWedged, wedgedPlanPrompt } from '../plans/planWedge.js';
 import { isPlanInDiscussion } from '../plans/planDiscussion.js';
 import {
   bySlug,
@@ -1100,15 +1101,61 @@ export class RuleDispatcher implements Dispatcher {
         type: 'propose_plan',
         planId: plan.id,
         originRef: plan.originRef,
-        prompt: this.templates.render('plan-approval', {
-          number: issueNumber,
-          title: issue.title,
-          parts: parts.length,
-          reason: plan.reason ?? 'the planner gave no reason',
-          list: describeProposedParts(parts),
-        }),
+        // Appended, never interpolated, for `ciFailureNote`'s reason: an override
+        // that never learned a `{warnings}` token would silently drop this on
+        // exactly the deployments that customised most.
+        prompt:
+          this.templates.render('plan-approval', {
+            number: issueNumber,
+            title: issue.title,
+            parts: parts.length,
+            reason: plan.reason ?? 'the planner gave no reason',
+            list: describeProposedParts(parts),
+          }) + planApprovalWarnings(issue, parts, openPrs),
         rule: 'plan-approval',
         reason: `Issue #${issueNumber} was decomposed into ${parts.length} part(s) and approval is required before any of them is scheduled.`,
+      } satisfies RawAction);
+    }
+
+    // 3i: a released plan that is going nowhere. The reconciler already knows —
+    // it blocks the parts and records the reason — but an error is a feed entry,
+    // and a feed is not a question. Without this, an approved decomposition whose
+    // parts all blocked showed two red machines, no agent, and nothing in "Needs
+    // you"; the operator's own approval was the last thing that happened to it.
+    //
+    // Only `active` plans. An unapproved one is already in front of a human, and
+    // `planApprovalWarnings` puts the same fact in that ask — escalating as well
+    // would be the same sentence twice, to the same person, about a decomposition
+    // they have not authorized.
+    for (const plan of this.planning.enabled ? (ctx.plans ?? []) : []) {
+      if (plan.status !== 'active') continue;
+      const issueNumber = planIssueNumber(plan.originRef);
+      if (issueNumber === null) continue;
+      const issue = ctx.world.issues.find((i) => i.number === issueNumber);
+      if (!issue || issue.state !== 'open') continue;
+      if (issueWatchGateReason(issue, this.pickup) !== null) continue;
+      const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));
+      if (!planIsWedged(parts)) continue;
+      // Asked once, deduped both ways for rule 1b's reason: an open item on the
+      // origin is the visible state, and a recent executed one covers the case
+      // where it has been answered but the branch is still there.
+      const wedgeOrigin = planOrigin(issueNumber);
+      const alreadyAsked =
+        ctx.openEscalations.some((e) => e.context.originRef === wedgeOrigin) ||
+        ctx.recentDecisions.some(
+          (d) =>
+            d.outcome === 'executed' &&
+            d.action.type === 'escalate_to_human' &&
+            (d.action.context as { originRef?: unknown } | undefined)?.originRef === wedgeOrigin,
+        );
+      if (alreadyAsked) continue;
+      raw.push({
+        type: 'escalate_to_human',
+        escalationType: 'resolve_ambiguity',
+        prompt: wedgedPlanPrompt(issueNumber, issue, parts),
+        context: { originRef: wedgeOrigin, taskTitle: issue.title },
+        rule: 'plan-blocked',
+        reason: `Every part of issue #${issueNumber}'s approved plan is blocked, so nothing will be dispatched for it.`,
       } satisfies RawAction);
     }
 

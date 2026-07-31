@@ -30,6 +30,7 @@ export function PlanModal({
   refUrls,
   onClose,
   onReplan,
+  onAbandon,
   onDiscuss,
   onEndDiscussion,
   onDecide,
@@ -48,6 +49,7 @@ export function PlanModal({
   refUrls: Record<string, string>;
   onClose: () => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
+  onAbandon: (planId: string) => Promise<unknown> | unknown;
   onDiscuss: (planId: string) => Promise<unknown> | unknown;
   onEndDiscussion: (planId: string) => Promise<unknown> | unknown;
   onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
@@ -63,6 +65,11 @@ export function PlanModal({
   // Both terminals — a part can finish as a write-up or a determination, and
   // counting only merges would show a finished plan as still in flight.
   const settled = live.filter((p) => p.status === 'merged' || p.status === 'concluded').length;
+  // Mirrors `partHasWork` on the server, which is what the abandon route refuses
+  // on — the same relationship `partProgress` has to `partSettled`, and gating the
+  // control here is the rule the Discuss button already follows: a control must
+  // not offer what the route refuses.
+  const started = live.some((p) => ['dispatched', 'in_review', 'merged', 'concluded'].includes(p.status));
   const issueNumber = issueOf(plan.originRef);
   const queued = new Map(upcoming.map((q) => [q.origin, q]));
   // A verdict is only on offer while the plan is still the thing that was
@@ -260,6 +267,19 @@ export function PlanModal({
               >
                 Replan
               </AsyncButton>
+              {/* The way out of a plan approved onto a branch git will not let its
+                  parts sit beneath: once released, Reject is gone (it settles an
+                  `awaiting_approval` plan) and a replan fails back to `parts`, so
+                  without this the only exit is the database. */}
+              {plan.status === 'active' && !started && (
+                <AsyncButton
+                  className="ghost"
+                  title="Retire the parts and work this issue as one pull request. Offered only while no part has started."
+                  onClick={() => onAbandon(plan.id)}
+                >
+                  Abandon decomposition
+                </AsyncButton>
+              )}
             </>
           )}
         </div>

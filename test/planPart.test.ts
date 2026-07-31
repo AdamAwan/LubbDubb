@@ -676,3 +676,79 @@ test('the plan comment never describes a non-code part as merged, and names a mi
   ]);
   assert.match(mismatched, /planned as code/);
 });
+
+// -- rule 3i: a released plan that is going nowhere ---------------------------
+
+/** Both parts parked by the ref-collision guard, as the reconciler leaves them. */
+function wedgedParts(): PlanPart[] {
+  const blocked = {
+    status: 'blocked' as const,
+    blockedReason: 'The branch issue/12 exists, and git cannot create it.',
+  };
+  return [part('a', 1, blocked), part('b', 2, blocked)];
+}
+
+test('every part blocked asks a human once, and dispatches nobody', async () => {
+  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+    context([issue(12)], { plans: [plan()], planParts: wedgedParts() }),
+  );
+  assert.deepEqual(
+    result.actions.map((a) => [a.rule, a.type]),
+    [['plan-blocked', 'escalate_to_human']],
+    'no agent is dispatched, because none could help',
+  );
+  const asked = result.actions[0]!;
+  assert.equal(asked.type === 'escalate_to_human' && asked.context.originRef, 'issue:12:plan');
+  const prompt = asked.type === 'escalate_to_human' ? asked.prompt : '';
+  // The reason is quoted off the part rows, and both ways out are named — the
+  // harness will not choose between them.
+  assert.match(prompt, /The branch issue\/12 exists/);
+  assert.match(prompt, /abandon the decomposition/);
+});
+
+test('the wedge is asked once — an open item or a recent one both settle it', async () => {
+  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', enabled);
+  const open = await dispatcher.decide(
+    context([issue(12)], {
+      plans: [plan()],
+      planParts: wedgedParts(),
+      openEscalations: [{ id: 'esc_1', context: { originRef: 'issue:12:plan' } } as never],
+    }),
+  );
+  assert.ok(
+    open.actions.every((a) => a.rule !== 'plan-blocked'),
+    'an open item on the origin is the visible state',
+  );
+
+  // And a decision that outlives the inbox item: each covers the other's blind spot.
+  const recent = await dispatcher.decide(
+    context([issue(12)], {
+      plans: [plan()],
+      planParts: wedgedParts(),
+      recentDecisions: [
+        {
+          id: 'dec_1',
+          cycleId: 'cyc',
+          action: { type: 'escalate_to_human', context: { originRef: 'issue:12:plan' }, reason: 'x' },
+          outcome: 'executed',
+          detail: '',
+          rule: 'plan-blocked',
+          createdAt: '2026-07-25T00:00:00.000Z',
+        } as never,
+      ],
+    }),
+  );
+  assert.ok(recent.actions.every((a) => a.rule !== 'plan-blocked'));
+});
+
+test('an unapproved wedged plan is not escalated — the ask already carries it', async () => {
+  const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
+    context([issue(12)], { plans: [{ ...plan(), status: 'awaiting_approval' }], planParts: wedgedParts() }),
+  );
+  // Rule 3d proposes it; `planApprovalWarnings` puts the collision in that ask.
+  // Escalating as well would be the same sentence twice to the same person.
+  assert.deepEqual(
+    result.actions.map((a) => a.rule),
+    ['plan-approval'],
+  );
+});

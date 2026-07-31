@@ -281,6 +281,25 @@ class DemoServer {
   }
 
   /**
+   * Abandon a released decomposition — the demo mirror of
+   * `POST /api/plans/:id/abandon`. Mirrors the server's guards too (active, and no
+   * part started), because a demo that offers what the real route refuses teaches
+   * the control wrong.
+   */
+  async abandonPlan(planId: string): Promise<{ ok: true }> {
+    const plan = (this.state.plans ?? []).find((p) => p.id === planId);
+    const parts = (this.state.planParts ?? []).filter((p) => p.planId === planId && p.status !== 'retired');
+    const started = parts.some((p) => ['dispatched', 'in_review', 'merged', 'concluded'].includes(p.status));
+    if (plan?.status === 'active' && !started) {
+      for (const part of parts) part.status = 'retired';
+      plan.status = 'single';
+      plan.updatedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
    * Talk it through with an agent instead of accepting or rejecting — the demo
    * mirror of `POST /api/plans/:id/discuss`. Marks the plan `discussing` (nothing
    * is scheduled while that's true) and spawns the same discussion agent a real
@@ -941,6 +960,7 @@ export const demoApi = {
     getServer().setIssueAssay(issueNumber, verdict),
   dismissFloorCompletion: (issueNumber: number) => getServer().dismissFloorCompletion(issueNumber),
   replan: (planId: string) => getServer().replan(planId),
+  abandonPlan: (planId: string) => getServer().abandonPlan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),
   endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),
   reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),

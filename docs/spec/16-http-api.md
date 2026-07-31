@@ -385,6 +385,19 @@ reports the ticket through `link_ticket` — see [11](11-mcp-tools.md).
 reader never saw), broadcasts, runs a cycle. **Tears nothing down** — see [08](08-planning.md).
 Returns `{ ok: true, plan }`.
 
+### `POST /api/plans/:id/abandon`
+
+No body. 404 when the plan is unknown. **409 unless the plan is `active` and no part has started**
+(`partHasWork`) — the guard is the point, since retiring a part with an agent, a branch or a PR behind
+it would strand real work. Retires every live part and collapses the plan to `single`, so rule 4 works
+the issue as one pull request. Broadcasts, runs a cycle. Returns `{ ok: true, detail, plan }`.
+
+This is the way out of a decomposition approved onto an issue whose flat `issue/<n>` branch was
+already taken: its parts block on the ref collision, and once released neither Reject (which settles
+an `awaiting_approval` plan) nor Replan (which fails back to `parts`) can free it. A separate act
+rather than a loosened `refusePlan` because it is a different sentence — see
+[08](08-planning.md#when-the-collision-arrives-after-approval).
+
 ### `POST /api/plans/:id/discuss`
 
 No body. 404 when the plan is unknown. **Discuss is a replan with a conversational planner** — same
