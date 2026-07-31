@@ -1,12 +1,24 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { MergeMethod, PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
+import type {
+  MergeMethod,
+  PrBaseInput,
+  PrCreateInput,
+  PrLabelInput,
+  PrMergeInput,
+  PrReplyInput,
+  PrTitleInput,
+  SendResult,
+} from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
   Capability,
   Integration,
+  PrBaseCapable,
+  PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
+  PrTitleCapable,
   WorldSlice,
 } from '../integration.js';
 import { closedWindowStart } from '../closedWindow.js';
@@ -40,7 +52,7 @@ interface AzureSourceControlOpts {
  * instead of an injected fake world, so it is *not* `Injectable`.
  */
 export class AzureDevOpsSourceControlIntegration
-  implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable
+  implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable, PrCreateCapable, PrTitleCapable, PrBaseCapable
 {
   readonly id = 'sourceControl:azure';
   readonly capability: Capability = 'sourceControl';
@@ -144,6 +156,26 @@ export class AzureDevOpsSourceControlIntegration
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {
     await this.opts.api.setPullLabel(input.prNumber, input.label, input.present);
+    return { ok: true };
+  }
+
+  async createPullRequest(input: PrCreateInput): Promise<SendResult> {
+    const { pullRequestId } = await this.opts.api.createPull({
+      head: input.branch,
+      base: input.base,
+      title: input.title,
+      body: input.body,
+    });
+    return { ok: true, ref: String(pullRequestId) };
+  }
+
+  async setPullTitle(input: PrTitleInput): Promise<SendResult> {
+    await this.opts.api.setPullTitle(input.prNumber, input.title);
+    return { ok: true };
+  }
+
+  async setPullBase(input: PrBaseInput): Promise<SendResult> {
+    await this.opts.api.setPullBase(input.prNumber, input.base);
     return { ok: true };
   }
 }

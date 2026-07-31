@@ -267,6 +267,25 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.setLabel(number, label, present);
   }
 
+  async createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ number: number }> {
+    const res = await this.octokit.pulls.create({
+      ...this.base,
+      head: input.head,
+      base: input.base,
+      title: input.title,
+      body: input.body,
+    });
+    return { number: res.data.number };
+  }
+
+  async setPullTitle(number: number, title: string): Promise<void> {
+    await this.octokit.pulls.update({ ...this.base, pull_number: number, title });
+  }
+
+  async setPullBase(number: number, base: string): Promise<void> {
+    await this.octokit.pulls.update({ ...this.base, pull_number: number, base });
+  }
+
   /** Shared labels-API write — PRs and issues are the same endpoint on GitHub. */
   private async setLabel(number: number, label: string, present: boolean): Promise<void> {
     // addLabels is additive and idempotent; removeLabel 404s when the label isn't

@@ -619,6 +619,33 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     });
   }
 
+  async createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ pullRequestId: number }> {
+    const data = await this.request<{ pullRequestId: number }>(this.withApiVersion(`${this.repoUrl}/pullrequests`), {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceRefName: headsRef(input.head),
+        targetRefName: headsRef(input.base),
+        title: input.title,
+        description: input.body,
+      }),
+    });
+    return { pullRequestId: data.pullRequestId };
+  }
+
+  async setPullTitle(pullRequestId: number, title: string): Promise<void> {
+    await this.request(this.withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    });
+  }
+
+  async setPullBase(pullRequestId: number, base: string): Promise<void> {
+    await this.request(this.withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ targetRefName: headsRef(base) }),
+    });
+  }
+
   async setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void> {
     const labelsUrl = `${this.repoUrl}/pullRequests/${pullRequestId}/labels`;
     if (present) {
@@ -633,6 +660,18 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       }
     }
   }
+}
+
+/**
+ * A plain branch name as the full ref Azure's PR API expects.
+ *
+ * The read side strips this prefix (`sourceControl.ts`), so every branch inside the
+ * harness is plain and the conversion belongs at the one boundary that needs it —
+ * a second stripper elsewhere is how the two ends come to disagree about whether a
+ * branch is `main` or `refs/heads/main`.
+ */
+function headsRef(branch: string): string {
+  return branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`;
 }
 
 /**

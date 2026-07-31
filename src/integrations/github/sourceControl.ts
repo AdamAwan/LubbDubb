@@ -1,12 +1,23 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { PrLabelInput, PrMergeInput, PrReplyInput, SendResult } from '../../sink/actionSink.js';
+import type {
+  PrBaseInput,
+  PrCreateInput,
+  PrLabelInput,
+  PrMergeInput,
+  PrReplyInput,
+  PrTitleInput,
+  SendResult,
+} from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
   Capability,
   Integration,
+  PrBaseCapable,
+  PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
+  PrTitleCapable,
   RefResolvable,
   WorldSlice,
 } from '../integration.js';
@@ -43,7 +54,15 @@ interface GitHubSourceControlOpts {
  * `Injectable`.
  */
 export class GitHubSourceControlIntegration
-  implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable, RefResolvable
+  implements
+    Integration,
+    PrReplyCapable,
+    PrMergeCapable,
+    PrLabelCapable,
+    PrCreateCapable,
+    PrTitleCapable,
+    PrBaseCapable,
+    RefResolvable
 {
   readonly id = 'sourceControl:github';
   readonly capability: Capability = 'sourceControl';
@@ -142,6 +161,26 @@ export class GitHubSourceControlIntegration
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {
     await this.opts.api.setPullLabel(input.prNumber, input.label, input.present);
+    return { ok: true };
+  }
+
+  async createPullRequest(input: PrCreateInput): Promise<SendResult> {
+    const { number } = await this.opts.api.createPull({
+      head: input.branch,
+      base: input.base,
+      title: input.title,
+      body: input.body,
+    });
+    return { ok: true, ref: String(number) };
+  }
+
+  async setPullTitle(input: PrTitleInput): Promise<SendResult> {
+    await this.opts.api.setPullTitle(input.prNumber, input.title);
+    return { ok: true };
+  }
+
+  async setPullBase(input: PrBaseInput): Promise<SendResult> {
+    await this.opts.api.setPullBase(input.prNumber, input.base);
     return { ok: true };
   }
 }
