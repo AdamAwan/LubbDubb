@@ -44,6 +44,14 @@ export interface CockpitActions {
    */
   viewRetro(issueRef: string | null): void;
   /**
+   * Which goal's shared scratchpad is open, as an `issue:<n>` ref. On the seam for
+   * `viewRetro`'s reason exactly: the modal is shared and fetches its trail from
+   * `api.js`, while the controls that open it are embedded by whichever skin draws
+   * the goal — and two skins reaching one action is what stops the notepad
+   * becoming readable in one theme only.
+   */
+  viewScratchpad(issueRef: string | null): void;
+  /**
    * Open or close the settings modal — the running config and the skin picker.
    * On the seam for `viewPlan`'s reason: the modal is shared and hangs off the
    * shell (it reaches `/api/config`, which a skin may not do), while the cog that

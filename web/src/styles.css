@@ -2108,6 +2108,34 @@ body {
   font-size: 12px;
   margin: 4px 0 6px;
 }
+
+/*
+ * The shared notepad's trail. It reuses `.pm-doc` for the scroll box — it is the
+ * same kind of thing, a document read inside the modal — and adds only what a
+ * *trail* needs the write-up does not: one block per entry, its attribution above
+ * it, and prose that keeps the newlines its author wrote (the note is rendered as
+ * plain text, so nothing else restores its shape).
+ */
+.pad-entry {
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  margin: 10px 0;
+}
+.pad-entry:first-child {
+  margin-top: 0;
+}
+.pad-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+.pad-entry-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .pm-say {
   display: flex;
   gap: 6px;

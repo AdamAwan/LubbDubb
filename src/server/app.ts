@@ -11,6 +11,7 @@ import type {
   IssueAssay,
   IssueDelivery,
   Retrospective,
+  ScratchPadSummary,
   ShortfallCause,
   WorldSnapshot,
 } from '../types.js';
@@ -36,6 +37,7 @@ import { detectFileOverlaps } from '../fileOverlap.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { SHORTFALL_CAUSES } from '../delivery/shortfall.js';
 import { assaySignalQuery, goalFingerprint } from '../intake/assay.js';
+import { padOriginFor } from '../scratch/pad.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { watchLabelsFor } from '../watchLabels.js';
 import {
@@ -1181,6 +1183,26 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { retrospective: store.getRetrospective(ref) };
   });
 
+  // The shared pad, whole and in the order it was written — the testimony the
+  // retrospective is written *from*, which until now only an agent could read
+  // (`scratch_read`) and only a retro agent could quote.
+  //
+  // Fetched rather than polled for the retrospective's reason, with more force: a
+  // pad is unbounded prose from every agent on the goal. The snapshot carries the
+  // count and the age, which is all a way in needs to draw itself.
+  //
+  // The ref is resolved through the **same `padOriginFor`** an agent's write goes
+  // through, so a part's origin names the pad its author writes to and the two
+  // sides cannot disagree about which pad a ref means. A ref naming no pad at all
+  // is a bad request rather than an empty one: "nobody has written here" and "that
+  // is not a pad" are different answers, and only the first is silence.
+  app.get('/api/scratchpads/:ref', async (req, reply) => {
+    const { ref } = req.params as { ref: string };
+    const padRef = padOriginFor(ref);
+    if (!padRef) return reply.code(400).send({ error: `${ref} is not inside an issue, so it names no scratchpad` });
+    return { padRef, entries: store.listScratchEntries(padRef) };
+  });
+
   app.get('/api/prompts', async () => ({
     dir: config.promptTemplatesDir ?? null,
     // The `claude` dispatcher composes its prompts via the LLM and reads none of
@@ -1394,6 +1416,10 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // reads, so the chip and the rule cannot disagree about what fell short.
   const shortfalls = store.listShortfalls();
   const shortfallsByOrigin = new Map(shortfalls.map((s) => [s.originRef, s]));
+  // What the agents on each goal wrote each other, as a count and an age. One
+  // grouped read for the whole world (see `Store.listScratchPadSummaries`), keyed
+  // on the issue origin like every other per-goal record.
+  const padsByOrigin = new Map(store.listScratchPadSummaries().map((p) => [p.padRef, p]));
   const assays = store.listAssays();
   const assayWindow = assaySignalQuery(assays);
   // Keyed the same way the conclusion and shortfall maps below are, so the
@@ -1518,6 +1544,9 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
       assay: assayVerdictOf(assaysByOrigin.get(origin)),
       // The run's own write-up (rule 3h) — the reading, never the writing.
       retrospective: retroReading(store.getRetrospective(origin)),
+      // The shared pad the agents on this goal left each other — the reading, for
+      // the retrospective's reason: the trail is fetched when a reader opens it.
+      scratchpad: padReading(padsByOrigin.get(origin)),
       // Whether the operator is keeping this finished goal on the floor, and
       // whether they have dismissed it (issue #203). Absent when nothing has
       // recorded a completion, so the floor's retention gate reads three states —
@@ -1721,6 +1750,16 @@ function standingDelivery(delivery: IssueDelivery | undefined, issue: Issue, ctx
  */
 function retroReading(retro: Retrospective | null) {
   return retro ? { summary: retro.summary, hasDocument: retro.document.length > 0, updatedAt: retro.updatedAt } : null;
+}
+
+/**
+ * The same shape for the shared pad, and the same rule: the count and the age,
+ * never the trail. A pad nobody has written to is **null rather than a zero**,
+ * because the control it draws is keyed on the pad existing — the lesson the plan
+ * and the retrospective both learned about hanging a way in off a status.
+ */
+function padReading(pad: ScratchPadSummary | undefined) {
+  return pad && pad.entries > 0 ? { entries: pad.entries, updatedAt: pad.updatedAt } : null;
 }
 
 function assayVerdictOf(assay: IssueAssay | undefined) {

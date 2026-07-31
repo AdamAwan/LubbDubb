@@ -77,6 +77,32 @@ function planChip(plan: Plan | undefined, onViewPlan: (planId: string) => void) 
 }
 
 /**
+ * The way into the shared notepad, drawn whenever there is something on it.
+ *
+ * Keyed on the pad **having entries**, never on what the goal is doing — the
+ * lesson the plan and the retrospective both learned, and the reason the snapshot
+ * ships a reading rather than the trail. A pad is written during the work and read
+ * long after it, so the moment it stops being reachable must not be the moment the
+ * goal changes status.
+ *
+ * The count is on the chip because it is the one fact that decides whether opening
+ * it is worth the click: four entries is a conversation, one is a note.
+ */
+function scratchpadChip(issue: Issue, onViewScratchpad: (issueRef: string) => void) {
+  const pad = issue.scratchpad;
+  if (!pad || pad.entries === 0) return null;
+  return (
+    <button
+      className="btn ghost small chip-button"
+      onClick={() => onViewScratchpad(`issue:${issue.number}`)}
+      title="Open the shared notepad for this goal — what the agents working it left each other, oldest first"
+    >
+      notepad · {pad.entries}
+    </button>
+  );
+}
+
+/**
  * The per-issue conclusion chip: has anyone said this issue is finished?
  *
  * It draws for **`done` and `undeclared` alike**, and that is the point. The two
@@ -233,6 +259,7 @@ export function WorldSummary({
   onSetConclusion,
   onSetAssay,
   onViewPlan,
+  onViewScratchpad,
 }: {
   state: AppState;
   /**
@@ -251,6 +278,8 @@ export function WorldSummary({
   onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
   /** Open the full plan for an issue's decomposition, when it has one. */
   onViewPlan: (planId: string) => void;
+  /** Open a goal's shared notepad, when the agents on it wrote anything. */
+  onViewScratchpad: (issueRef: string) => void;
 }) {
   const [tab, setTab] = useState<WatchBucket>('watched');
   const { pullRequests, issues } = state.world;
@@ -412,6 +441,7 @@ export function WorldSummary({
               (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`),
               onViewPlan,
             )}
+            {scratchpadChip(i, onViewScratchpad)}
             {conclusionChip(i.conclusion)}
             {shortfallChip(i.shortfall, i.number, state.proposals)}
             {i.linkedPrNumber !== null && (

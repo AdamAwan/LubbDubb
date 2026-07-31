@@ -149,6 +149,10 @@ export function buildDemoState(): DemoSeed {
             hasDocument: true,
             updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
           },
+          // What the agents wrote each other while they worked it — the testimony
+          // the write-up above was written from, and the demo's one readable pad.
+          // The count and the age only; the trail is fetched on open.
+          scratchpad: { entries: 4, updatedAt: new Date(Date.now() - 4_200_000).toISOString() },
         },
         {
           id: 'iss-212',

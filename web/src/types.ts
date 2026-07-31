@@ -170,6 +170,17 @@ export interface Issue {
    */
   retrospective?: { summary: string; hasDocument: boolean; updatedAt: string } | null;
   /**
+   * The shared pad the agents on this goal left each other (`scratch_append`) —
+   * how many entries, and when the last one landed. The entries themselves are
+   * fetched on open (`api.getScratchpad`), for the reason the write-up is: this
+   * snapshot is polled, and a pad is unbounded prose from every agent on the goal.
+   *
+   * Absent and null both mean *nobody has written anything*, which draws no way in
+   * at all — a control that opened an empty pad would be a button whose only
+   * answer is that there was nothing to see.
+   */
+  scratchpad?: { entries: number; updatedAt: string } | null;
+  /**
    * Whether the operator is keeping this finished goal on the Goal Floor, and
    * whether they have dismissed it (issue #203). Three states off one optional
    * field: **absent** is a live goal (retention has said nothing), **present and
@@ -184,6 +195,25 @@ export interface Issue {
    * {@link CockpitState.floorCompletions} instead, rebuilt from its stored record.
    */
   completion?: { at: string; dismissed: boolean };
+}
+
+/**
+ * One entry on a goal's shared pad, fetched on open.
+ *
+ * `authorOriginRef` is the attribution and the interesting field: it says which
+ * agent on the goal wrote this — a part, the planner, the assessor — and it is
+ * taken from the credential rather than from anything the author typed.
+ */
+export interface ScratchEntryView {
+  id: string;
+  padRef: string;
+  authorOriginRef: string;
+  agentId: string;
+  taskId: string;
+  /** An optional scannable tag the author chose. */
+  topic: string | null;
+  note: string;
+  createdAt: string;
 }
 
 /** A goal's retrospective in full, fetched on open. */

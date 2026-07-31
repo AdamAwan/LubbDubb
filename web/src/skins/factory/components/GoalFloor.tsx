@@ -79,6 +79,8 @@ interface GoalFloorProps {
   onViewPlan: (planId: string) => void;
   /** Open the run's write-up, keyed on the goal — `onViewPlan`'s pattern. */
   onViewRetro: (issueRef: string) => void;
+  /** Open the shared notepad the agents on the goal wrote — the same pattern again. */
+  onViewScratchpad: (issueRef: string) => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
   /**
    * Override a refused intake verdict. A second entry point onto the same action
@@ -223,6 +225,27 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
             >
               Replan
             </AsyncButton>
+          </span>
+        </div>
+      )}
+
+      {/* The notepad's way in, on the same terms as the plan's and the
+          manifest's: drawn while there is something to read. It sits above the
+          Manifest because it is what the manifest was written *from* — the raw
+          testimony first, the account of it second — and it is drawn on goals
+          that have no manifest at all, which is the case it exists for: a run
+          still going, or one nobody ever wrote up. */}
+      {floor.padRef && (
+        <div className="fx-gf-plan fx-sunk">
+          <span className="fx-gf-who">Logbook</span>
+          <span className="fx-gf-act">
+            <button
+              className="fx-btn"
+              onClick={() => props.onViewScratchpad(floor.padRef!)}
+              title="The shared notepad for this goal — what the agents working it left each other, oldest first"
+            >
+              Open notepad
+            </button>
           </span>
         </div>
       )}

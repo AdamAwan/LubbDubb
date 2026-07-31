@@ -31,6 +31,7 @@ export function useCockpit(): CockpitStatus {
   const [selected, setSelected] = useState<string | null>(null);
   const [viewingPlan, setViewingPlan] = useState<string | null>(null);
   const [viewingRetro, setViewingRetro] = useState<string | null>(null);
+  const [viewingScratchpad, setViewingScratchpad] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
@@ -163,6 +164,7 @@ export function useCockpit(): CockpitStatus {
       replan: (planId) => then(api.replan(planId)),
       viewPlan: (planId) => setViewingPlan(planId),
       viewRetro: (issueRef) => setViewingRetro(issueRef),
+      viewScratchpad: (issueRef) => setViewingScratchpad(issueRef),
       openSettings: (open) => setSettingsOpen(open),
       discussPlan: (planId) => then(api.discussPlan(planId)),
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
@@ -201,6 +203,7 @@ export function useCockpit(): CockpitStatus {
       lastPulseAt: lastPulse.current,
       viewingPlan,
       viewingRetro,
+      viewingScratchpad,
       settingsOpen,
     }),
   };

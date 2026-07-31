@@ -83,6 +83,7 @@ function frozenView() {
     lastPulseAt: NOW,
     viewingPlan: null,
     viewingRetro: null,
+    viewingScratchpad: null,
     settingsOpen: false,
   });
 }

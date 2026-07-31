@@ -891,6 +891,41 @@ between them they left the modal reachable only during the approval window.
 `test/factorySkin.test.ts` asserts the floor's way in across **every** plan status rather than only
 the one that was broken, so a later attempt to hang it off a plate fails a test.
 
+## The notepad modal
+
+`ScratchpadModal` (`web/src/components/`) is a goal's shared scratchpad, on demand: every note every
+agent working it left, oldest first, attributed to the origin that wrote it. It is the testimony the
+retrospective is written _from_ — and until it existed, the write-up was the only account of a run
+that anybody outside the fleet could read. The pad was written by agents (`scratch_append`), read by
+agents (`scratch_read`), and quoted by one retrospective agent, so a claim in the write-up was
+checkable against nothing, and an operator watching a goal go wrong could not read the reasoning as it
+was written.
+
+**Shell-owned**, opened through `viewScratchpad(issueRef: string | null)` on `CockpitActions` — the
+plan and retrospective modals' seam, and for their reason: one implementation across both skins, and a
+skin may not reach `api.js` to open it another way. The trail is fetched on open
+(`GET /api/scratchpads/:ref`); the snapshot carries only the count and the age.
+
+**Three states, and the third is the point**: loading, the trail, and an **error** — a fetch that
+failed must not render as "nobody wrote anything". That matters more here than for the write-up,
+because an empty pad is unreachable by construction: nothing draws a way in unless the snapshot says
+there are entries, so an empty trail on screen means the fetch and the snapshot disagree.
+
+**Notes render as plain text with their newlines kept**, not as markdown — the opposite choice to the
+plan and retrospective documents, which are written to be read as documents. A pad note is one agent's
+testimony, and rendering it would let a stray backtick or hash change what that testimony looks like.
+
+**Entry points**, both keyed on the pad **having entries** and neither on what the goal is doing —
+`planId`/`retroRef`'s lesson, applied rather than relearned:
+
+- a **`notepad · <n>`** chip on the issue's row in the **shared** `WorldSummary`, so both skins get it;
+- the Goal Floor's **Logbook** bar, above the Manifest, because it is what the manifest was written
+  from — the raw testimony first, the account of it second.
+
+The floor draws it off `GoalFloorModel.padRef`, beside `retroRef` and on the same terms. It appears on
+goals with no retrospective at all, which is the case it exists for: a run still going, or one nobody
+ever wrote up.
+
 ## Links
 
 The cockpit never builds a provider URL. `refUrls` in the state snapshot is a `ref → URL` map, and

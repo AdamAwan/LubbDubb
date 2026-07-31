@@ -39,6 +39,7 @@ import type {
   PlanPartInput,
   Retrospective,
   ScratchEntry,
+  ScratchPadSummary,
   PlanStatus,
   PriorityOverride,
   Proposal,
@@ -901,6 +902,26 @@ export class Store {
       .prepare(`SELECT * FROM scratch_entries WHERE pad_ref=? ORDER BY created_at ASC, rowid ASC`)
       .all(padRef) as ScratchEntryRow[];
     return rows.map(rowToScratchEntry);
+  }
+
+  /**
+   * Every pad that has been written to, as a count and the age of its newest
+   * entry — what the cockpit needs to draw a way in without opening one.
+   *
+   * **One grouped query for the whole world**, not one per issue: this is read on
+   * every `/api/state` poll, and a per-issue read would scale the poll with the
+   * number of goals to say nothing more than these two numbers do. `MAX` over an
+   * ISO-8601 UTC timestamp sorts as it reads, which is the same property
+   * {@link listScratchEntries} already leans on.
+   */
+  listScratchPadSummaries(): ScratchPadSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT pad_ref, COUNT(*) AS entries, MAX(created_at) AS updated_at
+           FROM scratch_entries GROUP BY pad_ref`,
+      )
+      .all() as { pad_ref: string; entries: number; updated_at: string }[];
+    return rows.map((r) => ({ padRef: r.pad_ref, entries: r.entries, updatedAt: r.updated_at }));
   }
 
   /**
