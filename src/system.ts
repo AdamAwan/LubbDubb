@@ -429,6 +429,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // apply it at fetch time — so when it is set the world is already only theirs.
   const naming = new PrNamingDesk({
     sink: opts.sink ?? connector,
+    defaultBranch: config.defaultBranch,
     prAuthorConfigured:
       config.github?.filters?.prAuthor !== undefined || config.azureDevOps?.filters?.prAuthor !== undefined,
     template: prompts.render('pr-title', {}),

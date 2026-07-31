@@ -4,6 +4,7 @@ import { Store } from '../src/store/store.js';
 import { FakeConnector } from '../src/connector/fakeConnector.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { buildStacks } from '../src/stacks/stack.js';
+import { retargetsFor } from '../src/prRetarget.js';
 import type { Plan, PlanPart, PullRequest } from '../src/types.js';
 
 function connector(): FakeConnector {
@@ -229,3 +230,49 @@ function srcFiles(dir: string): string[] {
   }
   return out.sort();
 }
+
+// ---------------------------------------------------------------------------
+// Retarget on merge — the half GitHub does for us and Azure does not
+// ---------------------------------------------------------------------------
+
+test('a rung whose parent merged is retargeted onto the parent’s own base', () => {
+  const out = retargetsFor(
+    [pr({ number: 45, branch: 'issue/182/cursor', baseBranch: 'issue/182/migrations' })],
+    [pr({ number: 44, branch: 'issue/182/migrations', baseBranch: 'main', state: 'merged' })],
+    'main',
+  );
+  assert.deepEqual(out, [{ prNumber: 45, base: 'main' }]);
+});
+
+test('a taller stack retargets onto the next rung down, not straight to the default branch', () => {
+  const out = retargetsFor(
+    [pr({ number: 46, branch: 'c', baseBranch: 'b' })],
+    [pr({ number: 45, branch: 'b', baseBranch: 'a', state: 'merged' })],
+    'main',
+  );
+  assert.deepEqual(out, [{ prNumber: 46, base: 'a' }]);
+});
+
+test('retargeting is idempotent — a rung already on the right base yields nothing', () => {
+  const out = retargetsFor(
+    [pr({ number: 45, branch: 'b', baseBranch: 'main' })],
+    [pr({ number: 44, branch: 'a', baseBranch: 'main', state: 'merged' })],
+    'main',
+  );
+  assert.deepEqual(out, []);
+});
+
+test('an abandoned parent strands its child deliberately rather than rebasing it', () => {
+  // The work beneath never landed, so retargeting would silently drop the premise
+  // this rung was built on. That is a human's call.
+  const out = retargetsFor(
+    [pr({ number: 45, branch: 'b', baseBranch: 'a' })],
+    [pr({ number: 44, branch: 'a', baseBranch: 'main', state: 'closed' })],
+    'main',
+  );
+  assert.deepEqual(out, []);
+});
+
+test('nothing recently closed means no work and no reads', () => {
+  assert.deepEqual(retargetsFor([pr({ number: 45, branch: 'b', baseBranch: 'a' })], [], 'main'), []);
+});

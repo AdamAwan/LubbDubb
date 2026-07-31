@@ -166,7 +166,7 @@ export class Harness extends EventEmitter {
       await this.deps.plans?.reconcile(world);
       // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
       // world already on convention writes nothing.
-      await this.deps.naming?.rename(world);
+      await this.deps.naming?.run(world);
       // Record what the world and the store now say happened, after the reconciler
       // so part→PR observations are fresh, and before `decide` so stage 2 can read
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after
