@@ -73,7 +73,10 @@ export function ladderFor(pr: PullRequest): { scanners: Scanner[]; gates: MergeG
 export function prCourt(pr: PullRequest): { label: string; tone: StatusTone } {
   switch (pr.attention?.status) {
     case 'you':
-      return { label: 'Your call', tone: 'bad' };
+      // `next`, not `bad`: red is the fault colour everywhere else on the floor, and
+      // "the harness is asking you a question" is not a fault. The row's stripe reads
+      // `rackGroup`, so this no longer decides severity — see `Row`.
+      return { label: 'Your call', tone: 'next' };
     case 'harness':
       return { label: 'Harness working it', tone: 'ok' };
     case 'elsewhere':

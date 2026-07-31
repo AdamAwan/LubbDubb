@@ -1,7 +1,7 @@
 import type { CSSProperties, JSX } from 'react';
 import type { Agent, QueueItem, Task } from '../../../types.js';
 import { elapsed } from '../../../components/util.js';
-import { Icon } from './Sprite.js';
+import { Icon, Lamp, LampMark } from './Sprite.js';
 import {
   bayMachineStatus,
   botState,
@@ -243,7 +243,10 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
         <Icon name={iconForOrigin(item.origin)} />
         <span>
           <span className="fx-item-ref">{item.origin}</span>
-          <span className="fx-item-why">{status.word}</span>
+          <span className="fx-item-why">
+            <Lamp tone={status.tone} />
+            {status.word}
+          </span>
         </span>
       </span>
     );
@@ -335,9 +338,11 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
                     <text className="fx-hud" x={x + BAY_W / 2} y={BAY_Y + 26} textAnchor="middle" fill="var(--accent)">
                       Free bay
                     </text>
-                    <text className="fx-mono" x={x + BAY_W / 2} y={BAY_Y + 42} textAnchor="middle">
+                    <text className="fx-bay-word" x={x + BAY_W / 2} y={BAY_Y + 42} textAnchor="middle">
                       {status.word.toLowerCase()}
                     </text>
+                    {/* Lower-left, where the game puts it. */}
+                    <LampMark x={x + 8} y={BAY_Y + BAY_H - 15} tone={status.tone} />
                     <g style={{ color: 'var(--accent)' }}>
                       <svg
                         x={x + BAY_W / 2 - 18}
@@ -409,10 +414,12 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
                   <text className="fx-mono" x={x + 58} y={BAY_Y + 62}>
                     {clip(task?.branch ?? 'no branch', 22)}
                   </text>
-                  <text className="fx-mono" x={x + 58} y={BAY_Y + 82} fill={toneColor(status.tone)}>
+                  <text className="fx-bay-word" x={x + 58} y={BAY_Y + 82} fill={toneColor(status.tone)}>
                     {status.word}
                     {state !== 'idle' && ` · ${elapsed(agent.startedAt, agent.endedAt, now)}`}
                   </text>
+                  {/* Lower-left, where the game puts it. */}
+                  <LampMark x={x + 8} y={BAY_Y + BAY_H - 15} tone={status.tone} />
                   <StatusBadge x={x + BAY_W - 24} y={BAY_Y + 8} status={status} />
                   {state === 'working' && (
                     <g fill="var(--muted)">

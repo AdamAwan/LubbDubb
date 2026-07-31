@@ -587,10 +587,38 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--grey);
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The lamp: fill and glow both `currentColor`, which is `toneColor`'s token, so
+   there is one value behind both and no second mapping to keep in step. */
+.fx-lamp {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 6px currentColor;
+}
+/* An unlit machine glows at nothing. Without this an `off` lamp haloes grey, which
+   reads as a machine doing something quietly rather than one that is not running. */
+.fx-lamp[data-tone='off'],
+.fx-lamp[data-tone='ghost'],
+.fx-lamp-mark[data-tone='off'],
+.fx-lamp-mark[data-tone='ghost'] {
+  box-shadow: none;
+  filter: none;
+}
+/* SVG has no `box-shadow`; the glow is the same statement in the medium that
+   has one, so the lit/unlit split above reads the same on both halves. */
+.fx-lamp-mark {
+  filter: drop-shadow(0 0 3px currentColor);
 }
 .fx-item.hot {
   border-style: solid;
@@ -814,6 +842,17 @@
 }
 .fx-mono.on {
   fill: var(--muted);
+}
+/* The bay's status caption, demoted now a lamp carries the state.
+   Its own class rather than `.fx-mono`, which the origin and branch lines share:
+   those are detail Alt-mode moves, not a state a lamp restates. Demoted and never
+   removed — the word is the reading that survives a colourblind operator,
+   `prefers-contrast` and a screen reader. */
+.fx-bay-word {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  opacity: 0.78;
 }
 
 /* ============================ arrangements ============================
@@ -1504,10 +1543,14 @@
   font-size: 16px;
   fill: var(--text);
 }
+/* Demoted for `.fx-bay-word`'s reason: three of five machines on a one-goal floor
+   are ghosts or unbuilt, and at full weight the eye went to the things that are
+   not happening. The lamp carries the state; this confirms it. */
 .fx-gf-word {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: 0.06em;
+  opacity: 0.78;
 }
 .fx-gf-m.ghost .fx-gf-name,
 .fx-gf-m.ghost .fx-gf-kind,

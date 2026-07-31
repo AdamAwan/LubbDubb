@@ -7,6 +7,7 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, WorldEvent } from '../web/src/types.js';
+import type { StatusTone } from '../web/src/skins/factory/vocabulary.js';
 
 // Same reason as `cockpitSkins.test.ts`: Vite compiles the cockpit's JSX with the
 // automatic runtime and `tsx` with the classic one, so the global goes in before
@@ -1502,10 +1503,61 @@ test('the rack groups on the court, and a merge-ready PR needs no arm of its own
     [5, 8],
   );
 
-  // The chip is the server's word, never re-derived.
-  assert.equal(prCourt(at(1, 'you')).tone, 'bad');
+  // The chip is the server's word, never re-derived. `next` rather than `bad`:
+  // red is the fault colour everywhere else on the floor, and a question the
+  // harness is asking you is not a fault.
+  assert.equal(prCourt(at(1, 'you')).tone, 'next');
+  assert.equal(prCourt(at(1, 'you')).label, 'Your call');
   assert.equal(prCourt(at(1, 'settled')).label, 'Settled — you said no');
   assert.equal(loadedCount([{ merged: true } as PullRequest, { state: 'closed' } as PullRequest]), 1);
+});
+
+/**
+ * A lamp is a second *renderer* of a tone, never a second source of one — so its
+ * colour is `toneColor`'s value and nothing else. A hard-coded hex here would be a
+ * bay and a silo able to disagree about what "warn" looks like, which is the exact
+ * drift `toneColor` was written to prevent.
+ *
+ * Asserted against the **tone flag** rather than a tag name, because the floor is
+ * two media: the crate is HTML and the bay and the machine are SVG, so an `<i>`
+ * dropped into a `<g>` parses as an unknown SVG element and draws nothing while a
+ * markup-shape assertion stays green. `data-tone` is the one thing both carry.
+ */
+test('a lamp takes its colour from toneColor and never restates it', () => {
+  const markup = render();
+  const lamps = markup.match(/<(?:i|rect) class="fx-lamp[^"]*"[^>]*>/g) ?? [];
+  assert.ok(lamps.length > 0, 'the floor must draw lamps');
+
+  const tones: StatusTone[] = ['ok', 'warn', 'bad', 'idle', 'off', 'ghost', 'next'];
+  for (const lamp of lamps) {
+    assert.ok(!/#[0-9a-f]{3,6}/i.test(lamp), `a lamp must carry a var() from toneColor, not a literal: ${lamp}`);
+    assert.match(lamp, /var\(--/, `a lamp must be coloured through a token: ${lamp}`);
+    const flag = /data-tone="([^"]+)"/.exec(lamp)?.[1] as StatusTone | undefined;
+    assert.ok(flag && tones.includes(flag), `a lamp must flag a tone from the vocabulary: ${lamp}`);
+    // The flag and the colour are the same reading, or the lamp is a second source.
+    assert.ok(lamp.includes(toneColor(flag)), `lamp tone ${flag} must be drawn in toneColor's value: ${lamp}`);
+  }
+  // Both media are lamped — the SVG half is the half a tag-name assertion misses.
+  assert.ok(
+    lamps.some((l) => l.startsWith('<i ')),
+    'the HTML half of the floor (the crates) must be lamped',
+  );
+  assert.ok(
+    lamps.some((l) => l.startsWith('<rect ')),
+    'the SVG half of the floor (the bays and the machines) must be lamped',
+  );
+});
+
+/**
+ * The lamp is additive. The word stays in the markup because it is the reading that
+ * survives a colourblind operator, `prefers-contrast`, and a screen reader — the
+ * lamp is decoration over it, not a replacement for it.
+ */
+test('a lamp never replaces the word beside it', () => {
+  const markup = render();
+  for (const word of ['Working', 'Awaiting an item']) {
+    assert.ok(markup.includes(word), `the demo floor should still say "${word}" in words`);
+  }
 });
 
 /**
