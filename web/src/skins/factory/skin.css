@@ -18,18 +18,24 @@
  * reaches into `.escalation-card` the two skins stop being separable.
  */
 :root[data-skin='factory'] {
-  --bg: #1c1b1a;
-  --panel: #2a2827;
-  --panel-2: #201f1e;
-  --border: #383431;
-  --text: #e8e3da;
-  --muted: #9a9288;
+  /* Cool grey-slate, sampled from the game's own UI. The accent stays exactly
+     where it is: the orange is meant to be the only warm thing in the frame, and
+     on a warm ground it was competing with the floor rather than sitting on it. */
+  --bg: #191b1c;
+  --panel: #313436;
+  --panel-2: #292c2e;
+  --border: #3d4144;
+  --text: #e9e7e1;
+  /* One step lighter than the sampled value: a cooler ground is darker in
+     perceived value, and the warm grey carried straight over landed at 4.44
+     against `--panel` — under AA, where it had been over it. */
+  --muted: #9e9e99;
   --accent: #ff9c1a;
   --blue: #5b9ec9;
   --green: #6fbf5a;
   --amber: #f2c14e;
   --red: #d9483b;
-  --grey: #6d665e;
+  --grey: #6a6d6f;
 
   /* Warm-dark restatements of Classic's cool tints — same jobs, this palette. */
   --amber-line: #5a4413;
@@ -46,7 +52,7 @@
      panel's lettering is the panel's own shadow, not ink from somewhere else. */
   --on-light: #1c1b1a;
   --on-warm: #1c1b1a;
-  --well: #171615;
+  --well: #16181a;
 
   /* Square. Nothing on a factory floor is rounded. */
   --r-sm: 0;
@@ -62,8 +68,8 @@
   --font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
 
   /* Extruded, not flat: 1px light top/left, 1px dark bottom/right. */
-  --border-hi: #403c38;
-  --border-lo: #121110;
+  --border-hi: #474b4e;
+  --border-lo: #0f1112;
 
   /* This skin's own, used by nothing shared. */
   --fx-belt: #f2c14e;
