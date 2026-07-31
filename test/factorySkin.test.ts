@@ -201,6 +201,19 @@ function renderDesk(
   }
 }
 
+/** The rack alone, for assertions about one row's markup. */
+function renderRack(prs: PullRequest[]): string {
+  return renderToStaticMarkup(
+    createElement(Inspection, {
+      prs,
+      closed: [],
+      refUrls: {},
+      ignoreLabel: 'lubbdubb-ignore',
+      onToggleExclude: () => {},
+    }),
+  );
+}
+
 /**
  * The vocabulary is stated once so the belt and the bay can't disagree about
  * what a part looks like. These are the cases where a naive prefix check gets it
@@ -1493,6 +1506,45 @@ test('the rack groups on the court, and a merge-ready PR needs no arm of its own
   assert.equal(prCourt(at(1, 'you')).tone, 'bad');
   assert.equal(prCourt(at(1, 'settled')).label, 'Settled — you said no');
   assert.equal(loadedCount([{ merged: true } as PullRequest, { state: 'closed' } as PullRequest]), 1);
+});
+
+/**
+ * The stripe answers "is this yours", and `rackGroup` is the function that answers
+ * that. Deriving it from `court.tone` instead made the severity of a row depend on
+ * the colour of a chip — so a palette change could silently un-stripe every row
+ * needing a decision. This asserts the independence directly.
+ */
+test('a row stripe survives the court chip changing colour', () => {
+  // Only `id`, `number`, `title`, `branch`, `ciStatus` and `unresolvedComments` are
+  // required on `PullRequest` — everything else is optional, so the fixture stays
+  // the size of what the assertion is actually about.
+  const pr = (over: Partial<PullRequest>): PullRequest => ({
+    id: 'pr-7',
+    number: 7,
+    title: 'A pull request',
+    branch: 'issue/7',
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    labels: [],
+    merged: false,
+    approved: true,
+    mergeable: true,
+    mergeableState: 'clean',
+    attention: { status: 'you', reasons: ['a merge is proposed'] },
+    ...over,
+  });
+
+  const markup = renderRack([pr({})]);
+  assert.match(markup, /fx-part[^"]*\byou\b/, 'a `you` row must carry the you stripe');
+
+  const stalled = renderRack([pr({ attention: { status: 'stalled', reasons: ['attempts spent'] } })]);
+  assert.match(stalled, /fx-part[^"]*\bstalled\b/, 'a `stalled` row must carry the stalled stripe');
+
+  const handled = renderRack([pr({ attention: { status: 'harness', reasons: ['an agent has it'] } })]);
+  assert.ok(
+    !/fx-part[^"]*\byou\b/.test(handled),
+    'a row the harness is working is not yours and carries no you stripe',
+  );
 });
 
 /**

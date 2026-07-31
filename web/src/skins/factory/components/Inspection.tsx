@@ -66,11 +66,11 @@ function Row({
   const court = prCourt(pr);
   const ladder = ladderFor(pr);
   const reason = rackReason(pr);
-  // The stripe is the row's own severity, and it is the only red on the row besides
-  // the chip: the ladder's states are amber, blue, green or unlit, which is what
-  // keeps red meaning "a question only you can answer" on a row with four red
-  // checks on it.
-  const tone = inHand ? '' : court.tone === 'bad' ? ' you' : ' stalled';
+  // The stripe is the row's own severity, and it is read from the group — the
+  // function that already answers "is this yours" — never from the court chip's
+  // colour. Inferring it from a tone made a palette change able to un-stripe every
+  // row needing a decision.
+  const tone = inHand ? '' : pr.attention?.status === 'stalled' ? ' stalled' : ' you';
   const isExcluded = (pr.labels ?? []).includes(ignoreLabel);
   return (
     <div className={`fx-part${inHand ? ' hand' : ''}${tone}`}>
