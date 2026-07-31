@@ -16,6 +16,7 @@ import { ciFailureNote, ciNeedsHuman, classifyCiFailures, type CiPolicy, type Ci
 import { mergeProposalRef, planProposalHold, planProposalRef, proposalHold } from '../proposals/proposals.js';
 import type { DispatchRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
+import { prCommentOrigin, prCommentsOrigin, reviewThreadNote, reviewThreadsNote } from './reviewThreads.js';
 import { resolveIssueConclusion } from '../issueConclusion.js';
 import { jobBranch } from '../jobs.js';
 import { deliveryHold } from '../delivery/delivery.js';
@@ -173,6 +174,9 @@ export class RuleDispatcher implements Dispatcher {
     // recent decision window — a note that ages out is harmless (the agent just
     // gets told again).
     const notified = notifiedOriginsByAgent(ctx.recentDecisions);
+    // The signals each branch's dispatch already carried into an agent's prompt —
+    // the half `notified` cannot see, since a dispatch is not a note.
+    const dispatchedSignals = dispatchedSignalsByBranch(ctx.recentDecisions);
     // "Now" for cooldown arithmetic — the snapshot's own timestamp, so a cycle is
     // judged against when its world was observed, not wall-clock at decision time.
     const now = ctx.world.takenAt;
@@ -358,22 +362,52 @@ export class RuleDispatcher implements Dispatcher {
           originSummary: `PR #${pr.number} on branch ${pr.branch} · ${behind ? `behind ${base}` : `conflicts with ${base}`}`,
         });
       }
-      for (const comment of pr.unresolvedComments) {
-        if (comment.handled) continue;
+      // Review feedback is **one** concern for the whole PR, never one per thread.
+      // A review is written as a unit — the same person leaving three comments in
+      // one pass, each assuming the others — so an agent handed a single thread in
+      // isolation makes a fix for comment 1 that contradicts comment 3, or does
+      // the same edit twice a cycle apart. One agent, one branch, every open
+      // thread in front of it at once.
+      //
+      // De-dup stays per *thread* (`signals` below): dispatch is per branch, but
+      // "has this agent been told about *this* comment" is per comment, or a
+      // reviewer's fourth comment is swallowed by the origin its first three
+      // already claimed.
+      const unhandled = pr.unresolvedComments.filter((c) => !c.handled);
+      if (unhandled.length > 0) {
+        const authors = [...new Set(unhandled.map((c) => c.author))];
+        const many = unhandled.length > 1;
         concerns.push({
           rule: 'pr-review-comment',
-          origin: `pr:${pr.number}:comment:${comment.id}`,
-          title: `Address review comment on PR #${pr.number}`,
-          prompt: this.templates.render('pr-review-comment', {
-            number: pr.number,
-            branch: pr.branch,
-            author: comment.author,
-            comment: comment.body,
-          }),
-          dispatchReason: `Unhandled review comment from ${comment.author} on PR #${pr.number}.`,
-          note: `New review comment from ${comment.author} on PR #${pr.number}: "${comment.body}" — address it or prepare a reply.`,
+          origin: prCommentsOrigin(pr.number),
+          title: many
+            ? `Address ${unhandled.length} review comments on PR #${pr.number}`
+            : `Address review comment on PR #${pr.number}`,
+          // Appended, never interpolated (see `reviewThreadsNote`). `author` and
+          // `comment` stay filled so an override written against the old
+          // one-comment prompt still renders something true — the full set
+          // follows it either way.
+          prompt:
+            this.templates.render('pr-review-comment', {
+              number: pr.number,
+              branch: pr.branch,
+              author: authors.join(', '),
+              comment: unhandled[0]!.body,
+            }) + reviewThreadsNote(unhandled),
+          dispatchReason: many
+            ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
+            : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,
+          // Only reached when this concern carries no fresh signals of its own,
+          // which cannot happen — kept honest rather than unreachable-by-luck.
+          note: `Unhandled review feedback on PR #${pr.number} from ${authors.join(', ')}.`,
           originTitle: pr.title,
-          originSummary: `Review comment from ${comment.author}: ${comment.body}`,
+          originSummary: many
+            ? `${unhandled.length} review threads on PR #${pr.number} from ${authors.join(', ')}`
+            : `Review comment from ${authors[0]}: ${unhandled[0]!.body}`,
+          signals: unhandled.map((c) => ({
+            ref: prCommentOrigin(pr.number, c.id),
+            note: reviewThreadNote(pr.number, c),
+          })),
         });
       }
 
@@ -381,9 +415,23 @@ export class RuleDispatcher implements Dispatcher {
         const branch = resolveBranchAgent(ctx, pr.branch);
         if (branch.kind === 'running') {
           // A running agent already owns this branch — notify it, don't duplicate.
-          // Collapse all fresh, not-yet-notified concerns into one note.
-          const fresh = concerns.filter(
-            (c) => !activeOrigins.has(c.origin) && !notified.has(`${branch.agent.id}::${c.origin}`),
+          // Collapse every fresh, not-yet-delivered signal into one note.
+          //
+          // De-dup is per *signal*, not per concern: the comment concern covers
+          // every open thread under one dispatch origin, so keying on the origin
+          // alone would let the first three comments swallow the fourth — the
+          // exact signal an operator reviewing an agent's work is sending. Three
+          // things have already delivered a signal: an active task on it (a CI or
+          // base concern *is* its own origin), the dispatch that launched this
+          // agent (its prompt lists those threads; repeating them is noise), and
+          // a note already sent.
+          const fresh = concerns.flatMap((c) =>
+            signalsOf(c).filter(
+              (s) =>
+                !activeOrigins.has(s.ref) &&
+                !dispatchedSignals.has(`${pr.branch}::${s.ref}`) &&
+                !notified.has(`${branch.agent.id}::${s.ref}`),
+            ),
           );
           if (fresh.length > 0) {
             raw.push({
@@ -391,8 +439,11 @@ export class RuleDispatcher implements Dispatcher {
               agentId: branch.agent.id,
               response:
                 `An update on the branch you're working (PR #${pr.number}):\n` +
-                fresh.map((c) => `- ${c.note}`).join('\n'),
-              originRefs: fresh.map((c) => c.origin),
+                fresh.map((s) => `- ${s.note}`).join('\n') +
+                (fresh.length > 1
+                  ? '\n\nRead them together before changing anything — they may resolve or contradict one another.'
+                  : ''),
+              originRefs: fresh.map((s) => s.ref),
               rule: 'branch-notify',
               reason: `New PR signal(s) for a branch already staffed by agent ${branch.agent.id}.`,
             } satisfies RawAction);
@@ -478,6 +529,11 @@ export class RuleDispatcher implements Dispatcher {
             originRef: top.origin,
             originTitle: top.originTitle,
             originSummary: top.originSummary,
+            // What this agent is being launched to answer. Recorded so the next
+            // pulse doesn't read the same review threads back to it as news —
+            // the dispatch origin alone can't say, since it names the branch's
+            // whole review rather than any one thread.
+            signalRefs: signalsOf(top).map((s) => s.ref),
             rule: top.rule,
             reason: top.dispatchReason,
           } satisfies RawAction,
@@ -1439,6 +1495,35 @@ interface PrConcern {
    * headroom cut; it decides position in the queue and nothing else.
    */
   urgent?: boolean;
+  /**
+   * The individual world signals this concern folds, for notify de-dup. Defaults
+   * to the concern itself ({@link signalsOf}), which is right for CI and
+   * base-update: one origin, one signal.
+   *
+   * The review-comment concern is the one that differs, and it has to. It
+   * deliberately collapses every open thread onto **one** dispatch origin so a
+   * single agent answers a whole review — but "has this agent been told about
+   * this comment" is still a per-thread question, and answering it per origin
+   * would mean a reviewer's later comments never reached the agent already on the
+   * branch. Dispatch at branch granularity, de-dup at thread granularity.
+   */
+  signals?: PrSignal[];
+}
+
+/** One world signal inside a {@link PrConcern}: what it is about, and how it reads. */
+interface PrSignal {
+  /** The world ref this signal names — the notify de-dup key. */
+  ref: string;
+  /** The line delivered to a running agent on the branch when this signal is fresh. */
+  note: string;
+}
+
+/**
+ * The signals a concern folds. A concern that names none is its own single
+ * signal, so every rule but the review-comment one is unchanged by the split.
+ */
+function signalsOf(concern: PrConcern): PrSignal[] {
+  return concern.signals ?? [{ ref: concern.origin, note: concern.note }];
 }
 
 /**
@@ -1498,6 +1583,35 @@ function notifiedOriginsByAgent(decisions: Decision[]): Set<string> {
     const origins = a.originRefs;
     if (typeof agentId !== 'string' || !Array.isArray(origins)) continue;
     for (const o of origins) if (typeof o === 'string') set.add(`${agentId}::${o}`);
+  }
+  return set;
+}
+
+/**
+ * Branch+signal pairs a dispatch has already put in front of an agent, from
+ * executed `dispatch_code_agent` decisions carrying `signalRefs`.
+ *
+ * This exists because the review-comment concern dispatches on an origin
+ * (`pr:<n>:comments`) that is *not* any one of the signals it folds, so
+ * `activeOrigins` — which sees task origins only — cannot tell that the running
+ * agent was launched with those three threads in its prompt. Without it every
+ * thread an agent was dispatched to answer would be read back to it as news on the
+ * next pulse. Keyed on the branch rather than the agent because the dispatch
+ * decision is recorded before an agent exists to key on.
+ *
+ * Best-effort over the same recent-decision window `notified` uses, and harmless
+ * in the same way: a dispatch that ages out costs one redundant note.
+ */
+function dispatchedSignalsByBranch(decisions: Decision[]): Set<string> {
+  const set = new Set<string>();
+  for (const d of decisions) {
+    if (d.outcome !== 'executed') continue;
+    const a = d.action;
+    if (a.type !== 'dispatch_code_agent') continue;
+    const branch = a.branch;
+    const refs = a.signalRefs;
+    if (typeof branch !== 'string' || !Array.isArray(refs)) continue;
+    for (const r of refs) if (typeof r === 'string') set.add(`${branch}::${r}`);
   }
   return set;
 }

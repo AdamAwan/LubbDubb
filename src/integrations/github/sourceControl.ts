@@ -22,7 +22,15 @@ import type {
   WorldSlice,
 } from '../integration.js';
 import { closedWindowStart } from '../closedWindow.js';
-import type { GhCheckRun, GhClosedPull, GhCombinedStatus, GhReview, GhReviewComment, GitHubApi } from './githubApi.js';
+import type {
+  GhCheckRun,
+  GhClosedPull,
+  GhCombinedStatus,
+  GhReview,
+  GhReviewComment,
+  GhReviewThread,
+  GitHubApi,
+} from './githubApi.js';
 import { githubRefUrl } from './refUrl.js';
 
 interface GitHubSourceControlOpts {
@@ -83,10 +91,11 @@ export class GitHubSourceControlIntegration
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [detail, reviews, comments, status, checks] = await Promise.all([
+          const [detail, reviews, comments, threads, status, checks] = await Promise.all([
             api.getPull(p.number),
             api.listPullReviews(p.number),
             api.listPullReviewComments(p.number),
+            this.reviewThreads(p.number),
             api.getCombinedStatus(p.headSha),
             api.listCheckRuns(p.headSha),
           ]);
@@ -98,7 +107,7 @@ export class GitHubSourceControlIntegration
             baseBranch: p.baseBranch,
             ciStatus: aggregateCiStatus(checks, status),
             ciChecks: listCiChecks(checks, status),
-            unresolvedComments: buildUnresolvedComments(comments, viewer),
+            unresolvedComments: buildUnresolvedComments(comments, viewer, threads),
             approved: computeApproved(reviews),
             mergeableState: normalizeMergeState(detail.mergeableState),
             merged: detail.merged,
@@ -123,6 +132,34 @@ export class GitHubSourceControlIntegration
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
       return { pullRequests: this.lastGood, closedPullRequests: this.lastGoodClosed };
+    }
+  }
+
+  /**
+   * Review-thread resolution, or an empty list when it cannot be read.
+   *
+   * The one call in the snapshot allowed to fail on its own. It is the sole
+   * GraphQL read here (resolution has no REST form), so it can be unavailable for
+   * reasons the REST reads are not — a token without GraphQL access, an Enterprise
+   * Server that answers the schema differently, a proxy that passes `/repos` and
+   * not `/graphql`. Letting that throw would take the whole snapshot down to
+   * `lastGood` and freeze the world over a field that only *refines* a verdict.
+   *
+   * Absent resolution degrades to the reply arm of `buildUnresolvedComments` —
+   * i.e. exactly the behaviour before this existed — which fails toward a thread
+   * staying *open*, the safe direction: an operator sees an agent dispatched for a
+   * comment they had resolved, rather than their review being silently dropped.
+   */
+  private async reviewThreads(number: number): Promise<GhReviewThread[]> {
+    try {
+      return await this.opts.api.listPullReviewThreads(number);
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} could not read review-thread resolution for PR #${number}: ${(err as Error).message}`,
+        detail: 'Falling back to reply-based handling — a resolved thread may still be treated as open.',
+      });
+      return [];
     }
   }
 
@@ -296,24 +333,59 @@ export function computeApproved(reviews: GhReview[]): boolean {
 
 /**
  * Group review comments into threads (by `in_reply_to_id`) and surface one
- * {@link PrComment} per thread, keyed on the thread root. A thread is `handled`
- * once the authenticated bot authored its latest comment — the network-native
- * analogue of the fake's `markCommentHandled`, so the deterministic loop settles
- * one poll after a reply is posted.
+ * {@link PrComment} per thread, keyed on the thread root.
+ *
+ * Two arms, in this order — the same shape as the Azure provider's, which is the
+ * point: both trackers have a real resolution verdict, so both read it.
+ *
+ * 1. **The reviewer resolved the thread.** Their own answer to "has this been
+ *    dealt with", and the only authoritative one. It costs a GraphQL read
+ *    (`listPullReviewThreads`) because GitHub exposes `isResolved` nowhere in
+ *    REST — which is the entire reason this function ever had to infer anything.
+ *    `threads` is empty when that read failed or when a caller does not supply
+ *    one, and absence means "no verdict", never "unresolved".
+ * 2. **The harness posted the newest reply.** The fallback for a thread nobody
+ *    resolved, and the network-native analogue of the fake's `markCommentHandled`,
+ *    so the deterministic loop settles one poll after a reply goes out.
+ *
+ * **Arm 2 is positional rather than an identity test, and has to be.**
+ * `viewerLogin` is whoever holds `GITHUB_TOKEN`, which on a single-operator
+ * deployment is the operator themselves. Comparing the *root's* author against it
+ * marked every review comment the operator left as already handled the instant
+ * they wrote it, and rule 2b never saw it: the harness silently ignored exactly
+ * the reviews a human took the time to write, which is the one signal it must
+ * never drop. No author comparison fixes that — the two identities are the same
+ * string. The position test needs none: the harness only ever posts *replies*
+ * under a root (`createPullReviewReply`; a `commentId: null` reply is an issue
+ * comment, which this list never contains), so "the newest reply is ours" holds
+ * whether the token belongs to a dedicated bot account or to the operator.
+ *
+ * Both arms fail toward a thread staying **open**, which is the safe direction: an
+ * agent dispatched for a comment already dealt with is visible and cheap, where a
+ * dropped review is neither.
  */
-export function buildUnresolvedComments(comments: GhReviewComment[], viewerLogin: string): PrComment[] {
+export function buildUnresolvedComments(
+  comments: GhReviewComment[],
+  viewerLogin: string,
+  threads: GhReviewThread[] = [],
+): PrComment[] {
+  const resolved = new Set(threads.filter((t) => t.isResolved).map((t) => t.rootCommentId));
   const roots: GhReviewComment[] = [];
-  const latestByRoot = new Map<number, GhReviewComment>();
+  const latestReplyByRoot = new Map<number, GhReviewComment>();
   for (const c of comments) {
-    const rootId = c.inReplyToId ?? c.id;
-    if (c.inReplyToId === null) roots.push(c);
+    if (c.inReplyToId === null) {
+      roots.push(c);
+      continue;
+    }
     // Comments arrive in creation order, so the last write per root is the latest.
-    latestByRoot.set(rootId, c);
+    latestReplyByRoot.set(c.inReplyToId, c);
   }
   return roots.map((root) => ({
     id: String(root.id),
     author: root.authorLogin,
     body: root.body,
-    handled: (latestByRoot.get(root.id) ?? root).authorLogin === viewerLogin,
+    // Resolution first; failing that, a thread with no reply of ours is
+    // unanswered, whoever wrote it.
+    handled: resolved.has(root.id) || latestReplyByRoot.get(root.id)?.authorLogin === viewerLogin,
   }));
 }

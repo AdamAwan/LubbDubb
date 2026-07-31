@@ -86,7 +86,8 @@ cockpit's link map.
 | `pr:<n>`                     | A pull request (world events, link map)   | —                          |
 | `pr:<n>:ci`                  | A PR's failing-CI concern                 | the PR's own `branch`      |
 | `pr:<n>:mergeable`           | A PR's base-update / conflict concern     | the PR's own `branch`      |
-| `pr:<n>:comment:<commentId>` | One unhandled review comment              | the PR's own `branch`      |
+| `pr:<n>:comments`            | A PR's unhandled review threads, together | the PR's own `branch`      |
+| `pr:<n>:comment:<commentId>` | One review thread (a signal, not a dispatch origin) | the PR's own `branch` |
 | `issue:<n>`                  | An issue, and its plan row's `origin_ref` | `issue/<n>`                |
 | `issue:<n>:plan`             | A planning agent for that issue           | `plan/issue/<n>`           |
 | `issue:<n>:part:<slug>`      | One part of a decomposed issue            | `issue/<n>/<slug>`         |

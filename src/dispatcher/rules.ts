@@ -40,9 +40,9 @@ export const DISPATCH_RULES = {
   },
   'pr-review-comment': {
     number: '2b',
-    name: 'Unhandled review comment',
+    name: 'Unhandled review comments',
     description:
-      'An unhandled reviewer comment gets a code agent to either fix the code or draft a reply defending the approach — review feedback must never silently rot.',
+      'Every unresolved review thread on a PR goes to one code agent together, to either fix the code or draft a reply defending the approach — review feedback must never silently rot. All of them at once, not one per cycle: comments from a single review pass are related, so answering them in isolation produces duplicate or contradictory fixes.',
   },
   'branch-notify': {
     number: '1–2b',

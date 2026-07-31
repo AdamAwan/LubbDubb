@@ -304,11 +304,47 @@ its own warrant a code agent, in urgency order:
 
 1. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `inheritedCiFailure` returns null.
 2. **Base** (`pr:<n>:mergeable`) — when `needsBaseUpdate(pr)`. The base is `pr.baseBranch ?? config.defaultBranch`.
-3. **Comments** (`pr:<n>:comment:<id>`) — one per unhandled comment.
+3. **Comments** (`pr:<n>:comments`) — **one concern for every unhandled thread on the PR**, not one per
+   thread.
 
 Then, by the branch's agent state: notify a running agent, hold for a busy one, or make the most
 urgent concern a dispatch candidate. Candidates from all PRs are ranked together — concern class
 first (CI > base > comment), then PR number — before the headroom cut.
+
+### A review is answered as a whole
+
+A review is written as a unit: the same person leaves three comments in one pass, each assuming the
+others. One concern per thread meant one agent per thread, a cycle apart — so a fix for comment 1
+landed without comment 3 in view, and the two contradicted each other or made the same edit twice.
+The comment concern therefore folds **every** unhandled thread on the PR: one origin, one attempt cap,
+one agent, with all of the threads in its prompt (`reviewThreadsNote`, `src/dispatcher/reviewThreads.ts`).
+
+Two things fall out, and both are load-bearing:
+
+- **The threads are appended to the rendered prompt, never interpolated.** `pr-review-comment` is
+  operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so an override
+  written against the older one-comment prompt declares no token for a thread list — interpolating
+  would hand exactly the deployments that customised most a single comment out of five, silently.
+  `{author}` and `{comment}` stay declared and filled (with the joined author list and the first
+  thread's body) so such an override still renders something true. Same rule as `ciFailureNote`.
+- **De-dup stays per thread, because dispatch granularity and notification granularity are different
+  questions.** The dispatch origin `pr:<n>:comments` names the whole review; `pr:<n>:comment:<id>`
+  names one thread and is what `respond_to_agent` de-dup keys on. Keyed on the origin alone, a
+  reviewer's fourth comment would be swallowed by the origin the first three already claimed — the
+  signal an operator sends while reviewing an agent's work as it goes. `PrConcern.signals` carries the
+  thread refs; `dispatch_code_agent.signalRefs` records the ones a dispatch already put in an agent's
+  prompt, since `activeOrigins` sees task origins only and cannot tell that the running agent was
+  launched with those threads (`dispatchedSignalsByBranch`).
+
+The thread ref is also the ref a refused `reply_draft` proposal is filed under, so `rejectionGuidance`
+takes the **list** of refs a dispatch names — its origin plus its signals — and matches each whole.
+That is not a widening to the world item, which must never happen there: matching the origin alone
+would have silently stopped every operator refusal reaching an agent.
+
+What makes a thread stop being unhandled is the provider's business, and both providers read the
+tracker's real resolution verdict first — see [15](15-integrations.md). Resolving a thread in the
+GitHub or Azure UI is therefore the ordinary way to tell the harness a comment is dealt with; the
+harness's own reply is the fallback for a thread nobody resolved.
 
 Independently of all that, rule 3 evaluates merge-readiness (see [05](05-dispatcher.md)) and emits
 `merge_pr`, which claims no headroom and goes through the executor's auto-send gate.

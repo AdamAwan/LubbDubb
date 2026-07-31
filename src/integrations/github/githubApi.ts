@@ -34,6 +34,22 @@ export interface GitHubApi {
   getPull(number: number): Promise<GhPullDetail>;
   listPullReviews(number: number): Promise<GhReview[]>;
   listPullReviewComments(number: number): Promise<GhReviewComment[]>;
+  /**
+   * Whether each review thread is **resolved** — the reviewer's own verdict on
+   * whether their comment has been dealt with, and the only authoritative answer
+   * to that question.
+   *
+   * Separate from {@link listPullReviewComments} because GitHub splits it that
+   * way, not because we wanted two calls: resolution exists **only in GraphQL**
+   * (`PullRequestReviewThread.isResolved`). The REST comments endpoint the other
+   * method wraps returns no resolution state at all, which is the whole reason
+   * `handled` was ever inferred from authorship.
+   *
+   * Threads are keyed by their root comment's `databaseId`, which is the same id
+   * the REST endpoint returns — that shared key is what lets the two reads be
+   * joined without a second notion of thread identity.
+   */
+  listPullReviewThreads(number: number): Promise<GhReviewThread[]>;
   /** Combined commit status for a head SHA (the legacy statuses API). */
   getCombinedStatus(sha: string): Promise<GhCombinedStatus>;
   /** Check-runs for a head SHA (the Checks API). */
@@ -124,6 +140,17 @@ export interface GhReviewComment {
   body: string;
   /** in_reply_to_id — null for a thread root, the root's id for a reply. */
   inReplyToId: number | null;
+}
+
+/**
+ * A review thread's resolution state, joined to {@link GhReviewComment} on the
+ * root comment's id. Only what REST cannot answer — the comments themselves stay
+ * on the REST read, so a GraphQL failure costs the verdict and not the thread.
+ */
+export interface GhReviewThread {
+  /** `databaseId` of the thread's first comment — the same id REST calls `id`. */
+  rootCommentId: number;
+  isResolved: boolean;
 }
 
 export interface GhCombinedStatus {
