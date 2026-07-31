@@ -18,18 +18,24 @@
  * reaches into `.escalation-card` the two skins stop being separable.
  */
 :root[data-skin='factory'] {
-  --bg: #1c1b1a;
-  --panel: #2a2827;
-  --panel-2: #201f1e;
-  --border: #383431;
-  --text: #e8e3da;
-  --muted: #9a9288;
+  /* Cool grey-slate, sampled from the game's own UI. The accent stays exactly
+     where it is: the orange is meant to be the only warm thing in the frame, and
+     on a warm ground it was competing with the floor rather than sitting on it. */
+  --bg: #191b1c;
+  --panel: #313436;
+  --panel-2: #292c2e;
+  --border: #3d4144;
+  --text: #e9e7e1;
+  /* One step lighter than the sampled value: a cooler ground is darker in
+     perceived value, and the warm grey carried straight over landed at 4.44
+     against `--panel` — under AA, where it had been over it. */
+  --muted: #9e9e99;
   --accent: #ff9c1a;
   --blue: #5b9ec9;
   --green: #6fbf5a;
   --amber: #f2c14e;
   --red: #d9483b;
-  --grey: #6d665e;
+  --grey: #6a6d6f;
 
   /* Warm-dark restatements of Classic's cool tints — same jobs, this palette. */
   --amber-line: #5a4413;
@@ -46,7 +52,7 @@
      panel's lettering is the panel's own shadow, not ink from somewhere else. */
   --on-light: #1c1b1a;
   --on-warm: #1c1b1a;
-  --well: #171615;
+  --well: #16181a;
 
   /* Square. Nothing on a factory floor is rounded. */
   --r-sm: 0;
@@ -62,11 +68,14 @@
   --font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
 
   /* Extruded, not flat: 1px light top/left, 1px dark bottom/right. */
-  --border-hi: #403c38;
-  --border-lo: #121110;
+  --border-hi: #474b4e;
+  --border-lo: #0f1112;
 
   /* This skin's own, used by nothing shared. */
   --fx-belt: #f2c14e;
+  /* The game's speed hierarchy, swapped in per tier by `.fx-belt.red` / `.blue`. */
+  --fx-belt-red: #d0523f;
+  --fx-belt-blue: #4f8bc9;
   --fx-belt-dark: #3b3530;
   --fx-ghost: #7fc8e8;
 }
@@ -522,6 +531,26 @@
 .fx-belt.stopped::before {
   animation-play-state: paused;
 }
+/* The other two belt tiers. One token drives the chevrons (see the mask note
+   above), so tiering is a token swap and no belt markup changes. */
+.fx-belt.red {
+  --fx-belt: var(--fx-belt-red);
+}
+.fx-belt.blue {
+  --fx-belt: var(--fx-belt-blue);
+}
+/* An empty belt is still and dark, and takes a rail's worth of height rather than a
+   belt's. The floor should be small when the factory is idle — a full-width lit belt
+   carrying nothing is the loudest object on screen saying the least.
+   `clear` is not `stopped`: a paused belt carrying items keeps its full height, and
+   the two classes can be on at once. */
+.fx-belt.clear {
+  height: 22px;
+}
+.fx-belt.clear::before {
+  animation-play-state: paused;
+  opacity: 0.1;
+}
 
 /* Two runs, and the gap between them is the gate's.
    The boarding prefix keeps the crate pitch (128 + 12); everything behind the
@@ -581,10 +610,38 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--grey);
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The lamp: fill and glow both `currentColor`, which is `toneColor`'s token, so
+   there is one value behind both and no second mapping to keep in step. */
+.fx-lamp {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 6px currentColor;
+}
+/* An unlit machine glows at nothing. Without this an `off` lamp haloes grey, which
+   reads as a machine doing something quietly rather than one that is not running. */
+.fx-lamp[data-tone='off'],
+.fx-lamp[data-tone='ghost'],
+.fx-lamp-mark[data-tone='off'],
+.fx-lamp-mark[data-tone='ghost'] {
+  box-shadow: none;
+  filter: none;
+}
+/* SVG has no `box-shadow`; the glow is the same statement in the medium that
+   has one, so the lit/unlit split above reads the same on both halves. */
+.fx-lamp-mark {
+  filter: drop-shadow(0 0 3px currentColor);
 }
 .fx-item.hot {
   border-style: solid;
@@ -808,6 +865,17 @@
 }
 .fx-mono.on {
   fill: var(--muted);
+}
+/* The bay's status caption, demoted now a lamp carries the state.
+   Its own class rather than `.fx-mono`, which the origin and branch lines share:
+   those are detail Alt-mode moves, not a state a lamp restates. Demoted and never
+   removed — the word is the reading that survives a colourblind operator,
+   `prefers-contrast` and a screen reader. */
+.fx-bay-word {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  opacity: 0.78;
 }
 
 /* ============================ arrangements ============================
@@ -1110,10 +1178,24 @@
 .fx-part .fx-job {
   margin: 0;
 }
+/* The glyph sits on the sentence's baseline and never pushes it: the cell is a
+   fixed 34ch and the text is what may truncate, not the icon. The ellipsis moved
+   onto `.fx-part-said` with it — `text-overflow` has nothing to act on once the
+   cell is a flex row, so leaving it here would cut the sentence off square. */
 .fx-part-why {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--grey);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fx-part-why > .fx-ic {
+  flex: none;
+  opacity: 0.8;
+}
+.fx-part-said {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1498,10 +1580,14 @@
   font-size: 16px;
   fill: var(--text);
 }
+/* Demoted for `.fx-bay-word`'s reason: three of five machines on a one-goal floor
+   are ghosts or unbuilt, and at full weight the eye went to the things that are
+   not happening. The lamp carries the state; this confirms it. */
 .fx-gf-word {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: 0.06em;
+  opacity: 0.78;
 }
 .fx-gf-m.ghost .fx-gf-name,
 .fx-gf-m.ghost .fx-gf-kind,

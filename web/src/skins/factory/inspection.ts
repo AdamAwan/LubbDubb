@@ -1,6 +1,7 @@
 import type { PullRequest } from '../../types.js';
 import { scannersFor, type Scanner } from './scanners.js';
 import type { StatusTone } from './vocabulary.js';
+import type { IconName } from './components/Sprite.js';
 
 /**
  * Open pull requests as parts on an inspection rack.
@@ -73,7 +74,10 @@ export function ladderFor(pr: PullRequest): { scanners: Scanner[]; gates: MergeG
 export function prCourt(pr: PullRequest): { label: string; tone: StatusTone } {
   switch (pr.attention?.status) {
     case 'you':
-      return { label: 'Your call', tone: 'bad' };
+      // `next`, not `bad`: red is the fault colour everywhere else on the floor, and
+      // "the harness is asking you a question" is not a fault. The row's stripe reads
+      // `rackGroup`, so this no longer decides severity — see `Row`.
+      return { label: 'Your call', tone: 'next' };
     case 'harness':
       return { label: 'Harness working it', tone: 'ok' };
     case 'elsewhere':
@@ -149,4 +153,26 @@ export function rack(prs: PullRequest[]): { yours: PullRequest[]; inHand: PullRe
 /** Merges inside the retained closed-PR window — all that survives of the Launches log. */
 export function loadedCount(closed: PullRequest[]): number {
   return closed.filter((pr) => pr.state === 'merged' || pr.merged).length;
+}
+
+/**
+ * The game's status glyph for a reason the server wrote.
+ *
+ * Matched on the reason text, which is the only structure there is — `attention`
+ * ships prose, and re-deriving the condition from the PR here would be a second
+ * opinion sitting nowhere near the verdict that formed it.
+ *
+ * An unrecognised reason returns null and the cell draws its sentence alone. A
+ * fallback glyph would put a confident picture on a condition nobody classified,
+ * which is worse than no picture — the same rule `prState` follows in never
+ * inventing `closed`.
+ */
+export function conditionGlyph(reason: string): IconName | null {
+  const r = reason.toLowerCase();
+  if (r.includes('ci ') || r.includes('check')) return 'alert';
+  if (r.includes('comment')) return 'signal';
+  if (r.includes('behind') || r.includes('conflict')) return 'belt';
+  if (r.includes('propos') || r.includes('approv')) return 'blueprint';
+  if (r.includes('agent')) return 'bot';
+  return null;
 }

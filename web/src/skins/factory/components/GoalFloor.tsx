@@ -12,6 +12,7 @@ import {
   type Machine,
 } from '../goalFloor.js';
 import { clip, iconForStage, patchStatus, toneColor } from '../vocabulary.js';
+import { LampMark } from './Sprite.js';
 
 /**
  * The Goal Floor: one ticket's whole production line, from the patch it is mined
@@ -511,7 +512,9 @@ function FloorPlan({
                   </text>
                 </>
               )}
-              <text className="fx-gf-word" x={mx + 10} y={my + mh - 12} fill={tone}>
+              {/* Lower-left, where the game puts it, with the word beside it. */}
+              <LampMark x={mx + 10} y={my + mh - 22} tone={m.status.tone} />
+              <text className="fx-gf-word" x={mx + 22} y={my + mh - 15} fill={tone}>
                 {m.status.word.toUpperCase()}
               </text>
               {m.prNumber !== null && (

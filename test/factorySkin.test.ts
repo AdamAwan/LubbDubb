@@ -7,6 +7,7 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, WorldEvent } from '../web/src/types.js';
+import type { StatusTone } from '../web/src/skins/factory/vocabulary.js';
 
 // Same reason as `cockpitSkins.test.ts`: Vite compiles the cockpit's JSX with the
 // automatic runtime and `tsx` with the classic one, so the global goes in before
@@ -44,11 +45,11 @@ const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress, re
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
 const { BlueprintDesk, FaultLog, FindingsDesk } = await import('../web/src/skins/factory/components/Desks.js');
-const { ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await import(
+const { conditionGlyph, ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await import(
   '../web/src/skins/factory/inspection.js'
 );
 const { Inspection } = await import('../web/src/skins/factory/components/Inspection.js');
-const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
+const { axisScale, beltTier, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
 
 const INERT = new Proxy({} as CockpitActions, { get: () => () => Promise.resolve() });
@@ -199,6 +200,51 @@ function renderDesk(
   } finally {
     Date.now = realNow;
   }
+}
+
+/**
+ * How many tracks one rack row draws — the direct children of the `.fx-part` grid.
+ *
+ * A depth-aware walk rather than a regex, because the whole question is whether
+ * something added inside a cell became a cell: a counter that could not tell the
+ * two apart would answer the assertion it exists to make.
+ */
+function rowTrackCount(markup: string): number {
+  // `[ "]` because `fx-part` is a prefix of the `.fx-parts` wrapper around it, and
+  // counting that one's children answers a different question with a plausible number.
+  const open = markup.search(/<div class="fx-part[ "]/);
+  assert.ok(open >= 0, 'expected a rack row in the markup');
+  const VOID = new Set(['area', 'base', 'br', 'col', 'hr', 'img', 'input', 'link', 'meta', 'source', 'wbr']);
+  const tag = /<(\/?)([a-zA-Z][\w-]*)(?:\s[^>]*?)?(\/?)>/g;
+  tag.lastIndex = markup.indexOf('>', open) + 1;
+  let depth = 0;
+  let tracks = 0;
+  for (let m = tag.exec(markup); m; m = tag.exec(markup)) {
+    const close = m[1] ?? '';
+    const name = (m[2] ?? '').toLowerCase();
+    const selfClose = m[3] ?? '';
+    if (close) {
+      if (depth === 0) break; // the row's own closing tag
+      depth -= 1;
+      continue;
+    }
+    if (depth === 0) tracks += 1;
+    if (!selfClose && !VOID.has(name)) depth += 1;
+  }
+  return tracks;
+}
+
+/** The rack alone, for assertions about one row's markup. */
+function renderRack(prs: PullRequest[]): string {
+  return renderToStaticMarkup(
+    createElement(Inspection, {
+      prs,
+      closed: [],
+      refUrls: {},
+      ignoreLabel: 'lubbdubb-ignore',
+      onToggleExclude: () => {},
+    }),
+  );
 }
 
 /**
@@ -529,11 +575,17 @@ test('the findings gauge counts open findings, and only those', () => {
   assert.equal(gaugeCount(mixed, 'Findings'), '1', 'only an open finding is unactioned');
 
   // Overlaps present, no findings: the gauge is muted, and the desk still lists
-  // the overlap — it is the *count* they stay out of, not the panel.
+  // the overlap — it is the *count* they stay out of, not the panel. An unlit
+  // gauge draws no number at all, so "not counted" is read off the `quiet` class
+  // rather than off a zero on its face.
   const overlapsOnly = render((s) => {
     s.findings = [];
   });
-  assert.equal(gaugeCount(overlapsOnly, 'Findings'), '0', 'an overlap must not light the gauge');
+  assert.match(
+    overlapsOnly,
+    /class="fx-read fx-act quiet"[^>]*>(?:(?!<\/button>).)*?Findings/s,
+    'an overlap must not light the gauge',
+  );
   const desk = renderDesk(FindingsDesk, (s) => {
     s.findings = [];
   });
@@ -1541,10 +1593,208 @@ test('the rack groups on the court, and a merge-ready PR needs no arm of its own
     [5, 8],
   );
 
-  // The chip is the server's word, never re-derived.
-  assert.equal(prCourt(at(1, 'you')).tone, 'bad');
+  // The chip is the server's word, never re-derived. `next` rather than `bad`:
+  // red is the fault colour everywhere else on the floor, and a question the
+  // harness is asking you is not a fault.
+  assert.equal(prCourt(at(1, 'you')).tone, 'next');
+  assert.equal(prCourt(at(1, 'you')).label, 'Your call');
   assert.equal(prCourt(at(1, 'settled')).label, 'Settled — you said no');
   assert.equal(loadedCount([{ merged: true } as PullRequest, { state: 'closed' } as PullRequest]), 1);
+});
+
+/**
+ * The glyph is chosen from the reason the server already wrote, and an unrecognised
+ * reason gets **no** glyph rather than a default one. A fallback icon would put a
+ * confident wrong picture on a condition nobody classified — the row's own sentence
+ * is the honest answer there.
+ */
+test('a condition glyph is recognised or absent, never guessed', () => {
+  assert.equal(conditionGlyph('CI failing on base PR #7'), 'alert');
+  assert.equal(conditionGlyph('3 unresolved comments'), 'signal');
+  assert.equal(conditionGlyph('behind base by 18 commits'), 'belt');
+  assert.equal(conditionGlyph('a merge is proposed'), 'blueprint');
+  assert.equal(conditionGlyph('something nobody has classified'), null);
+  assert.equal(conditionGlyph(''), null);
+});
+
+/**
+ * Iconising the why cell must not add or remove a grid cell — the row's tracks are
+ * fixed and every column past the title lines up down the rack, which is the whole
+ * reason the strip can be read downward.
+ */
+test('a glyph does not change the row grid', () => {
+  const pr = (over: Partial<PullRequest>): PullRequest => ({
+    id: 'pr-7',
+    number: 7,
+    title: 'A pull request',
+    branch: 'issue/7',
+    ciStatus: 'failing',
+    unresolvedComments: [],
+    labels: [],
+    merged: false,
+    approved: false,
+    mergeable: true,
+    mergeableState: 'clean',
+    attention: { status: 'harness', reasons: ['CI failing on base PR #7'] },
+    ...over,
+  });
+
+  const withGlyph = renderRack([pr({})]);
+  assert.match(withGlyph, /fx-part-why/, 'the why cell must still exist');
+  assert.match(withGlyph, /fx-part-why[^>]*>\s*<svg/, 'the why cell leads with its glyph');
+
+  // The unclassified row draws the same cells, one of them simply without a glyph —
+  // the cap is the 34ch track, never a count, so nothing about the grid moves.
+  const noGlyph = renderRack([pr({ attention: { status: 'harness', reasons: ['nobody has classified this'] } })]);
+  assert.match(noGlyph, /fx-part-why/, 'an unclassified row keeps its why cell');
+  assert.ok(!/fx-part-why[^>]*>\s*<svg/.test(noGlyph), 'and leads with its sentence instead');
+
+  // `.fx-part` is a grid, so its *direct children* are its tracks. Counted with a
+  // depth-aware walk rather than a regex: a glyph nested inside the why cell cannot
+  // be a track, and this is what says so rather than assuming it.
+  assert.equal(rowTrackCount(withGlyph), 7, 'stripe, ladder, ref, title, why, court, toggle');
+  assert.equal(rowTrackCount(noGlyph), rowTrackCount(withGlyph), 'a glyph adds no cell to the row');
+});
+
+/**
+ * The tiers are the game's speed hierarchy read as queue pressure, and the
+ * thresholds are against the cap rather than absolute — four items behind a cap of
+ * two is congestion, behind a cap of eight it is not.
+ */
+test('the belt tiers up as the queue outruns the cap', () => {
+  assert.equal(beltTier(0, 4), 'yellow');
+  assert.equal(beltTier(4, 4), 'yellow', 'a queue the fleet could take in one pulse is not backed up');
+  assert.equal(beltTier(5, 4), 'red');
+  assert.equal(beltTier(8, 4), 'red');
+  assert.equal(beltTier(9, 4), 'blue');
+  assert.equal(beltTier(3, 1), 'blue', 'a small cap saturates sooner');
+});
+
+/**
+ * An empty belt is still and dark. `stopped` and `clear` are different conditions
+ * and must stay separable: a paused belt with items on it is full height and
+ * stopped, which is what the existing pulse assertion protects.
+ */
+test('an empty belt collapses and a stopped one does not', () => {
+  // `UpcomingPlan` is `{ cycleId, at, items }` — `at` is when the ranked world was
+  // observed and is required.
+  const empty = render((s) => (s.upcoming = { cycleId: 'c', at: NOW, items: [] }));
+  assert.match(empty, /fx-belt[^"]*\bclear\b/, 'an empty belt must collapse');
+
+  const pausedWithWork = render((s) => {
+    s.control.paused = true;
+  });
+  assert.match(pausedWithWork, /fx-belt[^"]*\bstopped\b/, 'a paused belt is still stopped');
+  assert.ok(
+    !/fx-belt[^"]*\bclear\b/.test(pausedWithWork),
+    'a paused belt carrying items is stopped and full height, never clear',
+  );
+});
+
+/**
+ * A zero gauge keeps its label and its way in — `every desk has a way in from the
+ * status bar` is asserted elsewhere and hiding a quiet gauge would break it — but it
+ * stops carrying a `0`. Four labels each with a zero on them is the band this
+ * removes; four labels alone is not.
+ */
+test('a quiet gauge drops its count, not its way in', () => {
+  const markup = render((s) => {
+    s.escalations = [];
+    s.findings = [];
+  });
+  const quiet = markup.match(/<button[^>]*fx-act quiet[^>]*>.*?<\/button>/gs) ?? [];
+  assert.ok(quiet.length > 0, 'a demo state with nothing outstanding should have quiet gauges');
+  for (const gauge of quiet) {
+    assert.ok(!/>0</.test(gauge), `a quiet gauge should not draw its zero: ${gauge}`);
+    assert.match(gauge, /fx-lbl/, `a quiet gauge keeps its label: ${gauge}`);
+  }
+});
+
+/**
+ * A lamp is a second *renderer* of a tone, never a second source of one — so its
+ * colour is `toneColor`'s value and nothing else. A hard-coded hex here would be a
+ * bay and a silo able to disagree about what "warn" looks like, which is the exact
+ * drift `toneColor` was written to prevent.
+ *
+ * Asserted against the **tone flag** rather than a tag name, because the floor is
+ * two media: the crate is HTML and the bay and the machine are SVG, so an `<i>`
+ * dropped into a `<g>` parses as an unknown SVG element and draws nothing while a
+ * markup-shape assertion stays green. `data-tone` is the one thing both carry.
+ */
+test('a lamp takes its colour from toneColor and never restates it', () => {
+  const markup = render();
+  const lamps = markup.match(/<(?:i|rect) class="fx-lamp[^"]*"[^>]*>/g) ?? [];
+  assert.ok(lamps.length > 0, 'the floor must draw lamps');
+
+  const tones: StatusTone[] = ['ok', 'warn', 'bad', 'idle', 'off', 'ghost', 'next'];
+  for (const lamp of lamps) {
+    assert.ok(!/#[0-9a-f]{3,6}/i.test(lamp), `a lamp must carry a var() from toneColor, not a literal: ${lamp}`);
+    assert.match(lamp, /var\(--/, `a lamp must be coloured through a token: ${lamp}`);
+    const flag = /data-tone="([^"]+)"/.exec(lamp)?.[1] as StatusTone | undefined;
+    assert.ok(flag && tones.includes(flag), `a lamp must flag a tone from the vocabulary: ${lamp}`);
+    // The flag and the colour are the same reading, or the lamp is a second source.
+    assert.ok(lamp.includes(toneColor(flag)), `lamp tone ${flag} must be drawn in toneColor's value: ${lamp}`);
+  }
+  // Both media are lamped — the SVG half is the half a tag-name assertion misses.
+  assert.ok(
+    lamps.some((l) => l.startsWith('<i ')),
+    'the HTML half of the floor (the crates) must be lamped',
+  );
+  assert.ok(
+    lamps.some((l) => l.startsWith('<rect ')),
+    'the SVG half of the floor (the bays and the machines) must be lamped',
+  );
+});
+
+/**
+ * The lamp is additive. The word stays in the markup because it is the reading that
+ * survives a colourblind operator, `prefers-contrast`, and a screen reader — the
+ * lamp is decoration over it, not a replacement for it.
+ */
+test('a lamp never replaces the word beside it', () => {
+  const markup = render();
+  for (const word of ['Working', 'Awaiting an item']) {
+    assert.ok(markup.includes(word), `the demo floor should still say "${word}" in words`);
+  }
+});
+
+/**
+ * The stripe answers "is this yours", and `rackGroup` is the function that answers
+ * that. Deriving it from `court.tone` instead made the severity of a row depend on
+ * the colour of a chip — so a palette change could silently un-stripe every row
+ * needing a decision. This asserts the independence directly.
+ */
+test('a row stripe survives the court chip changing colour', () => {
+  // Only `id`, `number`, `title`, `branch`, `ciStatus` and `unresolvedComments` are
+  // required on `PullRequest` — everything else is optional, so the fixture stays
+  // the size of what the assertion is actually about.
+  const pr = (over: Partial<PullRequest>): PullRequest => ({
+    id: 'pr-7',
+    number: 7,
+    title: 'A pull request',
+    branch: 'issue/7',
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    labels: [],
+    merged: false,
+    approved: true,
+    mergeable: true,
+    mergeableState: 'clean',
+    attention: { status: 'you', reasons: ['a merge is proposed'] },
+    ...over,
+  });
+
+  const markup = renderRack([pr({})]);
+  assert.match(markup, /fx-part[^"]*\byou\b/, 'a `you` row must carry the you stripe');
+
+  const stalled = renderRack([pr({ attention: { status: 'stalled', reasons: ['attempts spent'] } })]);
+  assert.match(stalled, /fx-part[^"]*\bstalled\b/, 'a `stalled` row must carry the stalled stripe');
+
+  const handled = renderRack([pr({ attention: { status: 'harness', reasons: ['an agent has it'] } })]);
+  assert.ok(
+    !/fx-part[^"]*\byou\b/.test(handled),
+    'a row the harness is working is not yours and carries no you stripe',
+  );
 });
 
 /**

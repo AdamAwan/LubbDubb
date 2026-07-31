@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { toneColor, type StatusTone } from '../vocabulary.js';
 
 /**
  * The skin's icon set, drawn here rather than imported.
@@ -43,6 +44,48 @@ export function Icon({ name, className = '', title }: { name: IconName; classNam
       {title && <title>{title}</title>}
       <use href={`#fx-i-${name}`} />
     </svg>
+  );
+}
+
+/**
+ * An entity's status lamp — the indicator the game puts on the lower-left of every
+ * machine.
+ *
+ * Two of them because the floor is two media: the belt's crates are HTML and the
+ * bays and Goal Floor machines are SVG, where an `<i>` parses as an unknown
+ * element and draws nothing. What is *not* duplicated is the mapping — both read
+ * `toneColor`, so the fill and the caption beside it cannot drift, which is the
+ * whole reason a lamp is a second renderer of a tone rather than a second source.
+ *
+ * `data-tone` is on both so the flag is one thing to assert whichever medium drew
+ * it. `aria-hidden` because the word carries the accessible reading; a lamp
+ * announcing "green" would say the same thing twice and less clearly.
+ */
+export function Lamp({ tone }: { tone: StatusTone }): JSX.Element {
+  return <i className="fx-lamp" data-tone={tone} style={{ color: toneColor(tone) }} aria-hidden="true" />;
+}
+
+/**
+ * The same lamp on the SVG half of the floor. Square, because the game's is.
+ *
+ * The tone goes on as `color` and the fill reads `currentColor` so the glow — a
+ * `drop-shadow` in the medium with no `box-shadow` — is the same value as the
+ * fill, exactly as the HTML lamp's is.
+ */
+export function LampMark({ x, y, tone }: { x: number; y: number; tone: StatusTone }): JSX.Element {
+  return (
+    <rect
+      className="fx-lamp-mark"
+      data-tone={tone}
+      style={{ color: toneColor(tone) }}
+      x={x}
+      y={y}
+      width="7"
+      height="7"
+      fill="currentColor"
+      stroke="var(--border-lo)"
+      strokeWidth="1"
+    />
   );
 }
 

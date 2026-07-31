@@ -43,10 +43,12 @@ function Chev(): JSX.Element {
  * real button with its own chrome, and the chevron is the part that says so while
  * standing still.
  *
- * A count of zero mutes the gauge but never removes it. Faults is the only way to
+ * A count of zero drops the *number* and never the gauge. Faults is the only way to
  * the fault log, which carries the two-step `clear` — a control that must not
  * become unreachable because the log happens to be empty — and a gauge that
- * vanished would reflow the bar every time the number moved off zero.
+ * vanished would reflow the bar every time the number moved off zero. What a zero
+ * costs is a digit's worth of attention on "nothing is wrong", four times over,
+ * which is the band the label alone does not form.
  */
 function ActRead({
   icon,
@@ -75,7 +77,9 @@ function ActRead({
     >
       <Icon name={icon} className="sm" />
       <span className="fx-lbl">{label}</span>
-      <span className={`fx-val ${lit && tone ? tone : ''}`}>{count}</span>
+      {/* Unlit draws no number at all. Dimming a `0` still spends a digit's worth of
+          attention on "nothing is wrong", four times over; the label alone says it. */}
+      {lit && <span className={`fx-val ${tone ?? ''}`}>{count}</span>}
       <Chev />
     </button>
   );

@@ -1,8 +1,9 @@
 import type { JSX } from 'react';
 import type { PullRequest } from '../../../types.js';
 import { refLink } from '../../../components/util.js';
+import { Icon } from './Sprite.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
-import { ladderFor, loadedCount, prCourt, rack, rackReason } from '../inspection.js';
+import { conditionGlyph, ladderFor, loadedCount, prCourt, rack, rackReason } from '../inspection.js';
 import { clip } from '../vocabulary.js';
 import type { Scanner } from '../scanners.js';
 import type { MergeGate } from '../inspection.js';
@@ -66,11 +67,12 @@ function Row({
   const court = prCourt(pr);
   const ladder = ladderFor(pr);
   const reason = rackReason(pr);
-  // The stripe is the row's own severity, and it is the only red on the row besides
-  // the chip: the ladder's states are amber, blue, green or unlit, which is what
-  // keeps red meaning "a question only you can answer" on a row with four red
-  // checks on it.
-  const tone = inHand ? '' : court.tone === 'bad' ? ' you' : ' stalled';
+  const glyph = conditionGlyph(reason);
+  // The stripe is the row's own severity, and it is read from the group — the
+  // function that already answers "is this yours" — never from the court chip's
+  // colour. Inferring it from a tone made a palette change able to un-stripe every
+  // row needing a decision.
+  const tone = inHand ? '' : pr.attention?.status === 'stalled' ? ' stalled' : ' you';
   const isExcluded = (pr.labels ?? []).includes(ignoreLabel);
   return (
     <div className={`fx-part${inHand ? ' hand' : ''}${tone}`}>
@@ -80,8 +82,14 @@ function Row({
       <p className="fx-job" title={pr.title}>
         {clip(pr.title, 60)}
       </p>
+      {/* The glyph leads the sentence the server wrote; the sentence is unchanged and
+          still the full reading, in the `title` when the 34ch track truncates it. The
+          cap here is the track, not a count — a row with four conditions shows what
+          fits, exactly as it does today. The sentence keeps its own span so the
+          ellipsis still lands on it now the cell is a flex row. */}
       <span className="fx-part-why" title={reason}>
-        {reason}
+        {glyph && <Icon name={glyph} className="sm" />}
+        <span className="fx-part-said">{reason}</span>
       </span>
       <span className={`fx-court ${court.tone}`}>{court.label}</span>
       {/* The watch/ignore toggle — the same label write `WorldSummary` carries in
