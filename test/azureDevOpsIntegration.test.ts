@@ -951,8 +951,9 @@ test('createPullRequest returns the new id (the REST arm adds the refs/heads pre
   });
   assert.deepEqual(res, { ok: true, ref: '88' });
   // Branches stay plain across the seam; only restAzureDevOpsApi speaks refs/heads.
-  assert.equal(recorded.createdPulls[0].head, 'issue/12/cursor');
-  assert.equal(recorded.createdPulls[0].base, 'issue/12/schema');
+  assert.deepEqual(recorded.createdPulls, [
+    { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
+  ]);
 });
 
 test('setPullBase is the retarget Azure never does itself when a rung merges', async () => {
