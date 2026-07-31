@@ -29,6 +29,7 @@ import { EscalationInbox } from './escalation/escalationInbox.js';
 import { ProposalDesk } from './proposals/proposalDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
+import type { McpToolDeps } from './mcp/tools.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
 import { RecoveryDesk } from './agents/recoveryDesk.js';
@@ -287,6 +288,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // (it needs the escalation inbox). Off entirely when the operator disabled the
     // backstop, so `request_permission` denies rather than blocks.
     permissions: (): PermissionDesk | undefined => (config.mcp.permissionEscalation ? permissions : undefined),
+    // Lazy for the same reason again: the sink and the template book are both built
+    // below this. If this closure is ever dropped, `open_pr` reports itself unwired
+    // in production and no test catches it — the ArgsBuilder/mcpConfigPath trap.
+    openPr: (): McpToolDeps['openPr'] => ({
+      sink: opts.sink ?? connector,
+      defaultBranch: config.defaultBranch,
+      prompts,
+    }),
     errors,
   });
 
