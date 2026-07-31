@@ -4,7 +4,7 @@ import { resolveOpenPr, type OpenPrContext } from '../src/mcp/openPr.js';
 import type { Issue, Plan, PlanPart } from '../src/types.js';
 
 function issue(number: number, title = 'Ticket sync rewrite'): Issue {
-  return { id: `issue_${number}`, number, title, body: '', state: 'open', labels: [] };
+  return { id: `issue_${number}`, number, title, body: '', state: 'open', labels: [], linkedPrNumber: null };
 }
 
 function part(over: Partial<PlanPart> & { slug: string; seq: number }): PlanPart {
