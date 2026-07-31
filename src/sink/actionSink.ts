@@ -34,6 +34,26 @@ export interface PrLabelInput {
   present: boolean;
 }
 
+export interface PrCreateInput {
+  /** The head branch — the work. */
+  branch: string;
+  /** The branch this PR targets: the default branch, or the rung beneath it in a stack. */
+  base: string;
+  title: string;
+  body: string;
+}
+
+export interface PrTitleInput {
+  prNumber: number;
+  title: string;
+}
+
+export interface PrBaseInput {
+  prNumber: number;
+  /** The branch the PR should target. Retarget-on-merge writes the merged rung's own base here. */
+  base: string;
+}
+
 export interface WorkItemStateInput {
   /** The work item / issue number to transition. */
   number: number;
@@ -90,4 +110,25 @@ export interface ActionSink {
    * fails. Only providers with a comment API implement it.
    */
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
+  /**
+   * Open a pull request. `ref` on the result is the new PR number, so the audit log
+   * records what was created. Throws if creation fails.
+   *
+   * The harness authoring its own PRs is what makes the title convention
+   * enforceable rather than merely requested — but it never replaces an agent
+   * opening one itself, which stays the floor when the tool channel is off.
+   */
+  createPullRequest(input: PrCreateInput): Promise<SendResult>;
+  /**
+   * Rewrite a pull request's title onto the house convention. Mechanical
+   * bookkeeping like {@link setWorkItemState}, so it is not auto-send gated;
+   * callers skip a write whose rendered title already matches. Throws if it fails.
+   */
+  setPullTitle(input: PrTitleInput): Promise<SendResult>;
+  /**
+   * Retarget a pull request's base — a stack rung whose parent merged. GitHub does
+   * this itself, Azure does not, which is the whole reason the seam exists.
+   * Idempotent: callers skip a write whose base is already right. Throws if it fails.
+   */
+  setPullBase(input: PrBaseInput): Promise<SendResult>;
 }

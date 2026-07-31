@@ -51,6 +51,7 @@ interface Script {
   workItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems';
+  createdPullNumber?: number;
 }
 
 interface Recorded {
@@ -65,6 +66,9 @@ interface Recorded {
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
   comments: Array<{ id: number; commentId: number | null; text: string }>;
   closedSince: string[];
+  createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
+  titleSets: Array<{ id: number; title: string }>;
+  baseSets: Array<{ id: number; base: string }>;
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -80,8 +84,21 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     tagSets: [],
     comments: [],
     closedSince: [],
+    createdPulls: [],
+    titleSets: [],
+    baseSets: [],
   };
   const api: AzureDevOpsApi = {
+    async createPull(input) {
+      recorded.createdPulls.push(input);
+      return { pullRequestId: script.createdPullNumber ?? 88 };
+    },
+    async setPullTitle(id, title) {
+      recorded.titleSets.push({ id, title });
+    },
+    async setPullBase(id, base) {
+      recorded.baseSets.push({ id, base });
+    },
     async viewerUniqueName() {
       return script.viewer ?? 'bot@acme.com';
     },
@@ -921,4 +938,29 @@ test('the plan status comment is created once on the work item, then edited in p
   ]);
   assert.equal(edited.ref, '5101');
   store.close();
+});
+
+test('createPullRequest returns the new id (the REST arm adds the refs/heads prefix)', async () => {
+  const { api, recorded } = fakeApi({ createdPullNumber: 88 });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  const res = await sc.createPullRequest({
+    branch: 'issue/12/cursor',
+    base: 'issue/12/schema',
+    title: '#12 [2/2] feat(store): cursor',
+    body: 'part of #12',
+  });
+  assert.deepEqual(res, { ok: true, ref: '88' });
+  // Branches stay plain across the seam; only restAzureDevOpsApi speaks refs/heads.
+  assert.deepEqual(recorded.createdPulls, [
+    { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
+  ]);
+});
+
+test('setPullBase is the retarget Azure never does itself when a rung merges', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  await sc.setPullTitle({ prNumber: 42, title: '#12 feat(store): cursor' });
+  await sc.setPullBase({ prNumber: 42, base: 'main' });
+  assert.deepEqual(recorded.titleSets, [{ id: 42, title: '#12 feat(store): cursor' }]);
+  assert.deepEqual(recorded.baseSets, [{ id: 42, base: 'main' }]);
 });

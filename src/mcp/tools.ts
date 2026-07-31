@@ -35,6 +35,10 @@ import {
 import { SHORTFALL_CAUSE_HELP, SHORTFALL_CAUSES, shortfallRecordedNote } from '../delivery/shortfall.js';
 import { FINDING_KIND_HELP, FINDING_KINDS, parseFindingRef, validateFinding } from './findings.js';
 import { PART_OUTCOME_KIND_HELP, PART_OUTCOME_KINDS, validatePartConclusion } from './partOutcome.js';
+import { resolveOpenPr } from './openPr.js';
+import { prTitleFields, renderPrTitle } from '../prTitle.js';
+import type { ActionSink } from '../sink/actionSink.js';
+import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { MCP_TOOL_NAMES } from './names.js';
 import { normaliseNote } from './progress.js';
 import { normalisePadNote } from '../scratch/pad.js';
@@ -96,7 +100,7 @@ export interface AgentToolTarget {
   ): { ok: true; issueOrigin: string } | { ok: false; error: string };
 }
 
-interface McpToolDeps {
+export interface McpToolDeps {
   store: Store;
   agents: AgentToolTarget;
   /** `planning.requireApproval` — see {@link ingestPlanDocument}. */
@@ -107,6 +111,17 @@ interface McpToolDeps {
    * Absent, that tool reports the backstop is off rather than blocking forever.
    */
   permissions?: PermissionDesk;
+  /**
+   * What `open_pr` needs to author a pull request. Optional, and that is the
+   * degradation floor rather than laziness: unwired — no sink, `mcp.enabled` off,
+   * a `claude` that ignores the server — an agent opens its own PR exactly as it
+   * did before the tool existed, which is what every prompt still tells it to do.
+   */
+  openPr?: {
+    sink: ActionSink;
+    defaultBranch: string;
+    prompts: PromptTemplates;
+  };
   errors?: ErrorRecorder;
 }
 
@@ -865,6 +880,113 @@ export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] 
             'Recorded. It is read in the cockpit on the goal that produced it; nothing is posted to the ' +
             'tracker, nothing is closed, and nothing is scheduled from it.',
         });
+      },
+    },
+    {
+      name: MCP_TOOL_NAMES[14],
+      description:
+        'Open the pull request for the work you were dispatched to do. The harness supplies the branch, ' +
+        'the base — which is the rung beneath you when your work is stacked on another part — and the ' +
+        'title convention; you supply what the change does. You cannot open a pull request for another ' +
+        "agent's work: the branch and base come from your own origin, never from an argument. If this " +
+        'tool reports it is unavailable, open the pull request yourself against the branch and base named ' +
+        'in your prompt.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          summary: {
+            type: 'string',
+            description:
+              'What the change does, in a few words — it becomes the title. Not a sentence and not a ' +
+              'restatement of the issue: "sync cursor table", not "This PR adds a table for sync cursors".',
+          },
+          type: {
+            type: 'string',
+            description:
+              'Optional conventional-commit type: feat, fix, refactor, docs, test, chore. Omit it if none fits.',
+          },
+          scope: {
+            type: 'string',
+            description: 'Optional module the change lands in, e.g. "store". Omit it if the change is broad.',
+          },
+          body: {
+            type: 'string',
+            description:
+              'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
+              'which ticket it belongs to.',
+          },
+        },
+        required: ['summary'],
+      },
+      handler: async (args) => {
+        const wiring = deps.openPr;
+        if (!wiring) {
+          return toolError(
+            'Pull-request authoring is not wired on this harness. Open the pull request yourself against ' +
+              'the branch and base named in your prompt.',
+          );
+        }
+        const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
+        if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
+
+        const issueNumber = planOriginIssue(task.originRef);
+        const plan = issueNumber === null ? null : deps.store.getPlanByOrigin(issueOrigin(issueNumber));
+        const target = resolveOpenPr(task.originRef, {
+          issues: deps.store.getWorldBaseline()?.issues ?? [],
+          plan,
+          parts: plan ? deps.store.listPlanParts(plan.id) : [],
+          defaultBranch: wiring.defaultBranch,
+        });
+        if ('error' in target) return toolError(target.error);
+
+        const title = renderPrTitle(
+          wiring.prompts.render('pr-title', {}),
+          prTitleFields({
+            number: target.issueNumber,
+            title: target.issueTitle,
+            position: target.position,
+            total: target.total,
+            type: typeof args.type === 'string' ? args.type : undefined,
+            scope: typeof args.scope === 'string' ? args.scope : undefined,
+            summary,
+          }),
+        );
+
+        // The reference is appended, never interpolated into the agent's body — and
+        // deliberately never a closing keyword. Whether a PR closes its issue is the
+        // agent's judgement (the prompts say so); a harness-written "closes" would
+        // shut a ticket whose remaining parts are still open.
+        const reference =
+          target.total > 1
+            ? `Part ${target.position}/${target.total} of #${target.issueNumber}.`
+            : `Relates to #${target.issueNumber}.`;
+        const given = typeof args.body === 'string' ? args.body.trim() : '';
+        const body = given ? `${given}\n\n${reference}` : reference;
+
+        try {
+          const result = await wiring.sink.createPullRequest({
+            branch: target.branch,
+            base: target.base,
+            title,
+            body,
+          });
+          return ok({
+            opened: result.ok,
+            pullRequest: result.ref ? Number(result.ref) : null,
+            title,
+            branch: target.branch,
+            base: target.base,
+            note:
+              target.base === wiring.defaultBranch
+                ? 'Opened against the default branch.'
+                : `Opened against ${target.base} — your work is stacked on it, so do not retarget this at the default branch.`,
+          });
+        } catch (err) {
+          return toolError(
+            `Opening the pull request failed: ${(err as Error).message}. Open it yourself against ` +
+              `${target.branch} -> ${target.base}.`,
+          );
+        }
       },
     },
   ];

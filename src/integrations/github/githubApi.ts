@@ -55,6 +55,12 @@ export interface GitHubApi {
   setPullLabel(number: number, label: string, present: boolean): Promise<void>;
   /** Add (`present`) or remove a label on an issue — the watch/ignore toggle. Idempotent. */
   setIssueLabel(number: number, label: string, present: boolean): Promise<void>;
+  /** Open a pull request. Returns the new number. */
+  createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ number: number }>;
+  /** Rewrite a pull request's title — the naming convention. */
+  setPullTitle(number: number, title: string): Promise<void>;
+  /** Retarget a pull request's base — a stack rung whose parent merged. */
+  setPullBase(number: number, base: string): Promise<void>;
 }
 
 export interface GhPullSummary {

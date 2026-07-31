@@ -80,6 +80,34 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['behind base branch'] },
         },
+        {
+          id: 'pr-143',
+          number: 143,
+          title: '#212 [2/3] refactor(store): route reads through the interface',
+          branch: 'issue/212/reads',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: true,
+          mergeable: true,
+          baseBranch: 'main',
+          mergeableState: 'clean',
+          merged: false,
+          health: { blocked: false, reasons: [] },
+        },
+        {
+          id: 'pr-144',
+          number: 144,
+          title: '#212 [3/3] refactor(store): route writes through the interface',
+          branch: 'issue/212/writes',
+          ciStatus: 'failing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'issue/212/reads',
+          mergeableState: 'unstable',
+          merged: false,
+          health: { blocked: true, reasons: ['CI failing on base PR #143'] },
+        },
       ],
       // What the World panel used to lose: a PR you were watching disappears when
       // it leaves the open set, with nothing to say whether it landed.
@@ -271,6 +299,35 @@ export function buildDemoState(): DemoSeed {
     // One decomposed issue, so the plan panel has a stack to draw: part 1 merged,
     // part 2 in review with its PR open, part 3 ready but held by the plan's own
     // two-at-a-time concurrency cap.
+    // The same three-part decomposition seen as pull requests rather than as plan
+    // rows: part 2 is the bottom rung (its base is the default branch, part 1 having
+    // merged) and part 3 stacks on it, red only because part 2's commits are red.
+    stacks: [
+      {
+        ref: 'stack:143',
+        issueNumber: 212,
+        issueTitle: 'Move the store behind a repository interface',
+        planId: 'plan-212',
+        rungs: [
+          {
+            prNumber: 143,
+            title: '#212 [2/3] refactor(store): route reads through the interface',
+            branch: 'issue/212/reads',
+            base: 'main',
+            position: 1,
+            partSlug: 'reads',
+          },
+          {
+            prNumber: 144,
+            title: '#212 [3/3] refactor(store): route writes through the interface',
+            branch: 'issue/212/writes',
+            base: 'issue/212/reads',
+            position: 2,
+            partSlug: 'writes',
+          },
+        ],
+      },
+    ],
     plans: [
       {
         id: 'plan-212',

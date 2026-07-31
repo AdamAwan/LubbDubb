@@ -198,6 +198,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       <Inspection
         prs={state.world.pullRequests}
         closed={state.world.closedPullRequests ?? []}
+        stacks={state.stacks ?? []}
         refUrls={state.refUrls}
         ignoreLabel={state.config.ignoreLabel}
         onToggleExclude={(prNumber, excluded) => actions.setPrExcluded(prNumber, excluded)}

@@ -5,9 +5,12 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type {
   IssueCommentInput,
   IssueLabelInput,
+  PrBaseInput,
+  PrCreateInput,
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrTitleInput,
   SendResult,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
@@ -103,6 +106,40 @@ export interface PrLabelCapable {
 
 export function isPrLabelCapable(x: Integration): x is Integration & PrLabelCapable {
   return typeof (x as Partial<PrLabelCapable>).setPrLabel === 'function';
+}
+
+/**
+ * An integration that can open a pull request — the harness authoring its own.
+ *
+ * Separate from {@link PrTitleCapable} and {@link PrBaseCapable} rather than one
+ * "PR write" capability, because a provider genuinely may have one and not the
+ * others: GitHub retargets a stack itself on merge, so its `setPullBase` exists
+ * only for the hand-driven case, while Azure needs it on every merge.
+ */
+export interface PrCreateCapable {
+  createPullRequest(input: PrCreateInput): Promise<SendResult>;
+}
+
+export function isPrCreateCapable(x: Integration): x is Integration & PrCreateCapable {
+  return typeof (x as Partial<PrCreateCapable>).createPullRequest === 'function';
+}
+
+/** An integration that can rewrite a pull request's title — the naming convention. */
+export interface PrTitleCapable {
+  setPullTitle(input: PrTitleInput): Promise<SendResult>;
+}
+
+export function isPrTitleCapable(x: Integration): x is Integration & PrTitleCapable {
+  return typeof (x as Partial<PrTitleCapable>).setPullTitle === 'function';
+}
+
+/** An integration that can retarget a pull request's base — a rung whose parent merged. */
+export interface PrBaseCapable {
+  setPullBase(input: PrBaseInput): Promise<SendResult>;
+}
+
+export function isPrBaseCapable(x: Integration): x is Integration & PrBaseCapable {
+  return typeof (x as Partial<PrBaseCapable>).setPullBase === 'function';
 }
 
 /** An integration that can add/remove a label on an issue / work item — the watch/ignore toggle. */

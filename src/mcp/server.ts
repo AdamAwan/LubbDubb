@@ -16,7 +16,7 @@ import {
   type ToolCallResult,
 } from './protocol.js';
 import { MCP_SERVER_ID } from './names.js';
-import { type AgentToolTarget, buildTools, type McpIdentity } from './tools.js';
+import { type AgentToolTarget, buildTools, type McpIdentity, type McpToolDeps } from './tools.js';
 
 /** Absolute path to the shipped stdio bridge `claude` spawns. See {@link file://./bridge.mjs}. */
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
@@ -46,6 +46,12 @@ interface McpBridgeServerOptions {
    * it, and {@link release} denies any request a leaving agent was blocked on.
    */
   permissions?: () => import('../agents/permissionDesk.js').PermissionDesk | undefined;
+  /**
+   * What `open_pr` needs to author a pull request, resolved lazily like the two
+   * above. Absent, the tool says so and the agent opens its own PR — the floor
+   * every prompt still describes.
+   */
+  openPr?: () => McpToolDeps['openPr'];
   errors?: ErrorRecorder;
 }
 
@@ -252,6 +258,7 @@ export class McpBridgeServer {
         agents: this.opts.agents(),
         requirePlanApproval: this.opts.requirePlanApproval,
         permissions: this.opts.permissions?.(),
+        openPr: this.opts.openPr?.(),
         errors: this.opts.errors,
       },
       resolved.identity,

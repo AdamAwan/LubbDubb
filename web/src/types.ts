@@ -733,6 +733,12 @@ export interface AppState {
   plans?: Plan[];
   planParts?: PlanPart[];
   /**
+   * Chains of stacked pull requests, derived from the world each pulse rather than
+   * stored. A plan *adopts* a stack, so a chain someone opened by hand is drawn on
+   * the same terms as one a plan produced. Optional so an older server draws none.
+   */
+  stacks?: Stack[];
+  /**
    * Finished goals the operator is keeping on the Goal Floor whose issue the world
    * has forgotten (issue #203) — closed by hand, or the watch tag removed. Shipped
    * beside `world.issues` rather than mixed into it, so the Yard and world panels
@@ -793,4 +799,26 @@ export interface AppState {
    * rule that fired; a missing key ⇒ no rule identity to show.
    */
   dispatchRules: Record<string, DispatchRule>;
+}
+
+/** One pull request in a stack, bottom-first by `position`. */
+export interface StackRung {
+  prNumber: number;
+  title: string;
+  branch: string;
+  /** The branch this rung targets — the rung beneath it, or the default branch. */
+  base: string;
+  /** 1-based, bottom-first. */
+  position: number;
+  /** The plan part this rung delivers, when a plan adopted the stack. */
+  partSlug: string | null;
+}
+
+/** A chain of stacked pull requests. Mirrors `src/stacks/stack.ts` by hand — the web bundle imports no server code. */
+export interface Stack {
+  ref: string;
+  issueNumber: number | null;
+  issueTitle: string | null;
+  planId: string | null;
+  rungs: StackRung[];
 }

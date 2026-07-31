@@ -38,6 +38,7 @@ interface Script {
   issues?: GhIssue[];
   timeline?: Record<number, GhTimelineEvent[]>;
   throwOn?: 'listOpenPulls' | 'listOpenIssues';
+  createdPullNumber?: number;
 }
 
 interface Recorded {
@@ -48,6 +49,9 @@ interface Recorded {
   issueLabelQueries: Array<string | undefined>;
   labelSets: Array<{ number: number; label: string; present: boolean }>;
   closedSince: string[];
+  createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
+  titleSets: Array<{ number: number; title: string }>;
+  baseSets: Array<{ number: number; base: string }>;
 }
 
 function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
@@ -59,8 +63,21 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     issueLabelQueries: [],
     labelSets: [],
     closedSince: [],
+    createdPulls: [],
+    titleSets: [],
+    baseSets: [],
   };
   const api: GitHubApi = {
+    async createPull(input) {
+      recorded.createdPulls.push(input);
+      return { number: script.createdPullNumber ?? 77 };
+    },
+    async setPullTitle(number, title) {
+      recorded.titleSets.push({ number, title });
+    },
+    async setPullBase(number, base) {
+      recorded.baseSets.push({ number, base });
+    },
     async viewerLogin() {
       return script.viewer ?? 'lubbdubb-bot';
     },
@@ -628,4 +645,28 @@ test('the plan status comment is created once, then edited in place', () => {
       assert.equal(edited.ref, '912');
       store.close();
     });
+});
+
+test('createPullRequest posts head/base to the pulls API and returns the new number', async () => {
+  const { api, recorded } = fakeApi({ createdPullNumber: 77 });
+  const sc = new GitHubSourceControlIntegration({ api });
+  const res = await sc.createPullRequest({
+    branch: 'issue/12/cursor',
+    base: 'issue/12/schema',
+    title: '#12 [2/2] feat(store): cursor',
+    body: 'part of #12',
+  });
+  assert.deepEqual(res, { ok: true, ref: '77' });
+  assert.deepEqual(recorded.createdPulls, [
+    { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
+  ]);
+});
+
+test('setPullTitle and setPullBase each write only their own field', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new GitHubSourceControlIntegration({ api });
+  await sc.setPullTitle({ prNumber: 42, title: '#12 feat(store): cursor' });
+  await sc.setPullBase({ prNumber: 42, base: 'main' });
+  assert.deepEqual(recorded.titleSets, [{ number: 42, title: '#12 feat(store): cursor' }]);
+  assert.deepEqual(recorded.baseSets, [{ number: 42, base: 'main' }]);
 });

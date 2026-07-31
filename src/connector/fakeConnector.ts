@@ -3,9 +3,12 @@ import type {
   ActionSink,
   IssueCommentInput,
   IssueLabelInput,
+  PrBaseInput,
+  PrCreateInput,
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrTitleInput,
   SendResult,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
@@ -65,6 +68,18 @@ export class FakeConnector implements Connector, ActionSink {
 
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     return this.composite.upsertIssueComment(input);
+  }
+
+  createPullRequest(input: PrCreateInput): Promise<SendResult> {
+    return this.composite.createPullRequest(input);
+  }
+
+  setPullTitle(input: PrTitleInput): Promise<SendResult> {
+    return this.composite.setPullTitle(input);
+  }
+
+  setPullBase(input: PrBaseInput): Promise<SendResult> {
+    return this.composite.setPullBase(input);
   }
 
   /** Apply an event to the fake world (routes to the owning module) and log it. */

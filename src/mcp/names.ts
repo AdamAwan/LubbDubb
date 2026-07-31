@@ -37,6 +37,7 @@ export const MCP_TOOL_NAMES = [
   'scratch_append',
   'scratch_read',
   'retro_submit',
+  'open_pr',
 ] as const;
 
 /**

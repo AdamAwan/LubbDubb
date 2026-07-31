@@ -3,9 +3,12 @@ import type {
   ActionSink,
   IssueCommentInput,
   IssueLabelInput,
+  PrBaseInput,
+  PrCreateInput,
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrTitleInput,
   SendResult,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
@@ -14,9 +17,12 @@ import {
   isInjectable,
   isIssueCommentCapable,
   isIssueLabelCapable,
+  isPrBaseCapable,
+  isPrCreateCapable,
   isPrLabelCapable,
   isPrMergeCapable,
   isPrReplyCapable,
+  isPrTitleCapable,
   isRefResolvable,
   isWorkItemStateCapable,
   type Integration,
@@ -64,6 +70,24 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrLabelCapable);
     if (!handler) throw new Error('no integration can label PRs (no sourceControl provider is PrLabelCapable)');
     return handler.setPrLabel(input);
+  }
+
+  async createPullRequest(input: PrCreateInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrCreateCapable);
+    if (!handler) throw new Error('no integration can open PRs (no sourceControl provider is PrCreateCapable)');
+    return handler.createPullRequest(input);
+  }
+
+  async setPullTitle(input: PrTitleInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrTitleCapable);
+    if (!handler) throw new Error('no integration can retitle PRs (no sourceControl provider is PrTitleCapable)');
+    return handler.setPullTitle(input);
+  }
+
+  async setPullBase(input: PrBaseInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrBaseCapable);
+    if (!handler) throw new Error('no integration can retarget PRs (no sourceControl provider is PrBaseCapable)');
+    return handler.setPullBase(input);
   }
 
   async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {

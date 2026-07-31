@@ -15,6 +15,7 @@ import { assaySignalQuery } from './intake/assay.js';
 import { completionsToRecord } from './floor/completions.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
+import type { PrNamingDesk } from './prNamingDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, Task, WorldEvent, WorldSnapshot } from './types.js';
 
@@ -43,6 +44,8 @@ interface HarnessDeps {
    * it no-ops anyway with the assay off).
    */
   assays?: AssayDesk;
+  /** Keeps open pull requests on the naming convention. Absent = no renaming. */
+  naming?: PrNamingDesk;
   /**
    * Writes the durable work graph each pulse. Absent = no graph (tests that do not
    * care). Stage 1 is a lens: nothing reads what it writes.
@@ -161,6 +164,9 @@ export class Harness extends EventEmitter {
       // the store holds intent, the outside world stays the source of truth, and a
       // part this moves to `ready` is dispatchable in this same cycle.
       await this.deps.plans?.reconcile(world);
+      // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
+      // world already on convention writes nothing.
+      await this.deps.naming?.run(world);
       // Record what the world and the store now say happened, after the reconciler
       // so part→PR observations are fresh, and before `decide` so stage 2 can read
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after

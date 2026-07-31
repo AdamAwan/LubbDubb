@@ -84,6 +84,12 @@ export interface AzureDevOpsApi {
 
   /** Add (`present`) or remove a `System.Tags` entry on a work item — the watch/ignore toggle. Idempotent. */
   setWorkItemTag(id: number, tag: string, present: boolean): Promise<void>;
+  /** Open a pull request. Branch names are plain here; the REST arm adds `refs/heads/`. */
+  createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ pullRequestId: number }>;
+  /** Rewrite a pull request's title — the naming convention. */
+  setPullTitle(pullRequestId: number, title: string): Promise<void>;
+  /** Retarget a pull request's base. Azure never does this itself when a rung merges. */
+  setPullBase(pullRequestId: number, base: string): Promise<void>;
 }
 
 /** A work-item comment's own id — what an in-place edit addresses. */

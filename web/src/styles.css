@@ -2242,3 +2242,75 @@ body {
   font-size: 12px;
   word-break: break-word;
 }
+
+/* Stacks. Tokens only, so the treatment follows whatever skin is active — the
+   shared-component contract in this file's header. The rung column carries a
+   left rule rather than a per-rung border, so a stack reads as one run of work
+   and not as a list that happens to be adjacent. */
+.stacks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stack-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 8px 12px 10px;
+  font-size: 13px;
+}
+.stack-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.stack-title {
+  font-weight: 600;
+  min-width: 0;
+}
+.stack-ref {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.stack-rungs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  margin-left: 4px;
+}
+.stack-rung {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 5px 8px;
+}
+/* The one that merges next, and the only one the merge rule can act on. */
+.stack-rung.bottom {
+  border-color: var(--green);
+}
+.stack-pos {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 1ch;
+}
+.stack-rung-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 0;
+}
+.stack-base {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

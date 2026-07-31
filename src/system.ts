@@ -29,6 +29,8 @@ import { EscalationInbox } from './escalation/escalationInbox.js';
 import { ProposalDesk } from './proposals/proposalDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
+import { PrNamingDesk } from './prNamingDesk.js';
+import type { McpToolDeps } from './mcp/tools.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
 import { RecoveryDesk } from './agents/recoveryDesk.js';
@@ -287,6 +289,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // (it needs the escalation inbox). Off entirely when the operator disabled the
     // backstop, so `request_permission` denies rather than blocks.
     permissions: (): PermissionDesk | undefined => (config.mcp.permissionEscalation ? permissions : undefined),
+    // Lazy for the same reason again: the sink and the template book are both built
+    // below this. If this closure is ever dropped, `open_pr` reports itself unwired
+    // in production and no test catches it — the ArgsBuilder/mcpConfigPath trap.
+    openPr: (): McpToolDeps['openPr'] => ({
+      sink: opts.sink ?? connector,
+      defaultBranch: config.defaultBranch,
+      prompts,
+    }),
     errors,
   });
 
@@ -414,6 +424,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // ticket. Beside the plan reconciler because it is the same act — mechanical
   // bookkeeping through the same seam, not an action the executor gates.
   const assays = new AssayDesk({ store, sink: opts.sink ?? connector, assay: config.assay, errors });
+  // The naming convention's outbound half. `filters.prAuthor` being configured is
+  // the operator's own answer to "which pull requests are mine", and both providers
+  // apply it at fetch time — so when it is set the world is already only theirs.
+  const naming = new PrNamingDesk({
+    sink: opts.sink ?? connector,
+    defaultBranch: config.defaultBranch,
+    prAuthorConfigured:
+      config.github?.filters?.prAuthor !== undefined || config.azureDevOps?.filters?.prAuthor !== undefined,
+    template: prompts.render('pr-title', {}),
+    errors,
+  });
 
   const graph = new WorkGraphRecorder({ store, errors });
 
@@ -424,6 +445,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     executor,
     plans,
     assays,
+    naming,
     graph,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,

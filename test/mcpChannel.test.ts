@@ -1522,3 +1522,53 @@ test('conclude_part refuses "code": a merge is observed, never declared', async 
   assert.deepEqual(kind.enum, ['report', 'determination']);
   system.store.close();
 });
+
+test('open_pr opens the pull request for the calling agent, titled by the convention', async () => {
+  const system = build();
+  system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+  await system.harness.runCycle('manual');
+  const agent = spawnAgent(system, 'issue:182');
+
+  const res = await callTool(system, agent, 'open_pr', {
+    summary: 'sync cursor table',
+    type: 'feat',
+    scope: 'store',
+    body: 'Adds the cursor the reconciler reads.',
+  });
+  const payload = JSON.parse(res.text) as { opened: boolean; pullRequest: number; title: string; base: string };
+  assert.equal(payload.opened, true);
+  assert.equal(payload.title, '#182 feat(store): sync cursor table', 'no position clause on a lone PR');
+  assert.equal(payload.base, 'main');
+
+  const world = await system.connector.getState();
+  const opened = world.pullRequests.find((p) => p.number === payload.pullRequest);
+  assert.ok(opened, 'the PR is in the world');
+  assert.equal(opened.branch, 'issue/182');
+  assert.match(opened.title, /^#182 feat\(store\)/);
+  system.store.close();
+});
+
+test('open_pr is refused for an origin that is not doing an issue’s work', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'pr:142:ci');
+  const res = await callTool(system, agent, 'open_pr', { summary: 'whatever' });
+  assert.match(res.text, /open_pr is for/);
+  const world = await system.connector.getState();
+  assert.equal(world.pullRequests.length, 0, 'nothing was opened');
+  system.store.close();
+});
+
+test('open_pr degrades to the floor when authoring is unwired — it never silently no-ops', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:182');
+  const task = system.store.getTask(agent.taskId)!;
+  // The tool built without its `openPr` wiring is exactly the production trap: the
+  // server still connects and still advertises the tool.
+  const tool = buildTools({ store: system.store, agents: system.agents }, { agent, task }).find(
+    (t) => t.name === 'open_pr',
+  );
+  assert.ok(tool, 'the tool is still advertised, so names.ts stays honest');
+  const result = await tool.handler({ summary: 'x' });
+  assert.match(JSON.stringify(result), /not wired|open the pull request yourself/i);
+  system.store.close();
+});
