@@ -671,6 +671,9 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   gap, since a blocked part is never queued (so the held-reason plate cannot speak for it) and has no
   PR to be read for one, leaving a red word and no reason anywhere. `blocked_reason` is a column on an
   **existing** table and so needs its `ensureColumns('plan_parts', …)` entry.
+  `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
+  for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
+  get none). Tests: `test/planReconcile.test.ts`.
   - **A plan approved into that wall had no exit (`src/plans/planWedge.ts`).** An issue worked `single`,
     replanned and then _approved_ blocks every part instantly, and every way out is shut: `refusePlan`
     compare-and-sets against `awaiting_approval` (correctly — refusing is a verdict on an unanswered
@@ -690,9 +693,6 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     collapse safe. **Nothing attaches the existing PR to a part**: it claims to resolve the whole
     issue, which is the claim the decomposition overruled, so deriving an owner would infer a positive
     terminal from incidental evidence. Tests: `test/planApproval.test.ts`, `test/planPart.test.ts`.
-  `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
-  for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
-  get none). Tests: `test/planReconcile.test.ts`.
 - **The goal assay (`src/intake/`, the `issue_assays` table, the `assay_issue` tool, issue #158).**
   Every gate in front of a fresh issue asks about **policy** — the watch tag, the workflow state, the
   cooldown, the attempt cap, headroom, `resolvePlanRoute`. None asks whether the ticket says anything
