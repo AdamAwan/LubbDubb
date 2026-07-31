@@ -73,6 +73,9 @@
 
   /* This skin's own, used by nothing shared. */
   --fx-belt: #f2c14e;
+  /* The game's speed hierarchy, swapped in per tier by `.fx-belt.red` / `.blue`. */
+  --fx-belt-red: #d0523f;
+  --fx-belt-blue: #4f8bc9;
   --fx-belt-dark: #3b3530;
   --fx-ghost: #7fc8e8;
 }
@@ -527,6 +530,26 @@
    also exactly what a queue behind the cap is — the picture is honest either way. */
 .fx-belt.stopped::before {
   animation-play-state: paused;
+}
+/* The other two belt tiers. One token drives the chevrons (see the mask note
+   above), so tiering is a token swap and no belt markup changes. */
+.fx-belt.red {
+  --fx-belt: var(--fx-belt-red);
+}
+.fx-belt.blue {
+  --fx-belt: var(--fx-belt-blue);
+}
+/* An empty belt is still and dark, and takes a rail's worth of height rather than a
+   belt's. The floor should be small when the factory is idle — a full-width lit belt
+   carrying nothing is the loudest object on screen saying the least.
+   `clear` is not `stopped`: a paused belt carrying items keeps its full height, and
+   the two classes can be on at once. */
+.fx-belt.clear {
+  height: 22px;
+}
+.fx-belt.clear::before {
+  animation-play-state: paused;
+  opacity: 0.1;
 }
 
 /* Two runs, and the gap between them is the gate's.

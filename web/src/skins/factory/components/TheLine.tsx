@@ -2,6 +2,7 @@ import type { CSSProperties, JSX } from 'react';
 import type { Agent, QueueItem, Task } from '../../../types.js';
 import { elapsed } from '../../../components/util.js';
 import { Icon, Lamp, LampMark } from './Sprite.js';
+import { beltTier } from '../production.js';
 import {
   bayMachineStatus,
   botState,
@@ -442,7 +443,11 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
           </svg>
 
           {/* ---- the belt ---- */}
-          <div className={`fx-belt ${stopped ? 'stopped' : ''}`}>
+          {/* `clear` and `stopped` are different conditions: a paused belt carrying
+              items is stopped and full height. Both classes can be on at once. */}
+          <div
+            className={`fx-belt ${stopped ? 'stopped' : ''} ${items.length === 0 ? 'clear' : ''} ${beltTier(items.length, cap)}`}
+          >
             <div className="fx-belt-row">
               {/* Each run is rendered only when it has crates: an empty flex child
                   would still take the row's gap, and that gap is exactly where the

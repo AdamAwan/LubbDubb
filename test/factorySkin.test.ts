@@ -49,7 +49,7 @@ const { ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await i
   '../web/src/skins/factory/inspection.js'
 );
 const { Inspection } = await import('../web/src/skins/factory/components/Inspection.js');
-const { axisScale, productionReading } = await import('../web/src/skins/factory/production.js');
+const { axisScale, beltTier, productionReading } = await import('../web/src/skins/factory/production.js');
 const { accumulatorCells } = await import('../web/src/skins/factory/power.js');
 
 const INERT = new Proxy({} as CockpitActions, { get: () => () => Promise.resolve() });
@@ -1516,6 +1516,41 @@ test('the rack groups on the court, and a merge-ready PR needs no arm of its own
   assert.equal(prCourt(at(1, 'you')).label, 'Your call');
   assert.equal(prCourt(at(1, 'settled')).label, 'Settled — you said no');
   assert.equal(loadedCount([{ merged: true } as PullRequest, { state: 'closed' } as PullRequest]), 1);
+});
+
+/**
+ * The tiers are the game's speed hierarchy read as queue pressure, and the
+ * thresholds are against the cap rather than absolute — four items behind a cap of
+ * two is congestion, behind a cap of eight it is not.
+ */
+test('the belt tiers up as the queue outruns the cap', () => {
+  assert.equal(beltTier(0, 4), 'yellow');
+  assert.equal(beltTier(4, 4), 'yellow', 'a queue the fleet could take in one pulse is not backed up');
+  assert.equal(beltTier(5, 4), 'red');
+  assert.equal(beltTier(8, 4), 'red');
+  assert.equal(beltTier(9, 4), 'blue');
+  assert.equal(beltTier(3, 1), 'blue', 'a small cap saturates sooner');
+});
+
+/**
+ * An empty belt is still and dark. `stopped` and `clear` are different conditions
+ * and must stay separable: a paused belt with items on it is full height and
+ * stopped, which is what the existing pulse assertion protects.
+ */
+test('an empty belt collapses and a stopped one does not', () => {
+  // `UpcomingPlan` is `{ cycleId, at, items }` — `at` is when the ranked world was
+  // observed and is required.
+  const empty = render((s) => (s.upcoming = { cycleId: 'c', at: NOW, items: [] }));
+  assert.match(empty, /fx-belt[^"]*\bclear\b/, 'an empty belt must collapse');
+
+  const pausedWithWork = render((s) => {
+    s.control.paused = true;
+  });
+  assert.match(pausedWithWork, /fx-belt[^"]*\bstopped\b/, 'a paused belt is still stopped');
+  assert.ok(
+    !/fx-belt[^"]*\bclear\b/.test(pausedWithWork),
+    'a paused belt carrying items is stopped and full height, never clear',
+  );
 });
 
 /**
