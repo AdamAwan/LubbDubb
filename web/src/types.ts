@@ -594,11 +594,18 @@ export interface Decision {
   createdAt: string;
 }
 
-/** One entry of the rule dispatcher's rule book (mirrors the server's DispatchRule). */
+/**
+ * One entry of the rule dispatcher's rule book (mirrors the server's DispatchRule).
+ *
+ * There is no rule number: order lives in the server's pipeline and nothing
+ * renders a position. `kind` says whether the entry is a rule that proposes work,
+ * an admission that decides what became of a proposal, or a property of the cycle
+ * itself — a decision row can carry any of the three.
+ */
 export interface DispatchRule {
-  number: string;
   name: string;
   description: string;
+  kind: 'rule' | 'admission' | 'terminal';
 }
 
 /** One ranked candidate in the dispatcher's pickup plan (mirrors the server's QueueItem). */
@@ -612,10 +619,11 @@ export interface QueueItem {
   /**
    * Above the headroom cut, waiting on a free slot, throttled by the cooldown,
    * `capped` — held by a per-plan concurrency limit, so a free slot wouldn't help
-   * — or `unapproved`, held because the plan it belongs to is a decomposition you
-   * have not accepted yet.
+   * — `unapproved`, held because the plan it belongs to is a decomposition you
+   * have not accepted yet, or `superseded`, because an earlier rule is asking a
+   * different question about the same issue this cycle.
    */
-  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped' | 'unapproved';
+  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped' | 'unapproved' | 'superseded';
   reason: string;
 }
 

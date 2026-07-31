@@ -136,6 +136,11 @@ export function crateMachineStatus(item: QueueItem, paused: boolean): MachineSta
       return { word: 'Output backed up', tone: 'warn' };
     case 'unapproved':
       return { word: 'Not connected', tone: 'bad' };
+    case 'superseded':
+      // Not this station's turn rather than anything wrong with it: another one
+      // upstream is still deciding what this goal even is, so `idle` like
+      // `waiting` and not a warning.
+      return { word: 'At inspection', tone: 'idle' };
   }
 }
 

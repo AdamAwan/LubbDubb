@@ -61,7 +61,7 @@ export function EventLog({
                   </span>
                 </td>
                 <td>{linkify(d.detail, refUrls)}</td>
-                <td title={rule?.description}>{rule ? `${rule.number} · ${rule.name}` : '—'}</td>
+                <td title={rule?.description}>{rule ? rule.name : '—'}</td>
                 <td>
                   <span className={`fx-by ${byHuman ? 'you' : ''} ${d.outcome === 'rejected' ? 'bad' : ''}`}>
                     {byHuman ? `you · ${d.outcome}` : d.outcome}

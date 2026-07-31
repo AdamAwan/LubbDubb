@@ -17,6 +17,7 @@ import type {
   WorldSnapshot,
 } from '../types.js';
 import type { ParseResult } from './actions.js';
+import type { QueueStatus } from './admission.js';
 import type { DispatchRuleId } from './rules.js';
 
 /** Everything the dispatcher gets to look at when deciding what to do this cycle. */
@@ -155,16 +156,13 @@ export interface QueueItem {
   kind: 'code' | 'desk';
   branch: string | null;
   /**
-   * Where the candidate sits relative to the headroom cut: dispatched this
-   * cycle, waiting on a free slot, throttled by the re-dispatch cooldown,
-   * `capped` — held by a per-plan concurrency limit rather than by fleet
-   * headroom, so it would not dispatch even with every slot free — or
-   * `unapproved`, held because its plan's decomposition is still a proposal you
-   * have not accepted (`planning.requireApproval`). Both of the latter two exist
-   * for the same reason: a part held by something other than capacity used to be
-   * skipped silently, which made the thing holding it invisible.
+   * Where the candidate sits relative to the headroom cut — dispatched this
+   * cycle, or held for one of the named reasons in `HeldReason`. Every
+   * reason a candidate can be held for appears here rather than causing it to
+   * vanish: a proposal held by something other than capacity used to be skipped
+   * silently, which made the thing holding it invisible.
    */
-  status: 'dispatching' | 'waiting' | 'cooldown' | 'capped' | 'unapproved';
+  status: QueueStatus;
   reason: string;
 }
 

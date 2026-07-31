@@ -90,12 +90,47 @@ in production.
 NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
   an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
   won't appear on databases from an older build.
-- **`src/dispatcher/rules.ts`** is the RuleDispatcher's rule book as data (`DISPATCH_RULES`):
-  every action the rule dispatcher emits carries a `rule` id from it, the store lifts the id
-  into the `decisions.rule` column at `recordDecision` time, and `/api/state` ships the
-  registry so the cockpit's Decision log can expand a row into the rule that fired. If you add
-  a dispatcher branch, add its registry entry and tag the emitted actions. LLM-dispatcher
-  actions carry no rule (null) by design.
+- **`src/dispatcher/rules.ts`** is the RuleDispatcher's rule book as data, and — for the entries
+  that are rules — **the order they run in**. Every action the rule dispatcher emits carries a
+  `rule` id from it, the store lifts the id into the `decisions.rule` column at `recordDecision`
+  time, and `/api/state` ships the registry so the cockpit's Decision log can expand a row into
+  the rule that fired. LLM-dispatcher actions carry no rule (null) by design. Three things about
+  its shape:
+  - **There is no rule number, and one must not come back.** There was one, hand-written per entry
+    ('1', '2b', '3c', …), claiming in its own doc comment to mirror the dispatcher's order — and it
+    had drifted: `issue-assay` was numbered after `issue-plan` and evaluated before it, two entries
+    both claimed '3b', and three claimed positions that were not positions ('1–2b', '1–4').
+    `concernUrgency` restated a slice of the same ordering a third time. Order is now the
+    declaration order of `DISPATCH_PIPELINE`, `concernUrgency` reads that array by index, and
+    **nothing renders a position** — the cockpit shows the id and the name. Adding a rule is adding
+    an entry in the position it should run plus a `stages` entry in `ruleDispatcher.ts`; inserting
+    one mid-list renumbers nothing, because there is nothing to renumber.
+  - **`kind` splits two vocabularies that were one registry.** A `rule` proposes work and is a
+    pipeline stage. An `admission` decides what became of a proposal (`src/dispatcher/admission.ts`)
+    and is **not** ordered per-feature and not a stage — `branch-notify` and `cooldown-escalate` are
+    only in the registry at all because `decisions.rule` is persisted and an old row must still
+    resolve. `idle` is a `terminal`: a property of the finished cycle. So the registry is the
+    display vocabulary (a superset) and the pipeline is the ordered subset that runs.
+  - **`enabled` is where an optional rule is switched in**, replacing the `if (this.<feature>.enabled)`
+    blocks that used to wrap four rule bodies. It takes a flat `RuleConditions` of booleans rather
+    than the policy objects, so this module stays dependency-free — it is imported by the server, the
+    snapshot builder and the action parser, and a policy type here would drag the plan/assay/retro
+    modules in with it.
+- **`src/dispatcher/admission.ts` is the other half of that split.** A rule answers _is there work
+  here_; admission answers _may it proceed, and if not what does the operator get told_ — asked of
+  every proposal the same way whichever rule made it. It was four representations of one idea: two
+  rule ids (so a throttled pickup audited as `cooldown-escalate` and lost that `issue-pickup` was
+  what got throttled), a `held` string for `cooldown`/`capped`/`unapproved`, `waiting` decided inline
+  by the cut, and **suppression represented not at all** — a superseded rule `continue`d, so its
+  candidate vanished with no queue entry and no reason anywhere, which is the same invisibility
+  `capped` was named to fix. The contract now is that **every held reason reaches the queue**, and
+  `QueueItem.status` gained `superseded` for it. Two consequences to preserve: a held candidate is
+  attributed to the rule that **proposed** it (what held it is the status), and `superseded` is
+  decided **without** routing through `consider` — the cooldown has no bearing on a dispatch that is
+  not going out for an unrelated reason, and escalating an attempt cap over one would blame the
+  pickup for the assay's turn. `askedAlready` is the shared "has this been put to a human" predicate
+  the three escalating rules (`pr-ci-blocked`, `plan-blocked`, `issue-shortfall`'s escalate arm) had
+  three copies of; both of its readings are load-bearing, and the doc comment there says why.
 - **The "Up next" queue (issue #69)** is a rank-then-slice inside `RuleDispatcher.decide`:
   agent-dispatch rules collect ordered `Candidate`s (PR concerns get a cross-PR urgency
   sort — CI > base-update > comment, then PR number), and only the final walk applies the
@@ -127,7 +162,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     long-running item keeps its priority) and drops any untracked longer than the TTL (default 7
     days; `0` disables). Tests: `test/priorityOverride.test.ts` (the pure ranking) and the override
     block in `test/upNext.test.ts` (persistence, restart, held-stays-held, rule-0-first, pruning).
-- **Operator-launched jobs (the `jobs` table + rule 0).** A job is an ad-hoc prompt queued from
+- **Operator-launched jobs (the `jobs` table + rule `manual-job`).** A job is an ad-hoc prompt queued from
   the cockpit (`POST /api/jobs` → `Store.createJob`, status `queued`). Unlike a `Task` (created
   the instant an agent spawns), a job persists _ahead of_ dispatch so it can sit in a queue when
   the fleet is at capacity. The dispatcher pushes queued jobs (`DispatchContext.queuedJobs`, wired
@@ -140,7 +175,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   cap/pause gate holds stays `queued`. `Store.cancelJob` drops a still-queued job; a dispatched one is a
   live agent (kill it instead). The `jobs` table is a fresh `CREATE TABLE`, so no `migrate()` entry is
   needed.
-  - **Rule 0 is the one dispatch path where origin and branch are not 1:1 (#116), so it is the one
+  - **Rule `manual-job` is the one dispatch path where origin and branch are not 1:1 (#116), so it is the one
     that needs the property enforced rather than merely observed.** `job.branch` is a free string the
     operator supplies while the origin is `job:<id>` — unique by construction — so `activeOrigins`
     and `findActiveTaskByOrigin`, which gate the branch for free everywhere else, are both blind to
@@ -158,7 +193,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     **no-op for every world-driven rule** — that is the point, and `test/jobQueue.test.ts` asserts it
     (a broad world, then: the gate never fired, yet no two live tasks share a branch), so a later
     rule that broke the 1:1 property fails a test instead of quietly sharing a checkout.
-  - **A code blueprint files a ticket instead of dispatching (#198), entirely at route time — rule 0 is
+  - **A code blueprint files a ticket instead of dispatching (#198), entirely at route time — rule `manual-job` is
     untouched.** An operator-injected **code** job is a _blueprint_, and when a tracker is configured
     (`trackerCoordinates(config) !== null`) `POST /api/jobs` does not queue a code job on the raw prompt:
     it renders the overridable `blueprint-ticket` template (pure fields from `blueprintTicketFields`,
@@ -208,7 +243,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     that a _failed_ one still is. That window is phase 2's doing and is the one behaviour the fold
     cost — see the phase 2 entry below. Asked in **two places off one predicate** (the jobs
     409/defer pattern):
-    rule 3 suppresses itself, and the executor refuses a duplicate whatever produced it — the LLM
+    rule `pr-merge-ready` suppresses itself, and the executor refuses a duplicate whatever produced it — the LLM
     dispatcher's `reply_on_pr` included, since prose-driven actions can't be gated rule-side. The
     dispatcher reads it from `DispatchContext.proposals`, wired in `harness.ts` from
     `store.listProposals()` beside `recentDecisions`/`queuedJobs`. That list is **unbounded** on
@@ -278,15 +313,15 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   - **Phase 3 — `planning.requireApproval`, the one proposal with no act.** The planning funnel
     had the same shape and no gate: a `parts` verdict is a proposal in every meaningful sense
     (_decompose this issue into five stacked PRs, on five branches, with agents_), `ingestPlanDocument`
-    committed it unconditionally, and rule 4a started dispatching — we built the undo (`replan`)
+    committed it unconditionally, and rule `plan-part` started dispatching — we built the undo (`replan`)
     instead of the gate. Five decisions carry it, and each is the point where the phase-1/2
     machinery does **not** fit unchanged:
   - **Release is the plan's status, not a verdict lookup.** `amendedPlanStatus` takes
     `requireApproval` and persists a `parts` verdict as **`awaiting_approval`** instead of `active`;
     accepting moves it to `active` and that is the entire effect, because `awaiting_approval` was
-    only ever `active` with the gate closed. So rule 4a's question — "is this plan released" — is
+    only ever `active` with the gate closed. So rule `plan-part`'s question — "is this plan released" — is
     the `plan.status !== 'active'` check it already had, and the old verdict structurally cannot
-    release a new one: a replan resets the row. The alternative (rule 4a joining on an accepted
+    release a new one: a replan resets the row. The alternative (rule `plan-part` joining on an accepted
     proposal) needs a "is this proposal for the plan's _current_ verdict" predicate, and the only
     honest key for that is a timestamp against `plan.updatedAt`, which the reconciler moves.
   - **`proposalHold` has the wrong polarity, in both directions**, so plan proposals get
@@ -303,11 +338,11 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     verdict is rewritten by both settlements. `test/planApproval.test.ts` asserts the polarity in
     both predicates rather than trusting them to stay apart.
   - **Rejection has an effect of its own, because a bare "no" parks the issue.** Once the funnel
-    is on, a plan is the only thing that schedules anything for a decomposed issue — rule 3b parks
+    is on, a plan is the only thing that schedules anything for a decomposed issue — `work-item-in-review` parks
     the work item in the review state for the life of the plan, and `resolvePlanRoute` fails a spent
     replan back to `parts`, never open to `single`. So `refusePlan` (`plans/planApproval.ts`)
     retires every part `partHasWork` says nothing was started for and then takes whatever
-    `amendedPlanStatus('single', …)` makes of the survivors: `single`, so rule 4 works the issue as
+    `amendedPlanStatus('single', …)` makes of the survivors: `single`, so rule `issue-pickup` works the issue as
     one PR (the arm the funnel already fails open to), or `active` when parts are genuinely in
     flight — that case is a _replan_ being refused, and the amendment's new parts are the ones
     retired. Both arms reuse the two predicates that already decide what an amendment may do; the
@@ -327,7 +362,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     carries no `confidence` for anyone to decide on — a row per plan recording "not asked" is a
     parallel _record_, not a shared one. `test/planPart.test.ts` asserts the default writes nothing.
   - Consequences worth knowing: `POST /api/plans/:id/replan` **withdraws** a pending plan proposal
-    (a pending verdict would hold rule 3d off the amended plan, and the stale card would release a
+    (a pending verdict would hold rule `plan-approval` off the amended plan, and the stale card would release a
     decomposition its reader never saw) — routed through the ordinary `ProposalDesk.reject`, which
     is safe precisely because the status write above already moved the plan, so `refusePlan`
     no-ops. The reconciler **does** run for `awaiting_approval` plans (readiness is what makes the
@@ -353,7 +388,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `SETTLE_WINDOW_MS` is the point: an accepted act waits on the world to _reflect_ something done,
     which is a duration; a rejected one waits on it to _become_ something else, which is an event.)
     And it **cannot flood** — expiring only un-holds the rule, whose own preconditions still decide
-    (the commonest signal on a refused PR, a new comment, un-holds rule 3 and then fails its
+    (the commonest signal on a refused PR, a new comment, un-holds rule `pr-merge-ready` and then fails its
     merge-readiness test), and the fresh pending proposal re-holds the ref, so the act is re-proposed
     **once**, not once per pulse. `reaskContext` prefixes the re-ask with the refusal, its note and
     the transition that ended it, or a second ask reads as the harness having forgotten the first.
@@ -370,7 +405,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `DispatchContext.rejectionSignals` and re-asked in the executor off the same predicate — a hold
     the two disagreed about would have the rule dispatch a merge the executor then skips.
   - **The note lands in `materializeTask`, on an exact ref match.** A rejected `reply_draft`'s ref
-    _is_ rule 2b's dispatch origin, so "what did the human say about this exact thing" is a lookup;
+    _is_ rule `pr-review-comment`'s dispatch origin, so "what did the human say about this exact thing" is a lookup;
     widening to the world item would put a refusal to _merge_ in front of an agent fixing CI, so a
     rejected merge deliberately reaches no agent. It is in the **executor** for the branch gate's
     reason (every dispatch passes), which is load-bearing here rather than tidy: a `reply_draft` is
@@ -389,10 +424,9 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `test/planApproval.test.ts`.
 - **Concluding an issue (`src/issueConclusion.ts`, the `conclude_work` tool).** A work item parked in
   `issueInReviewState` is ambiguous — it sits there when work remains **and** when everything is
-  delivered and it is waiting on test — and nothing outside the harness distinguishes the two. Rule 3b's
-  inverse arm used to release on the _absence of an open PR_, but `openPrForIssue` reads only the open
+  delivered and it is waiting on test — and nothing outside the harness distinguishes the two. `work-item-back-to-pickup` used to release on the _absence of an open PR_, but `openPrForIssue` reads only the open
   list, so "the PR merged" and "there was never a PR" are one observation: a merged PR bounced its ticket
-  back to `Ready` and rule 4 put a fresh agent on work already on the default branch. What carries the fix:
+  back to `Ready` and rule `issue-pickup` put a fresh agent on work already on the default branch. What carries the fix:
   - **The verdict is asked of whoever owns the whole issue**, which generalises what the decomposed path
     already did rather than adding a parallel notion. `partsPlanFor` counts a `complete` plan as still
     owning its issue precisely so it never bounces back, and `planComment` already tells the operator that
@@ -403,13 +437,13 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     it had concluded the issue. `resolveIssueConclusion(stored, plan)` folds it, operator toggle first
     (the escape hatch — the only thing that may contradict a roll-up), then the agent, then the plan.
   - **`undeclared` is a third answer and the whole point.** It is never stored — it is what a missing row
-    resolves to — and rule 3b acts _only_ on an explicit `more_work`. Folding it into `more_work` would
+    resolves to — and `work-item-back-to-pickup` acts _only_ on an explicit `more_work`. Folding it into `more_work` would
     restore the bug for every agent that forgets to declare, i.e. make the fix contingent on model
     diligence; the failure this direction causes instead is a ticket sitting still with a visible marker,
     which is the cheaper and the visible mistake. Same asymmetry as `@@LUBBDUBB_DONE@@` against the
     `result` event. A `single` plan derives **nothing**: that verdict is about delivery _shape_, not
     whether the PR was written.
-  - **Nothing gates pickup on it** — `issuePickupStatus` reports it, rule 3b is the only consumer that
+  - **Nothing gates pickup on it** — `issuePickupStatus` reports it, `work-item-back-to-pickup` is the only consumer that
     acts. A pickup gate would make `done` silently veto an item the operator had deliberately moved back
     to a pickup state, and would then need signal-based expiry (the phase-4 rejection pattern) to stay
     honest. The work-item state stays the source of truth for pickup, so **moving the ticket in the
@@ -434,7 +468,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     it — an agent saying work remains on an issue whose parts all merged is telling the roll-up
     something it cannot see, and more work is the safe direction. `planning` reads as in flight where it
     used to say nothing: both ways to reach it are unsettled decompositions, and an operator who
-    replanned by mistake has arm 1. Two readers were skipping arms and are fixed with it — rule 3b
+    replanned by mistake has arm 1. Two readers were skipping arms and are fixed with it — `work-item-back-to-pickup`
     passed no shortfall at all, so the assessor's verdict read as the working agent's, against
     `shortfallRecordedNote`'s own promise that the issue "comes back round for pickup"; and the Goal
     Floor's completion record, below.
@@ -469,13 +503,13 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   `plan.json` is ignored, since flipping its own issue to `parts` would strand it while nothing
   schedules parts. `resolvePlanRoute` (`src/plans/planning.ts`, pure) is the one place the arm of
   the funnel is decided — `single` / `parts` / `awaiting_approval` / `planning` — and both the
-  dispatcher (rules 3c + 4) and `issuePickupStatus` read it, so the cockpit chip can never disagree
+  dispatcher (`issue-plan` + `issue-pickup`) and `issuePickupStatus` read it, so the cockpit chip can never disagree
   with what fires. (`awaiting_approval` is `planning.requireApproval`'s arm — see the phase 3
   bullet under "Human decisions" for why the gate is a plan status rather than a proposal lookup.
   It behaves as `parts` for pickup, which is the point: the issue is planned either way.) Two
   properties to preserve: the verdict is persisted for **both** outcomes (without a `single` row
   the planner re-runs every cycle), and a planner that spends its `dispatchVerdict` attempt cap
-  **fails open** to `single` with no escalation — narrowing rule 4 without that turns any planner
+  **fails open** to `single` with no escalation — narrowing rule `issue-pickup` without that turns any planner
   crash into a permanently parked issue.
   `plans`/`plan_parts` were fresh `CREATE TABLE`s when introduced, so they needed no `migrate()`
   entry — but columns added to them **since** do, and have them (`risks`/`out_of_scope`/`document`/
@@ -498,7 +532,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     wired; `FloorPlate.planId` is gone, so there is one way in rather than a second answer about when
     it may be offered) and the plan has its own `plan · <status>` chip on the issue row. `POST /api/plans/:id/discuss` /
     `.../discuss/end` let an operator talk to the planner before deciding — a replan with a
-    conversational prompt (`discuss-plan`), inheriting rule 3c's origin gate, cooldown, attempt cap
+    conversational prompt (`discuss-plan`), inheriting rule `issue-plan`'s origin gate, cooldown, attempt cap
     and fail-open rather than earning new ones. See [08](docs/spec/08-planning.md) and
     [17](docs/spec/17-cockpit.md).
 - **Plan parts (stage 3 of the multi-PR design).** What makes a `parts` verdict mean something.
@@ -507,9 +541,9 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   and rule `plan-part` (4a) walks it. Things to preserve:
   - **Parts are not driven off `eligibleIssues`.** That list gates on the issue having no open
     PR, and a part's PR is exactly what makes the parent look taken (`linkedPrNumber` is sticky
-    and _will_ point at one). Rule 4a reads `ctx.plans`/`ctx.planParts` directly and applies only
+    and _will_ point at one). Rule `plan-part` reads `ctx.plans`/`ctx.planParts` directly and applies only
     `issueWatchGateReason` — the watch/ignore tag, evaluated once on the parent. Not the
-    workflow-state gate: rule 3b parks a decomposed work item in the review state for the life of
+    workflow-state gate: `work-item-in-review` parks a decomposed work item in the review state for the life of
     the plan (and suppresses its own inverse there), so re-applying the state gate would stop the
     remaining parts ever being scheduled. `issuePickupStatus` answers the `parts` arm **before**
     the open-PR gate for the same reason, reporting `2/5 parts merged`.
@@ -528,11 +562,11 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     executor passes `base` to `WorktreeManager.ensure` and calls `Store.markPartDispatched` only
     _after_ the spawn (same rule as `jobId` — a held dispatch must leave the part `ready`).
   - **The merge gate came forward from stage 4** with this, because this is the first point at
-    which stacked PRs exist: `isStackedPr` (beside `prHealth`) holds rule 3 off any PR whose base
+    which stacked PRs exist: `isStackedPr` (beside `prHealth`) holds rule `pr-merge-ready` off any PR whose base
     isn't `defaultBranch`, or a green part 2 merges into part 1's branch mid-review.
   - `maxConcurrentPartsPerIssue` counts **live tasks** on part origins, not the `dispatched`
     status, and a `hold` verdict never eats a slot — one stuck part must not stall a plan.
-  - **Rule 4a also walks an `awaiting_approval` plan, and dispatches nothing from it** — every
+  - **Rule `plan-part` also walks an `awaiting_approval` plan, and dispatches nothing from it** — every
     ready part is queued `held: 'unapproved'`, with the cooldown/attempt-cap arms skipped entirely
     (they would answer "why did this part not get an agent" with the wrong reason). Skipping the
     plan outright is the tempting version and the wrong one: an unapproved decomposition would
@@ -540,7 +574,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   - **A part can finish without a pull request (#160).** `merged` was the only status meaning "this
     work finished", so a part whose honest answer was _"nothing to build — #98 already fixed this"_
     had nowhere to go: it stayed `dispatched`, `liveParts` never emptied, the roll-up never reached
-    `complete`, and rule 3b parked its issue for the life of the plan. **One** new terminal,
+    `complete`, and `work-item-in-review` parked its issue for the life of the plan. **One** new terminal,
     `concluded`, covers the two outcomes that aren't a merge (`report`, `determination`), carried by
     four additive `plan_parts` columns — so they need an `ensureColumns('plan_parts', …)` entry, and
     have one. `merged` is untouched, which is what keeps the whole PR-observation path free of a new
@@ -572,15 +606,15 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
       Tests: `test/planPart.test.ts`, `test/planApproval.test.ts`, `test/planReconcile.test.ts`.
 - **Stack safety (stage 4 — the last one).** Three things, all in `test/stackedPrs.test.ts`.
   - **CI attribution.** A stacked PR's CI runs the commits of the PR beneath it, so one red base
-    turns the whole stack red and rule 1 would put an agent on each of them to fix code that isn't
+    turns the whole stack red and rule `pr-ci-failing` would put an agent on each of them to fix code that isn't
     theirs. `inheritedCiFailure(pr, openPrs)` (beside `prHealth`, pure) walks down the base chain
     and names the failing ancestor; the CI concern is skipped when it returns one. **Suppress-only —
-    the concern is not pushed down**: the bottom PR is in the same world and rule 1 fires on it
+    the concern is not pushed down**: the bottom PR is in the same world and rule `pr-ci-failing` fires on it
     unaided, so pushing would only duplicate it (and land on the `respond_to_agent` path if that
     branch is staffed). The base PR is found from the **world** (`pr.baseBranch` matching another
     open PR's `branch`), never from the plan graph — CI attribution is a PR-level fact and this way
     it covers hand-made stacks too. Two properties to keep: **only the CI concern is suppressed**
-    (rule 2 must still fire or a stack stops restacking the moment its parent goes red), and the
+    (rule `pr-base-update` must still fire or a stack stops restacking the moment its parent goes red), and the
     predicate reads `openPrs` — the dispatch world **plus `ctx.excludedPrs`** — so an `-ignore`d
     base still attributes. `prHealth(pr, openPrs?)` takes the same list and renders
     `CI failing on base PR #n`, which is the only place an operator sees why no agent came.
@@ -588,28 +622,28 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `issuePickupStatus` reads, hoisted to locals so the chip and the panel can't disagree);
     `web/src/components/PlanPanel.tsx` draws each plan's parts as a stack and joins them to
     `upcoming` **by origin** (`issue:<n>:part:<slug>`) for the dispatch cut. `QueueItem.status`
-    gained **`capped`**: rule 4a used to `break` out of the loop at `maxConcurrentPartsPerIssue`,
+    gained **`capped`**: rule `plan-part` used to `break` out of the loop at `maxConcurrentPartsPerIssue`,
     which made the limit invisible, and now queues the rest as held instead. `Candidate.cooldown`
     became `Candidate.held: 'cooldown' | 'capped'` — a held candidate is never dispatched whatever
     the headroom.
-  - **Replan** (`POST /api/plans/:id/replan`). Only flips the plan row to `planning`; rule 3c
+  - **Replan** (`POST /api/plans/:id/replan`). Only flips the plan row to `planning`; rule `issue-plan`
     already routes that back to a planner, now with the `issue-replan` prompt carrying
     `currentPlanSummary`. Three things make it work rather than merely fire: `plannerVerdict`
     (`planning.ts`) narrows the cooldown window to decisions **since `plan.updatedAt`**, so the
     original planner's attempt doesn't throttle the replan for 15 minutes (`planning` is only ever
     reached by a replan, so a first-time planner keeps the full throttle); `resolvePlanRoute` takes
     `existingParts` and fails a spent replan back to **`parts`**, not open to `single`, which would
-    point rule 4 at the flat `issue/<n>` branch git can't create beside the part refs; and
+    point rule `issue-pickup` at the flat `issue/<n>` branch git can't create beside the part refs; and
     ingestion (`AgentManager.ingestPlan`) does the amendment — `partsToRetire` retires parts the
     new document drops **only when nothing was started for them** (`partHasWork`), and
     `amendedPlanStatus` refuses to collapse to `single` while any part has a branch or PR, recording
     an error rather than overriding the planner silently. `retired` is a new `PlanPartStatus`;
     everything that counts parts goes through `liveParts` (progress, roll-up, sibling context,
-    rule 4a), and the reconciler skips retired rows so nothing quietly resurrects them.
+    rule `plan-part`), and the reconciler skips retired rows so nothing quietly resurrects them.
   - **The closed-unmerged hole, closed** — see "Recently-closed PRs" below.
 - **First-party stacked PRs and one naming convention (`src/stacks/`, `src/prTitle.ts`,
   `src/prRename.ts`, `src/prRetarget.ts`, `src/prNamingDesk.ts`, the `open_pr` tool).** Stage 4 left
-  stacks entirely _observed_: rule 4a picked a base, the `plan-part` prompt asked an agent **in prose**
+  stacks entirely _observed_: rule `plan-part` picked a base, the `plan-part` prompt asked an agent **in prose**
   to open a PR into it, and nothing under `src/` ever created a pull request, set a title or retargeted
   a base. Four things carry the close, and each is where the obvious move was wrong:
   - **The stack model is derived and is a lens.** `buildStacks` folds the open list on the edge
@@ -635,11 +669,11 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     an undeclared type — so an override is a plain substitution and the conditionals cannot drift
     across overrides. Renaming is a **desk**, not an executor action: nothing decides _whether_ to
     rename, so it is not auto-send gated, and it is idempotent, so a settled world writes nothing.
-  - **Restack was not built, and that is the finding.** Rule 2 already fires on `needsBaseUpdate`, and
+  - **Restack was not built, and that is the finding.** Rule `pr-base-update` already fires on `needsBaseUpdate`, and
     `ruleDispatcher.ts` says so in as many words — a git-derived `needsRestack` would have been a second
     opinion about a decision made elsewhere. What is genuinely missing is **provider-shaped**: Azure's
     `normalizeMergeState` has no `behind` arm at all, so a rung that falls behind its base is invisible
-    to rule 2 there. Recorded rather than papered over. What _was_ built is `retargetsFor`, because
+    to rule `pr-base-update` there. Recorded rather than papered over. What _was_ built is `retargetsFor`, because
     `isStackedPr`'s doc rested on "the provider retargets them when their parent merges" — true of
     GitHub, false of Azure, where the rest of a stack simply stopped with nothing saying why. An
     **abandoned** parent strands its child on purpose: the work beneath never landed, so rebasing would
@@ -649,7 +683,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   so a PR that merged used to just _vanish_ — and three things were wrong because of it. The world
   snapshot now carries a **separate** list of PRs that left the open set within
   `config.closedPrWindowMs` (default 6h, `0` disables). Separate, not merged into `pullRequests`:
-  rules 1/2/2b/3, `openPrForIssue`, `basePrOf`, `inheritedCiFailure` and `isStackedPr` all take a PR
+  the four PR rules, `openPrForIssue`, `basePrOf`, `inheritedCiFailure` and `isStackedPr` all take a PR
   list they trust to be open, and carrying closed rows alongside (the way `excludedPrs` is carried
   into `DispatchContext`) keeps that true **by construction** rather than by remembering to skip a
   status in nine places. Nothing in the dispatcher reads the list at all. `PullRequest` gained
@@ -719,9 +753,9 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     spent replan back to `parts`, never open to `single`. Three jobs, kept apart. **Notice**:
     `planIsWedged` — _every_ live part blocked, not any, since the collision blocks them together or
     not at all — drives rule `plan-blocked` (3i), which escalates once, deduped on an open escalation
-    for `issue:<n>:plan` **and** a recent executed one exactly as rule 1b, and dispatches nobody
+    for `issue:<n>:plan` **and** a recent executed one exactly as rule `pr-ci-blocked`, and dispatches nobody
     because nobody could help. `active` plans only: an unapproved one is already in front of a human.
-    **Warn**: `planApprovalWarnings` is **appended** to rule 3d's ask (never interpolated, for
+    **Warn**: `planApprovalWarnings` is **appended** to rule `plan-approval`'s ask (never interpolated, for
     `ciFailureNote`'s reason) and names the blocked parts plus any open PR for the issue no part
     claims. It warns and does **not** block — refusing approval would put a git fact in front of a
     judgement about _shape_, for a branch one command from being gone. **Exit**:
@@ -784,7 +818,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     open; the four switches are the way to stop paying for them. `QueueItem`/`issuePickupStatus` gained the `assay`
     status for `capped`'s reason (an issue waiting a cycle for a verdict must not look like an idle
     fleet). Tests: `test/goalAssay.test.ts`.
-- **The retrospective and the scratchpad (`src/retro/`, `src/scratch/`, rule 3h).** The Goal Floor drew a
+- **The retrospective and the scratchpad (`src/retro/`, `src/scratch/`, rule `issue-retro`).** The Goal Floor drew a
   station called **Manifest**, _Report what was done_, immediately before Launch — and it reported
   nothing: its content was `issue.conclusion?.note` or an em dash, its `link` was null, and nothing
   downstream read it. The floor named a step the harness never took. What was missing was two
@@ -833,7 +867,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   - **The rule is "only what no prompt already renders"**, which is what stops it becoming a second
     account of things the harness already says. So: the pad; the planner's `document`/`risks`/
     `outOfScope` (which reach the plan modal and no agent — and on a `single` verdict are the entire
-    product of a code agent that read the whole repository, against rule 4's title-and-body prompt); a
+    product of a code agent that read the whole repository, against rule `issue-pickup`'s title-and-body prompt); a
     part's `rationale`/`acceptance`, stored and rendered **nowhere at all**; and the prose behind each
     standing verdict. It therefore omits `plan.reason` (`currentPlanSummary` and `{plan}` render it)
     and a part's status/branch/PR number (`currentPlanSummary`, `siblingContext`).
@@ -890,7 +924,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
       tracker is worse than a gap in a graph. The category was only ever in doubt because it named two
       populations: a job agent's PR was unparented for the same reason a stranger's drive-by is. Two
       adoption arms in the fold split them — **arm A**, a job owns the PR on its own branch (`jobBranch`
-      in `src/jobs.ts`, shared with rule 0 so the two cannot disagree about where a job's work lands),
+      in `src/jobs.ts`, shared with rule `manual-job` so the two cannot disagree about where a job's work lands),
       and **arm B**, a job is adopted by the issue its own PR's `linkedPrNumber` names, which is the
       write-once parent's intended case one level up and means **no ticket is filed when one already
       exists**. Arm A runs before the issue arm because `parent_ref` is work _lineage_ — a branch match
@@ -925,18 +959,18 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
 - **`src/delivery/` is stage 2 — the assessor, and the first thing to read the graph.** It reads it
   as an **agent**, not as a rule: `world_read`'s issue payload gained the work subtree (via
   `Store.listWorkSubtree`, so nothing new imports the fold and the lens assertion above is untouched).
-  `delivered` is the harness's own park — rule 3b's review-state hold generalised off the tracker,
+  `delivered` is the harness's own park — `work-item-in-review`'s review-state hold generalised off the tracker,
   because that hold is a _tracker state_ and GitHub has none, which is why `openPrForIssue` reading
-  only the open list lets a merged PR's issue back into rule 4 every pulse. It is deliberately weaker
+  only the open list lets a merged PR's issue back into rule `issue-pickup` every pulse. It is deliberately weaker
   than the tracker's `closed`: reversible, gates pickup and nothing else, and never closes a ticket.
   What carries it:
   - **A fresh `issue_deliveries` table, not a third `IssueConclusionVerdict`** — the proposals-vs-
     escalations argument again. A conclusion is declared once by the agent that did the work and
     gates nothing; a delivery verdict is re-read by a gate every pulse and expires on world signal.
     The two are mutually exclusive and each write clears the other **in the store**, because a caller
-    that remembered one and forgot the other would have rule 3b return an item to pickup while this
+    that remembered one and forgot the other would have `work-item-back-to-pickup` return an item to pickup while this
     gate held it.
-  - **`deliveryHold` has two arms and no timer**, asked in two places off the one predicate (rule 4's
+  - **`deliveryHold` has two arms and no timer**, asked in two places off the one predicate (rule `issue-pickup`'s
     filter and `issuePickupStatus`). The **tracker move** is arm 1 and reads the issue's _current_
     pickup state rather than a transition, because `worldDiff` emits nothing for a `workItemState`
     change — and state survives a restart where an event between two pulses does not; adding an
@@ -945,24 +979,24 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     where arm 1 cannot fire. **No timer arm**: an accepted proposal waits on the world to _reflect_
     something done (a duration), a delivered issue waits on it to _become_ something else (an event).
     The operator's clear is a delete, which is why it is not an arm.
-  - **Rule `issue-assess` (3e) is not driven off `eligibleIssues`**, for rule 4a's reason: that list
+  - **Rule `issue-assess` (3e) is not driven off `eligibleIssues`**, for rule `plan-part`'s reason: that list
     applies the workflow-state gate and the Azure case this covers is precisely an item parked in the
     review state. **`hasPriorWork` does two jobs** — it stops every fresh issue getting an assessor
     that reports nothing was done, _and_ it is the discriminator that lets assess and pickup coexist
     on an issue both would claim (nothing started → pickup, something finished → ask). It is answered
     from `ctx.tasks`, **never the graph**, even though the graph is keyed on the same origin strings.
-    An assessed issue is **suppressed** from rule 4 that cycle or two agents land on it, and the rule
+    An assessed issue is **suppressed** from rule `issue-pickup` that cycle or two agents land on it, and the rule
     **fails open** like the planner (spent cap → ordinary pickup, no escalation), since narrowing
-    rule 4 without that turns an assessor crash into a permanently parked issue.
+    rule `issue-pickup` without that turns an assessor crash into a permanently parked issue.
   - **Which origins count as prior work is decided once, in `issueOriginRole` (`src/issueOrigins.ts`),
     and matching the whole `issue:<n>:*` subtree was a real defect.** The subtree holds two
     materially different things: the pickup root and a plan's parts are the **work**; `:assess` is not
     work but only ever happens downstream of some, so it counts as **evidence**; `:plan` and `:assay`
     are the harness **deliberating**, and a task on one says the issue has been thought about, never
     that anything was built. Counting the planner's own task made every issue the planner routed to
-    `single` look worked, so rule 3e fired on an issue nothing had built and suppressed the pickup
+    `single` look worked, so rule `issue-assess` fired on an issue nothing had built and suppressed the pickup
     that was the whole point of the verdict — the assessor then honestly reported nothing delivered,
-    rule 3g replanned, and the issue cycled the funnel forever with no PR ever written (observed on
+    rule `issue-shortfall` replanned, and the issue cycled the funnel forever with no PR ever written (observed on
     three at once against Azure Boards). Two properties keep it from recurring: an **unrecognised**
     suffix is its own answer rather than a silent default (an implicit "everything counts" is exactly
     how `:plan` slipped through), and `hasPriorWork` does not count it — failing toward a redundant
@@ -975,11 +1009,10 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `test/issueDelivery.test.ts`.
   - **The negative verdict, and what it drives (#159).** Stage 2 shipped the assessor able to say
     "not delivered" and nothing able to hear it. The intended loop is Plan → Work → is the goal
-    achieved? → No → re-plan: the check was rule 3e, the replan was `POST /api/plans/:id/replan`, and
+    achieved? → No → re-plan: the check was rule `issue-assess`, the replan was `POST /api/plans/:id/replan`, and
     the middle was missing. Worse than "no representation" — `more_work` **was** recorded, into
-    `issue_conclusions`, which is (a) the working agent's own row and (b) read only by rule 3b's
-    inverse arm, which emits a **tracker** move. So on GitHub it changed no dispatch at all, and on
-    either provider for a decomposed issue rule 4 is gated on the `single` route while rule 4a finds
+    `issue_conclusions`, which is (a) the working agent's own row and (b) read only by `work-item-back-to-pickup`, which emits a **tracker** move. So on GitHub it changed no dispatch at all, and on
+    either provider for a decomposed issue rule `issue-pickup` is gated on the `single` route while rule `plan-part` finds
     every part settled. What carries the fix:
     - **A fresh `issue_shortfalls` table, not a polarity column on `issue_deliveries`**, and the
       polarity is the argument. Every reader of a delivery is a **gate** — `deliveryHold`, each
@@ -993,7 +1026,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
       is the bug, so both rows stand and `resolveIssueConclusion` ranks them: operator toggle, then
       shortfall (the assessor is later and better informed), then the agent, then the plan.
     - **The cause is declared, and all three are routed differently.** `plan` → propose a replan
-      (arm A: one `setPlanStatus(planning)` write, and rule 3c takes over — `releasePlan`'s pattern);
+      (arm A: one `setPlanStatus(planning)` write, and rule `issue-plan` takes over — `releasePlan`'s pattern);
       `part` → propose one **appended** follow-up part (arm B); `goal` → escalate and schedule
       nothing (arm C, #158's question). Deriving the cause would send all three to a replan and
       re-decompose plans whose shape was fine, which is the issue's own stated failure mode. **No
@@ -1007,7 +1040,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     - **Arms A and B are `Proposal`s (kind `shortfall`, ref `issue:<n>:shortfall`); arm C is not.**
       Both spend a fleet, and a plan rewritten without a click would churn `plan_parts` under live
       agents. Arm C schedules nothing, and a proposal whose accept and reject both do nothing is not
-      a decision — so it is rule 1b's escalation, deduped on the open inbox item _and_ a recent
+      a decision — so it is rule `pr-ci-blocked`'s escalation, deduped on the open inbox item _and_ a recent
       executed decision. The **full** `proposalHold` applies (unlike a plan proposal's): the row
       persists until its arm is performed, so without the durable `rejected` arm one refusal is
       re-asked every pulse. `proposalWorldRef` maps the ref to `issue:<n>` unmodified, so phase 4's
@@ -1091,7 +1124,7 @@ base)` cuts a **new** branch from `config.defaultBranch` (threaded through `Exec
   `src/server/hub.ts` (fans harness/agent events out to sockets). The cockpit SPA is under
   `web/`.
 - **`src/server/auth.ts` guards that surface, and the guard is a path prefix, not a per-route
-  opt-in.** The severity is `POST /api/jobs`: rule 0 dispatches a queued job ahead of every
+  opt-in.** The severity is `POST /api/jobs`: rule `manual-job` dispatches a queued job ahead of every
   world-driven rule, so an unauthenticated cockpit is an RCE endpoint with repo write and a billing
   side-effect, not a dashboard. `authorizeRequest` is pure — the Fastify `onRequest` hook is a thin
   adapter — and answers **origin and host before the token**, so a leaked credential never re-opens
@@ -1314,7 +1347,7 @@ preserve:
     deliberately no catch-all fourth; a bucket implying no action is where findings rot, and the
     summary is free text already.
   - **It queues nothing, and that is the design, not an omission.** A queued job is dispatched by
-    rule 0 _ahead of every world-driven rule_, so an agent that could queue jobs could put agents on
+    rule `manual-job` _ahead of every world-driven rule_, so an agent that could queue jobs could put agents on
     the fleet — a capability escalation, and exactly the back-door round the auto-send seam that
     #108's open question 3 warns about. Promotion is the operator's click
     (`POST /api/findings/:id/promote` → `Store.createJob`, `findingJobRequest` carrying the
@@ -1745,7 +1778,7 @@ the `vstfs:///CodeReview/CodeReviewId/{projectId}/{prId}` artifact — so `RestA
 the project GUID once) and folds only _enabled, blocking_ CI-type policies (build-validation +
 status; reviewer/comment/work-item policies are human gates that map to `approved`/`unresolvedComments`
 instead). **That fold is frozen, and three invariants keep it that way** — it is what `prHealth`'s
-blocked verdict and rule 3's merge test read, so anything an operator can widen must be structurally
+blocked verdict and rule `pr-merge-ready`'s merge test read, so anything an operator can widen must be structurally
 unable to claim a PR cannot merge when Azure would complete it:
 
 - **No configuration reaches `aggregatePolicyCiStatus`.** Widening happens in `listPolicyCiChecks`,
@@ -1753,7 +1786,7 @@ unable to claim a PR cannot merge when Azure would complete it:
   (non-blocking) policies too, plus whichever non-CI kinds `azureDevOps.policyChecks` names. Policy
   kinds live in the pure `azure/policyKinds.ts` (`policyKindOf` + a kind→mode map, `check` /
   `advisory` / `off`), which `config.ts` validates without importing the provider.
-- **Rule 1, `inheritedCiFailure` and `prAttention` all gate on `ciNeedsAttention`** (`prHealth.ts`) —
+- **Rule `pr-ci-failing`, `inheritedCiFailure` and `prAttention` all gate on `ciNeedsAttention`** (`prHealth.ts`) —
   the aggregate _or_ any non-advisory failing check. A fourth reader added later must use it too, or
   the cockpit tells an operator a PR is nobody's turn while an agent is being dispatched for it. The
   `inheritedCiFailure` call site is load-bearing rather than tidy: a non-blocking check runs the
@@ -1761,7 +1794,7 @@ unable to claim a PR cannot merge when Azure would complete it:
   above one red format check.
 - **An `advisory` check is filtered out by both `classifyCiFailures` and `ciNeedsAttention`**, so no
   `ci.checks` rule — not even `match: '*'` — can claim one. That is what keeps the comment policy
-  (advisory by default) from outranking rule 2b, which holds the same signal with the thread's author
+  (advisory by default) from outranking rule `pr-review-comment`, which holds the same signal with the thread's author
   and body attached. Known, deliberately unfixed: `buildUnresolvedComments` marks a thread handled
   when the bot authored its last comment, so an agent's reply settles it for the harness while Azure
   keeps the policy red — the advisory check is what makes that divergence visible.
@@ -1803,7 +1836,7 @@ so the executor runs it directly.
   `basePrOf` / `inheritedCiFailure` (see "Stack safety" above). Keep these pure and unit-tested
   (`test/prHealth.test.ts` / `test/prExclusion.test.ts` / `test/stackedPrs.test.ts`); don't inline
   the logic.
-- **`src/ci/ciPolicy.ts` decides rule 1 per failing check, and it exists because `ciStatus` is a fold.**
+- **`src/ci/ciPolicy.ts` decides rule `pr-ci-failing` per failing check, and it exists because `ciStatus` is a fold.**
   One aggregate verdict meant one response to every failure. That is right for a broken build and wrong
   three ways: a lint failure has a house fix, a flaky suite wants latitude, and a red check another team
   owns is not fixable by an agent at all — dispatching into that last case burns the origin's attempt cap
@@ -1847,7 +1880,7 @@ so the executor runs it directly.
     arrive through `worldDiff` with **no participant identity attached**, and they are the most common
     reason a PR needs attention. What transfers is the _discipline_ (`issuePickupStatus`'s: many gates,
     one pure verdict, reasons), not the signal. `PrComment.author` is the one place identity genuinely
-    exists and is deliberately **not** branched on — an unhandled comment dispatches rule 2b whoever
+    exists and is deliberately **not** branched on — an unhandled comment dispatches rule `pr-review-comment` whoever
     wrote it, so `handled` decides and the author only ever appears in the wording of a reason.
   - **It is a lens: nothing in the dispatcher reads it**, following `findings`/`overlaps` and not the
     pending-proposal gate. Every input it folds is already a gate that fires on its own (the branch
@@ -1863,14 +1896,14 @@ so the executor runs it directly.
     A standing rejection is _nobody's_ turn by design (#122), and was invisible, which is the same
     invisibility `capped`/`unapproved` were added to `QueueItem` to fix; it quotes the note you left.
     The `settled` arm asks `proposalHold`, **not** the proposal row, so a rejection the world has
-    overtaken stops reading as settled at the instant rule 3 starts firing again.
+    overtaken stops reading as settled at the instant rule `pr-merge-ready` starts firing again.
   - **It reads the same lists the predicates beside it read** — the **unfiltered** open PR list
     (dispatch world + `ctx.excludedPrs`), so an `-ignore`d base still attributes exactly as
     `inheritedCiFailure` needs. `-ignore` on the PR itself is a **status**, checked first, because the
     harness filters those out of the dispatch world entirely and every arm below would be describing
     rules that cannot fire. The concern list and the merge-readiness test are re-derived from the same
     predicates rather than shared with the dispatcher (which builds prompt-bearing concerns) — the same
-    relationship `issuePickupStatus` has to rule 4. Shipped per-PR in `/api/state` as `attention` and
+    relationship `issuePickupStatus` has to rule `issue-pickup`. Shipped per-PR in `/api/state` as `attention` and
     drawn by `attentionChip` in `web/src/App.tsx`, which names the court only and leaves the detail to
     the health chip. Tests: `test/prAttention.test.ts`.
 - **Issue pickup state is the mirror on the issue side.** `isIssuePickupEligible` returns
@@ -1879,7 +1912,7 @@ so the executor runs it directly.
   contextual gates — active task on the origin, `dispatchVerdict` cooldown/escalation, and
   pause/headroom — into one per-item `{ eligible, status, reasons }` verdict.
   `buildStateSnapshot` attaches it per-issue as `pickup` (reading the policy via
-  `System.issuePickup` and `DEFAULT_COOLDOWN` — the same inputs rule 4 consults, so the
+  `System.issuePickup` and `DEFAULT_COOLDOWN` — the same inputs rule `issue-pickup` consults, so the
   verdict predicts the next cycle), and the cockpit renders it as the per-issue chip
   (`pickupChip` in `web/src/App.tsx`). If you add a pickup gate, extend both the pure
   verdict and its tests (`test/issuePickup.test.ts`) in the same change.
@@ -1904,7 +1937,7 @@ so the executor runs it directly.
   not by the executor: like `set_work_item_state` it's mechanical bookkeeping, so it isn't
   auto-send gated, and the one-comment rule is what keeps it from being noise.
 - **A review is answered as a whole, and only a reply settles a thread.** Two defects, one area.
-  - **Rule 2b dispatches per PR (`pr:<n>:comments`), not per thread.** A review is written as a unit —
+  - **Rule `pr-review-comment` dispatches per PR (`pr:<n>:comments`), not per thread.** A review is written as a unit —
     the same person leaving three comments in one pass, each assuming the others — so one concern per
     thread put one agent on each, a cycle apart, and a fix for comment 1 landed without comment 3 in
     view. The threads are **appended** to the rendered prompt (`reviewThreadsNote`), never
