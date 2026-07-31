@@ -392,6 +392,12 @@ export interface PlanPart {
   prNumber: number | null;
   /** 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'concluded' | 'blocked' | 'retired'. */
   status: string;
+  /**
+   * Why the part is blocked, in the server's words — the only status that carries
+   * its own reason, because a blocked part has no branch, PR or agent to be read
+   * for one. Optional so an older server degrades to today's silence.
+   */
+  blockedReason?: string | null;
   taskId: string | null;
   createdAt: string;
   updatedAt: string;

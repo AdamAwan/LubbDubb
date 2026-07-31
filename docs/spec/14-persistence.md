@@ -33,14 +33,14 @@ Current entries:
 | `decisions`  | `rule`                                                                                                   |
 | `findings`   | `ticket_ref`                                                                                             |
 | `plans`      | `risks`, `out_of_scope`, `document`, `discussing`                                                        |
-| `plan_parts` | `rationale`, `acceptance`                                                                                |
+| `plan_parts` | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
 `agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`, `scratch_entries`, `retrospectives`, `floor_completions`, `priority_overrides`, `work_nodes`,
 `work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
 migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
-has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the six fields above, which
+has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the fields above, which
 is exactly the case this table exists for. `CREATE TABLE IF NOT EXISTS` never alters an existing table,
 so a column added without an `ensureColumns` entry is invisible on every database from before that
 column existed — "this table is fresh, so it needs no entry" is only ever true on the day the table is

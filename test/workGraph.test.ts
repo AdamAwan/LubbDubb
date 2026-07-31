@@ -122,6 +122,7 @@ function part(over: Partial<PlanPart> = {}): PlanPart {
     branch: null,
     prNumber: null,
     status: 'ready',
+    blockedReason: null,
     taskId: null,
     createdAt: '2026-07-28T09:00:00.000Z',
     updatedAt: '2026-07-28T09:00:00.000Z',

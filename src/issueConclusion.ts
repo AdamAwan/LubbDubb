@@ -77,11 +77,15 @@ const UNDECLARED: ResolvedConclusion = { verdict: 'undeclared', by: null, note: 
  *    because the assessor is later and better informed than the agent that
  *    declared its own run, which is the sentence already in
  *    `Store.recordDelivery`'s doc comment, applied consistently.
- * 3. **The agent's declaration**, from `conclude_work`.
- * 4. **The plan derivation**: `complete` → done, an in-flight plan → more work.
- *    This is what keeps a decomposed issue behaving exactly as it does today
- *    without rule 3b needing a separate `decomposed` branch.
- * 5. Otherwise undeclared.
+ * 3. **A plan in flight** — `planning`, `active` or `awaiting_approval` — reads as
+ *    more work, *above* the stored declaration rather than below it. See
+ *    {@link planInFlightVerdict} for why that order is the one this module's own
+ *    doctrine asks for.
+ * 4. **The agent's declaration**, from `conclude_work`.
+ * 5. **A `complete` plan** → done. Below the declaration, because an agent saying
+ *    work remains on an issue whose parts all merged is telling the roll-up
+ *    something it cannot see, and `more_work` is the safe direction besides.
+ * 6. Otherwise undeclared.
  *
  * Arms 2 and 3 being separate is the fix for a bug that predates the feature: the
  * assessor used to write `more_work` into `issue_conclusions`, which is keyed
@@ -112,31 +116,68 @@ export function resolveIssueConclusion(
       at: shortfall.updatedAt,
     };
   }
+  // Above the stored declaration, not below it: a plan in flight has taken the
+  // issue back, and a declaration made before it did is about a delivery attempt
+  // the harness has since superseded.
+  const inFlight = planInFlightVerdict(plan);
+  if (inFlight) return inFlight;
   if (stored) {
     return { verdict: stored.verdict, by: stored.by, note: stored.note, at: stored.updatedAt };
   }
-  const derived = planDerivedVerdict(plan);
-  if (derived) return derived;
+  if (plan?.status === 'complete') {
+    return { verdict: 'done', by: 'plan', note: 'every part of the plan merged', at: null };
+  }
   return UNDECLARED;
 }
 
 /**
- * The plan roll-up read as a conclusion.
+ * A plan that still owns its issue, read as a conclusion.
  *
- * `single` is deliberately **not** derived from: a `single` verdict says the issue
- * is delivered as one PR, which is a statement about *shape*, not about whether
- * that PR has been written. Treating it as `more_work` would be harmless but
- * dishonest, and treating it as `done` would be catastrophic — so a `single` plan
- * leaves the issue exactly where an unplanned one sits, waiting on its agent to
- * declare. `planning`/`abandoned` say nothing about completeness either.
+ * ## Why this outranks a stored declaration
+ *
+ * The doctrine above — *the verdict is asked of whoever owns the whole issue* —
+ * was enforced by making the two arms unreachable together: a part agent, a
+ * planner and an assessor are all refused by {@link conclusionOrigin}, so on a
+ * decomposed issue nothing could write a declaration at all. The arm order below
+ * it therefore never had to decide anything, and encoded an assumption instead of
+ * a rule.
+ *
+ * A **replan breaks that assumption**, and it is the one path that does. An issue
+ * worked `single` has one agent, that agent declares through `conclude_work`, and
+ * then an accepted shortfall hands the issue to a plan (`shortfallArm`'s arm A
+ * flips it to `planning`). Now both exist — and with the declaration ranked first,
+ * a spent `done` outranked the plan that had just taken the issue back, which is
+ * ownership read exactly backwards. The observed cost was a goal shown finished on
+ * the Goal Floor while its only PR sat open and its plan sat in `planning`.
+ *
+ * So the rule the doctrine always stated is applied rather than assumed: while a
+ * plan is in flight, the plan speaks.
+ *
+ * ## Why `planning` is in flight
+ *
+ * It reads as `more_work` here where it used to say nothing, and the two ways to
+ * reach it are both unsettled decompositions: a plan awaiting its planner's
+ * verdict, and a replan. Nobody re-plans a finished goal — and an operator who
+ * did by mistake has arm 1, which outranks every derivation. A discussion is the
+ * same status (`isPlanInDiscussion`) and 409s unless the plan was
+ * `awaiting_approval`, so it is in flight on arrival and stays so.
+ *
+ * `single` is deliberately **not** derived from: it says the issue is delivered as
+ * one PR, which is a statement about *shape*, not about whether that PR has been
+ * written. Treating it as `more_work` would be harmless but dishonest, and
+ * treating it as `done` would be catastrophic — so a `single` plan leaves the
+ * issue exactly where an unplanned one sits, waiting on its agent to declare.
+ * `abandoned` says nothing about completeness either.
  */
-function planDerivedVerdict(plan: Plan | null): ResolvedConclusion | null {
+function planInFlightVerdict(plan: Plan | null): ResolvedConclusion | null {
   if (!plan) return null;
-  if (plan.status === 'complete') {
-    return { verdict: 'done', by: 'plan', note: 'every part of the plan merged', at: null };
-  }
-  if (plan.status === 'active' || plan.status === 'awaiting_approval') {
-    return { verdict: 'more_work', by: 'plan', note: 'the plan still has parts in flight', at: null };
+  if (plan.status === 'planning' || plan.status === 'active' || plan.status === 'awaiting_approval') {
+    return {
+      verdict: 'more_work',
+      by: 'plan',
+      note: plan.status === 'planning' ? 'the plan is being drawn up' : 'the plan still has parts in flight',
+      at: null,
+    };
   }
   return null;
 }

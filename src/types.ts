@@ -986,6 +986,13 @@ export interface PlanPart {
   branch: string | null;
   prNumber: number | null;
   status: PlanPartStatus;
+  /**
+   * Why this part is `blocked`, written by the reconciler with the status and
+   * cleared with it. Null on every other status — a blocked part is the one that
+   * has a reason nothing else in the world can be read for, since it has no
+   * branch, no PR and no agent to explain it.
+   */
+  blockedReason: string | null;
   taskId: string | null;
   createdAt: string;
   updatedAt: string;

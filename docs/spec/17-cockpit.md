@@ -496,10 +496,28 @@ fetch goes through `fetchWorkSubtree` on `CockpitActions`, because a skin may no
 the live world, so a completed goal — and the Manifest's way in to its retrospective — dropped off the
 moment the tracker stopped returning the issue (closed by hand) or its watch tag came off. So a goal
 observed complete is recorded server-side while it is still live (`floor_completions`, keyed on the
-issue origin, title captured then so it outlives the world forgetting the issue). "Complete" is any of
-the four signals the floor already draws completion from — a write-up, a `delivered` verdict, a `done`
-conclusion, or a `complete` plan (`isGoalComplete`, `src/floor/completions.ts`) — recorded each pulse
-in `harness.ts`. The snapshot then does two things: it stamps a still-present finished issue with a
+issue origin, title captured then so it outlives the world forgetting the issue). "Complete"
+(`isGoalComplete`, `src/floor/completions.ts`, recorded each pulse in `harness.ts`) folds two kinds of
+input, and the rule between them is **evidence adds; a standing verdict subtracts**:
+
+- **Evidence** — a write-up exists, or a `delivered` verdict was ever reached. Each says the goal was
+  reached at least once, and they are why the conclusion alone is not enough: a finished goal nobody
+  declared resolves to `undeclared`. The delivery is read as _presence_, not as still standing.
+- **The standing verdict**, from [`resolveIssueConclusion`](06-issue-pickup.md#concluding-an-issue) —
+  `done` completes, and **`more_work` outranks every piece of evidence above**, because the operator,
+  the assessor, the working agent or a plan being re-drawn is saying _now_ that work remains.
+
+The conclusion and the plan are asked through that resolver rather than read as two more raw signals,
+and reading them raw was a defect with two faces: an operator's `more_work` toggle was argued with by
+a `complete` plan — the exact contradiction the resolver's first arm exists to forbid — and a standing
+shortfall was not consulted at all, so an assessor's "nothing was delivered" lost to the stale `done`
+of the agent it was assessing.
+
+**The gate is on minting a completion, never on keeping one.** Retention stays one-way: nothing
+deletes a row, `recordFloorCompletion` is upsert-only and never resurrects a dismissal, and a
+genuinely finished goal resolves to `done` or `undeclared` — never `more_work` — so it cannot fall off
+the floor on its own. What no longer happens is the harness recording a goal as finished on the same
+pulse its own scheduler is putting agents on it. The snapshot then does two things: it stamps a still-present finished issue with a
 `completion` field, and it **synthesizes** the ones the world has forgotten into a separate
 `floorCompletions` list (rebuilt from the stored records through the _same_ `enrichIssue` path a live
 issue takes, so a retained card and a live one cannot disagree), which the floor merges in — the

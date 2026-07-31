@@ -129,6 +129,7 @@ export class Store {
       outcome_kind: 'TEXT',
       outcome_ref: 'TEXT',
       outcome_summary: 'TEXT',
+      blocked_reason: 'TEXT',
     });
   }
 
@@ -1003,6 +1004,9 @@ export class Store {
         branch: prev?.branch ?? null,
         prNumber: prev?.prNumber ?? null,
         status: prev?.status ?? 'pending',
+        // Progress like the outcome columns: it explains a status this call is not
+        // allowed to change, so an amendment re-declaring a part leaves it alone.
+        blockedReason: prev?.blockedReason ?? null,
         taskId: prev?.taskId ?? null,
         createdAt: prev?.createdAt ?? ts,
         updatedAt: ts,
@@ -1014,9 +1018,11 @@ export class Store {
       // progress, and an amendment re-declaring a part must leave what it produced
       // alone. `expected_kind` is part of the declaration, so it does update.
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, rationale, acceptance, expected_kind,
-         outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, task_id, created_at, updated_at)
+         outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
+         task_id, created_at, updated_at)
        VALUES (@id, @planId, @slug, @seq, @title, @scope, @rationale, @acceptance, @expectedKind,
-         @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @taskId, @createdAt, @updatedAt)
+         @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @blockedReason,
+         @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
          rationale=excluded.rationale, acceptance=excluded.acceptance, expected_kind=excluded.expected_kind,
          depends_on=excluded.depends_on, updated_at=excluded.updated_at`,
@@ -1049,7 +1055,13 @@ export class Store {
    */
   updatePlanPart(
     id: string,
-    patch: { status?: PlanPart['status']; branch?: string | null; prNumber?: number | null; taskId?: string | null },
+    patch: {
+      status?: PlanPart['status'];
+      branch?: string | null;
+      prNumber?: number | null;
+      taskId?: string | null;
+      blockedReason?: string | null;
+    },
   ): PlanPart | null {
     const row = this.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
     if (!row) return null;
@@ -1060,7 +1072,8 @@ export class Store {
     };
     this.db
       .prepare(
-        `UPDATE plan_parts SET status=@status, branch=@branch, pr_number=@prNumber, task_id=@taskId, updated_at=@updatedAt WHERE id=@id`,
+        `UPDATE plan_parts SET status=@status, branch=@branch, pr_number=@prNumber, task_id=@taskId,
+           blocked_reason=@blockedReason, updated_at=@updatedAt WHERE id=@id`,
       )
       .run({
         id: next.id,
@@ -1068,6 +1081,7 @@ export class Store {
         branch: next.branch,
         prNumber: next.prNumber,
         taskId: next.taskId,
+        blockedReason: next.blockedReason,
         updatedAt: next.updatedAt,
       });
     return next;
@@ -2102,6 +2116,7 @@ interface PlanPartRow {
   branch: string | null;
   pr_number: number | null;
   status: string;
+  blocked_reason: string | null | undefined;
   task_id: string | null;
   created_at: string;
   updated_at: string;
@@ -2390,6 +2405,7 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     branch: r.branch,
     prNumber: r.pr_number,
     status: r.status as PlanPart['status'],
+    blockedReason: r.blocked_reason ?? null,
     taskId: r.task_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

@@ -170,16 +170,31 @@ A work item parked in `inReviewState` is ambiguous: it sits there when work rema
 everything is delivered and it is waiting on test. No provider field distinguishes the two, so the
 harness keeps its own record of whether an issue is finished.
 
-`resolveIssueConclusion(stored, plan)` (`src/issueConclusion.ts`, pure) folds one verdict —
+`resolveIssueConclusion(stored, plan, shortfall)` (`src/issueConclusion.ts`, pure) folds one verdict —
 `done` | `more_work` | `undeclared` — with this precedence:
 
 1. **The operator's toggle** (`POST /api/issues/:number/conclusion`), which wins over everything,
    including a plan roll-up.
-2. **The agent's declaration**, via the `conclude_work` tool.
-3. **Derived from the plan**: `complete` → `done`, `active`/`awaiting_approval` → `more_work`.
-   `single`, `planning` and `abandoned` derive nothing — a `single` verdict describes the delivery's
-   _shape_, not whether it has happened.
-4. Otherwise `undeclared`.
+2. **A standing shortfall** — the assessor's "worked, and the goal is not reached".
+3. **A plan in flight**: `planning`, `active` or `awaiting_approval` → `more_work`.
+4. **The agent's declaration**, via the `conclude_work` tool.
+5. **A `complete` plan** → `done`.
+6. Otherwise `undeclared`. `single` and `abandoned` derive nothing — a `single` verdict describes the
+   delivery's _shape_, not whether it has happened.
+
+**Arm 3 sits above the declaration because ownership does.** The rule this module states — _the
+verdict is asked of whoever owns the whole issue_ — used to be enforced by making the two arms
+unreachable together: `conclusionOrigin` refuses the part agent, the planner and the assessor, so a
+decomposed issue had no declaration to rank. A **replan is the one path that breaks that**. An issue
+worked `single` has one agent, that agent declares `done`, and an accepted shortfall then flips its
+plan to `planning` ([rule 3g](05-dispatcher.md#rule-3g--routing-a-failed-assessment)) — and with the
+declaration ranked first, a spent verdict outranked the plan that had just taken the issue back. A
+`complete` plan stays _below_ the declaration: an agent saying work remains on an issue whose parts
+all merged is telling the roll-up something it cannot see, and `more_work` is the safe direction.
+
+`planning` reads as in flight for the same reason. Both ways to reach it — a plan awaiting its
+planner's verdict, and a replan — are unsettled decompositions, and nobody re-plans a finished goal.
+An operator who did by mistake has arm 1, which outranks every derivation.
 
 **`undeclared` is a distinct answer, not a synonym for `more_work`.** It is what a missing row
 resolves to, it is never stored, and rule 3b acts only on an explicit `more_work` — so an issue

@@ -237,6 +237,11 @@ export class RuleDispatcher implements Dispatcher {
     // origin. Empty until someone declares one, which resolves every issue to
     // `undeclared` — the direction that stops rather than acts.
     const conclusions = new Map((ctx.conclusions ?? []).map((c) => [c.originRef, c]));
+    // The negative half of that verdict, on the same origin. Rule 3b resolves the
+    // two together or it reads the assessor's "not delivered" as the working
+    // agent's `done` — and `shortfallRecordedNote`'s no-cause arm promises this
+    // exact behaviour ("it comes back round for pickup with your summary").
+    const shortfallsByOrigin = new Map((ctx.shortfalls ?? []).map((s) => [s.originRef, s]));
     /** Is this issue decomposed — i.e. owned by the part scheduler, not by pickup? */
     const partsPlanFor = (issueNumber: number): Plan | null => {
       if (!this.planning.enabled) return null;
@@ -554,6 +559,7 @@ export class RuleDispatcher implements Dispatcher {
           const conclusion = resolveIssueConclusion(
             conclusions.get(issueOrigin(issue.number)) ?? null,
             plansByOrigin.get(issueOrigin(issue.number)) ?? null,
+            shortfallsByOrigin.get(issueOrigin(issue.number)) ?? null,
           );
           if (conclusion.verdict !== 'more_work') continue;
           raw.push({
@@ -563,7 +569,13 @@ export class RuleDispatcher implements Dispatcher {
             rule: 'work-item-back-to-pickup',
             reason:
               `Work item #${issue.number} is open in "${inReviewState}" with no open PR, and ` +
-              `${conclusion.by === 'plan' ? 'its plan still has parts in flight' : `${conclusion.by === 'operator' ? 'you' : 'the agent that worked it'} reported work outstanding`}` +
+              `${
+                conclusion.by === 'plan'
+                  ? conclusion.note
+                  : conclusion.by === 'assessor'
+                    ? 'an assessment of the delivered work found the goal is not reached'
+                    : `${conclusion.by === 'operator' ? 'you' : 'the agent that worked it'} reported work outstanding`
+              }` +
               `; move it back to "${returnState}" so the rest can be picked up.`,
           } satisfies RawAction);
         }

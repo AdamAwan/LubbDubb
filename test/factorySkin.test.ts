@@ -1136,6 +1136,36 @@ test('an awaiting-approval plan draws ghosts', () => {
 });
 
 /**
+ * A jammed assembler is the one stopped machine the queue cannot speak for — a
+ * blocked part is never queued — so before this it drew a red word and no reason
+ * anywhere on the floor. The text is the server's, verbatim, like every plate.
+ */
+test('a jammed assembler carries the reason the server put on its row', () => {
+  const reason = 'The branch issue/9 exists, and git cannot create issue/9/<part> while it does.';
+  const floor = buildGoalFloor(
+    floorInput({
+      parts: [
+        { ...planPart('signer', [], 'blocked', 1), blockedReason: reason },
+        { ...planPart('route', ['signer'], 'blocked', 2), blockedReason: reason },
+      ],
+    }),
+  );
+  const assemblers = floor.machines.filter((m) => m.kind === 'assembler');
+  assert.ok(
+    assemblers.every((m) => m.status.word === 'Jammed'),
+    'the status this test is about',
+  );
+  assert.deepEqual(
+    floor.plates.filter((p) => p.text === reason).map((p) => p.who),
+    ['Assembler · 1', 'Assembler · 2'],
+  );
+
+  // An older server sends no reason; drawing a plate would mean inventing one.
+  const silent = buildGoalFloor(floorInput({ parts: [planPart('signer', [], 'blocked', 1)] }));
+  assert.deepEqual(silent.plates, []);
+});
+
+/**
  * A goal nothing has staked a claim to gets no floor — and the three things that
  * are not simply "filter on the tag" are each asserted, because each of them is a
  * way the panel could go confidently blank.
