@@ -103,8 +103,23 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `concernUrgency` restated a slice of the same ordering a third time. Order is now the
     declaration order of `DISPATCH_PIPELINE`, `concernUrgency` reads that array by index, and
     **nothing renders a position** — the cockpit shows the id and the name. Adding a rule is adding
-    an entry in the position it should run plus a `stages` entry in `ruleDispatcher.ts`; inserting
-    one mid-list renumbers nothing, because there is nothing to renumber.
+    an entry in the position it should run plus a module in `src/dispatcher/rules/` registered in
+    `ruleDispatcher.ts`'s `STAGES` map under that id; inserting one mid-list renumbers nothing,
+    because there is nothing to renumber.
+  - **A rule's body is a module, and `StageContext` is the seam.** Each rule is one file under
+    `src/dispatcher/rules/` exporting a `(s: StageContext) => void`; `decide` builds the context
+    once, walks `DISPATCH_PIPELINE` and applies the cut, and that is all it does. They were closures
+    inside that method over ~20 of its locals, so every read — and the two writes a later rule
+    depends on — was implicit. The context carries the **policy objects** rather than the dispatcher
+    itself (a stage that could reach the class could reach anything on it), and everything on it is
+    derived once: two rules re-deriving `eligibleIssues`, `routes` or `deliveryParked` is how they
+    come to disagree about an issue. **`assaying` and `assessing` are written by `issue-assay` /
+    `issue-assess` and read by the stages after them** — the whole mechanism behind `superseded`, and
+    it holds only because the pipeline runs the writers first. Moving either below its readers
+    compiles fine and silently puts two agents on one issue; the dependency is documented on
+    `StageContext` for that reason. The **PR pass is deliberately not split**: `pr-ci-failing`'s
+    module covers the four concern rules plus `pr-merge-ready`, because one agent works a branch and
+    the fold picking the top concern must see them together.
   - **`kind` splits two vocabularies that were one registry.** A `rule` proposes work and is a
     pipeline stage. An `admission` decides what became of a proposal (`src/dispatcher/admission.ts`)
     and is **not** ordered per-feature and not a stage — `branch-notify` and `cooldown-escalate` are

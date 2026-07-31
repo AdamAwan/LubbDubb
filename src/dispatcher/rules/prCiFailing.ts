@@ -1,0 +1,389 @@
+import type { DispatchContext } from '../dispatcher.js';
+import { ciNeedsAttention, inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../../prHealth.js';
+import type { Agent, PullRequest } from '../../types.js';
+import { askedAlready } from '../admission.js';
+import { ciFailureNote, ciNeedsHuman, classifyCiFailures, type CiVerdict } from '../../ci/ciPolicy.js';
+import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
+import { DISPATCH_PIPELINE, type DispatchRuleId } from '../rules.js';
+import { prCommentOrigin, prCommentsOrigin, reviewThreadNote, reviewThreadsNote } from '../reviewThreads.js';
+import { isActive, type RawAction, type StageContext } from './context.js';
+
+/**
+ * React to PR signals first — they're time-sensitive. At most one code agent
+ * works a given branch, so a fresh signal for a branch that already has a running
+ * agent is delivered to it, never a second dispatch. Dispatch candidates are
+ * collected here and ranked across PRs below — world order is arbitrary, so it
+ * must not decide who wins scarce headroom.
+ *
+ * **One pass covering five rules**, registered under the first of them, which is
+ * why `pr-ci-blocked`, `pr-base-update`, `pr-review-comment` and `pr-merge-ready`
+ * have no stage of their own. They are not independent: the four concern rules
+ * feed one per-PR list whose *top* entry alone becomes a dispatch, because one
+ * agent works a branch. Their relative urgency is their order in
+ * {@link DISPATCH_PIPELINE} — see {@link concernUrgency}, which reads it rather
+ * than restating it.
+ */
+export function prCiFailing(s: StageContext): void {
+  const { ctx } = s;
+  const prCandidates: Array<{ pr: PullRequest; top: PrConcern }> = [];
+  for (const pr of ctx.world.pullRequests) {
+    if (pr.merged) continue; // a merged PR is done — never act on it.
+
+    // Every concern that would, on its own, warrant a code agent on this
+    // branch, ordered by urgency: CI > base-update > review comments.
+    const concerns: PrConcern[] = [];
+    // A stacked PR's CI runs the commits of the PR underneath it, so a red base
+    // turns every PR above it red. Dispatching on that would put an agent on each
+    // of them to fix code that is not theirs — the failure multiplies up the
+    // stack and none of those agents can do anything about it. Suppress the rule
+    // here and leave it at that: the failing PR at the bottom is in this same
+    // world and rule 1 fires on it under its own steam, so there is no concern to
+    // push down. Only the CI rule is suppressed — the base-update rule below still
+    // fires, which is what keeps a stack restacking when its parent pushes.
+    const inheritedFailure = inheritedCiFailure(pr, s.openPrs);
+    // Which checks failed decides what happens, not merely that CI is red. An
+    // unconfigured harness — and a provider that reports no per-check detail —
+    // yields `actionable` with empty lists, i.e. exactly the behaviour above.
+    const ciVerdict = classifyCiFailures(pr.ciChecks, s.ci);
+    // The gate is `ciNeedsAttention`, not the aggregate: a check that fails
+    // without blocking completion still wants a fix, and folding it into
+    // `ciStatus` would have claimed the PR cannot merge when it can.
+    const ciFailing = ciNeedsAttention(pr) && inheritedFailure === null;
+    if (ciFailing && ciVerdict.actionable) {
+      const ciOrigin = `pr:${pr.number}:ci`;
+      concerns.push({
+        rule: 'pr-ci-failing',
+        origin: ciOrigin,
+        title: `Fix failing CI on PR #${pr.number}`,
+        // Appended, never interpolated: `pr-ci-fix` is operator-overridable and
+        // an override written before this existed would silently drop every
+        // word of the operator's own per-check guidance (see `ciFailureNote`).
+        prompt:
+          s.templates.render('pr-ci-fix', { number: pr.number, title: pr.title, branch: pr.branch }) +
+          ciFailureNote(ciVerdict),
+        dispatchReason: ciDispatchReason(pr.number, ciVerdict),
+        note: `CI is now failing on PR #${pr.number} — investigate and push a fix.${ciFailureNote(ciVerdict)}`,
+        originTitle: pr.title,
+        originSummary: `PR #${pr.number} on branch ${pr.branch} · CI ${pr.ciStatus}${pr.approved ? ' · approved' : ''}`,
+        urgent: ciVerdict.urgent,
+      });
+    } else if (ciFailing && ciNeedsHuman(ciVerdict)) {
+      // Nothing an agent can fix, and the operator asked to be told. Put it to
+      // a human once — see `askedAlready` for why that takes two readings.
+      const ciOrigin = `pr:${pr.number}:ci`;
+      if (!askedAlready(ciOrigin, ctx.openEscalations, ctx.recentDecisions)) {
+        const names = ciVerdict.escalate.map((m) => m.name).join(', ');
+        s.raw.push({
+          type: 'escalate_to_human',
+          escalationType: 'resolve_ambiguity',
+          prompt:
+            `CI is failing on PR #${pr.number} ("${pr.title}"), and every failing check is one you have told ` +
+            `the harness not to act on: ${names}. No agent has been dispatched. This needs someone who can ` +
+            `reach whoever owns those checks.`,
+          context: { originRef: ciOrigin, prNumber: pr.number, taskTitle: pr.title },
+          rule: 'pr-ci-blocked',
+          reason: `PR #${pr.number} is red only on checks configured to escalate (${names}).`,
+        } satisfies RawAction);
+      }
+    }
+    if (needsBaseUpdate(pr)) {
+      const base = pr.baseBranch ?? s.defaultBranch;
+      const behind = pr.mergeableState === 'behind';
+      concerns.push({
+        rule: 'pr-base-update',
+        origin: `pr:${pr.number}:mergeable`,
+        title: behind ? `Update PR #${pr.number} with ${base}` : `Resolve merge conflicts on PR #${pr.number}`,
+        prompt: s.templates.render(behind ? 'pr-base-update-behind' : 'pr-base-update-conflict', {
+          number: pr.number,
+          title: pr.title,
+          branch: pr.branch,
+          base,
+        }),
+        dispatchReason: behind
+          ? `PR #${pr.number} is behind ${base} and no agent is on it.`
+          : `PR #${pr.number} has merge conflicts with ${base} and no agent is on it.`,
+        note: behind
+          ? `PR #${pr.number} is now behind ${base} — merge ${base} in to bring it up to date, then push.`
+          : `The base branch ${base} now conflicts with PR #${pr.number} — merge ${base} in, resolve the conflicts, and push.`,
+        originTitle: pr.title,
+        originSummary: `PR #${pr.number} on branch ${pr.branch} · ${behind ? `behind ${base}` : `conflicts with ${base}`}`,
+      });
+    }
+    // Review feedback is **one** concern for the whole PR, never one per thread.
+    // A review is written as a unit — the same person leaving three comments in
+    // one pass, each assuming the others — so an agent handed a single thread in
+    // isolation makes a fix for comment 1 that contradicts comment 3, or does
+    // the same edit twice a cycle apart. One agent, one branch, every open
+    // thread in front of it at once.
+    //
+    // De-dup stays per *thread* (`signals` below): dispatch is per branch, but
+    // "has this agent been told about *this* comment" is per comment, or a
+    // reviewer's fourth comment is swallowed by the origin its first three
+    // already claimed.
+    const unhandled = pr.unresolvedComments.filter((c) => !c.handled);
+    if (unhandled.length > 0) {
+      const authors = [...new Set(unhandled.map((c) => c.author))];
+      const many = unhandled.length > 1;
+      concerns.push({
+        rule: 'pr-review-comment',
+        origin: prCommentsOrigin(pr.number),
+        title: many
+          ? `Address ${unhandled.length} review comments on PR #${pr.number}`
+          : `Address review comment on PR #${pr.number}`,
+        // Appended, never interpolated (see `reviewThreadsNote`). `author` and
+        // `comment` stay filled so an override written against the old
+        // one-comment prompt still renders something true — the full set
+        // follows it either way.
+        prompt:
+          s.templates.render('pr-review-comment', {
+            number: pr.number,
+            branch: pr.branch,
+            author: authors.join(', '),
+            comment: unhandled[0]!.body,
+          }) + reviewThreadsNote(unhandled),
+        dispatchReason: many
+          ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
+          : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,
+        // Only reached when this concern carries no fresh signals of its own,
+        // which cannot happen — kept honest rather than unreachable-by-luck.
+        note: `Unhandled review feedback on PR #${pr.number} from ${authors.join(', ')}.`,
+        originTitle: pr.title,
+        originSummary: many
+          ? `${unhandled.length} review threads on PR #${pr.number} from ${authors.join(', ')}`
+          : `Review comment from ${authors[0]}: ${unhandled[0]!.body}`,
+        signals: unhandled.map((c) => ({
+          ref: prCommentOrigin(pr.number, c.id),
+          note: reviewThreadNote(pr.number, c),
+        })),
+      });
+    }
+
+    if (concerns.length > 0) {
+      const branch = resolveBranchAgent(ctx, pr.branch);
+      if (branch.kind === 'running') {
+        // A running agent already owns this branch — notify it, don't duplicate.
+        // Collapse every fresh, not-yet-delivered signal into one note.
+        //
+        // De-dup is per *signal*, not per concern: the comment concern covers
+        // every open thread under one dispatch origin, so keying on the origin
+        // alone would let the first three comments swallow the fourth — the
+        // exact signal an operator reviewing an agent's work is sending. Three
+        // things have already delivered a signal: an active task on it (a CI or
+        // base concern *is* its own origin), the dispatch that launched this
+        // agent (its prompt lists those threads; repeating them is noise), and
+        // a note already sent.
+        const fresh = concerns.flatMap((c) =>
+          signalsOf(c).filter(
+            (sig) =>
+              !s.activeOrigins.has(sig.ref) &&
+              !s.dispatchedSignals.has(`${pr.branch}::${sig.ref}`) &&
+              !s.notified.has(`${branch.agent.id}::${sig.ref}`),
+          ),
+        );
+        if (fresh.length > 0) {
+          s.raw.push({
+            type: 'respond_to_agent',
+            agentId: branch.agent.id,
+            response:
+              `An update on the branch you're working (PR #${pr.number}):\n` +
+              fresh.map((sig) => `- ${sig.note}`).join('\n') +
+              (fresh.length > 1
+                ? '\n\nRead them together before changing anything — they may resolve or contradict one another.'
+                : ''),
+            originRefs: fresh.map((sig) => sig.ref),
+            rule: 'branch-notify',
+            reason: `New PR signal(s) for a branch already staffed by agent ${branch.agent.id}.`,
+          } satisfies RawAction);
+        }
+      } else if (branch.kind === 'free') {
+        // No agent on this branch — a dispatch candidate for the most urgent
+        // concern; ranked cross-PR (and throttled) after the loop.
+        prCandidates.push({ pr, top: concerns[0]! });
+      }
+      // branch.kind === 'busy' (queued / starting / parked waiting): hold every
+      // note. Injecting into a waiting agent would un-park a human escalation,
+      // and a starting agent has no live session yet. The signals persist, so a
+      // later cycle delivers them once the agent is running.
+    }
+
+    // 3: Drive a settled PR the last mile — merge it in. `merge_pr` isn't an
+    // agent dispatch (it claims no headroom); the executor's auto-send gate
+    // decides whether to merge autonomously or escalate for approval. A
+    // 'behind'/'blocked'/'dirty' state is handled above, so it never counts as
+    // merge-ready here.
+    //
+    // A stacked PR is held: merging it would land part 2 *into part 1's branch*
+    // mid-flight rather than into the integration branch. It becomes mergeable on
+    // its own the moment the provider retargets it, which is when its parent
+    // merges — no separate release step (see `isStackedPr`).
+    const mergeReady =
+      !isStackedPr(pr, s.defaultBranch) &&
+      pr.ciStatus === 'passing' &&
+      pr.approved === true &&
+      pr.mergeable === true &&
+      pr.mergeableState !== 'behind' &&
+      pr.mergeableState !== 'blocked' &&
+      pr.mergeableState !== 'dirty' &&
+      pr.unresolvedComments.every((c) => c.handled);
+    // A merge already put to a human is not put to them again: while the
+    // verdict on `pr:<n>:merge` stands — unanswered, or a "no" — this rule is
+    // held off that PR. Without it every pulse re-proposes the same merge and
+    // "Needs you" fills with copies of one question, which is what made the
+    // approval inert to begin with (issue #109). The pending item in the inbox
+    // is the visible state; there is no action to audit because none was taken.
+    //
+    // A "no" stops standing once something has happened to the PR since it was
+    // given (phase 4) — the rule then fires again, and its own preconditions
+    // above still decide whether the merge is proposed at all.
+    const mergeHeld = proposalHold('merge', mergeProposalRef(pr.number), ctx.proposals ?? [], {
+      rejectionSignals: ctx.rejectionSignals,
+    });
+    if (mergeReady && !mergeHeld) {
+      s.raw.push({
+        type: 'merge_pr',
+        prNumber: pr.number,
+        method: 'squash',
+        confidence: 0.9,
+        rule: 'pr-merge-ready',
+        reason: `PR #${pr.number} is green, approved and mergeable; merge it in.`,
+      } satisfies RawAction);
+    }
+  }
+
+  // Cross-PR ranking: an operator-flagged urgent check first, then the most
+  // urgent concern class (CI > base-update > review comment), tie-break by PR
+  // number for determinism.
+  prCandidates.sort(
+    (a, b) =>
+      Number(b.top.urgent ?? false) - Number(a.top.urgent ?? false) ||
+      concernUrgency(a.top.rule) - concernUrgency(b.top.rule) ||
+      a.pr.number - b.pr.number,
+  );
+  for (const { pr, top } of prCandidates) {
+    s.consider(
+      {
+        origin: top.origin,
+        rule: top.rule,
+        title: top.title,
+        kind: 'code',
+        branch: pr.branch,
+        reason: top.dispatchReason,
+        action: {
+          type: 'dispatch_code_agent',
+          branch: pr.branch,
+          title: top.title,
+          prompt: top.prompt,
+          originRef: top.origin,
+          originTitle: top.originTitle,
+          originSummary: top.originSummary,
+          // What this agent is being launched to answer. Recorded so the next
+          // pulse doesn't read the same review threads back to it as news —
+          // the dispatch origin alone can't say, since it names the branch's
+          // whole review rather than any one thread.
+          signalRefs: signalsOf(top).map((sig) => sig.ref),
+          rule: top.rule,
+          reason: top.dispatchReason,
+        } satisfies RawAction,
+      },
+      (attempts) => ({
+        type: 'escalate_to_human',
+        escalationType: 'resolve_ambiguity',
+        prompt: s.templates.render('pr-concern-escalation', {
+          title: top.title,
+          number: pr.number,
+          attempts,
+        }),
+        context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
+        rule: 'cooldown-escalate',
+        reason: `Origin ${top.origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
+      }),
+    );
+  }
+}
+
+/** One thing wrong with a PR that would warrant a code agent on its branch. */
+interface PrConcern {
+  /** Which dispatcher rule raised this concern, carried onto the emitted action. */
+  rule: DispatchRuleId;
+  origin: string;
+  title: string;
+  prompt: string;
+  dispatchReason: string;
+  note: string;
+  // Human-readable context about the originating item, carried onto the task so
+  // the cockpit can explain a running agent at a glance (issue #17).
+  originTitle: string;
+  originSummary: string;
+  /**
+   * Sort this PR ahead of every other PR concern. Set only by a CI check rule
+   * carrying `urgent` — the operator saying a red security scan outranks a
+   * behind-base branch elsewhere. Never re-orders past a held verdict or the
+   * headroom cut; it decides position in the queue and nothing else.
+   */
+  urgent?: boolean;
+  /**
+   * The individual world signals this concern folds, for notify de-dup. Defaults
+   * to the concern itself ({@link signalsOf}), which is right for CI and
+   * base-update: one origin, one signal.
+   *
+   * The review-comment concern is the one that differs, and it has to. It
+   * deliberately collapses every open thread onto **one** dispatch origin so a
+   * single agent answers a whole review — but "has this agent been told about
+   * this comment" is still a per-thread question, and answering it per origin
+   * would mean a reviewer's later comments never reached the agent already on the
+   * branch. Dispatch at branch granularity, de-dup at thread granularity.
+   */
+  signals?: PrSignal[];
+}
+
+/** One world signal inside a {@link PrConcern}: what it is about, and how it reads. */
+interface PrSignal {
+  /** The world ref this signal names — the notify de-dup key. */
+  ref: string;
+  /** The line delivered to a running agent on the branch when this signal is fresh. */
+  note: string;
+}
+
+/**
+ * The signals a concern folds. A concern that names none is its own single
+ * signal, so every rule but the review-comment one is unchanged by the split.
+ */
+function signalsOf(concern: PrConcern): PrSignal[] {
+  return concern.signals ?? [{ ref: concern.origin, note: concern.note }];
+}
+
+/**
+ * Name the failing checks in the audit line when the provider reported them, so
+ * the decision log says *why* an agent went out rather than only that CI was red.
+ */
+function ciDispatchReason(prNumber: number, verdict: CiVerdict): string {
+  const names = verdict.dispatch.map((m) => m.name);
+  if (names.length === 0) return `PR #${prNumber} has failing CI and no agent is on it.`;
+  return `PR #${prNumber} has failing CI (${names.join(', ')}) and no agent is on it.`;
+}
+
+/**
+ * Cross-PR rank of a concern class: CI beats base-update beats review comment.
+ *
+ * Read off the pipeline rather than restated here. It used to be three hardcoded
+ * numbers that happened to agree with the order the concerns are pushed in and
+ * with the registry's own numbering — three copies of one fact, which is the
+ * arrangement the rule numbers rotted under. A rule with no pipeline position
+ * sorts last rather than throwing: this only orders concerns, and a wrong order
+ * is a worse failure than a late one.
+ */
+function concernUrgency(rule: DispatchRuleId): number {
+  const at = DISPATCH_PIPELINE.findIndex((r) => r.id === rule);
+  return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+}
+
+/** The agent state of a PR's branch: a running agent to notify, busy (hold), or free (dispatch). */
+type BranchAgent = { kind: 'running'; agent: Agent } | { kind: 'busy' } | { kind: 'free' };
+
+function resolveBranchAgent(ctx: DispatchContext, branch: string): BranchAgent {
+  const task = ctx.tasks.find((t) => isActive(t) && t.branch === branch);
+  if (!task) return { kind: 'free' };
+  const agent = task.agentId ? ctx.agents.find((a) => a.id === task.agentId) : undefined;
+  if (agent && agent.status === 'running') return { kind: 'running', agent };
+  return { kind: 'busy' }; // queued / starting / waiting — hold new notes.
+}
