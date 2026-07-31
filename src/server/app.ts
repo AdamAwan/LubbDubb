@@ -33,6 +33,7 @@ import { isRecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { planOrigin } from '../plans/planning.js';
 import { planIssueNumber } from '../plans/parts.js';
+import { abandonDecomposition } from '../plans/planApproval.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { SHORTFALL_CAUSES } from '../delivery/shortfall.js';
@@ -576,6 +577,30 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     hub.broadcast({ type: 'world:changed' });
     await harness.runCycle('manual');
     return { ok: true, plan: next };
+  });
+
+  // Abandon a released decomposition and work the issue as one pull request.
+  //
+  // The escape hatch for a plan approved into a wall: its parts blocked instantly
+  // on the ref collision, `refusePlan` compare-and-sets against
+  // `awaiting_approval` so the fall-back-to-`single` arm is gone once approved,
+  // and `resolvePlanRoute` fails a spent replan back to `parts` rather than open
+  // to `single`. Without this the only remaining exit is editing the database.
+  //
+  // The operator's own act, taken immediately rather than proposed: a proposal is a
+  // standing verdict a rule re-reads, and this is one status write the person
+  // clicking has already decided on. The guard that matters is `partHasWork`,
+  // inside `abandonDecomposition`, so a decomposition with real work behind it is
+  // refused here rather than silently collapsed.
+  app.post('/api/plans/:id/abandon', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const plan = store.getPlan(id);
+    if (!plan) return reply.code(404).send({ error: 'plan not found' });
+    const settled = abandonDecomposition(store, id, plan.originRef);
+    if (!settled.ok) return reply.code(409).send({ error: settled.detail });
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, detail: settled.detail, plan: store.getPlan(id) };
   });
 
   // Discuss a plan with an agent instead of accepting, rejecting or replanning it.

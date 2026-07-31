@@ -180,6 +180,9 @@ const realApi = {
   // removes it, and it persists across a restart.
   dismissFloorCompletion: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/floor-dismiss`),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
+  // Collapse a released decomposition back to one pull request. 409s unless the
+  // plan is `active` with nothing started — the server owns that rule.
+  abandonPlan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/abandon`),
   // Talk it through with an agent instead of accepting or rejecting. Server-side
   // this is a replan whose planner converses first — see the route.
   discussPlan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/discuss`),

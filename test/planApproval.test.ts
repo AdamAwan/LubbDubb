@@ -11,7 +11,9 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { DEFAULT_PLANNING, resolvePlanRoute } from '../src/plans/planning.js';
 import { amendedPlanStatus } from '../src/plans/parts.js';
-import { describeProposedParts } from '../src/plans/planApproval.js';
+import { abandonDecomposition, describeProposedParts } from '../src/plans/planApproval.js';
+import { planApprovalWarnings, planIsWedged } from '../src/plans/planWedge.js';
+import { refCollisionReason } from '../src/plans/planReconciler.js';
 import { planProposalHold, planProposalRef } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { PLAN_FILE, parsePlanDocument } from '../src/plans/planDocument.js';
@@ -514,3 +516,170 @@ function submitPlan(system: System, originRef: string, slugs: string[]): void {
     requireApproval: system.config.planning.requireApproval,
   });
 }
+
+// -- the wedge: a plan approved onto a branch its parts cannot sit beneath -----
+
+test('planIsWedged needs every live part blocked, and ignores retired ones', () => {
+  const blocked = (slug: string, seq: number): PlanPart => ({
+    ...partRow(slug, seq),
+    status: 'blocked',
+    blockedReason: refCollisionReason(12),
+  });
+  assert.equal(planIsWedged([blocked('a', 1), blocked('b', 2)]), true);
+  // One part still moving is a plan still making progress. The collision blocks
+  // every part together or none, so a mixture is never the wedge.
+  assert.equal(planIsWedged([blocked('a', 1), partRow('b', 2)]), false);
+  assert.equal(planIsWedged([{ ...partRow('a', 1), status: 'retired' }, blocked('b', 2)]), true);
+  // Empty is not wedged but empty — a different thing, left to say so itself.
+  assert.equal(planIsWedged([]), false);
+  assert.equal(planIsWedged([{ ...partRow('a', 1), status: 'retired' }]), false);
+});
+
+test('the approval ask names an open PR that would belong to no part', () => {
+  const issue = {
+    id: 'i12',
+    number: 12,
+    title: 'Big thing',
+    body: '',
+    labels: [],
+    state: 'open' as const,
+    linkedPrNumber: 31231,
+  };
+  const pr = {
+    id: 'pr31231',
+    number: 31231,
+    title: 'Fix the thing',
+    branch: 'issue/12',
+    ciStatus: 'passing' as const,
+    unresolvedComments: [],
+  };
+  const parts = [partRow('a', 1), partRow('b', 2)];
+
+  const warning = planApprovalWarnings(issue, parts, [pr]);
+  assert.match(warning, /PR #31231/);
+  assert.match(warning, /belongs to no part/);
+  // It says what approving does *not* do, because nothing here knows which part
+  // the PR satisfies — naming it is the whole contribution.
+  assert.match(warning, /does not close it, hand it to a part/);
+
+  // A part that has claimed the PR is the ordinary working plan: nothing to say.
+  assert.equal(planApprovalWarnings(issue, [{ ...parts[0]!, prNumber: 31231 }, parts[1]!], [pr]), '');
+  // And a plan with nothing open against its issue warns about nothing at all,
+  // so nothing is appended to the ask.
+  assert.equal(planApprovalWarnings({ ...issue, linkedPrNumber: null }, parts, []), '');
+});
+
+test('a blocked decomposition warns before it is approved, quoting the stored reason', () => {
+  const issue = {
+    id: 'i12',
+    number: 12,
+    title: 'Big thing',
+    body: '',
+    labels: [],
+    state: 'open' as const,
+    linkedPrNumber: null,
+  };
+  const parts = [{ ...partRow('a', 1), status: 'blocked' as const, blockedReason: refCollisionReason(12) }];
+  const warning = planApprovalWarnings(issue, parts, []);
+  // Quoted off the row rather than recomposed, so the ask, the plate and the
+  // Errors panel are one sentence.
+  assert.ok(warning.includes(refCollisionReason(12)));
+  assert.match(warning, /cannot be cut/);
+});
+
+test('abandoning a released decomposition falls the issue back to a single PR', () => {
+  const store = new Store(':memory:');
+  const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: null });
+  store.upsertPlanParts(plan.id, [
+    {
+      slug: 'a',
+      seq: 1,
+      title: 'A',
+      scope: 'src/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
+    {
+      slug: 'b',
+      seq: 2,
+      title: 'B',
+      scope: 'src/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
+  ]);
+
+  const settled = abandonDecomposition(store, plan.id, 'issue:12');
+  assert.equal(settled.ok, true);
+  assert.equal(store.getPlan(plan.id)?.status, 'single');
+  assert.deepEqual(
+    store.listPlanParts(plan.id).map((p) => p.status),
+    ['retired', 'retired'],
+  );
+  store.close();
+});
+
+test('abandon refuses what would strand real work, and what is not released yet', () => {
+  const store = new Store(':memory:');
+  const plan = store.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Big thing',
+    status: 'awaiting_approval',
+    reason: null,
+  });
+  store.upsertPlanParts(plan.id, [
+    {
+      slug: 'a',
+      seq: 1,
+      title: 'A',
+      scope: 'src/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      expectedKind: null,
+    },
+  ]);
+
+  // Not released: refusing is that plan's verdict, and this one is a different
+  // sentence — collapsing the two would have one control mean two things.
+  assert.equal(abandonDecomposition(store, plan.id, 'issue:12').ok, false);
+
+  store.setPlanStatus(plan.id, 'active');
+  const part = store.listPlanParts(plan.id)[0]!;
+  store.updatePlanPart(part.id, { status: 'in_review', branch: 'issue/12/a', prNumber: 7 });
+  const refused = abandonDecomposition(store, plan.id, 'issue:12');
+  assert.equal(refused.ok, false);
+  assert.match(refused.detail, /work has already started/);
+  assert.equal(store.getPlan(plan.id)?.status, 'active', 'and nothing moved');
+  assert.equal(store.listPlanParts(plan.id)[0]?.status, 'in_review');
+  store.close();
+});
+
+test('the abandon route is the way out of an approved decomposition, and guards the same rule', async () => {
+  const { system } = plannedSystem();
+  await system.harness.runCycle('manual');
+  await system.proposals.accept(system.store.listProposals()[0]!.id);
+  const plan = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(plan.status, 'active');
+
+  const { app } = await buildApp(system);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/plans/nope/abandon' })).statusCode, 404);
+
+  const done = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/abandon` });
+  assert.equal(done.statusCode, 200);
+  assert.equal(system.store.getPlan(plan.id)!.status, 'single');
+  assert.ok(
+    system.store.listPlanParts(plan.id).every((p) => p.status === 'retired'),
+    'nothing is left for rule 4a to schedule',
+  );
+
+  // Idempotent by the same guard that makes it safe: a second click finds a
+  // `single` plan, not an active one, and 409s rather than re-retiring.
+  assert.equal((await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/abandon` })).statusCode, 409);
+  await app.close();
+  system.store.close();
+});

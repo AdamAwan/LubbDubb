@@ -497,6 +497,40 @@ plate. That was the other half of the gap: a blocked part is never queued, so th
 plate could not speak for it and it had no pull request to be read for one — it drew a red word and
 no reason anywhere.
 
+### When the collision arrives after approval
+
+An issue worked `single` first, replanned, and then **approved** onto its own taken branch is the bad
+case: the parts block instantly, and every exit is closed. `refusePlan` compare-and-sets against
+`awaiting_approval` — correctly, since refusing is a verdict on a question you have not yet answered
+— so the fall-back-to-`single` arm is gone the moment the decomposition is released; and
+`resolvePlanRoute` fails a spent replan back to `parts`, never open to `single`. The plan sits there,
+nothing is dispatched, and nothing says so. Three things close it, kept separate because they are
+three different jobs (`src/plans/planWedge.ts`):
+
+- **Noticing** — `planIsWedged(parts)`: every _live_ part blocked, not any. The collision blocks them
+  together or not at all, so a mixture is a plan still making progress. [Rule
+  3i](05-dispatcher.md#rule-3i--approved-plan-is-going-nowhere) escalates it once, deduped on an open
+  escalation for `issue:<n>:plan` **and** a recent executed one, exactly as rule 1b is. No agent is
+  dispatched, because none could help. Only `active` plans: an unapproved one is already in front of
+  a human, with the same fact in the ask.
+- **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule 3d's ask
+  (never interpolated, for `ciFailureNote`'s reason) and names both the blocked parts and any open PR
+  for the issue that no part claims. It **warns and does not block**: refusing to approve would put a
+  git fact in front of a judgement about _shape_, the branch is one command from being gone, and the
+  operator's only exit would become the opposite verdict to the one they were giving.
+- **A way out** — `abandonDecomposition` (`planApproval.ts`, `POST /api/plans/:id/abandon`) retires
+  the parts and collapses the plan to `single`. A separate act rather than a loosened `refusePlan`
+  guard because it is a different sentence: refusing says _I will not authorize this_, abandoning says
+  _I authorized it, it cannot run, work the issue whole instead_. The bar is `partHasWork`, so nothing
+  with an agent, a branch or a PR behind it is retired — which is also what makes the collapse safe,
+  since a part that never pushed has no branch to strand and the flat `issue/<n>` branch is exactly
+  the one rule 4 now wants.
+
+**Nothing attaches the existing pull request to a part.** The single-arm PR claims to resolve the
+whole issue — the claim the decomposition overruled — so nothing knows which part, if any, it
+satisfies. Deriving it would infer a positive terminal from incidental evidence, refused everywhere
+else in the harness. It is named to the operator and left alone.
+
 ### The status comment
 
 Each plan owns exactly **one** living comment on its issue, via
