@@ -1864,3 +1864,65 @@
     animation: none !important;
   }
 }
+
+/* Stacks, on the rack. Square and bevelled like everything else here; the spine is
+   a belt segment because a stack is work queued behind work — the one place that
+   metaphor is literally true of pull requests. */
+.fx-stack {
+  margin: 6px 0 10px;
+}
+.fx-stack-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  letter-spacing: 0.03em;
+}
+.fx-stack-ref {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.fx-stack-rungs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 8px solid var(--fx-belt-dark);
+  padding-left: 10px;
+}
+.fx-stack-rung {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: var(--panel-2);
+  border-top: 1px solid var(--border-hi);
+  border-left: 1px solid var(--border-hi);
+  border-bottom: 1px solid var(--border-lo);
+  border-right: 1px solid var(--border-lo);
+  padding: 5px 8px;
+}
+.fx-stack-rung.bottom {
+  border-top-color: var(--green);
+  border-left-color: var(--green);
+}
+.fx-stack-pos {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 1ch;
+}
+.fx-stack-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 0;
+}
+.fx-stack-base {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

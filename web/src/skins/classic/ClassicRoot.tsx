@@ -6,6 +6,7 @@ import { FleetControl } from '../../components/FleetControl.js';
 import { LaunchPanel } from '../../components/LaunchPanel.js';
 import { UsageChip } from '../../components/UsageChip.js';
 import { PlanPanel } from '../../components/PlanPanel.js';
+import { StackPanel } from '../../components/StackPanel.js';
 import { FindingsPanel } from '../../components/FindingsPanel.js';
 import { RecoveryPanel } from '../../components/RecoveryPanel.js';
 import { WorldSummary } from '../../components/WorldSummary.js';
@@ -186,6 +187,13 @@ export function ClassicRoot({ view, actions }: SkinProps) {
                 onReplan={(planId) => actions.replan(planId)}
                 onViewPlan={(id) => actions.viewPlan(id)}
               />
+            </>
+          )}
+
+          {(state.stacks?.length ?? 0) > 0 && (
+            <>
+              <h3 className="muted">Stacks</h3>
+              <StackPanel stacks={state.stacks ?? []} prs={state.world.pullRequests} refUrls={state.refUrls} />
             </>
           )}
 

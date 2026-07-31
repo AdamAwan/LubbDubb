@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { PullRequest } from '../../../types.js';
+import type { PullRequest, Stack } from '../../../types.js';
 import { refLink } from '../../../components/util.js';
 import { Icon } from './Sprite.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
@@ -117,15 +117,55 @@ function Row({
   );
 }
 
+/**
+ * A stack, on the rack.
+ *
+ * Drawn here rather than as a belt on the line because a stack is a fact about
+ * *pull requests*, and the rack is where pull requests are read — a belt would
+ * have said it was a fact about scheduling, which is the confusion the plan panel
+ * already risks by drawing parts as a stack.
+ *
+ * Rungs are listed top-first, with the one that merges next at the bottom, and the
+ * base of each named beneath it so the chain is legible without the reader holding
+ * branch names in their head.
+ */
+function StackRun({ stack, refUrls }: { stack: Stack; refUrls: Record<string, string> }): JSX.Element {
+  const topFirst = [...stack.rungs].reverse();
+  return (
+    <div className="fx-stack">
+      <p className="fx-stack-head">
+        {stack.issueNumber !== null && refLink(`#${stack.issueNumber}`, refUrls)}{' '}
+        <span>{stack.issueTitle ?? 'Stacked pull requests'}</span>
+        <span className="fx-stack-ref">
+          {stack.planId ? 'from plan' : 'observed'} · {stack.rungs.length} PRs
+        </span>
+      </p>
+      <div className="fx-stack-rungs">
+        {topFirst.map((rung) => (
+          <div key={rung.prNumber} className={`fx-stack-rung${rung.position === 1 ? ' bottom' : ''}`}>
+            <span className="fx-stack-pos">{rung.position}</span>
+            {refLink(`#${rung.prNumber}`, refUrls)}
+            <span className="fx-stack-title">{rung.title}</span>
+            <span className="fx-stack-base">&rarr; {rung.base}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Inspection({
   prs,
   closed,
+  stacks,
   refUrls,
   ignoreLabel,
   onToggleExclude,
 }: {
   prs: PullRequest[];
   closed: PullRequest[];
+  /** Chains of stacked PRs, drawn on the rack because a stack is a fact about pull requests. */
+  stacks: Stack[];
   refUrls: Record<string, string>;
   ignoreLabel: string;
   onToggleExclude: (prNumber: number, excluded: boolean) => void;
@@ -172,6 +212,15 @@ export function Inspection({
               />
             ))}
           </div>
+        </>
+      )}
+
+      {stacks.length > 0 && (
+        <>
+          <p className="fx-sub">Stacked &middot; {stacks.length}</p>
+          {stacks.map((stack) => (
+            <StackRun key={stack.ref} stack={stack} refUrls={refUrls} />
+          ))}
         </>
       )}
 

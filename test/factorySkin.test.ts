@@ -242,6 +242,7 @@ function renderRack(prs: PullRequest[]): string {
     createElement(Inspection, {
       prs,
       closed: [],
+      stacks: [],
       refUrls: {},
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
@@ -1854,6 +1855,7 @@ test('the rack says the rack is empty rather than drawing nothing', () => {
     createElement(Inspection, {
       prs: [],
       closed: [],
+      stacks: [],
       refUrls: {},
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
@@ -1902,6 +1904,7 @@ test('a drawn rack carries the group split, the states and the check names', () 
         }),
       ],
       closed: [mk(140, { merged: true }), mk(141, { state: 'closed' })],
+      stacks: [],
       refUrls: {},
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
@@ -1952,6 +1955,7 @@ test('every open rack row carries a watch/ignore toggle, and it reads off the ig
         mk(201, { labels: ['lubbdubb-ignore'], attention: { status: 'ignored', reasons: ['tagged ignore'] } }),
       ],
       closed: [],
+      stacks: [],
       refUrls: {},
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
@@ -1977,7 +1981,7 @@ test('the toggle is disabled when no ignore label is configured', () => {
     unresolvedComments: [],
   } as PullRequest;
   const html = renderToStaticMarkup(
-    createElement(Inspection, { prs: [pr], closed: [], refUrls: {}, ignoreLabel: '', onToggleExclude: () => {} }),
+    createElement(Inspection, { prs: [pr], closed: [], stacks: [], refUrls: {}, ignoreLabel: '', onToggleExclude: () => {} }),
   );
   assert.match(html, /class="btn ghost fx-part-toggle"[^>]*disabled/);
 });
