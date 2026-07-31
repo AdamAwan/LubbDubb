@@ -894,43 +894,43 @@ export function buildDemoState(): DemoSeed {
     // canned to just the rules the demo's decisions reference.
     dispatchRules: {
       'pr-ci-failing': {
-        number: '1',
+        kind: 'rule',
         name: 'Failing CI',
         description:
           'A PR with failing CI gets a code agent on its branch to investigate and push a fix — broken builds block everything downstream, so this outranks all other work.',
       },
       'pr-base-update': {
-        number: '2',
+        kind: 'rule',
         name: 'Base out of date',
         description:
           'A PR that is behind its base branch (clean update) or conflicts with it (resolve and push) gets a code agent, so it never sits unmergeable while the base moves on.',
       },
       'branch-notify': {
-        number: '1–2b',
+        kind: 'admission',
         name: 'One agent per branch',
         description:
           'At most one code agent works a PR branch: a fresh signal for a branch that already has a running agent is delivered to that agent as a note instead of spawning a second one.',
       },
       'plan-part': {
-        number: '4a',
+        kind: 'rule',
         name: 'Plan part ready',
         description:
           "One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/<n>/<slug>` — based on that dependency's branch while it is still open, on the default branch once it merged. A part held by the plan's concurrency cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.",
       },
       'pr-merge-ready': {
-        number: '3',
+        kind: 'rule',
         name: 'Merge-ready PR',
         description:
           'A green, approved, mergeable PR with no open comments is driven the last mile — merged in, gated by the auto-send policy (below the confidence bar it escalates for approval instead).',
       },
       'issue-pickup': {
-        number: '4',
+        kind: 'rule',
         name: 'Open issue without a PR',
         description:
           'An open, pickup-eligible issue with no linked PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority.',
       },
       idle: {
-        number: '5',
+        kind: 'terminal',
         name: 'Nothing actionable',
         description:
           'No rule matched this cycle, so a no-op is recorded — idleness is a decision too, and stays auditable.',

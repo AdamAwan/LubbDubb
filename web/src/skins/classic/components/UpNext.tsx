@@ -99,8 +99,8 @@ function QueueRow({
         {item.status === 'dispatching' ? '▶ now' : item.status}
       </span>
       {rule && (
-        <span className="chip small" title={`Rule ${rule.number}: ${rule.name} — ${rule.description}`}>
-          {rule.number}
+        <span className="chip small" title={`${rule.name} — ${rule.description}`}>
+          {item.rule}
         </span>
       )}
       <span className="upnext-title">{withOriginLink(item, refUrls)}</span>

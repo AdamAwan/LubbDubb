@@ -108,7 +108,7 @@ export function DecisionLog({
                   {rule ? (
                     <>
                       <div className="audit-rule-head">
-                        <span className="audit-rule-number">Rule {rule.number}</span>
+                        <span className="audit-rule-number">{rule.kind === 'rule' ? 'Rule' : rule.kind}</span>
                         <span className="audit-rule-name">{rule.name}</span>
                       </div>
                       <div className="audit-rule-desc">{rule.description}</div>
