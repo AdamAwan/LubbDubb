@@ -1981,7 +1981,14 @@ test('the toggle is disabled when no ignore label is configured', () => {
     unresolvedComments: [],
   } as PullRequest;
   const html = renderToStaticMarkup(
-    createElement(Inspection, { prs: [pr], closed: [], stacks: [], refUrls: {}, ignoreLabel: '', onToggleExclude: () => {} }),
+    createElement(Inspection, {
+      prs: [pr],
+      closed: [],
+      stacks: [],
+      refUrls: {},
+      ignoreLabel: '',
+      onToggleExclude: () => {},
+    }),
   );
   assert.match(html, /class="btn ghost fx-part-toggle"[^>]*disabled/);
 });

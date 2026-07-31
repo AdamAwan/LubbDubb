@@ -175,7 +175,10 @@ test('an ignored rung does not put a hole in the chain', () => {
     'main',
   );
   assert.equal(stacks.length, 1);
-  assert.deepEqual(stacks[0]?.rungs.map((r) => r.prNumber), [44, 45, 46]);
+  assert.deepEqual(
+    stacks[0]?.rungs.map((r) => r.prNumber),
+    [44, 45, 46],
+  );
 });
 
 test('a merged rung is not a base — the chain stops rather than resurrecting it', () => {

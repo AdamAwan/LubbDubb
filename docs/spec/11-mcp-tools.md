@@ -14,22 +14,22 @@ discover what a synchronous error would have said in one turn.
 
 `src/mcp/names.ts` lists them; `src/mcp/tools.ts` builds them.
 
-| Tool                 | Purpose                                                                                                                                                                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                   |
-| `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                |
-| `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                             |
-| `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                      |
-| `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                   |
-| `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                 |
-| `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                         |
-| `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                          |
-| `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                   |
-| `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                     |
-| `scratch_append`     | Leave a note on the shared scratchpad for the issue this agent is working. Append-only, attributed from the credential. Refused outside an issue subtree.                                                                                 |
+| Tool                 | Purpose                                                                                                                                                                                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                        |
+| `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                     |
+| `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                  |
+| `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                                           |
+| `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                                        |
+| `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                                      |
+| `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                              |
+| `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                                               |
+| `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                                        |
+| `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                          |
+| `scratch_append`     | Leave a note on the shared scratchpad for the issue this agent is working. Append-only, attributed from the credential. Refused outside an issue subtree.                                                                                                      |
 | `scratch_read`       | Read that pad — every note left by every agent on the goal, oldest first. Same access rule as the write. The operator reads the same trail in the cockpit's notepad modal (`GET /api/scratchpads/:ref`), which resolves a ref through the same `padOriginFor`. |
-| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, and how the run went. Fenced to `issue:<n>:retro` origins.                                                                                                                   |
-| `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`). |
+| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, and how the run went. Fenced to `issue:<n>:retro` origins.                                                                                                                                        |
+| `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                      |
 
 ### The `_status` envelope
 
@@ -235,7 +235,7 @@ resolved from the credential.
   that _is_ the caller's, so an agent reaching for the wrong one is told which is right.
 - **The two verdicts land in two rows of opposite polarity.** `delivered` writes the
   `issue_deliveries` park, which **gates pickup**; `more_work` writes an `issue_shortfalls` row,
-  which gates nothing and exists to *release* work. They are mutually exclusive — writing either
+  which gates nothing and exists to _release_ work. They are mutually exclusive — writing either
   clears the other, in the store — and they are separate tables rather than one with a polarity
   column precisely because every reader of the first holds and the second must never be mistaken for
   one (see [`14-persistence.md`](14-persistence.md)).
@@ -246,7 +246,7 @@ resolved from the credential.
   through one arm with no precedence between them. There are two records now, and one resolver, which
   ranks a shortfall above an agent's own declaration (the assessor is later and better informed) and
   the operator's toggle above both.
-- **`cause` says *what* fell short, and it is required when the issue has a plan.** `plan`, `part`
+- **`cause` says _what_ fell short, and it is required when the issue has a plan.** `plan`, `part`
   (with `part` naming the slug) or `goal` — see [rule 3g](05-dispatcher.md) for what each routes to.
   The refusals are **plan-aware and synchronous**, which is the tool channel's whole point: a `part`
   slug that is not a live part is refused with the parts that are, `plan`/`part` on an issue with no

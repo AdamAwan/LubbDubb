@@ -186,7 +186,7 @@ arrangement.
 `filters.prAuthor` is the gate, because it is already the operator's answer to "which pull requests
 are mine", and both providers apply it **at fetch time**:
 
-- **Set** — every PR in the world is theirs *by construction*; the provider never surfaced anyone
+- **Set** — every PR in the world is theirs _by construction_; the provider never surfaced anyone
   else's. All of them are renamable, and no attribution logic exists here at all.
 - **Unset** — the world holds everyone's PRs and the harness cannot tell them apart, so it falls back
   to the branch shapes only a dispatch mints (`issue/<n>`, `issue/<n>/<slug>`). Derived rather than

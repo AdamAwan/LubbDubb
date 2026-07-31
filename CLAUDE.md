@@ -609,14 +609,14 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   - **The closed-unmerged hole, closed** — see "Recently-closed PRs" below.
 - **First-party stacked PRs and one naming convention (`src/stacks/`, `src/prTitle.ts`,
   `src/prRename.ts`, `src/prRetarget.ts`, `src/prNamingDesk.ts`, the `open_pr` tool).** Stage 4 left
-  stacks entirely *observed*: rule 4a picked a base, the `plan-part` prompt asked an agent **in prose**
+  stacks entirely _observed_: rule 4a picked a base, the `plan-part` prompt asked an agent **in prose**
   to open a PR into it, and nothing under `src/` ever created a pull request, set a title or retargeted
   a base. Four things carry the close, and each is where the obvious move was wrong:
   - **The stack model is derived and is a lens.** `buildStacks` folds the open list on the edge
     `basePrOf` already walks, so a `stacks` table would be a second answer to a question the world
     answers every pulse. A plan **adopts** a stack and never owns one — rung identity is the pull
     request — which is what makes a hand-opened chain first-class without any storage, since
-    `plan_parts` was previously the only record that a chain *was* a chain. Nothing in
+    `plan_parts` was previously the only record that a chain _was_ a chain. Nothing in
     `src/dispatcher/` may read it (asserted structurally, twice, like `prAttention`): every input it
     folds is already a gate that fires on its own.
   - **`open_pr`'s identity is structural, with more force than `report_finding`'s.** The schema is
@@ -628,18 +628,18 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     prompt still tells the agent how to open its own.
   - **`filters.prAuthor` is the rename gate, and it needed no new attribution logic.** It is already
     the operator's answer to "which PRs are mine" and both providers apply it **at fetch time** — so
-    set, every PR in the world is theirs *by construction*; unset, the harness genuinely cannot tell
+    set, every PR in the world is theirs _by construction_; unset, the harness genuinely cannot tell
     and falls back to the branch shapes only a dispatch mints. A colleague's PR is renamed under
     neither arm. The title is `pr-title` in the overridable prompt book (`finding-ticket`'s argument),
     and its fields are **finished clauses** — an empty `{position}` for a lone PR, an empty `{kind}` for
     an undeclared type — so an override is a plain substitution and the conditionals cannot drift
-    across overrides. Renaming is a **desk**, not an executor action: nothing decides *whether* to
+    across overrides. Renaming is a **desk**, not an executor action: nothing decides _whether_ to
     rename, so it is not auto-send gated, and it is idempotent, so a settled world writes nothing.
   - **Restack was not built, and that is the finding.** Rule 2 already fires on `needsBaseUpdate`, and
     `ruleDispatcher.ts` says so in as many words — a git-derived `needsRestack` would have been a second
     opinion about a decision made elsewhere. What is genuinely missing is **provider-shaped**: Azure's
     `normalizeMergeState` has no `behind` arm at all, so a rung that falls behind its base is invisible
-    to rule 2 there. Recorded rather than papered over. What *was* built is `retargetsFor`, because
+    to rule 2 there. Recorded rather than papered over. What _was_ built is `retargetsFor`, because
     `isStackedPr`'s doc rested on "the provider retargets them when their parent merges" — true of
     GitHub, false of Azure, where the rest of a stack simply stopped with nothing saying why. An
     **abandoned** parent strands its child on purpose: the work beneath never landed, so rebasing would

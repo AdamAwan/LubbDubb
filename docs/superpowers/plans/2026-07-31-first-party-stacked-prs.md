@@ -21,25 +21,25 @@
 
 ## File structure
 
-| File | Responsibility |
-| --- | --- |
-| `src/sink/actionSink.ts` | Add `PrCreateInput`, `PrTitleInput`, `PrBaseInput` + three `ActionSink` methods |
-| `src/integrations/integration.ts` | Add `PrCreateCapable` / `PrTitleCapable` / `PrBaseCapable` + type guards |
-| `src/integrations/compositeConnector.ts` | Route the three new methods |
-| `src/integrations/fake/fakeGitHub.ts` | Fake implementations that reflect into the fake world |
-| `src/integrations/github/{githubApi,octokitGitHubApi,sourceControl}.ts` | GitHub arm |
-| `src/integrations/azure/{azureDevOpsApi,restAzureDevOpsApi,sourceControl}.ts` | Azure arm |
-| `src/prTitle.ts` | **Pure** `prTitleFields` + `renderPrTitle` — no provider call, no world read |
-| `src/dispatcher/promptTemplates.ts` | The `pr-title` entry |
-| `src/mcp/openPr.ts` | Pure origin → `{branch, base, issue, position, total}` resolution for `open_pr` |
-| `src/mcp/tools.ts` | The `open_pr` tool definition + handler |
-| `src/stacks/stack.ts` | **Pure** `buildStacks` — the derived stack model (lens) |
-| `src/prHealth.ts` | Add `needsRestack` beside `needsBaseUpdate` |
-| `src/dispatcher/ruleDispatcher.ts` | Rule 2 also fires on `needsRestack` |
-| `src/plans/planReconciler.ts` | Retarget-on-merge, idempotent |
-| `src/server/app.ts` | Ship `stacks` on `/api/state` — the stack model's **only** importer |
-| `web/src/components/StackPanel.tsx` | The panel |
-| `web/src/types.ts` | `Stack` / `StackRung` mirror types |
+| File                                                                          | Responsibility                                                                  |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `src/sink/actionSink.ts`                                                      | Add `PrCreateInput`, `PrTitleInput`, `PrBaseInput` + three `ActionSink` methods |
+| `src/integrations/integration.ts`                                             | Add `PrCreateCapable` / `PrTitleCapable` / `PrBaseCapable` + type guards        |
+| `src/integrations/compositeConnector.ts`                                      | Route the three new methods                                                     |
+| `src/integrations/fake/fakeGitHub.ts`                                         | Fake implementations that reflect into the fake world                           |
+| `src/integrations/github/{githubApi,octokitGitHubApi,sourceControl}.ts`       | GitHub arm                                                                      |
+| `src/integrations/azure/{azureDevOpsApi,restAzureDevOpsApi,sourceControl}.ts` | Azure arm                                                                       |
+| `src/prTitle.ts`                                                              | **Pure** `prTitleFields` + `renderPrTitle` — no provider call, no world read    |
+| `src/dispatcher/promptTemplates.ts`                                           | The `pr-title` entry                                                            |
+| `src/mcp/openPr.ts`                                                           | Pure origin → `{branch, base, issue, position, total}` resolution for `open_pr` |
+| `src/mcp/tools.ts`                                                            | The `open_pr` tool definition + handler                                         |
+| `src/stacks/stack.ts`                                                         | **Pure** `buildStacks` — the derived stack model (lens)                         |
+| `src/prHealth.ts`                                                             | Add `needsRestack` beside `needsBaseUpdate`                                     |
+| `src/dispatcher/ruleDispatcher.ts`                                            | Rule 2 also fires on `needsRestack`                                             |
+| `src/plans/planReconciler.ts`                                                 | Retarget-on-merge, idempotent                                                   |
+| `src/server/app.ts`                                                           | Ship `stacks` on `/api/state` — the stack model's **only** importer             |
+| `web/src/components/StackPanel.tsx`                                           | The panel                                                                       |
+| `web/src/types.ts`                                                            | `Stack` / `StackRung` mirror types                                              |
 
 Tests: `test/prTitle.test.ts`, `test/stacks.test.ts`, `test/openPr.test.ts`, plus additions to `test/stackedPrs.test.ts` and `test/mcpChannel.test.ts`.
 
@@ -48,6 +48,7 @@ Tests: `test/prTitle.test.ts`, `test/stacks.test.ts`, `test/openPr.test.ts`, plu
 ## Task 1: The three sink capabilities
 
 **Files:**
+
 - Modify: `src/sink/actionSink.ts`
 - Modify: `src/integrations/integration.ts`
 - Modify: `src/integrations/compositeConnector.ts`
@@ -55,6 +56,7 @@ Tests: `test/prTitle.test.ts`, `test/stacks.test.ts`, `test/openPr.test.ts`, plu
 - Test: `test/stacks.test.ts` (create)
 
 **Interfaces:**
+
 - Produces: `PrCreateInput {branch, base, title, body}`, `PrTitleInput {prNumber, title}`, `PrBaseInput {prNumber, base}`; `ActionSink.createPullRequest/setPullTitle/setPullBase` each returning `Promise<SendResult>`; capability interfaces `PrCreateCapable`/`PrTitleCapable`/`PrBaseCapable` and guards `isPrCreateCapable`/`isPrTitleCapable`/`isPrBaseCapable`.
 - `SendResult.ref` carries the created PR number as a string for `createPullRequest`.
 
@@ -68,10 +70,7 @@ import { buildSystem } from '../src/system.js';
 import { defaultConfig } from './helpers/config.js'; // follow whatever existing tests use
 
 test('the sink can open a pull request and it appears in the world', async () => {
-  const sys = await buildSystem(
-    { ...defaultConfig(), dbPath: ':memory:' } as never,
-    { errorMirror: () => {} },
-  );
+  const sys = await buildSystem({ ...defaultConfig(), dbPath: ':memory:' } as never, { errorMirror: () => {} });
   const result = await sys.sink.createPullRequest({
     branch: 'issue/12/schema',
     base: 'main',
@@ -209,11 +208,13 @@ git commit -m "Add PR create, retitle and retarget to the outbound seam"
 ## Task 2: The GitHub and Azure arms
 
 **Files:**
+
 - Modify: `src/integrations/github/githubApi.ts`, `octokitGitHubApi.ts`, `sourceControl.ts`
 - Modify: `src/integrations/azure/azureDevOpsApi.ts`, `restAzureDevOpsApi.ts`, `sourceControl.ts`
 - Test: `test/githubIntegration.test.ts`, `test/azureDevOpsIntegration.test.ts`
 
 **Interfaces:**
+
 - Consumes: the three capability interfaces from Task 1.
 - Produces: `GitHubApi.createPull/setPullTitle/setPullBase` and `AzureDevOpsApi.createPull/setPullTitle/setPullBase`, each added to the narrow seam **and its scripted fake together**.
 
@@ -271,12 +272,14 @@ git commit -m "Implement PR authoring on the github and azure arms"
 ## Task 3: The `pr-title` template and pure rendering
 
 **Files:**
+
 - Create: `src/prTitle.ts`
 - Modify: `src/dispatcher/promptTemplates.ts`
 - Create: `test/prTitle.test.ts`
 - Modify: `docs/prompt-templates/README.md` + add `docs/prompt-templates/pr-title.md`
 
 **Interfaces:**
+
 - Produces: `prTitleFields(input: PrTitleFieldsInput): Record<string, string>` and `renderPrTitle(template: string, fields: Record<string, string>): string`.
 - `PrTitleFieldsInput = {number: number; title: string; position: number; total: number; type?: string; scope?: string; summary: string}`.
 
@@ -293,26 +296,37 @@ const tpl = DEFAULT_PROMPT_TEMPLATES['pr-title'].template;
 
 test('a stacked PR renders position, type and scope', () => {
   const fields = prTitleFields({
-    number: 182, title: 'Ticket sync rewrite',
-    position: 2, total: 4,
-    type: 'feat', scope: 'store', summary: 'sync cursor table',
+    number: 182,
+    title: 'Ticket sync rewrite',
+    position: 2,
+    total: 4,
+    type: 'feat',
+    scope: 'store',
+    summary: 'sync cursor table',
   });
   assert.equal(renderPrTitle(tpl, fields), '#182 [2/4] feat(store): sync cursor table');
 });
 
 test('a lone PR omits the position clause entirely', () => {
   const fields = prTitleFields({
-    number: 182, title: 'Ticket sync rewrite',
-    position: 1, total: 1,
-    type: 'feat', scope: 'store', summary: 'sync cursor table',
+    number: 182,
+    title: 'Ticket sync rewrite',
+    position: 1,
+    total: 1,
+    type: 'feat',
+    scope: 'store',
+    summary: 'sync cursor table',
   });
   assert.equal(renderPrTitle(tpl, fields), '#182 feat(store): sync cursor table');
 });
 
 test('an undeclared type and scope leave no punctuation behind', () => {
   const fields = prTitleFields({
-    number: 182, title: 'Ticket sync rewrite',
-    position: 1, total: 1, summary: 'sync cursor table',
+    number: 182,
+    title: 'Ticket sync rewrite',
+    position: 1,
+    total: 1,
+    summary: 'sync cursor table',
   });
   assert.equal(renderPrTitle(tpl, fields), '#182 sync cursor table');
 });
@@ -364,9 +378,7 @@ export function prTitleFields(input: PrTitleFieldsInput): Record<string, string>
 }
 
 export function renderPrTitle(template: string, fields: Record<string, string>): string {
-  const filled = template.replace(/\{(\w+)\}/g, (whole, key: string) =>
-    key in fields ? fields[key] : whole,
-  );
+  const filled = template.replace(/\{(\w+)\}/g, (whole, key: string) => (key in fields ? fields[key] : whole));
   return filled.replace(/\s+/g, ' ').trim();
 }
 ```
@@ -405,12 +417,14 @@ git commit -m "Render PR titles from an overridable template"
 ## Task 4: `open_pr`
 
 **Files:**
+
 - Create: `src/mcp/openPr.ts`
 - Modify: `src/mcp/tools.ts`
 - Create: `test/openPr.test.ts`
 - Modify: `test/mcpChannel.test.ts`
 
 **Interfaces:**
+
 - Consumes: `prTitleFields`/`renderPrTitle` (Task 3), `ActionSink.createPullRequest` (Task 1).
 - Produces: `resolveOpenPr(originRef, ctx): OpenPrTarget | {error: string}` where `OpenPrTarget = {issueNumber: number; issueTitle: string; branch: string; base: string; position: number; total: number}`.
 
@@ -428,15 +442,20 @@ test('a part origin resolves its branch, base and stack position', () => {
     defaultBranch: 'main',
   });
   assert.deepEqual(target, {
-    issueNumber: 182, issueTitle: 'Ticket sync rewrite',
-    branch: 'issue/182/cursor', base: 'issue/182/migrations',
-    position: 2, total: 2,
+    issueNumber: 182,
+    issueTitle: 'Ticket sync rewrite',
+    branch: 'issue/182/cursor',
+    base: 'issue/182/migrations',
+    position: 2,
+    total: 2,
   });
 });
 
 test('a pickup origin is a lone PR onto the default branch', () => {
   const target = resolveOpenPr('issue:182', {
-    issue: { number: 182, title: 'Ticket sync rewrite' }, parts: [], defaultBranch: 'main',
+    issue: { number: 182, title: 'Ticket sync rewrite' },
+    parts: [],
+    defaultBranch: 'main',
   });
   assert.equal(target.total, 1);
   assert.equal(target.base, 'main');
@@ -444,7 +463,9 @@ test('a pickup origin is a lone PR onto the default branch', () => {
 
 test('an origin with no work behind it is refused rather than guessed', () => {
   const target = resolveOpenPr('pr:42:ci', {
-    issue: null, parts: [], defaultBranch: 'main',
+    issue: null,
+    parts: [],
+    defaultBranch: 'main',
   });
   assert.ok('error' in target);
 });
@@ -519,12 +540,14 @@ git commit -m "Let an agent open its pull request through the tool channel"
 ## Task 5: Rename, gated on `filters.prAuthor`
 
 **Files:**
+
 - Create: `src/prRename.ts`
 - Modify: `src/harness.ts` (call it on the pulse, beside the plan reconciler)
 - Modify: `src/config.ts` (nothing new — read the existing `filters.prAuthor`)
 - Test: `test/prTitle.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `renderPrTitle`/`prTitleFields` (Task 3), `ActionSink.setPullTitle` (Task 1).
 - Produces: `renamablePrs(prs, ctx): PrTitleInput[]` — pure; returns only PRs whose live title differs from the rendered one **and** which the gate admits.
 
@@ -533,20 +556,34 @@ git commit -m "Let an agent open its pull request through the tool channel"
 ```ts
 test('with prAuthor set every PR in the world is renamable', () => {
   const out = renamablePrs([pr({ number: 39, title: 'reclaim stale worktree dirs', branch: 'issue/164/reclaim' })], {
-    prAuthorConfigured: true, harnessOpened: new Set<number>(), template: tpl, issues, defaultBranch: 'main',
+    prAuthorConfigured: true,
+    harnessOpened: new Set<number>(),
+    template: tpl,
+    issues,
+    defaultBranch: 'main',
   });
   assert.deepEqual(out, [{ prNumber: 39, title: '#164 reclaim stale worktree dirs' }]);
 });
 
 test('with prAuthor unset only PRs the harness opened are renamable', () => {
   const ctx = { prAuthorConfigured: false, harnessOpened: new Set([44]), template: tpl, issues, defaultBranch: 'main' };
-  const out = renamablePrs([pr({ number: 39, branch: 'issue/164/reclaim' }), pr({ number: 44, branch: 'issue/182/x' })], ctx);
-  assert.deepEqual(out.map((o) => o.prNumber), [44]);
+  const out = renamablePrs(
+    [pr({ number: 39, branch: 'issue/164/reclaim' }), pr({ number: 44, branch: 'issue/182/x' })],
+    ctx,
+  );
+  assert.deepEqual(
+    out.map((o) => o.prNumber),
+    [44],
+  );
 });
 
 test('a PR already on convention is not rewritten', () => {
   const out = renamablePrs([pr({ number: 44, title: '#182 sync cursor table', branch: 'issue/182/x' })], {
-    prAuthorConfigured: true, harnessOpened: new Set(), template: tpl, issues, defaultBranch: 'main',
+    prAuthorConfigured: true,
+    harnessOpened: new Set(),
+    template: tpl,
+    issues,
+    defaultBranch: 'main',
   });
   assert.deepEqual(out, []);
 });
@@ -596,11 +633,13 @@ git commit -m "Rename pull requests onto the convention, scoped by the prAuthor 
 ## Task 6: The derived stack model
 
 **Files:**
+
 - Create: `src/stacks/stack.ts`
 - Modify: `web/src/types.ts` (mirror types)
 - Test: `test/stacks.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: `basePrOf`, `isStackedPr`, `prHealth`, `prAttentionStatus` (all existing).
 - Produces: `buildStacks(openPrs: PullRequest[], plans: Plan[], parts: PlanPart[], defaultBranch: string): Stack[]`, with `Stack = {ref: string; issueNumber: number | null; issueTitle: string | null; planId: string | null; rungs: StackRung[]}` and `StackRung = {prNumber: number; title: string; branch: string; base: string; position: number; partSlug: string | null}`.
 
@@ -608,13 +647,21 @@ git commit -m "Rename pull requests onto the convention, scoped by the prAuthor 
 
 ```ts
 test('a hand-made chain is a stack with no plan behind it', () => {
-  const stacks = buildStacks([
-    pr({ number: 38, branch: 'issue/164/prune', baseBranch: 'main' }),
-    pr({ number: 39, branch: 'issue/164/reclaim', baseBranch: 'issue/164/prune' }),
-  ], [], [], 'main');
+  const stacks = buildStacks(
+    [
+      pr({ number: 38, branch: 'issue/164/prune', baseBranch: 'main' }),
+      pr({ number: 39, branch: 'issue/164/reclaim', baseBranch: 'issue/164/prune' }),
+    ],
+    [],
+    [],
+    'main',
+  );
   assert.equal(stacks.length, 1);
   assert.equal(stacks[0].planId, null);
-  assert.deepEqual(stacks[0].rungs.map((r) => r.prNumber), [38, 39]);
+  assert.deepEqual(
+    stacks[0].rungs.map((r) => r.prNumber),
+    [38, 39],
+  );
 });
 
 test('a plan adopts the stack its parts opened', () => {
@@ -674,12 +721,14 @@ git commit -m "Derive the stack model from the world, as a lens"
 ## Task 7: `needsRestack`, and rule 2
 
 **Files:**
+
 - Modify: `src/prHealth.ts`
 - Modify: `src/dispatcher/ruleDispatcher.ts`
 - Modify: `src/dispatcher/promptTemplates.ts` (a `pr-restack` entry)
 - Test: `test/stackedPrs.test.ts`
 
 **Interfaces:**
+
 - Produces: `needsRestack(pr: PullRequest, openPrs: PullRequest[]): PullRequest | null` — the base PR this one has fallen behind, or null. Pure; the git-level "how far behind" is read by the reconciler, not here.
 
 - [ ] **Step 1: Write the failing test**
@@ -747,10 +796,12 @@ git commit -m "Dispatch a restack when a stack rung falls behind its base"
 ## Task 8: Retarget on merge
 
 **Files:**
+
 - Modify: `src/plans/planReconciler.ts`
 - Test: `test/planReconcile.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ActionSink.setPullBase` (Task 1), `buildStacks` is **not** used here — the reconciler reads PRs directly, keeping the lens unimported outside `app.ts`.
 
 - [ ] **Step 1: Write the failing test**
@@ -791,12 +842,14 @@ git commit -m "Retarget a stack rung when the rung beneath it merges"
 ## Task 9: The cockpit stack panel
 
 **Files:**
+
 - Modify: `src/server/app.ts` (ship `stacks`)
 - Create: `web/src/components/StackPanel.tsx`
 - Modify: `web/src/App.tsx` (mount it)
 - Test: `test/stacks.test.ts` (snapshot shape)
 
 **Interfaces:**
+
 - Consumes: `buildStacks` (Task 6) — `app.ts` is its **only** importer, which Task 6's structural test enforces.
 
 - [ ] **Step 1: Write the failing snapshot test**
@@ -838,12 +891,13 @@ git commit -m "Draw the stacks in the cockpit"
 ## Task 10: Specs
 
 **Files:**
+
 - Modify: `docs/spec/07-pull-requests.md`, `11-mcp-tools.md`, `15-integrations.md`, `17-cockpit.md`
 - Modify: `CLAUDE.md` (a bullet for the stack model's lens property and the rename gate)
 
 - [ ] **Step 1: Write the spec changes**
 
-`07` gains the stack model, the naming convention and restack-vs-inherited-CI. `11` gains `open_pr`. `15` gains the three capabilities. `17` gains the panel. `CLAUDE.md` gains a short bullet recording *why* the stack model is a lens and *why* rename is gated on `filters.prAuthor` — the reasoning, not the mechanics.
+`07` gains the stack model, the naming convention and restack-vs-inherited-CI. `11` gains `open_pr`. `15` gains the three capabilities. `17` gains the panel. `CLAUDE.md` gains a short bullet recording _why_ the stack model is a lens and _why_ rename is gated on `filters.prAuthor` — the reasoning, not the mechanics.
 
 - [ ] **Step 2: Run the full gate**
 

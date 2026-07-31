@@ -112,7 +112,14 @@ test('a retired part is not a target, and does not count toward the total', () =
 });
 
 test('every origin that is not doing an issue’s work is refused by name', () => {
-  for (const origin of ['pr:42:ci', 'issue:182:plan', 'issue:182:assay', 'issue:182:assess', 'issue:182:retro', 'job:7']) {
+  for (const origin of [
+    'pr:42:ci',
+    'issue:182:plan',
+    'issue:182:assay',
+    'issue:182:assess',
+    'issue:182:retro',
+    'job:7',
+  ]) {
     const target = resolveOpenPr(origin, ctx({ plan, parts: [part({ slug: 'cursor', seq: 1 })] }));
     assert.ok('error' in target, `${origin} must not be able to open a pull request`);
     assert.match(target.error, /open_pr is for/);

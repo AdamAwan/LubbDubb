@@ -30,7 +30,10 @@ test('a PR that stacks on nothing has no position clause at all', () => {
 });
 
 test('an undeclared scope leaves no empty parentheses', () => {
-  assert.equal(render({ ...issue, position: 1, total: 1, type: 'docs', summary: 'sync runbook' }), '#182 docs: sync runbook');
+  assert.equal(
+    render({ ...issue, position: 1, total: 1, type: 'docs', summary: 'sync runbook' }),
+    '#182 docs: sync runbook',
+  );
 });
 
 test('an undeclared type leaves no stray colon', () => {
@@ -67,7 +70,15 @@ function pr(over: Partial<PullRequest> & { number: number; branch: string }): Pu
 }
 
 const issues: Issue[] = [
-  { id: 'i164', number: 164, title: 'Flaky worktree reclaim', body: '', state: 'open', labels: [], linkedPrNumber: null },
+  {
+    id: 'i164',
+    number: 164,
+    title: 'Flaky worktree reclaim',
+    body: '',
+    state: 'open',
+    labels: [],
+    linkedPrNumber: null,
+  },
   { id: 'i182', number: 182, title: 'Ticket sync rewrite', body: '', state: 'open', labels: [], linkedPrNumber: null },
 ];
 
@@ -76,7 +87,10 @@ function renameCtx(over: Partial<PrRenameContext> = {}): PrRenameContext {
 }
 
 test('with prAuthor set, every PR in the world is renamable — the provider already filtered it', () => {
-  const out = renamablePrs([pr({ number: 39, title: 'reclaim stale worktree dirs', branch: 'issue/164/reclaim' })], renameCtx());
+  const out = renamablePrs(
+    [pr({ number: 39, title: 'reclaim stale worktree dirs', branch: 'issue/164/reclaim' })],
+    renameCtx(),
+  );
   assert.deepEqual(out, [{ prNumber: 39, title: '#164 reclaim stale worktree dirs' }]);
 });
 
@@ -100,12 +114,18 @@ test('with prAuthor unset, a linked PR on a foreign branch is still left alone',
   // It resolves to an issue, so the *naming* half would happily rename it; the gate
   // is what stops it, and this is the case that proves the gate is doing the work.
   const linked: Issue[] = [{ ...issues[1]!, linkedPrNumber: 77 }];
-  const out = renamablePrs([pr({ number: 77, title: 'theirs', branch: 'their/branch' })], renameCtx({ prAuthorConfigured: false, issues: linked }));
+  const out = renamablePrs(
+    [pr({ number: 77, title: 'theirs', branch: 'their/branch' })],
+    renameCtx({ prAuthorConfigured: false, issues: linked }),
+  );
   assert.deepEqual(out, []);
 });
 
 test('a PR already on the convention is not rewritten', () => {
-  const out = renamablePrs([pr({ number: 44, title: '#182 sync cursor table', branch: 'issue/182/cursor' })], renameCtx());
+  const out = renamablePrs(
+    [pr({ number: 44, title: '#182 sync cursor table', branch: 'issue/182/cursor' })],
+    renameCtx(),
+  );
   assert.deepEqual(out, [], 'idempotent, so a settled PR costs nothing every pulse');
 });
 
@@ -117,9 +137,12 @@ test('renaming twice does not stack prefixes', () => {
 });
 
 test('a stack rung is renamed with its position', () => {
-  const out = renamablePrs([pr({ number: 45, title: 'cursor table', branch: 'issue/182/cursor' })], renameCtx({
-    positions: new Map([[45, { position: 2, total: 4 }]]),
-  }));
+  const out = renamablePrs(
+    [pr({ number: 45, title: 'cursor table', branch: 'issue/182/cursor' })],
+    renameCtx({
+      positions: new Map([[45, { position: 2, total: 4 }]]),
+    }),
+  );
   assert.deepEqual(out, [{ prNumber: 45, title: '#182 [2/4] cursor table' }]);
 });
 
@@ -135,6 +158,9 @@ test('a merged PR is never renamed', () => {
 
 test('a linked PR is renamed off its link rather than its branch', () => {
   const linked: Issue[] = [{ ...issues[1]!, linkedPrNumber: 77 }];
-  const out = renamablePrs([pr({ number: 77, title: 'whatever', branch: 'some/other/branch' })], renameCtx({ issues: linked }));
+  const out = renamablePrs(
+    [pr({ number: 77, title: 'whatever', branch: 'some/other/branch' })],
+    renameCtx({ issues: linked }),
+  );
   assert.deepEqual(out, [{ prNumber: 77, title: '#182 whatever' }]);
 });

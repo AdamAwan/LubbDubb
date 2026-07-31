@@ -99,15 +99,15 @@ a file in `promptTemplatesDir`, not by patching a route.
 
 This spec commits to the **placeholders**, not the arrangement:
 
-| Placeholder  | Source                                                   |
-| ------------ | -------------------------------------------------------- |
-| `{number}`   | issue number from the origin                             |
-| `{title}`    | issue title                                              |
-| `{position}` | 1-based rung index within the stack                      |
-| `{total}`    | rung count; `1` when the PR stacks on nothing            |
-| `{type}`     | agent-declared, via `open_pr`; empty when not declared   |
-| `{scope}`    | agent-declared, via `open_pr`; empty when not declared   |
-| `{summary}`  | agent-declared, via `open_pr`; required                  |
+| Placeholder  | Source                                                 |
+| ------------ | ------------------------------------------------------ |
+| `{number}`   | issue number from the origin                           |
+| `{title}`    | issue title                                            |
+| `{position}` | 1-based rung index within the stack                    |
+| `{total}`    | rung count; `1` when the PR stacks on nothing          |
+| `{type}`     | agent-declared, via `open_pr`; empty when not declared |
+| `{scope}`    | agent-declared, via `open_pr`; empty when not declared |
+| `{summary}`  | agent-declared, via `open_pr`; required                |
 
 The shipped default renders `#182 [2/4] feat(store): sync cursor table`, and **omits the
 position clause entirely when `{total}` is 1** (`#182 feat(store): sync cursor table`). An

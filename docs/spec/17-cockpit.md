@@ -823,8 +823,8 @@ Chains of stacked pull requests, from `/api/state`'s `stacks` (see
 
 - **Classic** — `web/src/components/StackPanel.tsx`, one card per stack, styled through tokens only,
   so the treatment follows whichever skin is active.
-- **Factory** — on **the rack** (`Inspection.tsx`), not on the line. A stack is a fact about *pull
-  requests*, and the rack is where pull requests are read; a belt would have said it was a fact about
+- **Factory** — on **the rack** (`Inspection.tsx`), not on the line. A stack is a fact about _pull
+  requests_, and the rack is where pull requests are read; a belt would have said it was a fact about
   scheduling, which is the confusion the plan panel already risks by drawing parts as a stack.
 
 Rungs are listed **top-first**, with the one that merges next at the bottom — `Stack.rungs` is
@@ -832,7 +832,7 @@ bottom-first, which is the order the dispatcher and the reconciler think in, so 
 in the view and nowhere else. Each rung names its base, so the chain is legible without the reader
 holding branch names in their head.
 
-The health chip is the one the PR list already shows rather than a new one: a rung *is* a pull
+The health chip is the one the PR list already shows rather than a new one: a rung _is_ a pull
 request, and an operator reading it in two places must not get two accounts of it. A rung with no
 matching open PR draws no health at all rather than asserting health the snapshot does not carry.
 

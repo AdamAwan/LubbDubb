@@ -619,7 +619,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     });
   }
 
-  async createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ pullRequestId: number }> {
+  async createPull(input: {
+    head: string;
+    base: string;
+    title: string;
+    body: string;
+  }): Promise<{ pullRequestId: number }> {
     const data = await this.request<{ pullRequestId: number }>(this.withApiVersion(`${this.repoUrl}/pullrequests`), {
       method: 'POST',
       body: JSON.stringify({
