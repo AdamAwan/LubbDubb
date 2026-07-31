@@ -1178,10 +1178,24 @@
 .fx-part .fx-job {
   margin: 0;
 }
+/* The glyph sits on the sentence's baseline and never pushes it: the cell is a
+   fixed 34ch and the text is what may truncate, not the icon. The ellipsis moved
+   onto `.fx-part-said` with it — `text-overflow` has nothing to act on once the
+   cell is a flex row, so leaving it here would cut the sentence off square. */
 .fx-part-why {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--grey);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fx-part-why > .fx-ic {
+  flex: none;
+  opacity: 0.8;
+}
+.fx-part-said {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

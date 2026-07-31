@@ -45,7 +45,7 @@ const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress } =
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
 const { BlueprintDesk, FaultLog, FindingsDesk } = await import('../web/src/skins/factory/components/Desks.js');
-const { ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await import(
+const { conditionGlyph, ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await import(
   '../web/src/skins/factory/inspection.js'
 );
 const { Inspection } = await import('../web/src/skins/factory/components/Inspection.js');
@@ -200,6 +200,38 @@ function renderDesk(
   } finally {
     Date.now = realNow;
   }
+}
+
+/**
+ * How many tracks one rack row draws — the direct children of the `.fx-part` grid.
+ *
+ * A depth-aware walk rather than a regex, because the whole question is whether
+ * something added inside a cell became a cell: a counter that could not tell the
+ * two apart would answer the assertion it exists to make.
+ */
+function rowTrackCount(markup: string): number {
+  // `[ "]` because `fx-part` is a prefix of the `.fx-parts` wrapper around it, and
+  // counting that one's children answers a different question with a plausible number.
+  const open = markup.search(/<div class="fx-part[ "]/);
+  assert.ok(open >= 0, 'expected a rack row in the markup');
+  const VOID = new Set(['area', 'base', 'br', 'col', 'hr', 'img', 'input', 'link', 'meta', 'source', 'wbr']);
+  const tag = /<(\/?)([a-zA-Z][\w-]*)(?:\s[^>]*?)?(\/?)>/g;
+  tag.lastIndex = markup.indexOf('>', open) + 1;
+  let depth = 0;
+  let tracks = 0;
+  for (let m = tag.exec(markup); m; m = tag.exec(markup)) {
+    const close = m[1] ?? '';
+    const name = (m[2] ?? '').toLowerCase();
+    const selfClose = m[3] ?? '';
+    if (close) {
+      if (depth === 0) break; // the row's own closing tag
+      depth -= 1;
+      continue;
+    }
+    if (depth === 0) tracks += 1;
+    if (!selfClose && !VOID.has(name)) depth += 1;
+  }
+  return tracks;
 }
 
 /** The rack alone, for assertions about one row's markup. */
@@ -1516,6 +1548,60 @@ test('the rack groups on the court, and a merge-ready PR needs no arm of its own
   assert.equal(prCourt(at(1, 'you')).label, 'Your call');
   assert.equal(prCourt(at(1, 'settled')).label, 'Settled — you said no');
   assert.equal(loadedCount([{ merged: true } as PullRequest, { state: 'closed' } as PullRequest]), 1);
+});
+
+/**
+ * The glyph is chosen from the reason the server already wrote, and an unrecognised
+ * reason gets **no** glyph rather than a default one. A fallback icon would put a
+ * confident wrong picture on a condition nobody classified — the row's own sentence
+ * is the honest answer there.
+ */
+test('a condition glyph is recognised or absent, never guessed', () => {
+  assert.equal(conditionGlyph('CI failing on base PR #7'), 'alert');
+  assert.equal(conditionGlyph('3 unresolved comments'), 'signal');
+  assert.equal(conditionGlyph('behind base by 18 commits'), 'belt');
+  assert.equal(conditionGlyph('a merge is proposed'), 'blueprint');
+  assert.equal(conditionGlyph('something nobody has classified'), null);
+  assert.equal(conditionGlyph(''), null);
+});
+
+/**
+ * Iconising the why cell must not add or remove a grid cell — the row's tracks are
+ * fixed and every column past the title lines up down the rack, which is the whole
+ * reason the strip can be read downward.
+ */
+test('a glyph does not change the row grid', () => {
+  const pr = (over: Partial<PullRequest>): PullRequest => ({
+    id: 'pr-7',
+    number: 7,
+    title: 'A pull request',
+    branch: 'issue/7',
+    ciStatus: 'failing',
+    unresolvedComments: [],
+    labels: [],
+    merged: false,
+    approved: false,
+    mergeable: true,
+    mergeableState: 'clean',
+    attention: { status: 'harness', reasons: ['CI failing on base PR #7'] },
+    ...over,
+  });
+
+  const withGlyph = renderRack([pr({})]);
+  assert.match(withGlyph, /fx-part-why/, 'the why cell must still exist');
+  assert.match(withGlyph, /fx-part-why[^>]*>\s*<svg/, 'the why cell leads with its glyph');
+
+  // The unclassified row draws the same cells, one of them simply without a glyph —
+  // the cap is the 34ch track, never a count, so nothing about the grid moves.
+  const noGlyph = renderRack([pr({ attention: { status: 'harness', reasons: ['nobody has classified this'] } })]);
+  assert.match(noGlyph, /fx-part-why/, 'an unclassified row keeps its why cell');
+  assert.ok(!/fx-part-why[^>]*>\s*<svg/.test(noGlyph), 'and leads with its sentence instead');
+
+  // `.fx-part` is a grid, so its *direct children* are its tracks. Counted with a
+  // depth-aware walk rather than a regex: a glyph nested inside the why cell cannot
+  // be a track, and this is what says so rather than assuming it.
+  assert.equal(rowTrackCount(withGlyph), 7, 'stripe, ladder, ref, title, why, court, toggle');
+  assert.equal(rowTrackCount(noGlyph), rowTrackCount(withGlyph), 'a glyph adds no cell to the row');
 });
 
 /**
