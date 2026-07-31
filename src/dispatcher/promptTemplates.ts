@@ -41,7 +41,8 @@ type PromptId =
   | 'pr-concern-escalation'
   | 'finding-ticket'
   | 'work-item-ticket'
-  | 'blueprint-ticket';
+  | 'blueprint-ticket'
+  | 'pr-title';
 
 interface TemplateDef {
   /** The placeholder names this template may reference (validated on override). */
@@ -258,6 +259,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'Auto-resolution of "{title}" keeps failing: {attempts} agent attempt(s) on PR #{number} left the concern unresolved. Please handle it manually.',
     doc: 'Escalated to a human when a PR concern (CI / base / comment) keeps failing to clear. Placeholders: {number} {title} {attempts}.',
+  },
+  'pr-title': {
+    placeholders: ['number', 'title', 'position', 'total', 'type', 'scope', 'kind', 'summary'],
+    template: '#{number} {position}{kind}{summary}',
+    doc: "The title the harness gives a pull request it opens, and renames an existing one to. Unlike every other entry here this is not a prompt — it is rendered straight onto the PR. {position} and {kind} arrive already punctuated and are empty when they do not apply (a PR that stacks on nothing has no position; an agent that declared no type has no 'type(scope): ' prefix), so an override is a plain substitution and never has to express the conditionals. {title} is the issue title, available and unused by the default. Placeholders: {number} {title} {position} {total} {type} {scope} {kind} {summary}.",
   },
   'finding-ticket': {
     placeholders: ['kind', 'kindHelp', 'ref', 'summary', 'originRef', 'tracker'],
