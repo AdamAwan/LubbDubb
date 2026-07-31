@@ -543,11 +543,17 @@ test('the findings gauge counts open findings, and only those', () => {
   assert.equal(gaugeCount(mixed, 'Findings'), '1', 'only an open finding is unactioned');
 
   // Overlaps present, no findings: the gauge is muted, and the desk still lists
-  // the overlap — it is the *count* they stay out of, not the panel.
+  // the overlap — it is the *count* they stay out of, not the panel. An unlit
+  // gauge draws no number at all, so "not counted" is read off the `quiet` class
+  // rather than off a zero on its face.
   const overlapsOnly = render((s) => {
     s.findings = [];
   });
-  assert.equal(gaugeCount(overlapsOnly, 'Findings'), '0', 'an overlap must not light the gauge');
+  assert.match(
+    overlapsOnly,
+    /class="fx-read fx-act quiet"[^>]*>(?:(?!<\/button>).)*?Findings/s,
+    'an overlap must not light the gauge',
+  );
   const desk = renderDesk(FindingsDesk, (s) => {
     s.findings = [];
   });
@@ -1510,6 +1516,25 @@ test('the rack groups on the court, and a merge-ready PR needs no arm of its own
   assert.equal(prCourt(at(1, 'you')).label, 'Your call');
   assert.equal(prCourt(at(1, 'settled')).label, 'Settled — you said no');
   assert.equal(loadedCount([{ merged: true } as PullRequest, { state: 'closed' } as PullRequest]), 1);
+});
+
+/**
+ * A zero gauge keeps its label and its way in — `every desk has a way in from the
+ * status bar` is asserted elsewhere and hiding a quiet gauge would break it — but it
+ * stops carrying a `0`. Four labels each with a zero on them is the band this
+ * removes; four labels alone is not.
+ */
+test('a quiet gauge drops its count, not its way in', () => {
+  const markup = render((s) => {
+    s.escalations = [];
+    s.findings = [];
+  });
+  const quiet = markup.match(/<button[^>]*fx-act quiet[^>]*>.*?<\/button>/gs) ?? [];
+  assert.ok(quiet.length > 0, 'a demo state with nothing outstanding should have quiet gauges');
+  for (const gauge of quiet) {
+    assert.ok(!/>0</.test(gauge), `a quiet gauge should not draw its zero: ${gauge}`);
+    assert.match(gauge, /fx-lbl/, `a quiet gauge keeps its label: ${gauge}`);
+  }
 });
 
 /**
