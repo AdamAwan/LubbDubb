@@ -20,7 +20,7 @@ import type { Plan, PlanPart, PullRequest } from '../types.js';
  * near the rule it duplicates. `test/stacks.test.ts` asserts that structurally.
  */
 
-export interface StackRung {
+interface StackRung {
   prNumber: number;
   title: string;
   branch: string;
@@ -32,7 +32,7 @@ export interface StackRung {
   partSlug: string | null;
 }
 
-export interface Stack {
+interface Stack {
   /** `stack:<bottom rung's PR number>` — stable while the bottom rung is open. */
   ref: string;
   issueNumber: number | null;
@@ -49,12 +49,7 @@ export interface Stack {
  * the reason `inheritedCiFailure` and `prAttentionStatus` take it: an `-ignore`d
  * rung would otherwise put a hole in the chain and misattribute everything above it.
  */
-export function buildStacks(
-  openPrs: PullRequest[],
-  plans: Plan[],
-  parts: PlanPart[],
-  defaultBranch: string,
-): Stack[] {
+export function buildStacks(openPrs: PullRequest[], plans: Plan[], parts: PlanPart[], defaultBranch: string): Stack[] {
   const live = openPrs.filter((p) => !p.merged);
   const byBranch = new Map<string, PullRequest>();
   for (const pr of live) byBranch.set(pr.branch, pr);
@@ -106,7 +101,9 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[]): Stack {
 
   // The plan is adopted from the parts the rungs deliver, not from a branch-name
   // convention — a rung's part is the only thing that says which plan it belongs to.
-  const planIds = new Set(prs.map((pr) => partByPr.get(pr.number)?.planId).filter((id): id is string => id !== undefined));
+  const planIds = new Set(
+    prs.map((pr) => partByPr.get(pr.number)?.planId).filter((id): id is string => id !== undefined),
+  );
   const planId = planIds.size === 1 ? [...planIds][0]! : null;
   const plan = planId !== null ? (plans.find((p) => p.id === planId) ?? null) : null;
 

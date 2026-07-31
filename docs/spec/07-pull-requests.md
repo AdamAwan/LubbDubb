@@ -78,8 +78,13 @@ before.
 
 This holds rule 3 off the whole stack. Merging a stacked PR would land part 2 **into part 1's branch**
 mid-flight: the change lands nowhere real, part 1's review now contains part 2's code, and the stack
-is scrambled. A stacked child becomes mergeable on its own the moment the provider retargets it, which
-is when its parent merges. There is no separate release step.
+is scrambled. A stacked child becomes mergeable on its own the moment its base becomes the default
+branch, which is when its parent merges. There is no separate release step.
+
+**GitHub retargets a merged parent's children itself; Azure does not.** That asymmetry used to be an
+unstated assumption here, and on Azure it stopped a stack dead: the rung above a merged one kept
+targeting a branch that no longer received anything, `isStackedPr` went on holding it back, and
+nothing anywhere said why. `retargetsFor` (below) closes it.
 
 ### `basePrOf(pr, openPrs)`
 
@@ -115,6 +120,85 @@ Two properties of the fix:
 
 Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.excludedPrs` — so an
 `-ignore`d base still attributes.
+
+### `retargetsFor(openPrs, closedPrs, defaultBranch)`
+
+The rungs whose base should move, as `PrBaseInput[]`. For each open PR whose `baseBranch` names the
+branch of a PR that left the open set **merged** (`prState`, within `closedPrWindowMs`), the target is
+that merged PR's own base — the default branch for a two-deep stack, the next rung down for a taller
+one.
+
+- **Merged parents only.** An **abandoned** parent strands the rung above it on purpose: the work
+  beneath never landed, so rebasing onto the default branch would silently drop the premise the rung
+  was built on. That is a human's call, and `prState` never invents `closed` from absence.
+- **Idempotent.** A PR already targeting the right branch yields no input, so a settled world costs
+  one comparison per PR and no writes.
+- **Run on both providers.** The write is a no-op on GitHub, which has already done it. A
+  provider-conditional would be a second answer to "who retargets" living nowhere near the one that
+  matters.
+
+Performed by `PrNamingDesk` on the pulse through `ActionSink.setPullBase`. Mechanical bookkeeping like
+the plan's status comment, so **not** auto-send gated; a failure is recorded and never fails the cycle.
+
+### `buildStacks(openPrs, plans, parts, defaultBranch)`
+
+The stack model — chains of open PRs, each based on the one beneath it — as `Stack[]`, each carrying
+bottom-first `rungs`.
+
+**Derived, never stored.** The edge is the one `basePrOf` walks, so a stack is a fact about the world
+and the world is re-read every pulse; a `stacks` table would be a second answer to a question the
+world answers, needing reconciling the way `plan_parts` already does.
+
+**A plan adopts a stack; it never owns one.** Rung identity is the pull request, so a chain someone
+opened by hand is a stack on exactly the same terms as one a plan produced — which is the point, since
+`plan_parts` was previously the only record that a chain was a chain. The plan is adopted from the
+parts the rungs deliver, not from a branch-name convention.
+
+**It is a lens.** Nothing in `src/dispatcher/` may read it: every input it folds is already a gate
+that fires on its own, so a rule consulting it would be a second opinion about a decision made
+elsewhere. `test/stacks.test.ts` asserts that structurally — no file under `src/dispatcher/` names
+`stacks/`, and the only importer is `src/server/app.ts`.
+
+A chain of one is not a stack. A merged rung is not a base. A cycle in the base edges terminates
+rather than hanging the pulse. It takes the **unfiltered** open list, so an `-ignore`d rung does not
+put a hole in the chain.
+
+## Naming
+
+Every pull request the harness opens is titled from `pr-title`, an ordinary overridable entry in the
+prompt book — the `finding-ticket` argument: the wording is what an operator has opinions about, and a
+prompt is where those already live.
+
+### `prTitleFields(input)` / `renderPrTitle(template, fields)`
+
+Pure. The fields are assembled as **finished clauses**, not raw values: `{position}` is empty for a PR
+that stacks on nothing (a lone PR is not "1/1"), and `{kind}` is empty when the agent declared no
+type, `type: ` with no scope, `type(scope): ` with one. So an override stays a plain substitution and
+never has to express the conditionals — otherwise every override re-implements them and they drift.
+Substitution is `renderTemplate`'s, since an override is placeholder-validated against the same book.
+
+Placeholders: `{number} {title} {position} {total} {type} {scope} {kind} {summary}`. The shipped
+default is `#{number} {position}{kind}{summary}`. The spec commits to the placeholders, not the
+arrangement.
+
+### `renamablePrs(prs, ctx)` — and what may be renamed
+
+`filters.prAuthor` is the gate, because it is already the operator's answer to "which pull requests
+are mine", and both providers apply it **at fetch time**:
+
+- **Set** — every PR in the world is theirs *by construction*; the provider never surfaced anyone
+  else's. All of them are renamable, and no attribution logic exists here at all.
+- **Unset** — the world holds everyone's PRs and the harness cannot tell them apart, so it falls back
+  to the branch shapes only a dispatch mints (`issue/<n>`, `issue/<n>/<slug>`). Derived rather than
+  stored: recording every opened PR number would be a second answer to a question the branch answers.
+
+**A colleague's pull request is renamed under neither arm.** A PR that resolves to no issue is left
+alone — the convention is keyed on an issue number. A merged PR is never renamed. The render strips
+any prefix it would itself have written, so renaming twice does not stack prefixes.
+
+Performed by `PrNamingDesk` on the pulse through `ActionSink.setPullTitle`, and idempotent: only PRs
+whose rendered title differs from the live one are written, so a world already on convention writes
+nothing.
 
 ## `prAttentionStatus(pr, ctx)`
 

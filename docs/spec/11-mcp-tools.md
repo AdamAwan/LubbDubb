@@ -315,6 +315,33 @@ Idempotence is in the write: `Store.concludePlanPart` updates `WHERE id=? AND st
 merged or retired part cannot be re-labelled. It routes through `AgentManager.recordPartOutcome` for
 the `partOutcome` event, so the cockpit repaints on the verdict rather than on the next pulse.
 
+### `open_pr`
+
+Opens the pull request for the work the calling agent was dispatched to do.
+Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
+
+- **Identity is structural, with full force.** Branch, base, issue and stack position all resolve from
+  the credential's origin (`resolveOpenPr`, `src/mcp/openPr.ts`), so an agent cannot open a pull
+  request against another agent's work however it phrases the call. The same discipline
+  `report_finding` rests on, and with more reason: this write puts a pull request into the world under
+  the operator's account.
+- **Base selection reuses `partBase`.** Two answers to "what does this part stack on" is the drift
+  class the branch gate and the reconciler already avoid by sharing one.
+- **Every other origin is refused by name**, and told which tool it actually wants — a PR-concern
+  agent already has a pull request; a planner, assayer, assessor or desk job writes no code. Refusing
+  beats silently scoping: an agent handed a target it did not ask for would open a PR for work it is
+  not doing.
+- **The title comes from `pr-title`** (see [07](07-pull-requests.md)); `type` and `scope` are the one
+  thing the agent knows and the harness does not.
+- **The issue reference is appended, never a closing keyword.** Whether a PR closes its issue is the
+  agent's judgement — a harness-written "closes" would shut a ticket whose remaining parts are open.
+  A part gets `Part <n>/<m> of #<issue>.`, a whole-issue pickup `Relates to #<issue>.`
+
+**The floor is unchanged.** Unwired — no sink, `mcp.enabled: false`, a `claude` that ignores the
+server — the tool is still advertised (so `names.ts` stays honest) and reports that it is unavailable,
+and every prompt still tells the agent how to open its own pull request. `test/mcpChannel.test.ts`
+asserts that rather than intending it.
+
 ### `request_permission`
 
 The permission backstop (issue #130 phase B). Arguments `{tool_name, input, tool_use_id}` — but the

@@ -15,7 +15,7 @@ import type { Issue, Plan, PlanPart } from '../types.js';
  * the branch gate and the reconciler already read that one.
  */
 
-export interface OpenPrTarget {
+interface OpenPrTarget {
   issueNumber: number;
   issueTitle: string;
   branch: string;

@@ -19,11 +19,7 @@ import { prState } from './prHealth.js';
  * would be a second answer to "who retargets" living nowhere near the one that
  * matters.
  */
-export function retargetsFor(
-  openPrs: PullRequest[],
-  closedPrs: PullRequest[],
-  defaultBranch: string,
-): PrBaseInput[] {
+export function retargetsFor(openPrs: PullRequest[], closedPrs: PullRequest[], defaultBranch: string): PrBaseInput[] {
   // Only merged parents retarget their children. A PR that was *abandoned* leaves
   // the rung above it stranded on purpose: the work beneath it never landed, so
   // rebasing onto the default branch would silently drop the premise it was built

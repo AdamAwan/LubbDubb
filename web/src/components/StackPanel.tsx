@@ -54,7 +54,10 @@ function StackCard({
       <div className="stack-head">
         {stack.issueNumber !== null && refLink(`#${stack.issueNumber}`, refUrls)}
         <span className="stack-title">{stack.issueTitle ?? 'Stacked pull requests'}</span>
-        <span className="chip small" title={stack.planId ? 'A plan produced this stack' : 'Read off the pull requests themselves'}>
+        <span
+          className="chip small"
+          title={stack.planId ? 'A plan produced this stack' : 'Read off the pull requests themselves'}
+        >
           {stack.planId ? 'from plan' : 'observed'}
         </span>
         <span className="stack-ref">

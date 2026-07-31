@@ -41,8 +41,13 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
-`PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `IssueLabelCapable`,
-`WorkItemStateCapable`, `IssueCommentCapable`, `RefResolvable`, and the fake-only `Injectable`.
+`PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
+`PrBaseCapable`, `IssueLabelCapable`, `WorkItemStateCapable`, `IssueCommentCapable`, `RefResolvable`,
+and the fake-only `Injectable`.
+
+The three PR-write capabilities are deliberately separate rather than one `PrWriteCapable`, because a
+provider may genuinely have one and not the others: GitHub retargets a stack itself when a rung
+merges, so its `setPullBase` serves only the hand-driven case, while Azure needs it on every merge.
 
 A provider implements only what it supports. **New outbound actions add a new capability interface
 rather than widening a shared one.** When you extend a provider's `*Api` seam, add to the interface

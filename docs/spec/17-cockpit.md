@@ -816,6 +816,29 @@ for the world to change — chosen from `config.injectable`.
 - **Errors** (`ErrorsPanel`) — the last 100 recorded failures, with the count marked urgent when
   non-zero.
 
+## The stack panel
+
+Chains of stacked pull requests, from `/api/state`'s `stacks` (see
+[07](07-pull-requests.md) for the fold). Drawn in both skins, differently on purpose:
+
+- **Classic** — `web/src/components/StackPanel.tsx`, one card per stack, styled through tokens only,
+  so the treatment follows whichever skin is active.
+- **Factory** — on **the rack** (`Inspection.tsx`), not on the line. A stack is a fact about *pull
+  requests*, and the rack is where pull requests are read; a belt would have said it was a fact about
+  scheduling, which is the confusion the plan panel already risks by drawing parts as a stack.
+
+Rungs are listed **top-first**, with the one that merges next at the bottom — `Stack.rungs` is
+bottom-first, which is the order the dispatcher and the reconciler think in, so the reversal happens
+in the view and nowhere else. Each rung names its base, so the chain is legible without the reader
+holding branch names in their head.
+
+The health chip is the one the PR list already shows rather than a new one: a rung *is* a pull
+request, and an operator reading it in two places must not get two accounts of it. A rung with no
+matching open PR draws no health at all rather than asserting health the snapshot does not carry.
+
+A stack is drawn whether or not a plan produced it — `from plan` versus `observed` — which is the
+whole point of the model being derived from pull requests rather than from `plan_parts`.
+
 ## The agent drawer
 
 `AgentDrawer` opens over the page for one agent.
