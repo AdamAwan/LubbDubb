@@ -48,7 +48,48 @@ test('unhandled PR comment produces a code agent dispatch', async () => {
     }),
   );
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
-  assert.equal((actions[0] as { originRef: string }).originRef, 'pr:7:comment:c1');
+  // One origin for the PR's whole review, and the thread it folds carried
+  // alongside it so notify de-dup and a refused draft still key on the thread.
+  assert.equal((actions[0] as { originRef: string }).originRef, 'pr:7:comments');
+  assert.deepEqual((actions[0] as { signalRefs: string[] }).signalRefs, ['pr:7:comment:c1']);
+});
+
+test('every unresolved thread on a PR goes to one agent, not one agent per thread', async () => {
+  // A review is written as a unit: three comments in one pass, each assuming the
+  // others. Dispatched one at a time, an agent fixes comment 1 in a way that
+  // contradicts comment 3 — so the whole review is one concern, one branch, one
+  // agent, with every thread in the prompt.
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx({
+      pullRequests: [
+        {
+          id: 'p',
+          number: 7,
+          title: 'X',
+          branch: 'feat',
+          ciStatus: 'passing',
+          unresolvedComments: [
+            { id: 'c1', author: 'bob', body: 'rename this', handled: false },
+            { id: 'c2', author: 'bob', body: 'and pull it out of the loop', handled: false },
+            { id: 'c3', author: 'sue', body: 'already handled', handled: true },
+            { id: 'c4', author: 'sue', body: 'add a test', handled: false },
+          ],
+        },
+      ],
+    }),
+  );
+  const dispatches = actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatches.length, 1, 'one agent for the review, not one per comment');
+  const dispatch = dispatches[0] as { originRef: string; prompt: string; title: string; signalRefs: string[] };
+  assert.equal(dispatch.originRef, 'pr:7:comments');
+  // Only the unhandled ones, and every one of them.
+  assert.deepEqual(dispatch.signalRefs, ['pr:7:comment:c1', 'pr:7:comment:c2', 'pr:7:comment:c4']);
+  for (const body of ['rename this', 'and pull it out of the loop', 'add a test']) {
+    assert.ok(dispatch.prompt.includes(body), `the prompt carries "${body}"`);
+  }
+  assert.ok(!dispatch.prompt.includes('already handled'), 'a settled thread is not re-litigated');
+  assert.match(dispatch.title, /3 review comments on PR #7/);
 });
 
 test('a handled comment is ignored', async () => {
@@ -740,6 +781,64 @@ test('an already-notified concern is not re-notified', async () => {
     ),
   );
   assert.equal(actions[0]?.type, 'no_op', 'already told this agent about pr:42:mergeable');
+});
+
+test('a later comment still reaches the agent already answering the review', async () => {
+  // The hazard the collapsed origin introduces: every thread on the PR now shares
+  // one dispatch origin, so de-dup keyed on that origin would let the first
+  // comments swallow every later one — silencing exactly the operator who is
+  // reviewing an agent's work as it goes. De-dup is per thread instead.
+  const d = new RuleDispatcher();
+  const { actions } = await d.decide(
+    ctx(
+      {
+        pullRequests: [
+          {
+            id: 'p',
+            number: 42,
+            title: 'X',
+            branch: 'feat',
+            baseBranch: 'main',
+            ciStatus: 'passing',
+            unresolvedComments: [
+              { id: 'c1', author: 'you', body: 'rename this', handled: false },
+              { id: 'c2', author: 'you', body: 'and one more thing', handled: false },
+            ],
+          },
+        ],
+      },
+      {
+        // The agent was dispatched to answer c1; c2 arrived after it started.
+        tasks: [branchTask('feat', 'pr:42:comments', 'ag1')],
+        agents: [runningAgent('ag1')],
+        recentDecisions: [
+          {
+            id: 'd1',
+            cycleId: 'c',
+            outcome: 'executed',
+            detail: '',
+            rule: null,
+            createdAt: 'n',
+            action: {
+              type: 'dispatch_code_agent',
+              reason: 'r',
+              branch: 'feat',
+              title: 't',
+              prompt: 'p',
+              originRef: 'pr:42:comments',
+              signalRefs: ['pr:42:comment:c1'],
+            },
+          },
+        ],
+      },
+    ),
+  );
+  assert.ok(!actions.some((a) => a.type.startsWith('dispatch_')), 'still one agent per branch');
+  const note = actions.find((a) => a.type === 'respond_to_agent');
+  assert.ok(note, 'the new comment reaches the running agent');
+  // Only the new one: the thread it was dispatched with is already in its prompt.
+  assert.deepEqual((note as { originRefs: string[] }).originRefs, ['pr:42:comment:c2']);
+  assert.match((note as { response: string }).response, /and one more thing/);
 });
 
 test('respects concurrency headroom', async () => {

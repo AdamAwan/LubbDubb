@@ -541,7 +541,14 @@ export class ActionExecutor {
     action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
   ): Promise<{ task: Task; cwd: string }> {
     const { store } = this.deps;
-    const guidance = rejectionGuidance(action.originRef, store.listProposals());
+    // The origin *and* the signals folded under it: a review-comment dispatch
+    // names the PR's whole review, while a refused reply draft is filed against
+    // the single thread it answered. Both are exact refs — this is not a widening
+    // to the world item, which is the thing that must never happen here.
+    const guidance = rejectionGuidance(
+      [action.originRef, ...(action.type === 'dispatch_code_agent' ? (action.signalRefs ?? []) : [])],
+      store.listProposals(),
+    );
     // What the last agent on this issue said was left. Appended for the same
     // reason the rejection note is — a `{outstanding}` placeholder would be
     // dropped silently by any operator template override that omitted it — and

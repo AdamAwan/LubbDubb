@@ -341,9 +341,20 @@ export function computeApproved(votes: number[]): boolean {
 /**
  * Surface one {@link PrComment} per PR comment thread, keyed on the thread id. A
  * thread is `handled` once Azure marks it resolved (fixed/closed/wontFix/byDesign)
- * *or* the bot authored its latest human comment — the network-native analogue of
- * the fake's `markCommentHandled`, so the deterministic loop settles one poll after
- * a reply is posted. System comments (status changes, etc.) are ignored.
+ * *or* the harness authored the latest **reply** in it — the network-native
+ * analogue of the fake's `markCommentHandled`, so the deterministic loop settles
+ * one poll after a reply is posted. System comments (status changes, etc.) are
+ * ignored.
+ *
+ * The reply arm reads the thread's *position*, not merely its latest author, for
+ * the reason spelled out on the GitHub side: `viewer` is whoever the harness
+ * authenticates as, which on a single-operator deployment is the operator, so an
+ * unanswered thread they opened themselves read as already handled and their
+ * review was dropped before any rule saw it. A one-comment thread has no reply and
+ * is therefore never settled by this arm, whoever wrote it.
+ *
+ * Azure's own `resolved` status is unaffected and stays the primary arm — it is a
+ * real verdict from the reviewer rather than an inference about who spoke last.
  */
 export function buildUnresolvedComments(threads: AzThread[], viewer: string): PrComment[] {
   const RESOLVED: ReadonlySet<string> = new Set(['fixed', 'closed', 'wontFix', 'byDesign']);
@@ -352,13 +363,13 @@ export function buildUnresolvedComments(threads: AzThread[], viewer: string): Pr
     const comments = thread.comments.filter((c) => c.commentType !== 'system');
     const root = comments[0];
     if (!root) continue; // a purely-system thread carries no reviewer signal
-    const last = comments[comments.length - 1]!;
+    const lastReply = comments.length > 1 ? comments[comments.length - 1]! : null;
     const resolved = thread.status !== null && RESOLVED.has(thread.status);
     out.push({
       id: String(thread.id),
       author: root.authorUniqueName,
       body: root.content,
-      handled: resolved || last.authorUniqueName === viewer,
+      handled: resolved || lastReply?.authorUniqueName === viewer,
     });
   }
   return out;

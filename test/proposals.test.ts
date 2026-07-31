@@ -9,6 +9,7 @@ import { buildSystem } from '../src/system.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
+import { reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { gitRepo } from './support/gitRepo.js';
@@ -54,9 +55,16 @@ function draftPlan(prNumber: number, commentId: string): DispatchResult {
   } as unknown as DispatchResult;
 }
 
-/** What rule 2b's prompt is before anything is appended to it. */
-function reviewCommentPrompt(number: number, branch: string, comment: string): string {
-  return defaultPromptTemplates().render('pr-review-comment', { number, branch, author: 'reviewer', comment });
+/**
+ * What rule 2b dispatches with before a rejection note is appended: the rendered
+ * template plus the threads themselves, which are appended rather than
+ * interpolated so an operator override cannot drop them.
+ */
+function reviewCommentPrompt(number: number, branch: string, comment: string, id = 'c1'): string {
+  return (
+    defaultPromptTemplates().render('pr-review-comment', { number, branch, author: 'reviewer', comment }) +
+    reviewThreadsNote([{ id, author: 'reviewer', body: comment, handled: false }])
+  );
 }
 
 /** A PR rule 3 wants to merge: green, approved, mergeable, nothing else pending. */
@@ -292,19 +300,21 @@ test("a rejection reaches the next agent on that ref, in the operator's own word
   const tasks = new Map(system.store.listTasks().map((t) => [t.originRef, t]));
 
   // The reason a human typed reaches the agent that goes to work on that exact
-  // comment — attributed to them, never as the harness's own instruction.
-  const told = tasks.get(`pr:1:comment:${withNote}`)!;
+  // comment — attributed to them, never as the harness's own instruction. The
+  // dispatch origin names the PR's whole review, so the match is on the thread ref
+  // the dispatch *carries*: still an exact ref, never the world item.
+  const told = tasks.get('pr:1:comments')!;
   assert.match(told.prompt, /An operator refused a reply the harness proposed for this exact item/);
   assert.match(told.prompt, /operator's own words, quoted verbatim/);
   assert.match(told.prompt, /"too defensive — just fix the lint"/);
   // Appended to the rendered template rather than filled into it, so an operator
   // override that never heard of the feature cannot drop it.
-  assert.ok(told.prompt.startsWith(reviewCommentPrompt(1, 'feat/one', 'This looks over-engineered.')));
+  assert.ok(told.prompt.startsWith(reviewCommentPrompt(1, 'feat/one', 'This looks over-engineered.', withNote)));
 
   // An empty note changes the prompt not at all: there is nothing to pass on, and
   // a placeholder saying so would only invite the agent to speculate.
-  const untold = tasks.get(`pr:2:comment:${withoutNote}`)!;
-  assert.equal(untold.prompt, reviewCommentPrompt(2, 'feat/two', 'Same question here.'));
+  const untold = tasks.get('pr:2:comments')!;
+  assert.equal(untold.prompt, reviewCommentPrompt(2, 'feat/two', 'Same question here.', withoutNote));
   system.store.close();
 });
 

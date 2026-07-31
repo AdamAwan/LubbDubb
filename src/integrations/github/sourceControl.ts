@@ -297,23 +297,48 @@ export function computeApproved(reviews: GhReview[]): boolean {
 /**
  * Group review comments into threads (by `in_reply_to_id`) and surface one
  * {@link PrComment} per thread, keyed on the thread root. A thread is `handled`
- * once the authenticated bot authored its latest comment — the network-native
- * analogue of the fake's `markCommentHandled`, so the deterministic loop settles
- * one poll after a reply is posted.
+ * once the harness authored its latest **reply** — the network-native analogue of
+ * the fake's `markCommentHandled`, so the deterministic loop settles one poll
+ * after a reply is posted.
+ *
+ * **Only a reply can settle a thread, and that is positional rather than an
+ * identity test — deliberately, because identity cannot answer this question.**
+ * `viewerLogin` is whoever holds `GITHUB_TOKEN`, which on a single-operator
+ * deployment is the operator themselves. Comparing the *root's* author against it
+ * therefore marked every review comment the operator left as already handled the
+ * instant they wrote it, and rule 2b never saw it: the harness silently ignored
+ * exactly the reviews a human took the time to write, which is the one signal it
+ * must never drop. There is no author comparison that fixes this — the two
+ * identities are the same string.
+ *
+ * The position test needs none. The harness only ever posts *replies* under a root
+ * (`createPullReviewReply`); a `commentId: null` reply is an issue comment, which
+ * this list never contains. So "the newest reply is ours" is the whole of what
+ * `handled` can honestly mean, and it holds whether the token belongs to a
+ * dedicated bot account or to the operator.
+ *
+ * Consequence worth knowing: nothing else marks a thread handled, so a thread an
+ * agent addressed *in code* stays open until a reply goes out (the `reply_on_pr`
+ * path) or the reviewer answers. That loop is bounded — every thread on a PR now
+ * shares one dispatch origin, so it is one attempt cap and one escalation, not one
+ * per comment.
  */
 export function buildUnresolvedComments(comments: GhReviewComment[], viewerLogin: string): PrComment[] {
   const roots: GhReviewComment[] = [];
-  const latestByRoot = new Map<number, GhReviewComment>();
+  const latestReplyByRoot = new Map<number, GhReviewComment>();
   for (const c of comments) {
-    const rootId = c.inReplyToId ?? c.id;
-    if (c.inReplyToId === null) roots.push(c);
+    if (c.inReplyToId === null) {
+      roots.push(c);
+      continue;
+    }
     // Comments arrive in creation order, so the last write per root is the latest.
-    latestByRoot.set(rootId, c);
+    latestReplyByRoot.set(c.inReplyToId, c);
   }
   return roots.map((root) => ({
     id: String(root.id),
     author: root.authorLogin,
     body: root.body,
-    handled: (latestByRoot.get(root.id) ?? root).authorLogin === viewerLogin,
+    // A thread with no reply is unanswered, whoever wrote it.
+    handled: latestReplyByRoot.get(root.id)?.authorLogin === viewerLogin,
   }));
 }

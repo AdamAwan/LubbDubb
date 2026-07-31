@@ -1903,6 +1903,33 @@ so the executor runs it directly.
   exactly that, and Azure addresses an edit by (work item, comment). Called by the plan reconciler,
   not by the executor: like `set_work_item_state` it's mechanical bookkeeping, so it isn't
   auto-send gated, and the one-comment rule is what keeps it from being noise.
+- **A review is answered as a whole, and only a reply settles a thread.** Two defects, one area.
+  - **Rule 2b dispatches per PR (`pr:<n>:comments`), not per thread.** A review is written as a unit —
+    the same person leaving three comments in one pass, each assuming the others — so one concern per
+    thread put one agent on each, a cycle apart, and a fix for comment 1 landed without comment 3 in
+    view. The threads are **appended** to the rendered prompt (`reviewThreadsNote`), never
+    interpolated, for `ciFailureNote`'s reason; `{author}`/`{comment}` stay declared and filled so an
+    override written against the old one-comment prompt still renders something true.
+    **De-dup stays per thread** and must: `PrConcern.signals` carries `pr:<n>:comment:<id>` refs, and
+    keying notification on the collapsed origin would let a reviewer's first three comments swallow
+    the fourth — the signal an operator sends while watching an agent work. `activeOrigins` sees task
+    origins only, so it cannot tell that the running agent was launched with those threads; that is
+    what `dispatch_code_agent.signalRefs` + `dispatchedSignalsByBranch` record. The same split is why
+    `rejectionGuidance` takes a **list** of refs (origin + signals): a refused `reply_draft` is filed
+    against one thread, so matching the origin alone would have silently stopped every operator
+    refusal reaching an agent — that feature's own opening failure, restored by a rename.
+  - **`handled` is positional, never an identity test.** `viewerLogin` is whoever holds
+    `GITHUB_TOKEN`, which on a single-operator deployment is the operator — so comparing a thread
+    _root's_ author against it marked every review comment the operator left as handled the instant
+    they wrote it, and the harness silently ignored exactly the reviews a human took the time to
+    write. No author comparison fixes it; the two identities are one string. The harness only ever
+    posts _replies_ under a root (a `commentId: null` reply is an issue comment, absent from this
+    list), so "the newest **reply** is ours" is the whole of what `handled` can honestly mean, and it
+    is right for a bot account too. Azure keeps its native `resolved` status as the primary arm.
+    Consequence: nothing else settles a thread, so one an agent fixed _in code_ stays open until a
+    reply goes out or the reviewer answers — bounded, because the whole review now shares one attempt
+    cap and escalates once. Tests: `test/reviewThreads.test.ts`, the review blocks in
+    `test/ruleDispatcher.test.ts`, and the operator-thread cases in the two integration tests.
 - **One code agent per PR branch.** The PR rules never dispatch a second agent onto a branch that
   already has an active task. When the branch's agent is **running**, a fresh signal is delivered
   via `respond_to_agent` (the note records the concern origins in `originRefs`); when it's

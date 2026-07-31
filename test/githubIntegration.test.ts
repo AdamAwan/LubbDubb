@@ -235,6 +235,29 @@ test('buildUnresolvedComments: not handled while the human commented last', () =
   assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot')[0]!.handled, false);
 });
 
+test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
+  // The bug this closes: `viewerLogin` is whoever holds GITHUB_TOKEN, which on a
+  // single-operator deployment is the operator. Comparing the *root's* author
+  // against it marked every review comment they left as handled the instant they
+  // wrote it, so the harness silently ignored exactly the reviews a human took
+  // the time to write. Only a reply can settle a thread — the harness posts
+  // nothing but replies, so the position test needs no identity to work.
+  const comments: GhReviewComment[] = [
+    { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
+  ];
+  assert.equal(buildUnresolvedComments(comments, 'the-operator')[0]!.handled, false);
+});
+
+test('buildUnresolvedComments: the operator reviewing under their own token still settles on a reply', () => {
+  // The other half: once a reply *has* gone out under that same identity, the
+  // thread is answered. The fix must not turn every settled thread back on.
+  const comments: GhReviewComment[] = [
+    { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
+    { id: 101, authorLogin: 'the-operator', body: 'done', inReplyToId: 100 },
+  ];
+  assert.equal(buildUnresolvedComments(comments, 'the-operator')[0]!.handled, true);
+});
+
 test('linkedPrFromTimeline: takes the most recent PR cross-reference', () => {
   const events: GhTimelineEvent[] = [
     { event: 'cross-referenced', sourcePrNumber: 40, label: null, actorLogin: null },

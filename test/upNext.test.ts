@@ -112,7 +112,7 @@ test('cross-PR sort: failing CI outranks a review comment for scarce headroom', 
     result.upcoming?.map((q) => [q.origin, q.status]),
     [
       ['pr:2:ci', 'dispatching'],
-      ['pr:1:comment:c1', 'waiting'],
+      ['pr:1:comments', 'waiting'],
     ],
   );
 });

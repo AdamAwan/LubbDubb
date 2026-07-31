@@ -109,7 +109,7 @@ The field-mapping logic is exported as **pure functions** and tested directly:
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `aggregateCiStatus(checkRuns, status)`      | Folds check runs and the combined status into one `CiStatus`.                                      |
 | `computeApproved(reviews)`                  | Folds reviews into a single approval flag.                                                         |
-| `buildUnresolvedComments(comments, viewer)` | Threads review comments and marks the ones the viewer already answered as handled.                 |
+| `buildUnresolvedComments(comments, viewer)` | Threads review comments and marks the ones the viewer has **replied** to as handled.               |
 | `normalizeMergeState(state)`                | GitHub `mergeable_state` → `MergeableState`.                                                       |
 | `mapClosedPull(p)`                          | A closed PR in domain shape.                                                                       |
 | `linkedPrFromTimeline(events)`              | The last PR to cross-reference an issue. No open/merged filter — hence `linkedPrNumber` is sticky. |
@@ -128,6 +128,21 @@ Behaviour worth knowing:
   Pagination stops at the first entry outside the window: GitHub sorts by `updated` descending, and
   `updated_at >= closed_at` always holds, so the break is sound.
 - **A `prAuthor` filter** narrows the PR list client-side, for both open and closed PRs.
+- **Only a reply settles a review thread, and that is positional rather than an identity test.**
+  `viewer` is whoever holds `GITHUB_TOKEN`, which on a single-operator deployment is the operator
+  themselves — so comparing a thread _root's_ author against it marked every review comment the
+  operator left as handled the instant they wrote it, and rule 2b never saw it. The harness was
+  silently ignoring exactly the reviews a human took the time to write, and no author comparison can
+  fix it: the two identities are the same string. The position test needs none — the harness only ever
+  posts _replies_ under a root (`createPullReviewReply`; a `commentId: null` reply is an issue comment,
+  which this list never contains), so "the newest reply is ours" is the whole of what `handled` can
+  honestly mean, and it holds whether the token belongs to a bot account or to the operator. Azure has
+  the same rule, with its native `resolved` status as the primary arm.
+
+  Consequence, stated rather than discovered: nothing else marks a thread handled, so a thread an
+  agent addressed _in code_ stays open until a reply goes out (the `reply_on_pr` path) or the reviewer
+  answers. That loop is bounded — every thread on a PR shares one dispatch origin, so it is one
+  attempt cap and one escalation, not one per comment.
 - Auth is `GITHUB_TOKEN` only; `github.owner`/`github.repo` are required. See [02](02-configuration.md).
 
 ## The `azure` provider

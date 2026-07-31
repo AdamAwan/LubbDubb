@@ -443,6 +443,23 @@ test('buildUnresolvedComments: handled when the bot authored the latest comment'
   assert.equal(buildUnresolvedComments(threads, 'bot@acme.com')[0]!.handled, true);
 });
 
+test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
+  // `viewer` is whoever the harness authenticates as, which on a single-operator
+  // deployment is the operator — so a one-comment thread they opened themselves
+  // read as already handled and their review never reached a rule. A thread with
+  // no reply is unanswered, whoever wrote it.
+  const threads: AzThread[] = [
+    {
+      id: 300,
+      status: 'active',
+      comments: [
+        { id: 1, authorUniqueName: 'bot@acme.com', content: 'rename this', parentCommentId: null, commentType: 'text' },
+      ],
+    },
+  ];
+  assert.equal(buildUnresolvedComments(threads, 'bot@acme.com')[0]!.handled, false);
+});
+
 test('buildUnresolvedComments: handled when Azure marks the thread resolved', () => {
   const threads: AzThread[] = [
     {

@@ -55,6 +55,15 @@ const ActionSchema = z.discriminatedUnion('type', [
     title: z.string().min(1),
     prompt: z.string().min(1),
     originRef: z.string().nullable().default(null),
+    /**
+     * The individual world signals this dispatch was launched to answer, when
+     * they are finer-grained than `originRef`. Only the review-comment rule sets
+     * more than one: it folds every open thread on a PR onto a single origin so
+     * one agent answers the whole review, which leaves the origin unable to say
+     * *which* threads the agent already has. Recorded here so the branch-notify
+     * de-dup doesn't read them straight back to it (`dispatchedSignalsByBranch`).
+     */
+    signalRefs: z.array(z.string()).optional(),
     ...origin,
     ...job,
     ...part,
