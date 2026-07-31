@@ -10,6 +10,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import type { Agent } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { buildApp } from '../src/server/app.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -206,4 +207,62 @@ test('nothing in the dispatcher reads the pad', () => {
     [],
     'a rule reading pad notes would let one agent’s prose suppress another agent’s dispatch',
   );
+});
+
+// -- what the cockpit is served ----------------------------------------------
+
+test('the snapshot ships the pad reading and the trail is fetched on demand', async () => {
+  const system = build();
+  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Add the thing' });
+  system.connector.inject({ kind: 'new_issue', number: 13, title: 'Something nobody wrote about' });
+  await system.harness.runCycle('manual');
+
+  const part = spawnAgent(system, 'issue:12:part:schema');
+  await callTool(system, part, 'scratch_append', {
+    note: 'the ALTER needed a PRAGMA check first, and the migration is where that has to go',
+    topic: 'store',
+  });
+  await callTool(system, part, 'scratch_append', { note: 'second thing learned' });
+
+  const built = await buildApp(system);
+  const app = built.app;
+  const state = await app.inject({ method: 'GET', url: '/api/state' });
+  const issues = state.json().world.issues as { number: number; scratchpad: unknown }[];
+  assert.deepEqual(issues.find((i) => i.number === 12)?.scratchpad, {
+    entries: 2,
+    updatedAt: system.store.listScratchEntries('issue:12')[1]?.createdAt,
+  });
+  // A goal nobody wrote about is null, never a zero: the control that opens the
+  // pad is keyed on this, and a button whose only answer is "nothing here" is
+  // worse than no button.
+  assert.equal(issues.find((i) => i.number === 13)?.scratchpad, null);
+  // The snapshot is polled continuously, so the prose itself must not ride on it.
+  assert.doesNotMatch(state.body, /PRAGMA check/);
+
+  const pad = await app.inject({ method: 'GET', url: '/api/scratchpads/issue:12' });
+  assert.equal(pad.statusCode, 200);
+  assert.equal(pad.json().padRef, 'issue:12');
+  assert.deepEqual(
+    (pad.json().entries as { note: string }[]).map((e) => e.note.slice(0, 6)),
+    ['the AL', 'second'],
+    'the trail is served oldest first, the order it was written in',
+  );
+
+  // The route resolves a ref through the same `padOriginFor` an agent's write goes
+  // through, so any origin on the goal names the one pad — the cockpit and the
+  // tool channel cannot disagree about which pad a ref means.
+  const viaPart = await app.inject({ method: 'GET', url: '/api/scratchpads/issue:12:part:schema' });
+  assert.equal(viaPart.json().padRef, 'issue:12');
+  assert.equal((viaPart.json().entries as unknown[]).length, 2);
+
+  // An untouched pad is an empty trail, which is an ordinary answer...
+  const untouched = await app.inject({ method: 'GET', url: '/api/scratchpads/issue:13' });
+  assert.equal(untouched.statusCode, 200);
+  assert.deepEqual(untouched.json().entries, []);
+  // ...while a ref that names no pad at all is a bad request, not an empty one.
+  const notAPad = await app.inject({ method: 'GET', url: '/api/scratchpads/pr:42' });
+  assert.equal(notAPad.statusCode, 400);
+
+  await app.close();
+  system.store.close();
 });

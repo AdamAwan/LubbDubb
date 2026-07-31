@@ -158,6 +158,7 @@ function render(
       lastPulseAt: now,
       viewingPlan: null,
       viewingRetro: null,
+      viewingScratchpad: null,
       settingsOpen: false,
     });
     return renderToStaticMarkup(createElement(resolveSkin('factory').Root, { view, actions: INERT }));
@@ -194,6 +195,7 @@ function renderDesk(
       lastPulseAt: now,
       viewingPlan: null,
       viewingRetro: null,
+      viewingScratchpad: null,
       settingsOpen: false,
     });
     return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));
@@ -902,6 +904,7 @@ test('a refused floor draws the override, and a workable one does not', () => {
         stopped: false,
         onViewPlan: () => undefined,
         onViewRetro: () => undefined,
+        onViewScratchpad: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onDismissCompletion: () => undefined,
@@ -955,6 +958,7 @@ test('the floor opens its plan whatever the plan is doing', () => {
         stopped: false,
         onViewPlan: () => undefined,
         onViewRetro: () => undefined,
+        onViewScratchpad: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onDismissCompletion: () => undefined,
@@ -1257,6 +1261,7 @@ test('the goal floor strip is the staked goals', () => {
         ignoreLabel: 'lubbdubb-ignore',
         onViewPlan: () => undefined,
         onViewRetro: () => undefined,
+        onViewScratchpad: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
         onDismissCompletion: () => undefined,

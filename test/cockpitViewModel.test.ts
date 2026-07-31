@@ -41,6 +41,7 @@ function build(state: AppState, over: Partial<Parameters<typeof buildViewModel>[
     lastPulseAt: 1_000_000,
     viewingPlan: null,
     viewingRetro: null,
+    viewingScratchpad: null,
     settingsOpen: false,
     ...over,
   });

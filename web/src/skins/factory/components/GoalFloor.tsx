@@ -79,6 +79,8 @@ interface GoalFloorProps {
   onViewPlan: (planId: string) => void;
   /** Open the run's write-up, keyed on the goal — `onViewPlan`'s pattern. */
   onViewRetro: (issueRef: string) => void;
+  /** Open the shared notepad the agents on the goal wrote — the same pattern again. */
+  onViewScratchpad: (issueRef: string) => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
   /**
    * Override a refused intake verdict. A second entry point onto the same action
@@ -176,6 +178,39 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
 
   return (
     <>
+      {/* The goal's two *readings* — its notepad and its write-up — pinned to the
+          top right as ordinary buttons rather than a full-width plate each.
+          A plate carries something with a sentence to say (a stopped machine's
+          reason, a plan that can also be sent back); these two say nothing and
+          only open a document, so a bar per door spanned the panel to hold one
+          button. Drawn while there is something to read, never while the floor is
+          in a particular state — `planId`/`retroRef`'s rule, unchanged by where
+          the control sits. The notepad comes first because it is what the write-up
+          was made from, and it is drawn on goals that have no write-up at all: a
+          run still going, or one nobody ever wrote up. */}
+      {(floor.padRef || floor.retroRef) && (
+        <div className="fx-gf-reads">
+          {floor.padRef && (
+            <button
+              className="fx-btn"
+              onClick={() => props.onViewScratchpad(floor.padRef!)}
+              title="Logbook — the shared notepad for this goal, what the agents working it left each other, oldest first"
+            >
+              Notepad
+            </button>
+          )}
+          {floor.retroRef && (
+            <button
+              className="fx-btn"
+              onClick={() => props.onViewRetro(floor.retroRef!)}
+              title="Manifest — what shipped and how the run went, written after the goal was delivered"
+            >
+              Retrospective
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="fx-gf-patches" role="tablist" aria-label="Goals">
         {goals.map((issue) => {
           const status = patchStatus(issue.pickup?.status ?? 'eligible');
@@ -223,25 +258,6 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
             >
               Replan
             </AsyncButton>
-          </span>
-        </div>
-      )}
-
-      {/* The retrospective's way in, beside the plan's and for the same reason:
-          drawn while there is one to read, never while the floor is in a
-          particular state. The Manifest station names this document; before it
-          existed the station named a step the harness never took. */}
-      {floor.retroRef && (
-        <div className="fx-gf-plan fx-sunk">
-          <span className="fx-gf-who">Manifest</span>
-          <span className="fx-gf-act">
-            <button
-              className="fx-btn"
-              onClick={() => props.onViewRetro(floor.retroRef!)}
-              title="What shipped, and how the run went — written after the goal was delivered"
-            >
-              Open retrospective
-            </button>
           </span>
         </div>
       )}

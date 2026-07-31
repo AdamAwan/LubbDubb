@@ -225,6 +225,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
             onSetConclusion={(issueNumber, verdict) => actions.setIssueConclusion(issueNumber, verdict)}
             onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
             onViewPlan={(id) => actions.viewPlan(id)}
+            onViewScratchpad={(issueRef) => actions.viewScratchpad(issueRef)}
           />
         </section>
 

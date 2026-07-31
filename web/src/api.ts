@@ -4,6 +4,7 @@ import type {
   RecoveryVerdict,
   RunningConfigGroup,
   RetrospectiveView,
+  ScratchEntryView,
   UnrecordedWorkView,
   WorkNodeView,
 } from './types.js';
@@ -110,6 +111,13 @@ const realApi = {
   getRetrospective: (ref: string) =>
     authFetch(`/api/retrospectives/${encodeURIComponent(ref)}`).then((r) =>
       json<{ retrospective: RetrospectiveView | null }>(r),
+    ),
+  // The shared pad the agents on a goal wrote each other, fetched when a reader
+  // opens it — the snapshot carries only how much is there. `padOriginFor` on the
+  // server resolves a subtree ref to its issue, so any origin on the goal works.
+  getScratchpad: (ref: string) =>
+    authFetch(`/api/scratchpads/${encodeURIComponent(ref)}`).then((r) =>
+      json<{ padRef: string; entries: ScratchEntryView[] }>(r),
     ),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.

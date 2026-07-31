@@ -360,6 +360,17 @@ export interface GoalFloorModel {
    */
   planId: string | null;
   /**
+   * The goal whose shared notepad can be opened, as an `issue:<n>` ref, or null
+   * when the agents on it wrote nothing.
+   *
+   * Keyed on the pad **having entries**, for `retroRef`'s reason: the notepad is
+   * written during the work and read long after it, so it must not stop being
+   * reachable when the floor changes status. It is the raw testimony beside the
+   * Manifest's write-up, and it exists on goals no retrospective was ever written
+   * for — a run still going, or one that failed before anything wrote it up.
+   */
+  padRef: string | null;
+  /**
    * The goal whose retrospective can be opened, as an `issue:<n>` ref, or null
    * when nobody has written one.
    *
@@ -791,7 +802,8 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     layout: layoutFloor(refs, edges),
     plates,
     planId: plan?.id ?? null,
-    // Keyed on the write-up existing, and on nothing else — see `retroRef`.
+    // Both keyed on the record existing, and on nothing else — see `retroRef`.
+    padRef: (issue.scratchpad?.entries ?? 0) > 0 ? `issue:${n}` : null,
     retroRef: issue.retrospective ? `issue:${n}` : null,
   };
 }

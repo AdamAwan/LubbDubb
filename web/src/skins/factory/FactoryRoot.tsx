@@ -234,6 +234,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         ignoreLabel={state.config.ignoreLabel}
         onViewPlan={(id) => actions.viewPlan(id)}
         onViewRetro={(issueRef) => actions.viewRetro(issueRef)}
+        onViewScratchpad={(issueRef) => actions.viewScratchpad(issueRef)}
         onReplan={(planId) => actions.replan(planId)}
         onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
         onDismissCompletion={(issueNumber) => actions.dismissCompletion(issueNumber)}
@@ -264,6 +265,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         onSetConclusion={(issueNumber, verdict) => actions.setIssueConclusion(issueNumber, verdict)}
         onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
         onViewPlan={(id) => actions.viewPlan(id)}
+        onViewScratchpad={(issueRef) => actions.viewScratchpad(issueRef)}
       />
     </section>
   );

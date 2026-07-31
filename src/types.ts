@@ -773,6 +773,22 @@ export interface ScratchEntry {
 }
 
 /**
+ * What a pad amounts to without reading it: how much was written, and when the
+ * last entry landed.
+ *
+ * The reading rather than the trail, for the retrospective's reason exactly — the
+ * snapshot is polled continuously, and a goal's pad is unbounded prose, so what
+ * rides on every poll is only what a control needs to know there is something to
+ * open. The entries themselves are fetched when a reader opens them.
+ */
+export interface ScratchPadSummary {
+  padRef: string;
+  entries: number;
+  /** The newest entry's timestamp — the pad is append-only, so this is its age. */
+  updatedAt: string;
+}
+
+/**
  * One goal's retrospective: what shipped, and how the run went.
  *
  * Nothing gates on it — a goal is delivered whether or not anybody wrote it up —

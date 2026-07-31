@@ -1675,6 +1675,18 @@
   gap: 6px;
   margin-left: auto;
 }
+/* The goal's two readings — notepad and write-up — as a right-aligned pair at
+   the top of the floor. They were a full-width plate each, which spent a bar of
+   the panel apiece to hold one button and read as though each had something to
+   say; a door does not. Above the patch strip rather than in the card's own head,
+   which belongs to the panel and not to whichever goal is picked. */
+.fx-gf-reads {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
 /* The plan's own bar, above the floor rather than under it: it is not a stopped
    machine's reason, it is the way into the record of what was agreed, and it is
    drawn for as long as there is a plan at all. Same plate frame so it reads as

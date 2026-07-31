@@ -844,6 +844,55 @@ const DEMO_RETROSPECTIVE = {
   updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
 };
 
+/**
+ * The demo's scratchpad: the trail the retrospective above was written from, and
+ * deliberately the *same story from the inside* — the second agent rediscovering
+ * what the first had already established is what the write-up calls out, and it
+ * is only visible here because the pad kept both entries.
+ */
+const DEMO_SCRATCHPAD = [
+  {
+    id: 'scr_demo1',
+    padRef: 'issue:205',
+    authorOriginRef: 'issue:205',
+    agentId: 'agent-4',
+    taskId: 'task-4',
+    topic: 'detection',
+    note: 'Detection lives in two places, not one: sentinels.ts has the pure helpers, and PtySession additionally handles a sentinel split across two data chunks. The README section has to cover both or it describes half the protocol.',
+    createdAt: new Date(Date.now() - 9_000_000).toISOString(),
+  },
+  {
+    id: 'scr_demo2',
+    padRef: 'issue:205',
+    authorOriginRef: 'issue:205',
+    agentId: 'agent-4',
+    taskId: 'task-4',
+    topic: 'ci',
+    note: 'CI on this branch is red and none of it is ours — the failures are all in the base PR (#137). Do not chase them.',
+    createdAt: new Date(Date.now() - 7_800_000).toISOString(),
+  },
+  {
+    id: 'scr_demo3',
+    padRef: 'issue:205',
+    authorOriginRef: 'issue:205:part:docs',
+    agentId: 'agent-6',
+    taskId: 'task-6',
+    topic: 'ci',
+    note: 'Spent about an hour on the red suite before working out the failures come from the base branch. Reading the pad first would have saved all of it.',
+    createdAt: new Date(Date.now() - 4_800_000).toISOString(),
+  },
+  {
+    id: 'scr_demo4',
+    padRef: 'issue:205',
+    authorOriginRef: 'issue:205:assess',
+    agentId: 'agent-7',
+    taskId: 'task-7',
+    topic: null,
+    note: 'PR #140 covers both runtimes and the stripping rule. Nothing outstanding that I can see.',
+    createdAt: new Date(Date.now() - 4_200_000).toISOString(),
+  },
+];
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
@@ -858,6 +907,10 @@ export const demoApi = {
   // goal nobody wrote up — silence, not an error.
   getRetrospective: (ref: string) =>
     Promise.resolve({ retrospective: ref === 'issue:205' ? DEMO_RETROSPECTIVE : null }),
+  // The pad behind that write-up. Every other goal answers an empty trail, which
+  // is what the real route says for a pad nobody has written to — and no way in
+  // is drawn for one, since the snapshot's reading is what the control keys on.
+  getScratchpad: (ref: string) => Promise.resolve({ padRef: ref, entries: ref === 'issue:205' ? DEMO_SCRATCHPAD : [] }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals

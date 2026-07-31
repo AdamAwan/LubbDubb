@@ -245,6 +245,25 @@ by every open cockpit; the snapshot carries the summary and `hasDocument`, which
 station needs to draw itself. Returns `{ retrospective }`, and `null` rather than a 404 for a goal
 nobody wrote up: "no retrospective" is an ordinary answer here, not a missing resource.
 
+### `GET /api/scratchpads/:ref`
+
+One goal's shared scratchpad in full — every entry every agent on it left, oldest first. Fetched on
+open for the reason the write-up above is, with more force: a pad is unbounded prose from every agent
+on the goal, where a retrospective is one document. The snapshot carries `issue.scratchpad`
+(`{entries, updatedAt}`, and `null` when nothing has been written), which is all a way in needs to
+draw itself.
+
+Until this route existed the pad was readable only _by an agent_ (`scratch_read`) and quotable only by
+the retrospective that was handed it — so the account of a run was checkable against nothing, and an
+operator watching a goal go wrong could not read the reasoning as it was written.
+
+The ref is resolved through the **same `padOriginFor`** an agent's write goes through, so any origin
+on the goal (`issue:12:part:schema`, `issue:12:plan`) names the one pad and the cockpit cannot
+disagree with the tool channel about which pad a ref means. Returns `{padRef, entries}`. An untouched
+pad is an empty list — an ordinary answer — while a ref inside no issue at all (`pr:42`) is a **400**:
+"nobody has written here" and "that is not a pad" are different answers, and only the first is
+silence.
+
 ### `POST /api/work/:ref/file`
 
 Ask an agent to create a tracker item for unrecorded work. The mirror of
