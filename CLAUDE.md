@@ -423,6 +423,35 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     and quoted) — appended, not filled into a placeholder, for the reason the rejection note is. The loop
     is bounded by the existing `dispatchVerdict` attempt cap on `issue:<n>`; nothing new was added.
     Tests: `test/issueConclusion.test.ts`, and the `return-from-review` block in `test/ruleDispatcher.test.ts`.
+  - **A plan in flight outranks a declaration, because ownership does.** The doctrine — _the verdict is
+    asked of whoever owns the whole issue_ — was enforced by making the two arms unreachable together:
+    `conclusionOrigin` refuses the part agent, the planner and the assessor, so a decomposed issue had
+    no declaration to rank and the arm order never had to decide anything. **A replan is the one path
+    that breaks it.** Worked `single` → one agent declares `done` → an accepted shortfall flips the plan
+    to `planning`; both records now exist, and with the declaration first a spent verdict outranked the
+    plan that had just taken the issue back. So `planInFlightVerdict` (`planning` | `active` |
+    `awaiting_approval` → more work) sits **above** the stored arm and a `complete` plan stays **below**
+    it — an agent saying work remains on an issue whose parts all merged is telling the roll-up
+    something it cannot see, and more work is the safe direction. `planning` reads as in flight where it
+    used to say nothing: both ways to reach it are unsettled decompositions, and an operator who
+    replanned by mistake has arm 1. Two readers were skipping arms and are fixed with it — rule 3b
+    passed no shortfall at all, so the assessor's verdict read as the working agent's, against
+    `shortfallRecordedNote`'s own promise that the issue "comes back round for pickup"; and the Goal
+    Floor's completion record, below.
+- **Keeping a finished goal on the floor (`src/floor/completions.ts`, `floor_completions`, #203).**
+  `isGoalComplete` folds two kinds of input and the rule between them is **evidence adds; a standing
+  verdict subtracts**. A retrospective and a delivery-ever are _evidence_ — each says the goal was
+  reached at least once, and they are why the resolver alone is not enough (a finished goal nobody
+  declared resolves to `undeclared`). The conclusion and the plan are **not** two more raw signals: they
+  are asked through `resolveIssueConclusion`, and a resolved `more_work` outranks all the evidence,
+  because the operator, the assessor, the working agent or a plan being re-drawn is saying _now_ that
+  work remains. Reading them raw was one defect with two faces — an operator's `more_work` toggle argued
+  with by a `complete` plan (the contradiction arm 1 exists to forbid), and a standing shortfall not
+  consulted at all, so an assessor's "nothing was delivered" lost to the stale `done` of the agent it
+  was assessing. **The gate is on minting, never on keeping**: nothing deletes a row,
+  `recordFloorCompletion` is upsert-only and never resurrects a dismissal, and a genuinely finished goal
+  resolves to `done` or `undeclared` — never `more_work` — so it cannot fall off the floor on its own.
+  Tests: `test/floorCompletions.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **on by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
   (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
@@ -631,7 +660,18 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   (`IssueCommentCapable.upsertIssueComment`, `plans.status_comment_ref`, edited in place, written
   only when there's news) and the `issue/<n>` **ref collision** guard — the flat branch blocks
   every `issue/<n>/<slug>`, so the parts are parked `blocked` with one clear error rather than a
-  git failure per dispatch. `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
+  git failure per dispatch. **That reason is written twice from one pure function**
+  (`refCollisionReason`): into the error, and onto `plan_parts.blocked_reason` for every part it parks.
+  The error fires only under `changed && collision` — right for a feed, which carries news, but it left
+  a plan blocked yesterday explaining itself to nobody today and to nobody at all across a restart. So
+  the feed keeps the news and the standing condition moves onto the row, cleared with the status so a
+  part never claims a collision that is resolved. It is a complete account rather than one case of
+  several: `readiness` answers `pending` or `ready` and **never `blocked`**, so this is the only thing
+  that blocks a part. The Goal Floor draws it as the jammed assembler's plate — the other half of the
+  gap, since a blocked part is never queued (so the held-reason plate cannot speak for it) and has no
+  PR to be read for one, leaving a red word and no reason anywhere. `blocked_reason` is a column on an
+  **existing** table and so needs its `ensureColumns('plan_parts', …)` entry.
+  `planning.gitFetchIntervalMs` floors the `fetch`, which is wired only
   for the real observer (tests inject `FakeGitObserver` via `buildSystem`'s `gitObserver` opt and
   get none). Tests: `test/planReconcile.test.ts`.
 - **The goal assay (`src/intake/`, the `issue_assays` table, the `assay_issue` tool, issue #158).**

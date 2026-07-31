@@ -215,7 +215,13 @@ export class Harness extends EventEmitter {
       // per pulse, so a failure is recorded and the next pulse retries rather than
       // failing the whole cycle.
       try {
-        for (const c of completionsToRecord(world.issues, { retrospectiveOrigins, conclusions, deliveries, plans }))
+        for (const c of completionsToRecord(world.issues, {
+          retrospectiveOrigins,
+          conclusions,
+          deliveries,
+          shortfalls,
+          plans,
+        }))
           store.recordFloorCompletion(c);
       } catch (err) {
         this.deps.errors.record({

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { PlanReconciler } from '../src/plans/planReconciler.js';
+import { PlanReconciler, refCollisionReason } from '../src/plans/planReconciler.js';
 import { renderPlanComment } from '../src/plans/planComment.js';
 import { DEFAULT_PLANNING } from '../src/plans/planning.js';
 import { bySlug, partBase } from '../src/plans/parts.js';
@@ -233,8 +233,24 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
     ['schema', 'blocked'],
     ['api', 'blocked'],
   ]);
-  assert.match(h.errors[0]?.message ?? '', /the branch issue\/12 exists/);
+  assert.match(h.errors[0]?.message ?? '', /The branch issue\/12 exists/);
   assert.equal(h.errors.length, 1, 'said once, on the transition — not every pulse');
+
+  // The reason is on the rows, which is what makes the once-only error safe: the
+  // Errors panel carries the news, the part carries the standing condition. Same
+  // string in both, so the floor and the panel cannot word it differently.
+  const reason = refCollisionReason(12);
+  assert.ok(h.errors[0]?.message.includes(reason), 'the feed quotes the row');
+  assert.deepEqual(
+    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    [reason, reason],
+  );
+
+  // And it survives the pulses that follow, when nothing flips and the feed is
+  // silent — the case an operator actually looks at.
+  await h.reconciler.reconcile(world());
+  assert.equal(h.errors.length, 1, 'still silent');
+  assert.equal(h.store.listPlanParts(h.planId)[0]?.blockedReason, reason, 'still explained');
 
   // Recovery is just deleting the branch; the next pulse un-blocks the parts.
   h.git.setPresence('issue/12', { local: false });
@@ -243,6 +259,11 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
     ['schema', 'ready'],
     ['api', 'pending'],
   ]);
+  assert.deepEqual(
+    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    [null, null],
+    'and stops claiming a collision that has been resolved',
+  );
 });
 
 test('reconciliation is inert with the funnel off', async () => {

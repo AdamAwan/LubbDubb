@@ -139,7 +139,13 @@ export class PlanReconciler {
     for (const part of observed) {
       if (part.status !== 'pending' && part.status !== 'ready' && part.status !== 'blocked') continue;
       const status = collision ? 'blocked' : await this.readiness(part, index, issueNumber);
-      if (status !== part.status) next.set(part.slug, { ...next.get(part.slug), status });
+      // The reason travels with the status, so a part that is still blocked on a
+      // pulse where nothing flipped can still say why — and one that is no longer
+      // blocked stops claiming a collision that has been resolved. `differs` keeps
+      // both writes to real transitions.
+      const blockedReason = status === 'blocked' ? refCollisionReason(issueNumber) : null;
+      if (status !== part.status || blockedReason !== part.blockedReason)
+        next.set(part.slug, { ...next.get(part.slug), status, blockedReason });
     }
 
     let changed = false;
@@ -149,13 +155,13 @@ export class PlanReconciler {
       store.updatePlanPart(part.id, patch);
       changed = true;
     }
+    // Still only on a flip: the Errors panel is a feed, and a line per pulse for a
+    // standing condition is how a feed stops being read. What the operator needs
+    // on every later pulse is on the part rows above.
     if (changed && collision) {
       this.deps.errors?.record({
         source: 'cycle',
-        message:
-          `Plan for issue #${issueNumber} is blocked: the branch ${issueBranch(issueNumber)} exists, and git cannot ` +
-          `create ${partBranch(issueNumber, '<part>')} while it does (refs are files, not directories). ` +
-          `Delete or rename ${issueBranch(issueNumber)} to unblock the parts.`,
+        message: `Plan for issue #${issueNumber} is blocked: ${refCollisionReason(issueNumber)}`,
       });
     }
 
@@ -267,6 +273,30 @@ export class PlanReconciler {
       });
     }
   }
+}
+
+/**
+ * Why every part of a plan is `blocked`, in the harness's own words.
+ *
+ * The ref collision is the *only* thing that blocks a part — {@link
+ * PlanReconciler.readiness} answers `pending` or `ready` and never `blocked` — so
+ * this is a complete account of the status rather than one case among several.
+ *
+ * It is one function because the sentence the operator reads on the Goal Floor
+ * and the sentence in the Errors panel have to be one string. Before, only the
+ * second existed, and it was recorded under `changed && collision` — the honest
+ * shape for an event feed, since a feed carries news, but it means a plan blocked
+ * yesterday explains itself to nobody today and to nobody at all across a
+ * restart. So the feed keeps the news and the *reason* moves onto the row beside
+ * the status it explains, where it stands for exactly as long as the block does.
+ * The floor draws a stopped machine's plate from it verbatim, composing nothing.
+ */
+export function refCollisionReason(issueNumber: number): string {
+  return (
+    `The branch ${issueBranch(issueNumber)} exists, and git cannot create ` +
+    `${partBranch(issueNumber, '<part>')} while it does (refs are files, not directories). ` +
+    `Delete or rename ${issueBranch(issueNumber)} to unblock the parts.`
+  );
 }
 
 /** Does a patch actually move the row? Keeps reconciliation writes to real transitions. */

@@ -597,6 +597,19 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
         siloLabel: null,
       });
       if (pr) plates.push(...prPlates(pr));
+      // A jammed assembler is the one stopped machine whose reason is on its own
+      // row: it is never queued, so the `held` arm below cannot speak for it, and
+      // it has no pull request for `prPlates` to read. Without this it drew a red
+      // word and nothing else. Verbatim, like every other plate.
+      if (!ghostPlan && progress === 'blocked' && part.blockedReason) {
+        plates.push({
+          who: `Assembler · ${i + 1}`,
+          tone: 'bad',
+          text: part.blockedReason,
+          route: null,
+          assayIssue: null,
+        });
+      }
       // An unapproved plan already has one plate saying so; a plate per ghost
       // part would be the same sentence three times.
       if (!ghostPlan && held && held.status !== 'dispatching') {

@@ -298,6 +298,7 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   branch      TEXT,
   pr_number   INTEGER,
   status      TEXT NOT NULL,          -- pending | ready | dispatched | in_review | merged | concluded | blocked | retired
+  blocked_reason TEXT,                -- why, while status is blocked; cleared with it
   task_id     TEXT,
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,

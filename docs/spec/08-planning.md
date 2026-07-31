@@ -481,6 +481,22 @@ create with a git error nobody can act on. The reconciler checks `git presence(i
 flat branch exists locally or remotely, every uncut part is parked `blocked` and **one** clear error is
 recorded naming the branch to delete or rename.
 
+The wording is `refCollisionReason(issueNumber)` (`src/plans/planReconciler.ts`, pure) and it is
+written in **two places from that one function**: the error above, and `plan_parts.blocked_reason` on
+each part it parks. This is the only thing that blocks a part — the readiness pass answers `pending`
+or `ready` and never `blocked` — so the stored string is a complete account of the status, and it is
+cleared with the status when the branch goes away, so a part never claims a collision that has been
+resolved.
+
+**Why both.** The error is recorded only on the pulse a part _flips_, which is the honest shape for a
+feed — a feed carries news, and a line per pulse for a standing condition is how a feed stops being
+read. But it means a plan blocked yesterday explains itself to nobody today, and to nobody at all
+across a restart. So the feed keeps the news and the reason moves onto the row beside the status it
+explains, where the [Goal Floor](17-cockpit.md#the-goal-floor) draws it as the jammed assembler's
+plate. That was the other half of the gap: a blocked part is never queued, so the queue's held-reason
+plate could not speak for it and it had no pull request to be read for one — it drew a red word and
+no reason anywhere.
+
 ### The status comment
 
 Each plan owns exactly **one** living comment on its issue, via

@@ -83,7 +83,7 @@ test('dismissing is one-way, idempotent, and never resurrected by a re-record', 
 // -- the pure fold -----------------------------------------------------------
 
 test('isGoalComplete reads any of the four completion signals, but not more_work', () => {
-  const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], plans: [] };
+  const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [] };
   assert.equal(isGoalComplete(12, none), false);
 
   assert.equal(isGoalComplete(12, { ...none, retrospectiveOrigins: ['issue:12'] }), true, 'a write-up');
@@ -181,8 +181,93 @@ test('isGoalComplete reads any of the four completion signals, but not more_work
   );
 });
 
+// The two faces of reading the conclusion and the plan raw instead of asking the
+// one resolver: an operator argued with by a derivation, and an assessor's
+// verdict losing to the stale `done` of the agent it was assessing.
+test('a standing verdict of more_work outranks every piece of evidence', () => {
+  const base = { retrospectiveOrigins: ['issue:12'], conclusions: [], deliveries: [], shortfalls: [], plans: [] };
+  assert.equal(isGoalComplete(12, base), true, 'the write-up alone is enough');
+
+  assert.equal(
+    isGoalComplete(12, {
+      ...base,
+      shortfalls: [
+        {
+          originRef: 'issue:12',
+          cause: 'plan',
+          partSlug: null,
+          summary: 'nothing was delivered — the fix is absent from the delivered state',
+          by: 'assessor',
+          agentId: null,
+          taskId: null,
+          decidedAt: 'T',
+          updatedAt: 'T',
+        },
+      ],
+    }),
+    false,
+    'a standing shortfall was not consulted at all before',
+  );
+
+  assert.equal(
+    isGoalComplete(12, {
+      ...base,
+      retrospectiveOrigins: [],
+      conclusions: [
+        {
+          originRef: 'issue:12',
+          verdict: 'more_work',
+          note: 'there is more here',
+          by: 'operator',
+          agentId: null,
+          taskId: null,
+          createdAt: 'T',
+          updatedAt: 'T',
+        },
+      ],
+      plans: [{ id: 'p1', originRef: 'issue:12', title: '', status: 'complete', discussing: false } as never],
+    }),
+    false,
+    "a complete plan used to argue with the operator's own toggle",
+  );
+});
+
+// The observed defect, end to end: worked `single`, the agent declared done, an
+// accepted shortfall sent the plan back to `planning` — and the next pulse minted
+// a completion for a goal whose only PR was still open.
+test('a goal whose plan is being re-drawn is not minted as complete', () => {
+  const signals = {
+    retrospectiveOrigins: ['issue:12'],
+    deliveries: [],
+    shortfalls: [],
+    conclusions: [
+      {
+        originRef: 'issue:12',
+        verdict: 'done' as const,
+        note: 'delivered in PR #31226',
+        by: 'agent' as const,
+        agentId: null,
+        taskId: null,
+        createdAt: 'T',
+        updatedAt: 'T',
+      },
+    ],
+    plans: [{ id: 'p1', originRef: 'issue:12', title: '', status: 'planning', discussing: false } as never],
+  };
+  assert.equal(isGoalComplete(12, signals), false);
+  assert.deepEqual(completionsToRecord([issue()], signals), [], 'and so nothing is recorded');
+
+  // The boundary: the gate is on minting, never on a goal that genuinely finished.
+  // Once the replan lands and its parts merge, the same signals mint it again.
+  const settled = {
+    ...signals,
+    plans: [{ id: 'p1', originRef: 'issue:12', title: '', status: 'complete', discussing: false } as never],
+  };
+  assert.equal(isGoalComplete(12, settled), true);
+});
+
 test('completionsToRecord names the finished live issues, with their titles', () => {
-  const signals = { retrospectiveOrigins: ['issue:12'], conclusions: [], deliveries: [], plans: [] };
+  const signals = { retrospectiveOrigins: ['issue:12'], conclusions: [], deliveries: [], shortfalls: [], plans: [] };
   const record = completionsToRecord([issue(), issue({ number: 13, id: 'i13', title: 'Other' })], signals);
   assert.deepEqual(record, [{ originRef: 'issue:12', issueNumber: 12, title: 'Add the thing' }]);
 });
