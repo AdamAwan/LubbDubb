@@ -18,7 +18,7 @@ const KIND_HELP: Record<Finding['kind'], string> = {
  * The buttons are the *only* way a finding becomes anything. Nothing in the
  * dispatcher reads findings, deliberately: an agent that could queue jobs could
  * put agents on the fleet, so every transition is the operator's click. "Queue
- * job" turns one into an ordinary queued job (dispatched by rule 0 like any
+ * job" turns one into an ordinary queued job (dispatched by rule `manual-job` like any
  * other) — do it now; "File ticket" puts it in the tracker so it can wait its
  * turn there — defer it; "Dismiss" records that it was read and needs nothing.
  */

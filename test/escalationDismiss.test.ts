@@ -184,7 +184,7 @@ test('dismissing a proposal rejects it rather than leaving a pending verdict beh
   const res = await app.inject({ method: 'POST', url: `/api/escalations/${escalation.id}/dismiss` });
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().dismissedAs, 'proposal_rejected');
-  // A dropped inbox row with the proposal still pending would hold rule 3 off that
+  // A dropped inbox row with the proposal still pending would hold rule `pr-merge-ready` off that
   // PR for good — the wedge this arm exists to avoid.
   assert.equal(system.store.listProposals().find((p) => p.id === proposal.id)!.status, 'rejected');
   assert.equal(system.store.listOpenEscalations().length, 0);

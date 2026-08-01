@@ -18,7 +18,7 @@ import { gitRepo } from './support/gitRepo.js';
 test('discuss parks the plan for a planner and withdraws the pending approval', async () => {
   const { system, app } = await buildTestApp();
   const plan = seedAwaitingApprovalPlan(system);
-  await system.harness.runCycle('manual'); // rule 3d writes the proposal
+  await system.harness.runCycle('manual'); // rule `plan-approval` writes the proposal
   const before = system.store.listProposals().find((p) => p.kind === 'plan')!;
   assert.equal(before.status, 'pending');
 
@@ -26,11 +26,11 @@ test('discuss parks the plan for a planner and withdraws the pending approval', 
   assert.equal(res.statusCode, 200);
 
   const after = system.store.getPlan(plan.id)!;
-  // `planning`, so rule 3c dispatches and rule 4a schedules no parts.
+  // `planning`, so rule `issue-plan` dispatches and rule `plan-part` schedules no parts.
   assert.equal(after.status, 'planning');
   assert.equal(after.discussing, true);
   assert.equal(isPlanInDiscussion(after), true);
-  // The withdrawal is not optional: a pending proposal holds rule 3d, so the
+  // The withdrawal is not optional: a pending proposal holds rule `plan-approval`, so the
   // amended decomposition would never be put to anyone — and the stale card, if
   // accepted, would release a plan its reader never saw.
   assert.equal(system.store.listProposals().find((p) => p.id === before.id)!.status, 'rejected');
@@ -49,7 +49,7 @@ test('ending a discussion puts the plan back to awaiting approval', async () => 
   const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss/end` });
   assert.equal(res.statusCode, 200);
   const after = system.store.getPlan(plan.id)!;
-  // Without restoring the status the plan sits in `planning` and rule 3c simply
+  // Without restoring the status the plan sits in `planning` and rule `issue-plan` simply
   // starts another discussion — the flag alone is not the whole of ending one.
   assert.equal(after.status, 'awaiting_approval');
   assert.equal(after.discussing, false);
@@ -72,7 +72,7 @@ test('/discuss/end refuses a plan that is not being discussed, and leaves it unt
   // `active`, not `awaiting_approval`: this is the state where an unguarded
   // restore actually costs something — parts already dispatched, agents already
   // on branches — and where forcing it back to `awaiting_approval` would reopen
-  // an approval gate nobody asked to reopen and stop rule 4a scheduling its parts.
+  // an approval gate nobody asked to reopen and stop rule `plan-part` scheduling its parts.
   system.store.setPlanStatus(plan.id, 'active');
 
   const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss/end` });
@@ -109,7 +109,7 @@ test('a discussed plan gets a conversational planner, not a fresh one', async ()
   await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
 
   const task = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
-  assert.ok(task, 'rule 3c dispatched on the planner origin');
+  assert.ok(task, 'rule `issue-plan` dispatched on the planner origin');
   // Same origin and branch as any planner — that is what makes the origin gate,
   // the cooldown and the attempt cap apply without a line of new code.
   assert.equal(task!.branch, 'plan/issue/231');
@@ -145,7 +145,7 @@ test('replan during a discussion clears the discussing flag', async () => {
   assert.equal(after.discussing, false, 'a replan requested mid-discussion must not leave the flag set');
   assert.equal((res.json() as { plan: Plan }).plan.discussing, false, 'the response body agrees with the store');
 
-  // The discussion agent still holds the origin (rule 3c dispatches no second
+  // The discussion agent still holds the origin (rule `issue-plan` dispatches no second
   // planner while it does), so end it and prove the *next* dispatch reads the
   // cleared flag: `discuss-plan` would render again if the clear were lost.
   const discussionTask = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
@@ -155,7 +155,7 @@ test('replan during a discussion clears the discussing flag', async () => {
   const replanTask = system.store
     .listTasks()
     .find((t) => t.originRef === 'issue:231:plan' && t.id !== discussionTask!.id);
-  assert.ok(replanTask, 'rule 3c dispatched a fresh planner once the origin freed up');
+  assert.ok(replanTask, 'rule `issue-plan` dispatched a fresh planner once the origin freed up');
   assert.match(replanTask!.prompt, /an operator has asked for it to be replanned/);
   assert.doesNotMatch(replanTask!.prompt, /conversation/i);
   await app.close();
@@ -198,7 +198,7 @@ test('an amended plan ends the discussion and comes back as a fresh proposal', a
   assert.equal(amended.status, 'awaiting_approval');
 
   // A *fresh* proposal, not the withdrawn one: the withdrawal at discuss time is
-  // what unblocks rule 3d, which would otherwise be held by a pending verdict.
+  // what unblocks rule `plan-approval`, which would otherwise be held by a pending verdict.
   await system.harness.runCycle('manual');
   const pending = system.store.listProposals().filter((p) => p.kind === 'plan' && p.status === 'pending');
   assert.equal(pending.length, 1);
@@ -217,8 +217,8 @@ test('nothing is scheduled from a plan while it is being discussed', async () =>
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  // Rule 4a schedules parts for `active`/`awaiting_approval` only, so a plan in
-  // `planning` yields no part dispatch — and rule 3c cannot start a second
+  // Rule `plan-part` schedules parts for `active`/`awaiting_approval` only, so a plan in
+  // `planning` yields no part dispatch — and rule `issue-plan` cannot start a second
   // planner because the discussion agent holds `issue:231:plan`.
   const partTasks = system.store.listTasks().filter((t) => (t.originRef ?? '').includes(':part:'));
   assert.deepEqual(partTasks, []);
@@ -242,7 +242,7 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
-    // A throwaway repo, not the ambient `cwd` default: rule 3c dispatches a *code*
+    // A throwaway repo, not the ambient `cwd` default: rule `issue-plan` dispatches a *code*
     // agent, so `WorktreeManager.ensure` really cuts `plan/issue/231` from
     // `defaultBranch`. Against the checkout the suite runs in that both pollutes it
     // with a branch and a worktree, and fails outright wherever `main` is not

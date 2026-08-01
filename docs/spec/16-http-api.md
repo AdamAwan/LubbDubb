@@ -188,7 +188,7 @@ the store. `cause: 'part'` requires the part slug in `part`. 400 on a non-intege
 unrecognised cause, or a `part` cause with no slug.
 
 The escape hatch matters here in a way it does not for the other two verdicts. A shortfall lives
-until the arm it named has been performed, and **rejecting** rule 3g's proposal deliberately leaves
+until the arm it named has been performed, and **rejecting** rule `issue-shortfall`'s proposal deliberately leaves
 it standing — the verdict is still true; you simply declined to act on it. Without this route the row
 and its cockpit chip would stand for good, with no way to settle it short of marking the issue
 delivered, which claims something different.
@@ -352,7 +352,7 @@ Re-order the "Up next" queue (issue #128). Body `{origins: string[]}` — the op
 priority order of candidate origins. **400** when `origins` is not an array of strings, or contains a
 duplicate. Replaces the whole override set (ranked `0..n-1`), broadcasts `world:changed`, and runs a
 cycle so the new order takes effect immediately. It only re-orders — it never un-holds a held item,
-and rule-0 jobs stay first regardless — so this is safe to run inline. Returns `{ ok: true, report }`.
+and `manual-job` items stay first regardless — so this is safe to run inline. Returns `{ ok: true, report }`.
 
 ### `POST /api/jobs/:id/cancel`
 
@@ -389,7 +389,7 @@ Returns `{ ok: true, plan }`.
 
 No body. 404 when the plan is unknown. **409 unless the plan is `active` and no part has started**
 (`partHasWork`) — the guard is the point, since retiring a part with an agent, a branch or a PR behind
-it would strand real work. Retires every live part and collapses the plan to `single`, so rule 4 works
+it would strand real work. Retires every live part and collapses the plan to `single`, so rule `issue-pickup` works
 the issue as one pull request. Broadcasts, runs a cycle. Returns `{ ok: true, detail, plan }`.
 
 This is the way out of a decomposition approved onto an issue whose flat `issue/<n>` branch was
@@ -402,7 +402,7 @@ rather than a loosened `refusePlan` because it is a different sentence — see
 
 No body. 404 when the plan is unknown. **Discuss is a replan with a conversational planner** — same
 mechanism as `/replan` (flips the plan to `planning`, withdraws any pending plan proposal for the same
-reason), plus sets `plans.discussing`, which is the one thing that tells rule 3c to render the
+reason), plus sets `plans.discussing`, which is the one thing that tells rule `issue-plan` to render the
 `discuss-plan` template instead of `issue-replan`. Broadcasts, runs a cycle. See
 [08](08-planning.md#discussing-a-plan). Returns `{ ok: true, plan }`.
 
@@ -528,7 +528,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 Seven consistency points:
 
-- **The pickup verdict uses the same inputs rule 4 consults** — the policy, `DEFAULT_COOLDOWN`, the
+- **The pickup verdict uses the same inputs rule `issue-pickup` consults** — the policy, `DEFAULT_COOLDOWN`, the
   world's `takenAt`, tasks, the last 200 decisions, the **unfiltered** open PR list, the plan graph,
   the planning policy, and the same headroom arithmetic — so the chip predicts what happens next cycle.
 - **PR health is passed the full open-PR list** as stack context, so an inherited CI failure names the

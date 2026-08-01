@@ -40,7 +40,7 @@ deferred with the holding task's id and origin in the detail.
 For every world-driven rule origin and branch are 1:1, so the origin check above already **is** a
 branch check and this one is a no-op for them — `test/jobQueue.test.ts` asserts exactly that against a
 broad world, so a later rule that broke the 1:1 property fails a test rather than quietly sharing a
-checkout. Two paths can reach here with a branch the origin does not determine: **rule 0**, whose
+checkout. Two paths can reach here with a branch the origin does not determine: **rule `manual-job`**, whose
 `job.branch` is a free string the operator supplies, and the **LLM dispatcher**, which names branches
 in prose. `WorktreeManager.ensure` is reuse-first, so letting either through would put two live claude
 processes in one worktree directory — the same files on disk, with no merge anywhere to reconcile
@@ -121,7 +121,7 @@ PR can be the subject of a merge and a reply at once without the two holding eac
 | `rejected` | Until something happens to the world item (below). |
 | `accepted` | `SETTLE_WINDOW_MS` (15 min, deliberately `DEFAULT_COOLDOWN` — the same statement), then it stops, so a *failed* act is re-proposed while a successful one is not re-proposed before the world reflects it. |
 
-Rule 3 suppresses itself off the same predicate, so on the default path the question is asked once —
+Rule `pr-merge-ready` suppresses itself off the same predicate, so on the default path the question is asked once —
 but it is repeated here because it must hold for *every* path that reaches the executor, the LLM
 dispatcher's prose-composed `reply_on_pr` included. Two call sites, one predicate.
 
@@ -208,7 +208,7 @@ A rejection therefore stands until the **world item it concerns** changes, and t
   rejected one waits on it to *become* something else (an event).
 - **It cannot flood.** Expiring only un-holds the rule; the rule's own preconditions still decide, and
   the fresh pending proposal holds the ref again. So the act is re-proposed **once**, not once per
-  pulse — and the most common signal on a refused PR, a new review comment, un-holds rule 3 and then
+  pulse — and the most common signal on a refused PR, a new review comment, un-holds rule `pr-merge-ready` and then
   fails its first merge-readiness test.
 - **The re-ask says why it is being asked twice.** `reaskContext` prefixes the escalation with the
   refusal, its note and the transition that ended it; without it a second ask reads as the harness
@@ -241,7 +241,7 @@ no agent at all, so refusing a draft with *"too defensive — just fix the lint"
   *unknown* placeholders, so an override that omitted a new `{rejection}` token would silently drop a
   human's words — on exactly the deployments that customised the prompt most. Appending has no
   fallback to get wrong.
-- **Exact ref, not the world item.** A rejected `reply_draft`'s ref *is* rule 2b's dispatch origin, so
+- **Exact ref, not the world item.** A rejected `reply_draft`'s ref *is* rule `pr-review-comment`'s dispatch origin, so
   this is a lookup. Widening it to the PR would put a refusal to *merge* in front of an agent fixing
   CI, as guidance it can neither act on nor tell apart from its own task — so a rejected merge reaches
   no agent, because no agent's job is to hear about it.
@@ -266,7 +266,7 @@ prompt.
 - **Only what no prompt already renders.** The rule that stops it becoming a second account of things
   the harness already says. It carries the **pad**; the planner's **`document` / `risks` /
   `outOfScope`**, which reach the plan modal and no agent — and on a `single` verdict are the entire
-  product of a code agent that read the whole repository, while rule 4's prompt is the issue title and
+  product of a code agent that read the whole repository, while rule `issue-pickup`'s prompt is the issue title and
   body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; and the **prose
   behind each standing verdict** (assay, conclusion, delivery, shortfall). It therefore omits
   `plan.reason` (rendered by `currentPlanSummary` to a replanner and as `{plan}` to a part agent) and a

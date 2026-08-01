@@ -36,7 +36,7 @@ later. The two cannot drift apart because they ask the same predicate; they diff
 which is why this one rejects (nothing has been promised yet) and the executor's defers (a queued job
 the operator is entitled to have retried).
 
-Desk jobs skip the check entirely: rule 0 ignores a desk job's branch.
+Desk jobs skip the check entirely: rule `manual-job` ignores a desk job's branch.
 
 The route creates the job, broadcasts `world:changed`, and kicks a cycle so a job dispatches
 immediately when there is headroom.
@@ -51,7 +51,7 @@ assay, the planning agent, the plan's parts — exactly like a picked-up issue. 
 points ("start with a prompt", "start with a ticket") are drawn converging on _find-or-create a ticket,
 then the funnel_; this is the prompt arm wired to that convergence.
 
-- **The whole transform is at route time; rule 0 is untouched.** That is a clean recursion boundary:
+- **The whole transform is at route time; rule `manual-job` is untouched.** That is a clean recursion boundary:
   only an operator-injected code blueprint via this route becomes a ticket, and the **desk** filing job
   it becomes never does (a desk job is never itself a code blueprint). No new dispatcher wiring — the
   funnel already picks up watched issues.
@@ -81,7 +81,7 @@ blueprint's branch is meaningless (the funnel works `issue/<n>` branches later).
 
 Tests: `test/blueprintTicket.test.ts`.
 
-### Dispatch — rule 0
+### Dispatch — rule `manual-job`
 
 `DispatchContext.queuedJobs` is wired from `store.listQueuedJobs()` (oldest first). The dispatcher
 pushes them onto the **front** of the candidate list, **before any world-driven rule**, so the headroom
@@ -99,7 +99,7 @@ The `claude` dispatcher gets the same queue in its prompt, with instructions to 
 
 ### The branch invariant
 
-Rule 0 is the **one** dispatch path where origin and branch are not 1:1, so it is the one that needs
+Rule `manual-job` is the **one** dispatch path where origin and branch are not 1:1, so it is the one that needs
 the property enforced rather than merely observed. `job.branch` is a free string the operator supplies
 while the origin `job:<id>` is unique by construction, so `activeOrigins` and `findActiveTaskByOrigin`
 — which gate the branch for free everywhere else — are both blind to it. `WorktreeManager.ensure` being
@@ -187,7 +187,7 @@ so dismissing one means something.
 
 ### It queues nothing
 
-**Nothing in the dispatcher reads `findings`.** A queued job is dispatched by rule 0 ahead of every
+**Nothing in the dispatcher reads `findings`.** A queued job is dispatched by rule `manual-job` ahead of every
 world-driven rule, so an agent that could queue jobs could put agents on the fleet — one agent's hunch
 would spend another agent's slot, budget and worktree with nothing in between saying yes. That is a
 capability escalation, not a convenience, and it is exactly the shape the auto-send seam exists to

@@ -167,7 +167,7 @@ test('openPrForIssue: an ignore-tagged PR still parks its issue', () => {
   assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [hidden])?.number, 41);
 });
 
-test('issueBranch is the branch rule 4 dispatches onto', () => {
+test('issueBranch is the branch rule `issue-pickup` dispatches onto', () => {
   assert.equal(issueBranch(12), 'issue/12');
 });
 

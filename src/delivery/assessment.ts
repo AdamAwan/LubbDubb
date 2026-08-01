@@ -18,7 +18,7 @@ export interface AssessmentPolicy {
    * The tool channel is on by default because it is purely additive; this is
    * not — it gates pickup and spends an agent per assessed issue. `planning` is
    * the right precedent and this follows it: with the flag off no rule fires, no
-   * verdict is written, and rule 4 behaves exactly as it does today.
+   * verdict is written, and rule `issue-pickup` behaves exactly as it does today.
    */
   enabled: boolean;
 }
@@ -63,7 +63,7 @@ export function assessBranch(issueNumber: number): string {
  *
  * The second job: an open, watched issue with no open PR is a candidate for *both*
  * pickup and assessment, and this is what tells them apart. No prior tasks means
- * the work has not started, so rule 4 picks it up; prior tasks with nothing in
+ * the work has not started, so rule `issue-pickup` picks it up; prior tasks with nothing in
  * flight means it may be finished, so the assessor asks.
  *
  * **Only an origin that could have delivered something counts** — the pickup root,

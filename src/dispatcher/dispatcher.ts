@@ -47,14 +47,14 @@ export interface DispatchContext {
    */
   plans?: Plan[];
   /**
-   * Every plan's parts — the scheduling graph rule 4a walks. Reconciliation has
+   * Every plan's parts — the scheduling graph rule `plan-part` walks. Reconciliation has
    * already folded git and provider reality onto these rows *this* cycle, so a part
    * that became ready during the pulse is dispatchable in the same pulse.
    */
   planParts?: PlanPart[];
   /**
    * Operator "Up next" priority overrides (issue #128), keyed on candidate
-   * origin. Applied ahead of the natural cross-rule ranking but behind rule 0
+   * origin. Applied ahead of the natural cross-rule ranking but behind rule `manual-job`
    * and behind every `held` verdict, so an override changes *order* only —
    * never whether a cooldown, cap, ignore tag or unapproved plan holds an item.
    * Absent/empty means the natural ranking stands. The LLM dispatcher ignores
@@ -64,7 +64,7 @@ export interface DispatchContext {
   /**
    * Standing "is this issue finished" verdicts, keyed on the `issue:<n>` origin —
    * declared by the agent that worked the issue (`conclude_work`) or toggled by
-   * an operator. Read by rule 3b, which returns a reviewed item to pickup only on
+   * an operator. Read by rule `work-item-back-to-pickup`, which returns a reviewed item to pickup only on
    * an explicit `more_work`. Absent/empty resolves every issue to `undeclared`,
    * which holds the item rather than releasing it: a review state does not say
    * whether the work is done, so silence must not read as "not done" (see
@@ -74,7 +74,7 @@ export interface DispatchContext {
   /**
    * Standing `delivered` verdicts, keyed on the same `issue:<n>` origin — the
    * harness's own park, written by the assessor or the operator. Unlike a
-   * conclusion this **gates pickup**: rule 4 skips an issue whose verdict still
+   * conclusion this **gates pickup**: rule `issue-pickup` skips an issue whose verdict still
    * stands. Absent/empty means nothing is parked, which is every deployment until
    * an issue is assessed (see `src/delivery/delivery.ts`).
    */
@@ -98,14 +98,14 @@ export interface DispatchContext {
   /**
    * Standing goal-assay verdicts, keyed on the same `issue:<n>` origin — whether an
    * issue's text can be worked from at all (issue #158). An `unclear` verdict gates
-   * the funnel in front of the issue: rules 3c and 4 skip it while the verdict
+   * the funnel in front of the issue: rules `issue-plan` and `issue-pickup` skip it while the verdict
    * stands. Absent/empty means nothing has been assayed, which holds nothing — the
    * fail-open that makes the gate safe (see `src/intake/assay.ts`).
    */
   assays?: IssueAssay[];
   /**
    * The issues that already have a retrospective — **origins only, never the
-   * writing**. Rule 3h needs to know whether to dispatch one and that is the whole
+   * writing**. Rule `issue-retro` needs to know whether to dispatch one and that is the whole
    * of what it may know: a rule branching on retrospective prose would let one
    * agent's account of a run change what the harness schedules next, which is the
    * reason nothing reads the scratchpad at all. Absent/empty means none has been

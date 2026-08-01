@@ -39,7 +39,7 @@ function plan(status: Plan['status']): Plan {
 
 test('the funnel is out entirely when planning is disabled', () => {
   // Off must mean off: no plan row, no cooldown state and a spent attempt cap all
-  // route straight to `single`, so rule 4 is un-narrowed and today's path holds.
+  // route straight to `single`, so rule `issue-pickup` is un-narrowed and today's path holds.
   for (const verdict of [{ kind: 'dispatch' }, { kind: 'cooldown' }, { kind: 'hold' }] as const) {
     assert.deepEqual(resolvePlanRoute({ planning: { ...DEFAULT_PLANNING, enabled: false }, plan: null, verdict }), {
       route: 'single',
@@ -70,7 +70,7 @@ test('a persisted verdict decides the route; an unplanned issue awaits a planner
 });
 
 test('a planner that spends its attempt cap fails the issue open to single', () => {
-  // Without this, narrowing rule 4 turns any planner crash into a permanently
+  // Without this, narrowing rule `issue-pickup` turns any planner crash into a permanently
   // parked issue. `failedOpen` marks how it got there.
   for (const verdict of [{ kind: 'escalate', attempts: 3 }, { kind: 'hold' }] as const) {
     assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: null, verdict }), {
@@ -113,7 +113,7 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
   };
 }
 
-test('rule 3c dispatches a planner instead of a pickup, on its own branch', async () => {
+test('rule `issue-plan` dispatches a planner instead of a pickup, on its own branch', async () => {
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(context([issue(12)]));
   assert.equal(result.actions.length, 1, 'the planner replaces the pickup, it does not join it');
   const action = result.actions[0]!;
@@ -144,7 +144,7 @@ test('planners rank ahead of pickups for scarce headroom', async () => {
   );
 });
 
-test('rule 4 fires only for a `single` plan, and is unchanged for one', async () => {
+test('rule `issue-pickup` fires only for a `single` plan, and is unchanged for one', async () => {
   const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', enabled);
   const plans: Plan[] = [
     { ...plan('single'), id: 'plan_7', originRef: 'issue:7' },

@@ -133,7 +133,7 @@ export function validateAssessment(
  * discipline pointed the other way: there, a part agent is refused because the
  * plan speaks for the issue; here, every agent that is *doing* work is refused
  * because judging your own delivery is not an assessment. The agent that wrote
- * the code has `conclude_work`, which records what it believes it did; rule 3e
+ * the code has `conclude_work`, which records what it believes it did; rule `issue-assess`
  * exists precisely to have someone else look.
  *
  * Refusing beats silently narrowing, for the reason `conclusionOrigin` gives: an

@@ -45,7 +45,7 @@ interface PlanSettlement {
 }
 
 /**
- * Approve: the decomposition becomes work. One status write and rule 4a starts
+ * Approve: the decomposition becomes work. One status write and rule `plan-part` starts
  * scheduling its parts on the next pulse — which is the entire effect, because
  * `awaiting_approval` was never anything but `active` with the gate closed.
  */
@@ -64,7 +64,7 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
  * route**, which is the half a plain "no" would get wrong.
  *
  * Rejection is durable by design (phase 1), and once the funnel is on a plan is
- * the only thing that schedules anything for an issue: rule 3b parks the work item
+ * the only thing that schedules anything for an issue: rule `work-item-in-review` parks the work item
  * in the review state for the life of the plan, and `resolvePlanRoute` fails a
  * spent replan back to `parts` rather than open to `single`. A "no" that only
  * stopped the parts would therefore park the issue for good — the exact failure
@@ -77,7 +77,7 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
  *   an empty declaration — a refused decomposition declares no parts), so the
  *   graph says what happened instead of leaving `ready` rows nothing schedules.
  * - The status is then whatever {@link amendedPlanStatus} makes of what survived:
- *   `single`, so rule 4 works the issue as one PR (the pre-funnel path, and the
+ *   `single`, so rule `issue-pickup` works the issue as one PR (the pre-funnel path, and the
  *   arm the funnel already falls open to); or `active` when parts *are* in flight,
  *   because an issue whose parts have branches and PRs cannot be collapsed onto
  *   the flat `issue/<n>` branch git will not create beside them. That second case
@@ -109,7 +109,7 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
  * asked here through the pure {@link abandonBlockers} so the route's refusal and
  * the cockpit's control cannot disagree. That bar is also what makes the collapse
  * to `single` safe: a part that never pushed has no branch to strand, so the flat
- * `issue/<n>` branch git refused to create beside them is exactly the one rule 4
+ * `issue/<n>` branch git refused to create beside them is exactly the one rule `issue-pickup`
  * now wants — and on the wedged path it already exists, carrying the work that
  * caused the collision.
  */
@@ -165,7 +165,7 @@ export function refusePlan(store: Store, planId: string, originRef: string): Pla
  * end of the loop, finally wired to the check at the other end.
  *
  * **Arm A, `plan` — send the decomposition back.** One status write, and the
- * entire effect: rule 3c already routes a `planning` plan to a planner with the
+ * entire effect: rule `issue-plan` already routes a `planning` plan to a planner with the
  * `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict` already
  * narrows the cooldown to decisions since `plan.updatedAt` so the original
  * planner's attempt does not throttle the replan. This is {@link releasePlan}'s
@@ -180,7 +180,7 @@ export function refusePlan(store: Store, planId: string, originRef: string): Pla
  * re-dispatching puts an agent on a branch whose PR is closed. So one new part is
  * appended for the scope that fell short and the named part is left exactly as it
  * is — which meets "cannot retire parts that have work started" by construction
- * rather than by a check. Rule 4a schedules it with no new dispatch path, and the
+ * rather than by a check. Rule `plan-part` schedules it with no new dispatch path, and the
  * plan moves `complete` → `active` through the roll-up it already computes.
  *
  * Routing arm B to a replan instead was considered and refused: that is precisely
@@ -210,7 +210,7 @@ export function actOnShortfall(
   const target = liveParts(parts).find((p) => p.slug === act.partSlug);
   if (!target)
     return { ok: false, detail: `"${act.partSlug}" is no longer a live part of the plan for ${act.originRef}` };
-  // Seq beyond every existing part, live or retired: rule 4a orders by depth then
+  // Seq beyond every existing part, live or retired: rule `plan-part` orders by depth then
   // seq, and a follow-up is the last thing the plan does.
   const seq = Math.max(0, ...parts.map((p) => p.seq)) + 1;
   const [appended] = store.upsertPlanParts(act.planId, [followupPartInput(target, act.summary, seq)]);

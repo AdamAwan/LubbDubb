@@ -52,7 +52,7 @@ Assembled once in `src/system.ts` from config and handed to whichever dispatcher
 | `priorityLabels`  | `issuePriorityLabels`        | Label → weight.                                                     |
 | `defaultPriority` | `issueDefaultPriority`       | Weight when no label matches.                                       |
 | `pickupStates`    | `issuePickupStates`          | Allowed provider-native workflow states.                            |
-| `inReviewState`   | `issueInReviewState`         | The state rule 3b parks an item in.                                 |
+| `inReviewState`   | `issueInReviewState`         | The state rule `work-item-in-review` parks an item in.              |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
@@ -75,14 +75,14 @@ explain an untouched item:
 
 `issueWatchGateReason(issue, policy)` is the **label half only** — ignore, then watch, and
 deliberately **not** the state gate. It is what plan parts inherit: the tag is evaluated once on the
-parent issue. Re-applying the state gate there would be wrong, because rule 3b parks a decomposed item
+parent issue. Re-applying the state gate there would be wrong, because rule `work-item-in-review` parks a decomposed item
 in the review state for the life of its plan, which would stop the remaining parts ever being
 scheduled.
 
 ## Priority
 
 `issuePriority(labels, policy)` is pure: the **highest** weight among labels that match the scheme, or
-`defaultPriority` when none match. Rule 4 sorts eligible issues by weight descending, tie-breaking on
+`defaultPriority` when none match. Rule `issue-pickup` sorts eligible issues by weight descending, tie-breaking on
 issue number for determinism.
 
 ## `openPrForIssue`
@@ -104,7 +104,7 @@ is invisible here and reads as gone.
 ## The per-issue verdict
 
 `issuePickupStatus(issue, ctx)` folds **every** gate — intrinsic and contextual — into one verdict,
-checked in the same order rule 4 applies them, so it predicts what happens next cycle rather than
+checked in the same order rule `issue-pickup` applies them, so it predicts what happens next cycle rather than
 guessing. `buildStateSnapshot` attaches it to each issue as `pickup`, and the cockpit renders it as a
 chip.
 
@@ -129,7 +129,7 @@ The `parts` arm is answered **before** the open-PR gate, and it has to be: a par
 decomposed issue the reason is `"<merged>/<total> parts merged"`, or — for a `complete` plan, which
 never moves again on its own — `"plan complete — all N parts merged; close the issue or replan"`.
 
-`IssuePickupContext` carries the same inputs rule 4 consults: the policy, `DEFAULT_COOLDOWN`, the
+`IssuePickupContext` carries the same inputs rule `issue-pickup` consults: the policy, `DEFAULT_COOLDOWN`, the
 world's `takenAt` as "now", tasks, the last 200 decisions, the **unfiltered** open PR list, the plan
 graph, the planning policy, the standing delivery verdicts with the world transitions that may have
 ended one, the standing goal assays with the same, the assay policy, and the current headroom /
@@ -141,14 +141,14 @@ with a live agent is honestly `active`. Saying "delivered" in either case would 
 looking in the wrong place.
 
 The `assay` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
-exactly where rule 3f sits: an unwatched or state-parked issue is never assayed, so reporting an
+exactly where rule `issue-assay` sits: an unwatched or state-parked issue is never assayed, so reporting an
 assay for one would promise something that cannot happen, while an assay that refused the goal is
 the reason no planner and no pickup agent is coming. It covers both the standing hold (the
 assayer's own words, quoted) and the pending case — `awaiting a goal assay`, `a goal assay is
 running`, `goal assay on cooldown` — because an issue silently waiting a cycle for a verdict looks
 exactly like an idle fleet.
 
-## Rule 4 in full
+## Rule `issue-pickup` in full
 
 An issue is picked up when:
 
@@ -187,7 +187,7 @@ verdict is asked of whoever owns the whole issue_ — used to be enforced by mak
 unreachable together: `conclusionOrigin` refuses the part agent, the planner and the assessor, so a
 decomposed issue had no declaration to rank. A **replan is the one path that breaks that**. An issue
 worked `single` has one agent, that agent declares `done`, and an accepted shortfall then flips its
-plan to `planning` ([rule 3g](05-dispatcher.md#rule-3g--routing-a-failed-assessment)) — and with the
+plan to `planning` ([rule `issue-shortfall`](05-dispatcher.md#issue-shortfall--routing-a-failed-assessment)) — and with the
 declaration ranked first, a spent verdict outranked the plan that had just taken the issue back. A
 `complete` plan stays _below_ the declaration: an agent saying work remains on an issue whose parts
 all merged is telling the roll-up something it cannot see, and `more_work` is the safe direction.
@@ -197,10 +197,10 @@ planner's verdict, and a replan — are unsettled decompositions, and nobody re-
 An operator who did by mistake has arm 1, which outranks every derivation.
 
 **`undeclared` is a distinct answer, not a synonym for `more_work`.** It is what a missing row
-resolves to, it is never stored, and rule 3b acts only on an explicit `more_work` — so an issue
+resolves to, it is never stored, and rule `work-item-back-to-pickup` acts only on an explicit `more_work` — so an issue
 nobody has vouched for stays parked and is surfaced rather than re-picked. Folding the two would
 re-open the failure this exists to close: a merged PR leaves the open list, `openPrForIssue` cannot
-tell that from "there was never a PR", and the item would bounce back to a pickup state for rule 4 to
+tell that from "there was never a PR", and the item would bounce back to a pickup state for rule `issue-pickup` to
 put a fresh agent on work already on the default branch.
 
 Only a **whole-issue origin** may declare (`conclusionOrigin`). `issue:<n>:part:<slug>`,
@@ -214,7 +214,7 @@ note is: a conclusion belongs to the issue and outlives every agent that touched
 a replan. Clearing is a delete, so `undeclared` has exactly one representation.
 
 **Nothing gates pickup on it.** `buildStateSnapshot` ships it per issue as `conclusion`, beside
-`pickup`, and the cockpit draws a chip and a toggle; the only consumer that acts is rule 3b (see
+`pickup`, and the cockpit draws a chip and a toggle; the only consumer that acts is rule `work-item-back-to-pickup` (see
 [the dispatcher spec](05-dispatcher.md)). Gating pickup directly would make a `done` verdict silently
 veto an item the operator had deliberately moved back to a pickup state — the work-item state stays
 the source of truth for pickup, which is also why moving the ticket in the tracker _is_ the override
@@ -232,8 +232,8 @@ in, so there is no bounce-back to suppress.
 ## The delivery park (`delivered`)
 
 The consequence above is exactly what this closes. `delivered` is the harness's **own** park, for
-the providers that have no tracker park — rule 3b's review-state hold, generalised off the tracker
-onto a row the harness owns. It is written by rule 3e's assessor (see
+the providers that have no tracker park — rule `work-item-in-review`'s review-state hold, generalised off the tracker
+onto a row the harness owns. It is written by rule `issue-assess`'s agent (see
 [the dispatcher spec](05-dispatcher.md)) or by the operator, and unlike a conclusion **it gates
 pickup**.
 
@@ -249,7 +249,7 @@ exists.
 ### What ends it
 
 `deliveryHold(delivery, issue, ctx)` (`src/delivery/delivery.ts`, pure) is asked in **two places off
-the one predicate** — rule 4's eligibility filter and `issuePickupStatus` — so the chip can never
+the one predicate** — rule `issue-pickup`'s eligibility filter and `issuePickupStatus` — so the chip can never
 promise what the next cycle refuses. Two arms, plus a third clearer that is deliberately not an arm:
 
 1. **The issue is observed in a pickup state again.** The operator moved the ticket, and CLAUDE.md
@@ -284,7 +284,7 @@ working agent's note with the assessor's. So `issue_deliveries` is a separate ta
 argument [proposals](../../CLAUDE.md) made for a fresh table over columns on `escalations`.
 
 The two are **mutually exclusive**: writing either clears the other, enforced in the store rather
-than in a caller, because a caller that remembered one and forgot the other would leave rule 3b
+than in a caller, because a caller that remembered one and forgot the other would leave rule `work-item-back-to-pickup`
 returning an item to pickup while this gate held it.
 
 ## The shortfall — the same verdict's other polarity
@@ -293,7 +293,7 @@ An assessment's `more_work` writes `issue_shortfalls`, and the single most impor
 row is what it does to this document: **nothing**. It is not a pickup gate, it is not asked by
 `issuePickupStatus`, and an issue carrying one is eligible exactly as if it carried nothing —
 releasing work is the whole point of the verdict. Its one consumer is
-[rule 3g](05-dispatcher.md#rule-3g--routing-a-failed-assessment), which routes what the assessor said
+[rule `issue-shortfall`](05-dispatcher.md#issue-shortfall--routing-a-failed-assessment), which routes what the assessor said
 fell short.
 
 That is why it is a **separate table** rather than a polarity column on `issue_deliveries`, and the
@@ -324,12 +324,12 @@ Every gate above asks about **policy**: the watch tag, the workflow state, the c
 cap, headroom, `resolvePlanRoute`. None of them asks whether the ticket says anything an agent could
 act on. So a vague, self-contradictory or already-obsolete issue goes straight into the funnel — with
 `planning.enabled` the planner decomposes the vagueness and an operator is asked to approve the
-decomposition of a question nobody could answer; with it off, rule 4 puts an agent on it directly —
+decomposition of a question nobody could answer; with it off, rule `issue-pickup` puts an agent on it directly —
 and the first signal that anything was wrong is an agent spending its attempt cap and escalating in a
 way that reads as its own failure.
 
 The goal assay (issue #158, `src/intake/assay.ts`, config `assay.enabled`, **on by default**) is
-that missing gate. Rule 3f dispatches a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`,
+that missing gate. Rule `issue-assay` dispatches a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`,
 cut from the default branch) for a watched open issue nothing has been started for, and the agent
 casts a verdict with the `assay_issue` tool. It is the mirror of the assessor: `hasPriorWork` is the
 discriminator for both, one taking each arm — nothing started means the goal is all there is to
@@ -339,11 +339,11 @@ assessment — never the origins where the harness is merely deliberating (`:pla
 distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 [`05-dispatcher.md`](05-dispatcher.md) for what counting a planner's own task as work cost.
 
-| Verdict    | Effect                                                                              |
-| ---------- | ----------------------------------------------------------------------------------- |
-| `workable` | None on scheduling. Stored so the assay is not asked again for this text.            |
-| `unclear`  | Holds the issue out of **both** rule 3c and rule 4 while it stands.                  |
-| _no row_   | Holds nothing. This is what a crashed, killed or capped assayer leaves behind.       |
+| Verdict    | Effect                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| `workable` | None on scheduling. Stored so the assay is not asked again for this text.                  |
+| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands. |
+| _no row_   | Holds nothing. This is what a crashed, killed or capped assayer leaves behind.             |
 
 ### Block or inform, and why blocking is safe
 
@@ -364,7 +364,7 @@ way to stop the harness working:
 
 ### What ends a hold
 
-`assayHold(assay, issue, ctx)` (pure) is asked in **two places off the one predicate** — rule 4's
+`assayHold(assay, issue, ctx)` (pure) is asked in **two places off the one predicate** — rule `issue-pickup`'s
 eligibility filter and `issuePickupStatus` — so the chip can never promise what the next cycle
 refuses. Two arms, plus a clearer that is deliberately not an arm:
 

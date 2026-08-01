@@ -51,7 +51,7 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
 
-  // The funnel is off above, so an open issue with no PR is exactly one rule-4
+  // The funnel is off above, so an open issue with no PR is exactly one `issue-pickup`
   // pickup — one agent, on the issue's own branch.
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
   await system.harness.runCycle('manual');

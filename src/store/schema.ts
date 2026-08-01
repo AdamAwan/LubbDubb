@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS findings (
 -- touched it, including across a replan. One row per issue, overwritten per
 -- declaration — the standing verdict is a lookup, not a fold over history. A
 -- missing row is 'undeclared', which is a distinct answer from 'more_work' and
--- is why rule 3b stops bouncing a reviewed item back to pickup on silence.
+-- is why rule work-item-back-to-pickup stops bouncing a reviewed item back to pickup on silence.
 CREATE TABLE IF NOT EXISTS issue_conclusions (
   origin_ref TEXT PRIMARY KEY,      -- "issue:12"
   verdict    TEXT NOT NULL,         -- done | more_work
@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS issue_conclusions (
 
 -- The harness's own park: an issue the assessor judged delivered, or the operator
 -- marked so directly. Weaker than the tracker's 'closed' and reversible — its only
--- effect is to stop pickup, filling the gap where rule 3b's review-state hold
+-- effect is to stop pickup, filling the gap where rule work-item-in-review's review-state hold
 -- cannot reach because the provider has no review state (GitHub).
 --
 -- A separate table from issue_conclusions rather than a third verdict on it: a

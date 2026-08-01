@@ -23,7 +23,7 @@ type PolicyKind = (typeof POLICY_KINDS)[number];
  * - `check` — an ordinary `CiCheck`: visible, routable by a `ci.checks` rule,
  *   dispatchable.
  * - `advisory` — visible and *structurally* unable to dispatch or escalate. The
- *   comment policy's mode, so it can never outrank rule 2b, which holds the same
+ *   comment policy's mode, so it can never outrank rule `pr-review-comment`, which holds the same
  *   signal at far higher fidelity (thread ids, authors, bodies).
  * - `off` — not emitted.
  */

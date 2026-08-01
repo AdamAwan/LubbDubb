@@ -342,7 +342,7 @@ Both directions are idempotent — after either move the item no longer matches.
 
 The inverse arm's gate is the conclusion, **not** the absence of a PR, and that is load-bearing.
 `openPrForIssue` reads only the open list, so "this PR merged" and "there was never a PR" are one
-observation; releasing on absence therefore bounced a merged ticket back to "Ready" and had rule 4
+observation; releasing on absence therefore bounced a merged ticket back to "Ready" and had rule `issue-pickup`
 put a fresh agent on work already sitting on the default branch. `done` and `undeclared` both leave
 the item where it is — see [the conclusion verdict](06-issue-pickup.md#concluding-an-issue) for why
 silence stops the harness rather than releasing it.
@@ -362,14 +362,14 @@ hold are in [06](06-issue-pickup.md); the dispatcher's half is:
 - A **code** agent — the judgement needs the repository — on branch `assay/issue/<n>`, origin
   `issue:<n>:assay`, based on `defaultBranch`. Its own branch namespace for `plan/issue/<n>`'s hard
   reason: git cannot put `refs/heads/issue/12/assay` beside `refs/heads/issue/12`.
-- Driven off `eligibleIssues` (unlike rules 3e and 4a), because an issue the state gate or the watch
+- Driven off `eligibleIssues` (unlike rules `issue-assess` and `plan-part`), because an issue the state gate or the watch
   gate excludes is not going to be worked and so has nothing to assay.
 - Fires only when nothing has been started: no verdict against the issue's _current_ text, no prior
   work (`hasWorkStarted`, now exactly `hasPriorWork` — it began as that predicate with the assay's
   own tasks filtered out, or a crashed assayer would retire its own retry, and `issueOriginRole` now
   makes that exclusion for every deliberation origin), no plan row, and nothing live on `issue:N` or
   any `issue:N:*`.
-- **Suppresses rule 3c and rule 4 for that issue this cycle**, from a set built once, so the three
+- **Suppresses rule `issue-plan` and rule `issue-pickup` for that issue this cycle**, from a set built once, so the three
   rules cannot hold different opinions about which issues are in it.
 - **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation, exactly as
   the planner and the assessor do, because narrowing pickup without that would make the assay the
@@ -382,9 +382,9 @@ verdict with the fingerprint of an empty goal.
 ## `issue-assess` — the assessor
 
 `assessment.enabled` (**on by default**) puts an assessing agent in front of re-pickup. It exists
-because rule 3b's park is a **tracker state**, so it only protects providers that have one: on
+because rule `work-item-in-review`'s park is a **tracker state**, so it only protects providers that have one: on
 GitHub there is no review state, `openPrForIssue` reads only the open list, and the moment a
-delivering PR merges the issue is again "open, watched, no open PR" — rule 4's entire precondition.
+delivering PR merges the issue is again "open, watched, no open PR" — rule `issue-pickup`'s entire precondition.
 A fresh agent is then put on work already sitting on the default branch, bounded only by the attempt
 cap. `delivered` is the same park, generalised off the tracker onto a row the harness owns.
 
@@ -397,8 +397,8 @@ cosmetic, for `plan/issue/<n>`'s reason: git stores refs as files, so `refs/head
 It fires for issue N when all of:
 
 - N is open and passes `issueWatchGateReason`. Deliberately **not** driven off `eligibleIssues`, for
-  rule 4a's reason — that list applies the workflow-state gate, and the Azure case this must cover
-  is precisely an item rule 3b parked in the review state.
+  rule `plan-part`'s reason — that list applies the workflow-state gate, and the Azure case this must cover
+  is precisely an item rule `work-item-in-review` parked in the review state.
 - No `delivered` verdict stands, no open PR, and no plan still scheduling something
   (`planning`/`active`/`awaiting_approval`).
 - Nothing live on `issue:N` or any `issue:N:*` origin.
@@ -409,9 +409,9 @@ It fires for issue N when all of:
 The prior-work condition does two jobs. It stops the assessor being noise — without it a brand-new
 issue satisfies every other precondition trivially, since nothing is in flight because nothing ever
 started. It is also the **discriminator that lets assess and pickup coexist** on an issue both would
-otherwise claim: no prior tasks means the work has not started, so rule 4 picks it up; prior tasks
+otherwise claim: no prior tasks means the work has not started, so rule `issue-pickup` picks it up; prior tasks
 with nothing in flight means it may be finished, so the assessor asks. An issue the assessor claims
-this cycle is **suppressed** from rule 4, or two agents land on it — one judging, one redoing.
+this cycle is **suppressed** from rule `issue-pickup`, or two agents land on it — one judging, one redoing.
 
 **Which origins count is decided in one place**, `issueOriginRole` (`src/issueOrigins.ts`), because
 the `issue:N:*` subtree holds two materially different things. The pickup root and a plan's parts are
@@ -419,7 +419,7 @@ the **work**; `issue:N:assess` is not work but only ever happens downstream of s
 **evidence**; `issue:N:plan` and `issue:N:assay` are the harness **deliberating**, and a task on one
 of those says the issue has been thought about, never that anything was built. Matching the whole
 subtree was a real defect: the planner's own task made every issue routed to `single` look worked, so
-it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule 3g
+it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule `issue-shortfall`
 replanned, and the issue cycled the funnel without a line of its work ever being written. An
 **unrecognised** suffix is its own answer rather than a silent default — that is exactly how `:plan`
 slipped through — and `hasPriorWork` does not count it, failing toward a redundant pickup an operator
@@ -432,22 +432,22 @@ the dispatcher already holds. Nothing in `src/dispatcher/` reads the graph — s
 [`14-persistence.md`](14-persistence.md).
 
 **It fails open**, exactly as the planner does: a spent attempt cap returns the issue to ordinary
-pickup with **no escalation**, because narrowing rule 4 without that turns any assessor crash into a
+pickup with **no escalation**, because narrowing rule `issue-pickup` without that turns any assessor crash into a
 permanently parked issue. A cooling assessor suppresses pickup for that cycle only and stays visible
 in the queue as `cooldown`.
 
 The agent casts its verdict with the `assess_issue` tool ([`11-mcp-tools.md`](11-mcp-tools.md)):
-`delivered` writes the park, `more_work` writes an `issue_shortfalls` row that rule 3g routes. See
+`delivered` writes the park, `more_work` writes an `issue_shortfalls` row that rule `issue-shortfall` routes. See
 [`06-issue-pickup.md`](06-issue-pickup.md) for what the park holds and what ends it.
 
 ## `issue-shortfall` — routing a failed assessment
 
 The other end of the loop the assessor opens. Plan → Work → is the goal achieved? → No → re-plan:
-the check was rule 3e, the replan was `POST /api/plans/:id/replan`, and **nothing joined them**. A
-negative verdict was written into `issue_conclusions`, whose only consumer is rule 3b's inverse arm
+the check was rule `issue-assess`, the replan was `POST /api/plans/:id/replan`, and **nothing joined them**. A
+negative verdict was written into `issue_conclusions`, whose only consumer is rule `work-item-back-to-pickup`
 — which emits a _tracker_ move, so it fires only where `issueInReviewState` is configured. On GitHub
-it changed no dispatch at all; and on either provider, for an issue with a plan, rule 4 is gated on
-the `single` route and rule 4a finds every part settled. The assessor said "not delivered" and the
+it changed no dispatch at all; and on either provider, for an issue with a plan, rule `issue-pickup` is gated on
+the `single` route and rule `plan-part` finds every part settled. The assessor said "not delivered" and the
 harness scheduled nothing, anywhere.
 
 This rule is the one consumer of `issue_shortfalls`, and it routes by the cause the assessor
@@ -461,7 +461,7 @@ and re-decompose plans whose shape was never the problem — the failure the iss
 | `goal` | the issue itself is wrong, ambiguous or obsolete             | **C** — escalate, and schedule nothing      |
 | _none_ | nothing was named beyond "the work is not finished"          | nothing at all                              |
 
-**Arm A** flips the plan to `planning`, which is the entire effect: rule 3c already routes such a
+**Arm A** flips the plan to `planning`, which is the entire effect: rule `issue-plan` already routes such a
 plan back to a planner with the `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict`
 already narrows the cooldown to decisions since `plan.updatedAt` so the original planner does not
 throttle it. `releasePlan`'s pattern — one status write, and a rule that was already there starts
@@ -477,7 +477,7 @@ branch is spent, so re-dispatching puts an agent on a branch whose PR is closed.
 `complete` → `active` through the roll-up it already computes.
 
 **Arm C** files an escalation and schedules nothing. It is deliberately **not** a proposal: a
-proposal whose accept and reject both do nothing is not a decision. It is deduped the way rule 1b's
+proposal whose accept and reject both do nothing is not a decision. It is deduped the way rule `pr-ci-blocked`'s
 escalation is — on an open item for `issue:<n>:shortfall` **and** on a recent executed one in the
 audit log, each covering the other's blind spot.
 
@@ -495,7 +495,7 @@ counter already in the code. Nothing new counts it: a second counter claiming to
 would be two answers to one question.
 
 **With the funnel off, both plan-shaped arms degrade to arm C** rather than being taken. A replan
-needs rule 3c to pick the `planning` plan up and a follow-up needs rule 4a to schedule it, so
+needs rule `issue-plan` to pick the `planning` plan up and a follow-up needs rule `plan-part` to schedule it, so
 accepting either with planning disabled would park the issue on a transition nothing consumes — the
 same fail-safe direction as the planner's and the assessor's.
 

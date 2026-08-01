@@ -84,7 +84,7 @@ function node(out: WorkNodeObservation[], ref: string): WorkNodeObservation {
 // ---------------------------------------------------------------------------
 
 test('jobBranch derives job/<id> for a code job and refuses a desk one', () => {
-  assert.equal(jobBranch(job()), 'job/j7', 'the derived branch is what rule 0 dispatches on');
+  assert.equal(jobBranch(job()), 'job/j7', 'the derived branch is what rule `manual-job` dispatches on');
   assert.equal(jobBranch(job({ branch: 'chore/lint' })), 'chore/lint', "an operator's branch wins");
   assert.equal(jobBranch(job({ kind: 'desk' })), null, 'a desk job runs in a scratch dir and has no branch');
 });

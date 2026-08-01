@@ -448,7 +448,7 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(6),
       },
       // plan-231's three parts — all `ready`, none dispatched, because the plan
-      // itself is still awaiting approval (rule 4a queues them `unapproved`).
+      // itself is still awaiting approval (rule `plan-part` queues them `unapproved`).
       {
         id: 'plan-231:signer',
         planId: 'plan-231',

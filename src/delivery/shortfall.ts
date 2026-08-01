@@ -7,10 +7,10 @@
  * The intended loop is Plan → Work → is the goal achieved? → No → re-plan. Both
  * ends existed and nothing joined them. The assessor could say `more_work`, but it
  * wrote that into `issue_conclusions` — the working agent's own row — where the
- * only consumer is rule 3b's inverse arm, which emits a *tracker* move and so
+ * only consumer is rule `work-item-back-to-pickup`, which emits a *tracker* move and so
  * fires only where `issueInReviewState` is configured. On GitHub it changed no
- * dispatch at all; and on either provider, for an issue with a plan, rule 4 is
- * gated on the `single` route and rule 4a finds every part settled. The assessor
+ * dispatch at all; and on either provider, for an issue with a plan, rule `issue-pickup` is
+ * gated on the `single` route and rule `plan-part` finds every part settled. The assessor
  * said "not delivered" and the harness scheduled nothing, anywhere.
  *
  * ## Why the cause is declared rather than derived
@@ -31,7 +31,7 @@
  * is what bounds the loop from the outside. Arm C schedules nothing: it says the
  * *goal* is wrong, which is #158's question and not the planner's. A proposal
  * whose accept and reject both do nothing is not a decision, so arm C is an
- * ordinary escalation, deduped the way rule 1b's is.
+ * ordinary escalation, deduped the way rule `pr-ci-blocked`'s is.
  */
 
 import type { PlanPart, PlanPartInput, ShortfallCause } from '../types.js';
@@ -88,7 +88,7 @@ export function shortfallRef(issueNumber: number): string {
  * would do.
  *
  * - `replan` — arm A. Flips the plan to `planning`, which is the *entire* effect:
- *   rule 3c already routes a `planning` plan back to a planner with the
+ *   rule `issue-plan` already routes a `planning` plan back to a planner with the
  *   `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict` already
  *   narrows the cooldown to decisions since `plan.updatedAt` so the original
  *   planner does not throttle it. `releasePlan`'s pattern — one status write, and

@@ -3,7 +3,7 @@ import type { CiCheck } from '../types.js';
 /**
  * Per-check CI policy: what the harness does about *which* check went red.
  *
- * `ciStatus` is one aggregate verdict for a whole PR, so rule 1 had exactly one
+ * `ciStatus` is one aggregate verdict for a whole PR, so rule `pr-ci-failing` had exactly one
  * response to every failure — dispatch a code agent with the generic fix prompt.
  * That is the right default and the wrong only option: a lint failure has a
  * house-specific fix, a flaky suite wants latitude, and a red deploy check owned
@@ -134,14 +134,14 @@ export function validateCiPolicy(policy: CiPolicy): void {
  *
  * A third case is not a silence at all: an **advisory** check is dropped before
  * anything is decided, so a PR whose only failure is advisory classifies into
- * nothing. Rule 1 does not fire on one either — `ciNeedsAttention` excludes them
+ * nothing. Rule `pr-ci-failing` does not fire on one either — `ciNeedsAttention` excludes them
  * by the same rule — so the two cannot disagree.
  */
 export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPolicy): CiVerdict {
   // Advisory checks are dropped up front, so no rule — not even `match: '*'` —
   // can claim one. They are reported for visibility and belong to whatever
   // already models the signal at higher fidelity (a comment policy's threads are
-  // rule 2b's, with the author and body attached).
+  // rule `pr-review-comment`'s, with the author and body attached).
   const failing = (checks ?? []).filter((c) => c.status === 'failing' && !c.advisory);
   if (failing.length === 0) {
     return { actionable: true, dispatch: [], escalate: [], ignored: [], urgent: false };

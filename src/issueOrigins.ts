@@ -44,8 +44,8 @@ const DELIBERATION_SUFFIXES = ['plan', 'assay'];
 const WORK_SUFFIX_PREFIXES = ['part:'];
 
 /**
- * The origins that are not the work but prove it happened. Rule 3e only fires once
- * work has started and rule 3h only once a goal has been parked as delivered, so
+ * The origins that are not the work but prove it happened. Rule `issue-assess` only fires once
+ * work has started and rule `issue-retro` only once a goal has been parked as delivered, so
  * neither can exist without some.
  */
 const EVIDENCE_SUFFIXES = ['assess', 'retro'];

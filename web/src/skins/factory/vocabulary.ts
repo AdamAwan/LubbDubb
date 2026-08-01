@@ -298,7 +298,7 @@ export function patchStatus(status: string): MachineStatus {
 }
 
 /**
- * The assay drill (rule 3f).
+ * The assay drill (rule `issue-assay`).
  *
  * There are only two verdicts because the third — nobody has judged this goal —
  * is drawn by there being **no drill on the floor at all**. That is the whole
@@ -324,7 +324,7 @@ const FURNACE_WORDS: Record<PlanStatus, MachineStatus> = {
   abandoned: { word: 'Gone cold', tone: 'off' },
 };
 
-/** The furnace — the planner (rule 3c). A floor with no plan draws it unbuilt. */
+/** The furnace — the planner (rule `issue-plan`). A floor with no plan draws it unbuilt. */
 export function furnaceStatus(status: string): MachineStatus {
   return FURNACE_WORDS[status as PlanStatus] ?? { word: 'Gone cold', tone: 'off' };
 }
@@ -409,9 +409,9 @@ export function siloStatus(filled: number, total: number): MachineStatus {
 }
 
 /**
- * What the goal check (rule 3e) has said, if anything.
+ * What the goal check (rule `issue-assess`) has said, if anything.
  *
- * Three readings, because rule 3e writes exactly two rows — a delivery and a
+ * Three readings, because rule `issue-assess` writes exactly two rows — a delivery and a
  * shortfall — and the third reading is their absence. There was a fourth,
  * `more_work`, and it was unreachable: it was gated on the *conclusion* fold
  * returning `by: 'assessor'`, which only ever comes back out of the shortfall

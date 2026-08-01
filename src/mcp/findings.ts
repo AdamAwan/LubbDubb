@@ -15,7 +15,7 @@
  * ## Does a finding become work? No — deliberately.
  *
  * #108 floats "optionally becomes a queued job". It does not, and the reason is
- * not caution for its own sake: a queued job is dispatched by rule 0 *ahead of
+ * not caution for its own sake: a queued job is dispatched by rule `manual-job` *ahead of
  * every world-driven rule*, so an agent that could queue jobs could put agents on
  * the fleet. That is a capability escalation, not a convenience — one agent's
  * hunch would spend another agent's slot, budget and worktree, with nothing in

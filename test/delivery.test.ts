@@ -136,14 +136,14 @@ test('an off-vocabulary origin is never expired by a signal it cannot be matched
 
 // -- the gate, asked in both places off the one predicate ---------------------
 
-test('a standing verdict stops rule 4, and lifting it lets pickup through', async () => {
+test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup through', async () => {
   const world = {
     takenAt: '2026-07-28T12:00:00.000Z',
     pullRequests: [],
     issues: [issue()],
   };
-  // The retrospective is pinned off: this test is about rule 4 standing down for a
-  // parked issue, and rule 3h legitimately writes a delivered goal up (covered in
+  // The retrospective is pinned off: this test is about rule `issue-pickup` standing down for a
+  // parked issue, and rule `issue-retro` legitimately writes a delivered goal up (covered in
   // test/retrospective.test.ts). Leaving it on would assert two rules at once.
   const d = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, { enabled: false });
 

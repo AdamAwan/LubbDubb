@@ -159,7 +159,7 @@ export function ciNeedsAttention(pr: PullRequest): boolean {
  * red turns part 2 red, and the CI rule would put an agent on part 2 to fix code
  * that isn't part 2's — multiplying agents up the whole stack, each of them
  * unable to fix anything. Suppressing the rule on the inheriting PR is enough on
- * its own: the failing PR at the bottom is in the same world and rule 1 fires on
+ * its own: the failing PR at the bottom is in the same world and rule `pr-ci-failing` fires on
  * it under its own steam, so there is nothing to push down. When the fix lands
  * there, the children go green with it.
  *

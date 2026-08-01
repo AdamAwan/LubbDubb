@@ -81,7 +81,7 @@ test('a delivery clears a standing conclusion, and a conclusion clears a standin
   assert.ok(s.getDelivery('issue:12'));
 
   // And back the other way: an assessor that finds outstanding work retracts its
-  // own park, or rule 3b would return the item to pickup while the gate held it.
+  // own park, or rule `work-item-in-review` would return the item to pickup while the gate held it.
   s.recordIssueConclusion({
     originRef: 'issue:12',
     verdict: 'more_work',
@@ -159,7 +159,7 @@ test('/api/state ships a standing delivery beside the conclusion and the pickup 
 /**
  * Standing-ness is the reading, not the row. A verdict the world has overtaken
  * is the same null as one that was never cast: the issue is back in play and
- * rule 3e will assess it again, so a cockpit still reporting it delivered would
+ * rule `issue-assess` will assess it again, so a cockpit still reporting it delivered would
  * be promising a park that has ended.
  */
 test('/api/state drops a delivery the world has overtaken', async () => {
@@ -175,7 +175,7 @@ test('/api/state drops a delivery the world has overtaken', async () => {
   assert.ok(shipped(), 'it stands until something ends it');
 
   // A transition on the issue after the verdict — phase 4's expiry arm, the same
-  // one `deliveryHold` gives rule 4. The store stamps `createdAt` itself, and the
+  // one `deliveryHold` gives rule `issue-pickup`. The store stamps `createdAt` itself, and the
   // arm is a *strict* `>`, so the clock has to have moved between the two writes
   // or the test asserts nothing on a fast machine.
   await new Promise((r) => setTimeout(r, 5));

@@ -73,7 +73,7 @@ export interface IssuePickupPolicy {
   inReviewState?: string;
 }
 
-/** The branch rule 4 puts an issue's agent on — and how a PR is matched back to its issue. */
+/** The branch rule `issue-pickup` puts an issue's agent on — and how a PR is matched back to its issue. */
 export function issueBranch(number: number): string {
   return `issue/${number}`;
 }
@@ -165,7 +165,7 @@ function issueWatchReason(issue: Issue, policy: IssuePickupPolicy): string | nul
 /**
  * The label half of the gate on its own — the one parts inherit. There is no
  * per-part watch check: the tag is evaluated once, on the parent issue, and parts
- * follow it. Deliberately **without** the workflow-state gate: rule 3b parks a work
+ * follow it. Deliberately **without** the workflow-state gate: rule `work-item-in-review` parks a work
  * item in the review state as soon as any part's PR opens, and re-applying the
  * state gate there would stop the plan's remaining parts from ever being scheduled.
  */
@@ -196,7 +196,7 @@ interface IssuePickupStatus {
   reasons: string[];
 }
 
-/** The runtime context the contextual gates need — everything rule 4 consults. */
+/** The runtime context the contextual gates need — everything rule `issue-pickup` consults. */
 export interface IssuePickupContext {
   policy: IssuePickupPolicy;
   cooldown: CooldownPolicy;
@@ -211,7 +211,7 @@ export interface IssuePickupContext {
    */
   openPrs: PullRequest[];
   /**
-   * The plan funnel's state and policy — the same inputs rules 3c and 4 consult.
+   * The plan funnel's state and policy — the same inputs rules `issue-plan` and `issue-pickup` consult.
    * Omitted = funnel off, so every issue routes straight to pickup as before.
    */
   plans?: Plan[];
@@ -226,21 +226,21 @@ export interface IssuePickupContext {
   planning?: PlanningPolicy;
   /**
    * Standing `delivered` verdicts and the world transitions that may have ended
-   * one — the same two lists rule 4 gates on, so the chip predicts it. Absent =
+   * one — the same two lists rule `issue-pickup` gates on, so the chip predicts it. Absent =
    * nothing parked, which is every deployment until an issue is assessed.
    */
   deliveries?: IssueDelivery[];
   deliverySignals?: WorldEvent[];
   /**
    * Standing goal-assay verdicts and the transitions that may have ended one —
-   * the same two lists rule 3f and the `eligibleIssues` filter gate on, so the chip
+   * the same two lists rule `issue-assay` and the `eligibleIssues` filter gate on, so the chip
    * predicts them. Absent = nothing assayed, which holds nothing.
    */
   assays?: IssueAssay[];
   assaySignals?: WorldEvent[];
   /**
    * Whether the goal assay is on. Needed as well as the verdicts because the chip
-   * reports the *pending* case too — an issue rule 3f will assay next cycle is not
+   * reports the *pending* case too — an issue rule `issue-assay` will assay next cycle is not
    * eligible, and saying so is the difference between a queue and a silence.
    */
   assay?: AssayPolicy;
@@ -253,7 +253,7 @@ export interface IssuePickupContext {
  * Fold every gate that decides issue pickup — intrinsic policy gates *and* the
  * contextual ones (active task, cooldown/attempt cap, capacity) — into one
  * per-item verdict, mirroring `prHealth` for PRs. Pure over the issue + context,
- * and checked in the same order rule 4 of the rule dispatcher applies them, so
+ * and checked in the same order rule `issue-pickup` of the rule dispatcher applies them, so
  * the verdict matches what actually happens next cycle.
  */
 export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
@@ -286,7 +286,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
   if (planVerdict.route === 'parts' && plan) {
     const { settled, total } = planProgress(parts);
-    // A `complete` plan is the one arm that never moves again on its own: rule 4a
+    // A `complete` plan is the one arm that never moves again on its own: rule `plan-part`
     // schedules nothing and pickup stays narrowed off, which is correct while a
     // human decides whether the issue is done — but "3/3 parts done" reads like
     // a plan still in flight. Say what the two ways out are instead.
@@ -322,7 +322,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
   // The harness's own park, asked *after* `has_pr` and `active`: a delivered issue
   // that somehow has an open PR is honestly `has_pr` — the PR rules own it — and
-  // one with a live agent is honestly `active`. Same predicate rule 4 gates on, so
+  // one with a live agent is honestly `active`. Same predicate rule `issue-pickup` gates on, so
   // the chip cannot promise what the next cycle refuses.
   const held = deliveryHold(ctx.deliveries?.find((d) => d.originRef === origin) ?? null, issue, {
     pickupStates: ctx.policy.pickupStates,
@@ -339,14 +339,14 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   }
 
   // The content gate (issue #158), asked *after* the intrinsic policy gates and
-  // *before* the plan funnel — which is exactly where rule 3f sits. After, because
+  // *before* the plan funnel — which is exactly where rule `issue-assay` sits. After, because
   // an unwatched or state-parked issue is never assayed, so reporting an assay for
   // one would promise something that cannot happen; before, because an assay that
   // refused the goal is the reason no planner and no pickup agent is coming.
   const assay = assayFor(issue, ctx);
   if (assay) return { eligible: false, status: 'assay', reasons: [assay] };
 
-  // The rest of the funnel sits between eligibility and pickup: narrowing rule 4
+  // The rest of the funnel sits between eligibility and pickup: narrowing rule `issue-pickup`
   // without reporting it here would leave the chip saying "eligible" for an issue
   // that is actually waiting on a planner. (The `parts` arm is answered above,
   // before the PR gate can mistake a part's PR for the issue's.)
@@ -392,10 +392,10 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
  * Why the goal assay is the reason nothing is happening to this issue, or null
  * when it isn't.
  *
- * Two arms, in the order rule 3f resolves them. A **standing** `unclear` verdict
+ * Two arms, in the order rule `issue-assay` resolves them. A **standing** `unclear` verdict
  * first — asked through the same pure `assayHold` the dispatcher asks, so the chip
  * cannot say "parked" for an issue the next cycle dispatches, nor the reverse.
- * Then the **pending** case: an issue rule 3f would assay, or is assaying now.
+ * Then the **pending** case: an issue rule `issue-assay` would assay, or is assaying now.
  * Reporting that matters as much as the hold — an issue silently waiting a cycle
  * for a verdict looks exactly like an idle fleet, which is the invisibility
  * `capped` and `unapproved` were added to `QueueItem` to fix.
@@ -409,7 +409,7 @@ function assayFor(issue: Issue, ctx: IssuePickupContext): string | null {
   const held = assayHold(stored, issue, { signals: ctx.assaySignals });
   if (held) return held;
   if (!ctx.assay?.enabled) return null;
-  // Same preconditions rule 3f applies, in its order.
+  // Same preconditions rule `issue-assay` applies, in its order.
   if (isAssayed(stored, issue)) return null;
   if (hasWorkStarted(issue.number, ctx.tasks)) return null;
   if (ctx.plans?.some((p) => p.originRef === origin)) return null;

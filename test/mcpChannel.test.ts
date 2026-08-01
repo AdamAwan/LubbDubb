@@ -912,7 +912,7 @@ test('a finding queues no work by itself; promotion is the operator’s click', 
     summary: 'The retry helper squares the delay instead of doubling it.',
   });
   // The deliberate half of the design: an agent that could queue jobs could put
-  // agents on the fleet (rule 0 dispatches a job ahead of every world-driven
+  // agents on the fleet (rule `manual-job` dispatches a job ahead of every world-driven
   // rule), so filing one changes nothing about what runs.
   assert.deepEqual(system.store.listQueuedJobs(), []);
 
@@ -1016,12 +1016,12 @@ test('note_progress lands on the agent row and hands back the status envelope', 
 
   const before = system.store.getAgent(agent.id)!.status;
   const res = await callTool(system, agent, 'note_progress', {
-    note: 'Reading how the dispatcher ranks candidates before touching rule 4a',
+    note: 'Reading how the dispatcher ranks candidates before touching rule `plan-part`',
   });
   assert.equal(res.isError, false);
 
   const stored = system.store.getAgent(agent.id)!;
-  assert.equal(stored.note, 'Reading how the dispatcher ranks candidates before touching rule 4a');
+  assert.equal(stored.note, 'Reading how the dispatcher ranks candidates before touching rule `plan-part`');
   assert.ok(stored.notedAt, 'the note is dated so a reader can tell how current it is');
   // It says something and changes nothing: not a status transition, not a park.
   assert.equal(stored.status, before);

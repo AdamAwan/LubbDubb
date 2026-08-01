@@ -352,7 +352,7 @@ export function computeApproved(reviews: GhReview[]): boolean {
  * `viewerLogin` is whoever holds `GITHUB_TOKEN`, which on a single-operator
  * deployment is the operator themselves. Comparing the *root's* author against it
  * marked every review comment the operator left as already handled the instant
- * they wrote it, and rule 2b never saw it: the harness silently ignored exactly
+ * they wrote it, and rule `pr-review-comment` never saw it: the harness silently ignored exactly
  * the reviews a human took the time to write, which is the one signal it must
  * never drop. No author comparison fixes that — the two identities are the same
  * string. The position test needs none: the harness only ever posts *replies*

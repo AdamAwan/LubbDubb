@@ -48,7 +48,7 @@ test('multiple overrides order by rank, non-overridden keep natural order after'
   assert.deepEqual(origins(ranked), ['issue:9', 'pr:2:mergeable', 'pr:1:ci', 'issue:5']);
 });
 
-test('rule-0 jobs stay first whatever the override', () => {
+test('`manual-job` items stay first whatever the override', () => {
   const items = [
     item('job:a', 'manual-job'),
     item('job:b', 'manual-job'),

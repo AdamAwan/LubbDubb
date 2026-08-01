@@ -206,7 +206,7 @@ const MAX_PROMPT = 8000;
  * The job a **requeue** verdict files: the same work, from the top, with a fresh
  * agent and no memory of the crashed one.
  *
- * It is a job (rule 0) rather than a reset task, and that is forced rather than
+ * It is a job (rule `manual-job`) rather than a reset task, and that is forced rather than
  * chosen. A task left `queued` with no agent is *active* to every gate in the
  * dispatcher — `activeOrigins`, `findActiveTaskByOrigin`, `findActiveTaskByBranch`
  * all count it — so parking the work there would wedge its origin and its branch

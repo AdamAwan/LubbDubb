@@ -88,7 +88,7 @@ PR's CI status or review comments had to shell out, which is provider-coupled (n
   `closedPrWindowMs` (6h), so a PR that delivered the issue last week is simply absent from the
   snapshot and the edge to it is in the graph or nowhere. Each node carries its `provenance`, so a
   reader can weigh "the harness watched this merge" (`observed`) against "it left the open list and
-  the merge was assumed" (`inferred`) — rule 3e's assessor is the reader stage 1 recorded that
+  the merge was assumed" (`inferred`) — rule `issue-assess`'s agent is the reader stage 1 recorded that
   distinction for. The lookup is `Store.listWorkSubtree`, in the tool layer rather than in the pure
   `worldRead.ts`, and nothing here imports the fold, so the dispatcher-side lens property in
   [`14-persistence.md`](14-persistence.md) is untouched.
@@ -113,7 +113,7 @@ so it cannot reach another repository or project.
 Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope', summary, ref?}`. See
 [13](13-jobs-and-findings.md) for the full vocabulary and the promotion path. Three properties:
 
-- **It queues nothing, and that is the design.** A queued job is dispatched by rule 0 ahead of every
+- **It queues nothing, and that is the design.** A queued job is dispatched by rule `manual-job` ahead of every
   world-driven rule, so an agent that could queue jobs could put agents on the fleet — a capability
   escalation. Promotion is an operator's click. The tool's description **and** its response say so, so
   an agent does not report a bug and then assume its fix is scheduled.
@@ -215,7 +215,7 @@ everything is delivered and it is waiting on test. See
   quoted so it reads as a report rather than as the harness's instruction. Only an _agent's_ verdict
   is carried; an operator's toggle is not, since the operator has the cockpit and the job queue to say
   what they want done.
-- **It schedules nothing.** `more_work` returns the issue to pickup on a later cycle through rule 3b;
+- **It schedules nothing.** `more_work` returns the issue to pickup on a later cycle through rule `work-item-back-to-pickup`;
   it does not dispatch. The response says so, so an agent does not assume a follow-up is queued — and
   `done` does not close the ticket in the tracker, which the response also says.
 
@@ -224,7 +224,7 @@ on the verdict rather than on the next pulse.
 
 ### `assess_issue`
 
-Arguments `{status: 'delivered'|'more_work', summary, cause?, part?}`. Rule 3e's assessor casts its
+Arguments `{status: 'delivered'|'more_work', summary, cause?, part?}`. Rule `issue-assess`'s assessor casts its
 verdict here. Identity is structural as for every other write tool — no issue argument, the origin
 resolved from the credential.
 
@@ -247,7 +247,7 @@ resolved from the credential.
   ranks a shortfall above an agent's own declaration (the assessor is later and better informed) and
   the operator's toggle above both.
 - **`cause` says _what_ fell short, and it is required when the issue has a plan.** `plan`, `part`
-  (with `part` naming the slug) or `goal` — see [rule 3g](05-dispatcher.md) for what each routes to.
+  (with `part` naming the slug) or `goal` — see [rule `issue-shortfall`](05-dispatcher.md) for what each routes to.
   The refusals are **plan-aware and synchronous**, which is the tool channel's whole point: a `part`
   slug that is not a live part is refused with the parts that are, `plan`/`part` on an issue with no
   plan is refused and pointed at `goal`, and a missing cause on a planned issue is refused with the
@@ -271,7 +271,7 @@ repaints on the verdict rather than on the next pulse.
 
 ### `assay_issue`
 
-Arguments `{status: 'workable'|'unclear', summary}`. Rule 3f's assayer casts its verdict here, with
+Arguments `{status: 'workable'|'unclear', summary}`. Rule `issue-assay`'s assayer casts its verdict here, with
 identity structural as everywhere else — no issue argument, the origin resolved from the credential.
 
 - **`assayerOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,

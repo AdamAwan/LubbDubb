@@ -179,7 +179,7 @@ test('health names the PR a failure was inherited from', () => {
 
 // -- CI attribution, in the dispatcher ---------------------------------------
 
-test('rule 1 fires on the bottom of a red stack and is suppressed above it', async () => {
+test('rule `pr-ci-failing` fires on the bottom of a red stack and is suppressed above it', async () => {
   const prs = [
     pr(40, 'issue/12/schema', { ciStatus: 'failing' }),
     pr(41, 'issue/12/api', { baseBranch: 'issue/12/schema', ciStatus: 'failing' }),
@@ -210,7 +210,7 @@ test('an ignored PR still counts as the base its children inherit from', async (
 
 test('suppressing CI does not suppress restacking — a stack keeps following its parent', async () => {
   // Part 1 pushed, so part 2 went behind *and* red with part 1's failure. The CI
-  // rule is held, but rule 2 must still fire: without it the stack stops
+  // rule is held, but rule `pr-base-update` must still fire: without it the stack stops
   // restacking the moment its parent goes red, which is exactly when it moves.
   const prs = [
     pr(40, 'issue/12/schema', { ciStatus: 'failing' }),
@@ -385,7 +385,7 @@ test('an attempt stamped in the same millisecond as the replan request is the *p
 
 test('a replan that spends its attempts falls back to the existing parts, never to `single`', () => {
   const spent = { kind: 'hold' } as const;
-  // Failing open to `single` here would point rule 4 at the flat `issue/12`
+  // Failing open to `single` here would point rule `issue-pickup` at the flat `issue/12`
   // branch, which git cannot create beside the existing `issue/12/<slug>` refs.
   assert.deepEqual(
     resolvePlanRoute({ planning: enabled, plan: plan({ status: 'planning' }), verdict: spent, existingParts: 2 }),

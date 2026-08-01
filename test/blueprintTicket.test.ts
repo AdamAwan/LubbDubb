@@ -17,7 +17,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
  * ticket (issue #198): when a tracker is configured, `POST /api/jobs` does not
  * dispatch it onto a branch but files a *watched* ticket, so it flows through the
  * planning funnel like any picked-up issue. The whole change is at route time —
- * rule 0 is untouched.
+ * rule `manual-job` is untouched.
  *
  * The one thing a finding-filed ticket does not need and a blueprint does: the
  * issue must carry the effective `-watch` label, or the watch gate never picks it

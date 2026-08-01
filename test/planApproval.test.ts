@@ -249,7 +249,7 @@ test('with approval on, the verdict lands, one proposal is pending, and nothing 
   );
 
   // Repeated pulses neither re-ask nor grow rows: the pending verdict holds
-  // rule 3d, which is the whole reason the gate is a typed status and not a timer.
+  // rule `plan-approval`, which is the whole reason the gate is a typed status and not a timer.
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
   assert.equal(system.store.listProposals().length, 1);
@@ -359,7 +359,7 @@ test('a replan withdraws the question it supersedes, so the amended plan is stil
 
   const { app } = await buildApp(system);
   await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/replan` });
-  // Withdrawn, not left pending: a pending verdict holds rule 3d off the plan, so
+  // Withdrawn, not left pending: a pending verdict holds rule `plan-approval` off the plan, so
   // the amended decomposition would never be put to anyone — and the stale card,
   // if accepted, would release a plan its reader never saw.
   const withdrawn = system.store.getProposal(first.id)!;
@@ -674,7 +674,7 @@ test('the abandon route is the way out of an approved decomposition, and guards 
   assert.equal(system.store.getPlan(plan.id)!.status, 'single');
   assert.ok(
     system.store.listPlanParts(plan.id).every((p) => p.status === 'retired'),
-    'nothing is left for rule 4a to schedule',
+    'nothing is left for rule `plan-part` to schedule',
   );
 
   // Idempotent by the same guard that makes it safe: a second click finds a

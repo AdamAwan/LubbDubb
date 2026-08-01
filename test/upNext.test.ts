@@ -227,7 +227,7 @@ test('an operator override jumps a world item ahead of the natural ranking', asy
   assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:103', 'the pinned issue wins the slot');
 });
 
-test('rule-0 jobs stay first whatever the override', async () => {
+test('`manual-job` items stay first whatever the override', async () => {
   const d = new RuleDispatcher();
   const result = await d.decide(
     ctx(

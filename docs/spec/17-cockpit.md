@@ -421,13 +421,13 @@ below corresponds to a stage of that document, which is what the floor is checke
 | Factory              | Harness                                            |
 | -------------------- | -------------------------------------------------- |
 | Ore patch            | A ticket, and the strip that picks which floor     |
-| Assay drill          | The goal assay, rule 3f                            |
-| Furnace              | The planner, rule 3c                               |
+| Assay drill          | The goal assay, rule `issue-assay`                 |
+| Furnace              | The planner, rule `issue-plan`                     |
 | Splitter / merger    | Where the plan's edge list branches and rejoins    |
 | Assembly machine     | A plan part, carrying the pull request it produced |
 | Scanners on the belt | CI checks, classified — plus human review          |
 | Silo                 | The goal, filling with settled parts               |
-| Satellite            | The assessment, rule 3e                            |
+| Satellite            | The assessment, rule `issue-assess`                |
 | Manifest             | Report what was done — `issue.conclusion.note`     |
 | Signal post          | Update the ticket — state and status comment       |
 | Launch               | `delivered`, or a launch that failed verification  |
@@ -807,7 +807,7 @@ for the world to change — chosen from `config.injectable`.
   (issue #128). Moving a row sends the whole new order of candidate origins to
   `POST /api/upnext/order`, which the dispatcher persists as a priority override and reads back into
   its ranking — so the order survives pulses and restarts while the panel stays a projection. It
-  re-orders only: a held row keeps its held status wherever it lands, and rule-0 jobs stay first. New
+  re-orders only: a held row keeps its held status wherever it lands, and `manual-job` items stay first. New
   work the harness surfaces later slots in behind the arranged order until you re-arrange. Empty under
   the `claude` dispatcher, which materialises no plan.
 - **Decision log** (`DecisionLog`) — the last 100 decisions with outcome, detail and, where present,

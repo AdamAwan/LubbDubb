@@ -25,7 +25,7 @@
  * `issuePickupStatus` already does on the issue side — not the signal.
  *
  * The one place participant identity genuinely exists is `PrComment.author`, and
- * it is deliberately **not** read here. An unhandled comment is what makes rule 2b
+ * it is deliberately **not** read here. An unhandled comment is what makes rule `pr-review-comment`
  * dispatch an agent, whoever wrote it, so the author changes nothing about whose
  * turn it is; branching on it would recreate the two-party assumption in the one
  * corner of the world that happens to carry a name. `handled` is what decides;
@@ -105,7 +105,7 @@ export interface PrAttentionContext {
   cooldown: CooldownPolicy;
   /**
    * The per-check CI policy — the same `config.ci` the dispatcher holds, so this
-   * verdict names the court rule 1 will actually act in. Threaded as policy rather
+   * verdict names the court rule `pr-ci-failing` will actually act in. Threaded as policy rather
    * than as a pre-computed verdict so nothing depends on the snapshot having
    * classified the PR first; `classifyCiFailures` is pure, so asking twice is one
    * answer, not two.
@@ -167,7 +167,7 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   }
 
   // What the CI policy makes of the failing checks — asked once, here, and threaded
-  // into both the concern list and the tail, because rule 1 dispatches only when
+  // into both the concern list and the tail, because rule `pr-ci-failing` dispatches only when
   // the verdict is `actionable` (`ruleDispatcher.ts`) and this verdict has to name
   // the same court the rules will actually act in.
   const ci = ciReading(pr, ctx);
@@ -185,11 +185,11 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
     };
   }
 
-  // The concerns rules 1/2/2b build, in their urgency order (CI > base > comment)
+  // The concerns rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment` build, in their urgency order (CI > base > comment)
   // and off their own predicates. Re-derived here rather than shared with the
   // dispatcher because the rules build prompt-bearing concerns and this needs only
   // the labels and the top origin — the same relationship `issuePickupStatus` has
-  // to rule 4, and the same drift risk, which is why 07-pull-requests.md states
+  // to rule `issue-pickup`, and the same drift risk, which is why 07-pull-requests.md states
   // the order once for both.
   const concerns = prConcerns(pr, ctx, ci);
   if (concerns.length > 0) {
@@ -207,7 +207,7 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
     return { status: 'harness', reasons: [`${top.label} — an agent will be dispatched`, ...others] };
   }
 
-  // Merge-readiness, exactly as rule 3 tests it. Reproduced rather than imported
+  // Merge-readiness, exactly as rule `pr-merge-ready` tests it. Reproduced rather than imported
   // for the same reason as the concerns above; 05-dispatcher.md states the list.
   const mergeReady =
     !isStackedPr(pr, ctx.defaultBranch) &&
@@ -222,7 +222,7 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   if (mergeReady) {
     // Ask the gate, not the row: `proposalHold` is where a rejection stops standing
     // once the world moves (#122), and asking it here is what keeps this verdict
-    // from claiming "settled" about a PR rule 3 is about to re-propose. The pending
+    // from claiming "settled" about a PR rule `pr-merge-ready` is about to re-propose. The pending
     // arm is answered above, so what is left is a rejection or a settling accept.
     const ref = mergeProposalRef(pr.number);
     const held = proposalHold('merge', ref, ctx.proposals, {
@@ -260,14 +260,14 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
     return { status: 'elsewhere', reasons: ['merge blocked (required checks/reviews)'] };
   }
 
-  // Green, approved, unstaffed, unproposed and still not mergeable by rule 3's
+  // Green, approved, unstaffed, unproposed and still not mergeable by rule `pr-merge-ready`'s
   // reading — so no rule will ever act on it and no human has been asked to. Name
   // what is missing: this arm exists to be looked at, not to be a fallback.
   const missing: string[] = [];
   if (ci.mutedOnly) {
     // Red, and every failing check is one the operator told the harness to leave
-    // alone — so rule 1 will not dispatch and rule 1b will not escalate, and yet
-    // rule 3's merge test reads the *aggregate* `ciStatus`, which is still failing.
+    // alone — so rule `pr-ci-failing` will not dispatch and rule `pr-ci-blocked` will not escalate, and yet
+    // rule `pr-merge-ready`'s merge test reads the *aggregate* `ciStatus`, which is still failing.
     // Nothing will ever move this PR. "CI has not reported" would be a lie about a
     // check that reported and was muted, and it is the one wording that hides the
     // gap rather than naming it.
@@ -282,23 +282,23 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
 
 /** One thing about a PR that would, on its own, warrant a code agent. */
 interface PrConcern {
-  /** The dispatch origin rules 1/2/2b use — what the cooldown is keyed on. */
+  /** The dispatch origin rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment` use — what the cooldown is keyed on. */
   origin: string;
   label: string;
 }
 
 /**
- * What the per-check CI policy makes of this PR — the reading rule 1 makes before
+ * What the per-check CI policy makes of this PR — the reading rule `pr-ci-failing` makes before
  * it dispatches, made once here and used by three arms.
  *
  * It exists because `ciStatus` is a fold and this verdict is about *courts*: a red
  * check the policy dispatches for is the harness's, a red check it escalates is
- * yours, and a red check it mutes is nobody's while still holding rule 3's merge
+ * yours, and a red check it mutes is nobody's while still holding rule `pr-merge-ready`'s merge
  * test shut. Reading only the aggregate collapsed all three into "an agent will be
  * dispatched", which is a promise the dispatcher does not keep for two of them.
  *
  * An **inherited** failure reads as no failure at all, exactly as `prConcerns` and
- * rule 1 both already treat it: the fix belongs to the PR underneath, and the
+ * rule `pr-ci-failing` both already treat it: the fix belongs to the PR underneath, and the
  * `elsewhere` arm names it. Checking that here rather than per-arm is what keeps a
  * stacked PR from being handed to you for its parent's red build.
  */
@@ -309,13 +309,13 @@ interface CiReading {
   muted: string[];
   /** True when the whole failure is muted, so nothing will act and nothing is owed. */
   mutedOnly: boolean;
-  /** Whether rule 1 would dispatch — the gate the CI concern now rides on. */
+  /** Whether rule `pr-ci-failing` would dispatch — the gate the CI concern now rides on. */
   actionable: boolean;
 }
 
 function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
   const none: CiReading = { heldByPolicy: [], muted: [], mutedOnly: false, actionable: false };
-  // The same gate rule 1 rides, read from the same predicate: the lens telling an
+  // The same gate rule `pr-ci-failing` rides, read from the same predicate: the lens telling an
   // operator a PR is nobody's turn while an agent is being dispatched for it is
   // the drift this whole file exists to avoid.
   if (!ciNeedsAttention(pr) || inheritedCiFailure(pr, ctx.openPrs) !== null) return none;
@@ -335,16 +335,16 @@ function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
 }
 
 /**
- * The concerns rules 1/2/2b would raise for this PR, most urgent first. Same
+ * The concerns rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment` would raise for this PR, most urgent first. Same
  * predicates and same order as the dispatcher; the labels are the operator-facing
  * half only, so nothing here can drift into deciding what an agent is *told*.
  */
 function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): PrConcern[] {
   const concerns: PrConcern[] = [];
-  // Gated on the policy verdict, not on `ciStatus` alone: rule 1 dispatches only
+  // Gated on the policy verdict, not on `ciStatus` alone: rule `pr-ci-failing` dispatches only
   // when the classification is actionable, so raising the concern off the aggregate
   // promised an agent for a check the policy had already taken off the table. An
-  // inherited failure is excluded inside `ciReading` for the reason rule 1 excludes
+  // inherited failure is excluded inside `ciReading` for the reason rule `pr-ci-failing` excludes
   // it — the fix belongs to the PR underneath, and the `elsewhere` arm says so.
   if (ci.actionable) {
     concerns.push({ origin: `pr:${pr.number}:ci`, label: 'CI is failing' });

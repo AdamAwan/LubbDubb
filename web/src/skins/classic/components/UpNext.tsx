@@ -11,7 +11,7 @@ import { refLink, relTime } from '../../../components/util.js';
  * The operator can re-order it (issue #128): the ▲/▼ controls send the desired
  * order of candidate origins, which the dispatcher persists as a priority
  * override and reads back into its ranking. It changes *order* only — a held
- * item stays held wherever it lands, and rule-0 jobs stay first regardless — so
+ * item stays held wherever it lands, and `manual-job` items stay first regardless — so
  * the cut-line still falls where the headroom actually does after the next pulse.
  */
 export function UpNext({

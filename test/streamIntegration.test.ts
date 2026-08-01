@@ -39,7 +39,7 @@ function streamConfig() {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     // The funnel in front of pickup defaults **on**; these tests are about the
-    // agent transport, so pin it off and let rule 4 dispatch directly.
+    // agent transport, so pin it off and let rule `issue-pickup` dispatch directly.
     planning: { enabled: false } as never,
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
