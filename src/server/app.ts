@@ -12,7 +12,6 @@ import type {
   IssueDelivery,
   Retrospective,
   ScratchPadSummary,
-  ShortfallCause,
   WorldSnapshot,
 } from '../types.js';
 import type {
@@ -39,7 +38,7 @@ import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../mcp/findings.js';
 import { unrecordedWork, workItemTicketFields } from '../graph/unrecorded.js';
 import { blueprintTicketFields } from '../blueprintTicket.js';
-import { isRecoveryVerdict } from '../agents/crashRecovery.js';
+import { isRecoveryVerdict, type RecoveryVerdict } from '../agents/crashRecovery.js';
 import { planProposalRef, rejectionSignalQuery } from '../proposals/proposals.js';
 import { planOrigin } from '../plans/planning.js';
 import { planIssueNumber } from '../plans/parts.js';
@@ -61,6 +60,16 @@ import {
 import { debugLog } from '../debug.js';
 import { mintArtifactCapability, verifyArtifactCapability } from './artifactCapability.js';
 import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
+import {
+  IdParams,
+  IssueNumberParams,
+  PrNumberParams,
+  RefParams,
+  optionalText,
+  readRequest,
+  requiredBoolean,
+} from './validation.js';
 
 /**
  * Whether the configured world accepts synthetic events: only the `fake`
@@ -84,6 +93,60 @@ interface BuiltApp {
   /** Where a minted token was persisted, for the banner. Null when it came from the env or auth is off. */
   tokenPath: string | null;
 }
+
+/**
+ * The synthetic world events `/api/inject` accepts, at module scope rather than
+ * beside its route only because it is the one body big enough to bury the
+ * handler.
+ *
+ * The old check asserted the whole body to be an `InjectableEvent` and then
+ * tested that `kind` was a string, which typed every other field as validated
+ * while checking none of them — and this is the one body that reaches a
+ * connector. Annotating the schema as
+ * `z.ZodType<InjectableEvent>` is what removes the assertion rather than moving
+ * it: TypeScript refuses the annotation if the parsed output is not an
+ * `InjectableEvent`, so a variant that drifts from the union in `connector.ts`
+ * fails `typecheck`. The other direction — the union gaining a kind this misses
+ * — fails loudly at runtime as a 400 naming the kind, and only ever under the
+ * `fake` provider this route is gated to.
+ */
+const InjectEventBody: z.ZodType<InjectableEvent> = z.discriminatedUnion(
+  'kind',
+  [
+    z.object({ kind: z.literal('ci_failed'), prNumber: z.number() }),
+    z.object({ kind: z.literal('ci_passed'), prNumber: z.number() }),
+    z.object({ kind: z.literal('pr_comment'), prNumber: z.number(), author: z.string(), body: z.string() }),
+    z.object({
+      kind: z.literal('new_pr'),
+      number: z.number(),
+      title: z.string(),
+      branch: z.string(),
+      baseBranch: z.string().optional(),
+      labels: z.array(z.string()).optional(),
+    }),
+    z.object({ kind: z.literal('pr_approved'), prNumber: z.number() }),
+    z.object({
+      kind: z.literal('pr_mergeable'),
+      prNumber: z.number(),
+      mergeable: z.boolean().optional(),
+      mergeableState: z.enum(['dirty', 'behind', 'blocked', 'clean', 'unknown']).optional(),
+    }),
+    z.object({ kind: z.literal('pr_closed'), prNumber: z.number(), merged: z.boolean().optional() }),
+    z.object({
+      kind: z.literal('new_issue'),
+      number: z.number(),
+      title: z.string(),
+      body: z.string().optional(),
+      labels: z.array(z.string()).optional(),
+    }),
+    z.object({ kind: z.literal('issue_state'), number: z.number(), state: z.enum(['open', 'closed']) }),
+    z.object({ kind: z.literal('issue_linked_pr'), number: z.number(), prNumber: z.number() }),
+  ],
+  // One wording for both "no `kind` at all" and "a kind nothing handles", since
+  // the panel that sends these is a fixed set of buttons and anything else
+  // reaching here is a hand-written call.
+  { errorMap: () => ({ message: 'invalid event' }) },
+);
 
 /**
  * Builds the cockpit HTTP + WebSocket surface. REST for actions and state,
@@ -225,7 +288,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   app.get('/api/state', async () => buildStateSnapshot(system, { artifactSigner }));
 
   app.get('/api/agents/:id/transcript', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
     const agent = store.getAgent(id);
     if (!agent) return reply.code(404).send({ error: 'agent not found' });
     return { agentId: id, transcript: store.getTranscript(id) };
@@ -251,7 +316,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // capability the navigation can carry in the query string (see
   // {@link ./artifactCapability.ts} for why that is not the cockpit token in a URL).
   app.get('/artifacts/:id', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const params = readRequest(req, { params: IdParams });
+    if (!params.ok) return reply.code(400).send({ error: params.error });
+    const { id } = params.params;
     // Capability first, before the flag is even looked up: it is bound to this id,
     // and refusing early keeps the route from confirming which flag ids exist to a
     // caller that holds no capability. Skipped only when auth is off (no key).
@@ -281,9 +348,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // refuses when no fake provider is configured to receive the event.
     if (!isWorldInjectable(config.integrations))
       return reply.code(403).send({ error: 'event injection is only available with fake integrations' });
-    const event = req.body as InjectableEvent;
-    if (!event || typeof event.kind !== 'string') return reply.code(400).send({ error: 'invalid event' });
-    connector.inject(event);
+    const input = readRequest(req, { body: InjectEventBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    connector.inject(input.body);
     hub.broadcast({ type: 'world:changed' });
     // An injected event should provoke an immediate cycle.
     const report = await harness.runCycle('manual');
@@ -315,17 +382,20 @@ export async function buildApp(system: System): Promise<BuiltApp> {
 
   // Live dispatch controls (cap + pause). Changes are in-memory and ephemeral;
   // on success we broadcast so every open cockpit updates without a refetch.
+  // `cap` is only checked to *be* a number here: which numbers are a legal cap is
+  // `runtimeControl.apply`'s question, and it throws with the reason (caught
+  // below). Two answers to one question is what a `z.number().int().positive()`
+  // here would be.
+  const ControlBody = z.object({
+    cap: z.number({ invalid_type_error: 'cap must be a number' }).optional(),
+    paused: z.boolean({ invalid_type_error: 'paused must be a boolean' }).optional(),
+  });
   app.post('/api/control', async (req, reply) => {
-    const body = (req.body ?? {}) as { cap?: unknown; paused?: unknown };
-    const patch: { cap?: number; paused?: boolean } = {};
-    if (body.cap !== undefined) {
-      if (typeof body.cap !== 'number') return reply.code(400).send({ error: 'cap must be a number' });
-      patch.cap = body.cap;
-    }
-    if (body.paused !== undefined) {
-      if (typeof body.paused !== 'boolean') return reply.code(400).send({ error: 'paused must be a boolean' });
-      patch.paused = body.paused;
-    }
+    const input = readRequest(req, { body: ControlBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    // Handed over whole: `apply` reads an absent field as "leave it alone", which
+    // is exactly what the optional fields above parse to.
+    const patch = input.body;
     try {
       const next = system.runtimeControl.apply(patch);
       hub.broadcast({ type: 'control:changed', cap: next.cap, paused: next.paused });
@@ -339,12 +409,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // exclusion label on the PR through the provider. The next snapshot reflects
   // the label and the harness leaves a tagged PR alone. Provider-agnostic — it
   // routes through the same outbound seam as replies/merges.
+  const ExcludeBody = z.object({ excluded: requiredBoolean('excluded must be a boolean') });
   app.post('/api/prs/:number/exclude', async (req, reply) => {
-    const { number } = req.params as { number: string };
-    const prNumber = Number(number);
-    if (!Number.isInteger(prNumber)) return reply.code(400).send({ error: 'invalid PR number' });
-    const { excluded } = (req.body ?? {}) as { excluded?: unknown };
-    if (typeof excluded !== 'boolean') return reply.code(400).send({ error: 'excluded must be a boolean' });
+    const input = readRequest(req, { params: PrNumberParams, body: ExcludeBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { number: prNumber } = input.params;
+    const { excluded } = input.body;
     try {
       const result = await connector.setPrLabel({ prNumber, label: ignoreLabel, present: excluded });
       // Reflect the change immediately: refetch on the next state read, and run a
@@ -361,12 +431,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // "watch" adds the watch tag (and clears any ignore tag) and "ignore" adds the
   // ignore tag (and clears the watch tag) — the write pair keeps the two labels
   // mutually exclusive. Provider-agnostic through the same outbound seam.
+  const WatchBody = z.object({ watched: requiredBoolean('watched must be a boolean') });
   app.post('/api/issues/:number/watch', async (req, reply) => {
-    const { number } = req.params as { number: string };
-    const issueNumber = Number(number);
-    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
-    const { watched } = (req.body ?? {}) as { watched?: unknown };
-    if (typeof watched !== 'boolean') return reply.code(400).send({ error: 'watched must be a boolean' });
+    const input = readRequest(req, { params: IssueNumberParams, body: WatchBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { number: issueNumber } = input.params;
+    const { watched } = input.body;
     try {
       await connector.setIssueLabel({ number: issueNumber, label: watchLabel, present: watched });
       await connector.setIssueLabel({ number: issueNumber, label: ignoreLabel, present: !watched });
@@ -388,11 +458,20 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Rule `work-item-back-to-pickup` then reads the verdict on the next cycle, which is why `more_work`
   // runs one immediately — the operator's "no, there's more here" should bounce
   // the item back to pickup now rather than on the next heartbeat.
+  // `null` is a member of the verdict rather than an absence, because it is what
+  // clears the row — and absence is refused, since a body that names no verdict
+  // asks for nothing.
+  const ConclusionBody = z.object({
+    verdict: z.union([z.literal('done'), z.literal('more_work'), z.null()], {
+      errorMap: () => ({ message: 'verdict must be "done", "more_work" or null' }),
+    }),
+    note: optionalText('note'),
+  });
   app.post('/api/issues/:number/conclusion', async (req, reply) => {
-    const { number } = req.params as { number: string };
-    const issueNumber = Number(number);
-    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
-    const { verdict, note } = (req.body ?? {}) as { verdict?: unknown; note?: unknown };
+    const input = readRequest(req, { params: IssueNumberParams, body: ConclusionBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { number: issueNumber } = input.params;
+    const { verdict, note } = input.body;
     const originRef = issueConclusionOrigin(issueNumber);
     // null clears, returning the issue to whatever its plan derives (or to
     // undeclared) — a delete rather than a third stored verdict, so there is only
@@ -402,15 +481,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, verdict: null };
     }
-    if (verdict !== 'done' && verdict !== 'more_work') {
-      return reply.code(400).send({ error: 'verdict must be "done", "more_work" or null' });
-    }
     const conclusion = store.recordIssueConclusion({
       originRef,
       verdict,
       // An operator toggling from the cockpit has the row itself as context, so
       // unlike the tool a note is optional here; the default says who decided.
-      note: typeof note === 'string' && note.trim() ? note.trim() : 'Set by the operator from the cockpit.',
+      note: note ?? 'Set by the operator from the cockpit.',
       by: 'operator',
     });
     hub.broadcast({ type: 'world:changed' });
@@ -431,14 +507,17 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // also the state a crashed assayer leaves behind — the fail-open. The goal
   // fingerprint of an operator's verdict is taken from the issue as the harness
   // currently sees it, so it expires on the next edit exactly as an agent's does.
+  const AssayBody = z.object({
+    verdict: z.union([z.literal('workable'), z.literal('unclear'), z.null()], {
+      errorMap: () => ({ message: 'verdict must be "workable", "unclear" or null' }),
+    }),
+    summary: optionalText('summary'),
+  });
   app.post('/api/issues/:number/assay', async (req, reply) => {
-    const { number } = req.params as { number: string };
-    const issueNumber = Number(number);
-    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
-    const { verdict, summary } = (req.body ?? {}) as { verdict?: unknown; summary?: unknown };
-    if (verdict !== null && verdict !== 'workable' && verdict !== 'unclear') {
-      return reply.code(400).send({ error: 'verdict must be "workable", "unclear" or null' });
-    }
+    const input = readRequest(req, { params: IssueNumberParams, body: AssayBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { number: issueNumber } = input.params;
+    const { verdict, summary } = input.body;
     const originRef = issueConclusionOrigin(issueNumber);
     if (verdict === null) {
       store.clearAssay(originRef);
@@ -458,7 +537,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       verdict,
       // As on the conclusion and delivery routes, an operator has the item in front
       // of them, so the summary is optional and the default says who decided.
-      summary: typeof summary === 'string' && summary.trim() ? summary.trim() : 'Set by the operator from the cockpit.',
+      summary: summary ?? 'Set by the operator from the cockpit.',
       goalRef: goalFingerprint(issue.title, issue.body),
       by: 'operator',
     });
@@ -479,12 +558,15 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   //
   // Clearing is a delete rather than a stored "not delivered", so the absence of a
   // verdict keeps exactly one representation — `clearIssueConclusion`'s reason.
+  const DeliveredBody = z.object({
+    delivered: requiredBoolean('delivered must be a boolean'),
+    summary: optionalText('summary'),
+  });
   app.post('/api/issues/:number/delivered', async (req, reply) => {
-    const { number } = req.params as { number: string };
-    const issueNumber = Number(number);
-    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
-    const { delivered, summary } = (req.body ?? {}) as { delivered?: unknown; summary?: unknown };
-    if (typeof delivered !== 'boolean') return reply.code(400).send({ error: 'delivered must be a boolean' });
+    const input = readRequest(req, { params: IssueNumberParams, body: DeliveredBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { number: issueNumber } = input.params;
+    const { delivered, summary } = input.body;
     const originRef = issueConclusionOrigin(issueNumber);
     if (!delivered) {
       store.clearDelivery(originRef);
@@ -497,7 +579,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       originRef,
       // As on the conclusion route, an operator has the row in front of them, so
       // the summary is optional and the default says who decided.
-      summary: typeof summary === 'string' && summary.trim() ? summary.trim() : 'Marked delivered by the operator.',
+      summary: summary ?? 'Marked delivered by the operator.',
       by: 'operator',
     });
     hub.broadcast({ type: 'world:changed' });
@@ -518,11 +600,31 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Clearing is a delete rather than a stored "no shortfall", for
   // `clearIssueConclusion`'s reason. Writing one clears any standing delivery, in
   // the store — the two are opposite answers to one question.
+  // `cause` distinguishes three states and the schema has to keep all three
+  // apart: **absent** records a shortfall naming no cause (an unplanned issue
+  // that simply is not finished), an explicit **null** *clears* one, and a named
+  // cause records it. Absent and null are the same value in JSON and opposite
+  // acts here, which is why `.optional()` wraps the union rather than `null`
+  // standing in for "not given".
+  const ShortfallBody = z
+    .object({
+      cause: z
+        .union([z.enum(SHORTFALL_CAUSES), z.null()], {
+          errorMap: () => ({ message: `cause must be null or one of ${SHORTFALL_CAUSES.join(', ')}` }),
+        })
+        .optional(),
+      part: optionalText('part'),
+      summary: optionalText('summary'),
+    })
+    // The one cross-field rule on this surface: a `part` cause names which part.
+    .refine((body) => body.cause !== 'part' || body.part !== undefined, {
+      message: 'cause "part" needs the part slug in `part`',
+    });
   app.post('/api/issues/:number/shortfall', async (req, reply) => {
-    const { number } = req.params as { number: string };
-    const issueNumber = Number(number);
-    if (!Number.isInteger(issueNumber)) return reply.code(400).send({ error: 'invalid issue number' });
-    const body = (req.body ?? {}) as { cause?: unknown; part?: unknown; summary?: unknown };
+    const input = readRequest(req, { params: IssueNumberParams, body: ShortfallBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { number: issueNumber } = input.params;
+    const body = input.body;
     const originRef = issueConclusionOrigin(issueNumber);
     if (body.cause === null) {
       store.clearShortfall(originRef);
@@ -531,21 +633,13 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       await harness.runCycle('manual');
       return { ok: true, shortfall: null };
     }
-    if (body.cause !== undefined && !SHORTFALL_CAUSES.includes(body.cause as ShortfallCause))
-      return reply.code(400).send({ error: `cause must be null or one of ${SHORTFALL_CAUSES.join(', ')}` });
-    const cause = (body.cause as ShortfallCause | undefined) ?? null;
-    if (cause === 'part' && (typeof body.part !== 'string' || !body.part.trim()))
-      return reply.code(400).send({ error: 'cause "part" needs the part slug in `part`' });
     const shortfall = store.recordShortfall({
       originRef,
-      cause,
-      partSlug: typeof body.part === 'string' ? body.part.trim() : null,
+      cause: body.cause ?? null,
+      partSlug: body.part ?? null,
       // As on the conclusion and delivery routes, an operator has the row in front
       // of them, so the summary is optional and the default says who decided.
-      summary:
-        typeof body.summary === 'string' && body.summary.trim()
-          ? body.summary.trim()
-          : 'Marked as not delivered by the operator.',
+      summary: body.summary ?? 'Marked as not delivered by the operator.',
       by: 'operator',
     });
     hub.broadcast({ type: 'world:changed' });
@@ -565,7 +659,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Until that lands, the existing plan keeps scheduling: a replan that fails or is
   // never picked up leaves the issue exactly where it was, not parked.
   app.post('/api/plans/:id/replan', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
     const plan = store.getPlan(id);
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
     let next = store.setPlanStatus(id, 'planning');
@@ -603,7 +699,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // inside `abandonDecomposition`, so a decomposition with real work behind it is
   // refused here rather than silently collapsed.
   app.post('/api/plans/:id/abandon', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
     const plan = store.getPlan(id);
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
     const settled = abandonDecomposition(store, id, plan.originRef);
@@ -638,7 +736,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // scheduling the remaining parts, which is exactly what `/discuss/end`'s own 409
   // exists to prevent on the way back out.
   app.post('/api/plans/:id/discuss', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
     const plan = store.getPlan(id);
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
     if (plan.status !== 'awaiting_approval')
@@ -664,7 +764,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // flag alone leaves the plan in `planning`, which is precisely what rule `issue-plan`
   // dispatches from, so the next pulse would start another planner.
   app.post('/api/plans/:id/discuss/end', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
     const plan = store.getPlan(id);
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
     // Compare-and-set against `discussing`, the same discipline `releasePlan` and
@@ -697,19 +799,25 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // the dispatcher ahead of world-driven work — taking the next free slot, or
   // waiting in the queue when the fleet is at capacity. A cycle is kicked so a
   // job dispatches immediately when there's headroom.
+  const JobBody = z.object({
+    prompt: z
+      .string({ required_error: 'prompt required', invalid_type_error: 'prompt required' })
+      .trim()
+      .min(1, 'prompt required'),
+    title: optionalText('title'),
+    kind: z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) }).default('code'),
+    // `null` is accepted beside absence because the cockpit sends it for "no
+    // branch"; both mean the same thing to `createJob`.
+    branch: z
+      .union([z.string({ invalid_type_error: 'branch must be a string' }).trim(), z.null()])
+      .optional()
+      .transform((branch) => branch || null),
+  });
   app.post('/api/jobs', async (req, reply) => {
-    const body = (req.body ?? {}) as { prompt?: unknown; title?: unknown; kind?: unknown; branch?: unknown };
-    if (typeof body.prompt !== 'string' || body.prompt.trim() === '')
-      return reply.code(400).send({ error: 'prompt required' });
-    const kind = body.kind ?? 'code';
-    if (kind !== 'code' && kind !== 'desk') return reply.code(400).send({ error: "kind must be 'code' or 'desk'" });
-    if (body.title !== undefined && typeof body.title !== 'string')
-      return reply.code(400).send({ error: 'title must be a string' });
-    if (body.branch !== undefined && body.branch !== null && typeof body.branch !== 'string')
-      return reply.code(400).send({ error: 'branch must be a string' });
-    const prompt = body.prompt.trim();
-    const branch = (body.branch as string | undefined) ?? null;
-    const providedTitle = (typeof body.title === 'string' && body.title.trim()) || null;
+    const input = readRequest(req, { body: JobBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { prompt, kind, branch } = input.body;
+    const providedTitle = input.body.title ?? null;
 
     // A code blueprint enters the workflow through the *same* door as a ticket
     // (issue #198): when a tracker is configured, it is not dispatched onto a
@@ -776,15 +884,20 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // 0..n-1. It only re-orders the dispatcher's ranking — it never un-holds a held
   // item, and `manual-job` items stay first regardless — so it is safe to run a cycle
   // immediately so the new order takes effect and the next `/api/state` reflects it.
+  const UpNextOrderBody = z.object({
+    origins: z
+      .array(z.string({ invalid_type_error: 'origins must be an array of strings' }), {
+        required_error: 'origins must be an array of strings',
+        invalid_type_error: 'origins must be an array of strings',
+      })
+      // A duplicate origin is two ranks for one item, which is meaningless and
+      // would make the persisted order depend on insertion accident.
+      .refine((origins) => new Set(origins).size === origins.length, { message: 'origins must be unique' }),
+  });
   app.post('/api/upnext/order', async (req, reply) => {
-    const body = (req.body ?? {}) as { origins?: unknown };
-    if (!Array.isArray(body.origins) || body.origins.some((o) => typeof o !== 'string'))
-      return reply.code(400).send({ error: 'origins must be an array of strings' });
-    const origins = body.origins as string[];
-    // Guard against a duplicate origin: two ranks for one item is meaningless and
-    // would make the persisted order depend on insertion accident.
-    if (new Set(origins).size !== origins.length) return reply.code(400).send({ error: 'origins must be unique' });
-    store.setPriorityOverrides(origins);
+    const input = readRequest(req, { body: UpNextOrderBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    store.setPriorityOverrides(input.body.origins);
     hub.broadcast({ type: 'world:changed' });
     const report = await harness.runCycle('manual');
     return { ok: true, report };
@@ -793,8 +906,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Drop a still-queued job before it runs. A job already dispatched can't be
   // cancelled here — kill its agent instead.
   app.post('/api/jobs/:id/cancel', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const job = store.cancelJob(id);
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const job = store.cancelJob(input.params.id);
     if (!job) return reply.code(409).send({ error: 'job not found or no longer queued' });
     hub.broadcast({ type: 'world:changed' });
     return { ok: true, job };
@@ -806,19 +920,28 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // world-driven rule), which is a capability escalation rather than a
   // convenience. So `report_finding` files a claim, and this route is where a
   // human turns one into work. See src/mcp/findings.ts for the full argument.
+  const PromoteBody = z.object({
+    title: optionalText('title'),
+    prompt: optionalText('prompt'),
+    kind: z.enum(['code', 'desk'], { errorMap: () => ({ message: "kind must be 'code' or 'desk'" }) }).default('code'),
+  });
   app.post('/api/findings/:id/promote', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const params = readRequest(req, { params: IdParams });
+    if (!params.ok) return reply.code(400).send({ error: params.error });
+    const { id } = params.params;
     const finding = store.getFinding(id);
     if (!finding) return reply.code(404).send({ error: 'finding not found' });
     if (finding.status !== 'open') return reply.code(409).send({ error: `finding is already ${finding.status}` });
-    const body = (req.body ?? {}) as { prompt?: unknown; title?: unknown; kind?: unknown };
-    if (body.kind !== undefined && body.kind !== 'code' && body.kind !== 'desk')
-      return reply.code(400).send({ error: "kind must be 'code' or 'desk'" });
+    // Read after the store answers, not with the params: a finding that does not
+    // exist is a 404 whatever the body says, and the old route answered in that
+    // order.
+    const input = readRequest(req, { body: PromoteBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
     const derived = findingJobRequest(finding);
     // The operator may reword it before it runs; the derived text is only the default.
-    const title = (typeof body.title === 'string' && body.title.trim()) || derived.title;
-    const prompt = (typeof body.prompt === 'string' && body.prompt.trim()) || derived.prompt;
-    const job = store.createJob({ title, prompt, kind: (body.kind as 'code' | 'desk' | undefined) ?? 'code' });
+    const title = input.body.title ?? derived.title;
+    const prompt = input.body.prompt ?? derived.prompt;
+    const job = store.createJob({ title, prompt, kind: input.body.kind });
     // Resolve only after the job exists, so a failed create leaves the finding open.
     const resolved = store.resolveFinding(id, 'promoted', job.id);
     hub.broadcast({ type: 'world:changed' });
@@ -832,8 +955,14 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // dispatches one at the tracker so the problem can wait its turn with everything
   // else. Filing is asynchronous, so the finding lands on `filing` here and reaches
   // `filed` only when the agent reports the ticket back through `link_ticket`.
+  // The operator may reword the ticket's title before an agent files it; the
+  // derived one is only the default. Shared with `/api/work/:ref/file`, which
+  // offers the same override over its own derived title.
+  const TicketTitleBody = z.object({ title: optionalText('title') });
   app.post('/api/findings/:id/file', async (req, reply) => {
-    const { id } = req.params as { id: string };
+    const params = readRequest(req, { params: IdParams });
+    if (!params.ok) return reply.code(400).send({ error: params.error });
+    const { id } = params.params;
     const finding = store.getFinding(id);
     if (!finding) return reply.code(404).send({ error: 'finding not found' });
     if (finding.status !== 'open') return reply.code(409).send({ error: `finding is already ${finding.status}` });
@@ -845,11 +974,10 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       return reply
         .code(409)
         .send({ error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)' });
+    const input = readRequest(req, { body: TicketTitleBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
     const derived = findingTicketFields(finding, tracker);
-    const title =
-      (typeof (req.body as { title?: unknown })?.title === 'string' &&
-        ((req.body as { title?: string }).title ?? '').trim()) ||
-      derived.title;
+    const title = input.body.title ?? derived.title;
     // Rendered from the operator's template book, not built here: how a ticket
     // should be worded is exactly the sort of house style an override exists for.
     const prompt = system.prompts.render('finding-ticket', derived.vars);
@@ -868,8 +996,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // and a verbatim re-report is deduped onto the dismissed row rather than
   // reopening it.
   app.post('/api/findings/:id/dismiss', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const finding = store.resolveFinding(id, 'dismissed');
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const finding = store.resolveFinding(input.params.id, 'dismissed');
     if (!finding) return reply.code(409).send({ error: 'finding not found or already resolved' });
     hub.broadcast({ type: 'dirty' });
     return { ok: true, finding };
@@ -882,19 +1011,24 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // error state. One-way; an accidental dismissal is undone by the goal re-entering
   // production, which the floor draws as live work regardless.
   app.post('/api/issues/:number/floor-dismiss', async (req, reply) => {
-    const { number } = req.params as { number: string };
-    const n = Number(number);
-    if (!Number.isInteger(n)) return reply.code(400).send({ error: 'invalid issue number' });
-    const dismissed = store.dismissFloorCompletion(issueConclusionOrigin(n));
+    const input = readRequest(req, { params: IssueNumberParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const dismissed = store.dismissFloorCompletion(issueConclusionOrigin(input.params.number));
     if (!dismissed) return reply.code(409).send({ error: 'no retained completion to dismiss' });
     hub.broadcast({ type: 'dirty' });
     return { ok: true };
   });
 
+  const AnswerBody = z.object({
+    response: z
+      .string({ required_error: 'response required', invalid_type_error: 'response required' })
+      .min(1, 'response required'),
+  });
   app.post('/api/escalations/:id/answer', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { response } = (req.body ?? {}) as { response?: string };
-    if (!response) return reply.code(400).send({ error: 'response required' });
+    const input = readRequest(req, { params: IdParams, body: AnswerBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
+    const { response } = input.body;
     // An item carrying a pending proposal is a decision, not a question: free text
     // cannot be branched on, so answering one here would settle the inbox item
     // while leaving the proposal pending — which holds the rule that made it off
@@ -931,6 +1065,11 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     }
   });
 
+  // The reason an operator may attach to a "no" — a dismissal, a permission
+  // denial, a rejected proposal, an accepted one. Four routes take it and each
+  // wrote the same two checks; blank and absent mean the same thing to all four.
+  const NoteBody = z.object({ note: optionalText('note') });
+
   // Clear an alert without answering it. The gap this closes: an item raised
   // because an agent parked stays in "Needs you" even once the thing was handled
   // outside the harness, and the only way to empty it was to type a message nobody
@@ -944,10 +1083,10 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // everywhere (nothing goes out, nobody is left blocked) without a special case
   // that quietly does less than it says.
   app.post('/api/escalations/:id/dismiss', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { note } = (req.body ?? {}) as { note?: unknown };
-    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
-    const reason = typeof note === 'string' && note.trim() ? note.trim() : undefined;
+    const input = readRequest(req, { params: IdParams, body: NoteBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
+    const reason = input.body.note;
 
     const pending = store.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
     if (pending) {
@@ -976,11 +1115,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Resolves the blocked `--permission-prompt-tool` call with the operator's verdict
   // and settles the inbox item — the same live agent then continues (allow) or gets
   // the denial (deny), rather than being lost the way a config-and-restart was.
+  const PermissionBody = NoteBody.extend({ allow: requiredBoolean('allow (boolean) required') });
   app.post('/api/escalations/:id/permission', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { allow, note } = (req.body ?? {}) as { allow?: unknown; note?: unknown };
-    if (typeof allow !== 'boolean') return reply.code(400).send({ error: 'allow (boolean) required' });
-    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
+    const input = readRequest(req, { params: IdParams, body: PermissionBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { id } = input.params;
+    const { allow, note } = input.body;
     const decided = permissions.decide(id, allow, note);
     if (!decided) return reply.code(409).send({ error: 'no pending permission request for this escalation' });
     hub.broadcast({ type: 'dirty' });
@@ -992,10 +1132,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // and "the approved thing happens" that issue #109 found missing. The verdict
   // transition is one-way, so a double-click merges once and the second call 409s.
   app.post('/api/proposals/:id/accept', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { note } = (req.body ?? {}) as { note?: unknown };
-    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
-    const result = await proposals.accept(id, note);
+    const input = readRequest(req, { params: IdParams, body: NoteBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const result = await proposals.accept(input.params.id, input.body.note);
     if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
     hub.broadcast({ type: 'world:changed' });
     return { ok: result.outcome !== 'failed', ...result };
@@ -1004,10 +1143,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Reject it: nothing goes out, the reason is recorded, and the rule that
   // proposed it does not ask again (see `proposalHold`).
   app.post('/api/proposals/:id/reject', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { note } = (req.body ?? {}) as { note?: unknown };
-    if (note !== undefined && typeof note !== 'string') return reply.code(400).send({ error: 'note must be a string' });
-    const result = proposals.reject(id, note);
+    const input = readRequest(req, { params: IdParams, body: NoteBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const result = proposals.reject(input.params.id, input.body.note);
     if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
     hub.broadcast({ type: 'dirty' });
     return { ok: true, ...result };
@@ -1026,12 +1164,18 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   //
   // `:id` is the **task** id, not the agent id: a restart can orphan a task before
   // its agent was ever spawned, and the task is the only identity every candidate has.
+  // The verdict list lives in `crashRecovery.ts` and is checked through its own
+  // predicate, so this schema does not restate the three names — a second copy
+  // here is how the route and the desk come to disagree about what is on offer.
+  const RecoveryBody = z.object({
+    verdict: z.custom<RecoveryVerdict>(isRecoveryVerdict, {
+      message: "verdict must be 'restore', 'requeue' or 'remove'",
+    }),
+  });
   app.post('/api/recovery/:id', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { verdict } = (req.body ?? {}) as { verdict?: unknown };
-    if (!isRecoveryVerdict(verdict))
-      return reply.code(400).send({ error: "verdict must be 'restore', 'requeue' or 'remove'" });
-    const result = recovery.decide(id, verdict);
+    const input = readRequest(req, { params: IdParams, body: RecoveryBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const result = recovery.decide(input.params.id, input.body.verdict);
     if (!result.ok) return reply.code(409).send({ error: result.error });
     hub.broadcast({ type: 'world:changed' });
     const remaining = recovery.pendingCount();
@@ -1039,17 +1183,20 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, ...result.outcome, remaining, report };
   });
 
+  const RespondBody = z.object({
+    text: z.string({ required_error: 'text required', invalid_type_error: 'text required' }).min(1, 'text required'),
+  });
   app.post('/api/agents/:id/respond', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { text } = (req.body ?? {}) as { text?: string };
-    if (!text) return reply.code(400).send({ error: 'text required' });
-    const ok = agents.respond(id, text);
+    const input = readRequest(req, { params: IdParams, body: RespondBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const ok = agents.respond(input.params.id, input.body.text);
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
   app.post('/api/agents/:id/kill', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const ok = agents.kill(id);
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const ok = agents.kill(input.params.id);
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
@@ -1057,14 +1204,16 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // done sentinel. Stops the process and records the clean terminal (task `done`,
   // worktree reclaimed on the reap), unlike kill, which records an abandonment.
   app.post('/api/agents/:id/complete', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const ok = agents.complete(id);
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const ok = agents.complete(input.params.id);
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
   app.post('/api/agents/:id/interrupt', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const ok = agents.interrupt(id);
+    const input = readRequest(req, { params: IdParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const ok = agents.interrupt(input.params.id);
     return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
   });
 
@@ -1112,15 +1261,18 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // be set would make an accidental click permanent, which is the wrong shape for
   // a lens whose whole content is the harness's own guess about what matters.
   app.post('/api/work/:ref/ignore', WORK_RATE_LIMIT, async (req, reply) => {
-    const { ref } = req.params as { ref: string };
+    const input = readRequest(req, { params: RefParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { ref } = input.params;
     if (!store.listWorkNodes().some((n) => n.ref === ref)) return reply.code(404).send({ error: 'no such work item' });
     store.ignoreWorkItem(ref);
     return { ok: true };
   });
 
-  app.delete('/api/work/:ref/ignore', WORK_RATE_LIMIT, async (req) => {
-    const { ref } = req.params as { ref: string };
-    store.unignoreWorkItem(ref);
+  app.delete('/api/work/:ref/ignore', WORK_RATE_LIMIT, async (req, reply) => {
+    const input = readRequest(req, { params: RefParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    store.unignoreWorkItem(input.params.ref);
     return { ok: true };
   });
 
@@ -1132,7 +1284,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // until acted on, so a throttle would only set the rate at which a backlog
   // fills. See src/graph/unrecorded.ts for the full argument.
   app.post('/api/work/:ref/file', WORK_RATE_LIMIT, async (req, reply) => {
-    const { ref } = req.params as { ref: string };
+    const params = readRequest(req, { params: RefParams });
+    if (!params.ok) return reply.code(400).send({ error: params.error });
+    const { ref } = params.params;
     const node = store.listWorkNodes().find((n) => n.ref === ref);
     if (!node) return reply.code(404).send({ error: 'no such work item' });
 
@@ -1161,11 +1315,10 @@ export async function buildApp(system: System): Promise<BuiltApp> {
         .code(409)
         .send({ error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)' });
 
+    const input = readRequest(req, { body: TicketTitleBody });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
     const derived = workItemTicketFields(node, store.listWorkSubtree(ref), tracker);
-    const title =
-      (typeof (req.body as { title?: unknown })?.title === 'string' &&
-        ((req.body as { title?: string }).title ?? '').trim()) ||
-      derived.title;
+    const title = input.body.title ?? derived.title;
     // Rendered from the operator's template book, not built here: how a work item
     // should be worded is exactly the sort of house style an override exists for.
     const prompt = system.prompts.render('work-item-ticket', derived.vars);
@@ -1180,8 +1333,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   });
 
   app.get('/api/work/:ref', WORK_RATE_LIMIT, async (req, reply) => {
-    const { ref } = req.params as { ref: string };
-    const nodes = store.listWorkSubtree(ref);
+    const input = readRequest(req, { params: RefParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const nodes = store.listWorkSubtree(input.params.ref);
     if (nodes.length === 0) return reply.code(404).send({ error: 'no such work item' });
     // Resolved here rather than read off the snapshot's `refUrls`: that map is
     // built from the world, and a PR the graph remembers merging left the world
@@ -1213,9 +1367,10 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // The document itself, fetched when a reader opens it rather than shipped on
   // every poll. Null rather than 404 for a goal nobody wrote up: "no retrospective"
   // is an ordinary answer here, not a missing resource.
-  app.get('/api/retrospectives/:ref', async (req) => {
-    const { ref } = req.params as { ref: string };
-    return { retrospective: store.getRetrospective(ref) } satisfies RetrospectivePayload;
+  app.get('/api/retrospectives/:ref', async (req, reply) => {
+    const input = readRequest(req, { params: RefParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    return { retrospective: store.getRetrospective(input.params.ref) } satisfies RetrospectivePayload;
   });
 
   // The shared pad, whole and in the order it was written — the testimony the
@@ -1232,7 +1387,9 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // is a bad request rather than an empty one: "nobody has written here" and "that
   // is not a pad" are different answers, and only the first is silence.
   app.get('/api/scratchpads/:ref', async (req, reply) => {
-    const { ref } = req.params as { ref: string };
+    const input = readRequest(req, { params: RefParams });
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    const { ref } = input.params;
     const padRef = padOriginFor(ref);
     if (!padRef) return reply.code(400).send({ error: `${ref} is not inside an issue, so it names no scratchpad` });
     return { padRef, entries: store.listScratchEntries(padRef) } satisfies ScratchpadPayload;

@@ -70,6 +70,43 @@ supported local choice — but only while bound to loopback.
 An unanticipated throw in any route is caught by `setErrorHandler`, recorded to the error log (which
 mirrors it to stderr and streams it to the cockpit), and returned as a plain `500 {error}`.
 
+## Request validation
+
+Every route reads its path params and its body through a **zod schema**, via `readRequest`
+(`src/server/validation.ts`). Nothing on this surface asserts request input with a type assertion:
+`req.params as { number: string }` is a claim about data the server does not control, and the
+hand-written checks that used to follow one were written per route, so what a route validated was
+whatever its author remembered. `test/requestValidation.test.ts` asserts the absence structurally, on
+`app.ts`'s source, so a route added later cannot quietly reintroduce one. (`req.query` is out of
+scope on both of its sites — each asserts the value to `unknown` and tests its type before use, so
+the assertion claims nothing.)
+
+Four properties hold across the surface:
+
+- **A refusal is a value, never a throw.** `setErrorHandler` means "an unanticipated throw" and
+  records every one to the error log; a malformed request is neither unanticipated nor the harness's
+  fault, so routing it there would bury real faults under other people's typos. `readRequest` returns
+  `{ok: false, error}` and the route sends it as a `400 {error}`.
+- **Every field states its own refusal in full** — `cap must be a number`, `invalid issue number` —
+  because the 400 body joins the schema's messages and drops their field paths. A field declared
+  without a message refuses with zod's stock text, which names nothing.
+- **Params are read before the body**, so a request naming no such item is refused for that whatever
+  else its body got wrong. Where a route answers 404/409 off the store first (`/api/findings/:id/*`,
+  `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a finding
+  that does not exist is a 404 whatever the body says.
+- **A missing body is read as `{}`**, so a route whose fields are all optional may be called with no
+  body at all, while a required field still refuses by name.
+
+The shared shapes are `IssueNumberParams` / `PrNumberParams` (a `:number` path segment parsed with
+the same `Number` + `Number.isInteger` pair the seven hand-written copies used, so no path the old
+check accepted is now refused), `IdParams`, `RefParams`, `requiredBoolean` and `optionalText`.
+Optional text — a note, a summary, an operator's reworded title — is **trimmed, with blank read as
+absent**, which every route taking one already did before falling back to its own default.
+
+One tightening came with it: a **non-string** where text is expected is now a `400` naming the field,
+where several routes tested `typeof x === 'string'` inline and silently fell back to the default.
+Silently ignoring a field the caller clearly meant to set is the failure this is about.
+
 ## Routes
 
 ### `GET /api/state`
@@ -133,8 +170,11 @@ never approaches the ceiling.
 ### `POST /api/inject`
 
 **403 unless a `fake` provider is configured** — defence in depth, since the cockpit also hides the
-panel. 400 on a body with no string `kind`. Applies the event, broadcasts `world:changed`, runs a
-cycle, and returns `{ ok: true, report }`.
+panel. **400 (`invalid event`) unless the body matches the `InjectableEvent` variant its `kind`
+names** — not merely that a `kind` is present, which is all the old check tested while typing every
+other field as validated. The schema is annotated `z.ZodType<InjectableEvent>`, so a variant that
+drifts from the union in `connector.ts` fails `typecheck` rather than being caught by a cast. Applies
+the event, broadcasts `world:changed`, runs a cycle, and returns `{ ok: true, report }`.
 
 ### `POST /api/control`
 
