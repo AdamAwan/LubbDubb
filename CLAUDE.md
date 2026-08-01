@@ -1193,6 +1193,30 @@ base)` cuts a **new** branch from `config.defaultBranch` (threaded through `Exec
     table spends the failure budget partway through — which doesn't weaken it, because the path check
     precedes the throttle and an unguarded route would answer 200/404 instead.
     Tests: `test/cockpitAuth.test.ts`.
+- **`src/server/validation.ts` is how a route reads its input, and `readRequest` is the only way in.**
+  The routes hand-validated: 33 `req.params as {…}` and 17 `(req.body ?? {}) as {…}` assertions, zero
+  uses of zod, on the surface `auth.ts` calls "an RCE endpoint with repo write and a billing
+  side-effect" — while the dispatcher's actions, the plan document and every MCP tool argument have
+  been zod-checked with the rejection returned synchronously all along. **An `as` on request input is
+  a claim, not a check**, and every field the handler then reads is typed as though something
+  validated it; what actually held were per-route checks, so what a route validated was whatever its
+  author remembered. Five things to preserve:
+  - **A refusal is a value, not a throw.** `setErrorHandler` means _unanticipated_ and records to the
+    error log; a malformed request is neither, and routing it there buries real faults under other
+    people's typos. `readRequest` returns `{ok: false, error}` and the route sends the 400.
+  - **Every field states its own refusal in full** (`cap must be a number`), because `refusalMessage`
+    joins zod's messages and drops the field paths. A field declared without one refuses with stock
+    text that names nothing — so declaring a message is the convention, not a nicety.
+  - **Params before body, and split where a route answers off the store between them.**
+    `/api/findings/:id/promote` 404s an unknown finding whatever its body says; that ordering is the
+    old behaviour and is asserted.
+  - **`optionalText` trims and reads blank as absent** — every route taking a note/summary/title
+    already did, before falling back to its own default. The one deliberate tightening: a _non-string_
+    is now a 400 naming the field rather than being silently ignored.
+  - **The absence of assertions is asserted structurally** on `app.ts`'s source, so the 45th route
+    cannot reintroduce one. `req.query` is out of scope on both of its sites — each asserts to
+    `unknown` and tests the type before use, so the assertion claims nothing.
+    Tests: `test/requestValidation.test.ts`.
 
 ## Agent runtimes (the part that surprises people)
 
