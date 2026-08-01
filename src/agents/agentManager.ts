@@ -359,6 +359,38 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
+   * Resolve the caller a tool call arrived as, and run the call against it.
+   *
+   * **This is `token -> agent -> task -> origin`, and it is the step the whole
+   * tool channel rests on.** No write tool takes an agent, task or issue
+   * argument: the credential minted at spawn is what says who is calling, so an
+   * agent cannot name itself and therefore cannot address another's work. That
+   * guarantee is only as good as the resolution, and the resolution used to be
+   * copied into all eleven tool-facing methods below — so it held eleven times by
+   * inspection rather than once by construction. A twelfth method written from
+   * scratch, or one that dropped the `!task` half because its store call happens
+   * to take only an `agentId` (as {@link recordProgress}'s genuinely does), would
+   * have inherited nothing and failed nothing.
+   *
+   * A wrapper rather than a `resolveCaller()` a caller may forget to check: the
+   * body **cannot run** without a resolved `{agent, task}` in hand, and the
+   * refusal it returns is the same sentence for every tool.
+   *
+   * It deliberately does **not** check liveness — a finding, a note or a verdict
+   * cast on an agent's last breath is still true, and {@link ask} is the one
+   * caller that needs a live session, which it tests for itself before asking.
+   */
+  private withCaller<R extends { ok: true } | { ok: false; error: string }>(
+    agentId: string,
+    fn: (caller: { agent: Agent; task: Task }) => R,
+  ): R | { ok: false; error: string } {
+    const agent = this.store.getAgent(agentId);
+    const task = agent ? this.store.getTask(agent.taskId) : null;
+    if (!agent || !task) return { ok: false, error: 'agent has no task' };
+    return fn({ agent, task });
+  }
+
+  /**
    * Park an agent on a human question raised through the `escalate` MCP tool.
    *
    * This is the *same* transition the WAITING sentinel drives — deliberately, and
@@ -374,16 +406,15 @@ export class AgentManager extends EventEmitter {
    */
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string } {
     if (!this.sessions.has(agentId)) return { ok: false, error: 'agent is no longer live' };
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const question = ask.question.trim();
-    if (!question) return { ok: false, error: 'question must not be empty' };
-    this.handleWaiting(agentId, task, question, ask);
-    // Listeners are synchronous, so by now the inbox has either created the
-    // escalation or the whitelist answered and moved the agent back to running.
-    const open = this.store.listOpenEscalations().find((e) => e.agentId === agentId) ?? null;
-    return { ok: true, escalationId: open?.id ?? null };
+    return this.withCaller(agentId, ({ task }) => {
+      const question = ask.question.trim();
+      if (!question) return { ok: false, error: 'question must not be empty' };
+      this.handleWaiting(agentId, task, question, ask);
+      // Listeners are synchronous, so by now the inbox has either created the
+      // escalation or the whitelist answered and moved the agent back to running.
+      const open = this.store.listOpenEscalations().find((e) => e.agentId === agentId) ?? null;
+      return { ok: true, escalationId: open?.id ?? null };
+    });
   }
 
   /**
@@ -398,12 +429,11 @@ export class AgentManager extends EventEmitter {
    * is a durable note, and one filed on an agent's last breath is still true.
    */
   recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const { finding, created } = this.store.recordFinding(agentId, task.id, task.originRef, input);
-    this.emit('finding', { agentId, taskId: task.id, finding, created });
-    return { ok: true, finding };
+    return this.withCaller(agentId, ({ task }) => {
+      const { finding, created } = this.store.recordFinding(agentId, task.id, task.originRef, input);
+      this.emit('finding', { agentId, taskId: task.id, finding, created });
+      return { ok: true, finding };
+    });
   }
 
   /**
@@ -419,65 +449,64 @@ export class AgentManager extends EventEmitter {
    * Routed through the manager for the same reason as {@link recordFinding}: the
    * `finding` event is what repaints the cockpit now rather than next pulse.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   linkTicket(agentId: string, ticketRef: string): LinkTicketResult {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
-    const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
-    // A job is created for at most one of the two, so there is nothing to
-    // disambiguate — the credential resolves to a finding, a work-item filing, or
-    // neither, and neither is the whole access check.
-    const filing = jobId && !finding ? this.store.findWorkItemFilingByJobId(jobId) : null;
-    if (!finding && !filing) {
-      return {
-        ok: false,
-        error:
-          `link_ticket is only for a job dispatched to file a finding as a ticket, or to file a work ` +
-          `item for unrecorded work. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
-          `created from neither.`,
-      };
-    }
-
-    if (filing) {
-      // A work item is an issue in both trackers the harness reads (a GitHub issue,
-      // an Azure work item), and the graph stands a placeholder node up under that
-      // ref when the world never lists it — so guessing a node kind off a `pr:`
-      // ref is a case worth removing rather than answering.
-      if (!ticketRef.startsWith('issue:')) {
+    return this.withCaller(agentId, ({ task }): LinkTicketResult => {
+      const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
+      const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
+      // A job is created for at most one of the two, so there is nothing to
+      // disambiguate — the credential resolves to a finding, a work-item filing, or
+      // neither, and neither is the whole access check.
+      const filing = jobId && !finding ? this.store.findWorkItemFilingByJobId(jobId) : null;
+      if (!finding && !filing) {
         return {
           ok: false,
           error:
-            `A work item must be an issue ref like "issue:314"; got "${ticketRef}". If you filed ` +
-            'something else, file the work item too and link that.',
+            `link_ticket is only for a job dispatched to file a finding as a ticket, or to file a work ` +
+            `item for unrecorded work. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
+            `created from neither.`,
         };
       }
-      // Idempotence in the write, as below.
-      const linked = this.store.linkWorkItemFiling(filing.jobId, ticketRef);
+
+      if (filing) {
+        // A work item is an issue in both trackers the harness reads (a GitHub issue,
+        // an Azure work item), and the graph stands a placeholder node up under that
+        // ref when the world never lists it — so guessing a node kind off a `pr:`
+        // ref is a case worth removing rather than answering.
+        if (!ticketRef.startsWith('issue:')) {
+          return {
+            ok: false,
+            error:
+              `A work item must be an issue ref like "issue:314"; got "${ticketRef}". If you filed ` +
+              'something else, file the work item too and link that.',
+          };
+        }
+        // Idempotence in the write, as below.
+        const linked = this.store.linkWorkItemFiling(filing.jobId, ticketRef);
+        if (!linked) {
+          return {
+            ok: false,
+            error: `the work item for ${filing.targetRef} is ${filing.status}, not awaiting a ticket — nothing to link.`,
+          };
+        }
+        // No bespoke event: the Work panel is fetch-on-open, and the parent edge it
+        // draws is written by the next pulse's fold, not from here.
+        return { ok: true, filing: linked };
+      }
+
+      // Idempotence lives in the write, not in a read-then-check here.
+      const linked = this.store.linkFindingTicket(finding!.id, ticketRef);
       if (!linked) {
         return {
           ok: false,
-          error: `the work item for ${filing.targetRef} is ${filing.status}, not awaiting a ticket — nothing to link.`,
+          error: `finding ${finding!.id} is ${finding!.status}, not awaiting a ticket — nothing to link.`,
         };
       }
-      // No bespoke event: the Work panel is fetch-on-open, and the parent edge it
-      // draws is written by the next pulse's fold, not from here.
-      return { ok: true, filing: linked };
-    }
-
-    // Idempotence lives in the write, not in a read-then-check here.
-    const linked = this.store.linkFindingTicket(finding!.id, ticketRef);
-    if (!linked) {
-      return {
-        ok: false,
-        error: `finding ${finding!.id} is ${finding!.status}, not awaiting a ticket — nothing to link.`,
-      };
-    }
-    this.emit('finding', { agentId, taskId: task.id, finding: linked, created: false });
-    return { ok: true, finding: linked };
+      this.emit('finding', { agentId, taskId: task.id, finding: linked, created: false });
+      return { ok: true, finding: linked };
+    });
   }
 
   /**
@@ -490,18 +519,17 @@ export class AgentManager extends EventEmitter {
    * durable line on the agent's row, and one written on an agent's last breath is
    * the summary of the run.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally rather than by an `implements` clause: the tool layer
    * depends on the fleet, never the reverse. knip's member analysis is name-based, so
    * without the tag it reads as uncalled.
    */
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const notedAt = this.store.recordAgentNote(agentId, note);
-    this.emit('progress', { agentId, taskId: task.id, note, notedAt });
-    return { ok: true, notedAt };
+    return this.withCaller(agentId, ({ task }) => {
+      const notedAt = this.store.recordAgentNote(agentId, note);
+      this.emit('progress', { agentId, taskId: task.id, note, notedAt });
+      return { ok: true, notedAt };
+    });
   }
 
   /**
@@ -517,7 +545,7 @@ export class AgentManager extends EventEmitter {
    * {@link recordProgress}'s reason: the event is what lets a reader hear about
    * this now rather than on the next pulse.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   appendScratch(
@@ -525,21 +553,20 @@ export class AgentManager extends EventEmitter {
     note: string,
     topic: string | null,
   ): { ok: true; entry: ScratchEntry } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const target = padWriteTarget(task.originRef);
-    if (!target.ok) return { ok: false, error: target.error };
-    const entry = this.store.appendScratchEntry({
-      padRef: target.padRef,
-      authorOriginRef: task.originRef ?? target.padRef,
-      agentId,
-      taskId: task.id,
-      topic,
-      note,
+    return this.withCaller(agentId, ({ task }) => {
+      const target = padWriteTarget(task.originRef);
+      if (!target.ok) return { ok: false, error: target.error };
+      const entry = this.store.appendScratchEntry({
+        padRef: target.padRef,
+        authorOriginRef: task.originRef ?? target.padRef,
+        agentId,
+        taskId: task.id,
+        topic,
+        note,
+      });
+      this.emit('scratch', { agentId, taskId: task.id, entry });
+      return { ok: true, entry };
     });
-    this.emit('scratch', { agentId, taskId: task.id, entry });
-    return { ok: true, entry };
   }
 
   /**
@@ -550,16 +577,15 @@ export class AgentManager extends EventEmitter {
    * **refused** rather than handed an empty pad: an empty pad reads as "nobody has
    * written anything", which is a different and untrue answer.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   readScratch(agentId: string): { ok: true; padRef: string; entries: ScratchEntry[] } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const target = padWriteTarget(task.originRef);
-    if (!target.ok) return { ok: false, error: target.error };
-    return { ok: true, padRef: target.padRef, entries: this.store.listScratchEntries(target.padRef) };
+    return this.withCaller(agentId, ({ task }) => {
+      const target = padWriteTarget(task.originRef);
+      if (!target.ok) return { ok: false, error: target.error };
+      return { ok: true, padRef: target.padRef, entries: this.store.listScratchEntries(target.padRef) };
+    });
   }
 
   /**
@@ -571,7 +597,7 @@ export class AgentManager extends EventEmitter {
    * account of it. Idempotence is in the store's upsert: a second submission
    * revises one row.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   recordRetrospective(
@@ -579,20 +605,19 @@ export class AgentManager extends EventEmitter {
     summary: string,
     document: string,
   ): { ok: true; issueOrigin: string } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const origin = retroSubmitOrigin(task.originRef);
-    if (!origin.ok) return { ok: false, error: origin.error };
-    this.store.recordRetrospective({
-      originRef: origin.issueOrigin,
-      summary,
-      document,
-      agentId,
-      taskId: task.id,
+    return this.withCaller(agentId, ({ task }) => {
+      const origin = retroSubmitOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
+      this.store.recordRetrospective({
+        originRef: origin.issueOrigin,
+        summary,
+        document,
+        agentId,
+        taskId: task.id,
+      });
+      this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
+      return { ok: true, issueOrigin: origin.issueOrigin };
     });
-    this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
-    return { ok: true, issueOrigin: origin.issueOrigin };
   }
 
   /**
@@ -611,7 +636,7 @@ export class AgentManager extends EventEmitter {
    * now rather than on the next pulse. Like a finding it needs no *live* session
    * — a verdict cast on an agent's last breath is the one that matters most.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   recordConclusion(
@@ -619,21 +644,20 @@ export class AgentManager extends EventEmitter {
     verdict: IssueConclusionVerdict,
     note: string,
   ): { ok: true; conclusion: IssueConclusion } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const origin = conclusionOrigin(task.originRef);
-    if (!origin.ok) return { ok: false, error: origin.error };
-    const conclusion = this.store.recordIssueConclusion({
-      originRef: origin.originRef,
-      verdict,
-      note,
-      by: 'agent',
-      agentId,
-      taskId: task.id,
+    return this.withCaller(agentId, ({ task }) => {
+      const origin = conclusionOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
+      const conclusion = this.store.recordIssueConclusion({
+        originRef: origin.originRef,
+        verdict,
+        note,
+        by: 'agent',
+        agentId,
+        taskId: task.id,
+      });
+      this.emit('conclusion', { agentId, taskId: task.id, conclusion });
+      return { ok: true, conclusion };
     });
-    this.emit('conclusion', { agentId, taskId: task.id, conclusion });
-    return { ok: true, conclusion };
   }
 
   /**
@@ -663,7 +687,7 @@ export class AgentManager extends EventEmitter {
    * to discover, which is the `plan.json` lesson. Each names the alternative, the
    * way `conclusionOrigin` and `partConclusionOrigin` do.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   recordAssessment(
@@ -673,15 +697,66 @@ export class AgentManager extends EventEmitter {
     cause: ShortfallCause | null = null,
     part: string | null = null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const origin = assessmentOrigin(task.originRef);
-    if (!origin.ok) return { ok: false, error: origin.error };
+    return this.withCaller(agentId, ({ task }) => {
+      const origin = assessmentOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
 
-    if (verdict === 'delivered') {
-      this.store.recordDelivery({
+      if (verdict === 'delivered') {
+        this.store.recordDelivery({
+          originRef: origin.issueOrigin,
+          summary,
+          by: 'assessor',
+          agentId,
+          taskId: task.id,
+        });
+        this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+        return { ok: true, issueOrigin: origin.issueOrigin, verdict };
+      }
+
+      // The discriminator is the plan *row*, not its parts: a `single` verdict is a
+      // plan, and replanning one is the honest response to "one pull request was not
+      // enough" — it re-runs the planner, which may now decompose it.
+      const plan = this.store.listPlans().find((p) => p.originRef === origin.issueOrigin) ?? null;
+      const parts = plan ? liveParts(this.store.listPlanParts(plan.id)) : [];
+
+      if (plan === null && (cause === 'plan' || cause === 'part')) {
+        return {
+          ok: false,
+          error:
+            `cause "${cause}" says the delivery plan is what fell short, and ${origin.issueOrigin} has no plan — ` +
+            `there is nothing to re-plan and no part to follow up. If the issue's own goal is the problem, say ` +
+            `cause "goal". If the work simply is not finished, say more_work with no cause: the issue comes ` +
+            `back round for pickup with your summary against it.`,
+        };
+      }
+      if (plan !== null && cause === null) {
+        return {
+          ok: false,
+          error:
+            `${origin.issueOrigin} has a delivery plan, so a shortfall has to say what fell short or the harness ` +
+            `cannot route it: cause "plan" (the split itself is wrong, or a part is missing), "part" (one named ` +
+            `part missed its own scope — name it in \`part\`), or "goal" (the issue itself is wrong, and no ` +
+            `planner can fix that).`,
+        };
+      }
+      if (cause === 'part' && !parts.some((p) => p.slug === part)) {
+        return {
+          ok: false,
+          error:
+            parts.length === 0
+              ? `${origin.issueOrigin}'s plan declares no parts — it is a single-pull-request verdict, so there ` +
+                `is no "${part}" to follow up. Say cause "plan" if one pull request was not enough; the planner ` +
+                `will see your summary and may decompose it.`
+              : `"${part}" is not a live part of ${origin.issueOrigin}'s plan. Its parts are: ` +
+                `${parts.map((p) => p.slug).join(', ')}. Name one of those, or say cause "plan" if the part you ` +
+                `have in mind is one the decomposition is missing.`,
+        };
+      }
+
+      this.store.recordShortfall({
         originRef: origin.issueOrigin,
+        cause,
+        partSlug: part,
         summary,
         by: 'assessor',
         agentId,
@@ -689,59 +764,7 @@ export class AgentManager extends EventEmitter {
       });
       this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
       return { ok: true, issueOrigin: origin.issueOrigin, verdict };
-    }
-
-    // The discriminator is the plan *row*, not its parts: a `single` verdict is a
-    // plan, and replanning one is the honest response to "one pull request was not
-    // enough" — it re-runs the planner, which may now decompose it.
-    const plan = this.store.listPlans().find((p) => p.originRef === origin.issueOrigin) ?? null;
-    const parts = plan ? liveParts(this.store.listPlanParts(plan.id)) : [];
-
-    if (plan === null && (cause === 'plan' || cause === 'part')) {
-      return {
-        ok: false,
-        error:
-          `cause "${cause}" says the delivery plan is what fell short, and ${origin.issueOrigin} has no plan — ` +
-          `there is nothing to re-plan and no part to follow up. If the issue's own goal is the problem, say ` +
-          `cause "goal". If the work simply is not finished, say more_work with no cause: the issue comes ` +
-          `back round for pickup with your summary against it.`,
-      };
-    }
-    if (plan !== null && cause === null) {
-      return {
-        ok: false,
-        error:
-          `${origin.issueOrigin} has a delivery plan, so a shortfall has to say what fell short or the harness ` +
-          `cannot route it: cause "plan" (the split itself is wrong, or a part is missing), "part" (one named ` +
-          `part missed its own scope — name it in \`part\`), or "goal" (the issue itself is wrong, and no ` +
-          `planner can fix that).`,
-      };
-    }
-    if (cause === 'part' && !parts.some((p) => p.slug === part)) {
-      return {
-        ok: false,
-        error:
-          parts.length === 0
-            ? `${origin.issueOrigin}'s plan declares no parts — it is a single-pull-request verdict, so there ` +
-              `is no "${part}" to follow up. Say cause "plan" if one pull request was not enough; the planner ` +
-              `will see your summary and may decompose it.`
-            : `"${part}" is not a live part of ${origin.issueOrigin}'s plan. Its parts are: ` +
-              `${parts.map((p) => p.slug).join(', ')}. Name one of those, or say cause "plan" if the part you ` +
-              `have in mind is one the decomposition is missing.`,
-      };
-    }
-
-    this.store.recordShortfall({
-      originRef: origin.issueOrigin,
-      cause,
-      partSlug: part,
-      summary,
-      by: 'assessor',
-      agentId,
-      taskId: task.id,
     });
-    this.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
-    return { ok: true, issueOrigin: origin.issueOrigin, verdict };
   }
 
   /**
@@ -760,7 +783,7 @@ export class AgentManager extends EventEmitter {
    * nobody assayed, and `assayHold`'s first arm — the one that re-opens the
    * question when the ticket changes — could never fire for it.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   recordAssay(
@@ -768,23 +791,22 @@ export class AgentManager extends EventEmitter {
     verdict: GoalAssayVerdictName,
     summary: string,
   ): { ok: true; issueOrigin: string; verdict: GoalAssayVerdictName } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const origin = assayerOrigin(task.originRef);
-    if (!origin.ok) return { ok: false, error: origin.error };
+    return this.withCaller(agentId, ({ task }) => {
+      const origin = assayerOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
 
-    this.store.recordAssay({
-      originRef: origin.issueOrigin,
-      verdict,
-      summary,
-      goalRef: goalFingerprint(task.originTitle, task.originSummary),
-      by: 'assayer',
-      agentId,
-      taskId: task.id,
+      this.store.recordAssay({
+        originRef: origin.issueOrigin,
+        verdict,
+        summary,
+        goalRef: goalFingerprint(task.originTitle, task.originSummary),
+        by: 'assayer',
+        agentId,
+        taskId: task.id,
+      });
+      this.emit('assay', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+      return { ok: true, issueOrigin: origin.issueOrigin, verdict };
     });
-    this.emit('assay', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
-    return { ok: true, issueOrigin: origin.issueOrigin, verdict };
   }
 
   /**
@@ -797,7 +819,7 @@ export class AgentManager extends EventEmitter {
    * credential's task origin, so an agent cannot conclude a sibling's work, and
    * {@link partConclusionOrigin} refuses every other kind of caller by name.
    *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools.ts`), which this
+   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
    * class satisfies structurally; knip's member analysis is name-based.
    */
   recordPartOutcome(
@@ -806,29 +828,28 @@ export class AgentManager extends EventEmitter {
     summary: string,
     ref: string | null,
   ): { ok: true; part: PlanPart } | { ok: false; error: string } {
-    const agent = this.store.getAgent(agentId);
-    const task = agent ? this.store.getTask(agent.taskId) : null;
-    if (!agent || !task) return { ok: false, error: 'agent has no task' };
-    const origin = partConclusionOrigin(task.originRef);
-    if (!origin.ok) return { ok: false, error: origin.error };
-    const plan = this.store.getPlanByOrigin(issueOrigin(origin.issueNumber));
-    const part = plan ? this.store.listPlanParts(plan.id).find((p) => p.slug === origin.slug) : undefined;
-    if (!part) {
-      return { ok: false, error: `no part "${origin.slug}" is recorded for issue #${origin.issueNumber}.` };
-    }
-    // The store's guard does the work: only a part still being worked moves, so a
-    // second call merges nothing and a merged or retired part cannot be re-labelled.
-    const concluded = this.store.concludePlanPart(part.id, { kind, ref, summary });
-    if (!concluded) {
-      return {
-        ok: false,
-        error:
-          `part "${origin.slug}" is "${part.status}", and only a part being worked can be concluded. ` +
-          `A merged part already finished; a retired one was dropped by a replan.`,
-      };
-    }
-    this.emit('partOutcome', { agentId, taskId: task.id, part: concluded });
-    return { ok: true, part: concluded };
+    return this.withCaller(agentId, ({ task }) => {
+      const origin = partConclusionOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
+      const plan = this.store.getPlanByOrigin(issueOrigin(origin.issueNumber));
+      const part = plan ? this.store.listPlanParts(plan.id).find((p) => p.slug === origin.slug) : undefined;
+      if (!part) {
+        return { ok: false, error: `no part "${origin.slug}" is recorded for issue #${origin.issueNumber}.` };
+      }
+      // The store's guard does the work: only a part still being worked moves, so a
+      // second call merges nothing and a merged or retired part cannot be re-labelled.
+      const concluded = this.store.concludePlanPart(part.id, { kind, ref, summary });
+      if (!concluded) {
+        return {
+          ok: false,
+          error:
+            `part "${origin.slug}" is "${part.status}", and only a part being worked can be concluded. ` +
+            `A merged part already finished; a retired one was dropped by a replan.`,
+        };
+      }
+      this.emit('partOutcome', { agentId, taskId: task.id, part: concluded });
+      return { ok: true, part: concluded };
+    });
   }
 
   /**

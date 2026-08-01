@@ -1415,6 +1415,27 @@ preserve:
   `planOriginIssue` fencing was approximating over a transport that carried no identity. The token is
   a bearer credential — it lives in the 0600 launch-config file, never in argv — and is revoked on
   kill/interrupt/reap. `world_read` is the deliberate exception, argued in its own bullet below.
+  - **That resolution lives in exactly one place — `AgentManager.withCaller` (#220).** It was copied
+    into all eleven tool-facing methods, so the step the whole design rests on held eleven times by
+    inspection rather than once by construction; a twelfth written from scratch, or one that dropped
+    the `!task` half because its store call takes only an `agentId` (as `recordProgress`'s genuinely
+    does), inherits nothing and fails nothing. A **wrapper**, not a `resolveCaller()` a caller may
+    forget to check, and it does **not** check liveness — a verdict cast on an agent's last breath is
+    still true, and `ask` is the one caller needing a live session, which it tests for itself.
+  - **The tool layer is one module per tool** (`src/mcp/tools/`, assembled by `src/mcp/tools.ts`),
+    mirroring `src/dispatcher/rules/` for its reason: `buildTools` was one 844-line function whose
+    scope every tool shared. Three things carry it. A module **does not carry its own name** — the
+    registry is a `Record<McpToolName, ToolFactory>` over `MCP_TOOL_NAMES` and a factory returns
+    everything but the name, so a name with no module is a compile error and `names.ts`' "connected
+    server whose every call is refused" trap is shut at compile time rather than by an index literal.
+    `ToolContext` (`tools/context.ts`) is the **seam** — deps, the resolved `{agent, task}`, and the
+    `ok()` that folds in `_status` — which is what makes "the caller is on the context, never in
+    `args`" a property of the type. And the **origin fence is declared in the tool's own module**, of
+    which there is exactly one (`plan_submit`'s `plannerIssue`, pure): the others resolve something out
+    of the store as they refuse, so a tool-layer copy would be a second answer beside the write it
+    guards. Both halves are asserted structurally in `test/mcpChannel.test.ts` — no behavioural test
+    can fail on them, since a hand-rolled caller resolution works right up until it works for the
+    wrong agent.
 - **`world_read(kind, ref)` — the harness's view, read out of the store, never re-fetched.** Closes
   the `gh`-shell-out gap: an agent that needed a PR's CI status or review comments had to shell out,
   which is provider-coupled (nothing works under `azure`) and re-fetches what the pulse already holds.

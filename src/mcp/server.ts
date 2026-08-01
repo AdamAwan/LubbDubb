@@ -16,7 +16,8 @@ import {
   type ToolCallResult,
 } from './protocol.js';
 import { MCP_SERVER_ID } from './names.js';
-import { type AgentToolTarget, buildTools, type McpIdentity, type McpToolDeps } from './tools.js';
+import { buildTools } from './tools.js';
+import type { AgentToolTarget, McpIdentity, McpToolDeps } from './tools/context.js';
 
 /** Absolute path to the shipped stdio bridge `claude` spawns. See {@link file://./bridge.mjs}. */
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));

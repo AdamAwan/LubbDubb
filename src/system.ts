@@ -30,7 +30,7 @@ import { ProposalDesk } from './proposals/proposalDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { PrNamingDesk } from './prNamingDesk.js';
-import type { McpToolDeps } from './mcp/tools.js';
+import type { McpToolDeps } from './mcp/tools/context.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
 import { RecoveryDesk } from './agents/recoveryDesk.js';

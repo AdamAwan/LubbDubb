@@ -41,6 +41,16 @@ export const MCP_TOOL_NAMES = [
 ] as const;
 
 /**
+ * One advertised tool name.
+ *
+ * The tool registry in `tools.ts` is a `Record` over this, so the list above and
+ * the modules under `tools/` are checked against each other at compile time: a
+ * name here with no module fails to build, and a module cannot name itself
+ * something this list never granted.
+ */
+export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
+
+/**
  * The names as the permission layer sees them.
  *
  * **Why this is needed at all** (verified empirically against `claude` 2.1.220,
