@@ -25,8 +25,8 @@ export interface RunningConfigEntry {
   isDefault: boolean;
 }
 
-/** Named but unexported: it is reachable as `describeRunningConfig`'s return type. */
-interface RunningConfigGroup {
+/** Named for the wire contract (`src/wire.ts`), which the settings modal reads it through. */
+export interface RunningConfigGroup {
   title: string;
   entries: RunningConfigEntry[];
 }

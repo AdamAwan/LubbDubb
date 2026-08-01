@@ -18,7 +18,7 @@ interface OverlapWriter {
 }
 
 /** A path two or more concurrently-live code agents wrote. */
-interface FileOverlap {
+export interface FileOverlap {
   path: string;
   /** Most recent writer first. Always at least two. */
   writers: OverlapWriter[];

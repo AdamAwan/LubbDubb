@@ -80,9 +80,14 @@ function deltaOf(points: readonly number[]): number | null {
   return Math.round(((second - first) / first) * 100);
 }
 
-/** A decision that actually happened — a held or skipped one produced no work. */
+/**
+ * A decision that actually happened — a deferred, rejected or skipped one
+ * produced no work. `executed` is the whole of it: the `'ok'` arm this also read
+ * was never a {@link Decision} outcome, and only compiled while the cockpit's
+ * copy of the union was `string`.
+ */
 function landed(d: Decision): boolean {
-  return d.outcome === 'ok' || d.outcome === 'executed';
+  return d.outcome === 'executed';
 }
 
 function timesOf(rows: readonly { createdAt: string }[]): number[] {
@@ -102,7 +107,7 @@ export function productionReading(input: {
 
   const dispatchTimes = timesOf(decisions.filter((d) => landed(d) && d.action.type.startsWith('dispatch_')));
   const mergeTimes = timesOf(worldEvents.filter((e) => e.kind === 'pr_merged'));
-  const escalationTimes = timesOf(decisions.filter((d) => landed(d) && d.action.type === 'escalate'));
+  const escalationTimes = timesOf(decisions.filter((d) => landed(d) && d.action.type === 'escalate_to_human'));
 
   const build = (key: SeriesKey, label: string, times: number[]): ProductionSeries => {
     const points = bucketise(times, start, bucketMs);

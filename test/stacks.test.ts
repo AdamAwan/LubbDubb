@@ -220,7 +220,11 @@ test('the stack model has exactly one importer, and it is the snapshot', () => {
   const importers = srcFiles('src')
     .filter((f) => !f.startsWith('src/stacks/'))
     .filter((f) => readFileSync(f, 'utf8').includes('stacks/stack.js'));
-  assert.deepEqual(importers, ['src/server/app.ts'], 'the stack model must stay cockpit-only');
+  // `src/wire.ts` is the second, and it is a declaration: it names {@link Stack}
+  // as the shape `/api/state` ships and imports no value at all (asserted in
+  // `test/wireContract.test.ts`). The one importer that *builds* stacks is still
+  // the snapshot.
+  assert.deepEqual(importers, ['src/server/app.ts', 'src/wire.ts'], 'the stack model must stay cockpit-only');
 });
 
 /** Every `.ts` under a source directory, recursively, as repo-relative paths. */

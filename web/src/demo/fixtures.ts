@@ -1,12 +1,73 @@
 // Seed data for the GitHub Pages demo. This is the canned world the fake backend
 // (demoBackend.ts) starts from — a plausible slice of an engineering day so every
 // cockpit panel has something real-looking to render. No server, no network.
-import type { AppState } from '../types.js';
+import type { AppState, Issue, OpenPullRequest, PlanPart } from '../types.js';
 
 interface DemoSeed {
   state: AppState;
   // Per-agent scrollback the drawer seeds from before live deltas take over.
   transcripts: Record<string, string>;
+}
+
+/**
+ * The verdicts every issue on the wire carries, in the reading a goal nobody has
+ * judged gets. A helper rather than six more lines per fixture, and a helper
+ * rather than loosening the contract: the server folds all six for every issue,
+ * so a fixture omitting them was a demo world the real cockpit could not receive.
+ */
+type IssueSeed = Omit<Issue, 'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall'> &
+  Partial<Issue>;
+
+function demoIssue(seed: IssueSeed): Issue {
+  return {
+    conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
+    shortfall: null,
+    delivery: null,
+    assay: null,
+    retrospective: null,
+    scratchpad: null,
+    ...seed,
+  };
+}
+
+/**
+ * The CI verdict for a world that reports no per-check detail — which is what a
+ * `fake` provider always reports, so it is the demo's honest answer rather than a
+ * placeholder. `actionable` with three empty lists is missing detail, not a clean
+ * bill of health; see `classifyCiFailures`.
+ */
+const NO_CI_DETAIL: OpenPullRequest['ciVerdict'] = {
+  actionable: true,
+  dispatch: [],
+  escalate: [],
+  ignored: [],
+  urgent: false,
+};
+
+/** An open pull request as the wire ships one: the row plus its three verdicts. */
+type OpenPrSeed = Omit<OpenPullRequest, 'ciVerdict'> & Partial<OpenPullRequest>;
+
+function demoPr(seed: OpenPrSeed): OpenPullRequest {
+  return { ciVerdict: NO_CI_DETAIL, ...seed };
+}
+
+/**
+ * A plan part, with the five columns that are null until something concludes it.
+ * `demoIssue`'s reason: the store writes them for every row, so a fixture leaving
+ * them out was describing a part the reconciler could not have produced.
+ */
+type PartSeed = Omit<PlanPart, 'blockedReason' | 'expectedKind' | 'outcomeKind' | 'outcomeRef' | 'outcomeSummary'> &
+  Partial<PlanPart>;
+
+function demoPart(seed: PartSeed): PlanPart {
+  return {
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    blockedReason: null,
+    ...seed,
+  };
 }
 
 /** Build a fresh demo world. Timestamps are relative to now so the feed reads as "recent". */
@@ -34,7 +95,7 @@ export function buildDemoState(): DemoSeed {
     world: {
       takenAt: ago(0),
       pullRequests: [
-        {
+        demoPr({
           id: 'pr-142',
           number: 142,
           title: 'Add rate limiting to the ingest API',
@@ -46,11 +107,15 @@ export function buildDemoState(): DemoSeed {
           approved: false,
           mergeable: true,
           baseBranch: 'main',
-          mergeableState: 'unstable',
+          // GitHub's own `unstable` is folded to `unknown` by `normalizeMergeState`
+          // — the raw value never reaches the wire, which is what the demo used to
+          // claim it did.
+          mergeableState: 'unknown',
           merged: false,
           health: { blocked: true, reasons: ['CI failing', '1 unresolved comment'] },
-        },
-        {
+          attention: { status: 'harness', reasons: ['an agent is working this branch'] },
+        }),
+        demoPr({
           id: 'pr-141',
           number: 141,
           title: 'Cache PR merge commits between cycles',
@@ -63,8 +128,9 @@ export function buildDemoState(): DemoSeed {
           mergeableState: 'clean',
           merged: false,
           health: { blocked: false, reasons: [] },
-        },
-        {
+          attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
+        }),
+        demoPr({
           id: 'pr-139',
           number: 139,
           title: 'Azure DevOps connector: reviewer votes → approval',
@@ -79,8 +145,9 @@ export function buildDemoState(): DemoSeed {
           mergeableState: 'behind',
           merged: false,
           health: { blocked: true, reasons: ['behind base branch'] },
-        },
-        {
+          attention: { status: 'harness', reasons: ['queued for a base update'] },
+        }),
+        demoPr({
           id: 'pr-143',
           number: 143,
           title: '#212 [2/3] refactor(store): route reads through the interface',
@@ -93,8 +160,9 @@ export function buildDemoState(): DemoSeed {
           mergeableState: 'clean',
           merged: false,
           health: { blocked: false, reasons: [] },
-        },
-        {
+          attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
+        }),
+        demoPr({
           id: 'pr-144',
           number: 144,
           title: '#212 [3/3] refactor(store): route writes through the interface',
@@ -104,10 +172,11 @@ export function buildDemoState(): DemoSeed {
           approved: false,
           mergeable: true,
           baseBranch: 'issue/212/reads',
-          mergeableState: 'unstable',
+          mergeableState: 'unknown',
           merged: false,
           health: { blocked: true, reasons: ['CI failing on base PR #143'] },
-        },
+          attention: { status: 'elsewhere', reasons: ['waiting on PR #143'] },
+        }),
       ],
       // What the World panel used to lose: a PR you were watching disappears when
       // it leaves the open set, with nothing to say whether it landed.
@@ -138,7 +207,7 @@ export function buildDemoState(): DemoSeed {
         },
       ],
       issues: [
-        {
+        demoIssue({
           id: 'iss-208',
           number: 208,
           title: 'Retry transient GitHub 502s in the snapshotter',
@@ -147,8 +216,8 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: true, status: 'eligible', reasons: [] },
-        },
-        {
+        }),
+        demoIssue({
           id: 'iss-205',
           number: 205,
           title: 'Document the sentinel protocol in the README',
@@ -181,8 +250,8 @@ export function buildDemoState(): DemoSeed {
           // the write-up above was written from, and the demo's one readable pad.
           // The count and the age only; the trail is fetched on open.
           scratchpad: { entries: 4, updatedAt: new Date(Date.now() - 4_200_000).toISOString() },
-        },
-        {
+        }),
+        demoIssue({
           id: 'iss-212',
           number: 212,
           title: 'Move the store behind a repository interface',
@@ -193,8 +262,8 @@ export function buildDemoState(): DemoSeed {
           // A plan, not a PR: the chip reports plan progress rather than whichever
           // part happened to open a pull request last.
           pickup: { eligible: false, status: 'planning', reasons: ['1/3 parts merged'] },
-        },
-        {
+        }),
+        demoIssue({
           id: 'iss-210',
           number: 210,
           title: 'Explore a Slack notification channel',
@@ -203,13 +272,13 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
-        },
+        }),
         // A watched ticket the harness has deliberately not started on: the goal
         // assay could not work out what to do from the description, so pickup is
         // held and the row carries both overrides plus a way into the question the
         // harness asked on the thread (#171). The one demo state where the harness
         // has spoken to somebody outside the cockpit.
-        {
+        demoIssue({
           id: 'iss-219',
           number: 219,
           title: 'Make the queue smarter',
@@ -236,8 +305,8 @@ export function buildDemoState(): DemoSeed {
             decidedAt: ago(52),
             commentRef: 'issue:219:comment:8402',
           },
-        },
-        {
+        }),
+        demoIssue({
           id: 'iss-231',
           number: 231,
           title: 'Split the cockpit auth guard from the artifact route',
@@ -246,13 +315,13 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'planning', reasons: ['0/3 parts merged'] },
-        },
+        }),
       ],
     },
     tasks: [
       {
         id: 'task-a1',
-        kind: 'fix_ci',
+        kind: 'code',
         title: 'Fix failing CI on PR #142',
         prompt: 'CI is red on feature/rate-limit. Investigate the failing test and push a fix.',
         branch: 'feature/rate-limit',
@@ -260,14 +329,14 @@ export function buildDemoState(): DemoSeed {
         originTitle: 'Add token-bucket rate limiting to the ingest API',
         originSummary: 'PR #142 on branch feature/rate-limit · CI failing',
         dispatchReason: 'PR #142 has failing CI and no agent is on it.',
-        status: 'active',
+        status: 'running',
         agentId: 'agent-a1',
         createdAt: ago(8),
         updatedAt: ago(1),
       },
       {
         id: 'task-a2',
-        kind: 'address_review',
+        kind: 'code',
         title: 'Rebase PR #139 on main',
         prompt: 'PR #139 is behind base. Rebase on main and resolve any conflicts.',
         branch: 'feature/azure-approval',
@@ -275,14 +344,14 @@ export function buildDemoState(): DemoSeed {
         originTitle: 'Map Azure DevOps reviewer votes to approval state',
         originSummary: 'PR #139 on branch feature/azure-approval · behind main',
         dispatchReason: 'PR #139 is behind main and no agent is on it.',
-        status: 'active',
+        status: 'running',
         agentId: 'agent-a2',
         createdAt: ago(4),
         updatedAt: ago(2),
       },
       {
         id: 'task-a0',
-        kind: 'implement_issue',
+        kind: 'code',
         title: 'Document sentinel protocol (#205)',
         prompt: 'Add a README section describing the sentinel protocol.',
         branch: 'feature/merge-cache',
@@ -393,7 +462,7 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     planParts: [
-      {
+      demoPart({
         id: 'plan-212:schema',
         planId: 'plan-212',
         slug: 'schema',
@@ -410,8 +479,8 @@ export function buildDemoState(): DemoSeed {
         taskId: null,
         createdAt: ago(90),
         updatedAt: ago(30),
-      },
-      {
+      }),
+      demoPart({
         id: 'plan-212:reads',
         planId: 'plan-212',
         slug: 'reads',
@@ -428,8 +497,8 @@ export function buildDemoState(): DemoSeed {
         taskId: null,
         createdAt: ago(90),
         updatedAt: ago(6),
-      },
-      {
+      }),
+      demoPart({
         id: 'plan-212:writes',
         planId: 'plan-212',
         slug: 'writes',
@@ -446,10 +515,10 @@ export function buildDemoState(): DemoSeed {
         taskId: null,
         createdAt: ago(90),
         updatedAt: ago(6),
-      },
+      }),
       // plan-231's three parts — all `ready`, none dispatched, because the plan
       // itself is still awaiting approval (rule `plan-part` queues them `unapproved`).
-      {
+      demoPart({
         id: 'plan-231:signer',
         planId: 'plan-231',
         slug: 'signer',
@@ -465,8 +534,8 @@ export function buildDemoState(): DemoSeed {
         taskId: null,
         createdAt: ago(12),
         updatedAt: ago(12),
-      },
-      {
+      }),
+      demoPart({
         id: 'plan-231:route',
         planId: 'plan-231',
         slug: 'route',
@@ -482,8 +551,8 @@ export function buildDemoState(): DemoSeed {
         taskId: null,
         createdAt: ago(12),
         updatedAt: ago(12),
-      },
-      {
+      }),
+      demoPart({
         id: 'plan-231:mint',
         planId: 'plan-231',
         slug: 'mint',
@@ -500,9 +569,19 @@ export function buildDemoState(): DemoSeed {
         taskId: null,
         createdAt: ago(12),
         updatedAt: ago(12),
-      },
+      }),
     ],
     jobs: [],
+    // Every list `/api/state` always ships, empty here because the demo has no
+    // story for them: an orphan-free boot, no goal retained past its issue, and
+    // no agent that surfaced an artifact or wrote a file. Present rather than
+    // omitted because the wire sends them unconditionally — a demo that left them
+    // out was a payload the real cockpit never receives.
+    recovery: [],
+    floorCompletions: [],
+    flags: [],
+    artifactUrls: {},
+    files: [],
     // A path two live agents are both editing from different branches. Neither
     // dispatch gate is violated — the collision only exists inside the worktrees,
     // which is the whole point of detecting it off what was actually written.
@@ -606,6 +685,7 @@ export function buildDemoState(): DemoSeed {
         cwd: '/work/lubbdubb-142',
         pid: 4821,
         waitingReason: null,
+        sessionId: null,
         startedAt: ago(8),
         endedAt: null,
         costUsd: 0.84,
@@ -623,6 +703,7 @@ export function buildDemoState(): DemoSeed {
         cwd: '/work/lubbdubb-139',
         pid: 4899,
         waitingReason: 'Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?',
+        sessionId: null,
         startedAt: ago(4),
         endedAt: null,
         costUsd: 0.31,
@@ -642,6 +723,7 @@ export function buildDemoState(): DemoSeed {
         cwd: '/work/lubbdubb-205',
         pid: null,
         waitingReason: null,
+        sessionId: null,
         startedAt: ago(40),
         endedAt: ago(22),
         costUsd: 2.17,
@@ -740,7 +822,7 @@ export function buildDemoState(): DemoSeed {
       },
       {
         id: 'esc-1',
-        type: 'agent_waiting',
+        type: 'answer_question',
         status: 'open',
         prompt: 'Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?',
         context: {
@@ -764,33 +846,37 @@ export function buildDemoState(): DemoSeed {
         outcome: 'executed',
         detail: 'Drafted a reply and escalated for approval (confidence 0.62 below threshold)',
         rule: null,
+        admission: null,
         createdAt: ago(1),
       },
       {
         id: 'dec-3',
         cycleId: 'cycle-102',
-        action: { type: 'dispatch_fix_ci', reason: 'PR #142 CI is failing' },
-        outcome: 'ok',
+        action: { type: 'dispatch_code_agent', reason: 'PR #142 CI is failing' },
+        outcome: 'executed',
         detail: 'Dispatched agent onto feature/rate-limit',
         rule: 'pr-ci-failing',
+        admission: null,
         createdAt: ago(8),
       },
       {
         id: 'dec-2',
         cycleId: 'cycle-101',
-        action: { type: 'escalate', reason: 'agent parked on a human' },
-        outcome: 'ok',
+        action: { type: 'escalate_to_human', reason: 'agent parked on a human' },
+        outcome: 'executed',
         detail: 'Rebase conflict on PR #139 needs a call',
         rule: 'pr-base-update',
+        admission: null,
         createdAt: ago(2),
       },
       {
         id: 'dec-1',
         cycleId: 'cycle-98',
         action: { type: 'merge_pr', reason: 'PR #141 is merge-ready' },
-        outcome: 'held',
+        outcome: 'deferred',
         detail: 'auto-merge disabled — leaving for a human',
         rule: 'pr-merge-ready',
+        admission: null,
         createdAt: ago(12),
       },
     ],

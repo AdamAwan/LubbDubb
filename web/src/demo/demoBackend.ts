@@ -9,9 +9,13 @@
 import type {
   AppState,
   Decision,
+  Issue,
+  Job,
+  OpenPullRequest,
   PromptTemplateView,
   RunningConfigGroup,
   Proposal,
+  Task,
   UnrecordedWorkView,
   WorkNodeView,
   WorldEvent,
@@ -56,6 +60,50 @@ function applyWatch(labels: string[] | undefined, config: WatchConfig, watched: 
   return [...set];
 }
 
+/** The dispatch action a kind of agent is sent as — the executor's two, by name. */
+function dispatchAction(kind: Task['kind']): Decision['action']['type'] {
+  return kind === 'desk' ? 'dispatch_desk_agent' : 'dispatch_code_agent';
+}
+
+/**
+ * The three statuses `isActiveTask` calls outstanding, mirrored here because the
+ * demo has no server to ask. It used to compare against `'active'`, which is not
+ * a `TaskStatus` at all — so killing or completing an agent left its task row
+ * saying `running` forever.
+ */
+function isLiveTask(task: Task): boolean {
+  return task.status === 'queued' || task.status === 'running' || task.status === 'waiting';
+}
+
+/**
+ * A pull request injected into the demo world, with the three verdicts the wire
+ * always carries on an open one. `attention` is the injected PR's honest reading:
+ * the demo dispatches an agent for it in the same breath.
+ */
+function injectedPr(pr: Omit<OpenPullRequest, 'attention' | 'ciVerdict'>): OpenPullRequest {
+  return {
+    ...pr,
+    attention: { status: 'harness', reasons: ['queued for dispatch'] },
+    ciVerdict: { actionable: true, dispatch: [], escalate: [], ignored: [], urgent: false },
+  };
+}
+
+/** An injected issue, with the verdicts nothing has yet cast about its goal. */
+function injectedIssue(
+  issue: Omit<Issue, 'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'pickup'>,
+): Issue {
+  return {
+    ...issue,
+    pickup: { eligible: true, status: 'eligible', reasons: [] },
+    conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
+    shortfall: null,
+    delivery: null,
+    assay: null,
+    retrospective: null,
+    scratchpad: null,
+  };
+}
+
 class DemoServer {
   private seed = buildDemoState();
   private state: AppState = this.seed.state;
@@ -82,7 +130,7 @@ class DemoServer {
 
   async pulse(): Promise<{ ok: true }> {
     // A heartbeat with nothing new to do — just advance the clock + audit it.
-    this.addDecision('heartbeat', 'ok', 'nothing to dispatch this cycle', undefined, 'idle');
+    this.addDecision('no_op', 'executed', 'nothing to dispatch this cycle', undefined, 'idle');
     this.emit({ type: 'cycle:end', cycleId: this.id('cycle'), rationale: 'manual pulse' });
     this.dirty();
     return { ok: true };
@@ -113,7 +161,7 @@ class DemoServer {
         agent.waitingReason = null;
         this.append(agent.id, `\n> human: ${response}\nresuming …`);
       }
-      this.addDecision('answer', 'ok', `answered escalation for ${esc.context.taskTitle ?? esc.id}`);
+      this.addDecision('respond_to_agent', 'executed', `answered escalation for ${esc.context.taskTitle ?? esc.id}`);
     }
     this.dirty();
     return { ok: true };
@@ -132,7 +180,7 @@ class DemoServer {
       esc.answeredAt = new Date().toISOString();
       const agent = esc.agentId ? this.state.agents.find((a) => a.id === esc.agentId) : null;
       if (agent) agent.resumedAt = null;
-      this.addDecision('answer', 'ok', `dismissed escalation for ${esc.context.taskTitle ?? esc.id}`);
+      this.addDecision('respond_to_agent', 'executed', `dismissed escalation for ${esc.context.taskTitle ?? esc.id}`);
     }
     this.dirty();
     return { ok: true, dismissedAs: 'cleared' };
@@ -144,7 +192,7 @@ class DemoServer {
       esc.status = 'answered';
       esc.response = allow ? 'Allowed' : `Denied${note ? `: ${note}` : ''}`;
       esc.answeredAt = new Date().toISOString();
-      this.addDecision('answer', 'ok', `${allow ? 'allowed' : 'denied'} a permission request`);
+      this.addDecision('respond_to_agent', 'executed', `${allow ? 'allowed' : 'denied'} a permission request`);
     }
     this.dirty();
     return { ok: true, allowed: allow };
@@ -180,7 +228,7 @@ class DemoServer {
       if (excluded) labels.add(tag);
       else labels.delete(tag);
       pr.labels = [...labels];
-      this.addDecision('pr_label_set', 'ok', `${excluded ? 'tagged' : 'untagged'} PR #${prNumber} (${tag})`);
+      this.addDecision('no_op', 'executed', `${excluded ? 'tagged' : 'untagged'} PR #${prNumber} (${tag})`);
       this.dirty();
     }
     return { ok: true, excluded };
@@ -198,7 +246,7 @@ class DemoServer {
         verdict === null
           ? { verdict: 'undeclared', by: null, note: '', at: null }
           : { verdict, by: 'operator', note: 'Set by the operator from the cockpit.', at: new Date().toISOString() };
-      this.addDecision('issue_conclusion_set', 'ok', `issue #${issueNumber} → ${verdict ?? 'unconcluded'}`);
+      this.addDecision('no_op', 'executed', `issue #${issueNumber} → ${verdict ?? 'unconcluded'}`);
       this.dirty();
     }
     return { ok: true };
@@ -218,10 +266,11 @@ class DemoServer {
           : {
               verdict,
               by: 'operator',
+              commentRef: null,
               summary: 'Set by the operator from the cockpit.',
               decidedAt: new Date().toISOString(),
             };
-      this.addDecision('issue_assay_set', 'ok', `issue #${issueNumber} → ${verdict ?? 'unassayed'}`);
+      this.addDecision('no_op', 'executed', `issue #${issueNumber} → ${verdict ?? 'unassayed'}`);
       this.dirty();
     }
     return { ok: true };
@@ -239,7 +288,7 @@ class DemoServer {
     const target = present ?? forgotten;
     if (target?.completion) {
       target.completion = { ...target.completion, dismissed: true };
-      this.addDecision('floor_completion_dismissed', 'ok', `issue #${issueNumber} dismissed from the floor`);
+      this.addDecision('no_op', 'executed', `issue #${issueNumber} dismissed from the floor`);
       this.dirty();
     }
     return { ok: true };
@@ -250,14 +299,9 @@ class DemoServer {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
       issue.labels = applyWatch(issue.labels, this.state.config, watched);
-      this.addDecision('issue_label_set', 'ok', `${watched ? 'watching' : 'ignoring'} issue #${issueNumber}`);
+      this.addDecision('no_op', 'executed', `${watched ? 'watching' : 'ignoring'} issue #${issueNumber}`);
       if (watched)
-        this.trySpawn(
-          'implement_issue',
-          `Implement issue #${issueNumber}`,
-          `issue/${issueNumber}`,
-          `issue:${issueNumber}`,
-        );
+        this.trySpawn('code', `Implement issue #${issueNumber}`, `issue/${issueNumber}`, `issue:${issueNumber}`);
       this.dirty();
     }
     return { ok: true, watched };
@@ -274,7 +318,7 @@ class DemoServer {
     if (plan) {
       plan.status = 'planning';
       plan.updatedAt = new Date().toISOString();
-      this.addDecision('dispatch_code', 'ok', `replanning ${plan.title}`, 'issue-plan');
+      this.addDecision('dispatch_code_agent', 'executed', `replanning ${plan.title}`, 'issue-plan');
       this.dirty();
     }
     return { ok: true };
@@ -311,8 +355,8 @@ class DemoServer {
     if (plan && !plan.discussing) {
       plan.discussing = true;
       plan.updatedAt = new Date().toISOString();
-      this.trySpawn('discuss_plan', `Discuss ${plan.title}`, null, `${plan.originRef}:plan`);
-      this.addDecision('dispatch_desk', 'ok', `discussing ${plan.title}`, 'issue-plan');
+      this.trySpawn('desk', `Discuss ${plan.title}`, null, `${plan.originRef}:plan`);
+      this.addDecision('dispatch_desk_agent', 'executed', `discussing ${plan.title}`, 'issue-plan');
       this.dirty();
     }
     return { ok: true };
@@ -442,10 +486,10 @@ class DemoServer {
       agent.endedAt = new Date().toISOString();
       agent.waitingReason = null;
       const task = this.state.tasks.find((t) => t.id === agent.taskId);
-      if (task && task.status === 'active') task.status = 'interrupted';
+      if (task && isLiveTask(task)) task.status = 'interrupted';
       // Any open escalation from this agent is moot now.
       for (const e of this.state.escalations) if (e.agentId === id && e.status === 'open') e.status = 'dismissed';
-      this.addDecision('kill', 'ok', `killed ${id}`);
+      this.addDecision('no_op', 'executed', `killed ${id}`);
       this.dirty();
     }
     return { ok: true };
@@ -463,9 +507,9 @@ class DemoServer {
       agent.endedAt = new Date().toISOString();
       agent.waitingReason = null;
       const task = this.state.tasks.find((t) => t.id === agent.taskId);
-      if (task && task.status === 'active') task.status = 'done';
+      if (task && isLiveTask(task)) task.status = 'done';
       for (const e of this.state.escalations) if (e.agentId === id && e.status === 'open') e.status = 'dismissed';
-      this.addDecision('no_op', 'ok', `marked ${id} done`);
+      this.addDecision('no_op', 'executed', `marked ${id} done`);
       this.dirty();
     }
     return { ok: true };
@@ -530,8 +574,8 @@ class DemoServer {
    * two columns the server records, so the demo's log renders like a real one.
    */
   private addDecision(
-    type: string,
-    outcome: string,
+    type: Decision['action']['type'],
+    outcome: Decision['outcome'],
     detail: string,
     reason?: string,
     rule?: string,
@@ -540,7 +584,7 @@ class DemoServer {
     const dec: Decision = {
       id: this.id('dec'),
       cycleId: this.id('cycle'),
-      action: reason ? { type, reason } : { type },
+      action: { type, reason: reason ?? detail },
       outcome,
       detail,
       rule: rule ?? null,
@@ -559,7 +603,7 @@ class DemoServer {
   // Spawn an agent for a piece of work — honouring pause + the concurrency cap,
   // so the FleetControl and pause button visibly matter in the demo.
   private trySpawn(
-    kind: string,
+    kind: Task['kind'],
     title: string,
     branch: string | null,
     originRef: string | null,
@@ -571,15 +615,15 @@ class DemoServer {
     const prNumber = originRef?.startsWith('pr:') ? Number(originRef.slice(3)) : NaN;
     const taggedPr = this.state.world.pullRequests.find((p) => p.number === prNumber);
     if (taggedPr && (taggedPr.labels ?? []).includes(this.state.config.ignoreLabel)) {
-      this.addDecision(`dispatch_${kind}`, 'skipped', `PR #${prNumber} is ignored — held ${title}`, 'pr excluded');
+      this.addDecision(dispatchAction(kind), 'skipped', `PR #${prNumber} is ignored — held ${title}`, 'pr excluded');
       return null;
     }
     if (this.state.control.paused) {
-      this.addDecision(`dispatch_${kind}`, 'deferred', `paused — held ${title}`, 'dispatch paused');
+      this.addDecision(dispatchAction(kind), 'deferred', `paused — held ${title}`, 'dispatch paused');
       return null;
     }
     if (this.liveCount() >= this.state.control.cap) {
-      this.addDecision(`dispatch_${kind}`, 'deferred', `at cap (${this.state.control.cap}) — held ${title}`);
+      this.addDecision(dispatchAction(kind), 'deferred', `at cap (${this.state.control.cap}) — held ${title}`);
       return null;
     }
     const taskId = this.id('task');
@@ -596,7 +640,7 @@ class DemoServer {
         originTitle: title,
         originSummary: null,
         dispatchReason: null,
-        status: 'active',
+        status: 'running',
         agentId,
         createdAt: nowIso,
         updatedAt: nowIso,
@@ -611,6 +655,7 @@ class DemoServer {
         cwd: `/work/lubbdubb-${this.seq}`,
         pid: 5000 + (this.seq % 900),
         waitingReason: null,
+        sessionId: null,
         startedAt: nowIso,
         endedAt: null,
         costUsd: null,
@@ -626,7 +671,7 @@ class DemoServer {
       ...this.state.agents,
     ];
     this.transcripts.set(agentId, `$ claude ${kind}\nPicking up: ${title}`);
-    this.addDecision(`dispatch_${kind}`, 'ok', `dispatched agent for ${title}`);
+    this.addDecision(dispatchAction(kind), 'executed', `dispatched agent for ${title}`);
     return taskId;
   }
 
@@ -644,14 +689,14 @@ class DemoServer {
     const nowIso = new Date().toISOString();
     const id = this.id('job');
     const branch = input.branch ?? (kind === 'code' ? `job/${id}` : null);
-    const job = {
+    const job: Job = {
       id,
       title,
       prompt,
       kind,
       branch,
       status: 'queued',
-      taskId: null as string | null,
+      taskId: null,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
@@ -672,7 +717,7 @@ class DemoServer {
     if (job && job.status === 'queued') {
       job.status = 'cancelled';
       job.updatedAt = new Date().toISOString();
-      this.addDecision('job_cancel', 'ok', `cancelled queued job ${job.title}`);
+      this.addDecision('no_op', 'executed', `cancelled queued job ${job.title}`);
       this.dirty();
     }
     return { ok: true };
@@ -694,7 +739,7 @@ class DemoServer {
           return a.index - b.index;
         })
         .map((e) => e.item);
-      this.addDecision('dispatch_code', 'ok', `re-ordered Up next (${origins.length} pinned)`);
+      this.addDecision('dispatch_code_agent', 'executed', `re-ordered Up next (${origins.length} pinned)`);
       this.dirty();
     }
     return { ok: true };
@@ -708,7 +753,7 @@ class DemoServer {
         const number = Number(ev.number ?? 0);
         world.pullRequests = [
           ...world.pullRequests,
-          {
+          injectedPr({
             id: this.id('pr'),
             number,
             title: String(ev.title ?? `PR #${number}`),
@@ -721,7 +766,7 @@ class DemoServer {
             mergeableState: 'clean',
             merged: false,
             health: { blocked: false, reasons: [] },
-          },
+          }),
         ];
         this.addWorldEvent('pr_opened', `pr:${number}`, `PR #${number} opened`);
         break;
@@ -733,7 +778,7 @@ class DemoServer {
           pr.ciStatus = 'failing';
           pr.health = { blocked: true, reasons: ['CI failing'] };
           this.addWorldEvent('pr_ci', `pr:${n}`, `CI failing on PR #${n}`);
-          this.trySpawn('fix_ci', `Fix failing CI on PR #${n}`, pr.branch, `pr:${n}`);
+          this.trySpawn('code', `Fix failing CI on PR #${n}`, pr.branch, `pr:${n}`);
         }
         break;
       }
@@ -748,7 +793,7 @@ class DemoServer {
           this.addWorldEvent('pr_comment', `pr:${n}`, `${String(ev.author ?? 'reviewer')} commented on PR #${n}`);
           this.addDecision(
             'respond_to_agent',
-            'ok',
+            'executed',
             `notified branch agent about comment on PR #${n}`,
             undefined,
             // No proposing rule: a branch note folds every fresh signal on the
@@ -764,7 +809,7 @@ class DemoServer {
         const labels = Array.isArray(ev.labels) ? (ev.labels as string[]) : [];
         world.issues = [
           ...world.issues,
-          {
+          injectedIssue({
             id: this.id('iss'),
             number,
             title: String(ev.title ?? `Issue #${number}`),
@@ -772,15 +817,20 @@ class DemoServer {
             labels,
             state: 'open',
             linkedPrNumber: null,
-          },
+          }),
         ];
         this.addWorldEvent('issue_opened', `issue:${number}`, `Issue #${number} opened`);
         // Opt-in: only a watched issue is worked. An untagged injected issue shows
         // up unwatched with a "watch" toggle, mirroring the real dispatcher gate.
         if (isWatched(labels, this.state.config)) {
-          this.trySpawn('implement_issue', `Implement issue #${number}`, `issue/${number}`, `issue:${number}`);
+          this.trySpawn('code', `Implement issue #${number}`, `issue/${number}`, `issue:${number}`);
         } else {
-          this.addDecision('dispatch_code', 'skipped', `issue #${number} is not watched — left alone`, 'unwatched');
+          this.addDecision(
+            'dispatch_code_agent',
+            'skipped',
+            `issue #${number} is not watched — left alone`,
+            'unwatched',
+          );
         }
         break;
       }
@@ -799,16 +849,16 @@ class DemoServer {
         if (pr) {
           const mergeable = ev.mergeable === undefined ? true : Boolean(ev.mergeable);
           pr.mergeable = mergeable;
-          pr.mergeableState = String(ev.mergeableState ?? (mergeable ? 'clean' : 'dirty'));
+          pr.mergeableState = mergeable ? 'clean' : 'dirty';
           pr.health = mergeable ? { blocked: false, reasons: [] } : { blocked: true, reasons: ['merge conflict'] };
           this.addWorldEvent('pr_mergeable', `pr:${n}`, `PR #${n} is ${mergeable ? 'mergeable' : 'conflicted'}`);
-          if (!mergeable) this.trySpawn('resolve_conflict', `Resolve conflict on PR #${n}`, pr.branch, `pr:${n}`);
+          if (!mergeable) this.trySpawn('code', `Resolve conflict on PR #${n}`, pr.branch, `pr:${n}`);
         }
         break;
       }
       default:
         // Unknown/raw injection — record it so the feed shows *something* happened.
-        this.addDecision('inject', 'ok', `injected ${kind || 'event'}`);
+        this.addDecision('no_op', 'executed', `injected ${kind || 'event'}`);
     }
   }
 

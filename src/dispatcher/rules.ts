@@ -60,7 +60,7 @@ export interface RuleConditions {
   workItemStates: boolean;
 }
 
-interface DispatchRule {
+export interface DispatchRule {
   name: string;
   /** Why the rule exists — the standing rationale, independent of any one firing. */
   description: string;

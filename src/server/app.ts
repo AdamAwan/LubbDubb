@@ -14,6 +14,15 @@ import type {
   ScratchPadSummary,
   WorldSnapshot,
 } from '../types.js';
+import type {
+  CockpitState,
+  PromptsPayload,
+  RetrospectivePayload,
+  RunningConfigPayload,
+  ScratchpadPayload,
+  WorkRootsPayload,
+  WorkSubtreePayload,
+} from '../wire.js';
 import { Hub } from './hub.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { describeRunningConfig } from './runningConfig.js';
@@ -1244,7 +1253,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       const url = connector.resolveRefUrl(ref);
       if (url) refUrls[ref] = url;
     }
-    return { roots, unrecorded, refUrls };
+    return { roots, unrecorded, refUrls } satisfies WorkRootsPayload;
   });
 
   // The other verdict on the same row: no tracker item is wanted for this work.
@@ -1339,7 +1348,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       const url = connector.resolveRefUrl(ref);
       if (url) refUrls[ref] = url;
     }
-    return { nodes, refUrls };
+    return { nodes, refUrls } satisfies WorkSubtreePayload;
   });
 
   // The prompt book the rule dispatcher renders from — what the harness says to
@@ -1361,7 +1370,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   app.get('/api/retrospectives/:ref', async (req, reply) => {
     const input = readRequest(req, { params: RefParams });
     if (!input.ok) return reply.code(400).send({ error: input.error });
-    return { retrospective: store.getRetrospective(input.params.ref) };
+    return { retrospective: store.getRetrospective(input.params.ref) } satisfies RetrospectivePayload;
   });
 
   // The shared pad, whole and in the order it was written — the testimony the
@@ -1383,16 +1392,20 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     const { ref } = input.params;
     const padRef = padOriginFor(ref);
     if (!padRef) return reply.code(400).send({ error: `${ref} is not inside an issue, so it names no scratchpad` });
-    return { padRef, entries: store.listScratchEntries(padRef) };
+    return { padRef, entries: store.listScratchEntries(padRef) } satisfies ScratchpadPayload;
   });
 
-  app.get('/api/prompts', async () => ({
-    dir: config.promptTemplatesDir ?? null,
-    // The `claude` dispatcher composes its prompts via the LLM and reads none of
-    // this. The cockpit says so rather than drawing a book that never fires.
-    dispatcher: config.dispatcher,
-    templates: system.prompts.describe(),
-  }));
+  app.get(
+    '/api/prompts',
+    async () =>
+      ({
+        dir: config.promptTemplatesDir ?? null,
+        // The `claude` dispatcher composes its prompts via the LLM and reads none
+        // of this. The cockpit says so rather than drawing a book that never fires.
+        dispatcher: config.dispatcher,
+        templates: system.prompts.describe(),
+      }) satisfies PromptsPayload,
+  );
 
   // The configuration this process is actually running on, for the cockpit's
   // settings modal. Fetched on open rather than polled, for the prompt book's
@@ -1405,7 +1418,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // values that *are* live — the agent cap and the pause flag — are already on
   // the snapshot as `control`, and the modal draws them beside their configured
   // counterparts rather than letting this block claim a cap that is not in force.
-  app.get('/api/config', async () => ({ groups: describeRunningConfig(config) }));
+  app.get('/api/config', async () => ({ groups: describeRunningConfig(config) }) satisfies RunningConfigPayload);
 
   app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
 
@@ -1543,7 +1556,10 @@ function artifactMime(file: string): string {
  * an error — which broadcasts another `dirty`. Unbounded, and worst exactly when
  * the provider is already refusing us. An empty world cannot do that.
  */
-export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (flagId: string) => string }) {
+export function buildStateSnapshot(
+  system: System,
+  opts?: { artifactSigner?: (flagId: string) => string },
+): CockpitState {
   const { store, connector, config, runtimeControl, harness, recovery } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
   const baseline = store.getWorldBaseline();

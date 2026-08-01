@@ -76,7 +76,7 @@ const PLAN: Plan = {
   updatedAt: NOW,
 };
 
-function planPart(slug: string, dependsOn: string[], status: string, seq: number): PlanPart {
+function planPart(slug: string, dependsOn: string[], status: PlanPart['status'], seq: number): PlanPart {
   return {
     id: `p-${slug}`,
     planId: 'plan-9',
@@ -87,6 +87,11 @@ function planPart(slug: string, dependsOn: string[], status: string, seq: number
     dependsOn,
     rationale: null,
     acceptance: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    blockedReason: null,
     branch: null,
     prNumber: null,
     status,
@@ -100,7 +105,7 @@ function floorInput(over: {
   plan?: Plan | null;
   parts?: PlanPart[];
   openPrs?: PullRequest[];
-  pickup?: string;
+  pickup?: Issue['pickup']['status'];
   pickupReasons?: string[];
   workItemState?: string;
   linkedPrNumber?: number;
@@ -120,9 +125,11 @@ function floorInput(over: {
     linkedPrNumber: over.linkedPrNumber ?? null,
     pickup: { eligible: false, status: over.pickup ?? 'planning', reasons: over.pickupReasons ?? [] },
     assay: over.assay ?? null,
-    conclusion: over.conclusion,
+    conclusion: over.conclusion ?? { verdict: 'undeclared', by: null, note: '', at: null },
     shortfall: over.shortfall ?? null,
     delivery: over.delivery ?? null,
+    retrospective: null,
+    scratchpad: null,
   };
   return {
     issue,
@@ -825,7 +832,13 @@ test('absent is not stopped', () => {
 
   const refused = buildGoalFloor(
     floorInput({
-      assay: { verdict: 'unclear', summary: 'Name one behaviour that is wrong today.', by: 'assayer', decidedAt: NOW },
+      assay: {
+        verdict: 'unclear',
+        summary: 'Name one behaviour that is wrong today.',
+        by: 'assayer',
+        decidedAt: NOW,
+        commentRef: null,
+      },
     }),
   );
   const drill = refused.machines.find((m) => m.kind === 'assay');
@@ -849,7 +862,13 @@ test('absent is not stopped', () => {
 test('only a refused assay carries an override', () => {
   const refused = buildGoalFloor(
     floorInput({
-      assay: { verdict: 'unclear', summary: 'Name one behaviour that is wrong today.', by: 'assayer', decidedAt: NOW },
+      assay: {
+        verdict: 'unclear',
+        summary: 'Name one behaviour that is wrong today.',
+        by: 'assayer',
+        decidedAt: NOW,
+        commentRef: null,
+      },
     }),
   );
   const plate = refused.plates.find((p) => p.assayIssue !== null);
@@ -858,7 +877,9 @@ test('only a refused assay carries an override', () => {
   assert.equal(plate.text, 'Name one behaviour that is wrong today.', 'the assayer is still quoted verbatim');
 
   const workable = buildGoalFloor(
-    floorInput({ assay: { verdict: 'workable', summary: 'Clear enough.', by: 'assayer', decidedAt: NOW } }),
+    floorInput({
+      assay: { verdict: 'workable', summary: 'Clear enough.', by: 'assayer', decidedAt: NOW, commentRef: null },
+    }),
   );
   assert.equal(
     workable.plates.find((p) => p.assayIssue !== null),
@@ -922,13 +943,20 @@ test('a refused floor draws the override, and a workable one does not', () => {
     summary: 'Name one behaviour that is wrong today.',
     by: 'assayer',
     decidedAt: NOW,
+    commentRef: null,
   });
   assert.match(refused, /Work it anyway/, 'a refused goal must be workable anyway from the floor');
   assert.match(refused, /Clear verdict/, 'clearing is a third option, not the same button');
   assert.match(refused, /Name one behaviour that is wrong today\./, 'the buttons sit beside the reason, not over it');
   assert.match(refused, /ends by itself/, 'the panel must say the hold lifts on the next edit to the ticket');
 
-  const workable = renderFloor({ verdict: 'workable', summary: 'Clear enough.', by: 'assayer', decidedAt: NOW });
+  const workable = renderFloor({
+    verdict: 'workable',
+    summary: 'Clear enough.',
+    by: 'assayer',
+    decidedAt: NOW,
+    commentRef: null,
+  });
   assert.doesNotMatch(workable, /Work it anyway/, 'a verdict that blocks nothing offers no override');
   assert.doesNotMatch(workable, /Clear verdict/);
 });
@@ -1172,7 +1200,7 @@ test('a jammed assembler carries the reason the server put on its row', () => {
  * way the panel could go confidently blank.
  */
 test('the floor draws the goals we have a claim staked to', () => {
-  const goal = (number: number, labels: string[], pickup = 'eligible'): Issue => ({
+  const goal = (number: number, labels: string[], pickup: Issue['pickup']['status'] = 'eligible'): Issue => ({
     id: `iss-${number}`,
     number,
     title: `Goal ${number}`,
@@ -1181,8 +1209,12 @@ test('the floor draws the goals we have a claim staked to', () => {
     state: 'open',
     linkedPrNumber: null,
     pickup: { eligible: pickup === 'eligible', status: pickup, reasons: [] },
+    conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
     assay: null,
     shortfall: null,
+    delivery: null,
+    retrospective: null,
+    scratchpad: null,
   });
   const GATE = { watchLabel: 'lubbdubb-watch', ignoreLabel: 'lubbdubb-ignore' };
   const numbers = (issues: Issue[]): number[] => floorGoals(issues, GATE).map((i) => i.number);
@@ -1229,8 +1261,12 @@ test('a completed goal is retained on the floor until dismissed (#203)', () => {
     // A finished goal: 'done' is not in production, and with no watch tag it would
     // otherwise drop straight off the floor.
     pickup: { eligible: false, status: 'done', reasons: [] },
+    conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
     assay: null,
     shortfall: null,
+    delivery: null,
+    retrospective: null,
+    scratchpad: null,
     ...over,
   });
   const GATE = { watchLabel: 'lubbdubb-watch', ignoreLabel: 'lubbdubb-ignore' };
@@ -2000,24 +2036,25 @@ test('the toggle is disabled when no ignore label is configured', () => {
 test('production counts only what landed, and says when it cannot see far enough', () => {
   const now = Date.parse('2026-01-01T12:00:00.000Z');
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
-  const decision = (type: string, outcome: string, mins: number): Decision => ({
+  const decision = (type: Decision['action']['type'], outcome: Decision['outcome'], mins: number): Decision => ({
     id: `d-${type}-${mins}`,
     cycleId: 'c',
-    action: { type },
+    action: { type, reason: '' },
     outcome,
     detail: '',
     rule: null,
+    admission: null,
     createdAt: ago(mins),
   });
 
   const reading = productionReading({
     decisions: [
-      decision('dispatch_fix_ci', 'ok', 30),
-      decision('dispatch_issue', 'executed', 90),
-      // Held and skipped dispatches produced no work and must not count as output.
-      decision('dispatch_issue', 'held', 100),
-      decision('dispatch_issue', 'skipped', 110),
-      decision('escalate', 'ok', 45),
+      decision('dispatch_code_agent', 'executed', 30),
+      decision('dispatch_desk_agent', 'executed', 90),
+      // Deferred and skipped dispatches produced no work and must not count as output.
+      decision('dispatch_code_agent', 'deferred', 100),
+      decision('dispatch_code_agent', 'skipped', 110),
+      decision('escalate_to_human', 'executed', 45),
     ],
     worldEvents: [{ id: 'w', kind: 'pr_merged', ref: 'pr:1', summary: 'merged', createdAt: ago(20) } as WorldEvent],
     fiveHourCostUsd: 5,
@@ -2028,7 +2065,7 @@ test('production counts only what landed, and says when it cannot see far enough
   assert.equal(
     by('dispatches')?.points.reduce((a, b) => a + b, 0),
     2,
-    'a held dispatch is not a dispatch',
+    'a deferred dispatch is not a dispatch',
   );
   assert.equal(
     by('merges')?.points.reduce((a, b) => a + b, 0),
@@ -2047,7 +2084,7 @@ test('production counts only what landed, and says when it cannot see far enough
   assert.equal(reading.truncated, true);
   assert.equal(
     productionReading({
-      decisions: [decision('dispatch_issue', 'ok', 7 * 60)],
+      decisions: [decision('dispatch_code_agent', 'executed', 7 * 60)],
       worldEvents: [],
       fiveHourCostUsd: null,
       now,

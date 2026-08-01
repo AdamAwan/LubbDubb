@@ -129,17 +129,7 @@ test('/api/state ships a standing delivery beside the conclusion and the pickup 
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Make it better', body: 'the thing' });
   system.store.setWorldBaseline(await system.connector.getState());
 
-  type Shipped = {
-    world: {
-      issues: {
-        number: number;
-        delivery: { summary: string; by: string; decidedAt: string } | null;
-        conclusion?: { by: string | null };
-      }[];
-    };
-  };
-  const shippedIssue = (): Shipped['world']['issues'][number] =>
-    (buildStateSnapshot(system) as unknown as Shipped).world.issues.find((i) => i.number === 12)!;
+  const shippedIssue = () => buildStateSnapshot(system).world.issues.find((i) => i.number === 12)!;
 
   // Nothing assessed: null, the same third reading `assay` ships.
   assert.equal(shippedIssue().delivery, null);
@@ -169,9 +159,7 @@ test('/api/state drops a delivery the world has overtaken', async () => {
   system.store.setWorldBaseline(await system.connector.getState());
   system.store.recordDelivery({ originRef: 'issue:12', summary: 'delivered', by: 'assessor' });
 
-  type Shipped = { world: { issues: { number: number; delivery: unknown }[] } };
-  const shipped = (): unknown =>
-    (buildStateSnapshot(system) as unknown as Shipped).world.issues.find((i) => i.number === 12)!.delivery;
+  const shipped = () => buildStateSnapshot(system).world.issues.find((i) => i.number === 12)!.delivery;
   assert.ok(shipped(), 'it stands until something ends it');
 
   // A transition on the issue after the verdict — phase 4's expiry arm, the same

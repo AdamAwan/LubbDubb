@@ -116,7 +116,9 @@ the escape hatch for the case where the build must not run — a checkout instal
   the code.
 - **Typed `emit`/`on` overrides** on `EventEmitter` subclasses (see `AgentManager`, `Harness`,
   `ErrorLog`) — keep event payloads typed at the call site when you add events.
-- **Domain types live in `src/types.ts`**; the cockpit has its own `web/src/types.ts`.
+- **Domain types live in `src/types.ts`**; the shapes the HTTP routes ship live in `src/wire.ts`, which
+  the cockpit re-exports through `web/src/types.ts`. Both are declaration-only and type-imported, so the
+  SPA still bundles no server code — `test/wireContract.test.ts` enforces it.
 - **`src/system.ts` is the composition root.** Every module is wired there through its interface, so
   any one is swappable. A new component is threaded through it.
 

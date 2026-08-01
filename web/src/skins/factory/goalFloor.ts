@@ -443,8 +443,14 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   for (const pr of [...closedPrs, ...openPrs]) prByNumber.set(pr.number, pr);
   const recordedPr = new Map<string, WorkNodeView>(recorded.filter((r) => r.kind === 'pr').map((r) => [r.ref, r]));
   const queued = new Map(upcoming.map((q) => [q.origin, q]));
+  // The same three statuses `isActiveTask` calls outstanding. It used to read
+  // `'active' || 'queued'`, and `active` is not a `TaskStatus` — so a running or
+  // waiting agent left its station drawn as unstaffed, and only the window
+  // between the task row and the spawn ever lit up.
   const activeOrigins = new Set(
-    tasks.filter((t) => t.status === 'active' || t.status === 'queued').map((t) => t.originRef ?? ''),
+    tasks
+      .filter((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting')
+      .map((t) => t.originRef ?? ''),
   );
 
   // -- the patch ---------------------------------------------------------
