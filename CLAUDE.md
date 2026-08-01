@@ -204,7 +204,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   the instant an agent spawns), a job persists _ahead of_ dispatch so it can sit in a queue when
   the fleet is at capacity. The dispatcher pushes queued jobs (`DispatchContext.queuedJobs`, wired
   from `store.listQueuedJobs()`) onto the front of the `Candidate` list **before any world-driven
-  rule** — rule `manual-job` (number `0`) — so the headroom cut dispatches them first (a manual
+  rule** — rule `manual-job` — so the headroom cut dispatches them first (a manual
   request takes the next free slot); a job below the cut shows as `waiting` in the Up next queue and
   is retried next cycle. No cooldown throttle applies (a job is a one-shot request). The ClaudeDispatcher
   gets the same queue in its prompt. The emitted `dispatch_*` action carries a `jobId`, and the executor
@@ -385,7 +385,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     retired. Both arms reuse the two predicates that already decide what an amendment may do; the
     "different split" case is Replan, which is reachable from the same panel.
   - **Born in the executor like every other proposal**, from a new validated action `propose_plan`
-    (rule `plan-approval`, 3d) — not at ingestion, which would have to thread an `EscalationInbox`
+    (rule `plan-approval`) — not at ingestion, which would have to thread an `EscalationInbox`
     into `AgentManager` (constructed _before_ the inbox, which takes the fleet) and into the MCP
     tool deps. Exactly-once falls out of the two gates rather than being asserted: the rule fires
     only on `awaiting_approval`, and a pending proposal holds it. Accepting runs through
@@ -525,7 +525,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   Tests: `test/floorCompletions.test.ts`.
 - **The planning funnel (`src/plans/`, stage 2 of the multi-PR design).** `planning.enabled`
   (config, **on by default**) puts a planning agent in front of issue pickup. Rule `issue-plan`
-  (3c, `ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
+  (`ruleDispatcher.ts`) dispatches a **code** agent — it needs a worktree to read the repo —
   on branch **`plan/issue/<n>`**, origin `issue:<n>:plan`. That branch namespace is not
   cosmetic: git stores refs as files, so `refs/heads/issue/12` and `refs/heads/issue/12/plan`
   cannot coexist, and `issue/<n>` is exactly what a `single` verdict's pickup agent will want.
@@ -575,7 +575,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
 - **Plan parts (stage 3 of the multi-PR design).** What makes a `parts` verdict mean something.
   Scheduling is pure in `src/plans/parts.ts` (origin `issue:<n>:part:<slug>`, branch
   `issue/<n>/<slug>`, dependency depth, base selection, the sibling context the prompt carries),
-  and rule `plan-part` (4a) walks it. Things to preserve:
+  and rule `plan-part` walks it. Things to preserve:
   - **Parts are not driven off `eligibleIssues`.** That list gates on the issue having no open
     PR, and a part's PR is exactly what makes the parent look taken (`linkedPrNumber` is sticky
     and _will_ point at one). Rule `plan-part` reads `ctx.plans`/`ctx.planParts` directly and applies only
@@ -789,7 +789,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     question), so the fall-back-to-`single` arm is gone once released, and `resolvePlanRoute` fails a
     spent replan back to `parts`, never open to `single`. Three jobs, kept apart. **Notice**:
     `planIsWedged` — _every_ live part blocked, not any, since the collision blocks them together or
-    not at all — drives rule `plan-blocked` (3i), which escalates once, deduped on an open escalation
+    not at all — drives rule `plan-blocked`, which escalates once, deduped on an open escalation
     for `issue:<n>:plan` **and** a recent executed one exactly as rule `pr-ci-blocked`, and dispatches nobody
     because nobody could help. `active` plans only: an unapproved one is already in front of a human.
     **Warn**: `planApprovalWarnings` is **appended** to rule `plan-approval`'s ask (never interpolated, for
@@ -807,9 +807,10 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   cooldown, the attempt cap, headroom, `resolvePlanRoute`. None asks whether the ticket says anything
   an agent could act on, so a vague or already-obsolete goal goes straight into the funnel and the
   first sign anything was wrong is an agent spending its attempt cap and escalating in a way that reads
-  as its own failure — `ciPolicy`'s wall, one stage earlier. Rule `issue-assay` (3f, off by default)
-  puts a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`, cut from the default branch) for a
-  watched open issue nothing has been started for. It is the **assessor's mirror**: `hasPriorWork` is
+  as its own failure — `ciPolicy`'s wall, one stage earlier. Rule `issue-assay` (off by default) puts a
+  code agent on `assay/issue/<n>` (origin `issue:<n>:assay`, cut from the default branch) for a
+  watched open issue nothing has been started for. It runs **ahead of both `issue-plan` and
+  `issue-assess`**, so its verdict is in hand before either of them looks at the issue. It is the **assessor's mirror**: `hasPriorWork` is
   the discriminator for both, one taking each arm — nothing started means the goal is all there is to
   judge, something started means the question was answered by someone acting on it. What carries it:
   - **It blocks, and silence is what makes blocking safe.** Only an explicit `unclear` holds; a
@@ -878,7 +879,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     this is prose nothing branches on. The document is stored on the row rather than surfaced as an
     artifact chip for `plan.document`'s reason — `GET /artifacts/:id` serves out of a worktree the reap
     removes.
-  - **Rule `issue-retro` (3h) is on by default**, unlike its three neighbours, because it runs once
+  - **Rule `issue-retro` is on by default**, unlike its three neighbours, because it runs once
     after the work is over and **gates nothing**: a spent attempt cap costs the write-up and nothing
     else, so it fails open _and silent_ with no escalation. A **desk** agent (no branch, no worktree —
     it writes no files), fenced so only `issue:<n>:retro` may `retro_submit`, which keeps the agent that
@@ -1016,7 +1017,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     where arm 1 cannot fire. **No timer arm**: an accepted proposal waits on the world to _reflect_
     something done (a duration), a delivered issue waits on it to _become_ something else (an event).
     The operator's clear is a delete, which is why it is not an arm.
-  - **Rule `issue-assess` (3e) is not driven off `eligibleIssues`**, for rule `plan-part`'s reason: that list
+  - **Rule `issue-assess` is not driven off `eligibleIssues`**, for rule `plan-part`'s reason: that list
     applies the workflow-state gate and the Azure case this covers is precisely an item parked in the
     review state. **`hasPriorWork` does two jobs** — it stops every fresh issue getting an assessor
     that reports nothing was done, _and_ it is the discriminator that lets assess and pickup coexist
@@ -1894,7 +1895,8 @@ so the executor runs it directly.
     overrides that customised most. Same reason the rejection note and the outstanding-work note append.
   - **Held checks are named to the agent, not hidden from it.** An agent that cannot see them watches CI
     stay red after a correct fix and starts chasing a failure that was never its own.
-  - **Escalate fires only when nothing is dispatchable** (rule `pr-ci-blocked`, 1b). An escalation
+  - **Escalate fires only when nothing is dispatchable** (rule `pr-ci-blocked`, immediately after
+    `pr-ci-failing`). An escalation
     alongside a dispatch asks a human to look at a PR an agent is already working. Asked **once**, deduped
     on both an open escalation for `pr:<n>:ci` _and_ a recent executed one in the audit log — each covers
     the other's blind spot (an inbox item outliving the decision window, a decision outliving the item).

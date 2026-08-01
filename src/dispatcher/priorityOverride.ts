@@ -18,7 +18,7 @@ interface Rankable {
  *
  * Three tiers, and the order between them is the whole contract:
  *
- *   1. **Rule-0 jobs stay first**, in their own (oldest-first) order. A manual
+ *   1. **`manual-job` items stay first**, in their own (oldest-first) order. A manual
  *      job is a distinct request — not a re-prioritisation of existing work — so
  *      an override never moves one: it always takes the next free slot.
  *   2. **Overridden origins next**, in ascending rank order (rank `0` = "do this
@@ -40,7 +40,7 @@ export function rankByPriorityOverride<T extends Rankable>(
 ): T[] {
   const keyed = candidates.map((candidate, index) => {
     const override = overrideRank.get(candidate.origin);
-    // Rule-0 jobs are pinned to the top regardless of any override, so a stray
+    // `manual-job` items are pinned to the top regardless of any override, so a stray
     // override on a `job:` origin can never demote the manual-job tier.
     const tier = candidate.rule === 'manual-job' ? 0 : override !== undefined ? 1 : 2;
     // Within the overridden tier, order by the operator's rank; every other tier

@@ -262,7 +262,7 @@ uses. Overrides live in the `priority_overrides` store table and reach the dispa
 The pure `rankByPriorityOverride` (`src/dispatcher/priorityOverride.ts`) re-sorts the collected
 candidates **once, immediately before the headroom cut**, into three tiers:
 
-1. **Rule-0 jobs stay first**, in their own order — a manual job is distinct work, not a
+1. **`manual-job` items stay first**, in their own order — a manual job is distinct work, not a
    re-prioritisation of existing work, so an override never moves one.
 2. **Overridden origins next**, by ascending rank (`0` = "do this next"). This is what jumps a
    world-driven item ahead of the natural cross-rule ranking above.
