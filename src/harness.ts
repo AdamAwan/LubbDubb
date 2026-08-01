@@ -17,7 +17,8 @@ import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
-import type { Action, Task, WorldEvent, WorldSnapshot } from './types.js';
+import type { Action, WorldEvent, WorldSnapshot } from './types.js';
+import { isActiveTask } from './tasks.js';
 
 interface HarnessDeps {
   store: Store;
@@ -368,9 +369,4 @@ export class Harness extends EventEmitter {
   override on<K extends keyof HarnessEvents>(event: K, listener: (...args: HarnessEvents[K]) => void): this {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
-}
-
-/** A task the fleet is still working — the dispatcher excludes its origin from the ranked queue. */
-function isActiveTask(t: Task): boolean {
-  return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
 }

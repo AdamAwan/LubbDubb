@@ -36,7 +36,6 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
   useEffect(() => {
     void load();
     // Read once on mount, like the roots — the panel is fetched, never polled.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

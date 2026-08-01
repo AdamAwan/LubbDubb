@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Agent, Plan, PlanPart, Proposal, QueueItem } from '../types.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
-import { refLink, relTime } from './util.js';
+import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 
 /**
  * The whole plan, on demand — the record of what was agreed, not just the
@@ -70,14 +70,14 @@ export function PlanModal({
   // control here is the rule the Discuss button already follows: a control must
   // not offer what the route refuses.
   const started = live.some((p) => ['dispatched', 'in_review', 'merged', 'concluded'].includes(p.status));
-  const issueNumber = issueOf(plan.originRef);
+  const issueNumber = planIssueOf(plan.originRef);
   const queued = new Map(upcoming.map((q) => [q.origin, q]));
   // A verdict is only on offer while the plan is still the thing that was
   // proposed; during a discussion there is nothing to approve, because the
   // amended plan comes back as a fresh proposal.
   const decidable = proposal?.status === 'pending' && !plan.discussing ? proposal : null;
   const cutAt = live.findIndex((p) => {
-    const q = queued.get(originOf(issueNumber, p.slug));
+    const q = queued.get(partOriginOf(issueNumber, p.slug));
     return q !== undefined && q.status !== 'dispatching';
   });
 
@@ -195,7 +195,7 @@ export function PlanModal({
                     <PartBlock
                       part={part}
                       seq={idx + 1}
-                      queue={queued.get(originOf(issueNumber, part.slug))}
+                      queue={queued.get(partOriginOf(issueNumber, part.slug))}
                       refUrls={refUrls}
                     />
                   </div>
@@ -383,14 +383,4 @@ function PartBlock({
 function kindOf(part: PlanPart): string | null {
   const kind = part.status === 'concluded' ? (part.outcomeKind ?? 'concluded') : (part.expectedKind ?? null);
   return kind && kind !== 'code' ? kind : null;
-}
-
-function issueOf(originRef: string): number | null {
-  const m = /^issue:(\d+)$/.exec(originRef);
-  return m ? Number(m[1]) : null;
-}
-
-/** A part's dispatch origin — the key the "Up next" queue is joined on. */
-function originOf(issueNumber: number | null, slug: string): string {
-  return issueNumber === null ? '' : `issue:${issueNumber}:part:${slug}`;
 }

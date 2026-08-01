@@ -21,6 +21,7 @@ import {
   type PlanningPolicy,
 } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
+import { isActiveTask } from '../tasks.js';
 
 /**
  * How the dispatcher gates and orders issue pickup, derived from operator config.
@@ -420,10 +421,6 @@ function assayFor(issue: Issue, ctx: IssuePickupContext): string | null {
   // says nothing about it and lets the arms below explain what happens instead.
   if (verdict.kind === 'escalate' || verdict.kind === 'hold') return null;
   return verdict.kind === 'cooldown' ? 'goal assay on cooldown' : 'awaiting a goal assay';
-}
-
-function isActiveTask(t: Task): boolean {
-  return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
 }
 
 /** Executed dispatches for one origin in the recent audit window. */

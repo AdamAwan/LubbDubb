@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runGit, resolveCommit } from '../git/gitCli.js';
+import { branchDirName } from './branchDir.js';
 
 /**
  * Git's *write* side, as the one seam the executor depends on. Its read side has
@@ -52,7 +53,7 @@ export class WorktreeManager implements Worktrees {
     const existing = await this.findExisting(branch);
     if (existing) return existing;
 
-    const dir = resolve(this.worktreeRoot, sanitize(branch));
+    const dir = resolve(this.worktreeRoot, branchDirName(branch));
     mkdirSync(this.worktreeRoot, { recursive: true });
     await this.reclaim(dir);
 
@@ -165,8 +166,4 @@ function parseWorktreeList(porcelain: string): WorktreeEntry[] {
   }
   if (current.path) entries.push({ path: current.path, branch: current.branch ?? null });
   return entries;
-}
-
-function sanitize(branch: string): string {
-  return branch.replace(/[^a-zA-Z0-9._-]/g, '-');
 }

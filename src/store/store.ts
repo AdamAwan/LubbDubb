@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
 import { liveParts, partSettled } from '../plans/parts.js';
+import { ACTIVE_TASK_STATUS_SQL } from '../tasks.js';
 import type {
   Agent,
   AgentFile,
@@ -219,7 +220,7 @@ export class Store {
    */
   listOutstandingTasks(): Task[] {
     const rows = this.db
-      .prepare(`SELECT * FROM tasks WHERE status IN ('queued','running','waiting') ORDER BY created_at ASC`)
+      .prepare(`SELECT * FROM tasks WHERE status IN ${ACTIVE_TASK_STATUS_SQL} ORDER BY created_at ASC`)
       .all() as TaskRow[];
     return rows.map(rowToTask);
   }
@@ -227,7 +228,7 @@ export class Store {
   /** Is there already an active (queued/running/waiting) task for this origin? */
   findActiveTaskByOrigin(originRef: string): Task | null {
     const row = this.db
-      .prepare(`SELECT * FROM tasks WHERE origin_ref=? AND status IN ('queued','running','waiting') LIMIT 1`)
+      .prepare(`SELECT * FROM tasks WHERE origin_ref=? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
       .get(originRef) as TaskRow | undefined;
     return row ? rowToTask(row) : null;
   }
@@ -244,7 +245,7 @@ export class Store {
    */
   findActiveTaskByBranch(branch: string): Task | null {
     const row = this.db
-      .prepare(`SELECT * FROM tasks WHERE branch=? AND status IN ('queued','running','waiting') LIMIT 1`)
+      .prepare(`SELECT * FROM tasks WHERE branch=? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
       .get(branch) as TaskRow | undefined;
     return row ? rowToTask(row) : null;
   }
