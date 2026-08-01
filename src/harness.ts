@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { Heartbeat } from './heartbeat.js';
 import type { Store } from './store/store.js';
 import type { Connector } from './connector/connector.js';
-import type { Dispatcher, QueueItem } from './dispatcher/dispatcher.js';
+import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor.js';
 import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
@@ -18,6 +18,7 @@ import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
+import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 
 interface HarnessDeps {
@@ -58,17 +59,6 @@ interface HarnessDeps {
    * {@link Harness.runCycle}.
    */
   recovery?: { pendingCount(): number };
-}
-
-/**
- * The last cycle's ordered pickup plan (issue #69) — "what's next as of this
- * pulse". A projection recomputed every cycle, not a persisted queue; `at` is
- * the world snapshot it was planned against.
- */
-interface UpcomingPlan {
-  cycleId: string;
-  at: string;
-  items: QueueItem[];
 }
 
 interface CycleReport {

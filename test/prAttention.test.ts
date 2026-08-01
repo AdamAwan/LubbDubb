@@ -461,7 +461,11 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
   const importers = srcFiles('src')
     .filter((f) => f !== 'src/prAttention.ts')
     .filter((f) => readFileSync(f, 'utf8').includes('prAttention.js'));
-  assert.deepEqual(importers, ['src/server/app.ts'], 'the attention verdict must stay cockpit-only');
+  // `src/wire.ts` names {@link PrAttention} as the shape `/api/state` ships and
+  // reads nothing: every import in it is `import type`, which
+  // `test/wireContract.test.ts` asserts, so it cannot consult the verdict even by
+  // accident. One computing consumer, and it is still the snapshot.
+  assert.deepEqual(importers, ['src/server/app.ts', 'src/wire.ts'], 'the attention verdict must stay cockpit-only');
 
   // Behavioural: building the snapshot (which computes the verdict for every PR)
   // between two pulses changes no decision the harness goes on to make.

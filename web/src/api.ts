@@ -1,13 +1,15 @@
+import type { AppState, RecoveryVerdict } from './types.js';
+// The fetched-on-open routes, as whole payloads rather than shapes re-typed at
+// each call site: the server declares each one as its return type, so a renamed
+// or re-nested key is a compile error here instead of an empty panel.
 import type {
-  AppState,
-  PromptTemplateView,
-  RecoveryVerdict,
-  RunningConfigGroup,
-  RetrospectiveView,
-  ScratchEntryView,
-  UnrecordedWorkView,
-  WorkNodeView,
-} from './types.js';
+  PromptsPayload,
+  RetrospectivePayload,
+  RunningConfigPayload,
+  ScratchpadPayload,
+  WorkRootsPayload,
+  WorkSubtreePayload,
+} from '../../src/wire.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 
 /**
@@ -97,37 +99,25 @@ const realApi = {
   // The work graph is fetched, never polled: `/api/state` comes round every couple
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.
-  getWorkRoots: () =>
-    authFetch('/api/work').then((r) =>
-      json<{ roots: WorkNodeView[]; unrecorded: UnrecordedWorkView[]; refUrls: Record<string, string> }>(r),
-    ),
+  getWorkRoots: () => authFetch('/api/work').then((r) => json<WorkRootsPayload>(r)),
   getWorkSubtree: (ref: string) =>
-    authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) =>
-      json<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }>(r),
-    ),
+    authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) => json<WorkSubtreePayload>(r)),
   // A goal's retrospective, fetched when the Manifest station is opened. The
   // snapshot carries only the summary, for the reason the work graph is not
   // polled: a document per issue on every poll pays for the feature in bandwidth.
   getRetrospective: (ref: string) =>
-    authFetch(`/api/retrospectives/${encodeURIComponent(ref)}`).then((r) =>
-      json<{ retrospective: RetrospectiveView | null }>(r),
-    ),
+    authFetch(`/api/retrospectives/${encodeURIComponent(ref)}`).then((r) => json<RetrospectivePayload>(r)),
   // The shared pad the agents on a goal wrote each other, fetched when a reader
   // opens it — the snapshot carries only how much is there. `padOriginFor` on the
   // server resolves a subtree ref to its issue, so any origin on the goal works.
   getScratchpad: (ref: string) =>
-    authFetch(`/api/scratchpads/${encodeURIComponent(ref)}`).then((r) =>
-      json<{ padRef: string; entries: ScratchEntryView[] }>(r),
-    ),
+    authFetch(`/api/scratchpads/${encodeURIComponent(ref)}`).then((r) => json<ScratchpadPayload>(r)),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
-  getPrompts: () =>
-    authFetch('/api/prompts').then((r) =>
-      json<{ dir: string | null; dispatcher: string; templates: PromptTemplateView[] }>(r),
-    ),
+  getPrompts: () => authFetch('/api/prompts').then((r) => json<PromptsPayload>(r)),
   // The running config, fetched on open for the same reason as the prompt book:
   // `loadConfig` runs once at boot, so this can never change while the tab is up.
-  getConfig: () => authFetch('/api/config').then((r) => json<{ groups: RunningConfigGroup[] }>(r)),
+  getConfig: () => authFetch('/api/config').then((r) => json<RunningConfigPayload>(r)),
   // Ask an agent to create a tracker item for work nothing external accounts for.
   // An operator's click, never a rule: see src/graph/unrecorded.ts.
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),

@@ -530,9 +530,7 @@ test('/api/state ships the classification verdict, from the same call the dispat
     pullRequests: [pr(31, { ciStatus: 'failing', ciChecks: checks })],
   });
 
-  const snapshot = buildStateSnapshot(system) as unknown as {
-    world: { pullRequests: { number: number; ciVerdict: unknown }[] };
-  };
+  const snapshot = buildStateSnapshot(system);
   const shipped = snapshot.world.pullRequests.find((p) => p.number === 31)!.ciVerdict;
   // Asserted against the function itself rather than against a transcribed
   // literal: a second expectation written out by hand is a second implementation

@@ -460,15 +460,7 @@ test('the cockpit is shipped the verdict beside the pickup chip, not inside it',
   await system.harness.runCycle('manual');
 
   const { buildStateSnapshot } = await import('../src/server/app.js');
-  const snap = buildStateSnapshot(system) as unknown as {
-    world: {
-      issues: {
-        number: number;
-        pickup?: { eligible: boolean; reasons: string[] };
-        shortfall?: { cause: string } | null;
-      }[];
-    };
-  };
+  const snap = buildStateSnapshot(system);
   const row = snap.world.issues.find((i) => i.number === 12)!;
   assert.equal(row.shortfall?.cause, 'plan');
   // Beside the pickup verdict, never inside it. This issue is decomposed, so
@@ -482,9 +474,8 @@ test('the cockpit is shipped the verdict beside the pickup chip, not inside it',
   );
   // And the chip can join to the inbox: the pending proposal is on the same
   // snapshot, keyed on the ref the chip builds from the issue number.
-  const snapshot = snap as unknown as { proposals: { kind: string; ref: string; status: string }[] };
   assert.ok(
-    snapshot.proposals.some((p) => p.kind === 'shortfall' && p.ref === 'issue:12:shortfall' && p.status === 'pending'),
+    snap.proposals.some((p) => p.kind === 'shortfall' && p.ref === 'issue:12:shortfall' && p.status === 'pending'),
   );
   system.store.close();
 });

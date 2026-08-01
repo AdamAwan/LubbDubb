@@ -77,13 +77,57 @@ in production.
   narrate the code.
 - **Typed `emit`/`on` overrides** on `EventEmitter` subclasses (see `AgentManager`) — keep
   event payloads typed at the call site when you add events.
-- Domain types live in `src/types.ts`; the cockpit has its own `web/src/types.ts` (they are
-  intentionally separate — the web bundle doesn't import server code).
+- Domain types live in `src/types.ts`; **the shapes the HTTP routes ship live in `src/wire.ts`**,
+  which `web/src/types.ts` re-exports under the cockpit's names. Both are declaration-only and
+  reach the SPA through `import type`, so "the web bundle doesn't import server code" still holds
+  literally — it is about runtime, and `import type` is erased before anything is bundled. See the
+  wire-contract bullet under "Where things live".
 
 ## Where things live
 
 - **`src/system.ts` is the composition root.** Every module is wired here through its
   interface, so any one is swappable. If you add a component, thread it through here.
+- **`src/wire.ts` is the cockpit wire contract, and it is the whole of it (#217, #218).** Every
+  shape the HTTP routes ship is declared there once: `buildStateSnapshot` returns `CockpitState`,
+  the fetched-on-open routes `satisfies` their payload types, and `web/src/types.ts` re-exports the
+  lot (`AppState` **is** `CockpitState`). It was two copies with nothing relating them — a 439-line
+  builder with **no declared return type**, a hand-maintained `AppState` mirroring whatever it
+  inferred, meeting at one unchecked `json<AppState>(r)`. A renamed key was green in `typecheck`,
+  `typecheck:web` and `knip` alike and empty only in the browser; the seven tests casting a real
+  snapshot through `unknown` to a local shape were a **third** copy drifting on its own. Four
+  things carry it:
+
+  - **Type-only, asserted rather than intended.** `test/wireContract.test.ts` requires the shared
+    modules to declare no runtime and import nothing by value, and requires `src/wire.ts` to be the
+    **only** server module anything under `web/src/` names. Both halves fail when violated (checked
+    by breaking each). That is what keeps the runtime constraint true while the _contract_ is
+    shared: `import type` is erased before the SPA is bundled, so 78 modules transform and none of
+    them are the harness.
+  - **Domain types are reused, never re-declared.** A wire type either _is_ the server's type or
+    `extends` it. The cockpit's copy widened the server's unions **three different ways in one
+    file** with no rule for which — `Job.status` to `string`, `Proposal.action` to an
+    index-signature bag, `Finding.status` re-declared member-by-member. The widened ones lost the
+    check exactly where the cockpit compares against a literal; the re-declared ones silently
+    narrowed the day a member was added server-side.
+  - **Required unless genuinely conditional.** The SPA is built from this tree, so there is one
+    version of the wire: a missing key is a bug, not skew to tolerate. Optional means _may be
+    absent_; always-sent-but-empty is `| null`. This is what makes a dropped key a compile error,
+    and `?` on those keys is what would quietly give it back.
+  - **`OpenPullRequest` vs `PullRequest`.** The open list requires `health`/`attention`/`ciVerdict`;
+    the recently-closed list carries none of them, because nothing acts on a dead PR. Two types
+    rather than three optional fields, so the builder is held to the strong one and a component
+    rendering either list stays honest about the closed case.
+
+  Pinning it found three live cockpit bugs that had compiled for as long as they existed: the
+  factory floor read `task.status === 'active'` (not a `TaskStatus`, so a running or waiting agent
+  left its station drawn unstaffed), and the Production graph counted `outcome === 'ok'` and
+  `action.type === 'escalate'` — neither a value the harness emits, so the escalation series had
+  always read zero. The demo backend was the same story at scale: invented task kinds
+  (`fix_ci`), a `mergeableState` (`unstable`) the provider folds away, and a decision vocabulary
+  the audit log has never used. Two structural lens assertions (`test/prAttention.test.ts`,
+  `test/stacks.test.ts`) now expect `src/wire.ts` as a second importer and say why — it names the
+  shipped shape and, being type-only, structurally cannot consult the verdict.
+
 - **`src/store/store.ts` is the _only_ thing that touches SQLite.** Everything else goes
   through the `Store`. Schema is `src/store/schema.ts`. Writes are synchronous
   (better-sqlite3), which keeps the harness logic race-free — lean on that. `CREATE TABLE IF

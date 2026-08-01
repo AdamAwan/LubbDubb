@@ -20,7 +20,7 @@ import type { Plan, PlanPart, PullRequest } from '../types.js';
  * near the rule it duplicates. `test/stacks.test.ts` asserts that structurally.
  */
 
-interface StackRung {
+export interface StackRung {
   prNumber: number;
   title: string;
   branch: string;
@@ -32,7 +32,7 @@ interface StackRung {
   partSlug: string | null;
 }
 
-interface Stack {
+export interface Stack {
   /** `stack:<bottom rung's PR number>` — stable while the bottom rung is open. */
   ref: string;
   issueNumber: number | null;

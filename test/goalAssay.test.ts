@@ -679,12 +679,10 @@ test('/api/state ships the verdict beside the pickup reason, not inside it', asy
   // for `workable`. The Goal Floor draws no drill at all for it, where a refusal
   // draws one that is stopped and says why — telling those apart by reading
   // `pickup.reasons[0]` is what `signalPolarity` refuses to do.
-  const untouched = buildStateSnapshot(system) as unknown as {
-    world: { issues: { number: number; assay: unknown }[] };
-  };
+  const untouched = buildStateSnapshot(system);
   assert.equal(untouched.world.issues.find((i) => i.number === 12)!.assay, null);
 
-  const i = untouched.world.issues.find((x) => x.number === 12) as unknown as Issue;
+  const i = untouched.world.issues.find((x) => x.number === 12)!;
   system.store.recordAssay({
     originRef: 'issue:12',
     verdict: 'unclear',
@@ -692,15 +690,14 @@ test('/api/state ships the verdict beside the pickup reason, not inside it', asy
     goalRef: goalFingerprint(i.title, i.body),
     by: 'assayer',
   });
-  const refused = buildStateSnapshot(system) as unknown as {
-    world: { issues: { number: number; assay: { verdict: string; summary: string; by: string; goalRef?: string } }[] };
-  };
-  const shipped = refused.world.issues.find((x) => x.number === 12)!.assay;
+  const refused = buildStateSnapshot(system);
+  const shipped = refused.world.issues.find((x) => x.number === 12)!.assay!;
   assert.equal(shipped.verdict, 'unclear');
   assert.equal(shipped.summary, 'Name one behaviour that is wrong today.');
   assert.equal(shipped.by, 'assayer');
   // The fingerprint is what the hold is measured against, not a reading, so it
-  // does not go on the wire.
-  assert.equal(shipped.goalRef, undefined);
+  // does not go on the wire — and now it *cannot*, since the shipped shape is the
+  // declared one rather than whatever a local cast happened to name.
+  assert.equal('goalRef' in shipped, false);
   system.store.close?.();
 });

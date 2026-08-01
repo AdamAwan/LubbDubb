@@ -496,6 +496,46 @@ resumed on the next boot and its worktree is kept.
 When `web/dist` exists it is served statically, with a not-found handler that returns `index.html` for
 anything that is not `/api` or `/ws` — so client-side routing works.
 
+## The wire contract
+
+Every shape these routes ship is declared once, in **`src/wire.ts`**, and both ends name that
+declaration: `buildStateSnapshot` returns `CockpitState`, the fetched-on-open routes `satisfies` their
+payload types, and `web/src/types.ts` re-exports the lot under the cockpit's own names (`AppState` is
+`CockpitState`). So a key renamed, dropped or re-nested in the builder is a compile error at the site
+that caused it.
+
+It used to be two copies with nothing relating them. `buildStateSnapshot` had **no declared return
+type**, so its shape was whatever TypeScript inferred from 439 lines of object construction; `AppState`
+was a standalone hand-maintained mirror; and they met at one unchecked `json<AppState>(r)` assertion.
+Rename a key and `typecheck`, `typecheck:web` and `knip` all stayed green — the panel rendered empty at
+runtime and nowhere else. The tests were the visible symptom: several cast a real snapshot through
+`unknown` to a locally re-declared shape, a third copy drifting independently of the other two.
+
+Four properties hold it together:
+
+- **Type-only, so the runtime constraint is untouched.** "The web bundle imports no server code" is
+  about what gets bundled; `import type` is erased first. `test/wireContract.test.ts` asserts it
+  structurally rather than trusting it: the shared modules must declare no runtime and import nothing
+  by value, and `src/wire.ts` must be the **only** server module anything under `web/src/` names.
+- **Domain types are reused, never re-declared.** A wire type either _is_ the server's type or
+  `extends` it. The cockpit's copy previously widened the server's unions three different ways in one
+  file — `Job.status` to `string`, `Proposal.action` to an index-signature bag, `Finding.status`
+  re-declared member-by-member — with no rule for which. The widened ones lost the check exactly where
+  the cockpit compares against a literal; the re-declared ones silently narrowed when a member was
+  added server-side.
+- **Every key is required unless the value is genuinely conditional.** The SPA is built from this tree,
+  so there is one version of the wire and a missing key is a bug rather than deployment skew to
+  tolerate. A key that may be _absent_ is optional; a key always sent but possibly empty is `| null`.
+- **The open list and the closed list are different types.** `OpenPullRequest` requires `health`,
+  `attention` and `ciVerdict`; `PullRequest` leaves them optional, because the recently-closed list
+  carries none of them — nothing acts on a dead PR, so nothing folds a verdict for one.
+
+Pinning the contract found three live cockpit bugs that had compiled for as long as they existed: the
+factory floor read `task.status === 'active'` (not a `TaskStatus`, so a running agent left its station
+drawn unstaffed), and the Production graph counted `outcome === 'ok'` and
+`action.type === 'escalate'` — neither a value the harness emits, so the escalation series had always
+read zero.
+
 ## The state snapshot
 
 `buildStateSnapshot(system)` assembles everything the cockpit needs in one response. Several values are

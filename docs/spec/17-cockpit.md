@@ -1,8 +1,14 @@
 # 17 — The cockpit
 
-`web/` is a React 18 + Vite SPA. It has its own `web/tsconfig.json` and its own `web/src/types.ts`;
-**the web bundle never imports server code**, so the two type files are intentionally separate and
-`npm run typecheck` and `npm run typecheck:web` are separate passes.
+`web/` is a React 18 + Vite SPA with its own `web/tsconfig.json`, so `npm run typecheck` and
+`npm run typecheck:web` are separate passes.
+
+**The web bundle never imports server code**, and that constraint is about _runtime_. The shapes the
+routes ship are declared once in `src/wire.ts` and re-exported by `web/src/types.ts` under the
+cockpit's own names; every import along that path is `import type`, which is erased before anything is
+bundled. `test/wireContract.test.ts` asserts both halves — that the shared modules declare no runtime,
+and that `src/wire.ts` is the only server module the SPA names at all. See
+[16 — HTTP API](16-http-api.md#the-wire-contract).
 
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 

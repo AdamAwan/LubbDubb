@@ -72,7 +72,7 @@ type PrAttentionKind =
   | 'settled' // you answered; nothing is owed until the world moves
   | 'stalled'; // nobody's court, and *that* is the thing to look at
 
-interface PrAttention {
+export interface PrAttention {
   status: PrAttentionKind;
   /** Human-readable, most actionable first. Never empty — every arm says why. */
   reasons: string[];

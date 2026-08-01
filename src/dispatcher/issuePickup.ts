@@ -189,7 +189,7 @@ type IssuePickupStatusKind =
   | 'blocked' // eligible, but no capacity (paused or cap reached)
   | 'eligible'; // would be picked up next cycle
 
-interface IssuePickupStatus {
+export interface IssuePickupStatus {
   /** True only when the dispatcher would start an agent for it next cycle. */
   eligible: boolean;
   status: IssuePickupStatusKind;

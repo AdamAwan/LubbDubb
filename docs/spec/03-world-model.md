@@ -1,7 +1,9 @@
 # 03 — World model
 
-The domain vocabulary lives in `src/types.ts`. The cockpit has its own copy in `web/src/types.ts`;
-the two are intentionally separate, because the web bundle never imports server code.
+The domain vocabulary lives in `src/types.ts`. The cockpit names the same types rather than keeping a
+copy of them: `web/src/types.ts` re-exports the wire contract in `src/wire.ts`, which is declaration-only
+and reaches the SPA through `import type`, so nothing survives erasure and the web bundle still imports
+no server code. See [16 — HTTP API](16-http-api.md#the-wire-contract).
 
 ## `WorldSnapshot`
 

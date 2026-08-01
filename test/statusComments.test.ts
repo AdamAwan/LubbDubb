@@ -10,6 +10,7 @@ import { goalFingerprint } from '../src/intake/assay.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
 import { buildRefUrls, issueCommentRef } from '../src/server/refUrls.js';
 import type { Issue } from '../src/types.js';
+import type { CockpitState } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // Issue #171 — the two comments the harness maintains on a ticket by itself: the
@@ -56,15 +57,9 @@ async function withIssue(system: System): Promise<Issue> {
   return world.issues.find((i) => i.number === ISSUE)!;
 }
 
-type Snapshot = {
-  plans: { originRef: string; statusCommentRef: string | null }[];
-  world: { issues: { number: number; assay: { commentRef?: string | null } | null }[] };
-  refUrls: Record<string, string>;
-};
-
-async function snapshot(system: System): Promise<Snapshot> {
+async function snapshot(system: System): Promise<CockpitState> {
   const { buildStateSnapshot } = await import('../src/server/app.js');
-  return buildStateSnapshot(system) as unknown as Snapshot;
+  return buildStateSnapshot(system);
 }
 
 test('a plan that has written no comment ships null, not an empty link', async () => {

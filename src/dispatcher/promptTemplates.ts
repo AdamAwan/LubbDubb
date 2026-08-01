@@ -379,7 +379,7 @@ export function sampleTemplateFile(id: PromptId): string {
 }
 
 /** One template as the cockpit shows it: what it is, and what it says. */
-interface PromptTemplateDescription {
+export interface PromptTemplateDescription {
   readonly id: PromptId;
   /** What the prompt is for and when it fires — the registry's own note. */
   readonly doc: string;

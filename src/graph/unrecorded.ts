@@ -34,7 +34,7 @@
 import type { Job, WorkItemFiling, WorkItemFilingStatus, WorkNode } from '../types.js';
 
 /** One node with no work item behind it, and the evidence beside the verdict. */
-interface UnrecordedWork {
+export interface UnrecordedWork {
   ref: string;
   title: string;
   /** PR nodes beneath it — what this work actually produced, if anything. */
