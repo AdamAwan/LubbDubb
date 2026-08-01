@@ -12,7 +12,8 @@ discover what a synchronous error would have said in one turn.
 
 ## The tools
 
-`src/mcp/names.ts` lists them; `src/mcp/tools.ts` builds them.
+`src/mcp/names.ts` lists them, a module under `src/mcp/tools/` defines each, and `src/mcp/tools.ts`
+assembles them (see [How a tool is built](#how-a-tool-is-built)).
 
 | Tool                 | Purpose                                                                                                                                                                                                                                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -386,6 +387,50 @@ approximating over a transport that carried no identity at all.
 The token is a **bearer credential**: it lives in the 0600 launch-config file, never in argv (where
 `ps` would show it), and it is revoked on kill, interrupt and reap. A resume mints a fresh one for the
 same agent row.
+
+**The `agent → task` half of that chain is resolved in exactly one place**, `AgentManager.withCaller`,
+and every tool-facing method on the fleet runs its body through it. It was copied into all eleven of
+them, so the channel's one security-relevant step held eleven times by inspection rather than once by
+construction: a twelfth method written from scratch, or one that dropped the `!task` check because its
+store call happens to take only an `agentId` (as `recordProgress`'s genuinely does), would have
+inherited nothing and failed nothing. It is a **wrapper**, not a `resolveCaller()` a caller may forget
+to check — the body cannot run without a resolved `{agent, task}` in hand — and it deliberately does
+not check liveness, because a finding, a note or a verdict cast on an agent's last breath is still
+true. `ask` is the one caller that needs a live session, and tests for it itself.
+
+The tool layer's half is the same property one level up: the caller reaches a tool body on its
+**context**, never in `args` (see [How a tool is built](#how-a-tool-is-built)).
+
+## How a tool is built
+
+`src/mcp/names.ts` declares the names, **one module per tool** under `src/mcp/tools/` carries its
+description, schema and handler, and `src/mcp/tools.ts` is the assembly and nothing else — the same
+shape `DISPATCH_PIPELINE` + `STAGES` gives the dispatch rules, for the same stated reason. `buildTools`
+was one 844-line function whose scope every tool shared, so the growth axis for "add a tool" was a
+function nobody could read end to end and each tool's origin fence was an `if` somewhere inside it.
+
+Three things carry the split:
+
+- **A tool module does not carry its own name.** The registry is a `Record<McpToolName, ToolFactory>`
+  keyed on `MCP_TOOL_NAMES`, and a factory returns everything _except_ the name. So a name with no
+  module is a compile error, and a module cannot name itself something `--allowedTools` never granted —
+  the "connected server whose every call is refused" trap, closed at compile time rather than by an
+  array index literal per module.
+- **`ToolContext` is the seam** (`tools/context.ts`): the deps, the resolved `{agent, task}`, and the
+  `ok()` that folds in the `_status` envelope. Everything a tool may reach is named there, which is what
+  makes "the caller is on the context, never in `args`" a property of the type rather than of the
+  reading.
+- **The origin fence is declared in the tool's own module.** Only `plan_submit` has one at this layer
+  (`plannerIssue`, pure — it resolves nothing but the issue number). The others — `conclusionOrigin`,
+  `partConclusionOrigin`, `padOriginFor`, `retroSubmitOrigin`, `assessmentOrigin`, `assayerOrigin` —
+  are asked at the fleet seam because each _resolves_ something out of the store as it refuses (the
+  part, the pad, the issue), so a copy in the tool layer would be a second answer to a question already
+  answered next to the write it guards.
+
+`test/mcpChannel.test.ts` asserts both halves structurally: the caller resolution appears once in
+`agentManager.ts`, and `tools.ts` declares no schema and no handler with one module per advertised
+tool. Neither is a property any behavioural test can fail on — a tool that re-derived the caller by
+hand works, right up until it works for the wrong agent.
 
 ## Transport
 

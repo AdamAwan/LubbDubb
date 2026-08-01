@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { connect } from 'node:net';
-import { mkdtempSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildClaudeArgs, buildClaudeStreamArgs, MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
@@ -1571,4 +1571,46 @@ test('open_pr degrades to the floor when authoring is unwired — it never silen
   const result = await tool.handler({ summary: 'x' });
   assert.match(JSON.stringify(result), /not wired|open the pull request yourself/i);
   system.store.close();
+});
+
+// -- the shape of the surface itself (issue #220) ---------------------------
+//
+// Both assertions are structural rather than behavioural, and deliberately so:
+// each guards a property that nothing else *can* fail on. A twelfth tool that
+// re-derived the caller by hand, or a fourteenth that named itself, would pass
+// every test above — the calls all work, right up until one of them works for
+// the wrong agent.
+
+test('the caller is resolved in exactly one place, so the identity chain cannot be got wrong twice', () => {
+  const source = readFileSync(new URL('../src/agents/agentManager.ts', import.meta.url), 'utf8');
+  // `token -> agent -> task -> origin`, as it is actually written. Eleven copies
+  // of this line meant the tool channel's one security-relevant step held eleven
+  // times by inspection; `withCaller` is the single copy, and a method that
+  // re-derives the caller rather than calling it puts a second one back.
+  const preamble = source.match(/agent \? this\.store\.getTask\(agent\.taskId\) : null/g) ?? [];
+  assert.equal(preamble.length, 1, 'the agent -> task resolution appears once, inside withCaller');
+  assert.match(source, /private withCaller</, 'and that one copy is the wrapper the tool-facing methods run through');
+});
+
+test('every advertised tool is its own module, and tools.ts is assembly and nothing else', () => {
+  const source = readFileSync(new URL('../src/mcp/tools.ts', import.meta.url), 'utf8');
+  // No tool body survives in the registry: a schema or a handler here is the
+  // 844-line scope growing back one tool at a time.
+  assert.equal(source.includes('inputSchema'), false, 'no schema is declared in the registry');
+  assert.equal(source.includes('handler:'), false, 'no handler is declared in the registry');
+  // Every name `--allowedTools` grants resolves to a module beside it, found by
+  // the one rule (`conclude_part` -> `concludePart.ts`) rather than by reading
+  // the registry. The reverse — a module under a name that was never granted —
+  // is a compile error rather than a test, because the registry is a
+  // `Record<McpToolName, …>`.
+  const imported = [...source.matchAll(/from '\.\/tools\/([A-Za-z]+)\.js';/g)].map((m) => m[1]);
+  for (const name of MCP_TOOL_NAMES) {
+    const module = name.replace(/_(.)/g, (_, c: string) => c.toUpperCase());
+    assert.ok(imported.includes(module), `${name} is built by tools/${module}.ts`);
+  }
+  assert.equal(
+    imported.filter((m) => m !== 'context').length,
+    MCP_TOOL_NAMES.length,
+    'one module per advertised tool, and no module that is not one',
+  );
 });
