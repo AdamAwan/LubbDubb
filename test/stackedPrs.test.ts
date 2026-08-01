@@ -348,6 +348,7 @@ test('a replan is not throttled by the planner that produced the plan it is amen
     outcome: 'executed',
     detail: '',
     rule: 'issue-plan',
+    admission: null,
     createdAt: '2026-07-25T11:58:00.000Z',
   };
   const now = '2026-07-25T12:00:00.000Z';
@@ -375,6 +376,7 @@ test('an attempt stamped in the same millisecond as the replan request is the *p
     outcome: 'executed',
     detail: '',
     rule: 'issue-plan',
+    admission: null,
     createdAt: at,
   };
   const requested = plan({ status: 'planning', updatedAt: at });

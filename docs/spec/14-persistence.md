@@ -30,7 +30,7 @@ Current entries:
 | ------------ | -------------------------------------------------------------------------------------------------------- |
 | `tasks`      | `origin_title`, `origin_summary`, `dispatch_reason`                                                      |
 | `agents`     | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
-| `decisions`  | `rule`                                                                                                   |
+| `decisions`  | `rule`, `admission`                                                                                      |
 | `findings`   | `ticket_ref`                                                                                             |
 | `plans`      | `risks`, `out_of_scope`, `document`, `discussing`                                                        |
 | `plan_parts` | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
@@ -72,7 +72,7 @@ introduced.
 | `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.      | `target_ref` is `PRIMARY KEY` |
 | `agent_transcripts`  | Chunked agent output.                                                                          | `PRIMARY KEY (agent_id, seq)` |
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                | —                             |
-| `decisions`          | The audit log. `action` is JSON; `rule` is lifted off it at record time.                       | —                             |
+| `decisions`          | The audit log. `action` is JSON; `rule` and `admission` are lifted off it at record time.       | —                             |
 | `connector_state`    | The fake provider's editable world, so injected events survive restarts.                       | —                             |
 | `world_events`       | Observed world transitions — the activity feed's backing store.                                | —                             |
 | `world_baseline`     | The last snapshot the harness diffed against.                                                  | Single row: `CHECK (id = 1)`  |
@@ -235,8 +235,16 @@ it ever being redone.
 
 ### Decisions
 
-`recordDecision(input)` — **lifts `action.rule` into the `rule` column** at record time, so the audit
-log can answer "which rule fired" first-class. `listDecisions(limit=200)`.
+`recordDecision(input)` — **lifts `action.rule` and `action.admission` into the `rule` and `admission`
+columns** at record time, so the audit log can answer "what proposed this" and "what became of it"
+separately rather than losing the first to the second. `listDecisions(limit=200)`.
+
+`admission` is nullable and is set only by the two admissions that emit an action of their own
+(`branch-notify`, `cooldown-escalate`); the held reasons (`cooldown`, `capped`, `unapproved`,
+`superseded`, `waiting`) hold a candidate that was never executed and so write no decision row at all.
+Rows written before the column existed carry the *outcome* in `rule` with `admission` NULL — the
+proposer is unrecoverable, nothing rewrites them, and the cockpit renders the two shapes distinctly.
+See [05](05-dispatcher.md#two-columns-on-the-decision-row).
 
 ### World and errors
 

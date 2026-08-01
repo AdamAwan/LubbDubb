@@ -172,6 +172,7 @@ test('a spent planner attempt cap lets pickup run as it does today', async () =>
     outcome: 'executed',
     detail: '',
     rule: 'issue-plan',
+    admission: null,
     createdAt: '2026-07-25T00:00:00.000Z',
   }));
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(

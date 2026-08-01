@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react';
 import type { Decision, DispatchRule, Proposal } from '../../../types.js';
-import { relTime, linkify } from '../../../components/util.js';
+import { relTime, linkify, decisionAttribution } from '../../../components/util.js';
 
 /**
  * The audit trail. Every decision the harness made, newest first, each with its
  * outcome, the action it chose, the reason the dispatcher gave, and when. The
  * filter chips let you narrow to just what executed, or just what got deferred.
- * Clicking a row expands it to show the dispatcher rule that produced it.
+ * Clicking a row expands it to show **what proposed** the action and **what
+ * became of it** — two readings, kept apart, because one column answering both
+ * is what made a throttled pickup read as `cooldown-escalate` with no trace of
+ * the pickup. Rows written before the split still have that shape and are
+ * labelled as such rather than guessed at: the proposer is not recoverable.
  *
  * Rows the *human* authorized are marked as such: the table records what the
  * harness decided each cycle and had no idea what you decided, which was the
@@ -72,7 +76,7 @@ export function DecisionLog({
       <div className="auditlog">
         {shown.length === 0 && <p className="empty">No decisions match.</p>}
         {shown.map((d) => {
-          const rule = d.rule ? rules[d.rule] : undefined;
+          const attribution = decisionAttribution(d, rules);
           const decider = deciderOf(d);
           const expanded = expandedId === d.id;
           return (
@@ -81,7 +85,7 @@ export function DecisionLog({
               className={`audit clickable ${d.outcome}`}
               role="button"
               tabIndex={0}
-              title={expanded ? 'Hide dispatch rule' : 'Show dispatch rule'}
+              title={expanded ? 'Hide attribution' : 'Show what proposed this, and what became of it'}
               onClick={() => setExpandedId(expanded ? null : d.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -105,20 +109,16 @@ export function DecisionLog({
               {d.detail && <div className="audit-detail">{linkify(d.detail, refUrls)}</div>}
               {expanded && (
                 <div className="audit-rule">
-                  {rule ? (
-                    <>
+                  {attribution.entries.map(({ label, id, rule }) => (
+                    <div key={label}>
                       <div className="audit-rule-head">
-                        <span className="audit-rule-number">{rule.kind === 'rule' ? 'Rule' : rule.kind}</span>
-                        <span className="audit-rule-name">{rule.name}</span>
+                        <span className="audit-rule-number">{label}</span>
+                        <span className="audit-rule-name">{rule ? rule.name : `unknown id “${id}”`}</span>
                       </div>
-                      <div className="audit-rule-desc">{rule.description}</div>
-                    </>
-                  ) : (
-                    <div className="audit-rule-desc muted">
-                      No dispatcher rule recorded for this decision
-                      {d.rule ? ` (unknown rule id "${d.rule}")` : ''}.
+                      {rule && <div className="audit-rule-desc">{rule.description}</div>}
                     </div>
-                  )}
+                  ))}
+                  {attribution.note && <div className="audit-rule-desc muted">{attribution.note}</div>}
                 </div>
               )}
             </div>

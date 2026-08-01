@@ -13,6 +13,7 @@ function dispatched(origin: string, createdAt: string): Decision {
     outcome: 'executed',
     detail: '',
     rule: null,
+    admission: null,
     createdAt,
     action: { type: 'dispatch_code_agent', reason: 'r', originRef: origin },
   };
@@ -57,6 +58,7 @@ test('once escalated for an origin, the cap holds silently (no re-escalation)', 
       outcome: 'executed',
       detail: '',
       rule: null,
+      admission: null,
       createdAt: '2026-07-21T00:41:00Z',
       action: { type: 'escalate_to_human', reason: 'r', context: { originRef: 'pr:1:mergeable' } },
     },
@@ -72,6 +74,7 @@ test('deferred dispatches are not attempts (they never ran)', () => {
     outcome: 'deferred',
     detail: '',
     rule: null,
+    admission: null,
     createdAt: '2026-07-21T00:00:30Z',
     action: { type: 'dispatch_code_agent', reason: 'r', originRef: 'pr:1:mergeable' },
   };

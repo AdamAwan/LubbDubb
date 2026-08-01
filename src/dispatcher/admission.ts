@@ -14,7 +14,11 @@ import { DISPATCH_RULES, type DispatchRuleId } from './rules.js';
  *
  * - `branch-notify` and `cooldown-escalate` were entries in the rule registry,
  *   which made a throttled pickup audit as `cooldown-escalate` and lose the fact
- *   that it was `issue-pickup` that got throttled.
+ *   that it was `issue-pickup` that got throttled. They are still registry
+ *   entries — a persisted id must resolve — but they no longer *displace* the
+ *   proposer: `decisions.admission` is their column and `decisions.rule` keeps
+ *   naming the rule, with `AdmissionId` making the two vocabularies distinct
+ *   types so a rule id cannot land in the outcome column.
  * - `cooldown` / `capped` / `unapproved` were a `held` string on the candidate.
  * - `waiting` was decided inline by the headroom cut.
  * - **Suppression was not represented at all** — a rule superseded by an earlier
@@ -28,6 +32,11 @@ import { DISPATCH_RULES, type DispatchRuleId } from './rules.js';
  * Why a proposed candidate did not become a dispatch this cycle. Every one of
  * these reaches the cockpit's Up next queue — that is the whole contract, and
  * what makes "nothing happened and nobody can say why" unrepresentable.
+ *
+ * None of them reaches `decisions.admission`, and that is not an omission: a
+ * held candidate was **never executed**, so there is no decision row for it to
+ * land on. Only the two admissions that emit an action of their own
+ * (`AdmissionId` in `rules.ts`) are ever recorded there.
  */
 type HeldReason =
   /** The per-origin re-dispatch throttle (see `dispatchVerdict`). */

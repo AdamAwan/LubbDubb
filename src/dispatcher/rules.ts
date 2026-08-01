@@ -22,14 +22,18 @@
  * - **`rule`** — proposes work from the world. These are the pipeline, in order.
  * - **`admission`** — decides what becomes of something a rule proposed. Not
  *   ordered per-feature and not a stage: every proposal passes the same chain
- *   (see `admission.ts`). Two of them emit actions of their own and so still need
- *   an id a decision row can carry.
+ *   (see `admission.ts`). Two of them emit actions of their own, and those land
+ *   in `decisions.admission` — a **column of its own**, so a throttled pickup
+ *   records `issue-pickup` as its proposer *and* `cooldown-escalate` as its
+ *   outcome rather than losing the first to the second. {@link AdmissionId} is
+ *   what keeps the two columns' vocabularies apart at compile time.
  * - **`terminal`** — a property of the finished cycle rather than of any rule.
  *
  * The registry keeps all three because `decisions.rule` is **persisted**: a row
- * written months ago naming `cooldown-escalate` must still resolve to something
- * the Decision log can render. So the registry is the display vocabulary (a
- * superset) and the pipeline is the ordered subset that actually runs.
+ * written months ago naming `cooldown-escalate` — before the split gave the
+ * outcome its own column — must still resolve to something the Decision log can
+ * render. So the registry is the display vocabulary (a superset) and the pipeline
+ * is the ordered subset that actually runs.
  */
 
 /**
@@ -249,6 +253,18 @@ const RULES = [
 
 /** Every id that can appear in `decisions.rule`, rules and non-rules alike. */
 export type DispatchRuleId = (typeof RULES)[number]['id'];
+
+/**
+ * The ids that can appear in `decisions.admission` — what *became* of a proposal,
+ * as against the `rule` column's what *proposed* it.
+ *
+ * Derived from the registry rather than written out, so a rule id structurally
+ * cannot land in the admission column: that conflation is the whole defect the
+ * split exists to end, and a hand-written union would let it back in the moment
+ * somebody added an id. `idle` is excluded with the rules — it is a property of
+ * the finished cycle, not a verdict on anything proposed.
+ */
+export type AdmissionId = Extract<(typeof RULES)[number], { kind: 'admission' }>['id'];
 
 /**
  * The ids that are pipeline stages, in evaluation order. The dispatcher walks

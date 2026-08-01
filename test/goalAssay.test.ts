@@ -105,6 +105,7 @@ function spentCap(origin: string, branch: string): Decision[] {
     action: { type: 'dispatch_code_agent', branch, title: 'x', prompt: 'x', originRef: origin, reason: 'x' },
     outcome: 'executed',
     rule: 'issue-assay',
+    admission: null,
     detail: '',
     createdAt: '2026-07-27T00:00:00.000Z',
   })) as Decision[];
@@ -239,6 +240,7 @@ test('a cooling assayer still suppresses pickup for that cycle, and stays visibl
       },
       outcome: 'executed',
       rule: 'issue-assay',
+      admission: null,
       detail: '',
       createdAt: '2026-07-28T11:55:00.000Z', // inside the 15-minute window
     },

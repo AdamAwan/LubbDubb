@@ -15,6 +15,19 @@ const base = {
    * the LLM dispatcher reasons freely and omits it — so it defaults to null.
    */
   rule: z.string().nullable().default(null),
+  /**
+   * What *became* of the proposal `rule` names — an `admission`-kind id from the
+   * same registry (`branch-notify`, `cooldown-escalate`), lifted into its own
+   * decision column beside `rule`. Null for the ordinary case, which is a rule's
+   * proposal admitted unchanged; the two columns answer different questions and
+   * neither is the other's fallback.
+   *
+   * Only the admissions that **emit an action** reach here. The rest
+   * (`cooldown`, `capped`, `unapproved`, `superseded`, `waiting`) hold a
+   * candidate that was never executed, so they are queue statuses on the Up next
+   * projection and produce no decision row at all.
+   */
+  admission: z.string().nullable().default(null),
 };
 
 /**

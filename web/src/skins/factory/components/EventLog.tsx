@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import type { Decision, DispatchRule } from '../../../types.js';
-import { linkify } from '../../../components/util.js';
+import { linkify, decisionAttribution } from '../../../components/util.js';
 import { Icon, type IconName } from './Sprite.js';
 
 /** The machine that carried the act out — the same vocabulary the floor uses. */
@@ -23,6 +23,12 @@ const stamp = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hou
  * a human authorized is audited under `human:<id>`, which is the same signal
  * Classic's decision log badges. Reading it here rather than adding a field is
  * what keeps the two skins agreeing about who did what.
+ *
+ * Rule and Outcome are two columns for the same reason they are two columns on
+ * the row: what proposed an act and what became of it are different facts, and a
+ * throttled pickup showing only `Attempt cap reached` was the whole defect.
+ * `decisionAttribution` is shared with Classic so neither skin has to re-decide
+ * what a pre-split row means.
  */
 export function EventLog({
   decisions,
@@ -44,12 +50,20 @@ export function EventLog({
             <th>Action</th>
             <th>Detail</th>
             <th>Rule</th>
+            <th>Outcome</th>
             <th>By</th>
           </tr>
         </thead>
         <tbody>
           {decisions.slice(0, 14).map((d) => {
-            const rule = d.rule ? rules[d.rule] : undefined;
+            const { entries, note } = decisionAttribution(d, rules);
+            // A pre-split row's single id is an *outcome*, so it is labelled
+            // `Outcome` and the Rule cell stays empty — the proposer it lost is
+            // not in the row, and inventing one here would be the conflation
+            // this split removed.
+            const cell = (label: string) => entries.find((e) => e.label === label);
+            const proposed = cell('Proposed by');
+            const became = cell('Admitted as') ?? cell('Outcome');
             const byHuman = d.cycleId.startsWith('human:');
             return (
               <tr key={d.id}>
@@ -61,7 +75,8 @@ export function EventLog({
                   </span>
                 </td>
                 <td>{linkify(d.detail, refUrls)}</td>
-                <td title={rule?.description}>{rule ? rule.name : '—'}</td>
+                <td title={proposed?.rule?.description ?? note}>{proposed?.rule?.name ?? '—'}</td>
+                <td title={became?.rule?.description ?? note}>{became?.rule?.name ?? '—'}</td>
                 <td>
                   <span className={`fx-by ${byHuman ? 'you' : ''} ${d.outcome === 'rejected' ? 'bad' : ''}`}>
                     {byHuman ? `you · ${d.outcome}` : d.outcome}

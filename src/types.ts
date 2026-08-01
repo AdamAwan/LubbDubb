@@ -1194,6 +1194,12 @@ export interface Action {
   reason: string;
   /** The dispatcher rule that produced this action (a `DISPATCH_RULES` id), when one did. */
   rule?: string | null;
+  /**
+   * What became of that proposal, when an admission transformed it (an
+   * `admission`-kind `DISPATCH_RULES` id). Null for a proposal admitted
+   * unchanged — see `decisions.admission`.
+   */
+  admission?: string | null;
   /** Payload shape depends on `type`; validated by zod at the boundary. */
   [key: string]: unknown;
 }
@@ -1207,10 +1213,24 @@ export interface Decision {
   outcome: DecisionOutcome;
   detail: string;
   /**
-   * The dispatcher rule that produced the action, lifted off it at record time
-   * so the audit log can answer "which rule fired" first-class. Null for
-   * decisions with no rule identity (LLM dispatcher, lifecycle bookkeeping).
+   * The dispatcher rule that **proposed** the action, lifted off it at record
+   * time so the audit log can answer "which rule fired" first-class. Null for
+   * decisions with no rule identity (LLM dispatcher, lifecycle bookkeeping) —
+   * and for the one action with no single proposer, the branch note (see
+   * `admission`).
    */
   rule: string | null;
+  /**
+   * What **became** of that proposal, when an admission transformed it rather
+   * than letting it through: `cooldown-escalate` (the attempt cap turned a
+   * dispatch into an escalation) or `branch-notify` (a fresh signal was
+   * delivered to the agent already on the branch). Null for the ordinary case.
+   *
+   * The two columns are not fallbacks for each other. A row written before this
+   * column existed carries the *outcome* in `rule` and `admission: null`, and
+   * which rule was throttled on one is unrecoverable — the renderers say which
+   * shape they are looking at rather than guessing.
+   */
+  admission: string | null;
   createdAt: string;
 }

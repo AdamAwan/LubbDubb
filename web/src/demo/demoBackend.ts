@@ -525,7 +525,18 @@ class DemoServer {
     return this.state.agents.filter((a) => ['starting', 'running', 'waiting'].includes(a.status)).length;
   }
 
-  private addDecision(type: string, outcome: string, detail: string, reason?: string, rule?: string): void {
+  /**
+   * `rule` names what proposed the act, `admission` what became of it — the same
+   * two columns the server records, so the demo's log renders like a real one.
+   */
+  private addDecision(
+    type: string,
+    outcome: string,
+    detail: string,
+    reason?: string,
+    rule?: string,
+    admission?: string,
+  ): void {
     const dec: Decision = {
       id: this.id('dec'),
       cycleId: this.id('cycle'),
@@ -533,6 +544,7 @@ class DemoServer {
       outcome,
       detail,
       rule: rule ?? null,
+      admission: admission ?? null,
       createdAt: new Date().toISOString(),
     };
     this.state.decisions = [dec, ...this.state.decisions].slice(0, 40);
@@ -738,6 +750,9 @@ class DemoServer {
             'respond_to_agent',
             'ok',
             `notified branch agent about comment on PR #${n}`,
+            undefined,
+            // No proposing rule: a branch note folds every fresh signal on the
+            // PR, so it is an admission with nothing single behind it.
             undefined,
             'branch-notify',
           );

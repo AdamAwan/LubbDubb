@@ -202,6 +202,7 @@ function dispatched(origin: string, createdAt: string): Decision {
     outcome: 'executed',
     detail: '',
     rule: null,
+    admission: null,
     createdAt,
     action: { type: 'dispatch_code_agent', reason: 'r', originRef: origin },
   };

@@ -314,6 +314,7 @@ test('a spent attempt cap returns the issue to ordinary pickup, with no escalati
     },
     outcome: 'executed',
     rule: 'issue-assess',
+    admission: null,
     detail: '',
     createdAt: '2026-07-27T00:00:00.000Z',
   });
@@ -342,6 +343,7 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
       },
       outcome: 'executed',
       rule: 'issue-assess',
+      admission: null,
       detail: '',
       // Inside the 15-minute cooldown window.
       createdAt: '2026-07-28T11:55:00.000Z',
