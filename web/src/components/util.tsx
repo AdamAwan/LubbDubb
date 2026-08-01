@@ -206,3 +206,14 @@ export function decisionAttribution(
     return { entries, note: 'No single proposing rule: this action folds signals from more than one concern.' };
   return { entries };
 }
+
+/** The issue number a plan hangs off (`issue:12` → 12), or null for a shape we don't recognise. */
+export function planIssueOf(originRef: string): number | null {
+  const m = /^issue:(\d+)$/.exec(originRef);
+  return m ? Number(m[1]) : null;
+}
+
+/** A part's dispatch origin — the key the "Up next" queue is joined on. */
+export function partOriginOf(issueNumber: number | null, slug: string): string {
+  return issueNumber === null ? '' : `issue:${issueNumber}:part:${slug}`;
+}

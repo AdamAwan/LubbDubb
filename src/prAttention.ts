@@ -56,6 +56,7 @@ import {
   prState,
 } from './prHealth.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
+import { isActiveTask } from './tasks.js';
 import type { Decision, Proposal, PullRequest, Task, WorldEvent } from './types.js';
 
 /**
@@ -371,8 +372,4 @@ function actLabel(proposal: Proposal): string {
   if (proposal.kind === 'merge') return 'the merge';
   if (proposal.kind === 'plan') return 'the plan';
   return 'the drafted reply';
-}
-
-function isActiveTask(t: Task): boolean {
-  return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
 }

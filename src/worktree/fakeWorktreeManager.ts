@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Worktrees } from './worktreeManager.js';
+import { branchDirName } from './branchDir.js';
 
 /** One recorded call, so a test can assert on the branch and base a dispatch asked for. */
 interface FakeWorktreeCall {
@@ -44,7 +45,7 @@ export class FakeWorktreeManager implements Worktrees {
     this.ensured.push(base === undefined ? { branch } : { branch, base });
     const existing = this.dirs.get(branch);
     if (existing) return Promise.resolve(existing);
-    const dir = resolve(this.root, sanitize(branch));
+    const dir = resolve(this.root, branchDirName(branch));
     mkdirSync(dir, { recursive: true });
     this.dirs.set(branch, dir);
     return Promise.resolve(dir);
@@ -58,9 +59,4 @@ export class FakeWorktreeManager implements Worktrees {
     rmSync(dir, { recursive: true, force: true });
     return Promise.resolve();
   }
-}
-
-/** The real manager's own path rule, so a fake path is wrong in the same ways. */
-function sanitize(branch: string): string {
-  return branch.replace(/[^a-zA-Z0-9._-]/g, '-');
 }

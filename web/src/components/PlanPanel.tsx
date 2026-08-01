@@ -1,6 +1,6 @@
 import type { Plan, PlanPart, QueueItem } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { refChip, refLink, relTime } from './util.js';
+import { partOriginOf, planIssueOf, refChip, refLink, relTime } from './util.js';
 
 /**
  * The multi-PR plan graph, per issue — the first time it is visible outside the
@@ -75,7 +75,7 @@ function PlanCard({
   onReplan: (planId: string) => Promise<unknown> | unknown;
   onViewPlan: (planId: string) => void;
 }) {
-  const issueNumber = issueOf(plan.originRef);
+  const issueNumber = planIssueOf(plan.originRef);
   const live = parts.filter((p) => p.status !== 'retired');
   // Every terminal, not just merges — a part can finish as a write-up or as the
   // determination that nothing needed building, and counting only merges would
@@ -85,7 +85,7 @@ function PlanCard({
   // the same rule `UpNext` draws. `capped` parts sit below it too, but they are
   // held by the plan's own limit rather than by a full fleet, so they say so.
   const cutAt = parts.findIndex((p) => {
-    const q = queued.get(originOf(issueNumber, p.slug));
+    const q = queued.get(partOriginOf(issueNumber, p.slug));
     return q !== undefined && q.status !== 'dispatching';
   });
   return (
@@ -153,7 +153,7 @@ function PlanCard({
           )}
           <PartRow
             part={part}
-            queue={queued.get(originOf(issueNumber, part.slug))}
+            queue={queued.get(partOriginOf(issueNumber, part.slug))}
             issueNumber={issueNumber}
             refUrls={refUrls}
           />
@@ -242,14 +242,3 @@ const MARK: Record<string, string> = {
   blocked: '!',
   retired: '–',
 };
-
-/** The issue number a plan hangs off (`issue:12` → 12), or null for a shape we don't recognise. */
-function issueOf(originRef: string): number | null {
-  const m = /^issue:(\d+)$/.exec(originRef);
-  return m ? Number(m[1]) : null;
-}
-
-/** A part's dispatch origin — the key the "Up next" queue is joined on. */
-function originOf(issueNumber: number | null, slug: string): string {
-  return issueNumber === null ? '' : `issue:${issueNumber}:part:${slug}`;
-}
