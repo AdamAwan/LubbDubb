@@ -9,7 +9,7 @@ import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusio
  * any of them says so — its plan rolled up, the assessor parked it delivered, the
  * agent declared it done, or its run was written up:
  *
- * - **the run's write-up exists** — rule 3h writes one only after the work is
+ * - **the run's write-up exists** — rule `issue-retro` writes one only after the work is
  *   over, and it is the report the operator wants to keep, so it is the surest
  *   "done, with something to read";
  * - **a `delivered` verdict** — the assessor's or the operator's park;

@@ -244,7 +244,7 @@ export function mergeableFromStatus(mergeStatus: string): boolean | undefined {
  * the merge rule read, so anything an operator can widen must be unable to claim
  * a PR cannot merge when Azure would complete it — or to stop the harness
  * merging one it would. Widening happens in {@link listPolicyCiChecks} instead,
- * and rule 1 reads that through `ciNeedsAttention`. Reviewer / comment /
+ * and rule `pr-ci-failing` reads that through `ciNeedsAttention`. Reviewer / comment /
  * work-item / merge-strategy policies are human or process gates that already
  * map onto `approved` / `unresolvedComments` / `mergeableState`, so folding them
  * in here would report "CI failing" for an unmet minimum-reviewers rule.

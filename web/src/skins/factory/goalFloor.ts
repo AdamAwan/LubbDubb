@@ -479,7 +479,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       kind: 'assay',
       kindLabel: 'Assay',
       name: assay.verdict === 'workable' ? 'Goal is workable' : 'Goal unclear',
-      meta: [`rule 3f · by ${assay.by}`],
+      meta: [`rule issue-assay · by ${assay.by}`],
       presence: 'built',
       status: assayStatus(assay.verdict),
       scanners: [],
@@ -694,7 +694,7 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     // wrong author for the same reason it was the wrong reading: for a decomposed
     // issue it resolves to `plan`, so a satellite saying *Verified · by plan*
     // would credit the goal check to a roll-up that never made one.
-    meta: [`rule 3e · assessment`, ...(satelliteAuthor(delivery, shortfall) ?? [])],
+    meta: [`rule issue-assess · assessment`, ...(satelliteAuthor(delivery, shortfall) ?? [])],
     presence: reading === 'unbuilt' ? 'unbuilt' : 'built',
     status: satelliteStatus(reading),
     scanners: [],

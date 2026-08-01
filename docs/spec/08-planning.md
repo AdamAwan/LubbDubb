@@ -1,7 +1,7 @@
 # 08 — The planning funnel
 
 `src/plans/`. On by default (`planning.enabled: true`); off leaves the funnel out entirely:
-every issue routes straight to `single`, rule 4 is un-narrowed, no planner is ever dispatched, and
+every issue routes straight to `single`, rule `issue-pickup` is un-narrowed, no planner is ever dispatched, and
 behaviour is exactly what it is without plans. Only the `rule` dispatcher implements it.
 
 On, every watched open issue passes a planning agent before any implementation work — a real change in
@@ -10,15 +10,15 @@ what the fleet spends its slots on, which is why it is opt-in where `mcp` is opt
 ## The four arms
 
 `resolvePlanRoute(input)` in `src/plans/planning.ts` is **the one place** an issue's arm is decided.
-Pure over the plan row plus the plan origin's cooldown verdict. Both the dispatcher (rules 3c and 4)
+Pure over the plan row plus the plan origin's cooldown verdict. Both the dispatcher (rules `issue-plan` and `issue-pickup`)
 and `issuePickupStatus` read it, so the cockpit's chip can never disagree with what fires.
 
-| Verdict                                              | Meaning                                                                                                                                                              |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{route:'single', failedOpen}`                       | Fall through to normal pickup. `failedOpen` marks the ones that got there because planning gave up.                                                                  |
-| `{route:'parts'}`                                    | Decomposed; the part scheduler owns it and pickup stays off.                                                                                                         |
-| `{route:'awaiting_approval'}`                        | Decomposed, and the decomposition is a proposal a human has not answered. Pickup stays off exactly as for `parts`; rule 4a queues the parts without dispatching any. |
-| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                             |
+| Verdict                                              | Meaning                                                                                                                                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{route:'single', failedOpen}`                       | Fall through to normal pickup. `failedOpen` marks the ones that got there because planning gave up.                                                                           |
+| `{route:'parts'}`                                    | Decomposed; the part scheduler owns it and pickup stays off.                                                                                                                  |
+| `{route:'awaiting_approval'}`                        | Decomposed, and the decomposition is a proposal a human has not answered. Pickup stays off exactly as for `parts`; rule `plan-part` queues the parts without dispatching any. |
+| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                                      |
 
 Resolution order:
 
@@ -35,7 +35,7 @@ gets worked normally. Nothing escalates: the cap is the signal, and an issue tha
 beats one that quietly stops.
 
 A **replan** fails back differently — to `parts`, not `single` — when `existingParts > 0`. An issue
-that already has parts has a decomposition to fall back on, and `single` would point rule 4 at the flat
+that already has parts has a decomposition to fall back on, and `single` would point rule `issue-pickup` at the flat
 `issue/<n>` branch git cannot create beside the existing part refs.
 
 ## Origins and branches
@@ -77,7 +77,7 @@ prevent; the cost the other way is at most one uncooled re-dispatch when a repla
 dispatched inside the same millisecond as the request, and the origin gate already stops that being a
 second concurrent planner.
 
-## Rule 3c — the planner
+## Rule `issue-plan` — the planner
 
 Dispatches a **code** agent (it needs a worktree to read the repo) on `plan/issue/<n>`, origin
 `issue:<n>:plan`, from the `issue-plan` template — or `issue-replan`, carrying `currentPlanSummary`,
@@ -276,7 +276,7 @@ than comparing to `merged`, so those sites cannot drift into disagreeing.
 
 Without this a plan could only contain work the planner could imagine merging, and — the expensive
 half — one no-code part parked the whole issue: it stayed `dispatched`, `liveParts` never emptied, the
-roll-up never reached `complete`, and rule 3b held the work item in the review state for the life of
+roll-up never reached `complete`, and rule `work-item-in-review` held the work item in the review state for the life of
 the plan.
 
 `concluded` is **not** a kind of retirement. `retired` means "dropped by an amendment before anything
@@ -314,7 +314,7 @@ that customised most — and this is the instruction without which the part cann
 
 The `conclude_part` tool is where an agent casts it; see [11](11-mcp-tools.md).
 
-## Rule 4a — scheduling parts
+## Rule `plan-part` — scheduling parts
 
 For each plan with status `active` — or `awaiting_approval`, which dispatches nothing (below) —
 whose issue is open and passes `issueWatchGateReason`:
@@ -322,7 +322,7 @@ whose issue is open and passes `issueWatchGateReason`:
 - Parts are read from `ctx.plans`/`ctx.planParts` **directly, not from `eligibleIssues`**. That list
   gates on the issue having no open PR, and a part's PR is exactly what makes the parent look taken.
 - Only the **watch/ignore tag** is applied, evaluated once on the parent. Not the workflow-state gate
-  — rule 3b parks a decomposed item in the review state for the life of the plan.
+  — rule `work-item-in-review` parks a decomposed item in the review state for the life of the plan.
 - `inFlight` counts **live tasks** on part origins, not the `dispatched` status, so a part whose agent
   died is not occupying a slot. `room = maxConcurrentPartsPerIssue - inFlight`.
 - Ready, unstaffed parts are ordered by dependency depth, then `seq`.
@@ -358,18 +358,18 @@ writes none — so the two default sites (`config.ts`, `DEFAULT_PLANNING`) canno
 
 **The gate is the plan's status.** Ingestion persists the verdict as `awaiting_approval` instead of
 `active`; accepting moves it to `active`, and that is the whole effect, because `awaiting_approval`
-is `active` with the gate closed. Rule 4a's question — "is this plan released" — is therefore the
+is `active` with the gate closed. Rule `plan-part`'s question — "is this plan released" — is therefore the
 status check it already had, and a superseded verdict structurally cannot release a new one, because
 a replan resets the row.
 
-| Step                      | What happens                                                                                                                                                                                                                                       |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Verdict lands             | `amendedPlanStatus(…, requireApproval)` → `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the verdict.                                                                                               |
-| Rule 3d (`plan-approval`) | Emits `propose_plan` for an `awaiting_approval` plan whose issue is open and watched, unless `planProposalHold` finds a pending one. Read off `ctx.plans`, not `eligibleIssues` — a replan of a live plan is re-approved while its parts have PRs. |
-| The executor              | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
-| Accept                    | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
-| Reject                    | `ProposalDesk.reject` → `refusePlan`.                                                                                                                                                                                                              |
-| Replan                    | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
+| Step                 | What happens                                                                                                                                                                                                                                       |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verdict lands        | `amendedPlanStatus(…, requireApproval)` → `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the verdict.                                                                                               |
+| Rule `plan-approval` | Emits `propose_plan` for an `awaiting_approval` plan whose issue is open and watched, unless `planProposalHold` finds a pending one. Read off `ctx.plans`, not `eligibleIssues` — a replan of a live plan is re-approved while its parts have PRs. |
+| The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
+| Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
+| Reject               | `ProposalDesk.reject` → `refusePlan`.                                                                                                                                                                                                              |
+| Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
 
 `planProposalHold(ref, proposals)` in `src/proposals/proposals.ts` holds on **`pending` only**, unlike
 `proposalHold`. A merge is proposed off world state that persists, so it needs a durable "no" and a
@@ -386,12 +386,12 @@ row that **is** that verdict is rewritten by both settlements. `test/planApprova
 polarity in both predicates rather than trusting the two to stay apart.
 
 **Rejection has an effect of its own**, because a bare "no" would park the issue: once the funnel is
-on, a plan is the only thing that schedules work for a decomposed issue (rule 3b parks the work item in
+on, a plan is the only thing that schedules work for a decomposed issue (rule `work-item-in-review` parks the work item in
 the review state for the life of the plan, and `resolvePlanRoute` fails a spent replan back to `parts`).
 So `refusePlan` (`src/plans/planApproval.ts`) retires every part `partHasWork` says nothing was started
 for, then takes `amendedPlanStatus('single', survivors)`:
 
-- **`single`** — nothing was in flight, so the issue falls back to being worked as one PR by rule 4.
+- **`single`** — nothing was in flight, so the issue falls back to being worked as one PR by rule `issue-pickup`.
 - **`active`** — parts are in flight, which means a _replan_ is being refused: the work already
   running carries on and the amendment's new parts are the ones retired. Collapsing here is impossible
   anyway, since git cannot create the flat `issue/<n>` branch beside the existing part refs.
@@ -508,12 +508,11 @@ nothing is dispatched, and nothing says so. Three things close it, kept separate
 three different jobs (`src/plans/planWedge.ts`):
 
 - **Noticing** — `planIsWedged(parts)`: every _live_ part blocked, not any. The collision blocks them
-  together or not at all, so a mixture is a plan still making progress. [Rule
-  3i](05-dispatcher.md#rule-3i--approved-plan-is-going-nowhere) escalates it once, deduped on an open
-  escalation for `issue:<n>:plan` **and** a recent executed one, exactly as rule 1b is. No agent is
+  together or not at all, so a mixture is a plan still making progress. [Rule `plan-blocked`](05-dispatcher.md#the-rules-in-evaluation-order) escalates it once, deduped on an open
+  escalation for `issue:<n>:plan` **and** a recent executed one, exactly as rule `pr-ci-blocked` is. No agent is
   dispatched, because none could help. Only `active` plans: an unapproved one is already in front of
   a human, with the same fact in the ask.
-- **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule 3d's ask
+- **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule `plan-approval`'s ask
   (never interpolated, for `ciFailureNote`'s reason) and names both the blocked parts and any open PR
   for the issue that no part claims. It **warns and does not block**: refusing to approve would put a
   git fact in front of a judgement about _shape_, the branch is one command from being gone, and the
@@ -524,7 +523,7 @@ three different jobs (`src/plans/planWedge.ts`):
   _I authorized it, it cannot run, work the issue whole instead_. The bar is `partHasWork`, so nothing
   with an agent, a branch or a PR behind it is retired — which is also what makes the collapse safe,
   since a part that never pushed has no branch to strand and the flat `issue/<n>` branch is exactly
-  the one rule 4 now wants.
+  the one rule `issue-pickup` now wants.
 
 **Nothing attaches the existing pull request to a part.** The single-arm PR claims to resolve the
 whole issue — the claim the decomposition overruled — so nothing knows which part, if any, it
@@ -556,13 +555,13 @@ the cockpit as silence rather than as a link to nowhere.
 withdraws any pending plan proposal, and kicks a cycle. That is all it does.
 
 Clearing `discussing` is not optional when a replan is requested mid-conversation: the flag is what
-picks the template rule 3c renders from `planning`, so leaving it set would render `discuss-plan` on
+picks the template rule `issue-plan` renders from `planning`, so leaving it set would render `discuss-plan` on
 the next dispatch instead of the `issue-replan` this call actually asked for — the two routes would
 disagree about what plain `planning` means. `PlanPanel.tsx` and the factory skin's `GoalFloor.tsx` keep
 Replan visible during a discussion for exactly this reason (the modal hides it, they don't); the route
 must be safe to call in that state, not merely reachable.
 
-The withdrawal is not optional under `requireApproval`: a pending verdict holds rule 3d off the plan,
+The withdrawal is not optional under `requireApproval`: a pending verdict holds rule `plan-approval` off the plan,
 so the amended decomposition would never be put to anyone — and the stale card, if accepted, would
 release a decomposition its reader never saw. It routes through the ordinary `ProposalDesk.reject`,
 which is safe precisely because the status write above already moved the plan, so `refusePlan` finds
@@ -589,7 +588,7 @@ what lets it inherit every safety property already argued for above rather than 
 
 `isPlanInDiscussion(plan)` (`src/plans/planDiscussion.ts`, pure) is the one predicate that tells a
 discussion apart from an ordinary replan: both put the plan row in `planning`, which is the whole
-mechanism rule 3c already dispatches a planner from. `discussing` (new `plans` column) only picks the
+mechanism rule `issue-plan` already dispatches a planner from. `discussing` (new `plans` column) only picks the
 prompt.
 
 `POST /api/plans/:id/discuss`:
@@ -598,10 +597,10 @@ prompt.
 2. **409 unless `plan.status === 'awaiting_approval'`.** Every framing of Discuss — the design, this
    section, the `discuss-plan` prompt itself ("before approving it") — only ever contemplates talking
    through a decomposition that is still a pending question. Without the guard, discussing a `single`
-   plan and then ending the discussion writes `awaiting_approval` over zero parts: rule 3d proposes it,
+   plan and then ending the discussion writes `awaiting_approval` over zero parts: rule `plan-approval` proposes it,
    an operator approves an empty decomposition, `resolvePlanRoute` now returns `parts` instead of
    `single`, and the issue is parked with no ready part, no agent and no chip explaining why. Discussing
-   an already-`active` plan is the milder version of the same mistake — it reopens the gate rule 4a
+   an already-`active` plan is the milder version of the same mistake — it reopens the gate rule `plan-part`
    already cleared and stops scheduling the remaining parts, which is exactly the harm `/discuss/end`'s
    own 409 (below) exists to prevent on the way back out. `PlanModal.tsx` hides the Discuss button
    outside `awaiting_approval` so the UI cannot offer what the route refuses.
@@ -610,14 +609,14 @@ prompt.
 5. Withdraw any pending plan proposal (`ProposalDesk.reject`, "superseded by a discussion"). Safe for
    the reason the replan withdrawal is safe: the status write lands first, so `refusePlan` finds the
    plan no longer `awaiting_approval` and no-ops — the withdrawal only closes the inbox item. And
-   **necessary**: a pending proposal holds rule 3d (`planProposalHold`), so the amended decomposition
+   **necessary**: a pending proposal holds rule `plan-approval` (`planProposalHold`), so the amended decomposition
    would never be put to anyone, and the stale card, if accepted, would release a plan its reader never
    saw.
 6. Broadcast, run a cycle.
 
 Returns `{ ok: true, plan }`.
 
-Rule 3c renders the `discuss-plan` template instead of `issue-replan` when `discussing` is set — same
+Rule `issue-plan` renders the `discuss-plan` template instead of `issue-replan` when `discussing` is set — same
 origin (`issue:<n>:plan`), same branch (`plan/issue/<n>`), same cooldown window, same attempt cap, same
 fail-open. `discuss-plan` is an ordinary overridable entry in the template book and tells the agent:
 this is a conversation, not a fresh decomposition; here is the current plan and its part states; use
@@ -626,10 +625,10 @@ satisfied; then finish.
 
 **Nothing is scheduled while you talk**, and each property is an existing gate rather than a new one:
 
-- rule 4a schedules parts only for `active` / `awaiting_approval` plans — `planning` schedules none;
-- rule 3c cannot dispatch a second planner while the discussion agent holds `issue:<n>:plan`
+- rule `plan-part` schedules parts only for `active` / `awaiting_approval` plans — `planning` schedules none;
+- rule `issue-plan` cannot dispatch a second planner while the discussion agent holds `issue:<n>:plan`
   (`findActiveTaskByOrigin`);
-- rule 3d proposes only for `awaiting_approval`, so no fresh approval card appears mid-conversation.
+- rule `plan-approval` proposes only for `awaiting_approval`, so no fresh approval card appears mid-conversation.
 
 **The conversation needs no new transport.** The agent parks with `escalate`; replies go through
 `POST /api/agents/:id/respond`, which works on any live agent and drives another turn on the default
@@ -640,7 +639,7 @@ pane is those two calls plus a link to the real drawer for tool calls.
 
 - **It amends.** `plan_submit` → `ingestPlanDocument` clears `discussing` as part of ingestion (not
   `upsertPlan` — folding the clear into ingestion is what stops an amendment silently re-opening a
-  discussion it did not ask to close) and lands `awaiting_approval`, so the next pulse's rule 3d puts a
+  discussion it did not ask to close) and lands `awaiting_approval`, so the next pulse's rule `plan-approval` puts a
   **fresh** proposal up. The stale card was withdrawn at step 4 above, so nothing holds it.
 - **You end it.** `POST /api/plans/:id/discuss/end` — 404 when the plan is unknown, **409 when
   `plan.discussing` is false** (the same compare-and-set discipline `releasePlan`/`refusePlan` apply to
@@ -648,7 +647,7 @@ pane is those two calls plus a link to the real drawer for tool calls.
   stale or duplicate call, reopening the approval gate on a plan whose parts are already dispatched).
   Otherwise it sets the plan back to `awaiting_approval`, clears `discussing`, broadcasts and runs a
   cycle — restoring the status is not an afterthought: clearing the flag alone would leave the plan in
-  `planning`, which is exactly what rule 3c dispatches a fresh planner from. It **does** end the
+  `planning`, which is exactly what rule `issue-plan` dispatches a fresh planner from. It **does** end the
   discussion agent — the live task on `planOrigin(planIssueNumber(plan.originRef))`, completed through
   the same `AgentManager.complete` the cockpit's own agent-complete button uses, the clean `done`
   terminal that reclaims the worktree rather than `kill`'s abandonment. Left alive, the planner holds a
@@ -658,7 +657,7 @@ pane is those two calls plus a link to the real drawer for tool calls.
   `requireApproval` re-check. A missing agent (already gone) or a completion that fails is a no-op, not
   a route failure: the plan restore is the important half and must land regardless. Returns
   `{ ok: true, plan }`.
-- **It dies.** The plan stays `planning` with `discussing` set, so rule 3c re-dispatches, bounded by the
+- **It dies.** The plan stays `planning` with `discussing` set, so rule `issue-plan` re-dispatches, bounded by the
   existing `dispatchVerdict` attempt cap on `issue:<n>:plan`; a spent cap fails the plan back to `parts`
   exactly as a spent replan does. Deliberately the same failure envelope as replan, not a new one.
 

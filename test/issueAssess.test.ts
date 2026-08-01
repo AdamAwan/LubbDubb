@@ -16,7 +16,7 @@ import { foldWorkGraph } from '../src/graph/workGraph.js';
 import type { Agent, Decision, Issue, IssueDelivery, Plan, Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-// Rule 3e — the assessor. What makes it fire, what makes it stand down, and the
+// Rule `issue-assess` — the assessor. What makes it fire, what makes it stand down, and the
 // one thing it must never do: let a second agent onto an issue it is judging.
 
 const NOW = '2026-07-28T12:00:00.000Z';
@@ -69,7 +69,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 
 /**
  * The dispatcher with the assessor on — everything else default, and the
- * retrospective explicitly off: rule 3h fires on exactly the issues rule 3e has
+ * retrospective explicitly off: rule `issue-retro` fires on exactly the issues rule `issue-assess` has
  * finished with, so leaving it on would put a second dispatch in every assertion
  * here about a parked issue. It has its own tests (test/retrospective.test.ts).
  */
@@ -117,7 +117,7 @@ function origins(actions: { type: string; originRef?: string | null }[]): string
 
 test('an issue whose delivering PR has merged and left the world is assessed, not re-picked', async () => {
   // The world after a merge: the issue is still open (waiting on sign-off) and
-  // `openPrForIssue` reads only the open list, so this is byte-for-byte rule 4's
+  // `openPrForIssue` reads only the open list, so this is byte-for-byte rule `issue-pickup`'s
   // precondition. Before the assessor, a second agent was dispatched here to redo
   // work already sitting on the default branch.
   const { actions } = await assessor().decide(ctx());
@@ -139,7 +139,7 @@ test('an issue whose delivering PR has merged and left the world is assessed, no
 
 test('with the flag off nothing changes — the issue is picked up exactly as today', async () => {
   const { actions } = await new RuleDispatcher().decide(ctx());
-  assert.deepEqual(origins(actions), ['issue:12'], 'off by default, so rule 4 is un-narrowed');
+  assert.deepEqual(origins(actions), ['issue:12'], 'off by default, so rule `issue-pickup` is un-narrowed');
 });
 
 // -- the prior-work condition ------------------------------------------------
@@ -203,7 +203,7 @@ test('every origin the harness dispatches under an issue is classified deliberat
 
 test('an issue the planner routed to `single` is picked up, not assessed', async () => {
   // The bug: the planner's own task sits at `issue:12:plan`, which counted as work
-  // having been done, so rule 3e fired on an issue nothing had ever built — and
+  // having been done, so rule `issue-assess` fired on an issue nothing had ever built — and
   // suppressed the pickup that was the whole point of the `single` verdict. The
   // assessor then honestly reported nothing delivered, the shortfall replanned,
   // and the loop closed with no PR ever written.
@@ -299,7 +299,7 @@ test('the watch gate applies, evaluated once on the issue', async () => {
 // -- failing open ------------------------------------------------------------
 
 test('a spent attempt cap returns the issue to ordinary pickup, with no escalation', async () => {
-  // Narrowing rule 4 without this turns any assessor crash into a permanently
+  // Narrowing rule `issue-pickup` without this turns any assessor crash into a permanently
   // parked issue — the planner's fail-open, for the planner's reason.
   const attempt = (i: number): Decision => ({
     id: `d${i}`,

@@ -145,7 +145,7 @@ Behaviour worth knowing:
 - **Arm 2 is positional rather than an identity test, and has to be.** `viewer` is whoever holds
   `GITHUB_TOKEN`, which on a single-operator deployment is the operator themselves — so comparing a
   thread _root's_ author against it marked every review comment the operator left as handled the
-  instant they wrote it, and rule 2b never saw it. The harness was silently ignoring exactly the
+  instant they wrote it, and rule `pr-review-comment` never saw it. The harness was silently ignoring exactly the
   reviews a human took the time to write, and no author comparison can fix it: the two identities are
   the same string. The position test needs none — the harness only ever posts _replies_ under a root
   (`createPullReviewReply`; a `commentId: null` reply is an issue comment, which this list never

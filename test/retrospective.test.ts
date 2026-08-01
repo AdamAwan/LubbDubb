@@ -159,7 +159,7 @@ test('a submission with no summary is refused, and an over-long document is kept
   system.store.close();
 });
 
-// -- rule 3h -----------------------------------------------------------------
+// -- rule `issue-retro` -----------------------------------------------------------------
 
 const NOW = '2026-07-30T12:00:00.000Z';
 
@@ -297,7 +297,7 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
   await system.harness.runCycle('manual');
 
   const retroTask = store.listTasks().find((t) => t.originRef === 'issue:12:retro');
-  assert.ok(retroTask, 'rule 3h dispatched a retrospective agent');
+  assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
   // The pad, attributed and quoted...
   assert.match(retroTask.prompt, /issue:12:part:schema/);
   assert.match(retroTask.prompt, /> the ALTER needed a PRAGMA check first/);

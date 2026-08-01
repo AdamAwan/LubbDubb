@@ -209,7 +209,7 @@ test('ciFailureNote: nothing to say adds nothing at all', () => {
 
 test('classifyCiFailures: an advisory failing check is never classified', () => {
   // Not dispatched, not escalated, not muted — it is not the CI policy's business
-  // at all. Rule 2b owns the signal the Azure comment policy restates.
+  // at all. Rule `pr-review-comment` owns the signal the Azure comment policy restates.
   const v = classifyCiFailures([{ name: 'Comment requirements', status: 'failing', advisory: true }], policy());
   assert.deepEqual(v.dispatch, []);
   assert.deepEqual(v.escalate, []);
@@ -291,7 +291,7 @@ test('loadConfig: the ci block defaults to empty, round-trips, and is validated 
 });
 
 // --------------------------------------------------------------------------
-// Rule 1, through the dispatcher
+// Rule `pr-ci-failing`, through the dispatcher
 // --------------------------------------------------------------------------
 
 async function decide(prs: PullRequest[], ci: CiPolicy, extra: Partial<DispatchContext> = {}) {
@@ -299,14 +299,14 @@ async function decide(prs: PullRequest[], ci: CiPolicy, extra: Partial<DispatchC
   return dispatcher.decide(context(prs, extra));
 }
 
-test('rule 1: an unconfigured harness dispatches on any failure, exactly as before', async () => {
+test('rule `pr-ci-failing`: an unconfigured harness dispatches on any failure, exactly as before', async () => {
   const result = await decide([pr(7, { ciChecks: checks(['lint', 'failing']) })], policy());
   const dispatched = result.actions.filter((a) => a.type === 'dispatch_code_agent');
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0]!.originRef, 'pr:7:ci');
 });
 
-test('rule 1: an ignored check leaves the PR alone — no agent, no escalation', async () => {
+test('rule `pr-ci-failing`: an ignored check leaves the PR alone — no agent, no escalation', async () => {
   const result = await decide(
     [pr(7, { ciChecks: checks(['deploy-preview', 'failing']) })],
     policy({ match: 'deploy-*', onFailure: 'ignore' }),
@@ -317,7 +317,7 @@ test('rule 1: an ignored check leaves the PR alone — no agent, no escalation',
   );
 });
 
-test('rule 1: guidance reaches the agent appended to the prompt, not interpolated into it', async () => {
+test('rule `pr-ci-failing`: guidance reaches the agent appended to the prompt, not interpolated into it', async () => {
   const result = await decide(
     [pr(7, { ciChecks: checks(['lint', 'failing'], ['deploy-preview', 'failing']) })],
     policy({ match: 'lint', onFailure: 'dispatch', guidance: 'Run the lint skill.' }, { match: 'deploy-*' }),
@@ -330,7 +330,7 @@ test('rule 1: guidance reaches the agent appended to the prompt, not interpolate
   assert.match(dispatch.prompt, /NOT yours to fix — deploy-preview/);
 });
 
-test('rule 1: an escalate-only failure asks a human once and dispatches nobody', async () => {
+test('rule `pr-ci-failing`: an escalate-only failure asks a human once and dispatches nobody', async () => {
   const ci = policy({ match: 'infra-*', onFailure: 'escalate' });
   const prs = [pr(7, { ciChecks: checks(['infra-gate', 'failing']) })];
 
@@ -366,7 +366,7 @@ test('rule 1: an escalate-only failure asks a human once and dispatches nobody',
   );
 });
 
-test('rule 1: an urgent check sorts its PR ahead of other PR concerns', async () => {
+test('rule `pr-ci-failing`: an urgent check sorts its PR ahead of other PR concerns', async () => {
   const prs = [
     pr(5, { ciChecks: checks(['lint', 'failing']) }),
     pr(9, { ciChecks: checks(['security-scan', 'failing']) }),
@@ -388,7 +388,7 @@ test('rule 1: an urgent check sorts its PR ahead of other PR concerns', async ()
   );
 });
 
-test('rule 1: a stacked PR whose base is red is still suppressed, policy or no policy', async () => {
+test('rule `pr-ci-failing`: a stacked PR whose base is red is still suppressed, policy or no policy', async () => {
   const base = pr(1, { branch: 'feature/1', ciChecks: checks(['lint', 'failing']) });
   const child = pr(2, { branch: 'feature/2', baseBranch: 'feature/1', ciChecks: checks(['lint', 'failing']) });
   const result = await decide([base, child], policy({ match: 'lint', onFailure: 'dispatch' }));

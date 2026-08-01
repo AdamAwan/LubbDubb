@@ -186,7 +186,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `DispatchContext.priorityOverrides` (wired in `harness.ts` from `store.listPriorityOverrides()`
     beside `queuedJobs`). The pure `rankByPriorityOverride` (`src/dispatcher/priorityOverride.ts`)
     re-sorts the collected `candidates` **once, just before the headroom cut**, into three tiers:
-    rule-0 jobs first (a manual job is distinct work, not a re-prioritisation — an override never
+    `manual-job` items first (a manual job is distinct work, not a re-prioritisation — an override never
     moves one), then overridden origins by ascending rank (`0` = "do this next"), then everything
     else in its natural order. It **only re-orders**: it never clears a `held` verdict, so a
     cooldown / cap / ignore tag / unapproved plan still holds an item wherever the override placed
@@ -198,7 +198,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     `harness.ts`: it refreshes `last_seen_at` for every origin still queued **or staffed** (so a
     long-running item keeps its priority) and drops any untracked longer than the TTL (default 7
     days; `0` disables). Tests: `test/priorityOverride.test.ts` (the pure ranking) and the override
-    block in `test/upNext.test.ts` (persistence, restart, held-stays-held, rule-0-first, pruning).
+    block in `test/upNext.test.ts` (persistence, restart, held-stays-held, manual-job-first, pruning).
 - **Operator-launched jobs (the `jobs` table + rule `manual-job`).** A job is an ad-hoc prompt queued from
   the cockpit (`POST /api/jobs` → `Store.createJob`, status `queued`). Unlike a `Task` (created
   the instant an agent spawns), a job persists _ahead of_ dispatch so it can sit in a queue when
@@ -1852,7 +1852,7 @@ from the last snapshot, so a `merge_pr` only works on a PR seen in a prior cycle
 The work item's raw **`System.State`** (unlike `Issue.state`, which collapses to open/closed) is
 preserved on `Issue.workItemState`, which drives two _state-based_ (not label-based) dispatcher
 knobs — orthogonal to the watch/ignore label gate below, don't conflate them. Both are off unless
-configured, so standard setups don't regress: **(1)** `issuePickupStates` gates rule-4 pickup to
+configured, so standard setups don't regress: **(1)** `issuePickupStates` gates `issue-pickup` to
 items in an allowed workflow state (e.g. `["Ready","Doing"]`) via the pure `isIssuePickupEligible`
 — items with no `workItemState` (github/fake) bypass it. **(2)** `issueInReviewState` (e.g.
 `"In Review"`) is the back-off: when a PR is open for a still-in-pickup work item (matched by its

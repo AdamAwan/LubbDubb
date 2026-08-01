@@ -69,7 +69,7 @@ function testConfig() {
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
     // The funnel in front of pickup would spawn an assayer/planner first; this
-    // test is about what rule 4 puts on the task row.
+    // test is about what rule `issue-pickup` puts on the task row.
     planning: { enabled: false } as never,
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
@@ -80,7 +80,7 @@ test('a dispatched task carries the source item title, summary and dispatch reas
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend });
 
-  // Straight to rule 4: the deliberation rules in front of pickup are off here, so
+  // Straight to rule `issue-pickup`: the deliberation rules in front of pickup are off here, so
   // the agent that spawns is the one working the issue and its task carries the
   // issue's own title and body.
   system.connector.inject({

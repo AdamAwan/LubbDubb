@@ -1,5 +1,5 @@
 <!--
-  Sent to a code agent when an open work item / issue has no open PR and no agent is on it (rule 4). Placeholders: {number} {title} {body} {branch}.
+  Sent to a code agent when an open work item / issue has no open PR and no agent is on it (rule `issue-pickup`). Placeholders: {number} {title} {body} {branch}.
 -->
 
 GitHub issue #{number} ("{title}") needs resolving.

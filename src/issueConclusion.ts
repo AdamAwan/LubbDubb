@@ -11,11 +11,11 @@ import type { ConclusionAuthor, IssueConclusion, IssueConclusionVerdict, IssueSh
  * delivered and it is waiting on test. Nothing outside the harness distinguishes
  * the two, and the only party that knows is the agent that did the work.
  *
- * Left unresolved, that ambiguity had a concrete cost. Rule 3b's inverse arm
+ * Left unresolved, that ambiguity had a concrete cost. Rule `work-item-back-to-pickup`
  * moved a reviewed item back to a pickup state whenever no PR was open for it —
  * and `openPrForIssue` reads only the *open* list, so "the PR merged" and "there
  * was never a PR" are one observation. A merged PR therefore bounced its ticket
- * back to `Ready`, and rule 4 put a fresh agent on work already sitting on the
+ * back to `Ready`, and rule `issue-pickup` put a fresh agent on work already sitting on the
  * default branch.
  *
  * ## Asked of whoever owns the whole issue
@@ -40,7 +40,7 @@ import type { ConclusionAuthor, IssueConclusion, IssueConclusionVerdict, IssueSh
  * stored: it is what a missing row resolves to. Keeping it distinct from
  * `more_work` is the entire fix. Folding the two would restore today's behaviour
  * for every agent that forgets to declare — which is to say it would preserve the
- * bug and make the fix contingent on model diligence. Rule 3b acts only on an
+ * bug and make the fix contingent on model diligence. Rule `work-item-back-to-pickup` acts only on an
  * explicit `more_work`, so an undeclared item stays parked and the cockpit says
  * that nobody vouched for it.
  */
@@ -93,7 +93,7 @@ const UNDECLARED: ResolvedConclusion = { verdict: 'undeclared', by: null, note: 
  * assessment **overwrote the working agent's own declaration**, its note, its
  * author and its timestamp, and the resolver read `by: 'assessor'` and
  * `by: 'agent'` through one arm with no precedence between them. Two records, one
- * resolver, and rule 3b needs no new branch.
+ * resolver, and rule `work-item-back-to-pickup` needs no new branch.
  *
  * Pure over its arguments — no store, no world — so the one question the
  * dispatcher, the cockpit chip and the tool layer all ask has exactly one answer.

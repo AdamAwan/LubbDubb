@@ -118,10 +118,10 @@ export interface Issue {
    * issue reports `planning`. Both readings are true; neither is this one.
    *
    * **Present only while the verdict still stands**, which is the same reading
-   * `deliveryHold` gives rule 4 — a tracker move back into a pickup state or a
+   * `deliveryHold` gives rule `issue-pickup` — a tracker move back into a pickup state or a
    * world transition since `decidedAt` ends it, and the field goes null with it.
    * So absent means "no standing goal check", never "there was never one": once
-   * released the issue is back in play and rule 3e will assess it again, and a
+   * released the issue is back in play and rule `issue-assess` will assess it again, and a
    * floor still reading *Verified* beside a patch that is ready to mine would be
    * the contradiction this field exists to remove.
    */
@@ -160,7 +160,7 @@ export interface Issue {
     commentRef?: string | null;
   } | null;
   /**
-   * The run's own write-up (rule 3h), once a goal has been delivered and written
+   * The run's own write-up (rule `issue-retro`), once a goal has been delivered and written
    * up — the **reading**, not the writing. The document is fetched when a reader
    * opens it (`api.getRetrospective`), because this snapshot is polled and a
    * write-up per issue would be paid for on every poll.

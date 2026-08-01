@@ -24,7 +24,7 @@ import type { Agent, Issue, IssueConclusion, IssueShortfall, Plan, Proposal, Tas
 // Issue #159 — the assessor's negative verdict, and what it drives.
 //
 // The loop is Plan → Work → is the goal achieved? → No → re-plan. Before this,
-// both ends existed and nothing joined them: rule 3e asked the question and the
+// both ends existed and nothing joined them: rule `issue-assess` asked the question and the
 // answer landed in a row whose only consumer emits a *tracker* move, so on GitHub
 // it changed no dispatch at all and on a decomposed issue it changed none anywhere.
 
@@ -201,7 +201,7 @@ test('the escalate arm asks once — deduped on the inbox and on the audit log a
   const base = { shortfalls: [shortfallRow({ cause: 'goal' })], plans: [planRow()] };
   const ref = shortfallRef(12);
 
-  // Rule 1b's pattern: each half covers the other's blind spot — an inbox item
+  // Rule `pr-ci-blocked`'s pattern: each half covers the other's blind spot — an inbox item
   // that outlives the decision window, and a decision that outlives the item.
   const viaInbox = await decide(
     ctx({
@@ -245,8 +245,8 @@ test('the escalate arm asks once — deduped on the inbox and on the audit log a
 });
 
 test('with the funnel off both plan-shaped arms degrade rather than parking the issue', async () => {
-  // A replan needs rule 3c to pick the `planning` plan up and a follow-up part
-  // needs rule 4a to schedule it. With planning off, accepting either would park
+  // A replan needs rule `issue-plan` to pick the `planning` plan up and a follow-up part
+  // needs rule `plan-part` to schedule it. With planning off, accepting either would park
   // the issue on a transition nothing consumes.
   const { actions } = await new RuleDispatcher({}, {}, undefined, 'main').decide(
     ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [planRow()] }),
@@ -366,7 +366,7 @@ test('accepting a plan-cause shortfall sends the decomposition back to a planner
   const accepted = await system.proposals.accept(proposal!.id, 'agreed');
   assert.equal(accepted!.outcome, 'performed');
   const plan = system.store.getPlanByOrigin('issue:12')!;
-  assert.equal(plan.status, 'planning', 'which is the entire effect — rule 3c takes it from here');
+  assert.equal(plan.status, 'planning', 'which is the entire effect — rule `issue-plan` takes it from here');
   assert.match(plan.reason ?? '', /the split left out the CLI entirely/, 'the replanner is told what fell short');
   // The row is consumed by the effect it drove, so the rule does not re-propose it.
   assert.equal(system.store.getShortfall('issue:12'), null);
@@ -472,7 +472,7 @@ test('the cockpit is shipped the verdict beside the pickup chip, not inside it',
   const row = snap.world.issues.find((i) => i.number === 12)!;
   assert.equal(row.shortfall?.cause, 'plan');
   // Beside the pickup verdict, never inside it. This issue is decomposed, so
-  // rule 4 leaves it to rule 4a either way — what matters is that the shortfall
+  // rule `issue-pickup` leaves it to rule `plan-part` either way — what matters is that the shortfall
   // is nowhere among the reasons. Folding it in would make it a pickup gate,
   // which is the one thing it must never be.
   assert.equal(

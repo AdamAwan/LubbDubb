@@ -6,7 +6,7 @@ import { dirname, resolve } from 'node:path';
  * Local access control for the cockpit's HTTP/WebSocket surface.
  *
  * **Why there is any.** The surface is 17 mutating routes, and `POST /api/jobs`
- * is the one that sets the severity: an arbitrary prompt that rule 0 dispatches
+ * is the one that sets the severity: an arbitrary prompt that rule `manual-job` dispatches
  * ahead of every world-driven rule, spawning a real agent under
  * `agentPermissionMode` in a worktree of the operator's repo, inheriting the
  * launching shell's environment. Unauthenticated on `0.0.0.0` that is remote

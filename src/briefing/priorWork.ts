@@ -34,7 +34,7 @@ import type {
  * - **the pad**, read by `retroBriefing` alone until now;
  * - **`document` / `risks` / `outOfScope`** — the planner's write-up, which reaches
  *   the plan modal and no agent. On a `single` verdict that write-up is the *entire*
- *   product of a code agent that read the whole repository, and rule 4's pickup
+ *   product of a code agent that read the whole repository, and rule `issue-pickup`'s
  *   prompt is the issue title and body;
  * - **a part's `rationale` / `acceptance`** — declared by the planner, stored, and
  *   rendered nowhere at all;

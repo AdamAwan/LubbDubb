@@ -26,7 +26,7 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   });
 }
 
-/** A plan carrying a single merge_pr action — what rule 3 emits for a settled PR. */
+/** A plan carrying a single merge_pr action — what rule `pr-merge-ready` emits for a settled PR. */
 function mergePlan(prNumber = 42): DispatchResult {
   return {
     rationale: 'test',
@@ -56,7 +56,7 @@ function draftPlan(prNumber: number, commentId: string): DispatchResult {
 }
 
 /**
- * What rule 2b dispatches with before a rejection note is appended: the rendered
+ * What rule `pr-review-comment` dispatches with before a rejection note is appended: the rendered
  * template plus the threads themselves, which are appended rather than
  * interpolated so an operator override cannot drop them.
  */
@@ -67,7 +67,7 @@ function reviewCommentPrompt(number: number, branch: string, comment: string, id
   );
 }
 
-/** A PR rule 3 wants to merge: green, approved, mergeable, nothing else pending. */
+/** A PR rule `pr-merge-ready` wants to merge: green, approved, mergeable, nothing else pending. */
 function mergeReadyPr(system: ReturnType<typeof buildSystem>, number: number): void {
   system.connector.inject({ kind: 'new_pr', number, title: 'Add the widget', branch: `feat/widget-${number}` });
   system.connector.inject({ kind: 'ci_passed', prNumber: number });
@@ -197,7 +197,7 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
   const sink = countingSink();
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink });
 
-  // A PR rule 3 wants to merge: green, approved, mergeable, nothing else pending.
+  // A PR rule `pr-merge-ready` wants to merge: green, approved, mergeable, nothing else pending.
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'Add the widget', branch: 'feat/widget' });
   system.connector.inject({ kind: 'ci_passed', prNumber: 7 });
   system.connector.inject({ kind: 'pr_approved', prNumber: 7 });
@@ -205,7 +205,7 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
 
   await system.harness.runCycle('manual');
   const first = system.store.listProposals();
-  assert.equal(first.length, 1, 'rule 3 should propose the merge once');
+  assert.equal(first.length, 1, 'rule `pr-merge-ready` should propose the merge once');
   assert.equal(first[0]!.ref, 'pr:7:merge');
   const escalationsAfterOne = system.store.listOpenEscalations().length;
 
@@ -213,7 +213,7 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
   // fill the inbox with copies of one question.
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 1, 'the pending verdict holds rule 3 off that PR');
+  assert.equal(system.store.listProposals().length, 1, 'the pending verdict holds rule `pr-merge-ready` off that PR');
   assert.equal(system.store.listOpenEscalations().length, escalationsAfterOne);
 
   // A rejection is durable for the same reason: "no" must not mean "not this second".
@@ -227,7 +227,7 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
 test('a rejection stands while nothing happens to the PR, and stops standing when something does', async () => {
   // Paused, so the CI signal below moves the world without also putting an agent
   // on the branch: this is about the verdict, not about dispatch. `merge_pr`
-  // claims no headroom, so rule 3 is unaffected by the pause.
+  // claims no headroom, so rule `pr-merge-ready` is unaffected by the pause.
   const sink = countingSink();
   const system = buildSystem(testConfig({ startPaused: true }), { backend: new FakePtyBackend(), sink });
   mergeReadyPr(system, 7);

@@ -99,7 +99,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'take on trust.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you ' +
       'are on branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule 3c). The agent writes its verdict to the plan file; nothing else it does is read. Asks for the write-up (`risks`, `outOfScope`, `document`) and per-part `rationale`/`acceptance` — all optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
+    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its verdict to the plan file; nothing else it does is read. Asks for the write-up (`risks`, `outOfScope`, `document`) and per-part `rationale`/`acceptance` — all optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -131,7 +131,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'old reasoning still applies.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
       'branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule 3c, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the write-up (`document`/`risks`/`outOfScope`) is replaced rather than merged. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule `issue-plan`, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the write-up (`document`/`risks`/`outOfScope`) is replaced rather than merged. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'discuss-plan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -154,7 +154,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'conversation and puts the plan back in front of them for approval.\n\n' +
       'Do not implement anything and do not open a pull request. You are on branch {branch} only so you have the ' +
       'repository to read.',
-    doc: 'Sent to a code agent when an operator hits Discuss on a plan (rule 3c, with the plan row in `planning` and `discussing` set). Unlike {issue-replan} it is a dialogue: the agent escalates to talk, and submitting the amended plan is what ends it. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+    doc: 'Sent to a code agent when an operator hits Discuss on a plan (rule `issue-plan`, with the plan row in `planning` and `discussing` set). Unlike {issue-replan} it is a dialogue: the agent escalates to talk, and submitting the amended plan is what ends it. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'plan-part': {
     placeholders: ['number', 'title', 'part', 'scope', 'branch', 'base', 'plan', 'done', 'remaining'],
@@ -174,7 +174,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'that is not the default branch, this PR is stacked on another part and must target it, not the default. ' +
       'Say in the PR body which part of #{number} this is and what it stacks on. Reference the issue as ' +
       '"part of #{number}" and never as "closes #{number}": other parts still have to land.',
-    doc: "Sent to a code agent for one part of a multi-PR plan (rule 4a). {plan} is the planner's justification, {done}/{remaining} the sibling parts either side of this one, {base} the branch this part stacks on (the default branch when it stacks on nothing). Placeholders: {number} {title} {part} {scope} {branch} {base} {plan} {done} {remaining}.",
+    doc: "Sent to a code agent for one part of a multi-PR plan (rule `plan-part`). {plan} is the planner's justification, {done}/{remaining} the sibling parts either side of this one, {base} the branch this part stacks on (the default branch when it stacks on nothing). Placeholders: {number} {title} {part} {scope} {branch} {base} {plan} {done} {remaining}.",
   },
   'plan-approval': {
     placeholders: ['number', 'title', 'parts', 'reason', 'list'],
@@ -184,7 +184,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Approve and each part gets its own agent, branch and pull request, bottom of the stack first. Reject and the ' +
       'issue is worked as a single pull request instead — parts nothing has been started for are retired. If you ' +
       'want a different split, use Replan on the plan panel: that asks the planner again and comes back here.',
-    doc: 'Put to a human when `planning.requireApproval` is on and a `parts` verdict has landed (rule 3d). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. Placeholders: {number} {title} {parts} {reason} {list}.',
+    doc: 'Put to a human when `planning.requireApproval` is on and a `parts` verdict has landed (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. Placeholders: {number} {title} {parts} {reason} {list}.',
   },
   'issue-shortfall': {
     placeholders: ['number', 'title', 'summary', 'consequence'],
@@ -193,7 +193,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'reached. Nothing has been scheduled about it.\n\nWhat the assessor found:\n\n{summary}\n\n{consequence}\n\n' +
       'Reject and nothing happens: the issue stays exactly where it is, and the assessment stays on record so you ' +
       'can see why. Say why you rejected it — the harness will not ask again until something changes on the issue.',
-    doc: 'Put to a human when an assessment says the goal was not reached and named something the harness can act on (rule 3g). A proposal, not a question: accepting performs the arm {consequence} describes. Placeholders: {number} {title} {summary} {consequence}.',
+    doc: 'Put to a human when an assessment says the goal was not reached and named something the harness can act on (rule `issue-shortfall`). A proposal, not a question: accepting performs the arm {consequence} describes. Placeholders: {number} {title} {summary} {consequence}.',
   },
   'plan-part-escalation': {
     placeholders: ['number', 'part', 'attempts'],
@@ -205,7 +205,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     placeholders: ['number', 'title', 'body', 'branch'],
     template:
       'GitHub issue #{number} ("{title}") needs resolving.\n\n{body}\n\nImplement the fix on branch {branch} and open a pull request that resolves it. Reference the issue as "closes #{number}" only if this PR completes the whole thing; if work remains afterwards, reference it as "part of #{number}" so it stays open for the rest.',
-    doc: 'Sent to a code agent when an open work item / issue has no open PR and no agent is on it (rule 4). Placeholders: {number} {title} {body} {branch}.',
+    doc: 'Sent to a code agent when an open work item / issue has no open PR and no agent is on it (rule `issue-pickup`). Placeholders: {number} {title} {body} {branch}.',
   },
   'issue-pickup-escalation': {
     placeholders: ['number', 'title', 'attempts'],
@@ -217,19 +217,19 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     placeholders: ['number', 'title', 'body', 'branch'],
     template:
       'Issue #{number} ("{title}") has had work done on it and has nothing in flight right now. Decide whether it is finished.\n\n{body}\n\nYou are on branch {branch}, cut from the default branch, so the repository you can see is the delivered state. Read it. Call world_read("issue", "issue:{number}") for the harness\'s own record of what was done — the pull requests that delivered this issue, including ones long gone from the world, each marked `observed` (the harness watched it merge) or `inferred` (it left the open list and the merge was assumed). An inferred merge is weaker evidence; say so if your verdict rests on one.\n\nThen call assess_issue:\n\n- "delivered" if what the issue asked for is actually present in the repository. This stops the harness scheduling anything further for it. It does NOT close the ticket — a human does that after testing, and your verdict is reversible.\n- "more_work" if something the issue asked for is missing. Say precisely what, because the next agent is given your words.\n\nDo not implement anything and do not open a pull request. Judge from what is there. If you genuinely cannot tell, say "more_work" and explain what you could not verify — a wrong "delivered" parks real work silently, while a wrong "more_work" costs one more agent.',
-    doc: 'Sent to a code agent for an issue that has had work and has nothing in flight (rule 3e). It reads the delivered state on the default branch plus the work graph via world_read, and casts a verdict with assess_issue. Placeholders: {number} {title} {body} {branch}.',
+    doc: 'Sent to a code agent for an issue that has had work and has nothing in flight (rule `issue-assess`). It reads the delivered state on the default branch plus the work graph via world_read, and casts a verdict with assess_issue. Placeholders: {number} {title} {body} {branch}.',
   },
   'issue-assay': {
     placeholders: ['number', 'title', 'body', 'branch'],
     template:
       'Nothing has been started for issue #{number} ("{title}"). Before anything is, decide whether there is a goal here an agent could work from.\n\n{body}\n\nYou are on branch {branch}, cut from the default branch, so what you can see is the repository as it stands. Read the ticket against it: do the things it names exist, does it say what "done" would look like, does it contradict itself or something already true of the code? Call world_read("issue", "issue:{number}") for the harness\'s own record of the issue, and read anything it points you at.\n\nThen call assay_issue:\n\n- "workable" if there is an identifiable goal to start on. The bar is *actionable*, not *good* or *small* — an opinionated, large or awkward ticket is still workable, and saying so schedules nothing by itself.\n- "unclear" if starting would be guessing. Say exactly what you would need, addressed to the person who wrote the ticket: the specific question, not "it is vague". Nothing is dispatched for this issue while that stands, so a wrong "unclear" stops real work — but it is undone by an edit, a comment, or an operator clearing it.\n\nDo not implement anything, do not open a pull request, and do not edit the ticket. If you are torn, say "workable": the agent that picks it up can escalate to a human from inside the work, which is a better place to ask from than here.',
-    doc: 'Sent to a code agent for a watched open issue nothing has been started for (rule 3f). It reads the ticket against the default branch and casts a verdict with assay_issue. Placeholders: {number} {title} {body} {branch}.',
+    doc: 'Sent to a code agent for a watched open issue nothing has been started for (rule `issue-assay`). It reads the ticket against the default branch and casts a verdict with assay_issue. Placeholders: {number} {title} {body} {branch}.',
   },
   'issue-retro': {
     placeholders: ['number', 'title', 'body'],
     template:
       'Issue #{number} ("{title}") has been delivered. Write the retrospective for it — the account of what shipped, and of how the work actually went.\n\n{body}\n\nYou have no worktree and you are not implementing anything. What you have is the scratchpad the agents on this goal left and the record the harness kept, both appended below, plus world_read if you need the state of a pull request or the issue itself.\n\nWrite one document, in markdown, for two readers:\n\n1. **What shipped** — for someone reviewing this goal who did not watch it happen: the pull requests, what each part delivered or decided, what was concluded to need no code or to be out of scope, and anything still outstanding.\n2. **How the run went** — for the operator: where agents were spent and on what, which gates, escalations or retries cost time, what surprised the agents, and what you would change about the process — a prompt, a gate, a config, a habit of decomposition. Be specific and name the evidence; "it went well" helps nobody, and neither does a list of everything that happened.\n\nQuote the scratchpad where it earns it and attribute it, and say plainly where the pad and the harness\'s record disagree — that disagreement is usually the most useful thing in the document. Then call retro_submit with a summary of one or two sentences and the document itself. Nothing you write is posted to the tracker, nothing is closed, and nothing is scheduled from it: a human reads it and decides what to change.',
-    doc: "Sent to a desk agent when an issue the harness parked as delivered has no retrospective yet (rule 3h). The issue's scratchpad and the harness dossier are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop them. Placeholders: {number} {title} {body}.",
+    doc: "Sent to a desk agent when an issue the harness parked as delivered has no retrospective yet (rule `issue-retro`). The issue's scratchpad and the harness dossier are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop them. Placeholders: {number} {title} {body}.",
   },
   'pr-ci-fix': {
     placeholders: ['number', 'title', 'branch'],

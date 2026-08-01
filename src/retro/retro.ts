@@ -25,7 +25,7 @@
  *
  * A goal is delivered whether or not anybody wrote it up. So a missing retrospective
  * is silence rather than a hold — the `undeclared`-vs-`more_work` asymmetry again —
- * and that is what makes rule 3h's fail-open cheap: an agent that crashes, is killed
+ * and that is what makes rule `issue-retro`'s fail-open cheap: an agent that crashes, is killed
  * or spends its attempt cap costs the report and nothing else. No escalation is
  * raised, because there is nothing a human can do about a write-up that did not
  * happen that they cannot do by reading the issue.

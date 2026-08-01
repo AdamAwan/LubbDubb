@@ -5,10 +5,10 @@ import type { Issue, IssueDelivery, WorldEvent } from '../types.js';
  *
  * ## What this is
  *
- * `delivered` is the harness's own park. Rule 3b parks a work item in
+ * `delivered` is the harness's own park. Rule `work-item-in-review` parks a work item in
  * `issueInReviewState` while a PR is open and returns it to pickup only on an
  * explicit `more_work` verdict — but that park is a *tracker state*, so it exists
- * only where the tracker has one. On GitHub there is none, so nothing stops rule 4
+ * only where the tracker has one. On GitHub there is none, so nothing stops rule `issue-pickup`
  * re-picking an issue the moment its PR leaves the open list, and `openPrForIssue`
  * cannot tell "the PR merged" from "there was never a PR". What bounds that today
  * is the attempt cap: three agents redo merged work, then the origin escalates.

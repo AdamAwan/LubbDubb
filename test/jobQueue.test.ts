@@ -101,9 +101,9 @@ test('a launched job takes priority over world-driven issue pickup for the last 
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(1), { backend });
 
-  // An open issue would, on its own, claim the one slot via rule 4.
+  // An open issue would, on its own, claim the one slot via rule `issue-pickup`.
   system.connector.inject({ kind: 'new_issue', number: 301, title: 'A bug', labels: ['bug'] });
-  // But an operator job is queued the same cycle — rule 0 wins the slot.
+  // But an operator job is queued the same cycle — rule `manual-job` wins the slot.
   const job = system.store.createJob({ title: 'Urgent chore', prompt: 'Handle the urgent chore.', kind: 'desk' });
   await system.harness.runCycle('manual');
 
@@ -157,7 +157,7 @@ test('a queued job can be cancelled and is then never dispatched', async () => {
 
 // -- Branch collisions (issue #116) ----------------------------------------
 //
-// Rule 0 is the one dispatch path where origin and branch are not 1:1: `job.branch`
+// Rule `manual-job` is the one dispatch path where origin and branch are not 1:1: `job.branch`
 // is a free string the operator supplies, while the origin is `job:<id>` and so
 // unique by construction. Both existing gates key on the origin, so neither can see
 // it — and `WorktreeManager.ensure` is reuse-first, which turns the collision into
@@ -239,7 +239,7 @@ test('POST /api/jobs refuses a colliding branch at queue time', async () => {
   assert.match(collide.json().error, /shared\/work is held by active task/);
   assert.equal(system.store.listJobs().length, 1, 'the refused job was never queued');
 
-  // A desk job's branch is ignored by rule 0 (it gets a scratch dir, not a
+  // A desk job's branch is ignored by rule `manual-job` (it gets a scratch dir, not a
   // worktree), so the queue-time check must read it the same way and let it past.
   const desk = await post({ prompt: 'Read the shared branch.', kind: 'desk', branch: 'shared/work' });
   assert.equal(desk.statusCode, 200);

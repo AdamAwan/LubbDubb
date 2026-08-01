@@ -111,7 +111,7 @@ export class ActionExecutor {
           // so the origin check above already *is* a branch check and this one is a
           // no-op for them — asserted in test/jobQueue.test.ts, because a later rule
           // that broke the 1:1 property would otherwise break it silently. Two paths
-          // can reach here with a branch the origin doesn't determine: rule 0, whose
+          // can reach here with a branch the origin doesn't determine: rule `manual-job`, whose
           // `job.branch` is a free string the operator supplies, and the LLM
           // dispatcher, which names branches in prose. `WorktreeManager.ensure` is
           // reuse-first, so letting either through puts two live claude processes in
@@ -204,7 +204,7 @@ export class ActionExecutor {
           // born here anyway, with the other two: proposals are created in one
           // place, from a validated action, so "who may put something to a human"
           // has a single answer. The hold is re-asked here for the same reason
-          // `authorize` re-asks about a merge — rule 3d suppresses itself, but
+          // `authorize` re-asks about a merge — rule `plan-approval` suppresses itself, but
           // every path that reaches the executor must be covered, not just the
           // one that happens to check first.
           const ref = planProposalRef(action.originRef);
@@ -333,7 +333,7 @@ export class ActionExecutor {
     const ref = merge ? mergeProposalRef(action.prNumber) : replyProposalRef(action.prNumber, action.commentId);
     const subject = merge ? `merge of PR #${action.prNumber}` : `reply on PR #${action.prNumber}`;
 
-    // Rule 3 suppresses itself while a merge proposal stands, so on the default
+    // Rule `pr-merge-ready` suppresses itself while a merge proposal stands, so on the default
     // path this is asked once — but it is repeated here because it must hold for
     // *every* path that reaches the executor, the LLM dispatcher's prose-composed
     // `reply_on_pr` included. One predicate, two call sites: the same discipline
@@ -431,7 +431,7 @@ export class ActionExecutor {
     const read = readProposedAct(proposal);
     if (!read.ok) return audit('rejected', `Cannot run the accepted proposal: ${read.error}.`);
     const act = read.act;
-    // A plan act publishes nothing: accepting it releases rule 4a onto the plan's
+    // A plan act publishes nothing: accepting it releases rule `plan-part` onto the plan's
     // parts. It runs here rather than in the desk so an approved decomposition
     // lands in the decision log in the same shape, under the same authority, as
     // an approved merge — the audit trail is the reason this function exists, and
@@ -443,7 +443,7 @@ export class ActionExecutor {
         : audit('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
     // A shortfall publishes nothing either: accepting it either sends the plan
-    // back to a planner (rule 3c takes over) or appends one part for rule 4a to
+    // back to a planner (rule `issue-plan` takes over) or appends one part for rule `plan-part` to
     // schedule. It runs here for the plan act's reason — this is the one place an
     // accepted proposal becomes both its effect and its audit row.
     if (act.kind === 'shortfall') {

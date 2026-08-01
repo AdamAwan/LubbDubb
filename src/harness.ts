@@ -209,7 +209,7 @@ export class Harness extends EventEmitter {
       // before `decide` only because everything else on the pulse is — it changes no
       // decision, and a failure is recorded rather than thrown.
       await this.deps.assays?.announce(world, assaySignals);
-      // Which goals already have a write-up — origins only. Rule 3h reads this to
+      // Which goals already have a write-up — origins only. Rule `issue-retro` reads this to
       // know whether to dispatch one; the Goal Floor's retention (below) reads it
       // as one of the signals that a goal is finished.
       const retrospectiveOrigins = store.listRetrospectiveOrigins();
@@ -285,7 +285,7 @@ export class Harness extends EventEmitter {
         shortfalls,
         assays,
         assaySignals,
-        // Which goals already have a write-up — origins only. Rule 3h needs to know
+        // Which goals already have a write-up — origins only. Rule `issue-retro` needs to know
         // whether to dispatch one; what it says is deliberately out of its reach.
         retrospectiveOrigins,
         recentDecisions,

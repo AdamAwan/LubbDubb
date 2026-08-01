@@ -37,7 +37,7 @@ export function prCiFailing(s: StageContext): void {
     // of them to fix code that is not theirs — the failure multiplies up the
     // stack and none of those agents can do anything about it. Suppress the rule
     // here and leave it at that: the failing PR at the bottom is in this same
-    // world and rule 1 fires on it under its own steam, so there is no concern to
+    // world and rule `pr-ci-failing` fires on it under its own steam, so there is no concern to
     // push down. Only the CI rule is suppressed — the base-update rule below still
     // fires, which is what keeps a stack restacking when its parent pushes.
     const inheritedFailure = inheritedCiFailure(pr, s.openPrs);

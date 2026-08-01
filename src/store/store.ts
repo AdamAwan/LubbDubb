@@ -237,7 +237,7 @@ export class Store {
    *
    * The mirror of {@link findActiveTaskByOrigin}, and the enforcement half of the
    * origin↔branch 1:1 property (issue #116). For every world-driven rule the two
-   * are the same question, so this never fires for one; rule 0's operator-supplied
+   * are the same question, so this never fires for one; rule `manual-job`'s operator-supplied
    * branch is the one dispatch path where they can diverge, and
    * `WorktreeManager.ensure` is reuse-first — so without this, two live agents
    * share one worktree directory with no merge anywhere to reconcile them.
@@ -613,7 +613,7 @@ export class Store {
    *
    * **Writing this clears any standing conclusion _and_ any standing shortfall**,
    * in the same transaction. The assessor is later and better informed than the
-   * agent that declared its own run, and leaving both would have rule 3b return
+   * agent that declared its own run, and leaving both would have rule `work-item-back-to-pickup` return
    * the item to pickup while this gate blocked it; a shortfall is the direct
    * contradiction of this row — "worked, and not delivered" against "delivered" —
    * so an assessment that changes its mind must not leave rule `issue-shortfall`
@@ -967,7 +967,7 @@ export class Store {
   }
 
   /**
-   * Which goals have one — **origins only, never the writing**. Rule 3h needs to
+   * Which goals have one — **origins only, never the writing**. Rule `issue-retro` needs to
    * know whether to dispatch and that is the whole of what it may know: a rule
    * branching on retrospective prose would let one agent's account of a run change
    * what the harness schedules next.

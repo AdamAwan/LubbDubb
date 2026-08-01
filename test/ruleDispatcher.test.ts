@@ -1084,7 +1084,7 @@ function conclusion(number: number, verdict: 'done' | 'more_work', by: 'agent' |
 }
 
 // The bug this feature exists for: a merged PR used to bounce its work item back
-// to "Ready" and rule 4 put a fresh agent on work already on the default branch.
+// to "Ready" and rule `issue-pickup` put a fresh agent on work already on the default branch.
 // `openPrForIssue` cannot tell "merged" from "never existed" — both are absence —
 // so the absence itself must not release the item.
 test('return-from-review: an undeclared item whose PR merged stays parked in review', async () => {

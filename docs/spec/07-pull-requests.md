@@ -51,7 +51,7 @@ branch policy. Folding such a check into the aggregate would claim the PR cannot
 and would stop the harness merging it. The aggregate is still an arm of the test, because a provider
 reporting no per-check detail has nothing else to answer from.
 
-**Three call sites read it and they must not diverge**: rule 1's gate, `inheritedCiFailure`, and
+**Three call sites read it and they must not diverge**: rule `pr-ci-failing`'s gate, `inheritedCiFailure`, and
 `prAttentionStatus`'s CI reading. A fourth reader added later uses this predicate, or the cockpit
 tells an operator a PR is nobody's turn while an agent is being dispatched for it.
 
@@ -63,7 +63,7 @@ conflicted.
 
 ## `needsBaseUpdate(pr)`
 
-`isConflicted(pr) || mergeableState === 'behind'`. False for a merged PR. This is what rule 2
+`isConflicted(pr) || mergeableState === 'behind'`. False for a merged PR. This is what rule `pr-base-update`
 consumes; the dispatcher then splits on `mergeableState === 'behind'` to choose between the
 `pr-base-update-behind` prompt (a routine update, no conflicts expected) and
 `pr-base-update-conflict` (merge, resolve, push, escalate if not cleanly resolvable).
@@ -76,7 +76,7 @@ True when `baseBranch` is present and is not `defaultBranch`. A PR whose base th
 report is **not** treated as stacked — unknown must not silently stop merging PRs that merged fine
 before.
 
-This holds rule 3 off the whole stack. Merging a stacked PR would land part 2 **into part 1's branch**
+This holds rule `pr-merge-ready` off the whole stack. Merging a stacked PR would land part 2 **into part 1's branch**
 mid-flight: the change lands nowhere real, part 1's review now contains part 2's code, and the stack
 is scrambled. A stacked child becomes mergeable on its own the moment its base becomes the default
 branch, which is when its parent merges. There is no separate release step.
@@ -105,17 +105,17 @@ check runs the base's commits exactly as a required one does and so propagates u
 way. Reading the aggregate would leave one red Optional check at the bottom putting an agent on every
 PR above it, each unable to fix anything — the multiplication this predicate exists to prevent.
 
-The hazard: part 2's CI runs part 1's commits, so part 1 going red turns part 2 red, and rule 1 would
+The hazard: part 2's CI runs part 1's commits, so part 1 going red turns part 2 red, and rule `pr-ci-failing` would
 put an agent on part 2 to fix code that is not part 2's — multiplying agents up the stack, none able
 to fix anything.
 
 Two properties of the fix:
 
 - **Suppress-only, never pushed down.** The concern is dropped on the inheriting PR and nothing is
-  re-raised on the base. The failing PR at the bottom is in the same world and rule 1 fires on it
+  re-raised on the base. The failing PR at the bottom is in the same world and rule `pr-ci-failing` fires on it
   unaided; pushing would only duplicate it (and land on the `respond_to_agent` path if that branch is
   already staffed).
-- **Only the CI concern is suppressed.** Rule 2 still fires, which is what keeps a stack restacking
+- **Only the CI concern is suppressed.** Rule `pr-base-update` still fires, which is what keeps a stack restacking
   the moment its parent pushes.
 
 Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.excludedPrs` — so an
@@ -214,15 +214,15 @@ folding them would make one of the two a lie every time they disagree.
 
 ### The arms, in the order they are checked
 
-| Status      | Court                         | When                                                                                                                                                                                                                                                        |
-| ----------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                   |
-| `ignored`   | nobody, by your instruction   | `isPrExcluded(pr, ignoreLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                       |
-| `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human); or a concern whose **attempt cap is spent** (rule `cooldown-escalate` did). |
-| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules 1/2/2b) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                  |
-| `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                       |
-| `elsewhere` | outside the loop              | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews.                                                                                 |
-| `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule 3's reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below.             |
+| Status      | Court                         | When                                                                                                                                                                                                                                                                                     |
+| ----------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                |
+| `ignored`   | nobody, by your instruction   | `isPrExcluded(pr, ignoreLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                    |
+| `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human); or a concern whose **attempt cap is spent** (rule `cooldown-escalate` did).                              |
+| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window. |
+| `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                    |
+| `elsewhere` | outside the loop              | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews.                                                                                                              |
+| `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule `pr-merge-ready`'s reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below.                           |
 
 Because the first matching arm wins, the ones below it are moot — a PR with an agent on its branch
 reads `an agent is working this branch` whatever its CI says, which is the answer prose about health
@@ -236,7 +236,7 @@ through the same `classifyCiFailures` the dispatcher calls, off the same `config
 context as **policy** rather than as a pre-computed verdict, so nothing depends on the snapshot having
 classified the PR first, and asking a pure function twice is one answer rather than two.
 
-- _*Actionable*_ → the CI concern is raised and the PR is the harness's, as before. Rule 1 dispatches
+- _*Actionable*_ → the CI concern is raised and the PR is the harness's, as before. Rule `pr-ci-failing` dispatches
   only when the verdict is actionable, so raising the concern off `ciStatus` promised an agent for a
   check the policy had already taken off the table.
 - **Held by policy** (`ciNeedsHuman`: nothing to dispatch, something to escalate) → **`you`**, naming
@@ -245,12 +245,12 @@ classified the PR first, and asking a pure function twice is one answer rather t
   the spent attempt cap, because those are the two ways a failing check stops being the harness's
   problem without being fixed.
 - **Muted only** (every failure `ignore`d) → falls through to **`stalled`**, and the reason says the
-  merge gate still reads CI as failing. Nothing dispatches and nothing escalates, yet rule 3's merge
+  merge gate still reads CI as failing. Nothing dispatches and nothing escalates, yet rule `pr-merge-ready`'s merge
   test reads the aggregate, so nothing will ever move the PR. The old wording — `CI has not reported`
   — was untrue of a check that reported and was muted, and it was the one phrasing that hid the gap
   rather than naming it.
 - **An inherited failure reads as no failure at all**, checked inside `ciReading` rather than per arm,
-  for the reason rule 1 suppresses the concern: the fix belongs to the PR underneath and the
+  for the reason rule `pr-ci-failing` suppresses the concern: the fix belongs to the PR underneath and the
   `elsewhere` arm names it. So a policy that would otherwise escalate cannot make a stacked PR your
   problem for its parent's red build.
 
@@ -261,8 +261,8 @@ classified the PR first, and asking a pure function twice is one answer rather t
   requires; the tasks; the proposals in the store's newest-first order; the recent decision window;
   and the world snapshot's `takenAt` as "now".
 - **`proposalHold`, not the proposal row.** The `settled` arm asks the gate, so a rejection that
-  stopped standing at the first world event on that PR ([#122](05-dispatcher.md#rule-3--the-merge-gate))
-  stops reading as settled at the same instant rule 3 starts firing again. `rejectionSignals` comes
+  stopped standing at the first world event on that PR ([#122](05-dispatcher.md#pr-merge-ready--the-merge-gate))
+  stops reading as settled at the same instant rule `pr-merge-ready` starts firing again. `rejectionSignals` comes
   from the same `rejectionSignalQuery` → `Store.listWorldEventsSince` pair the harness and the
   executor use.
 - **`last_actor` is not the predicate**, and cannot be. It works on a closed two-party board where
@@ -272,7 +272,7 @@ classified the PR first, and asking a pure function twice is one answer rather t
   discipline — many gates folded into one pure verdict with reasons — not the signal.
 - **`PrComment.author` is not read as a signal.** It is the one place participant identity genuinely
   exists, and branching on it would recreate the two-party assumption in that one corner. An
-  unhandled comment is what makes rule 2b dispatch, whoever wrote it: `handled` decides, and the
+  unhandled comment is what makes rule `pr-review-comment` dispatch, whoever wrote it: `handled` decides, and the
   author appears only in the wording of a reason.
 
 ### Nothing in the dispatcher reads it
@@ -288,7 +288,7 @@ pulses changes no decision).
 
 The concern list and the merge-readiness test are re-derived here from the same predicates rather
 than shared with the dispatcher, which builds prompt-bearing concerns it has no use for — the same
-relationship `issuePickupStatus` has to rule 4. The orders are stated once, above and in
+relationship `issuePickupStatus` has to rule `issue-pickup`. The orders are stated once, above and in
 [05](05-dispatcher.md), for both.
 
 ## `isPrExcluded(pr, label)`
@@ -346,5 +346,5 @@ tracker's real resolution verdict first — see [15](15-integrations.md). Resolv
 GitHub or Azure UI is therefore the ordinary way to tell the harness a comment is dealt with; the
 harness's own reply is the fallback for a thread nobody resolved.
 
-Independently of all that, rule 3 evaluates merge-readiness (see [05](05-dispatcher.md)) and emits
+Independently of all that, rule `pr-merge-ready` evaluates merge-readiness (see [05](05-dispatcher.md)) and emits
 `merge_pr`, which claims no headroom and goes through the executor's auto-send gate.

@@ -5,7 +5,7 @@ import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../d
  * The planning funnel: every watched, open issue passes a planning agent that
  * emits one of two verdicts — `single` (today's one-agent / one-PR path) or
  * `parts` (a decomposition into stacked PRs). On by default; off leaves the
- * funnel out entirely: every issue routes straight to `single`, so rule 4 is
+ * funnel out entirely: every issue routes straight to `single`, so rule `issue-pickup` is
  * un-narrowed and behaviour is exactly what it is today.
  */
 export interface PlanningPolicy {
@@ -26,7 +26,7 @@ export interface PlanningPolicy {
    * whether a decomposition into N branches and N agents starts itself.
    *
    * On, ingestion persists a `parts` verdict as `awaiting_approval` instead of
-   * `active`, rule `plan-approval` puts it to the operator once, and rule 4a
+   * `active`, rule `plan-approval` puts it to the operator once, and rule `plan-part`
    * schedules nothing until they accept — approve-before rather than replan-after,
    * which is the undo we built in place of this gate. A `single` verdict is never
    * gated: it is the status quo path and proposes nothing.
@@ -88,7 +88,7 @@ export function planBranch(issueNumber: number): string {
 
 /**
  * Which arm of the funnel an issue is on this cycle.
- * - `single` — fall through to normal pickup (rule 4). `failedOpen` marks the
+ * - `single` — fall through to normal pickup (rule `issue-pickup`). `failedOpen` marks the
  *   issue that got there because planning gave up, not because a planner said so.
  * - `parts`  — decomposed; the part scheduler owns it, pickup stays off.
  * - `awaiting_approval` — decomposed, but the decomposition is a proposal a human
@@ -164,7 +164,7 @@ export function plannerVerdict(
  * an issue that quietly keeps moving beats one that quietly stops.
  *
  * A **replan** fails back differently, and must: an issue that already has parts
- * has an existing decomposition to fall back on, and `single` would point rule 4
+ * has an existing decomposition to fall back on, and `single` would point rule `issue-pickup`
  * at the flat `issue/<n>` branch that git cannot create beside the part refs. The
  * point of failing open is that the issue keeps moving — for a replan, that means
  * carrying on with the plan it already had.

@@ -53,7 +53,7 @@ provider and persisted row that predates them reads unchanged:
 - **`advisory`** — the check is reported for visibility and nothing else. `classifyCiFailures` never
   classifies it (no rule, not even `match: "*"`, can claim one) and `ciNeedsAttention` never counts
   it, so it can neither dispatch an agent nor escalate. It is how a policy that merely _restates_ a
-  signal something else already owns at higher fidelity — the Azure comment policy against rule 2b —
+  signal something else already owns at higher fidelity — the Azure comment policy against rule `pr-review-comment` —
   is made visible without outranking the rule that owns it.
 
 `prState(pr)` (`src/prHealth.ts`) is the only correct way to read a PR's state. It returns `state`
@@ -94,7 +94,7 @@ cockpit's link map.
 | `job:<id>`                   | An operator-launched job                  | `job.branch` or `job/<id>` |
 
 **Origin and branch are 1:1 for every world-driven rule.** That is why the origin de-duplication gate
-already functions as a branch gate. Rule 0 (`job:<id>`) is the one dispatch path where the property
+already functions as a branch gate. Rule `manual-job` (`job:<id>`) is the one dispatch path where the property
 does not hold by construction — the operator supplies a free-string branch — so it is enforced
 explicitly there (see [09](09-execution.md)).
 

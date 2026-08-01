@@ -18,7 +18,7 @@ import type { Agent, Decision, Issue, IssueAssay, Plan, Task, WorldEvent, WorldS
 import type { ActionSink } from '../src/sink/actionSink.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
-// Rule 3f — the goal assay. The one gate in front of an issue that asks about its
+// Rule `issue-assay` — the goal assay. The one gate in front of an issue that asks about its
 // *content*. What makes it fire, what it must never do (park an issue for good),
 // and the two things that end a hold.
 

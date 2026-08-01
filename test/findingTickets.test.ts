@@ -82,7 +82,7 @@ function seedFinding(system: System): Finding {
  * The agent working the filing job — the one whose credential resolves the
  * finding back.
  *
- * Spawned here rather than waited for, deliberately: rule 0's dispatch of a
+ * Spawned here rather than waited for, deliberately: rule `manual-job`'s dispatch of a
  * queued job is `test/jobQueue.test.ts`'s subject, and depending on it here
  * would make this suite fail for a reason that has nothing to do with filing.
  * What is under test is the handshake — a task on `job:<id>` is what a dispatched

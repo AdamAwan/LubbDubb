@@ -395,13 +395,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           // Likewise rule-dispatcher only: the assessor is a rule, and the LLM
           // dispatcher reasons in prose with no equivalent branch.
           config.assessment,
-          // Per-check CI policy narrows rule 1. The LLM dispatcher composes its
+          // Per-check CI policy narrows rule `pr-ci-failing`. The LLM dispatcher composes its
           // own prompts from the world and has no rule to narrow.
           config.ci,
           // Same again: the goal assay is a rule in front of the funnel, and the
           // LLM dispatcher has no branch it narrows.
           config.assay,
-          // And the retrospective: rule 3h writes a delivered goal up. The LLM
+          // And the retrospective: rule `issue-retro` writes a delivered goal up. The LLM
           // dispatcher reasons in prose and has no equivalent branch.
           config.retrospective,
         );

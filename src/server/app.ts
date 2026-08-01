@@ -376,7 +376,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // item, because concluding an issue in the harness's own view is what stops the
   // re-pickup, while the tracker transition to a done state stays a human act (in
   // the workflow this was built for, a finished item is still waiting on test).
-  // Rule 3b then reads the verdict on the next cycle, which is why `more_work`
+  // Rule `work-item-back-to-pickup` then reads the verdict on the next cycle, which is why `more_work`
   // runs one immediately — the operator's "no, there's more here" should bounce
   // the item back to pickup now rather than on the next heartbeat.
   app.post('/api/issues/:number/conclusion', async (req, reply) => {
@@ -461,7 +461,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
 
   // Park an issue as delivered by hand, or release one the assessor parked.
   //
-  // The operator's own arm of the same verdict rule 3e's assessor casts, and the
+  // The operator's own arm of the same verdict rule `issue-assess`'s agent casts, and the
   // escape hatch for it — an operator looking at a finished issue must not have to
   // wait for an agent to agree, and one looking at a wrongly-parked issue must be
   // able to say so without moving the ticket. It writes the *harness's* record and
@@ -544,7 +544,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   });
 
   // Send a plan back for replanning. The mechanism already exists —
-  // `resolvePlanRoute` routes a plan row in `planning` status to rule 3c — so this
+  // `resolvePlanRoute` routes a plan row in `planning` status to rule `issue-plan` — so this
   // is only the operator's way in: flip the status, and the next cycle dispatches a
   // planner primed with the current plan and part states (`issue-replan`).
   //
@@ -561,12 +561,12 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     if (!plan) return reply.code(404).send({ error: 'plan not found' });
     let next = store.setPlanStatus(id, 'planning');
     // A replan also supersedes a running discussion — leaving `discussing` set
-    // would have rule 3c render the `discuss-plan` template on its next dispatch
+    // would have rule `issue-plan` render the `discuss-plan` template on its next dispatch
     // instead of the `issue-replan` one this call actually asked for, so the two
     // routes must agree about what plain `planning` means.
     if (next?.discussing) next = store.setPlanDiscussing(id, false);
     // A replan supersedes an approval that was still being asked for. Withdrawing
-    // it is not optional: a pending proposal holds rule 3d off this plan, so the
+    // it is not optional: a pending proposal holds rule `plan-approval` off this plan, so the
     // amended verdict would never be put to anyone — and the stale card, if
     // accepted, would release a decomposition its reader never saw. The status
     // write above is what makes this safe to route through the ordinary reject:
@@ -607,13 +607,13 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Discuss a plan with an agent instead of accepting, rejecting or replanning it.
   //
   // Deliberately *a replan with a different prompt*, not a new mechanism: the plan
-  // goes to `planning`, which is the status rule 3c already dispatches a planner
+  // goes to `planning`, which is the status rule `issue-plan` already dispatches a planner
   // from, so the discussion agent inherits the origin gate (`issue:<n>:plan`, so no
   // second planner), the cooldown, the attempt cap and the fail-open — none of which
   // a bespoke path would have. `discussing` only picks the prompt.
   //
-  // Nothing is scheduled while you talk: rule 4a schedules parts for `active` and
-  // `awaiting_approval` plans only, and rule 3d proposes for `awaiting_approval`
+  // Nothing is scheduled while you talk: rule `plan-part` schedules parts for `active` and
+  // `awaiting_approval` plans only, and rule `plan-approval` proposes for `awaiting_approval`
   // only, so no fresh card appears mid-conversation either.
   //
   // **409 unless the plan is `awaiting_approval`.** Every framing of Discuss — the
@@ -621,11 +621,11 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // only ever contemplates talking through a decomposition that is still a pending
   // question. Starting from anywhere else manufactures an approval gate the plan
   // never had: a `single` verdict has no parts to approve, so ending an unguarded
-  // discussion on one writes `awaiting_approval` over zero parts — rule 3d proposes
+  // discussion on one writes `awaiting_approval` over zero parts — rule `plan-approval` proposes
   // it, an operator approves an empty plan, `resolvePlanRoute` now returns `parts`
   // instead of `single`, and the issue is parked with no ready part, no agent and no
   // chip explaining why. Discussing an already-`active` plan is the milder version
-  // of the same mistake: it reopens the gate rule 4a already cleared and stops
+  // of the same mistake: it reopens the gate rule `plan-part` already cleared and stops
   // scheduling the remaining parts, which is exactly what `/discuss/end`'s own 409
   // exists to prevent on the way back out.
   app.post('/api/plans/:id/discuss', async (req, reply) => {
@@ -652,7 +652,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // agent ends itself when it submits an amended plan.
   //
   // Restoring the status is half the job and not an afterthought: clearing the
-  // flag alone leaves the plan in `planning`, which is precisely what rule 3c
+  // flag alone leaves the plan in `planning`, which is precisely what rule `issue-plan`
   // dispatches from, so the next pulse would start another planner.
   app.post('/api/plans/:id/discuss/end', async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -662,7 +662,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // `refusePlan` apply to `awaiting_approval`: an unguarded restore would force
     // *any* plan back to `awaiting_approval` on a stale or duplicate call — a plan
     // already `active`, with parts dispatched and agents on branches, would have
-    // its approval gate reopened and rule 4a would stop scheduling its parts. The
+    // its approval gate reopened and rule `plan-part` would stop scheduling its parts. The
     // flag is exactly what says whether this call still names a live discussion.
     if (!plan.discussing) return reply.code(409).send({ error: `plan ${id} is not being discussed` });
     store.setPlanStatus(id, 'awaiting_approval');
@@ -707,7 +707,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // branch but filed as a **watched ticket**, so it flows through the planning
     // funnel (assay → plan → parts → work) exactly like a picked-up issue rather
     // than being coded straight off this prompt. The whole transform is here, at
-    // route time — rule 0 is untouched, which keeps a clean recursion boundary:
+    // route time — rule `manual-job` is untouched, which keeps a clean recursion boundary:
     // only operator-injected code blueprints via this route become tickets, and
     // the desk filing job they become never does.
     //
@@ -746,7 +746,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     // `Store.findActiveTaskByBranch` the same question; where they differ is only in
     // *when*, which is why this one rejects (nothing has been promised yet) and the
     // executor's defers (a queued job the operator is entitled to have retried).
-    // Only for code jobs: rule 0 ignores a desk job's branch entirely.
+    // Only for code jobs: rule `manual-job` ignores a desk job's branch entirely.
     if (kind === 'code' && branch) {
       const held = store.findActiveTaskByBranch(branch);
       if (held)
@@ -765,7 +765,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // Re-order the "Up next" queue (issue #128). The body is the operator's desired
   // priority order of candidate origins; it replaces the whole override set, ranked
   // 0..n-1. It only re-orders the dispatcher's ranking — it never un-holds a held
-  // item, and rule-0 jobs stay first regardless — so it is safe to run a cycle
+  // item, and `manual-job` items stay first regardless — so it is safe to run a cycle
   // immediately so the new order takes effect and the next `/api/state` reflects it.
   app.post('/api/upnext/order', async (req, reply) => {
     const body = (req.body ?? {}) as { origins?: unknown };
@@ -793,7 +793,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
 
   // Promote a finding into work. **This is the only path from a finding to an
   // agent, and it starts with an operator's click** — an agent that could queue
-  // jobs could put agents on the fleet (rule 0 dispatches a job ahead of every
+  // jobs could put agents on the fleet (rule `manual-job` dispatches a job ahead of every
   // world-driven rule), which is a capability escalation rather than a
   // convenience. So `report_finding` files a claim, and this route is where a
   // human turns one into work. See src/mcp/findings.ts for the full argument.
@@ -1427,7 +1427,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // function feeds that map below, so the key and the lookup cannot disagree.
   const wirePlans = plans.map((p) => ({ ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef) }));
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
-  // same rows rule 3b reads, so the chip and the rule can't disagree.
+  // same rows rule `work-item-back-to-pickup` reads, so the chip and the rule can't disagree.
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
   const deliveries = store.listDeliveries();
   const deliveriesByOrigin = new Map(deliveries.map((d) => [d.originRef, d]));
@@ -1451,7 +1451,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
   // Keyed the same way the conclusion and shortfall maps below are, so the
   // per-issue verdict beside them reads off one lookup.
   const assaysByOrigin = new Map(assays.map((a) => [a.originRef, a]));
-  // The same inputs rule 4 of the dispatcher consults, so the per-issue verdict
+  // The same inputs rule `issue-pickup` of the dispatcher consults, so the per-issue verdict
   // below predicts what actually happens next cycle. The decision window (200)
   // and the headroom arithmetic mirror `Harness.runCycle`.
   const pickupCtx: IssuePickupContext = {
@@ -1463,7 +1463,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     // Unfiltered on purpose: an `-ignore` tagged PR is hidden from dispatch but
     // is still an open PR, so it still parks its issue (see `openPrForIssue`).
     openPrs: world.pullRequests,
-    // Same plan inputs rules 3c/4 read, so the chip explains an issue parked in
+    // Same plan inputs rules `issue-plan`/`issue-pickup` read, so the chip explains an issue parked in
     // the funnel rather than claiming it's eligible for a pickup that won't fire.
     plans,
     planParts,
@@ -1497,7 +1497,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
     rejectionSignals: signals ? store.listWorldEventsSince(signals.since, signals.refs) : [],
     recentDecisions: pickupCtx.recentDecisions,
     cooldown: DEFAULT_COOLDOWN,
-    // The same policy the dispatcher holds, so `attention` names the court rule 1
+    // The same policy the dispatcher holds, so `attention` names the court rule `pr-ci-failing`
     // will act in rather than promising an agent for a check the policy holds.
     ci: config.ci,
     now: world.takenAt,
@@ -1568,7 +1568,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
       delivery: standingDelivery(deliveriesByOrigin.get(origin), issue, pickupCtx),
       // The intake verdict, beside the other two and inside `pickup` for none.
       assay: assayVerdictOf(assaysByOrigin.get(origin)),
-      // The run's own write-up (rule 3h) — the reading, never the writing.
+      // The run's own write-up (rule `issue-retro`) — the reading, never the writing.
       retrospective: retroReading(store.getRetrospective(origin)),
       // The shared pad the agents on this goal left each other — the reading, for
       // the retrospective's reason: the trail is fetched when a reader opens it.
@@ -1656,7 +1656,7 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
       // relationship `attention` has to `health` above. Pickup answers "would an
       // agent start on this next cycle", which the work-item state already
       // decides; conclusion answers "has anyone said this is finished", which is
-      // what rule 3b reads and what the operator toggles. Folding the second into
+      // what rule `work-item-back-to-pickup` reads and what the operator toggles. Folding the second into
       // the first would make a `done` verdict silently veto an item the operator
       // had deliberately moved back to a pickup state.
       issues: world.issues.map(enrichIssue),
@@ -1750,13 +1750,13 @@ export function buildStateSnapshot(system: System, opts?: { artifactSigner?: (fl
 /**
  * A delivery verdict, shipped **only while it still stands**.
  *
- * The row is not the reading. `deliveryHold` is what rule 4 gates on, and it
+ * The row is not the reading. `deliveryHold` is what rule `issue-pickup` gates on, and it
  * answers null for a verdict the world has overtaken — the operator moved the
  * ticket back into a pickup state, or a transition landed after `decidedAt`. So
  * the standing-ness is asked here, off the same predicate and the same context
  * `issuePickupStatus` is handed, rather than shipping the row and leaving the
  * cockpit to re-derive an answer from inputs it does not have. A released verdict
- * going null is the point: the issue is back in play and rule 3e will assess it
+ * going null is the point: the issue is back in play and rule `issue-assess` will assess it
  * again, so a cockpit still reporting it delivered would be promising a park that
  * has ended.
  *

@@ -121,23 +121,23 @@ export interface Config {
    * The planning funnel for multi-PR issues. **On by default**: every watched open
    * issue gets a planning agent before any implementation work, and a `parts`
    * verdict is put to you before its agents are spent (`requireApproval`). Off
-   * leaves it out entirely — rule 4 un-narrowed, no planner ever dispatched,
+   * leaves it out entirely — rule `issue-pickup` un-narrowed, no planner ever dispatched,
    * behaviour exactly what it is without plans. Deep-merged, so one field can be
    * set alone. Only the `rule` dispatcher implements the funnel.
    */
   planning: PlanningPolicy;
   /**
-   * The assessor (rule 3e) — the harness asking whether an issue that has had work
+   * The assessor (rule `issue-assess`) — the harness asking whether an issue that has had work
    * and has nothing in flight is actually finished, and parking it as `delivered`
    * if so. **On by default**, with the cost stated: it spends an agent per assessed
    * issue and its `delivered` verdict gates pickup. Off, no assessor is dispatched,
-   * no verdict is written, and rule 4 behaves as it did before the assessor
+   * no verdict is written, and rule `issue-pickup` behaves as it did before the assessor
    * existed — which on GitHub means a merged PR's issue is picked up again.
    * Deep-merged. Only the `rule` dispatcher implements it.
    */
   assessment: AssessmentPolicy;
   /**
-   * The goal assay (rule 3f) — the harness asking whether a fresh issue's *text*
+   * The goal assay (rule `issue-assay`) — the harness asking whether a fresh issue's *text*
    * can be worked from at all, before anything is dispatched against it (issue
    * #158). **On by default**, with the cost named rather than discovered: with
    * `planning`, `assessment`, this and the retrospective all on, one issue can
@@ -149,7 +149,7 @@ export interface Config {
    */
   assay: AssayPolicy;
   /**
-   * The retrospective (rule 3h) — one desk agent writing up a goal the harness has
+   * The retrospective (rule `issue-retro`) — one desk agent writing up a goal the harness has
    * parked as delivered: what shipped, and what came out of the process of
    * shipping it, from the issue's scratchpad plus the record the harness kept.
    * **On by default**, unlike its three neighbours above: it runs once, after the

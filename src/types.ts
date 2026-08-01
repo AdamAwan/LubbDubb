@@ -41,7 +41,7 @@ export interface CiCheck {
    * or be muted by a `ci.checks` rule.
    *
    * The Azure comment policy's mode. Surfacing it as an ordinary check would let
-   * rule 1 outrank rule 2b and send the generic CI-fix prompt in place of one
+   * rule `pr-ci-failing` outrank rule `pr-review-comment` and send the generic CI-fix prompt in place of one
    * carrying the comment's author and body — the same work with strictly less
    * information. Structural rather than configurational, so the correct behaviour
    * cannot be lost by forgetting a line of config.
@@ -669,7 +669,7 @@ export type DeliveryAuthor = 'assessor' | 'operator';
  * Distinct from {@link IssueConclusion}, and deliberately not a third member of
  * {@link IssueConclusionVerdict}, because the two have different lifetimes and
  * different readers. A conclusion is declared once by the agent that did the work
- * and **gates nothing** — rule 3b is its only consumer. A delivery verdict is
+ * and **gates nothing** — rule `work-item-back-to-pickup` is its only consumer. A delivery verdict is
  * re-read by the pickup gate every pulse and stops standing when the world moves
  * (`src/delivery/delivery.ts`). Folding them would give the resolver an expiring
  * member its other two do not have, and would overwrite the working agent's note
@@ -848,7 +848,7 @@ export type ShortfallAuthor = 'assessor' | 'operator';
  *
  * A **separate table** rather than a polarity column on the delivery row, and the
  * reason is the polarity itself. Every reader of `issue_deliveries` is a *gate*:
- * `deliveryHold` is asked by rule 4's filter and by `issuePickupStatus`, each
+ * `deliveryHold` is asked by rule `issue-pickup`'s filter and by `issuePickupStatus`, each
  * pulse, and it holds pickup off. A shortfall must gate **nothing** — releasing
  * work is the entire point — so putting the two in one table would leave every
  * present and future reader having to remember which polarity it is holding, from
@@ -926,7 +926,7 @@ export interface Plan {
   outOfScope: string | null;
   /** The full narrative, markdown — the read-in-depth version of this plan. */
   document: string | null;
-  /** True while an operator is discussing this plan with an agent (see rule 3c). */
+  /** True while an operator is discussing this plan with an agent (see rule `issue-plan`). */
   discussing: boolean;
   /** Provider comment id for the plan's status comment, edited in place (stage 3). */
   statusCommentRef: string | null;

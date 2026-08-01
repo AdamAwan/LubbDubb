@@ -161,7 +161,7 @@ test('a requeued job is dispatched by the next pulse, once the hold lifts', asyn
 
   await system.harness.runCycle('manual');
   const job = system.store.listJobs()[0]!;
-  assert.equal(job.status, 'dispatched', 'rule 0 takes it ahead of world-driven work');
+  assert.equal(job.status, 'dispatched', 'rule `manual-job` takes it ahead of world-driven work');
   const task = system.store.getTask(job.taskId!)!;
   assert.equal(task.status, 'running');
   system.store.close();

@@ -215,9 +215,9 @@ test('sibling context separates work that exists from work that is not yours', (
   assert.match(siblingContext(parts, parts[0]!).done, /Nothing has landed yet/);
 });
 
-// -- rule 4a -----------------------------------------------------------------
+// -- rule `plan-part` -----------------------------------------------------------------
 
-test('rule 4a dispatches a ready part on its own branch, based on its dependency', async () => {
+test('rule `plan-part` dispatches a ready part on its own branch, based on its dependency', async () => {
   const parts = [
     part('schema', 1, { status: 'merged', branch: 'issue/12/schema', prNumber: 40 }),
     part('dispatcher', 2, { dependsOn: ['schema'], status: 'ready' }),
@@ -408,9 +408,9 @@ test('the cockpit chip reports plan progress, not whichever part opened a PR las
 
 // -- the merge gate a stack needs -------------------------------------------
 
-test('rule 3 holds a stacked PR and merges one that targets the integration branch', async () => {
+test('rule `pr-merge-ready` holds a stacked PR and merges one that targets the integration branch', async () => {
   // Brought forward from stage 4 deliberately: this is the first point at which
-  // stacked PRs actually exist, and rule 3 unguarded would merge part 2 *into part
+  // stacked PRs actually exist, and rule `pr-merge-ready` unguarded would merge part 2 *into part
   // 1's branch* mid-flight.
   const settled = { ciStatus: 'passing' as const, approved: true, mergeable: true, unresolvedComments: [] };
   const prs: PullRequest[] = [
@@ -681,7 +681,7 @@ test('the plan comment never describes a non-code part as merged, and names a mi
   assert.match(mismatched, /planned as code/);
 });
 
-// -- rule 3i: a released plan that is going nowhere ---------------------------
+// -- rule `plan-blocked`: a released plan that is going nowhere ---------------------------
 
 /** Both parts parked by the ref-collision guard, as the reconciler leaves them. */
 function wedgedParts(): PlanPart[] {
@@ -749,7 +749,7 @@ test('an unapproved wedged plan is not escalated — the ask already carries it'
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
     context([issue(12)], { plans: [{ ...plan(), status: 'awaiting_approval' }], planParts: wedgedParts() }),
   );
-  // Rule 3d proposes it; `planApprovalWarnings` puts the collision in that ask.
+  // Rule `plan-approval` proposes it; `planApprovalWarnings` puts the collision in that ask.
   // Escalating as well would be the same sentence twice to the same person.
   assert.deepEqual(
     result.actions.map((a) => a.rule),

@@ -5,7 +5,7 @@
  * ## The gap this closes
  *
  * An operator-launched code job (a "blueprint" from the cockpit's New blueprint
- * panel) used to be dispatched straight onto a branch by rule 0, on the raw
+ * panel) used to be dispatched straight onto a branch by rule `manual-job`, on the raw
  * prompt — skipping the whole funnel a *picked-up* ticket goes through: the goal
  * assay, the planning agent, the plan's parts. The workflow's two entry points
  * ("start with a prompt", "start with a ticket") are drawn converging on

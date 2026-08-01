@@ -28,7 +28,7 @@ function pr(over: Partial<PullRequest> = {}): PullRequest {
   };
 }
 
-/** A PR rule 3 would merge: green, approved, mergeable, nothing outstanding. */
+/** A PR rule `pr-merge-ready` would merge: green, approved, mergeable, nothing outstanding. */
 function mergeReadyPr(over: Partial<PullRequest> = {}): PullRequest {
   return pr({ approved: true, mergeable: true, mergeableState: 'clean', ...over });
 }
@@ -159,7 +159,7 @@ test('a concern whose attempt cap is spent is handed back to you', () => {
 
 test('a failure the CI policy holds is your court, not a promise of an agent', () => {
   // The whole point of a per-check policy: `codeql` is red, the operator has said a
-  // human owns it, so rule 1 does not dispatch and rule `pr-ci-blocked` escalates.
+  // human owns it, so rule `pr-ci-failing` does not dispatch and rule `pr-ci-blocked` escalates.
   // Reading the aggregate `ciStatus` alone reported "an agent will be dispatched",
   // which is a promise the dispatcher does not keep.
   const held = pr({
@@ -189,7 +189,7 @@ test('a red check the policy dispatches for stays the harness’s', () => {
 });
 
 test('a failure that is only muted is stalled, and says the merge gate still reads it', () => {
-  // Nothing dispatches and nothing escalates — but rule 3's merge test reads the
+  // Nothing dispatches and nothing escalates — but rule `pr-merge-ready`'s merge test reads the
   // *aggregate*, which is still failing, so this PR can never move. The old wording
   // was "CI has not reported", which is untrue of a check that reported and was muted.
   const muted = mergeReadyPr({
@@ -208,7 +208,7 @@ test('a failure that is only muted is stalled, and says the merge gate still rea
 
 test('an inherited failure is never handed to you, whatever the policy says', () => {
   // The fix belongs to the PR underneath. `ciReading` excludes an inherited failure
-  // for the same reason rule 1 suppresses the concern, so a policy that would
+  // for the same reason rule `pr-ci-failing` suppresses the concern, so a policy that would
   // otherwise escalate cannot make a stacked PR your problem.
   const base = pr({ id: 'p1', number: 1, branch: 'part/one', ciStatus: 'failing' });
   const stacked = pr({ id: 'p2', number: 2, branch: 'part/two', baseBranch: 'part/one', ciStatus: 'failing' });
@@ -310,7 +310,7 @@ test('a rejection the world has overtaken stops reading as settled', () => {
 });
 
 test('a rejection only reads as settled while the merge gate is the thing it holds', () => {
-  // The PR went red after the refusal: rule 1 dispatches regardless of a merge
+  // The PR went red after the refusal: rule `pr-ci-failing` dispatches regardless of a merge
   // verdict, so the honest answer is the harness's court, not "settled".
   const rejected = proposal({ status: 'rejected', decidedBy: 'human', decidedAt: ago(60), note: 'not yet' });
   const verdict = prAttentionStatus(mergeReadyPr({ ciStatus: 'failing' }), ctx({ proposals: [rejected] }));
@@ -364,7 +364,7 @@ test('CI running, an absent approval and a blocked merge are all outside the loo
 // --- stalled ----------------------------------------------------------------
 
 test('a green, approved PR no rule will ever act on is stalled, and says what is missing', () => {
-  // Nothing to fix, nobody asked, and rule 3 will not fire because the provider
+  // Nothing to fix, nobody asked, and rule `pr-merge-ready` will not fire because the provider
   // never reported mergeability. This is the case the verdict exists to surface.
   const verdict = prAttentionStatus(pr({ approved: true }), ctx());
   assert.deepEqual(verdict, { status: 'stalled', reasons: ['the provider reports no mergeable state'] });
@@ -440,7 +440,7 @@ test('a pending proposal and a standing rejection read differently through the w
   system.connector.inject({ kind: 'pr_approved', prNumber: 12 });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 12, mergeable: true, mergeableState: 'clean' });
 
-  // The default posture (autoSend off) turns rule 3's merge into a pending ask.
+  // The default posture (autoSend off) turns rule `pr-merge-ready`'s merge into a pending ask.
   await system.harness.runCycle('manual');
   const [pending] = system.store.listProposals();
   assert.equal(pending!.status, 'pending');
@@ -466,7 +466,7 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
   // Behavioural: building the snapshot (which computes the verdict for every PR)
   // between two pulses changes no decision the harness goes on to make.
   // Deliberately a world that dispatches no agent: PR 21 is waiting on CI and PR 22
-  // is merge-ready, so the pulse's only effect is rule 3's proposal — which is the
+  // is merge-ready, so the pulse's only effect is rule `pr-merge-ready`'s proposal — which is the
   // one the verdict could conceivably influence, and must not.
   const world = (system: ReturnType<typeof buildSystem>): void => {
     system.connector.inject({ kind: 'new_pr', number: 21, title: 'Widget', branch: 'feat/widget' });

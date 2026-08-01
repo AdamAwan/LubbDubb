@@ -81,7 +81,7 @@ export function ingestPlanDocument(
   // An amended plan is what *ends* a discussion — the agent has said its piece and
   // submitted. Cleared here rather than in the route so it holds for both
   // transports, and so an agent that finishes without anyone pressing a button
-  // still leaves the plan in a state rule 3c will not re-dispatch from.
+  // still leaves the plan in a state rule `issue-plan` will not re-dispatch from.
   if (plan.discussing) store.setPlanDiscussing(plan.id, false);
 
   return {

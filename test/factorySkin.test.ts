@@ -1538,7 +1538,7 @@ test('the ladder is the configured checks, then a fixed three a human moves', ()
     [false, true, true],
   );
   // Behind the base is a conflict for merging purposes even when `mergeable` is
-  // still true — it is the state rule 2 exists to clear.
+  // still true — it is the state rule `pr-base-update` exists to clear.
   assert.deepEqual(
     mergeGates(pr({ mergeableState: 'behind' })).map((g) => g.met),
     [true, true, false],
