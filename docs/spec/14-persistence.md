@@ -1,7 +1,64 @@
 # 14 — Persistence
 
-**`src/store/store.ts` is the only module that touches SQLite.** Everything else goes through the
+**`src/store/` is the only directory that touches SQLite.** Everything else goes through the
 `Store`. The schema is `src/store/schema.ts`.
+
+## Shape
+
+The rule above is about **SQLite access, not about one class** (issue #221). `store.ts` was a
+2,543-line class with 117 methods over 29 tables, and every subsystem that needed one of them
+depended on the surface of all of them. It is now a **composition root**: one domain module per
+group of related tables, each a class taking nothing but a `StoreContext` (`{db, now}`), and a
+thin `Store` that instantiates them and delegates. Every public method name and signature is
+unchanged, so no call site anywhere knows.
+
+| Module             | Tables                                                                      |
+| ------------------ | --------------------------------------------------------------------------- |
+| `tasks.ts`         | `tasks`                                                                     |
+| `jobs.ts`          | `jobs`                                                                      |
+| `priority.ts`      | `priority_overrides`                                                        |
+| `findings.ts`      | `findings`                                                                  |
+| `plans.ts`         | `plans`, `plan_parts`                                                       |
+| `issueVerdicts.ts` | `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays` |
+| `scratch.ts`       | `scratch_entries`, `retrospectives`                                         |
+| `agents.ts`        | `agents`, `usage_events`, `agent_flags`, `agent_files`                      |
+| `transcripts.ts`   | `agent_transcripts`                                                         |
+| `escalations.ts`   | `escalations`, `proposals`                                                  |
+| `decisions.ts`     | `decisions`                                                                 |
+| `world.ts`         | `world_events`, `world_baseline`, `connector_state`                         |
+| `errors.ts`        | `error_events`                                                              |
+| `graph.ts`         | `work_nodes`, `work_item_filings`, `work_item_ignores`                      |
+| `floor.ts`         | `floor_completions`                                                         |
+
+Four properties, all asserted structurally in `test/storeModules.test.ts` rather than intended:
+
+- **Only `src/store/` imports `better-sqlite3`.** The constraint the split was careful to preserve,
+  and now the one that fails a test when broken. (Matched on the _import_ — two modules elsewhere
+  mention the driver in prose to explain why a synchronous write makes a read-then-write race-free.)
+- **A module is handed the database and nothing else.** `StoreContext` is `{db, now}` and no module
+  imports a sibling. That is not a rule imposed on the split so much as a fact discovered by it:
+  every method in the old class was `this.db.prepare(...)` plus `this.now()`, with no domain
+  reaching another through class state, which is what made the move mechanical. A genuinely
+  cross-domain read belongs _above_ the persistence layer, in the caller that already holds both.
+- **Each table is named by exactly one module.** Two writers to one table is how the invariants
+  between them come to disagree — which is why the four issue-verdict tables are deliberately one
+  module and not four (see below).
+- **The transcript buffer survives `close()`.** `TranscriptStore` is the one stateful module — it
+  accumulates output in memory and writes on a ~16KB threshold — so `Store.close()` has to ask it
+  to flush before the handle goes, and a test with a real file on disk is what notices if it stops.
+
+One file under `src/store/` is deliberately **not** a domain module and is excluded from all three
+assertions above: `verdicts.ts`, the issue-verdict exclusion matrix (#222). It is a dependency-free
+declaration — no SQLite, no `Store` — naming the four verdict tables so a test can walk it, and
+`issueVerdicts.ts` is the only thing that writes them. `context.ts`, `migrate.ts`, `schema.ts` and
+`store.ts` itself are excluded for the same kind of reason: none of them owns a table.
+
+**Membership is settled by which invariants must be readable together, not by table count.**
+`issueVerdicts.ts` is the point of the exercise: the four verdict writers clear each other under
+rules that used to live hundreds of lines apart, related only by prose cross-references. Those
+rules are now declared as data and applied in one private method — see [Issue verdicts, and the
+exclusion matrix](#issue-verdicts-and-the-exclusion-matrix) — and the four writers that share them
+are one module rather than scattered through 2,500 lines.
 
 ## Database setup
 
@@ -12,7 +69,10 @@
 3. `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`.
 4. Executes `SCHEMA` (all statements are `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`,
    so it is idempotent).
-5. Runs `migrate()`.
+5. Runs `ensureColumns` for every domain module's declared columns — **before any module is
+   constructed**, let alone reads, since a module reading a migrated column on a database created
+   by an older build reads `undefined`.
+6. Constructs the domain modules over one shared `StoreContext`.
 
 Writes are **synchronous**, which is what keeps the harness logic race-free. Lean on that.
 
@@ -21,19 +81,22 @@ The clock is injectable (`Clock`), so tests get deterministic timestamps.
 ## Migrations
 
 `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a column added to the schema is
-invisible on databases created by an older build. `migrate()` closes that gap with additive, idempotent
-`ALTER TABLE … ADD COLUMN`, guarded by a `PRAGMA table_info` check, safe to run on every boot.
+invisible on databases created by an older build. `ensureColumns` (`src/store/migrate.ts`) closes that
+gap with additive, idempotent `ALTER TABLE … ADD COLUMN`, guarded by a `PRAGMA table_info` check, safe
+to run on every boot.
 
-Current entries:
+**The entries are declared by the module that owns the table**, as an exported `ColumnMigrations`
+the composition root applies — so "did this table's new column get an entry?" is a question you can
+answer without leaving the file you added the column's reader to. Current entries:
 
-| Table        | Columns added                                                                                            |
-| ------------ | -------------------------------------------------------------------------------------------------------- |
-| `tasks`      | `origin_title`, `origin_summary`, `dispatch_reason`                                                      |
-| `agents`     | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
-| `decisions`  | `rule`, `admission`                                                                                      |
-| `findings`   | `ticket_ref`                                                                                             |
-| `plans`      | `risks`, `out_of_scope`, `document`, `discussing`                                                        |
-| `plan_parts` | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
+| Table        | Declared in    | Columns added                                                                                                  |
+| ------------ | -------------- | -------------------------------------------------------------------------------------------------------------- |
+| `tasks`      | `tasks.ts`     | `origin_title`, `origin_summary`, `dispatch_reason`                                                            |
+| `agents`     | `agents.ts`    | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at`       |
+| `decisions`  | `decisions.ts` | `rule`, `admission`                                                                                            |
+| `findings`   | `findings.ts`  | `ticket_ref`                                                                                                   |
+| `plans`      | `plans.ts`     | `risks`, `out_of_scope`, `document`, `discussing`                                                              |
+| `plan_parts` | `plans.ts`     | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
 
 **One migration is not an `ALTER`.** `adoptFloorCompletions()` carries #203's `floor_completions`
 into `issue_runs` and drops it (#234). A reshape rather than a column: `completed_at` was `NOT NULL`
@@ -57,35 +120,35 @@ introduced.
 
 ## Tables
 
-| Table                | Holds                                                                                          | Key constraints               |
-| -------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------- |
-| `tasks`              | Units of work materialised at dispatch.                                                        | —                             |
-| `jobs`               | Operator-queued prompts awaiting a slot.                                                       | —                             |
-| `priority_overrides` | Operator "Up next" re-ordering, keyed on candidate origin.                                     | `origin` is `PRIMARY KEY`     |
-| `agents`             | One row per launched agent, including usage and the progress note.                             | —                             |
-| `usage_events`       | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`.       | —                             |
-| `agent_flags`        | Artifacts surfaced to the cockpit.                                                             | `UNIQUE (agent_id, ref)`      |
-| `agent_files`        | Every file an agent wrote; `promoted` marks the ones also surfaced as chips.                   | `UNIQUE (agent_id, path)`     |
-| `findings`           | Things agents noticed outside their own task.                                                  | —                             |
-| `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.          | `origin_ref` is `PRIMARY KEY` |
-| `plans`              | One delivery plan per issue.                                                                   | `origin_ref` is `UNIQUE`      |
-| `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                       | `UNIQUE (plan_id, slug)`      |
-| `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal. | `origin_ref` is `PRIMARY KEY` |
-| `issue_shortfalls`   | The negative mirror: an issue worked whose goal is still not reached, with the cause that routes it. Gates **nothing**; lives until the arm it named is performed. | `origin_ref` is `PRIMARY KEY`; `cause` is nullable |
-| `issue_assays`       | Whether an issue's goal text can be worked from at all, judged before anything is dispatched. Gates the funnel; expires when the text changes or the world moves. | `origin_ref` is `PRIMARY KEY`; `goal_ref` fingerprints the text judged |
-| `scratch_entries`    | The shared per-issue scratchpad: what the agents working one goal left for whoever works it next, and for the retrospective. **Append-only** — no update and no delete exists above the table. | keyed on `pad_ref` (`issue:<n>`); ties on `created_at` break on `rowid`, which is insertion order |
-| `retrospectives`     | One write-up per goal, produced after delivery. Gates nothing; nothing in the dispatcher reads it beyond whether a row exists. | `origin_ref` is `PRIMARY KEY`; upserted, so `created_at` dates the first write-up |
+| Table                | Holds                                                                                                                                                                                                     | Key constraints                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `tasks`              | Units of work materialised at dispatch.                                                                                                                                                                   | —                                                                                                  |
+| `jobs`               | Operator-queued prompts awaiting a slot.                                                                                                                                                                  | —                                                                                                  |
+| `priority_overrides` | Operator "Up next" re-ordering, keyed on candidate origin.                                                                                                                                                | `origin` is `PRIMARY KEY`                                                                          |
+| `agents`             | One row per launched agent, including usage and the progress note.                                                                                                                                        | —                                                                                                  |
+| `usage_events`       | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`.                                                                                                                  | —                                                                                                  |
+| `agent_flags`        | Artifacts surfaced to the cockpit.                                                                                                                                                                        | `UNIQUE (agent_id, ref)`                                                                           |
+| `agent_files`        | Every file an agent wrote; `promoted` marks the ones also surfaced as chips.                                                                                                                              | `UNIQUE (agent_id, path)`                                                                          |
+| `findings`           | Things agents noticed outside their own task.                                                                                                                                                             | —                                                                                                  |
+| `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.                                                                                                                     | `origin_ref` is `PRIMARY KEY`                                                                      |
+| `plans`              | One delivery plan per issue.                                                                                                                                                                              | `origin_ref` is `UNIQUE`                                                                           |
+| `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                                                                                                                                  | `UNIQUE (plan_id, slug)`                                                                           |
+| `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal.                                                                                                            | `origin_ref` is `PRIMARY KEY`                                                                      |
+| `issue_shortfalls`   | The negative mirror: an issue worked whose goal is still not reached, with the cause that routes it. Gates **nothing**; lives until the arm it named is performed.                                        | `origin_ref` is `PRIMARY KEY`; `cause` is nullable                                                 |
+| `issue_assays`       | Whether an issue's goal text can be worked from at all, judged before anything is dispatched. Gates the funnel; expires when the text changes or the world moves.                                         | `origin_ref` is `PRIMARY KEY`; `goal_ref` fingerprints the text judged                             |
+| `scratch_entries`    | The shared per-issue scratchpad: what the agents working one goal left for whoever works it next, and for the retrospective. **Append-only** — no update and no delete exists above the table.            | keyed on `pad_ref` (`issue:<n>`); ties on `created_at` break on `rowid`, which is insertion order  |
+| `retrospectives`     | One write-up per goal, produced after delivery. Gates nothing; nothing in the dispatcher reads it beyond whether a row exists.                                                                            | `origin_ref` is `PRIMARY KEY`; upserted, so `created_at` dates the first write-up                  |
 | `issue_runs`         | One run of the harness at a goal (#203, #234): minted the first pulse it has work under the issue, and living until the operator dismisses it. Carries the issue's title, body, labels, linked PR and workflow state as they last stood while live, because a retained run is **dispatched from** — it is unioned into the dispatcher's issue list, and a dismissal stops it. | `origin_ref` is `PRIMARY KEY`; upserted (`started_at` and `completed_at` frozen); `dismissed_at` is a one-way write that stamps `outcome` |
-| `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.       | `ref` is `PRIMARY KEY`        |
-| `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                  | `target_ref` is `PRIMARY KEY` |
-| `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.      | `target_ref` is `PRIMARY KEY` |
-| `agent_transcripts`  | Chunked agent output.                                                                          | `PRIMARY KEY (agent_id, seq)` |
-| `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                | —                             |
-| `decisions`          | The audit log. `action` is JSON; `rule` and `admission` are lifted off it at record time.       | —                             |
-| `connector_state`    | The fake provider's editable world, so injected events survive restarts.                       | —                             |
-| `world_events`       | Observed world transitions — the activity feed's backing store.                                | —                             |
-| `world_baseline`     | The last snapshot the harness diffed against.                                                  | Single row: `CHECK (id = 1)`  |
-| `error_events`       | Recorded failures — the Errors panel's backing store.                                          | —                             |
+| `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.                                                                                                                  | `ref` is `PRIMARY KEY`                                                                             |
+| `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                                                                                                                             | `target_ref` is `PRIMARY KEY`                                                                      |
+| `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.                                                                                                                 | `target_ref` is `PRIMARY KEY`                                                                      |
+| `agent_transcripts`  | Chunked agent output.                                                                                                                                                                                     | `PRIMARY KEY (agent_id, seq)`                                                                      |
+| `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                                                                                                                           | —                                                                                                  |
+| `decisions`          | The audit log. `action` is JSON; `rule` and `admission` are lifted off it at record time.                                                                                                                 | —                                                                                                  |
+| `connector_state`    | The fake provider's editable world, so injected events survive restarts.                                                                                                                                  | —                                                                                                  |
+| `world_events`       | Observed world transitions — the activity feed's backing store.                                                                                                                                           | —                                                                                                  |
+| `world_baseline`     | The last snapshot the harness diffed against.                                                                                                                                                             | Single row: `CHECK (id = 1)`                                                                       |
+| `error_events`       | Recorded failures — the Errors panel's backing store.                                                                                                                                                     | —                                                                                                  |
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
@@ -171,7 +234,7 @@ VERDICT_EXCLUSIONS: Record<VerdictKind, readonly VerdictKind[]> = {
 ```
 
 Writing a verdict clears every verdict its row names, for that origin, in one transaction. The
-private `Store.recordVerdict(kind, upsert, row)` is what applies it, and the four public writers —
+private `IssueVerdictStore.recordVerdict(kind, upsert, row)` is what applies it, and the four public writers —
 `recordIssueConclusion`, `recordDelivery`, `recordShortfall`, `recordAssay` — keep their names,
 signatures and row composition and call it instead of each hand-rolling a `DELETE`. The reasoning
 per row lives on the declaration; the summary is that a delivery and a conclusion are two answers to
@@ -295,7 +358,7 @@ separately rather than losing the first to the second. `listDecisions(limit=200)
 `admission` is nullable and is set only by the two admissions that emit an action of their own
 (`branch-notify`, `cooldown-escalate`); the held reasons (`cooldown`, `capped`, `unapproved`,
 `superseded`, `waiting`) hold a candidate that was never executed and so write no decision row at all.
-Rows written before the column existed carry the *outcome* in `rule` with `admission` NULL — the
+Rows written before the column existed carry the _outcome_ in `rule` with `admission` NULL — the
 proposer is unrecoverable, nothing rewrites them, and the cockpit renders the two shapes distinctly.
 See [05](05-dispatcher.md#two-columns-on-the-decision-row).
 

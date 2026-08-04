@@ -46,7 +46,6 @@ function context(pullRequests: PullRequest[], extra: Partial<DispatchContext> = 
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    steeringPriorities: [],
     agentHeadroom: 5,
     recentDecisions: [],
     ...extra,
@@ -507,7 +506,6 @@ test('/api/state ships the classification verdict, from the same call the dispat
     loadConfig({
       auth: { enabled: false } as never,
       dbPath: ':memory:',
-      dispatcher: 'rule',
       agentMode: 'raw',
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),

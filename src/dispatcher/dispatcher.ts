@@ -70,8 +70,7 @@ export interface DispatchContext {
    * origin. Applied ahead of the natural cross-rule ranking but behind rule `manual-job`
    * and behind every `held` verdict, so an override changes *order* only —
    * never whether a cooldown, cap, ignore tag or unapproved plan holds an item.
-   * Absent/empty means the natural ranking stands. The LLM dispatcher ignores
-   * it (it materialises no ranked queue).
+   * Absent/empty means the natural ranking stands.
    */
   priorityOverrides?: PriorityOverride[];
   /**
@@ -132,8 +131,6 @@ export interface DispatchContext {
    * `assaySignalQuery`, so it is empty until an issue is actually refused.
    */
   assaySignals?: WorldEvent[];
-  /** Optional operator hints, injected only as a corrective. */
-  steeringPriorities: string[];
   /** How many more agents may be started this cycle (concurrency headroom). */
   agentHeadroom: number;
   /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */
@@ -184,16 +181,19 @@ export interface DispatchResult extends ParseResult {
   rationale: string;
   /**
    * The full ordered pickup plan, including candidates below the headroom cut.
-   * Only the rule dispatcher materialises one; the LLM dispatcher omits it.
+   * Optional because a decision procedure need not rank what it did not pick;
+   * {@link RuleDispatcher} always materialises one, so `Harness.upcoming` is null
+   * only before the first cycle.
    */
   upcoming?: QueueItem[];
 }
 
 /**
  * Decides what the harness should do this cycle: full state in, a validated,
- * bounded action plan out. Two implementations ship: a deterministic
- * {@link RuleDispatcher} (the safe default, fully testable) and a
- * {@link ClaudeDispatcher} that drives a real Claude Code session.
+ * bounded action plan out. {@link RuleDispatcher} is the one implementation —
+ * deterministic and fully testable. This stays an interface because it is the
+ * seam the whole pulse is written against: `Harness` takes a `Dispatcher`, never
+ * the class, so what decides can be swapped without the cycle knowing.
  */
 export interface Dispatcher {
   decide(ctx: DispatchContext): Promise<DispatchResult>;

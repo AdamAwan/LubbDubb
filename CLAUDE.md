@@ -58,20 +58,24 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   is the only server module anything under `web/src/` names.
 - **`src/system.ts` is the composition root.** Every module is wired there through its interface. A
   new component is threaded through it.
-- **`src/store/store.ts` is the only module that touches SQLite.** Everything else goes through the
-  `Store`; writes are synchronous, which is what keeps the harness logic race-free.
+- **`src/store/` is the only directory that touches SQLite.** Everything else goes through the
+  `Store`; writes are synchronous, which is what keeps the harness logic race-free. `store.ts` is a
+  composition root: one module per group of related tables, each taking a `StoreContext` of
+  `{db, now}`, with `Store` delegating under the same method names. Asserted structurally in
+  `test/storeModules.test.ts`. → [14](docs/spec/14-persistence.md#shape)
 
 ## Sharp edges
 
 ### Persistence
 
-- **A column added to an _existing_ table needs an additive `ALTER TABLE` in `Store.migrate()`**,
-  guarded by a `PRAGMA table_info` check. `CREATE TABLE IF NOT EXISTS` never alters an existing
+- **A column added to an _existing_ table needs an additive `ALTER TABLE`**, guarded by a
+  `PRAGMA table_info` check and declared in the `ColumnMigrations` of the module that owns the table. `CREATE TABLE IF NOT EXISTS` never alters an existing
   table, so a column without an `ensureColumns` entry is invisible on every database from before it
   existed — and invisible is the whole failure: nothing errors. A brand-new table needs no entry,
   but a table being new **once** does not keep it exempt.
   → [14](docs/spec/14-persistence.md#migrations)
-- **A new issue-verdict writer goes through `Store.recordVerdict`, never a hand-rolled `DELETE`.**
+- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled
+  `DELETE`.**
   Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist
   is declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself compiles,
   passes, and silently reintroduces the pairwise drift the matrix replaced.

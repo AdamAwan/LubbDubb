@@ -14,7 +14,6 @@ function ptyConfig(dir: string): Config {
   return loadConfig({
     labelPrefix: '',
     dbPath: join(dir, 'db.sqlite'),
-    dispatcher: 'rule',
     agentMode: 'pty',
     agentPromptDelayMs: 0, // deliver synchronously; no TUI boot wait in tests
     deskRoot: join(dir, 'desk'),

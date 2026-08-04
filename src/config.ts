@@ -48,8 +48,6 @@ export interface Config {
   startPaused: boolean;
   /** PTY prompt substrings the harness may auto-answer instead of escalating. */
   whitelistedApprovals: WhitelistRule[];
-  /** Optional ordered hints injected into the dispatcher prompt. Empty by default. */
-  steeringPriorities: string[];
   /** Confidence-gated auto-send policy for side-effectful actions. Off by default. */
   autoSend: AutoSendConfig;
   /**
@@ -119,8 +117,8 @@ export interface Config {
   issueInReviewState?: string;
   /**
    * The planning funnel for multi-PR issues. **On by default**: every watched open
-   * issue gets a planning agent before any implementation work, and a `parts`
-   * verdict is put to you before its agents are spent (`requireApproval`). Off
+   * issue gets a planning agent before any implementation work, and its verdict —
+   * one PR or several — is put to you before any agent is spent (`requireApproval`). Off
    * leaves it out entirely — rule `issue-pickup` un-narrowed, no planner ever dispatched,
    * behaviour exactly what it is without plans. Deep-merged, so one field can be
    * set alone. Only the `rule` dispatcher implements the funnel.
@@ -204,8 +202,6 @@ export interface Config {
    * forever. Defaults to 7 days; `0` disables pruning entirely (supported).
    */
   upNextOverrideTtlMs: number;
-  /** Which dispatcher to use. `rule` is deterministic; `claude` drives a PTY session. */
-  dispatcher: 'rule' | 'claude';
   /**
    * How agents are launched.
    * - `stream`: real Claude Code over headless stream-JSON (`-p --output-format
@@ -291,8 +287,6 @@ export interface Config {
    * default. A file may start with an `<!-- ... -->` doc header describing what
    * it's for — that header is stripped before the prompt reaches the agent.
    * Defaults to `.lubbdubb/prompts`; absent directory => all built-in defaults.
-   * Only the `rule` dispatcher uses these; the `claude` dispatcher composes its
-   * own prompts.
    */
   promptTemplatesDir: string;
   /** Root under which per-branch worktrees are created. */
@@ -418,7 +412,6 @@ const DEFAULTS: Config = {
   maxConcurrentAgents: 3,
   startPaused: false,
   whitelistedApprovals: [],
-  steeringPriorities: [],
   autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
   integrations: { sourceControl: 'fake', issues: 'fake' },
   labelPrefix: 'lubbdubb',
@@ -435,7 +428,6 @@ const DEFAULTS: Config = {
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
-  dispatcher: 'rule',
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
   // The mechanical validate/commit/push commands a coding agent must run to take
@@ -514,15 +506,41 @@ export function defaultConfig(): Config {
   return base;
 }
 
+/**
+ * Keys that used to mean something and no longer do, each with the reason.
+ *
+ * A removed key merges into nothing and takes the default, so an operator who
+ * had chosen the behaviour watches the harness do the opposite of what their
+ * file says while the file goes on saying it. Same argument as
+ * {@link validatePolicyCheckModes}' typo'd kind: refuse at load, name the key,
+ * say what to do. The entries are permanent — a config written before the
+ * removal outlives the release that made it.
+ */
+const REMOVED_KEYS: Readonly<Record<string, string>> = {
+  dispatcher:
+    'the "claude" dispatcher was removed and the rule dispatcher is the only one, so there is nothing left to select',
+  steeringPriorities: 'it was only ever injected into the removed "claude" dispatcher\'s prompt and now steers nothing',
+};
+
+function refuseRemovedKeys(fromFile: object, filePath: string): void {
+  for (const [key, why] of Object.entries(REMOVED_KEYS)) {
+    if (!Object.hasOwn(fromFile, key)) continue;
+    throw new Error(`Refusing to start: ${filePath} sets "${key}", which no longer exists — ${why}. Delete the key.`);
+  }
+}
+
 export function loadConfig(overrides: Partial<Config> = {}): Config {
   const filePath = resolve(process.cwd(), 'lubbdubb.config.json');
   let fromFile: Partial<Config> = {};
   if (existsSync(filePath)) {
+    let parsed: unknown;
     try {
-      fromFile = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<Config>;
+      parsed = JSON.parse(readFileSync(filePath, 'utf8'));
     } catch (err) {
       throw new Error(`Failed to parse ${filePath}: ${(err as Error).message}`);
     }
+    if (typeof parsed === 'object' && parsed !== null) refuseRemovedKeys(parsed, filePath);
+    fromFile = parsed as Partial<Config>;
   }
   const fromEnv: Partial<Config> = {};
   if (process.env.PORT) fromEnv.port = Number(process.env.PORT);

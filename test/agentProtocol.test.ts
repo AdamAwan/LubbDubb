@@ -122,7 +122,6 @@ function claudeModeConfig() {
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'pty',
     agentPromptDelayMs: 0, // send immediately in tests
     deskRoot: join(dir, 'desk'),

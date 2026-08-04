@@ -30,7 +30,8 @@ is rejected and audited rather than executed.
 | `no_op`               | `reason`                                  | `rule`                                                                         |
 
 `reason` is mandatory on every action — it is what the audit log shows. `rule` defaults to `null`,
-because the LLM dispatcher reasons freely and emits none. Every action also accepts an optional
+because an act reaching the executor from outside the pulse (an accepted proposal, agent lifecycle)
+has no proposing rule. Every action also accepts an optional
 **`admission`** beside it, defaulting to `null`: `rule` names what proposed the act, `admission` what
 became of it, and both are lifted into their own decision columns (see
 [Two columns on the decision row](#two-columns-on-the-decision-row)).
@@ -85,7 +86,7 @@ unconditional.
 | `issue-assess`             | Issue may be finished                | `assessment`     | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                        |
 | `issue-shortfall`          | Assessment says the goal was missed  | —                | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                        |
 | `issue-retro`              | Delivered goal needs a retrospective | `retrospective`  | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included. |
-| `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.                                                     |
+| `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                  |
 | `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                |
 | `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                        |
 | `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`. Never a retained run.                                            |
@@ -592,24 +593,6 @@ expiry from re-asking on a PR that has merely been commented on.
 
 `buildRationale` produces `"Rule dispatcher: nothing actionable."` for a lone `no_op`, otherwise
 `"Rule dispatcher chose N action(s): <types>"`. It is persisted as its own decision row each cycle.
-
-## The `claude` dispatcher
-
-`src/dispatcher/claudeDispatcher.ts` drives a Claude Code session over the same `PtySession`
-abstraction as agents:
-
-- The prompt states the headroom, the allowed action types, the requirement that every action carries
-  a `reason`, the `confidence` contract for `reply_on_pr`, the operator's `steeringPriorities`, the
-  issue-pickup policy rendered as guidance, and the full state as JSON.
-- The model is asked to bracket a JSON object between `@@LUBBDUBB_PLAN_START@@` and
-  `@@LUBBDUBB_PLAN_END@@`. The session is finished on seeing the end sentinel, on `done`/`failed`/
-  `exit`, or on a 120-second timeout.
-- The extracted block is parsed and run through the **same** `parseActions`. No parseable block, or
-  invalid JSON, yields zero actions and an explanatory rationale — never a partial effect.
-
-It returns **no `upcoming`**, so the cockpit's Up next panel is empty under this dispatcher. It also
-does not implement the planning funnel or prompt templates; it is steered via `steeringPriorities`
-instead.
 
 ## Prompt templates
 

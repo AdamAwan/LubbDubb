@@ -1,6 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { PlanPart } from '../types.js';
-import { amendedPlanStatus, liveParts, partsToRetire } from './parts.js';
+import { amendedPlanStatus, liveParts, partsToRetire, releasedPlanStatus } from './parts.js';
+import { issueBranch } from '../dispatcher/issuePickup.js';
 import { abandonBlockers } from './planWedge.js';
 import { followupPartInput } from '../delivery/shortfall.js';
 
@@ -38,6 +39,51 @@ export function describeProposedParts(parts: PlanPart[]): string {
     .join('\n');
 }
 
+/**
+ * The **single** verdict as the operator is asked to authorize it — what fills the
+ * ask's `{list}` where a decomposition lists its parts.
+ *
+ * A single-PR proposal has no parts, and `describeProposedParts`' "declares no
+ * parts" is true but reads as a plan that failed to say anything. The shape being
+ * weighed is still a shape: one agent, one branch, one pull request — and the
+ * branch is worth naming, because a branch that already exists is exactly the
+ * collision the plan panel's other warnings are about.
+ */
+export function describeSingleRoute(issueNumber: number): string {
+  return (
+    `- no split: one agent works the whole issue on branch ${issueBranch(issueNumber)} and opens a single ` +
+    `pull request.`
+  );
+}
+
+/**
+ * What approving and rejecting *this* verdict do — appended to the rendered ask,
+ * never interpolated into it.
+ *
+ * Appending is `planApprovalWarnings`' rule and for its reason: `plan-approval` is
+ * operator-overridable and `loadPromptTemplates` rejects only *unknown*
+ * placeholders, so an `{arm}` token would be silently dropped by exactly the
+ * deployments that customised most — and the two arms settle differently enough
+ * that a reader given the wrong one would answer the wrong question. Appending has
+ * no fallback to get wrong.
+ *
+ * The template itself stays arm-neutral, so an override written before the single
+ * arm existed still frames the question correctly and this paragraph completes it.
+ */
+export function planApprovalNote(issueNumber: number, single: boolean): string {
+  if (single)
+    return (
+      `\n\nApprove and the issue is worked whole: one agent on ${issueBranch(issueNumber)}, one pull request, ` +
+      `through ordinary pickup. Reject and the plan goes back to a planner with your reason — a "no" here means ` +
+      `"not as one pull request", which is a question only a planner can answer again, so nothing is scheduled ` +
+      `either way until a verdict is approved.`
+    );
+  return (
+    `\n\nApprove and each part gets its own agent, branch and pull request, bottom of the stack first. Reject and ` +
+    `the issue is worked as a single pull request instead — parts nothing has been started for are retired.`
+  );
+}
+
 /** The outcome of settling a plan, in the form both callers audit. */
 interface PlanSettlement {
   ok: boolean;
@@ -45,18 +91,30 @@ interface PlanSettlement {
 }
 
 /**
- * Approve: the decomposition becomes work. One status write and rule `plan-part` starts
- * scheduling its parts on the next pulse — which is the entire effect, because
- * `awaiting_approval` was never anything but `active` with the gate closed.
+ * Approve: the verdict becomes work. One status write and the rule that owns the
+ * released arm starts on the next pulse — which is the entire effect, because
+ * `awaiting_approval` was never anything but the released status with the gate
+ * closed.
+ *
+ * **Which** released status is {@link releasedPlanStatus}'s answer, not `active`
+ * unconditionally: a released single verdict is `single`, so rule `issue-pickup`
+ * works the issue whole. `active` on a plan with no parts would park it — see there.
  */
 export function releasePlan(store: Store, planId: string, originRef: string): PlanSettlement {
   const plan = store.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing released` };
-  store.setPlanStatus(planId, 'active');
-  const parts = liveParts(store.listPlanParts(planId)).length;
-  return { ok: true, detail: `released the ${parts}-part plan for ${originRef}; its parts are now schedulable` };
+  const parts = liveParts(store.listPlanParts(planId));
+  const status = releasedPlanStatus(parts);
+  store.setPlanStatus(planId, status);
+  return {
+    ok: true,
+    detail:
+      status === 'single'
+        ? `released the single-pull-request plan for ${originRef}; the issue is now picked up whole`
+        : `released the ${parts.length}-part plan for ${originRef}; its parts are now schedulable`,
+  };
 }
 
 /**
@@ -70,8 +128,15 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
  * stopped the parts would therefore park the issue for good — the exact failure
  * the planner's fail-open exists to prevent.
  *
- * So a refusal *reassigns* the issue rather than stopping it, using the two rules
- * that already exist for the same question:
+ * So a refusal *reassigns* the issue rather than stopping it, using the rules that
+ * already exist for the same question.
+ *
+ * A refused **single** verdict is the arm with nowhere to fall — the single-PR
+ * route is what a refused decomposition falls *back* to — so it goes back to a
+ * planner (`planning`) with the operator's reason appended, which is the one thing
+ * that can produce a different verdict. See the guard in the body.
+ *
+ * A refused decomposition:
  *
  * - Every part nothing has been started for is retired ({@link partsToRetire} with
  *   an empty declaration — a refused decomposition declares no parts), so the
@@ -138,13 +203,27 @@ export function abandonDecomposition(store: Store, planId: string, originRef: st
   };
 }
 
-export function refusePlan(store: Store, planId: string, originRef: string): PlanSettlement {
+export function refusePlan(store: Store, planId: string, originRef: string, note?: string | null): PlanSettlement {
   const plan = store.getPlan(planId);
   if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing changed` };
 
   const parts = store.listPlanParts(planId);
+  // Refusing a **single** verdict has nowhere to fall: the single-PR route *is*
+  // what a refused decomposition falls back to, so writing `single` here would
+  // perform the very thing the operator declined. "Not as one pull request" is a
+  // question only a planner can answer again, and `planning` is exactly the status
+  // rule `issue-plan` dispatches a replan from — the same one status write
+  // `POST /api/plans/:id/replan` makes, so the refusal reuses a path rather than
+  // inventing one. It cannot loop: the planner's attempt cap is what ends it, and
+  // a spent cap fails the issue open to `single` and gets it worked, which is the
+  // funnel's existing answer to a planner that cannot settle.
+  if (liveParts(parts).length === 0) {
+    store.setPlanStatus(planId, 'planning', refusedSingleReason(plan.reason, note ?? null));
+    return { ok: true, detail: `sent the single-pull-request verdict for ${originRef} back to a planner` };
+  }
+
   const retire = partsToRetire(parts, []);
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
   const surviving = survivorsOf(parts, retire);
@@ -233,7 +312,29 @@ export function actOnShortfall(
  * without limit across repeated shortfalls.
  */
 function appendShortfallReason(reason: string | null, summary: string): string {
-  const note = `An assessment of the delivered work found: ${summary}`;
+  return appendPlanReason(reason, `An assessment of the delivered work found: ${summary}`);
+}
+
+/**
+ * The reason a refused **single** verdict carries back to the planner: what it
+ * decided, plus that a human declined it and why.
+ *
+ * The operator's note is the whole content of the refusal — without it the replan
+ * is a re-run of the question that just produced the answer being refused, and the
+ * planner has no reason to decide differently. Appended for
+ * {@link appendShortfallReason}'s reason: the planner's own reasoning is what is
+ * being corrected.
+ */
+function refusedSingleReason(reason: string | null, note: string | null): string {
+  return appendPlanReason(
+    reason,
+    `An operator declined working this issue as a single pull request${note ? `: ${note}` : '.'} Reconsider ` +
+      `whether it should be split into parts.`,
+  );
+}
+
+/** One plan reason with another appended, bounded so repeated verdicts cannot grow the row without limit. */
+function appendPlanReason(reason: string | null, note: string): string {
   const joined = reason ? `${reason}\n\n${note}` : note;
   return joined.length > MAX_PLAN_REASON ? `${joined.slice(0, MAX_PLAN_REASON - 1)}…` : joined;
 }

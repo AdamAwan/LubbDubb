@@ -183,7 +183,6 @@ test('pty mode exports LUBBDUBB_STATUS_FILE keyed by the chosen session id', asy
   const config = loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'pty',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
@@ -231,7 +230,6 @@ test('stream mode: result usage lands on the agent row and in the snapshot windo
   const config = loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'stream',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),

@@ -19,17 +19,22 @@ export interface PlanningPolicy {
    */
   maxConcurrentPartsPerIssue: number;
   /**
-   * Put a `parts` verdict to a human before anything is scheduled from it
+   * Put a planner's verdict to a human before anything is scheduled from it
    * (issue #109 phase 3). **On by default** — which changes nothing for a
    * deployment that has not enabled the funnel, because `enabled` is still off.
    * It only decides what happens once they do, and the thing being defaulted is
-   * whether a decomposition into N branches and N agents starts itself.
+   * whether a planner's decision about how an issue is worked starts itself.
    *
-   * On, ingestion persists a `parts` verdict as `awaiting_approval` instead of
-   * `active`, rule `plan-approval` puts it to the operator once, and rule `plan-part`
-   * schedules nothing until they accept — approve-before rather than replan-after,
-   * which is the undo we built in place of this gate. A `single` verdict is never
-   * gated: it is the status quo path and proposes nothing.
+   * On, ingestion persists the verdict as `awaiting_approval`, rule
+   * `plan-approval` puts it to the operator once, and nothing is scheduled until
+   * they accept — approve-before rather than replan-after, which is the undo we
+   * built in place of this gate.
+   *
+   * **Both arms.** A `single` verdict is a verdict about shape too — the same
+   * decision, differently answered — and gating only the `parts` arm left the
+   * commonest route with no acceptance step in it at all. The one arm still never
+   * gated is the `single` verdict the harness *overruled*, because parts are
+   * already in flight: the collapse was refused, so there is no decision in it.
    */
   requireApproval: boolean;
   /**
@@ -91,10 +96,11 @@ export function planBranch(issueNumber: number): string {
  * - `single` — fall through to normal pickup (rule `issue-pickup`). `failedOpen` marks the
  *   issue that got there because planning gave up, not because a planner said so.
  * - `parts`  — decomposed; the part scheduler owns it, pickup stays off.
- * - `awaiting_approval` — decomposed, but the decomposition is a proposal a human
- *   has not answered yet (`planning.requireApproval`). Pickup stays off exactly as
- *   for `parts` — the issue is planned — and the part scheduler queues its parts
- *   without dispatching any of them.
+ * - `awaiting_approval` — the planner has spoken, but its verdict is a proposal a
+ *   human has not answered yet (`planning.requireApproval`), on either arm. Pickup
+ *   stays off exactly as for `parts` — including for a *single* verdict, which is
+ *   the whole point: nothing is worked before the acceptance step. The part
+ *   scheduler queues a decomposition's parts without dispatching any of them.
  * - `planning` — a planner is still owed, either dispatchable now or cooling down.
  */
 export type PlanRouteVerdict =

@@ -58,9 +58,9 @@ test('a nested override marks the leaf, not the block', () => {
  * nothing to anybody.
  */
 test('arrays are shipped whole rather than expanded', () => {
-  const config = loadConfig({ steeringPriorities: ['ship the release'] });
-  assert.deepEqual(entry(config, 'steeringPriorities')?.value, ['ship the release']);
-  assert.equal(entry(config, 'steeringPriorities.0'), undefined);
+  const config = loadConfig({ agentAllowedTools: ['Bash(npm:*)'] });
+  assert.deepEqual(entry(config, 'agentAllowedTools')?.value, ['Bash(npm:*)']);
+  assert.equal(entry(config, 'agentAllowedTools.0'), undefined);
 });
 
 /** An unset optional is not a configured value, and a column of blanks buries the rest. */

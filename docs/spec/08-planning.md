@@ -193,8 +193,10 @@ For an amendment:
    Un-declaring in-flight work is a request to _stop_, which is a kill, not a plan edit.
 2. `amendedPlanStatus(verdict, surviving, requireApproval)` — `parts` is `active`, or
    `awaiting_approval` when approval is required; `single` is honoured only while nothing survives
-   with work, otherwise the plan stays `active`. A `single` verdict is never gated: it proposes
-   nothing, and gating it would park an issue on a question with no decision in it.
+   with work, otherwise the plan stays `active`. **Both verdicts are gated**: a honoured `single` is
+   `single`, or `awaiting_approval` when approval is required, for the reason under
+   [the approval gate](#the-approval-gate). The one arm that is never gated is the _overridden_
+   `single` — parts are in flight, the collapse was refused, and there is no decision left in it.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes).
 
@@ -344,32 +346,72 @@ actually spawns, so a held dispatch leaves the part `ready`.
 ## The approval gate
 
 `planning.requireApproval`, **on by default** (`src/config.ts` and `DEFAULT_PLANNING` in
-`src/plans/planning.ts` agree). On, a `parts` verdict is a **proposal** before it is work (issue #109
-phase 3). Off, an enabled funnel behaves byte-for-byte as it did before phase 3 existed: a
-decomposition commits the moment the planner writes it, and no proposal row is written for anyone.
+`src/plans/planning.ts` agree). On, a planner's verdict is a **proposal** before it is work (issue
+#109 phase 3) — **either verdict**. Off, an enabled funnel behaves byte-for-byte as it did before
+phase 3 existed, on both arms: the verdict commits the moment the planner writes it, and no proposal
+row is written for anyone.
+
+**Both arms, because both are verdicts about shape.** The gate started on the `parts` arm alone, on
+the reasoning that a `single` verdict proposes nothing — it is the path the funnel already falls open
+to. That was wrong in the one direction that matters: it made the _commonest_ route the one with no
+acceptance step in it. A planner deciding an issue is one pull request has decided something an
+operator may well disagree with (it is the same decision, differently answered), and "nothing is
+scheduled until you approve" was the whole promise of the gate. So a `single` verdict lands
+`awaiting_approval` too, is put to the operator by rule `plan-approval` exactly as a decomposition is,
+and rule `issue-pickup` starts nothing until it is released.
+
+**One `single` arm is never gated, at either setting**: the verdict the harness _overruled_. When live
+parts already carry a branch or a PR, `amendedPlanStatus` keeps the plan `active` and the caller says
+so out loud (`overriddenSingle`) — the collapse was refused, so there is no decision left in it, and
+asking a human to approve a verdict that will not be honoured would be a question with no answer. That
+is also why `overriddenSingle` keys on `active` rather than "not `single`": `awaiting_approval` is the
+verdict honoured and waiting, not overridden.
 
 **The default changes nothing for a deployment that has not turned the funnel on**, because
 `planning.enabled` is still `false` by default — this only decides what happens once an operator
 enables it, which is the honest place for the safe default: the thing being defaulted is whether a
 decomposition into N branches and N agents starts itself the moment a planner writes it.
-`test/planPart.test.ts` carries both polarities of the default assertion — it once asserted the
-default writes no proposal; it now asserts the default **does**, and that `requireApproval: false`
-writes none — so the two default sites (`config.ts`, `DEFAULT_PLANNING`) cannot drift apart unnoticed.
+Both polarities are asserted, and separately: `test/planApproval.test.ts` asserts the default **does**
+write a proposal — on each arm, and that accepting it releases the arm's own status — while
+`test/planPart.test.ts` pins `requireApproval: false` and asserts that path writes none. So the two
+default sites (`config.ts`, `DEFAULT_PLANNING`) cannot drift apart unnoticed.
 
 **The gate is the plan's status.** Ingestion persists the verdict as `awaiting_approval` instead of
-`active`; accepting moves it to `active`, and that is the whole effect, because `awaiting_approval`
-is `active` with the gate closed. Rule `plan-part`'s question — "is this plan released" — is therefore the
-status check it already had, and a superseded verdict structurally cannot release a new one, because
-a replan resets the row.
+`active`/`single`; accepting moves it to whichever of those its arm is scheduled from, and that is
+the whole effect, because `awaiting_approval` is the released status with the gate closed. Rule
+`plan-part`'s question — "is this plan released" — is therefore the status check it already had, and a
+superseded verdict structurally cannot release a new one, because a replan resets the row.
 
-| Step                 | What happens                                                                                                                                                                                                                                       |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Verdict lands        | `amendedPlanStatus(…, requireApproval)` → `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the verdict.                                                                                               |
-| Rule `plan-approval` | Emits `propose_plan` for an `awaiting_approval` plan whose issue is open and watched, unless `planProposalHold` finds a pending one. Read off `ctx.plans`, not `eligibleIssues` — a replan of a live plan is re-approved while its parts have PRs. |
-| The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
-| Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
-| Reject               | `ProposalDesk.reject` → `refusePlan`.                                                                                                                                                                                                              |
-| Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
+**Which released status is `releasedPlanStatus(parts)`** (`src/plans/parts.ts`), and it is not
+`active` unconditionally: a released single verdict must be `single`, or `resolvePlanRoute` answers
+`parts` for an issue with no parts — rule `plan-part` schedules nothing, rule `issue-pickup` stays
+narrowed off, the roll-up returns early on an empty plan, and the issue is parked _by its own
+approval_. Which arm a row is, is read off its parts rather than stored: a `parts` verdict always
+declares at least one part (`planDocument` refuses an empty one) and ingestion writes them before the
+gate closes, while a `single` verdict retires every part nothing was started for. So **no live parts
+_is_ the single arm**, and a verdict column on the row would be a second answer to a question the
+parts already answer.
+
+| Step                 | What happens                                                                                                                                                                                                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verdict lands        | `amendedPlanStatus(…, requireApproval)` → `awaiting_approval`, on either arm. Parts are written normally: the gate holds scheduling, not the record of the verdict.                                                                                                                      |
+| Rule `plan-approval` | Emits `propose_plan` for an `awaiting_approval` plan whose issue is open and watched, unless `planProposalHold` finds a pending one. Read off `ctx.plans`, not `eligibleIssues` — a replan of a live plan is re-approved while its parts have PRs.                                        |
+| The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                                                                 |
+| Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active` (a decomposition) or `single` (one pull request), audited under `human:<proposal id>` as `authorized by you`.                                                                           |
+| Reject               | `ProposalDesk.reject` → `refusePlan`, carrying the operator's note.                                                                                                                                                                                                                      |
+| Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                                                       |
+
+**What the ask says** is one template and two appended paragraphs. `plan-approval` is rendered with
+`{parts}` — the pull requests the plan produces, `1` on a single verdict — and `{list}`, which is
+`describeProposedParts` for a decomposition and `describeSingleRoute` for a single verdict (naming the
+`issue/<n>` branch, because a branch that already exists is what the other warnings on this ask are
+about). What approving and rejecting _this_ verdict do is then **appended** by `planApprovalNote`,
+never interpolated: the template is operator-overridable and `loadPromptTemplates` rejects only
+_unknown_ placeholders, so an `{arm}` token would be silently dropped by exactly the deployments that
+customised most — and the two arms settle differently enough that a reader given the wrong paragraph
+would answer the wrong question. The built-in template is arm-neutral for the same reason: an override
+written before the single arm existed still frames the question correctly, and the appended paragraph
+completes it. `planApprovalWarnings` appends after that, unchanged.
 
 `planProposalHold(ref, proposals)` in `src/proposals/proposals.ts` holds on **`pending` only**, unlike
 `proposalHold`. A merge is proposed off world state that persists, so it needs a durable "no" and a
@@ -386,17 +428,30 @@ row that **is** that verdict is rewritten by both settlements. `test/planApprova
 polarity in both predicates rather than trusting the two to stay apart.
 
 **Rejection has an effect of its own**, because a bare "no" would park the issue: once the funnel is
-on, a plan is the only thing that schedules work for a decomposed issue (rule `work-item-in-review` parks the work item in
+on, a plan is the only thing that schedules work for a planned issue (rule `work-item-in-review` parks the work item in
 the review state for the life of the plan, and `resolvePlanRoute` fails a spent replan back to `parts`).
-So `refusePlan` (`src/plans/planApproval.ts`) retires every part `partHasWork` says nothing was started
-for, then takes `amendedPlanStatus('single', survivors)`:
+`refusePlan` (`src/plans/planApproval.ts`) therefore leaves the issue a **route**, and which route
+depends on the arm it is refusing.
+
+A refused **decomposition** retires every part `partHasWork` says nothing was started for, then takes
+`amendedPlanStatus('single', survivors)`:
 
 - **`single`** — nothing was in flight, so the issue falls back to being worked as one PR by rule `issue-pickup`.
 - **`active`** — parts are in flight, which means a _replan_ is being refused: the work already
   running carries on and the amendment's new parts are the ones retired. Collapsing here is impossible
   anyway, since git cannot create the flat `issue/<n>` branch beside the existing part refs.
 
-An operator who wants a _different_ split presses Replan instead, which is on the same panel.
+A refused **single** verdict (no live parts) is the arm with nowhere to fall: the single-PR route is
+what a refused decomposition falls _back_ to, so writing `single` here would perform the very thing
+the operator declined, and `abandoned` would park the issue. "Not as one pull request" is a question
+only a planner can answer again — so the plan goes to **`planning`** with the operator's note appended
+to `plan.reason`, which is the same one status write `POST /api/plans/:id/replan` makes, and rule
+`issue-plan` dispatches a replan from it on the next pulse. The note is not decoration: a planner shown
+only "declined" has no reason to decide differently to the way it just decided. It cannot loop — the
+planner's attempt cap ends it, and a spent cap fails the issue open to `single` and gets it worked,
+which is the funnel's existing answer to a planner that cannot settle.
+
+An operator who wants a _different_ plan can also press Replan, which is on the same panel.
 
 **Both settlements are compare-and-set against `awaiting_approval`**, the same discipline as
 `Store.decideProposal`'s against `pending`: a verdict arriving after the plan moved on — an operator

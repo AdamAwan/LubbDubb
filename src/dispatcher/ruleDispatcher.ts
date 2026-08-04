@@ -97,8 +97,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
  * second one; while the branch's agent is `waiting`, the note is held so a
  * pending human escalation is never disturbed.
  *
- * It is the safe default and the reference the LLM dispatcher is measured
- * against. Every branch produces actions with an explicit `reason` and tags
+ * Every branch produces actions with an explicit `reason` and tags
  * them with its rule id from the {@link DISPATCH_RULES} registry (`rules.ts`),
  * so the audit log can show *which rule* fired, not just a sentence.
  */

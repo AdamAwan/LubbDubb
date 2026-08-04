@@ -31,7 +31,6 @@ interface HarnessDeps {
   errors: ErrorRecorder;
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
-  steeringPriorities: string[];
   /** PRs carrying this label (`${labelPrefix}-ignore`) are excluded from dispatch (the operator's "leave it alone" tag). */
   prIgnoreLabel: string;
   /** How long an operator "Up next" priority override survives after its origin stops being tracked (issue #128; 0 disables pruning). */
@@ -88,7 +87,7 @@ export class Harness extends EventEmitter {
   // first cycle so a restart doesn't re-emit the whole world as "new".
   private prevWorld: WorldSnapshot | null = null;
   // The last cycle's ranked pickup plan, cached for the state snapshot. Null
-  // until a cycle runs, or when the dispatcher reports no plan (LLM dispatcher).
+  // until a cycle runs. A per-pulse projection, never a persisted queue.
   private lastPlan: UpcomingPlan | null = null;
 
   /** The "Up next" queue from the last pulse, for `/api/state`. */
@@ -305,7 +304,6 @@ export class Harness extends EventEmitter {
         proposals,
         rejectionSignals,
         priorityOverrides,
-        steeringPriorities: this.deps.steeringPriorities,
         agentHeadroom: headroom,
       });
 

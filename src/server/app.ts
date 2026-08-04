@@ -718,16 +718,17 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   //
   // **409 unless the plan is `awaiting_approval`.** Every framing of Discuss — the
   // design, this spec, the `discuss-plan` prompt itself ("before approving it") —
-  // only ever contemplates talking through a decomposition that is still a pending
-  // question. Starting from anywhere else manufactures an approval gate the plan
-  // never had: a `single` verdict has no parts to approve, so ending an unguarded
-  // discussion on one writes `awaiting_approval` over zero parts — rule `plan-approval` proposes
-  // it, an operator approves an empty plan, `resolvePlanRoute` now returns `parts`
-  // instead of `single`, and the issue is parked with no ready part, no agent and no
-  // chip explaining why. Discussing an already-`active` plan is the milder version
-  // of the same mistake: it reopens the gate rule `plan-part` already cleared and stops
+  // only ever contemplates talking through a verdict that is still a pending
+  // question. A *released* one is not, and starting from there manufactures a gate
+  // the plan has already been through: on a `single` plan the discussion's own end
+  // would write `awaiting_approval` back over an issue an operator already
+  // authorised being worked whole, re-asking a question they answered; on an
+  // `active` one it reopens the gate rule `plan-part` already cleared and stops
   // scheduling the remaining parts, which is exactly what `/discuss/end`'s own 409
-  // exists to prevent on the way back out.
+  // exists to prevent on the way back out. (A `single` verdict *awaiting* approval
+  // is a pending question like any other, and is discussable — `releasePlan` puts
+  // it back to `single`, not `active`, so the empty-plan parking this guard used
+  // to be about cannot happen either way.)
   app.post('/api/plans/:id/discuss', async (req, reply) => {
     const input = readRequest(req, { params: IdParams });
     if (!input.ok) return reply.code(400).send({ error: input.error });
@@ -1393,9 +1394,6 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     async () =>
       ({
         dir: config.promptTemplatesDir ?? null,
-        // The `claude` dispatcher composes its prompts via the LLM and reads none
-        // of this. The cockpit says so rather than drawing a book that never fires.
-        dispatcher: config.dispatcher,
         templates: system.prompts.describe(),
       }) satisfies PromptsPayload,
   );
@@ -1413,7 +1411,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // counterparts rather than letting this block claim a cap that is not in force.
   app.get('/api/config', async () => ({ groups: describeRunningConfig(config) }) satisfies RunningConfigPayload);
 
-  app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
+  app.get('/api/health', async () => ({ ok: true }));
 
   // -- Static SPA (production build) --------------------------------------
   const distDir = resolve(process.cwd(), 'web/dist');
@@ -1758,8 +1756,6 @@ export function buildStateSnapshot(
     config: {
       heartbeatIntervalMs: config.heartbeatIntervalMs,
       maxConcurrentAgents: config.maxConcurrentAgents,
-      dispatcher: config.dispatcher,
-      steeringPriorities: config.steeringPriorities,
       // The watch/ignore tag pair, so the cockpit knows which labels its toggles
       // set and how to render an item's effective watched/ignored state.
       watchLabel,

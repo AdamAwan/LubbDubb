@@ -399,7 +399,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
     dbPath: ':memory:',
-    dispatcher: 'rule',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,

@@ -17,9 +17,6 @@ import { basename, extname, join } from 'node:path';
  * time. Each id declares the exact placeholders it supports; an override that
  * references an unknown placeholder (or lives in a file whose name matches no
  * id) fails fast at load, so a typo can't silently ship a broken prompt.
- *
- * The `claude` dispatcher composes its prompts via the LLM and is unaffected —
- * this is the rule dispatcher's template book.
  */
 type PromptId =
   | 'issue-plan'
@@ -179,12 +176,10 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'plan-approval': {
     placeholders: ['number', 'title', 'parts', 'reason', 'list'],
     template:
-      'Issue #{number} ("{title}") was planned as {parts} stacked pull request(s), and nothing is scheduled until ' +
-      'you approve the decomposition.\n\nWhy it was split: {reason}\n\n{list}\n\n' +
-      'Approve and each part gets its own agent, branch and pull request, bottom of the stack first. Reject and the ' +
-      'issue is worked as a single pull request instead — parts nothing has been started for are retired. If you ' +
-      'want a different split, use Replan on the plan panel: that asks the planner again and comes back here.',
-    doc: 'Put to a human when `planning.requireApproval` is on and a `parts` verdict has landed (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. Placeholders: {number} {title} {parts} {reason} {list}.',
+      'Issue #{number} ("{title}") was planned as {parts} pull request(s), and nothing is scheduled until you ' +
+      'approve the plan.\n\nWhy it was planned this way: {reason}\n\n{list}\n\n' +
+      'If you want a different plan, use Replan on the plan panel: that asks the planner again and comes back here.',
+    doc: "Put to a human when `planning.requireApproval` is on and a planner's verdict has landed — either arm, a decomposition or a single pull request (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What approving and rejecting *this* verdict do is appended by the rule rather than templated, so an override cannot lose it. Placeholders: {number} {title} {parts} (the pull requests the plan produces — 1 on a single verdict) {reason} {list}.",
   },
   'issue-shortfall': {
     placeholders: ['number', 'title', 'summary', 'consequence'],

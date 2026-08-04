@@ -262,16 +262,23 @@ export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPar
  * status *is* the verdict's standing, so releasing it is a one-way transition on
  * this row rather than a proposal lookup that could expire or be re-read wrongly.
  *
- * `requireApproval` gates only the `parts` arm. A `single` verdict proposes
- * nothing — it is the path the funnel already falls open to — so gating it would
- * park an issue on a question with no decision in it.
+ * `requireApproval` gates **both** arms. A `single` verdict is a verdict — the
+ * planner has decided this issue is one agent, one branch and one pull request,
+ * which is a shape an operator may disagree with exactly as they may disagree with
+ * a split — so it is put to them too, and nothing is scheduled until they answer.
+ * Gating only the `parts` arm meant the commonest route started work with no
+ * acceptance step at all, which is the hole this closes. Off, both arms are
+ * byte-for-byte what they were.
  *
  * A `single` verdict can only stand while nothing is in flight. Once a part has a
  * branch or a PR, the issue *is* already split: collapsing it back would hand rule
  * 4 the flat `issue/<n>` branch, which git cannot create beside the existing
  * `issue/<n>/<slug>` refs, and would orphan the open PRs besides. So the plan stays
  * `active` and the caller says so out loud rather than the collapse failing later
- * as an unattributable git error.
+ * as an unattributable git error. **That arm is never gated**, at either setting:
+ * the collapse was refused, so there is no proposal in it — asking a human to
+ * approve a verdict the harness has already overruled would be a question with no
+ * decision in it, on the one path where work is genuinely running.
  */
 export function amendedPlanStatus(
   verdict: 'single' | 'parts',
@@ -279,7 +286,29 @@ export function amendedPlanStatus(
   requireApproval = false,
 ): PlanStatus {
   if (verdict === 'parts') return requireApproval ? 'awaiting_approval' : 'active';
-  return surviving.some(partHasWork) ? 'active' : 'single';
+  if (surviving.some(partHasWork)) return 'active';
+  return requireApproval ? 'awaiting_approval' : 'single';
+}
+
+/**
+ * What an approved plan is released *to* — the other half of {@link amendedPlanStatus},
+ * and the reason release is not simply "write `active`".
+ *
+ * A released decomposition is `active`, where rule `plan-part` schedules its parts. A
+ * released **single** verdict must be `single`: `active` would leave
+ * `resolvePlanRoute` answering `parts` for an issue with no parts, so rule
+ * `plan-part` would schedule nothing, rule `issue-pickup` would stay narrowed off,
+ * and the roll-up would never move the row — an issue parked by its own approval.
+ *
+ * Which arm this is, is read off the parts rather than stored: a `parts` verdict
+ * always declares at least one part (`planDocument` refuses an empty one) and
+ * ingestion writes them before the gate closes, while a `single` verdict retires
+ * every part nothing was started for. So "no live parts" *is* the single arm, and
+ * the alternative — a verdict column on the row — would be a second answer to a
+ * question the parts already answer.
+ */
+export function releasedPlanStatus(parts: PlanPart[]): PlanStatus {
+  return liveParts(parts).length === 0 ? 'single' : 'active';
 }
 
 /**

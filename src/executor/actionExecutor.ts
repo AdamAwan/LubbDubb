@@ -335,7 +335,7 @@ export class ActionExecutor {
 
     // Rule `pr-merge-ready` suppresses itself while a merge proposal stands, so on the default
     // path this is asked once — but it is repeated here because it must hold for
-    // *every* path that reaches the executor, the LLM dispatcher's prose-composed
+    // *every* path that reaches the executor, including the human-authorized
     // `reply_on_pr` included. One predicate, two call sites: the same discipline
     // as the branch gate above.
     //
@@ -527,7 +527,7 @@ export class ActionExecutor {
    * It happens here, not in the dispatcher that composed the prompt, for the
    * reason the branch gate lives here: every dispatch passes through, whatever
    * produced it. That is not a technicality in this case — a `reply_draft` is
-   * only ever proposed off the LLM dispatcher's `reply_on_pr`, so the path where
+   * only ever proposed off a `reply_on_pr`, so the path where
    * a rejected reply exists is precisely the one a rule-dispatcher-side hook
    * would miss.
    *
@@ -635,7 +635,7 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
  * and would otherwise read its own goal's testimony twice in one prompt.
  *
  * In the executor, and for the branch gate's reason: every dispatch passes through
- * here whatever composed it, the LLM dispatcher's included.
+ * here whatever composed it, an accepted proposal's included.
  */
 function priorWorkFor(originRef: string | null | undefined, store: Store, outstandingShown: boolean): string | null {
   const ref = originRef ?? '';

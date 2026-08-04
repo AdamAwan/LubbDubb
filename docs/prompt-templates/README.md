@@ -6,9 +6,6 @@ default, and any of them can be overridden per deployment — so a team can phra
 terms of its own flow ("open a PR into `develop`", "link the Jira key", house conventions,
 etc.) without touching code.
 
-> Only the `rule` dispatcher uses these. The `claude` dispatcher composes its prompts with the
-> LLM and is steered via `steeringPriorities` instead.
-
 ## How to override
 
 1. Create the prompt-templates directory (default `.lubbdubb/prompts`, configurable via

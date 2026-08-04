@@ -25,7 +25,6 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     openEscalations: [],
     queuedJobs: [],
     recentDecisions: [],
-    steeringPriorities: [],
     agentHeadroom: 3,
     ...over,
   };
@@ -303,7 +302,6 @@ function testConfig(over: Record<string, unknown> = {}) {
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
@@ -354,7 +352,6 @@ test('a priority override holds after the next pulse and after a restart', async
     loadConfig({
       labelPrefix: '',
       dbPath,
-      dispatcher: 'rule',
       agentMode: 'raw',
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),

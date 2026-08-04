@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { loadConfig } from '../src/config.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
   const cfg = loadConfig();
-  assert.equal(cfg.dispatcher, 'rule');
   assert.equal(cfg.maxConcurrentAgents, 3);
   assert.equal(cfg.autoSend.enabled, false);
   assert.equal(cfg.autoSend.confidenceThreshold, 0.85);
@@ -34,8 +35,8 @@ test('labelPrefix and priority scheme are overridable', () => {
 });
 
 test('explicit overrides win over defaults', () => {
-  const cfg = loadConfig({ dispatcher: 'claude', maxConcurrentAgents: 7 });
-  assert.equal(cfg.dispatcher, 'claude');
+  const cfg = loadConfig({ startPaused: true, maxConcurrentAgents: 7 });
+  assert.equal(cfg.startPaused, true);
   assert.equal(cfg.maxConcurrentAgents, 7);
 });
 
@@ -169,4 +170,38 @@ test('a relative claudeArg that points at a real file is resolved to an absolute
   assert.ok(cfg.claudeArgs[0]!.startsWith('/'), 'existing script path is made absolute');
   assert.ok(cfg.claudeArgs[0]!.endsWith('scripts/mock-agent.sh'));
   assert.equal(cfg.claudeArgs[1], '--flag', 'a non-file arg is left untouched');
+});
+
+/**
+ * A removed key merges into nothing and takes the default, so the harness would
+ * do the opposite of what the file says while the file went on saying it — the
+ * silent-ignore failure `validatePolicyCheckModes` exists to prevent, one level
+ * up. Driven through a real file in a temp cwd because the removed-key check
+ * reads the *file's own* JSON: the keys are gone from `Config`, so an override
+ * object cannot carry one.
+ */
+test('a config file naming a removed key is refused, with the key named', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  t.after(() => {
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  for (const [key, value] of [
+    ['dispatcher', 'claude'],
+    ['steeringPriorities', ['ship the release']],
+  ] as const) {
+    writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ [key]: value }), 'utf8');
+    assert.throws(
+      () => loadConfig(),
+      (err: Error) => err.message.includes(key) && err.message.includes('no longer exists'),
+      `${key} must be refused by name`,
+    );
+  }
+
+  // The check is per key, not a blanket refusal of an unfamiliar file.
+  writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ maxConcurrentAgents: 9 }), 'utf8');
+  assert.equal(loadConfig().maxConcurrentAgents, 9);
 });

@@ -25,7 +25,6 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
     openEscalations: [],
     queuedJobs: [],
     recentDecisions: [],
-    steeringPriorities: [],
     agentHeadroom: 3,
     ...over,
   };

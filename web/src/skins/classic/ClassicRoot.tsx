@@ -75,7 +75,6 @@ export function ClassicRoot({ view, actions }: SkinProps) {
             <span className={`dot ${view.connected ? 'green' : 'red'}`} /> {view.connected ? 'live' : 'offline'}
           </span>
           <UsageChip usage={state.usage} now={now} />
-          <span className="chip">dispatcher: {state.config.dispatcher}</span>
           {state.control.paused && <span className="chip warn">paused</span>}
           <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
           <SettingsButton open={view.settingsOpen} onOpen={actions.openSettings} />

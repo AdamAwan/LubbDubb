@@ -281,7 +281,14 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     return {
       eligible: false,
       status: 'planning',
-      reasons: [`awaiting your approval of the ${total}-part plan`],
+      // No parts is the single verdict awaiting approval, not an empty
+      // decomposition — "the 0-part plan" would read as a planner that said
+      // nothing, on the arm an operator answers most often.
+      reasons: [
+        total === 0
+          ? 'awaiting your approval of the single-PR plan'
+          : `awaiting your approval of the ${total}-part plan`,
+      ],
     };
   }
 
