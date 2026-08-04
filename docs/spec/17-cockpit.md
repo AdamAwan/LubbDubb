@@ -505,7 +505,7 @@ at a goal is recorded server-side while the issue is still live (`issue_runs`, k
 origin), and the row keeps the issue's title, body, labels, linked PR and workflow state as they last
 stood, because a retained run is **dispatched from** and not merely drawn.
 
-**Minted at pickup, not at completion (#234).** #203 recorded a *completion*, which is a row that is
+**Minted at pickup, not at completion (#234).** #203 recorded a _completion_, which is a row that is
 never written for a goal nobody finished — so an abandoned goal, or one whose ticket was closed
 mid-flight, disappeared with no card to dismiss. A run is minted the first pulse the harness has work
 under the goal (`hasPriorWork`, the same predicate `issue-assess` uses to tell "nothing has started"
@@ -534,8 +534,8 @@ the floor on its own. What no longer happens is the harness recording a goal as 
 pulse its own scheduler is putting agents on it. The snapshot then does two things: it stamps every
 issue the harness has a run at with a `run` field (`startedAt`, `completedAt`, `outcome`,
 `dismissed`), and it rebuilds the runs the world has forgotten into a separate `retainedRuns` list —
-through `retainedRunIssues`, the *same* function the dispatcher unions into its issue list, and then
-the *same* `enrichIssue` path a live issue takes, so the card the operator sees and the subject the
+through `retainedRunIssues`, the _same_ function the dispatcher unions into its issue list, and then
+the _same_ `enrichIssue` path a live issue takes, so the card the operator sees and the subject the
 harness acts on are one thing. The floor merges that list in, the world's copy winning for a goal
 still present, so the Yard and world panels stay a view of the live world. `floorGoals` gains a third
 way onto the strip beside claimed and in-flight: a **retained run**, drawn until dismissed. The order
@@ -544,12 +544,16 @@ production is drawn as live work.
 
 **Dismissal is the terminal act, and since #234 it is a gate as well as the card** (`POST
 /api/issues/:n/dismiss-run` → `Store.dismissIssueRun`). This reverses #203's stated invariant that
-dismissal is *never* a gate, deliberately and for the reason the retention exists at all: a run that
+dismissal is _never_ a gate, deliberately and for the reason the retention exists at all: a run that
 outlives the ticket has to be endable, or the dispatcher would keep asking about a goal the operator
 has finished with. Two routes reach it and the row decides which — a run the harness had judged ends
 `judged`, one it had not ends `abandoned` — so the outcome is never claimed beyond the evidence.
-Operator-only, one-way, and it persists across a restart; a dismissed run is not unioned back into the
-issue list, so nothing further is scheduled for the goal. An accidental dismissal is undone by the
+Operator-only, one-way, and it persists across a restart: a dismissed run is not unioned back into the
+issue list, so nothing further is scheduled for a goal whose ticket the tracker has stopped returning.
+While the ticket _is_ still returned it is the tracker's own answer that puts the goal in the world, so
+dismissal ends the retention rather than parking a live issue — the operator's `-ignore` tag is what
+says "leave this one alone", and a dismissal that could silently park an open ticket would make a
+mis-click far more expensive than the card it was aimed at. An accidental dismissal is undone by the
 goal being worked again, not by an un-dismiss. The report itself is untouched — the row is the run,
 not the write-up, which `GET /api/retrospectives/:ref` still serves. The Dismiss control hangs off the
 run **existing and not yet ended** (`retainedRun`), never off the floor's state — the lesson `planId`
@@ -557,7 +561,7 @@ and `retroRef` learned.
 
 **The tail reads the goal check's verdict, and nothing else (#234).** The Manifest, the Signal post
 and the Launch sit on the satellite's yes arm; they used to be drawn off `delivery !== null ||
-pickupStatus === 'delivered' || pickupStatus === 'done'`, and `done` is *any closed issue* — so three
+pickupStatus === 'delivered' || pickupStatus === 'done'`, and `done` is _any closed issue_ — so three
 stations drew as built, under a green **Delivered · Away**, with the goal check beneath them reading
 **Not yet built**. They now read the delivery row the satellite reads. Where there is no verdict they
 are drawn `presence: 'unbuilt'` — the vocabulary the furnace already uses — rather than cut from the
