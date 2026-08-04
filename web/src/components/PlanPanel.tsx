@@ -130,10 +130,15 @@ function PlanCard({
           replan
         </AsyncButton>
       </div>
+      {/* Both arms are gated, and they settle differently — a reader shown the
+          decomposition's sentence on a single verdict would expect rejecting to
+          do the very thing approving does. `live.length === 0` is how the arms
+          are told apart everywhere (see `releasedPlanStatus`). */}
       {plan.status === 'awaiting_approval' && (
         <div className="plan-reason">
-          Nothing below is scheduled until you approve this decomposition — the proposal is in “Needs you”. Rejecting it
-          works the issue as a single pull request instead.
+          {live.length === 0
+            ? 'Nothing is picked up until you approve this plan — the proposal is in “Needs you”. Rejecting it sends the plan back to a planner with your reason.'
+            : 'Nothing below is scheduled until you approve this decomposition — the proposal is in “Needs you”. Rejecting it works the issue as a single pull request instead.'}
         </div>
       )}
       {plan.reason && <div className="plan-reason">{plan.reason}</div>}

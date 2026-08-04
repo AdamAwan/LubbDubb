@@ -92,7 +92,10 @@ export class ProposalDesk {
     if (proposal.kind !== 'plan') return '';
     const read = readProposedAct(proposal);
     if (!read.ok || read.act.kind !== 'plan') return `; the plan could not be settled (${read.ok ? '' : read.error})`;
-    return `; ${refusePlan(this.store, read.act.planId, read.act.originRef).detail}`;
+    // The operator's own words ride along: a refused *single* verdict goes back to
+    // a planner, and a planner shown only "declined" has no reason to decide
+    // differently to the way it just decided.
+    return `; ${refusePlan(this.store, read.act.planId, read.act.originRef, proposal.note).detail}`;
   }
 
   /**

@@ -896,10 +896,13 @@ export interface IssueShortfall {
  * Where a plan sits in its life:
  * - `planning` — a verdict is still being worked out (a replan in flight).
  * - `single`   — the planner said one PR; the issue falls through to normal pickup.
- * - `awaiting_approval` — decomposed, and `planning.requireApproval` is on, so a
- *   human has been asked to authorize the decomposition (issue #109 phase 3).
- *   Nothing is scheduled from it: this status *is* the gate, which is why release
- *   is a one-way move to `active` rather than a verdict re-read every pulse.
+ * - `awaiting_approval` — the planner has spoken and `planning.requireApproval` is
+ *   on, so a human has been asked to authorize the verdict (issue #109 phase 3) —
+ *   a decomposition, or the decision to work the issue as one PR. Nothing is
+ *   scheduled from it: this status *is* the gate, which is why release is a
+ *   one-way move rather than a verdict re-read every pulse. It releases to the
+ *   status its own arm is scheduled from — `active` or `single`, per
+ *   `releasedPlanStatus`.
  * - `active`   — decomposed into parts, at least one still outstanding.
  * - `complete` — every part merged.
  * - `abandoned`— the operator gave up on the decomposition.
