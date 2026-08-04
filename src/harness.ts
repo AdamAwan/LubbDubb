@@ -12,7 +12,7 @@ import { isPrExcluded } from './prHealth.js';
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
 import { assaySignalQuery } from './intake/assay.js';
-import { completionsToRecord } from './floor/completions.js';
+import { retainedRunIssues, runsToRecord } from './floor/runs.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
@@ -204,26 +204,26 @@ export class Harness extends EventEmitter {
       // know whether to dispatch one; the Goal Floor's retention (below) reads it
       // as one of the signals that a goal is finished.
       const retrospectiveOrigins = store.listRetrospectiveOrigins();
-      // Keep a finished goal on the Goal Floor until the operator dismisses it
-      // (issue #203). Recorded while the issue is still in the world so its title
-      // survives the tracker forgetting it (closed by hand, or its watch tag
-      // removed) — which is exactly when the floor would otherwise lose the one
-      // way in to the run's report. A store write, not a decision, and idempotent
-      // per pulse, so a failure is recorded and the next pulse retries rather than
-      // failing the whole cycle.
+      // A run lives until the operator dismisses it, not until the tracker stops
+      // returning the issue (issue #234). Minted the first pulse the harness has
+      // work under a goal and refreshed while the issue is live, so the snapshot a
+      // retained run is later dispatched and drawn from is the issue as it last
+      // actually stood. A store write, not a decision, and idempotent per pulse, so
+      // a failure is recorded and the next pulse retries rather than failing the
+      // whole cycle.
       try {
-        for (const c of completionsToRecord(world.issues, {
+        for (const r of runsToRecord(world.issues, tasks, {
           retrospectiveOrigins,
           conclusions,
           deliveries,
           shortfalls,
           plans,
         }))
-          store.recordFloorCompletion(c);
+          store.recordIssueRun(r);
       } catch (err) {
         this.deps.errors.record({
           source: 'cycle',
-          message: `Recording floor completions failed: ${(err as Error).message}`,
+          message: `Recording issue runs failed: ${(err as Error).message}`,
           detail: (err as Error).stack ?? null,
         });
       }
@@ -254,13 +254,35 @@ export class Harness extends EventEmitter {
       // visible (with its health and tag) — it's just not acted on.
       const label = this.deps.prIgnoreLabel;
       const excludedPrs = world.pullRequests.filter((pr) => isPrExcluded(pr, label));
+
+      // The other half of #234: the runs the tracker has forgotten join the
+      // dispatcher's issue list, so a goal whose ticket was closed by the very PR
+      // that delivered it is still a subject the assessor and the retrospective can
+      // finish. Only the *dispatch* view is widened — the snapshot above stays the
+      // connector's own answer, exactly as the ignore-tag filter below it does, so
+      // nothing that reports the world reports a stub as something the tracker said.
+      //
+      // Not safe by accident: every rule that must not act on a retained run says
+      // so in its own body, off `retainedIssues`. Most of them would skip a
+      // `closed` stub anyway, and that is precisely the kind of safety a later
+      // change removes without a test failing.
+      const retainedIssues = retainedRunIssues(store.listIssueRuns(), world.issues);
       const dispatchWorld: WorldSnapshot =
-        excludedPrs.length > 0
-          ? { ...world, pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)) }
+        excludedPrs.length > 0 || retainedIssues.length > 0
+          ? {
+              ...world,
+              pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)),
+              issues: [...world.issues, ...retainedIssues],
+            }
           : world;
 
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
+        // Which of `world.issues` above are retained runs rather than the tracker's
+        // own answer. A number list, not a flag on the issue: `Issue` is what the
+        // connector returned, and a synthesized field on it would be indistinguishable
+        // from one a provider set.
+        retainedIssues: retainedIssues.map((i) => i.number),
         // Hidden from dispatch, but still open — the issue-pickup gate has to see
         // them or an ignored PR reads as merged and its issue gets a second agent.
         excludedPrs,

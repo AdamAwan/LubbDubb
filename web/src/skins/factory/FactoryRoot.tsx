@@ -222,7 +222,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       </div>
       <GoalFloor
         issues={state.world.issues}
-        floorCompletions={state.floorCompletions ?? []}
+        retainedRuns={state.retainedRuns ?? []}
         plans={state.plans ?? []}
         parts={state.planParts ?? []}
         openPrs={state.world.pullRequests}
@@ -238,7 +238,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         onViewScratchpad={(issueRef) => actions.viewScratchpad(issueRef)}
         onReplan={(planId) => actions.replan(planId)}
         onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
-        onDismissCompletion={(issueNumber) => actions.dismissCompletion(issueNumber)}
+        onDismissRun={(issueNumber) => actions.dismissRun(issueNumber)}
         onFetchWork={(ref) => actions.fetchWorkSubtree(ref)}
       />
     </section>

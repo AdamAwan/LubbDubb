@@ -81,6 +81,25 @@ export interface StageContext {
   shortfallsByOrigin: Map<string, IssueShortfall>;
   /** Standing goal assays, on the same origin again (issue #158). */
   assays: Map<string, IssueAssay>;
+  /**
+   * Issues in the world that are **retained runs**, not the tracker's answer
+   * (issue #234) — a goal worked, forgotten by the tracker, and not yet dismissed.
+   *
+   * Exactly two rules may act on one: `issue-assess` and `issue-retro`, the two
+   * steps that come after a merge and so used to be lost to the close. **Every
+   * other rule skips them explicitly**, in its own body, rather than relying on
+   * the `closed` state of the stub — that is the accidental safety this set exists
+   * to replace, and the kind a later change removes with nothing failing.
+   */
+  retained: Set<number>;
+  /**
+   * The world issue with this number, **unless it is a retained run** — the
+   * lookup the rules that reach an issue through a plan or a shortfall use, so
+   * "this rule acts on live issues only" is written at the call site rather than
+   * inferred from a `state` check two lines down. Null for both absences, which
+   * is what those rules already do with them.
+   */
+  liveIssue: (issueNumber: number) => Issue | null;
   /** Is this issue decomposed — i.e. owned by the part scheduler, not by pickup? */
   partsPlanFor: (issueNumber: number) => Plan | null;
   /** Is a standing `delivered` verdict parking this issue? */

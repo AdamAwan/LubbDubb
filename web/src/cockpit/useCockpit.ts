@@ -179,7 +179,7 @@ export function useCockpit(): CockpitStatus {
       setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
       setIssueAssay: (n, verdict) => then(api.setIssueAssay(n, verdict)),
-      dismissCompletion: (n) => then(api.dismissFloorCompletion(n)),
+      dismissRun: (n) => then(api.dismissRun(n)),
 
       // A read, so no refetch: the work graph rides its own route precisely
       // because it must not be pulled along by the state poll.

@@ -24,6 +24,11 @@ export function workItemInReview(s: StageContext): void {
   if (!s.workItemStates) return;
   const { inReviewState, pickupStates } = s.workItemStates;
   for (const issue of s.ctx.world.issues) {
+    // A retained run carries the workflow state the item last had (issue #234),
+    // which is exactly enough to make this rule move an item the tracker no longer
+    // returns. Said here rather than left to the `open` check below, which would
+    // refuse it by coincidence.
+    if (s.retained.has(issue.number)) continue;
     const state = issue.workItemState;
     if (state === undefined || issue.state !== 'open') continue;
     if (!pickupStates.includes(state)) continue;

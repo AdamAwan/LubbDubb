@@ -13,9 +13,11 @@ import {
   satelliteStatus,
   signalPostStatus,
   siloStatus,
+  UNBUILT,
   type FloorStage,
   type MachinePresence,
   type MachineStatus,
+  type LaunchReading,
   type PartProgress,
   type PrMachineReading,
   type SatelliteReading,
@@ -64,13 +66,17 @@ export function inProduction(issue: Issue): boolean {
 }
 
 /**
- * A finished goal the operator is keeping on the floor until they dismiss it
- * (issue #203) — the retention that stops a completed goal (and the one way in to
- * its report) vanishing when the tracker forgets the issue or its watch tag comes
- * off. `dismissed` is what removes it, and only that: no pulse or poll drops one.
+ * A run the operator has not ended (issues #203, #234) — the retention that stops
+ * a goal (and the one way in to its report) vanishing when the tracker forgets
+ * the issue or its watch tag comes off. Dismissal is what removes it, and only
+ * that: no pulse, poll or ticket close drops one.
+ *
+ * True for an unfinished run too, which is the #234 change: a goal the harness
+ * worked and nobody finished is exactly the one an operator has to be able to see
+ * in order to abandon it.
  */
-export function retainedCompletion(issue: Issue): boolean {
-  return Boolean(issue.completion) && !issue.completion!.dismissed;
+export function retainedRun(issue: Issue): boolean {
+  return Boolean(issue.run) && !issue.run!.dismissed;
 }
 
 /**
@@ -109,18 +115,18 @@ export function floorGoals(issues: readonly Issue[], gate: { watchLabel: string;
   const claimed = (issue: Issue): boolean =>
     !gated || watchBucket(issue.labels, { ...gate, defaultWatched: false }) === 'watched';
   // Four ways onto the strip, and the order of the checks is the point:
-  // - **in-flight work is always drawn** (see the docstring), and a dismissed
-  //   completion that re-enters production is exactly that, so this comes first
-  //   and a dismissal can never hide live work;
-  // - a **dismissed** completion that is *not* back in production is hidden — the
-  //   operator cleared it, and that is the one thing that removes a finished goal;
-  // - otherwise a **claimed** goal or a **retained completion** is drawn: the
-  //   former is today's rule, the latter is #203's retention keeping a finished
-  //   goal (and its report) on the floor after the world forgot it.
+  // - **in-flight work is always drawn** (see the docstring), and a dismissed run
+  //   whose goal re-enters production is exactly that, so this comes first;
+  // - a **dismissed** run that is *not* back in production is hidden — the
+  //   operator ended it, and since #234 that ends the harness's interest in it too,
+  //   so there is nothing left for the floor to draw;
+  // - otherwise a **claimed** goal or a **retained run** is drawn: the former is
+  //   today's rule, the latter is the retention keeping a goal (and its report) on
+  //   the floor after the world forgot the issue.
   const show = (issue: Issue): boolean => {
     if (inProduction(issue)) return true;
-    if (issue.completion?.dismissed) return false;
-    return claimed(issue) || retainedCompletion(issue);
+    if (issue.run?.dismissed) return false;
+    return claimed(issue) || retainedRun(issue);
   };
   return issues.filter(show).sort((a, b) => Number(claimed(b)) - Number(claimed(a)) || a.number - b.number);
 }
@@ -418,6 +424,18 @@ const COMMENT_META: Record<StatusCommentReading, string> = {
   no_plan: 'no plan · no status comment to write',
 };
 
+/** The launch's name and line, one per reading — see {@link LaunchReading}. */
+const LAUNCH_NAMES: Record<LaunchReading, string> = {
+  away: 'Delivered',
+  returned: 'Failed verification',
+  unbuilt: 'Not launched',
+};
+const LAUNCH_META: Record<LaunchReading, string> = {
+  away: 'pickup held · reversible',
+  returned: 'returned by the assessor',
+  unbuilt: 'no goal check yet',
+};
+
 /**
  * Three readings, not two. A plan that has written no comment yet has a writer
  * that has not spoken; an unplanned issue has no writer at all, which is a
@@ -687,8 +705,15 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
   // closed issue is `done`, and an unplanned delivered one is `delivered`, which
   // the field agrees with rather than replaces.
   const delivery = issue.delivery ?? null;
-  const delivered = delivery !== null || pickupStatus === 'delivered' || pickupStatus === 'done';
   const reading = satelliteReading(delivery, shortfall);
+  // The tail reads the **verdict**, and nothing else (issue #234). It used to also
+  // accept two pickup statuses, and `done` is any *closed* issue — so the Manifest,
+  // the Signal post and the Launch drew on the goal check's yes arm while the check
+  // itself read unbuilt: three built stations under a green *Delivered · Away*, on a
+  // goal nothing had assessed. A ticket being closed is admin work anyone can do at
+  // any moment, and promoting it to the harness's own verdict is the thing #234
+  // exists to stop.
+  const delivered = reading === 'verified';
   const satRef = `${patchRef}:assess`;
   machines.push({
     ref: satRef,
@@ -721,27 +746,34 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     });
   }
 
-  // The manifest and the signal post sit on the goal check's **yes** arm, which
-  // is why no floor in flight reaches them: a shortfall returns before this
-  // point. Drawing them unbuilt on every floor would claim a tail the workflow
-  // has not got to.
+  // The manifest and the signal post sit on the goal check's **yes** arm: a
+  // shortfall returns before this point, so a returned floor draws neither.
+  //
+  // Without a verdict at all they are drawn **unbuilt** (issue #234), the
+  // vocabulary the furnace already uses for a stage nothing has reached. Cutting
+  // the route short instead said the same thing by omission — and said it in a
+  // shape indistinguishable from the floor simply ending there, which is how three
+  // stations came to be drawn as built off a closed ticket without anyone noticing
+  // the goal check underneath them read *Not yet built*.
   let tail = satRef;
-  if (delivered && !shortfall) {
+  if (!shortfall) {
     const manifestRef = `${patchRef}:manifest`;
     const retro = issue.retrospective ?? null;
     machines.push({
       ref: manifestRef,
       kind: 'manifest',
       kindLabel: 'Manifest',
-      name: 'Report what was done',
+      name: delivered ? 'Report what was done' : 'Nothing to report yet',
       // The retrospective's summary is the station's line; the working agent's own
       // conclusion note stays beneath it rather than being replaced. They answer
       // different questions — how the run went, and whether the goal was met — and
       // a station that showed only the second would still be reporting nothing
       // about the run it is named for.
-      meta: [retro?.summary ?? 'no retrospective yet', ...(conclusion?.note ? [conclusion.note] : [])],
-      presence: 'built',
-      status: manifestStatus(Boolean(retro)),
+      meta: delivered
+        ? [retro?.summary ?? 'no retrospective yet', ...(conclusion?.note ? [conclusion.note] : [])]
+        : ['—'],
+      presence: delivered ? 'built' : 'unbuilt',
+      status: delivered ? manifestStatus(Boolean(retro)) : UNBUILT,
       scanners: [],
       prNumber: null,
       link: null,
@@ -762,12 +794,17 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
       // the reading; the link opens the notice itself, and only when the provider
       // resolved a URL for it — so the post can say it has spoken on a provider
       // that builds no URLs without offering a way in that goes nowhere.
-      meta: [
-        issue.workItemState ? `state · ${issue.workItemState}` : 'no workflow state on this provider',
-        COMMENT_META[comment],
-      ],
-      presence: 'built',
-      status: signalPostStatus(issue.workItemState, comment),
+      // The reminder to go and close the ticket, and it can stand as long as it
+      // needs to: since #234 the run's life does not depend on the answer, so a
+      // ticket nobody has got round to closing costs the workflow nothing.
+      meta: delivered
+        ? [
+            issue.workItemState ? `state · ${issue.workItemState}` : 'no workflow state on this provider',
+            COMMENT_META[comment],
+          ]
+        : ['—'],
+      presence: delivered ? 'built' : 'unbuilt',
+      status: delivered ? signalPostStatus(issue.workItemState, comment) : UNBUILT,
       scanners: [],
       prNumber: null,
       link: plan?.statusCommentRef ? { ref: plan.statusCommentRef, label: 'notice ↗' } : null,
@@ -778,24 +815,26 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     tail = signalRef;
   }
 
-  if (delivered || shortfall) {
-    const launchRef = `${patchRef}:launch`;
-    machines.push({
-      ref: launchRef,
-      kind: 'launch',
-      kindLabel: 'Launch',
-      name: shortfall ? 'Failed verification' : 'Delivered',
-      meta: [shortfall ? 'returned by the assessor' : 'pickup held · reversible'],
-      presence: 'built',
-      status: launchStatus(Boolean(shortfall)),
-      scanners: [],
-      prNumber: null,
-      link: null,
-      fill: null,
-      siloLabel: null,
-    });
-    edges.push({ from: tail, to: launchRef });
-  }
+  // Three readings, not two (issue #234): a launch that went, one the assessor
+  // sent back, and one that has not happened — the last is what a floor with no
+  // goal check has, and it is a different fact from either of the others.
+  const launchRef = `${patchRef}:launch`;
+  const launch: LaunchReading = shortfall ? 'returned' : delivered ? 'away' : 'unbuilt';
+  machines.push({
+    ref: launchRef,
+    kind: 'launch',
+    kindLabel: 'Launch',
+    name: LAUNCH_NAMES[launch],
+    meta: [LAUNCH_META[launch]],
+    presence: launch === 'unbuilt' ? 'unbuilt' : 'built',
+    status: launchStatus(launch),
+    scanners: [],
+    prNumber: null,
+    link: null,
+    fill: null,
+    siloLabel: null,
+  });
+  edges.push({ from: tail, to: launchRef });
 
   // Whatever the harness itself says about why nothing is moving, quoted. Last,
   // so the specific machine plates above read first.

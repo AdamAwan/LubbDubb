@@ -277,18 +277,17 @@ class DemoServer {
   }
 
   /**
-   * Dismiss a finished goal from the Goal Floor — the demo mirror of #203's one
-   * way to remove a retained completion. Marks the completion dismissed wherever it
-   * rides (a still-present issue, or a forgotten-issue entry in `floorCompletions`),
-   * which is what the floor filters on.
+   * End a run — the demo mirror of the one way a goal leaves the floor (#203,
+   * #234). Marks the run dismissed wherever it rides (a still-present issue, or a
+   * forgotten-issue entry in `retainedRuns`), which is what the floor filters on.
    */
-  async dismissFloorCompletion(issueNumber: number): Promise<{ ok: true }> {
+  async dismissRun(issueNumber: number): Promise<{ ok: true }> {
     const present = this.state.world.issues.find((i) => i.number === issueNumber);
-    const forgotten = (this.state.floorCompletions ?? []).find((i) => i.number === issueNumber);
+    const forgotten = (this.state.retainedRuns ?? []).find((i) => i.number === issueNumber);
     const target = present ?? forgotten;
-    if (target?.completion) {
-      target.completion = { ...target.completion, dismissed: true };
-      this.addDecision('no_op', 'executed', `issue #${issueNumber} dismissed from the floor`);
+    if (target?.run) {
+      target.run = { ...target.run, dismissed: true };
+      this.addDecision('no_op', 'executed', `issue #${issueNumber} run dismissed`);
       this.dirty();
     }
     return { ok: true };
@@ -1023,7 +1022,7 @@ export const demoApi = {
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     getServer().setIssueAssay(issueNumber, verdict),
-  dismissFloorCompletion: (issueNumber: number) => getServer().dismissFloorCompletion(issueNumber),
+  dismissRun: (issueNumber: number) => getServer().dismissRun(issueNumber),
   replan: (planId: string) => getServer().replan(planId),
   abandonPlan: (planId: string) => getServer().abandonPlan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),

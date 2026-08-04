@@ -1,5 +1,6 @@
-import type { Issue, IssueConclusion, IssueDelivery, IssueShortfall, Plan } from '../types.js';
+import type { Issue, IssueConclusion, IssueDelivery, IssueRun, IssueShortfall, Plan, Task } from '../types.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
+import { hasPriorWork } from '../delivery/assessment.js';
 
 /**
  * Deciding a goal is finished, for retention on the Goal Floor (issue #203).
@@ -40,8 +41,8 @@ import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusio
  * re-drawing — and it is the one thing that outranks the evidence, because every
  * one of those parties is saying, now, that work remains.
  *
- * The gate is on **minting a completion, never on keeping one.** Nothing here
- * deletes a row, `Store.recordFloorCompletion` is upsert-only and never
+ * The gate is on **stamping a completion, never on keeping one.** Nothing here
+ * deletes a row, `Store.recordIssueRun` never clears a completion instant or
  * resurrects a dismissal, and a genuinely finished goal resolves to `done` or
  * `undeclared` — never `more_work` — so it cannot fall off the floor on its own.
  * What no longer happens is the harness recording that a goal is finished on the
@@ -68,20 +69,83 @@ export function isGoalComplete(issueNumber: number, signals: CompletionSignals):
   return resolved.verdict === 'done';
 }
 
+/** One live issue's run record, as this pulse would write it. */
+interface RunRecord {
+  originRef: string;
+  issueNumber: number;
+  title: string;
+  body: string;
+  labels: string[];
+  linkedPrNumber: number | null;
+  workItemState: string | null;
+  /** Whether the signals say the goal is finished *now* — see {@link isGoalComplete}. */
+  complete: boolean;
+}
+
 /**
- * The completions worth recording this pulse: one per live world issue the
- * signals say is finished. Recorded while the issue is still in the world so the
- * title survives the tracker forgetting it — the whole reason the row exists.
+ * The runs worth recording this pulse: one per live world issue the harness has
+ * either **worked** or **finished** (issue #234).
+ *
+ * Minted at pickup rather than at completion, which is the change #203's shape
+ * could not make. A record written only for a finished goal is never written for
+ * an abandoned one — so the goal whose ticket someone closed mid-flight left the
+ * floor with nothing to dismiss, and left the dispatcher with no subject at all.
+ * `hasPriorWork` is the pickup signal, and it is the same predicate `issue-assess`
+ * uses to tell "nothing has started" from "something finished", so the run and the
+ * assessment agree on when a goal entered production.
+ *
+ * The second arm keeps #203's behaviour exactly: a goal the operator declared
+ * done without the harness ever staffing it is still a finished goal worth
+ * retaining. Everything is captured while the issue is live, because a retained
+ * run is *dispatched from* once the tracker forgets the issue — see {@link IssueRun}.
  */
-export function completionsToRecord(
-  issues: readonly Issue[],
-  signals: CompletionSignals,
-): { originRef: string; issueNumber: number; title: string }[] {
-  return issues
-    .filter((issue) => isGoalComplete(issue.number, signals))
-    .map((issue) => ({
+export function runsToRecord(issues: readonly Issue[], tasks: Task[], signals: CompletionSignals): RunRecord[] {
+  const records: RunRecord[] = [];
+  for (const issue of issues) {
+    const complete = isGoalComplete(issue.number, signals);
+    if (!complete && !hasPriorWork(issue.number, tasks)) continue;
+    records.push({
       originRef: issueConclusionOrigin(issue.number),
       issueNumber: issue.number,
       title: issue.title,
+      body: issue.body,
+      labels: issue.labels,
+      linkedPrNumber: issue.linkedPrNumber,
+      workItemState: issue.workItemState ?? null,
+      complete,
+    });
+  }
+  return records;
+}
+
+/**
+ * The runs the tracker no longer returns, as issues again (issue #234).
+ *
+ * This is what the dispatcher's issue list is unioned with, and what the cockpit
+ * draws a forgotten goal's card from — one function, so the harness and
+ * `/api/state` cannot hold different opinions about which runs are still live.
+ * Two things take a run out of it and only two: the operator's dismissal, which
+ * is terminal, and the issue coming back into the world, where it is the live
+ * issue rather than this stub that everything reads.
+ *
+ * `state: 'closed'` is not a guess: an issue absent from a tracker's open list is
+ * closed or untagged, and every rule that must not act on a retained run is gated
+ * on the run itself, never on this field. The rest is the snapshot the row kept —
+ * so a retained run carries the body its assessor's prompt needs and the labels
+ * its watch gate reads, which a `body: ''` stub did not.
+ */
+export function retainedRunIssues(runs: readonly IssueRun[], live: readonly Issue[]): Issue[] {
+  const present = new Set(live.map((i) => i.number));
+  return runs
+    .filter((r) => r.dismissedAt === null && !present.has(r.issueNumber))
+    .map((r) => ({
+      id: `issue-${r.issueNumber}`,
+      number: r.issueNumber,
+      title: r.title,
+      body: r.body,
+      labels: r.labels,
+      state: 'closed' as const,
+      linkedPrNumber: r.linkedPrNumber,
+      ...(r.workItemState !== null ? { workItemState: r.workItemState } : {}),
     }));
 }

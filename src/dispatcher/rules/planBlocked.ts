@@ -23,7 +23,7 @@ export function planBlocked(s: StageContext): void {
     if (plan.status !== 'active') continue;
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) continue;
-    const issue = ctx.world.issues.find((i) => i.number === issueNumber);
+    const issue = s.liveIssue(issueNumber);
     if (!issue || issue.state !== 'open') continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));

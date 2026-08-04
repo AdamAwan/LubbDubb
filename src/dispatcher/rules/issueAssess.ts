@@ -29,7 +29,12 @@ import type { RawAction, StageContext } from './context.js';
 export function issueAssess(s: StageContext): void {
   const { ctx } = s;
   for (const issue of ctx.world.issues) {
-    if (issue.state !== 'open') continue;
+    // Open, **or** a retained run (issue #234). This is the rule the close used to
+    // silently disqualify: the window is the gap between a merge and the ticket
+    // closing, and a PR carrying `closes #N` makes that gap zero, so the assessor
+    // never ran and — with no delivery row written — neither did `issue-retro`. A
+    // run lives until the operator dismisses it, so the question is still askable.
+    if (issue.state !== 'open' && !s.retained.has(issue.number)) continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     if (openPrForIssue(issue, s.openPrs) !== null) continue;
     if (s.deliveryParked(issue)) continue; // already assessed; the verdict stands
