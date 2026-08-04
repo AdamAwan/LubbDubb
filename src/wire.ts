@@ -212,8 +212,6 @@ export interface UpcomingPlan {
 interface CockpitConfig {
   heartbeatIntervalMs: number;
   maxConcurrentAgents: number;
-  dispatcher: string;
-  steeringPriorities: string[];
   /** `${labelPrefix}-watch` — the tag the watch toggle sets and that marks an item watched. */
   watchLabel: string;
   /** `${labelPrefix}-ignore` — the tag the ignore toggle sets and that marks an item ignored. */
@@ -294,7 +292,8 @@ export interface CockpitState {
   decisions: Decision[];
   /**
    * The dispatcher's "Up next" queue from the last pulse — null until a cycle has
-   * run, or when the active dispatcher materialises no plan (LLM).
+   * run. A per-pulse projection, recomputed from the world every cycle, never a
+   * persisted FIFO.
    */
   upcoming: UpcomingPlan | null;
   worldEvents: WorldEvent[];
@@ -351,7 +350,6 @@ export interface ScratchpadPayload {
  */
 export interface PromptsPayload {
   dir: string | null;
-  dispatcher: string;
   templates: PromptTemplateDescription[];
 }
 

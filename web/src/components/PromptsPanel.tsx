@@ -23,9 +23,7 @@ import type { PromptTemplateView } from '../types.js';
  */
 export function PromptsPanel() {
   const [open, setOpen] = useState(false);
-  const [book, setBook] = useState<{ dir: string | null; dispatcher: string; templates: PromptTemplateView[] } | null>(
-    null,
-  );
+  const [book, setBook] = useState<{ dir: string | null; templates: PromptTemplateView[] } | null>(null);
   const [shown, setShown] = useState<PromptTemplateView | null>(null);
 
   useEffect(() => {
@@ -73,7 +71,7 @@ function PromptList({
   book,
   onShow,
 }: {
-  book: { dir: string | null; dispatcher: string; templates: PromptTemplateView[] };
+  book: { dir: string | null; templates: PromptTemplateView[] };
   onShow: (p: PromptTemplateView) => void;
 }) {
   if (book.templates.length === 0) {
@@ -81,12 +79,6 @@ function PromptList({
   }
   return (
     <>
-      {book.dispatcher !== 'rule' && (
-        <p className="muted prompts-note">
-          The <code>{book.dispatcher}</code> dispatcher composes its prompts itself, so none of these are what your
-          agents are being sent. They are the rule dispatcher&apos;s book.
-        </p>
-      )}
       <ul className="prompt-list">
         {book.templates.map((t) => (
           <li key={t.id}>

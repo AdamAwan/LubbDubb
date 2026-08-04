@@ -33,7 +33,6 @@ function streamConfig() {
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'stream',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),

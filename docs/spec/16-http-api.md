@@ -356,8 +356,7 @@ fetched because it only ever grows, this because it never changes at all — the
 read once at boot, so re-sending the book every couple of seconds would be paying for a constant.
 
 **Read-only.** Overriding stays a file drop: a write route would have to answer "when does this take
-effect", and the honest answer is "at the next restart". `dispatcher` rides along so the panel can say
-that under `dispatcher: 'claude'` the LLM composes its own prompts and none of this book fires.
+effect", and the honest answer is "at the next restart".
 
 ### `GET /api/config`
 
@@ -589,7 +588,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 | Key                  | Contents                                                                                                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `dispatcher`, `steeringPriorities`, `watchLabel`, `ignoreLabel`, `injectable`.                                                |
+| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `injectable`.                                                |
 | `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                   |
 | `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                               |
 | `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                           |
@@ -605,7 +604,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `escalations`        | Every escalation.                                                                                                                                                           |
 | `recovery`           | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**. |
 | `decisions`          | The last 100 decisions.                                                                                                                                                     |
-| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run, or under the LLM dispatcher.                                                               |
+| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                               |
 | `worldEvents`        | The last 100 world events.                                                                                                                                                  |
 | `errors`             | The last 100 recorded failures.                                                                                                                                             |
 | `refUrls`            | The `ref → URL` map.                                                                                                                                                        |

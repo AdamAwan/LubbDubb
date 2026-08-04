@@ -103,7 +103,6 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    steeringPriorities: [],
     agentHeadroom: 5,
     recentDecisions: [],
     ...extra,
@@ -451,7 +450,6 @@ function systemWithParts(): { system: System; repoRoot: string } {
   const config = loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),

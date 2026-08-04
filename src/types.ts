@@ -1215,7 +1215,7 @@ export interface Decision {
   /**
    * The dispatcher rule that **proposed** the action, lifted off it at record
    * time so the audit log can answer "which rule fired" first-class. Null for
-   * decisions with no rule identity (LLM dispatcher, lifecycle bookkeeping) —
+   * decisions with no rule identity (lifecycle bookkeeping, human-authorized acts) —
    * and for the one action with no single proposer, the branch note (see
    * `admission`).
    */

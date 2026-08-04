@@ -80,8 +80,6 @@ export function buildDemoState(): DemoSeed {
       // Short heartbeat so the countdown bar visibly moves in the demo.
       heartbeatIntervalMs: 15_000,
       maxConcurrentAgents: 3,
-      dispatcher: 'rule',
-      steeringPriorities: ['unblock humans', 'keep CI green', 'ship reviewed work'],
       watchLabel: 'lubbdubb-watch',
       ignoreLabel: 'lubbdubb-ignore',
       // The demo world is all-fake, so the inject panel stays available — and by

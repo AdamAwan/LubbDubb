@@ -1400,9 +1400,6 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     async () =>
       ({
         dir: config.promptTemplatesDir ?? null,
-        // The `claude` dispatcher composes its prompts via the LLM and reads none
-        // of this. The cockpit says so rather than drawing a book that never fires.
-        dispatcher: config.dispatcher,
         templates: system.prompts.describe(),
       }) satisfies PromptsPayload,
   );
@@ -1420,7 +1417,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // counterparts rather than letting this block claim a cap that is not in force.
   app.get('/api/config', async () => ({ groups: describeRunningConfig(config) }) satisfies RunningConfigPayload);
 
-  app.get('/api/health', async () => ({ ok: true, dispatcher: config.dispatcher }));
+  app.get('/api/health', async () => ({ ok: true }));
 
   // -- Static SPA (production build) --------------------------------------
   const distDir = resolve(process.cwd(), 'web/dist');
@@ -1771,8 +1768,6 @@ export function buildStateSnapshot(
     config: {
       heartbeatIntervalMs: config.heartbeatIntervalMs,
       maxConcurrentAgents: config.maxConcurrentAgents,
-      dispatcher: config.dispatcher,
-      steeringPriorities: config.steeringPriorities,
       // The watch/ignore tag pair, so the cockpit knows which labels its toggles
       // set and how to render an item's effective watched/ignored state.
       watchLabel,

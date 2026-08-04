@@ -45,7 +45,6 @@ function streamConfig(overrides: Record<string, unknown> = {}) {
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'stream',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),

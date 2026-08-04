@@ -40,10 +40,9 @@ deferred with the holding task's id and origin in the detail.
 For every world-driven rule origin and branch are 1:1, so the origin check above already **is** a
 branch check and this one is a no-op for them — `test/jobQueue.test.ts` asserts exactly that against a
 broad world, so a later rule that broke the 1:1 property fails a test rather than quietly sharing a
-checkout. Two paths can reach here with a branch the origin does not determine: **rule `manual-job`**, whose
-`job.branch` is a free string the operator supplies, and the **LLM dispatcher**, which names branches
-in prose. `WorktreeManager.ensure` is reuse-first, so letting either through would put two live claude
-processes in one worktree directory — the same files on disk, with no merge anywhere to reconcile
+checkout. One path reaches here with a branch the origin does not determine: **rule `manual-job`**, whose
+`job.branch` is a free string the operator supplies. `WorktreeManager.ensure` is reuse-first, so
+letting it through would put two live claude processes in one worktree directory — the same files on disk, with no merge anywhere to reconcile
 them.
 
 **Deferred, not skipped, deliberately.** `skipped` is the origin gate's word and means "this work is
@@ -234,9 +233,8 @@ no agent at all, so refusing a draft with *"too defensive — just fix the lint"
 `materializeTask` appends it to the dispatch prompt when the standing verdict for the action's
 **exact** origin ref is a rejection carrying a note.
 
-- **In the executor, not the dispatcher.** Every dispatch passes here whatever composed it — and that
-  is not a technicality: a `reply_draft` is only ever proposed off the LLM dispatcher's `reply_on_pr`,
-  so the path where a rejected reply exists is precisely the one a rule-dispatcher-side hook misses.
+- **In the executor, not the dispatcher.** Every dispatch passes here whatever composed it, so the
+  note reaches an agent whether the act was proposed by a rule or authorized outside the pulse.
 - **Appended, not filled in.** Prompt templates are operator-overridable and the loader only rejects
   *unknown* placeholders, so an override that omitted a new `{rejection}` token would silently drop a
   human's words — on exactly the deployments that customised the prompt most. Appending has no

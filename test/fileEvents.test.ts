@@ -193,17 +193,14 @@ test('buildClaudeArgs merges file-events + status-line into one --settings; stre
 });
 
 test('docsFolderPrefix is carried through loadConfig (string or array, unresolved)', () => {
-  assert.equal(
-    loadConfig({ dispatcher: 'rule', agentMode: 'raw', docsFolderPrefix: 'artifacts' }).docsFolderPrefix,
-    'artifacts',
-  );
+  assert.equal(loadConfig({ agentMode: 'raw', docsFolderPrefix: 'artifacts' }).docsFolderPrefix, 'artifacts');
   // An array carries through verbatim — relative entries are NOT resolved (they're
   // worktree-relative), and absolute entries are left absolute.
-  assert.deepEqual(
-    loadConfig({ dispatcher: 'rule', agentMode: 'raw', docsFolderPrefix: ['docs', 'D:/shared'] }).docsFolderPrefix,
-    ['docs', 'D:/shared'],
-  );
-  assert.equal(loadConfig({ dispatcher: 'rule', agentMode: 'raw' }).docsFolderPrefix, undefined);
+  assert.deepEqual(loadConfig({ agentMode: 'raw', docsFolderPrefix: ['docs', 'D:/shared'] }).docsFolderPrefix, [
+    'docs',
+    'D:/shared',
+  ]);
+  assert.equal(loadConfig({ agentMode: 'raw' }).docsFolderPrefix, undefined);
 });
 
 // -- spool round-trip --------------------------------------------------------
@@ -232,7 +229,6 @@ function testConfig(agentMode: 'raw' | 'pty' = 'raw', sessionTranscriptRoot?: st
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode,
     sessionTranscriptRoot,
     deskRoot: join(dir, 'desk'),

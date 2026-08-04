@@ -37,7 +37,6 @@ import { RecoveryDesk } from './agents/recoveryDesk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTemplates.js';
-import { ClaudeDispatcher } from './dispatcher/claudeDispatcher.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelsFor } from './watchLabels.js';
@@ -80,14 +79,14 @@ export interface System {
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
   /**
-   * The issue-pickup policy both dispatchers honour, exposed so the snapshot can
+   * The issue-pickup policy the dispatcher honours, exposed so the snapshot can
    * compute the same per-issue pickup verdict the dispatcher will act on.
    */
   issuePickup: IssuePickupPolicy;
   /**
    * The operator-customisable prompt book. Exposed because one prompt is
    * route-driven rather than dispatcher-driven: filing a finding as a ticket
-   * (`finding-ticket`), which must render the same way under either dispatcher.
+   * (`finding-ticket`), which renders on a click rather than on a pulse.
    */
   prompts: PromptTemplates;
   /**
@@ -374,37 +373,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   };
   // Hoisted out of the RuleDispatcher's construction because the template book is
   // no longer only the dispatcher's: `POST /api/findings/:id/file` renders
-  // `finding-ticket` from it, and that must work whichever dispatcher is active.
+  // `finding-ticket` from it, and that must work whether or not a cycle is running.
   const prompts = loadPromptTemplates(config.promptTemplatesDir);
-  const dispatcher: Dispatcher =
-    config.dispatcher === 'claude'
-      ? new ClaudeDispatcher(backend, {
-          command: config.claudeCommand,
-          args: config.claudeArgs,
-          cwd: config.repoRoot,
-          issuePickup,
-        })
-      : new RuleDispatcher(
-          issuePickup,
-          {},
-          prompts,
-          config.defaultBranch,
-          // The plan funnel is a rule-dispatcher feature; the LLM dispatcher
-          // composes its own prompts and has no equivalent (see the README).
-          config.planning,
-          // Likewise rule-dispatcher only: the assessor is a rule, and the LLM
-          // dispatcher reasons in prose with no equivalent branch.
-          config.assessment,
-          // Per-check CI policy narrows rule `pr-ci-failing`. The LLM dispatcher composes its
-          // own prompts from the world and has no rule to narrow.
-          config.ci,
-          // Same again: the goal assay is a rule in front of the funnel, and the
-          // LLM dispatcher has no branch it narrows.
-          config.assay,
-          // And the retrospective: rule `issue-retro` writes a delivered goal up. The LLM
-          // dispatcher reasons in prose and has no equivalent branch.
-          config.retrospective,
-        );
+  const dispatcher: Dispatcher = new RuleDispatcher(
+    issuePickup,
+    {},
+    prompts,
+    config.defaultBranch,
+    config.planning,
+    config.assessment,
+    config.ci,
+    config.assay,
+    config.retrospective,
+  );
 
   // The store holds scheduling intent; this folds git + provider reality back onto
   // it every pulse. Its `git fetch` is wired only for the real observer: the seam
@@ -452,7 +433,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,
-    steeringPriorities: config.steeringPriorities,
     prIgnoreLabel: ignoreLabel,
     upNextOverrideTtlMs: config.upNextOverrideTtlMs,
   });

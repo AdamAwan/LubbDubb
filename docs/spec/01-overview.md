@@ -33,7 +33,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 | Action sink (write)  | `src/sink/actionSink.ts`            | The seam side-effectful actions are written through                    |
 | Integrations         | `src/integrations/`                 | Per-capability providers (`fake`, `github`, `azure`) behind both seams |
 | Harness              | `src/harness.ts`                    | The pulse: snapshot → diff → reconcile → decide → execute              |
-| Dispatcher           | `src/dispatcher/`                   | Decides what to do; deterministic rules or an LLM                      |
+| Dispatcher           | `src/dispatcher/`                   | Decides what to do, by walking an ordered pipeline of named rules      |
 | Executor             | `src/executor/actionExecutor.ts`    | Turns a validated action plan into effects, applying the guard rails   |
 | Agent manager        | `src/agents/agentManager.ts`        | Owns the live agent fleet: spawn, stream, park, answer, kill, reap     |
 | Agent runtimes       | `src/agents/`, `src/pty/`           | Two interchangeable ways to run an agent (stream-JSON, PTY)            |
@@ -68,16 +68,13 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
   and reused, so two tasks on one branch share one checkout.
 - **`desk`** — runs in a scratch directory under `deskRoot`, keyed by task id. No branch, no worktree.
 
-## The two dispatchers
+## The dispatcher
 
-`config.dispatcher` selects one:
-
-- **`rule`** (default) — `RuleDispatcher`, deterministic and dependency-free. It is the reference
-  implementation and the only one that implements the planning funnel, prompt templates and the
-  "Up next" queue.
-- **`claude`** — `ClaudeDispatcher`, a Claude Code session that reads the state and emits a JSON plan
-  between sentinels. Its output passes through the identical zod schema, so it can only ever ask for
-  actions the rule dispatcher could also emit.
+`RuleDispatcher` is the one implementation: deterministic and dependency-free, walking an ordered
+pipeline of named rules. It stays behind the `Dispatcher` interface — one method, full state in, a
+validated action plan out — because that interface is the seam the whole pulse is written against.
+Its output is run through the same zod schemas whatever produced it, so an action that cannot be
+validated is never executed.
 
 ## The two agent runtimes
 

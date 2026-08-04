@@ -94,9 +94,6 @@ cut dispatches them first: a manual request takes the next free slot. A job belo
 - The emitted action carries `jobId`, and the executor calls `Store.markJobDispatched(jobId, task.id)`
   **only after** the agent actually spawns, so a job the cap or pause gate held stays `queued`.
 
-The `claude` dispatcher gets the same queue in its prompt, with instructions to dispatch it first with
-`jobId` set and `originRef` `job:<id>`.
-
 ### The branch invariant
 
 Rule `manual-job` is the **one** dispatch path where origin and branch are not 1:1, so it is the one that needs

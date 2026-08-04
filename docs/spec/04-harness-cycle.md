@@ -62,8 +62,8 @@ coalesced return does not: no cycle ran.
 8. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
 9. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
 10. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
-    and the world's `takenAt`. Null when the dispatcher returns no plan (the `claude` dispatcher
-    returns none). The operator priority overrides (issue #128) are then reconciled:
+    and the world's `takenAt`. Null before the first cycle, since the plan is a per-pulse projection
+    rather than a persisted queue. The operator priority overrides (issue #128) are then reconciled:
     `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
     active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
     lingers forever.
@@ -125,7 +125,6 @@ What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 | `plans`, `planParts` | The plan graph, already reconciled this cycle.                          |
 | `recentDecisions`    | The last 200 decisions — the cooldown and notify-dedup memory.          |
 | `priorityOverrides?` | Operator "Up next" re-ordering, keyed on candidate origin (issue #128). |
-| `steeringPriorities` | Operator hints.                                                         |
 | `agentHeadroom`      | How many agents may still be started this cycle.                        |
 
 ## `CycleReport`

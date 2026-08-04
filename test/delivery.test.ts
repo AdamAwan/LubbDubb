@@ -154,7 +154,6 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     openEscalations: [],
     queuedJobs: [],
     recentDecisions: [],
-    steeringPriorities: [],
     agentHeadroom: 3,
     deliveries: [delivery()],
   });
@@ -174,7 +173,6 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     openEscalations: [],
     queuedJobs: [],
     recentDecisions: [],
-    steeringPriorities: [],
     agentHeadroom: 3,
     deliveries: [delivery()],
     deliverySignals: [event()],

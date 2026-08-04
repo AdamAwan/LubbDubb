@@ -253,12 +253,10 @@ export function StatusBar({
   const queued = state.jobs.filter((j) => j.status === 'queued').length;
   const unactioned = (state.findings ?? []).filter((f) => f.status === 'open').length;
 
-  // Which dispatcher is wired is config: read once, never again, and it cannot
-  // change while the harness is up — so it is a hover on the name rather than a
-  // permanent caption competing with the gauges. `demo` stays on the face,
-  // because it is the difference between a floor and a picture of one.
+  // `demo` stays on the face, because it is the difference between a floor and a
+  // picture of one.
   const ident = (
-    <div className="fx-ident" title={`${state.config.dispatcher} dispatcher`}>
+    <div className="fx-ident">
       <Icon name="assembler" className="lg" />
       <h1>Factory Floor</h1>
       {view.demo && <span className="sub">demo</span>}

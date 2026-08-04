@@ -17,9 +17,6 @@ import { basename, extname, join } from 'node:path';
  * time. Each id declares the exact placeholders it supports; an override that
  * references an unknown placeholder (or lives in a file whose name matches no
  * id) fails fast at load, so a typo can't silently ship a broken prompt.
- *
- * The `claude` dispatcher composes its prompts via the LLM and is unaffected —
- * this is the rule dispatcher's template book.
  */
 type PromptId =
   | 'issue-plan'
