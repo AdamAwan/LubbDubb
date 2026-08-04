@@ -134,6 +134,21 @@ in production.
 NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
   an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
   won't appear on databases from an older build.
+  - **Which issue verdicts may coexist is declared in `src/store/verdicts.ts`, not in the writers
+    (#222).** `issue_conclusions`, `issue_deliveries`, `issue_shortfalls` and `issue_assays` are keyed
+    on the same `issue:<n>` origin and some pairs contradict; that used to be four half-rows, one
+    inline `DELETE` per writer, each explaining itself by pointing at the next — so an absent `DELETE`
+    said both "these may coexist" and "nobody considered this", and coverage was pairwise where
+    somebody remembered. `VERDICT_EXCLUSIONS` states every row including the empty ones and the
+    private `Store.recordVerdict(kind, upsert, row)` applies it in one transaction; the four public
+    writers keep their names, signatures and row composition. Three things carry it: the
+    `Record<VerdictKind, …>` type, so a fifth table is a **compile error** until its row is written
+    (a 5×5 matrix by inspection is what does not scale); the module being **dependency-free**, so
+    `test/verdictMatrix.test.ts` walks the declaration rather than re-typing it and a cell nobody
+    thought of cannot exist; and `recordVerdict` **not** composing the row — the four preserve
+    different timestamps and normalise different fields, so an applier that owned the row would be a
+    `switch (kind)`, the same half-rows moved. It says which rows may _exist_ together;
+    `resolveIssueConclusion` still owns which wins where two may.
 - **`src/dispatcher/rules.ts`** is the RuleDispatcher's rule book as data, and — for the entries
   that are rules — **the order they run in**. Every action the rule dispatcher emits carries a
   `rule` id from it, the store lifts the id into the `decisions.rule` column at `recordDecision`

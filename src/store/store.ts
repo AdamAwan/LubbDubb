@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import { SCHEMA } from './schema.js';
+import { VERDICT_EXCLUSIONS, VERDICT_TABLES, type VerdictKind } from './verdicts.js';
 import { liveParts, partSettled } from '../plans/parts.js';
 import { ACTIVE_TASK_STATUS_SQL } from '../tasks.js';
 import type {
@@ -535,6 +536,32 @@ export class Store {
   }
 
   /**
+   * Write one issue verdict and clear whatever {@link VERDICT_EXCLUSIONS} says it
+   * contradicts, in one transaction (#222).
+   *
+   * The boundary is drawn at exactly the thing all four writers share: an upsert
+   * keyed on `origin_ref`, plus a set of sibling rows to delete. It deliberately
+   * does **not** compose the row — the four are not the same shape in the ways
+   * that matter (a conclusion preserves `created_at` where the others preserve
+   * `decided_at`; a shortfall normalises `part_slug` against `cause`; an assay
+   * keeps `comment_ref` only while the goal text is unchanged), so a version of
+   * this that owned the row would be a `switch (kind)`: the same four half-rows,
+   * moved. Each public writer keeps its own row-composition and the argument for
+   * it; what they stop carrying is a private opinion about the other three.
+   */
+  private recordVerdict<T extends { originRef: string }>(kind: VerdictKind, upsert: string, row: T): T {
+    const clears = VERDICT_EXCLUSIONS[kind].map((k) => VERDICT_TABLES[k]);
+    const write = this.db.transaction((r: T) => {
+      this.db.prepare(upsert).run(r);
+      for (const table of clears) {
+        this.db.prepare(`DELETE FROM ${table} WHERE origin_ref=?`).run(r.originRef);
+      }
+    });
+    write(row);
+    return row;
+  }
+
+  /**
    * Record who says an issue is finished, replacing any standing verdict for it.
    *
    * Latest-wins per issue rather than append-and-fold: a second pickup's agent
@@ -542,6 +569,9 @@ export class Store {
    * is preserved across an overwrite so the row still dates the first time anyone
    * concluded this issue, which is what the cockpit shows when a verdict has been
    * revised.
+   *
+   * Which standing verdicts this clears is declared in {@link VERDICT_EXCLUSIONS}
+   * and applied by {@link recordVerdict}.
    */
   recordIssueConclusion(input: {
     originRef: string;
@@ -563,21 +593,15 @@ export class Store {
       createdAt: prev?.createdAt ?? ts,
       updatedAt: ts,
     };
-    const write = this.db.transaction((c: IssueConclusion) => {
-      this.db
-        .prepare(
-          `INSERT INTO issue_conclusions (origin_ref, verdict, note, by, agent_id, task_id, created_at, updated_at)
-           VALUES (@originRef, @verdict, @note, @by, @agentId, @taskId, @createdAt, @updatedAt)
-           ON CONFLICT(origin_ref) DO UPDATE SET
-             verdict=excluded.verdict, note=excluded.note, by=excluded.by,
-             agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
-        )
-        .run(c);
-      // The other half of "an issue never carries both". See `recordDelivery`.
-      this.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(c.originRef);
-    });
-    write(row);
-    return row;
+    return this.recordVerdict(
+      'conclusion',
+      `INSERT INTO issue_conclusions (origin_ref, verdict, note, by, agent_id, task_id, created_at, updated_at)
+       VALUES (@originRef, @verdict, @note, @by, @agentId, @taskId, @createdAt, @updatedAt)
+       ON CONFLICT(origin_ref) DO UPDATE SET
+         verdict=excluded.verdict, note=excluded.note, by=excluded.by,
+         agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
+      row,
+    );
   }
 
   getIssueConclusion(originRef: string): IssueConclusion | null {
@@ -612,16 +636,11 @@ export class Store {
    * world signal against, and refreshing it on every re-assessment would keep
    * moving the goalposts a transition has to clear.
    *
-   * **Writing this clears any standing conclusion _and_ any standing shortfall**,
-   * in the same transaction. The assessor is later and better informed than the
-   * agent that declared its own run, and leaving both would have rule `work-item-back-to-pickup` return
-   * the item to pickup while this gate blocked it; a shortfall is the direct
-   * contradiction of this row — "worked, and not delivered" against "delivered" —
-   * so an assessment that changes its mind must not leave rule `issue-shortfall`
-   * proposing a replan for an issue the gate has just parked. The mirrors live in
-   * {@link recordIssueConclusion} and {@link recordShortfall}; all three are here
-   * because this is the only file that touches SQLite, and a caller that
-   * remembered one and forgot the other would leave them contradicting.
+   * Which standing verdicts this clears — a conclusion and a shortfall, with the
+   * argument for each — is declared in {@link VERDICT_EXCLUSIONS} and applied by
+   * {@link recordVerdict}. It is stated there rather than here because a matrix
+   * written one writer at a time is one nobody can read a row of, and because a
+   * deliberate "clears nothing" then reads as an entry rather than as an absence.
    */
   recordDelivery(input: {
     originRef: string;
@@ -641,21 +660,15 @@ export class Store {
       decidedAt: prev?.decidedAt ?? ts,
       updatedAt: ts,
     };
-    const write = this.db.transaction((d: IssueDelivery) => {
-      this.db
-        .prepare(
-          `INSERT INTO issue_deliveries (origin_ref, summary, by, agent_id, task_id, decided_at, updated_at)
-           VALUES (@originRef, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
-           ON CONFLICT(origin_ref) DO UPDATE SET
-             summary=excluded.summary, by=excluded.by, agent_id=excluded.agent_id,
-             task_id=excluded.task_id, updated_at=excluded.updated_at`,
-        )
-        .run(d);
-      this.db.prepare(`DELETE FROM issue_conclusions WHERE origin_ref=?`).run(d.originRef);
-      this.db.prepare(`DELETE FROM issue_shortfalls WHERE origin_ref=?`).run(d.originRef);
-    });
-    write(row);
-    return row;
+    return this.recordVerdict(
+      'delivery',
+      `INSERT INTO issue_deliveries (origin_ref, summary, by, agent_id, task_id, decided_at, updated_at)
+       VALUES (@originRef, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
+       ON CONFLICT(origin_ref) DO UPDATE SET
+         summary=excluded.summary, by=excluded.by, agent_id=excluded.agent_id,
+         task_id=excluded.task_id, updated_at=excluded.updated_at`,
+      row,
+    );
   }
 
   getDelivery(originRef: string): IssueDelivery | null {
@@ -701,12 +714,9 @@ export class Store {
    * two rows the same shape is what stops a reader having to remember which one
    * dates what.
    *
-   * **Writing this clears any standing delivery**, in the same transaction: they
-   * are the two polarities of one question and an issue must never carry both.
-   * It deliberately does **not** clear an {@link IssueConclusion} — that is the
-   * working agent's own statement about its own run, and overwriting it is
-   * precisely the bug this table was created to stop. `resolveIssueConclusion`
-   * ranks the two instead.
+   * Which standing verdicts this clears — a delivery, and deliberately *not* an
+   * {@link IssueConclusion} — is declared in {@link VERDICT_EXCLUSIONS} and
+   * applied by {@link recordVerdict}.
    */
   recordShortfall(input: {
     originRef: string;
@@ -733,20 +743,15 @@ export class Store {
       decidedAt: prev?.decidedAt ?? ts,
       updatedAt: ts,
     };
-    const write = this.db.transaction((s: IssueShortfall) => {
-      this.db
-        .prepare(
-          `INSERT INTO issue_shortfalls (origin_ref, cause, part_slug, summary, by, agent_id, task_id, decided_at, updated_at)
-           VALUES (@originRef, @cause, @partSlug, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
-           ON CONFLICT(origin_ref) DO UPDATE SET
-             cause=excluded.cause, part_slug=excluded.part_slug, summary=excluded.summary, by=excluded.by,
-             agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
-        )
-        .run(s);
-      this.db.prepare(`DELETE FROM issue_deliveries WHERE origin_ref=?`).run(s.originRef);
-    });
-    write(row);
-    return row;
+    return this.recordVerdict(
+      'shortfall',
+      `INSERT INTO issue_shortfalls (origin_ref, cause, part_slug, summary, by, agent_id, task_id, decided_at, updated_at)
+       VALUES (@originRef, @cause, @partSlug, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
+       ON CONFLICT(origin_ref) DO UPDATE SET
+         cause=excluded.cause, part_slug=excluded.part_slug, summary=excluded.summary, by=excluded.by,
+         agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
+      row,
+    );
   }
 
   getShortfall(originRef: string): IssueShortfall | null {
@@ -788,10 +793,11 @@ export class Store {
    * to clear. `comment_ref` is preserved on absence, so the one living comment on
    * the ticket is edited rather than duplicated when a verdict is restated.
    *
-   * Unlike {@link recordDelivery} this clears **nothing**. A delivery and a
-   * conclusion are two answers to one question, so one must win; an assay answers
-   * a different question — whether the goal could be started from, not whether the
-   * work is finished — and an issue may honestly carry both.
+   * This clears **nothing**, and {@link VERDICT_EXCLUSIONS} says so as an explicit
+   * empty row rather than as a missing `DELETE` — an assay answers a different
+   * question from the other three (whether the goal could be started from, not
+   * whether the work is finished), so an issue may honestly carry it alongside
+   * any of them.
    */
   recordAssay(input: {
     originRef: string;
@@ -819,17 +825,16 @@ export class Store {
       decidedAt: prev?.decidedAt ?? ts,
       updatedAt: ts,
     };
-    this.db
-      .prepare(
-        `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, agent_id, task_id, comment_ref, decided_at, updated_at)
-         VALUES (@originRef, @verdict, @summary, @goalRef, @by, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
-         ON CONFLICT(origin_ref) DO UPDATE SET
-           verdict=excluded.verdict, summary=excluded.summary, goal_ref=excluded.goal_ref,
-           by=excluded.by, agent_id=excluded.agent_id, task_id=excluded.task_id,
-           comment_ref=excluded.comment_ref, updated_at=excluded.updated_at`,
-      )
-      .run(row);
-    return row;
+    return this.recordVerdict(
+      'assay',
+      `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, agent_id, task_id, comment_ref, decided_at, updated_at)
+       VALUES (@originRef, @verdict, @summary, @goalRef, @by, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
+       ON CONFLICT(origin_ref) DO UPDATE SET
+         verdict=excluded.verdict, summary=excluded.summary, goal_ref=excluded.goal_ref,
+         by=excluded.by, agent_id=excluded.agent_id, task_id=excluded.task_id,
+         comment_ref=excluded.comment_ref, updated_at=excluded.updated_at`,
+      row,
+    );
   }
 
   getAssay(originRef: string): IssueAssay | null {
