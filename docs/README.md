@@ -21,7 +21,37 @@ off by default is described as off by default, and what turning it on does.
 preceded a feature, recording the options weighed at the time — are **not** kept here: they age out
 of agreement with the code the moment it moves, and a reader cannot tell by looking which of two
 documents describes the application. The reasoning that is still load-bearing lives in the spec
-document that owns the behaviour, or beside the code in `CLAUDE.md`; the rest is in the git history.
+document that owns the behaviour; the rest is in the git history.
+
+## `CLAUDE.md` and `spec/` — the division of labour
+
+The two are split by **when they are read**, and that is the whole rule.
+
+[`CLAUDE.md`](../CLAUDE.md) is loaded into **every agent's context on every dispatch**. Its length is
+therefore a recurring, fleet-wide cost and its accuracy is a correctness concern rather than a
+tidiness one: a stale line there is a false instruction handed to every agent before it reads any
+code. So it holds one genre only — the things that, not knowing them, get something broken
+**silently**: a failure `npm run check` does not catch, that is not obvious at the call site, and
+that no test surfaces. `PtySession.kill()` setting status before signalling qualifies; the argument
+for why proposals are a table rather than columns on `escalations` does not.
+
+`spec/` is read **on demand**, by whoever is changing that subsystem. It carries the full
+description _and_ the reasoning behind it — which is what stops a later change re-litigating a
+settled decision badly, and is exactly why it must not be deleted for being long. A sharp edge that
+survives in `CLAUDE.md` links to the document that argues it.
+
+Neither file is a place to record what the other owns. A passage that starts as an operating note
+and grows an argument belongs in a spec, with a one-line pointer left behind. `CLAUDE.md`'s length
+is asserted rather than intended (`test/docsReferences.test.ts`), because it grew to 2,222 lines
+once by nobody noticing.
+
+## Keeping these documents honest
+
+Prose about code cannot be typechecked, and its failure mode is confident wrongness — nobody
+notices, so it is acted on. `test/docsReferences.test.ts` closes the one class that is both common
+and mechanically decidable: a backticked repo-relative path that no longer names anything. What is
+deliberately left unchecked, and why, is in
+[19 — Development](spec/19-development.md#what-holds-the-documentation-honest).
 
 ## The specification
 

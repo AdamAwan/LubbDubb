@@ -9,7 +9,7 @@ import { JobStore } from './jobs.js';
 import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { PlanStore, PLAN_COLUMNS } from './plans.js';
-import { VerdictStore } from './verdicts.js';
+import { IssueVerdictStore } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
@@ -73,7 +73,7 @@ import type {
  * Method names and signatures are exactly what they have always been, so every
  * call site is unchanged. What a delegation costs is one line; what it buys is
  * that a related set of invariants — the issue-verdict exclusion matrix on
- * {@link VerdictStore} being the clearest — sits in one readable scope instead of
+ * {@link IssueVerdictStore} being the clearest — sits in one readable scope instead of
  * hundreds of lines apart, joined only by prose.
  */
 export class Store {
@@ -83,7 +83,7 @@ export class Store {
   private readonly priority: PriorityStore;
   private readonly findings: FindingStore;
   private readonly plans: PlanStore;
-  private readonly verdicts: VerdictStore;
+  private readonly verdicts: IssueVerdictStore;
   private readonly scratch: ScratchStore;
   private readonly agents: AgentStore;
   private readonly transcripts: TranscriptStore;
@@ -111,7 +111,7 @@ export class Store {
     this.priority = new PriorityStore(ctx);
     this.findings = new FindingStore(ctx);
     this.plans = new PlanStore(ctx);
-    this.verdicts = new VerdictStore(ctx);
+    this.verdicts = new IssueVerdictStore(ctx);
     this.scratch = new ScratchStore(ctx);
     this.agents = new AgentStore(ctx);
     this.transcripts = new TranscriptStore(ctx);
@@ -263,7 +263,7 @@ export class Store {
 
   // -- Issue verdicts (conclusion / delivery / shortfall / assay) ------------
 
-  recordIssueConclusion(input: Parameters<VerdictStore['recordIssueConclusion']>[0]): IssueConclusion {
+  recordIssueConclusion(input: Parameters<IssueVerdictStore['recordIssueConclusion']>[0]): IssueConclusion {
     return this.verdicts.recordIssueConclusion(input);
   }
   getIssueConclusion(originRef: string): IssueConclusion | null {
@@ -275,7 +275,7 @@ export class Store {
   clearIssueConclusion(originRef: string): boolean {
     return this.verdicts.clearIssueConclusion(originRef);
   }
-  recordDelivery(input: Parameters<VerdictStore['recordDelivery']>[0]): IssueDelivery {
+  recordDelivery(input: Parameters<IssueVerdictStore['recordDelivery']>[0]): IssueDelivery {
     return this.verdicts.recordDelivery(input);
   }
   getDelivery(originRef: string): IssueDelivery | null {
@@ -287,7 +287,7 @@ export class Store {
   clearDelivery(originRef: string): boolean {
     return this.verdicts.clearDelivery(originRef);
   }
-  recordShortfall(input: Parameters<VerdictStore['recordShortfall']>[0]): IssueShortfall {
+  recordShortfall(input: Parameters<IssueVerdictStore['recordShortfall']>[0]): IssueShortfall {
     return this.verdicts.recordShortfall(input);
   }
   getShortfall(originRef: string): IssueShortfall | null {
@@ -299,7 +299,7 @@ export class Store {
   clearShortfall(originRef: string): boolean {
     return this.verdicts.clearShortfall(originRef);
   }
-  recordAssay(input: Parameters<VerdictStore['recordAssay']>[0]): IssueAssay {
+  recordAssay(input: Parameters<IssueVerdictStore['recordAssay']>[0]): IssueAssay {
     return this.verdicts.recordAssay(input);
   }
   getAssay(originRef: string): IssueAssay | null {

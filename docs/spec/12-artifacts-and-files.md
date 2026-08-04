@@ -124,7 +124,7 @@ Tests: `test/fileEvents.test.ts`.
 
 ## Serving artifacts
 
-`GET /api/artifacts/:id`, addressed by **flag id** — so the served path comes from the stored flag row,
+`GET /artifacts/:id`, addressed by **flag id** — so the served path comes from the stored flag row,
 never from the request, and the taint never reaches a path expression. Four layers:
 
 1. **Only a real flag.** An unknown id 404s. A URL ref 400s ("url refs are linked directly, not
@@ -142,6 +142,38 @@ never from the request, and the taint never reaches a path expression. Four laye
 4. **Sandboxing.** `Content-Security-Policy: sandbox allow-scripts allow-downloads` and
    `X-Content-Type-Options: nosniff`, so agent-authored HTML cannot script the cockpit origin. The
    content type is chosen by extension from a fixed map, falling back to `application/octet-stream`.
+
+### The route lives outside `/api`, and authorizes itself (issue #129)
+
+Opening a chip is a **top-level browser navigation**, and a navigation cannot carry the
+`Authorization` header the cockpit attaches to every `fetch` — the token lives in a `#t=` fragment a
+browser never sends to a server. So a route under `/api`, where `authorizeRequest` refuses anything
+without the bearer token, is structurally unreachable by a chip click, and every artifact link 401'd
+once the cockpit was authenticated.
+
+Rather than carve an exception _into_ the prefix guard — which would erode "guarded by prefix, not by
+per-route opt-in" ([16](16-http-api.md#authentication)) — the route sits at `/artifacts/:id` and
+guards itself with a **per-flag capability** (`src/server/artifactCapability.ts`, pure). A fresh
+per-run secret HMAC-signs `<flag id>.<expiry>`; `buildStateSnapshot` mints one into every local
+artifact URL it ships (`artifactUrls`, keyed by flag id — the cockpit looks a chip's URL up there the
+way it looks refs up in `refUrls`, and never string-builds one); and the route verifies it against
+the flag id in its **own path** before touching the store.
+
+Three properties make a capability safe to put in a URL, which the cockpit token deliberately never
+is:
+
+- **Flag-scoped.** A capability for one artifact cannot open another, and cannot be replayed against
+  `/api/state` or `/api/jobs`, which accept only the bearer token.
+- **Short-lived.** `ARTIFACT_CAP_TTL_MS` is 5 minutes, and the snapshot re-mints on every poll, so a
+  leaked URL dies fast.
+- **Stateless.** It is an HMAC, so there is nothing stored to leak or evict.
+
+The signing key is a per-run random secret, never the cockpit token, so a capability is not the
+cockpit token even derived. With `auth.enabled` off there is no key and the route serves without a
+capability — the whole surface is open by the operator's choice, loopback-only.
+
+Tests: `test/artifactCapability.test.ts` for the mint/verify predicate, and the navigation and
+capability-scoping cases in `test/cockpitAuth.test.ts`.
 
 ## File-overlap detection
 
@@ -179,7 +211,8 @@ support.
 two live agents there are editing one file **on disk**, with no merge anywhere to reconcile them.
 
 Results are sorted live-first (the only ones an operator can still act on), then `sameWorktree`, then
-most recent. Shipped in `/api/state` as `overlaps` and drawn by `web/src/components/OverlapPanel.tsx`.
+most recent. Shipped in `/api/state` as `overlaps` and drawn by
+`web/src/skins/classic/components/OverlapPanel.tsx`.
 
 It is **diagnostic only** — nothing in the dispatcher reads it, for the same reason nothing reads
 `findings` — and it is deliberately after-the-fact, which is the trade for being structural.

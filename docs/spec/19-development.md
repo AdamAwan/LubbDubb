@@ -72,6 +72,45 @@ Failure modes that are not obvious:
 
 CI additionally runs `npm run smoke` and coverage, and there are CodeQL and security workflows.
 
+## What holds the documentation honest
+
+These documents assert hundreds of specific facts about the code — names, orderings, call sites,
+invariants — and prose cannot be typechecked. The failure mode is not a doc that reads as
+out-of-date; it is **confident wrongness**: a claim that stopped being true three pull requests ago,
+stated in the present tense, acted on by the next reader. That reader is usually an agent, and
+`CLAUDE.md` reaches every one of them before they read a line of code.
+
+The position taken is that a claim is worth asserting mechanically when checking it is **cheap,
+decidable, and cannot itself go stale**. Three are, and `test/docsReferences.test.ts` holds them:
+
+- **Every backticked repo-relative path exists.** A moved or deleted module leaves every document
+  that pointed at it saying something false, with nothing going red. This is the largest class of
+  rot by a distance and the only one where the check is a filesystem lookup. It found two live stale
+  references the day it was written.
+- **`CLAUDE.md` stays under 400 lines.** Not a style rule — the file is loaded into every agent's
+  context on every dispatch, so its length is a recurring cost, and it reached 2,222 lines by nobody
+  noticing. Growth past the ceiling means a passage belongs in a spec.
+- **The index and `spec/` agree.** A document neither listed nor existing is the navigation failing
+  silently.
+
+Structural assertions elsewhere in the suite cover the claims whose violation would be invisible in
+behaviour: the lens properties (`test/workGraph.test.ts`, `test/stacks.test.ts`,
+`test/prAttention.test.ts` — nothing in `src/dispatcher/` may read a view), the wire contract
+(`test/wireContract.test.ts`), the MCP name agreement and one-module-per-tool split
+(`test/mcpChannel.test.ts`), the request-validation ban on `as` casts
+(`test/requestValidation.test.ts`), and the authentication route walk (`test/cockpitAuth.test.ts`).
+Each exists because no behavioural test can fail on the property: a hand-rolled caller resolution
+works right up until it works for the wrong agent.
+
+**What is deliberately left unchecked.** Everything that is a claim about _meaning_ — that a
+predicate is asked in two places off one definition, that an ordering is load-bearing, that a
+default was chosen for a stated reason. A test that tried to assert those would have to re-state
+them, which makes it a second copy that can rot in step with the first while looking like a guard.
+Those claims are held true the only way they can be: by the spec being updated in the same change
+as the code, which is the contract in [the index](../README.md), and by review. The honest
+statement is that the reasoning in these documents is **testimony, as old as its last edit** — read
+it to understand why a decision was made, and check the code before relying on a detail.
+
 ## Scripts
 
 | Script                | Does                                                                          |
@@ -192,6 +231,8 @@ Two recurring shapes worth knowing before you start:
 
 - **A column added to an existing table** needs an additive `ALTER TABLE` in `Store.migrate()`, guarded
   by a `PRAGMA table_info` check. A brand-new table does not.
-- **A new dispatcher branch** needs a `DISPATCH_RULES` registry entry, its id tagged onto every action
-  it emits, and — if it dispatches an agent — routing through the candidate list rather than an inline
-  `raw.push`.
+- **A new dispatcher branch** needs a `RULES` registry entry in the position it should run (which is
+  what puts it in `DISPATCH_PIPELINE`), a module under `src/dispatcher/rules/` registered in `STAGES`
+  under that id, its id tagged onto every action it emits, and — if it dispatches an agent — routing
+  through the candidate list rather than an inline `raw.push`. See
+  [05](05-dispatcher.md#where-a-rules-body-lives).

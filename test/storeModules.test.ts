@@ -15,6 +15,27 @@ function srcFiles(dir: string): string[] {
   return out.sort();
 }
 
+/**
+ * The modules that hold SQL. Four files under `src/store/` are not domain modules and
+ * are excluded by name: `store.ts` (the composition root), `schema.ts` (the DDL),
+ * `context.ts` / `migrate.ts` (what a module is handed), and `verdicts.ts` — the
+ * issue-verdict exclusion matrix (#222), which is a dependency-free *declaration*
+ * naming the four verdict tables so that `test/verdictMatrix.test.ts` can walk it
+ * without importing SQLite. It states which rows may coexist; `issueVerdicts.ts`
+ * owns the tables and is the only thing that writes them.
+ */
+const NOT_DOMAIN_MODULES = [
+  'src/store/store.ts',
+  'src/store/schema.ts',
+  'src/store/context.ts',
+  'src/store/migrate.ts',
+  'src/store/verdicts.ts',
+];
+
+function domainModules(): string[] {
+  return srcFiles('src/store').filter((f) => !NOT_DOMAIN_MODULES.includes(f));
+}
+
 test('only src/store/ touches SQLite', () => {
   // The constraint issue #221 was careful to preserve, now enforceable rather than
   // merely stated: splitting the 2,543-line class into domain modules keeps every
@@ -39,9 +60,7 @@ test('a domain module is handed the database and nothing else', () => {
   // what makes each one readable on its own and what stopped the split needing a
   // redesign. A cross-domain read belongs above the persistence layer, in the
   // caller that already holds both.
-  const modules = srcFiles('src/store').filter(
-    (f) => !['src/store/store.ts', 'src/store/schema.ts', 'src/store/context.ts', 'src/store/migrate.ts'].includes(f),
-  );
+  const modules = domainModules();
   assert.ok(modules.length >= 10, 'the class was split, not renamed');
   for (const file of modules) {
     const source = readFileSync(file, 'utf8');
@@ -49,6 +68,9 @@ test('a domain module is handed the database and nothing else', () => {
     for (const sibling of siblings) {
       assert.ok(!source.includes(`'${sibling}'`), `${file} reaches ${sibling}; a domain module owns its own tables`);
     }
+    // `verdicts.ts` is the deliberate exception, and only in one direction: it is a
+    // declaration that imports nothing, so depending on it cannot reach a table.
+    assert.ok(!readFileSync('src/store/verdicts.ts', 'utf8').includes('import'), 'the matrix stays dependency-free');
   }
 });
 
@@ -60,7 +82,7 @@ test('every table is owned by exactly one module', () => {
     (m) => m[1],
   );
   assert.ok(tables.length > 20, 'the schema was read');
-  const modules = srcFiles('src/store').filter((f) => f !== 'src/store/schema.ts' && f !== 'src/store/store.ts');
+  const modules = domainModules();
   for (const table of tables) {
     // Matched where SQL names a table, never in prose: "agents" is a word three
     // modules use in a comment and one of them writes to.
