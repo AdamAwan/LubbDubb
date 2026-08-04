@@ -285,7 +285,9 @@ argument [proposals](../../CLAUDE.md) made for a fresh table over columns on `es
 
 The two are **mutually exclusive**: writing either clears the other, enforced in the store rather
 than in a caller, because a caller that remembered one and forgot the other would leave rule `work-item-back-to-pickup`
-returning an item to pickup while this gate held it.
+returning an item to pickup while this gate held it. That exclusion, and every other one among the
+four issue-verdict tables, is declared as data in `src/store/verdicts.ts` and applied by one internal
+writer — see [14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix).
 
 ## The shortfall — the same verdict's other polarity
 
@@ -316,7 +318,10 @@ quietly holding an issue this row exists to free.
 A shortfall and a delivery are mutually exclusive, for the reason a delivery and a conclusion are. A
 shortfall and a **conclusion** are not: the conclusion is the working agent's own statement about its
 own run and the assessor must never overwrite it, so both rows stand and `resolveIssueConclusion`
-ranks them — operator toggle, then shortfall, then the agent, then the plan derivation.
+ranks them — operator toggle, then shortfall, then the agent, then the plan derivation. Both facts
+are cells of the declared matrix in
+[14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix), where "clears nothing" is written
+out rather than being an absent `DELETE`.
 
 ## The goal assay (`unclear`)
 
