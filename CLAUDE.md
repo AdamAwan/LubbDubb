@@ -128,12 +128,40 @@ in production.
   `test/stacks.test.ts`) now expect `src/wire.ts` as a second importer and say why — it names the
   shipped shape and, being type-only, structurally cannot consult the verdict.
 
-- **`src/store/store.ts` is the _only_ thing that touches SQLite.** Everything else goes
+- **`src/store/` is the _only_ directory that touches SQLite.** Everything else goes
   through the `Store`. Schema is `src/store/schema.ts`. Writes are synchronous
   (better-sqlite3), which keeps the harness logic race-free — lean on that. `CREATE TABLE IF
 NOT EXISTS` never alters an existing table, so a **column added to an existing table** needs
-  an additive `ALTER TABLE` in `Store.migrate()` (guarded by a `PRAGMA table_info` check) or it
-  won't appear on databases from an older build.
+  an additive `ALTER TABLE` (guarded by a `PRAGMA table_info` check) or it won't appear on
+  databases from an older build — declared as a `ColumnMigrations` entry in the module that owns
+  the table, which the `Store` constructor applies **before any module is constructed**.
+  - **`store.ts` is a composition root, not the implementation (#221).** It was one 2,543-line
+    class with 117 methods over 29 tables, so every subsystem depended on the whole surface and
+    every feature touching persistence edited one file. The rule quoted above is about **SQLite
+    access, not about one class**: the bodies now live in a module per group of related tables
+    (`tasks.ts`, `jobs.ts`, `priority.ts`, `findings.ts`, `plans.ts`, `verdicts.ts`, `scratch.ts`,
+    `agents.ts`, `transcripts.ts`, `escalations.ts`, `decisions.ts`, `world.ts`, `errors.ts`,
+    `graph.ts`, `floor.ts`), each owning its own row mappers and migration entries, and `Store`
+    instantiates them and delegates under **exactly today's method names** — so no call site
+    changed. Four things carry it, all asserted structurally in `test/storeModules.test.ts`:
+    - **`StoreContext` is `{db, now}` and no module imports a sibling.** That is a fact the split
+      discovered rather than a rule imposed on it — every method in the old class was
+      `this.db.prepare(...)` plus `this.now()`, with no domain reaching another through class
+      state, which is what made the move mechanical instead of a redesign. A genuinely
+      cross-domain read belongs *above* the persistence layer, in the caller that already has both.
+    - **Each table is named by exactly one module**, so two writers can't come to disagree about
+      the invariants between them.
+    - **Membership is settled by which invariants must be readable together**, not by table count.
+      `verdicts.ts` is the point of the exercise: the four issue-verdict tables clear each other
+      (`recordDelivery` clears a conclusion **and** a shortfall, `recordShortfall` clears a
+      delivery but deliberately **not** a conclusion, `recordAssay` clears nothing), and those
+      rules used to sit hundreds of lines apart joined only by `{@link recordDelivery}` prose. The
+      module's doc comment now states the whole matrix above the code implementing it. `plans.ts`
+      keeps `plan_parts` with `plans` because `rollUpPlanStatus` reads the parts and writes the
+      plan; `agents.ts` keeps `usage_events` because `recordAgentUsage` writes both in one breath.
+    - **`transcripts.ts` is the one stateful module** — it holds the in-memory chunk buffer — so
+      `Store.close()` must call its `flushAll()` before `db.close()` or buffered output is silently
+      lost. Tested against a real file on disk, since `:memory:` cannot be re-opened.
 - **`src/dispatcher/rules.ts`** is the RuleDispatcher's rule book as data, and — for the entries
   that are rules — **the order they run in**. Every action the rule dispatcher emits carries a
   `rule` id from it, the store lifts the id into the `decisions.rule` column at `recordDecision`

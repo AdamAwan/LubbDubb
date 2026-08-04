@@ -1,7 +1,58 @@
 # 14 — Persistence
 
-**`src/store/store.ts` is the only module that touches SQLite.** Everything else goes through the
+**`src/store/` is the only directory that touches SQLite.** Everything else goes through the
 `Store`. The schema is `src/store/schema.ts`.
+
+## Shape
+
+The rule above is about **SQLite access, not about one class** (issue #221). `store.ts` was a
+2,543-line class with 117 methods over 29 tables, and every subsystem that needed one of them
+depended on the surface of all of them. It is now a **composition root**: one domain module per
+group of related tables, each a class taking nothing but a `StoreContext` (`{db, now}`), and a
+thin `Store` that instantiates them and delegates. Every public method name and signature is
+unchanged, so no call site anywhere knows.
+
+| Module              | Tables                                                                     |
+| ------------------- | -------------------------------------------------------------------------- |
+| `tasks.ts`          | `tasks`                                                                    |
+| `jobs.ts`           | `jobs`                                                                     |
+| `priority.ts`       | `priority_overrides`                                                       |
+| `findings.ts`       | `findings`                                                                 |
+| `plans.ts`          | `plans`, `plan_parts`                                                      |
+| `verdicts.ts`       | `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays` |
+| `scratch.ts`        | `scratch_entries`, `retrospectives`                                        |
+| `agents.ts`         | `agents`, `usage_events`, `agent_flags`, `agent_files`                     |
+| `transcripts.ts`    | `agent_transcripts`                                                        |
+| `escalations.ts`    | `escalations`, `proposals`                                                 |
+| `decisions.ts`      | `decisions`                                                                |
+| `world.ts`          | `world_events`, `world_baseline`, `connector_state`                        |
+| `errors.ts`         | `error_events`                                                             |
+| `graph.ts`          | `work_nodes`, `work_item_filings`, `work_item_ignores`                     |
+| `floor.ts`          | `floor_completions`                                                        |
+
+Four properties, all asserted structurally in `test/storeModules.test.ts` rather than intended:
+
+- **Only `src/store/` imports `better-sqlite3`.** The constraint the split was careful to preserve,
+  and now the one that fails a test when broken. (Matched on the *import* — two modules elsewhere
+  mention the driver in prose to explain why a synchronous write makes a read-then-write race-free.)
+- **A module is handed the database and nothing else.** `StoreContext` is `{db, now}` and no module
+  imports a sibling. That is not a rule imposed on the split so much as a fact discovered by it:
+  every method in the old class was `this.db.prepare(...)` plus `this.now()`, with no domain
+  reaching another through class state, which is what made the move mechanical. A genuinely
+  cross-domain read belongs *above* the persistence layer, in the caller that already holds both.
+- **Each table is named by exactly one module.** Two writers to one table is how the invariants
+  between them come to disagree — which is why the four issue-verdict tables are deliberately one
+  module and not four (see below).
+- **The transcript buffer survives `close()`.** `TranscriptStore` is the one stateful module — it
+  accumulates output in memory and writes on a ~16KB threshold — so `Store.close()` has to ask it
+  to flush before the handle goes, and a test with a real file on disk is what notices if it stops.
+
+**Membership is settled by which invariants must be readable together, not by table count.**
+`verdicts.ts` is the point of the exercise: `recordDelivery` clears a conclusion *and* a shortfall,
+`recordIssueConclusion` clears a delivery, `recordShortfall` clears a delivery but deliberately not
+a conclusion, and `recordAssay` clears nothing. Those four rules used to live hundreds of lines
+apart, related only by prose cross-references; the module's doc comment now states the whole matrix
+in one table above the code that implements it.
 
 ## Database setup
 
@@ -12,7 +63,10 @@
 3. `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`.
 4. Executes `SCHEMA` (all statements are `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`,
    so it is idempotent).
-5. Runs `migrate()`.
+5. Runs `ensureColumns` for every domain module's declared columns — **before any module is
+   constructed**, let alone reads, since a module reading a migrated column on a database created
+   by an older build reads `undefined`.
+6. Constructs the domain modules over one shared `StoreContext`.
 
 Writes are **synchronous**, which is what keeps the harness logic race-free. Lean on that.
 
@@ -21,19 +75,22 @@ The clock is injectable (`Clock`), so tests get deterministic timestamps.
 ## Migrations
 
 `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a column added to the schema is
-invisible on databases created by an older build. `migrate()` closes that gap with additive, idempotent
-`ALTER TABLE … ADD COLUMN`, guarded by a `PRAGMA table_info` check, safe to run on every boot.
+invisible on databases created by an older build. `ensureColumns` (`src/store/migrate.ts`) closes that
+gap with additive, idempotent `ALTER TABLE … ADD COLUMN`, guarded by a `PRAGMA table_info` check, safe
+to run on every boot.
 
-Current entries:
+**The entries are declared by the module that owns the table**, as an exported `ColumnMigrations`
+the composition root applies — so "did this table's new column get an entry?" is a question you can
+answer without leaving the file you added the column's reader to. Current entries:
 
-| Table        | Columns added                                                                                            |
-| ------------ | -------------------------------------------------------------------------------------------------------- |
-| `tasks`      | `origin_title`, `origin_summary`, `dispatch_reason`                                                      |
-| `agents`     | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
-| `decisions`  | `rule`, `admission`                                                                                      |
-| `findings`   | `ticket_ref`                                                                                             |
-| `plans`      | `risks`, `out_of_scope`, `document`, `discussing`                                                        |
-| `plan_parts` | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
+| Table        | Declared in      | Columns added                                                                                            |
+| ------------ | ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `tasks`      | `tasks.ts`       | `origin_title`, `origin_summary`, `dispatch_reason`                                                      |
+| `agents`     | `agents.ts`      | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at` |
+| `decisions`  | `decisions.ts`   | `rule`, `admission`                                                                                      |
+| `findings`   | `findings.ts`    | `ticket_ref`                                                                                             |
+| `plans`      | `plans.ts`       | `risks`, `out_of_scope`, `document`, `discussing`                                                        |
+| `plan_parts` | `plans.ts`       | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
