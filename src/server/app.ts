@@ -5,14 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
-import type {
-  Issue,
-  IssueAssay,
-  IssueDelivery,
-  Retrospective,
-  ScratchPadSummary,
-  WorldSnapshot,
-} from '../types.js';
+import type { Issue, IssueAssay, IssueDelivery, Retrospective, ScratchPadSummary, WorldSnapshot } from '../types.js';
 import type {
   CockpitState,
   PromptsPayload,

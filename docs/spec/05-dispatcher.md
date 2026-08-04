@@ -82,13 +82,13 @@ unconditional.
 | `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                  |
 | `issue-assay`              | Issue goal needs checking            | `assay`          | A watched open issue nothing has been started for has no verdict on its goal text.                                                                        |
 | `issue-plan`               | Issue needs a plan                   | `planning`       | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                 |
-| `issue-assess`             | Issue may be finished                | `assessment`     | A watched open issue has had work, has nothing in flight and no open PR.                                                                                  |
+| `issue-assess`             | Issue may be finished                | `assessment`     | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                        |
 | `issue-shortfall`          | Assessment says the goal was missed  | —                | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                        |
-| `issue-retro`              | Delivered goal needs a retrospective | `retrospective`  | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up.                     |
+| `issue-retro`              | Delivered goal needs a retrospective | `retrospective`  | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included. |
 | `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a decomposition is `awaiting_approval` and no verdict is pending.                                                     |
 | `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                |
 | `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                        |
-| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`.                                                                 |
+| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`. Never a retained run.                                            |
 
 `workItemStates` is the one condition that is not a feature flag: it is true when the operator has
 configured **both** `issueInReviewState` and a non-empty `issuePickupStates`.
@@ -113,6 +113,17 @@ relocate the coupling rather than remove it. Everything on it is derived once, b
 runs: a projection of the world, an append-only collector (`raw`, `candidates`), or a predicate
 several rules must answer identically (`partsPlanFor`, `deliveryParked`, `assayParked`, `consider`).
 Deriving one of those twice is exactly how two rules come to disagree about an issue.
+
+**Two rules may act on a retained run; the rest say so themselves.** `ctx.world.issues` is the live
+tracker unioned with the runs it has forgotten (#234 — see
+[03](03-world-model.md#what-is-in-the-dispatchers-world-and-what-puts-it-there)), and
+`StageContext.retained` names which are which. Only `issue-assess` and `issue-retro` act on one: they
+are the two steps that come *after* a merge, which is exactly when a PR carrying `closes #N` has
+already taken the ticket out of the world. Every other rule excludes them **in its own body** —
+`eligibleIssues` for `issue-plan`/`issue-pickup`, a direct `retained` test in the two work-item rules,
+and `StageContext.liveIssue` for the plan- and shortfall-driven rules, which returns null for a
+retained issue. None of them leans on the stub's `closed` state: it would refuse them by coincidence,
+and coincidence is what a later change removes with nothing failing.
 
 **Two fields are written by one stage and read by later ones, and that ordering is load-bearing.**
 `assaying` and `assessing` are outputs of `issue-assay` and `issue-assess` and inputs to the stages
@@ -388,6 +399,12 @@ delivering PR merges the issue is again "open, watched, no open PR" — rule `is
 A fresh agent is then put on work already sitting on the default branch, bounded only by the attempt
 cap. `delivered` is the same park, generalised off the tracker onto a row the harness owns.
 
+The window it fires in used to be the gap between a merge and the ticket closing, and a PR carrying
+`closes #N` makes that gap **zero**: the assessor never ran, no `issue_deliveries` row was written,
+and `issue-retro` — whose only precondition is that row — never fired either, so the goal's Satellite
+and Manifest stayed unbuilt permanently. Since #234 the run outlives the ticket and the question stays
+askable until the operator dismisses it.
+
 The rule dispatches a **code** agent — it needs a worktree to read what was delivered — on branch
 `assess/issue/<n>`, origin `issue:<n>:assess`, based on `defaultBranch` (merged work is _on_ it, so
 it is the only checkout in which the question can be answered). The branch namespace is not
@@ -396,9 +413,10 @@ cosmetic, for `plan/issue/<n>`'s reason: git stores refs as files, so `refs/head
 
 It fires for issue N when all of:
 
-- N is open and passes `issueWatchGateReason`. Deliberately **not** driven off `eligibleIssues`, for
-  rule `plan-part`'s reason — that list applies the workflow-state gate, and the Azure case this must cover
-  is precisely an item rule `work-item-in-review` parked in the review state.
+- N is open **or a retained run** (#234), and passes `issueWatchGateReason`. Deliberately **not**
+  driven off `eligibleIssues`, for rule `plan-part`'s reason — that list applies the workflow-state
+  gate, and the Azure case this must cover is precisely an item rule `work-item-in-review` parked in
+  the review state.
 - No `delivered` verdict stands, no open PR, and no plan still scheduling something
   (`planning`/`active`/`awaiting_approval`).
 - Nothing live on `issue:N` or any `issue:N:*` origin.
@@ -513,7 +531,10 @@ Goal Floor's Manifest station, _Report what was done_, which drew the working ag
 or an em dash and was read by nothing.
 
 It fires when the issue passes the watch gate, has a standing delivery (or resolves `done`), has no
-`retrospectives` row, and has nothing live anywhere under `issue:<n>`. The origin is
+`retrospectives` row, and has nothing live anywhere under `issue:<n>`. **A retained run counts**
+(#234) and is deliberately not gated out: this and `issue-assess` are the two rules the union of
+forgotten runs into the issue list exists for, since both come after the work is over — which is
+exactly when a delivering PR has already closed the ticket. The origin is
 `issue:<n>:retro`, its own for `assessOrigin`'s reason: the cooldown and attempt cap that throttle
 write-ups must not eat the budget that gets work done. There is no branch and no worktree — the agent
 writes no files, and a checkout would only tempt it to start work on a finished goal.

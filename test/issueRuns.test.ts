@@ -413,7 +413,7 @@ test('retainedRunIssues is the forgotten, undismissed runs — and only those', 
     'the live issue speaks for itself and a dismissed run is over',
   );
   assert.equal(retained[0]!.state, 'closed');
-  assert.equal(retained[0]!.body, 'please add the thing', 'the stub carries the run\'s snapshot, not an empty body');
+  assert.equal(retained[0]!.body, 'please add the thing', "the stub carries the run's snapshot, not an empty body");
   assert.deepEqual(retained[0]!.labels, ['lubbdubb-watch']);
 });
 
@@ -442,11 +442,13 @@ const closedIssue = issue({ state: 'closed' });
 test('a retained run is still assessed after its ticket closed', async () => {
   const assessor = new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true }, {}, {}, { enabled: false });
 
-  const closed = await assessor.decide(dispatchCtx({ world: { takenAt: NOW, pullRequests: [], issues: [closedIssue] }, tasks: [task()] }));
+  const closed = await assessor.decide(
+    dispatchCtx({ world: { takenAt: NOW, pullRequests: [], issues: [closedIssue] }, tasks: [task()] }),
+  );
   assert.deepEqual(
     closed.actions.filter((a) => a.type.startsWith('dispatch_')),
     [],
-    'a closed issue nothing retains is not the harness\'s business',
+    "a closed issue nothing retains is not the harness's business",
   );
 
   const retained = await assessor.decide(
@@ -469,7 +471,15 @@ test('a retained run is written up after its ticket closed', async () => {
       retainedIssues: [12],
       tasks: [task()],
       deliveries: [
-        { originRef: 'issue:12', summary: 'shipped', by: 'assessor', agentId: null, taskId: null, decidedAt: NOW, updatedAt: NOW },
+        {
+          originRef: 'issue:12',
+          summary: 'shipped',
+          by: 'assessor',
+          agentId: null,
+          taskId: null,
+          decidedAt: NOW,
+          updatedAt: NOW,
+        },
       ],
     }),
   );
@@ -542,7 +552,7 @@ test('the pulse mints a run for a goal it has work under, before anything finish
 
 // -- what the cockpit is served ----------------------------------------------
 
-test('the snapshot marks a live goal\'s run and rebuilds a forgotten one', async () => {
+test("the snapshot marks a live goal's run and rebuilds a forgotten one", async () => {
   const system = build();
   const { store } = system;
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Present goal' });
@@ -581,7 +591,9 @@ test('the snapshot marks a live goal\'s run and rebuilds a forgotten one', async
   const res = await app.inject({ method: 'GET', url: '/api/state' });
   const body = res.json();
 
-  const present = (body.world.issues as { number: number; run?: { dismissed: boolean } }[]).find((i) => i.number === 12);
+  const present = (body.world.issues as { number: number; run?: { dismissed: boolean } }[]).find(
+    (i) => i.number === 12,
+  );
   assert.ok(present?.run, 'a goal the harness has worked carries its run');
   assert.equal(present!.run!.dismissed, false);
 

@@ -1066,7 +1066,7 @@ test('every goal-floor stage has a word', () => {
         signalPostStatus(state, comment).word.length > 0,
         `signal post ${state ?? 'no state'}/${comment} rendered no word`,
       );
-    // Three launch readings, each with a word of its own: 'not launched' is a fact,
+  // Three launch readings, each with a word of its own: 'not launched' is a fact,
   // not the absence of the other two.
   for (const reading of ['away', 'returned', 'unbuilt'] as const)
     assert.ok(launchStatus(reading).word.length > 0, `launch ${reading} rendered no word`);
@@ -1291,7 +1291,10 @@ test('a completed goal is retained on the floor until dismissed (#203)', () => {
   // is drawn like any other in-flight goal.
   assert.deepEqual(
     numbers([
-      goal({ pickup: { eligible: false, status: 'active', reasons: [] }, run: { startedAt: T, completedAt: T, outcome: 'judged', dismissed: true } }),
+      goal({
+        pickup: { eligible: false, status: 'active', reasons: [] },
+        run: { startedAt: T, completedAt: T, outcome: 'judged', dismissed: true },
+      }),
     ]),
     [1],
     'a dismissal never hides live work',

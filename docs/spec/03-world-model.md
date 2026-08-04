@@ -27,6 +27,33 @@ rather than by remembering to filter a status in nine places. **Nothing in the d
 `takenAt` is the clock the whole cycle is judged against: cooldown arithmetic uses it rather than
 wall-clock at decision time, so a cycle is evaluated against when its world was observed.
 
+### What is in the dispatcher's world, and what puts it there
+
+The snapshot above is the connector's answer and stays that way — everything that *reports* the world
+(the cockpit's world panels, the work graph, `world_read`, the assay desk) reads it verbatim. What
+`decide` is given is a **derived** view, built in `Harness.runCycle`, and two things shape it:
+
+- **PRs carrying the operator's `-ignore` tag are removed** and handed over separately as
+  `excludedPrs`, so nothing acts on one while gates that must not read "absent" as "merged" can still
+  see it.
+- **Runs the tracker has forgotten are added** (#234). A goal the harness has worked, whose issue no
+  longer comes back from the connector, and which the operator has not dismissed, is rebuilt from its
+  `issue_runs` row by `retainedRunIssues` and appended to `issues`. Their numbers ride alongside as
+  `DispatchContext.retainedIssues`.
+
+The second exists because a run's life is not the tracker's answer. `listOpenIssues` fetches open
+issues only, so a PR carrying `closes #N` takes the goal out of the world at the exact moment
+`issue-assess` and `issue-retro` — the two rules that run *after* a merge — become due. The union is
+what lets them finish; `issue_runs` is where the goal's title, body and labels survive the close, so a
+retained issue is one an assessor can actually read.
+
+**Every rule but those two skips a retained issue in its own body.** A retained stub reads `closed`,
+which most gates refuse already — and that is the point: safety by coincidence is what a later change
+removes with nothing failing. `issue-pickup` and `issue-plan` are gated at `eligibleIssues`, the two
+work-item rules test `retained` directly, and the plan- and shortfall-driven rules reach their issue
+through `StageContext.liveIssue`, which returns null for one. See
+[05](05-dispatcher.md#the-rule-book).
+
 ## `PullRequest`
 
 | Field                | Meaning                                                                                                                                                                                                                                                         |
@@ -76,6 +103,12 @@ A tracker issue or work item — the thing that becomes a PR.
 | `workItemState?`          | The provider's **native** workflow state (e.g. Azure `System.State`: "New"/"Ready"/"In Review"). `undefined` for GitHub and the fake.      |
 | `linkedPrNumber`          | The last PR that cross-referenced this issue. **Sticky** — it stays set after that PR merges, so no gate may treat it as "has an open PR". |
 | `url?`                    | Provider web URL.                                                                                                                          |
+
+A **retained run**'s issue is one of these too, rebuilt from its stored snapshot rather than returned
+by a provider: `state` is `closed`, and the rest is the issue as it last stood while live. Nothing
+flags it on the object — the connector's answer and a synthesized stub must stay indistinguishable in
+shape, or a provider field and a harness field start being read as one — so which issues are retained
+is carried beside the world, in `DispatchContext.retainedIssues`.
 
 ## The ref vocabulary
 

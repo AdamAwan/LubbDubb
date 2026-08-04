@@ -116,7 +116,10 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
   // The live world plus the runs it has forgotten (issues #203, #234), the world's
   // copy winning for one still present, so a goal and its report stay reachable
   // until dismissed. `floorGoals` then decides which are drawn.
-  const allIssues = [...issues, ...(props.retainedRuns ?? []).filter((c) => !issues.some((i) => i.number === c.number))];
+  const allIssues = [
+    ...issues,
+    ...(props.retainedRuns ?? []).filter((c) => !issues.some((i) => i.number === c.number)),
+  ];
 
   // Every reading below is of the *staked* goals — the strip, the default pick and
   // the pick that survives a poll alike. A goal un-watched while you were looking
