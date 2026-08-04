@@ -165,7 +165,7 @@ so escapes never show as literal text there.
 ## `PtySession`
 
 `src/pty/ptySession.ts`, over the swappable `PtyBackend` seam (`src/pty/backend.ts`;
-`FakePtyBackend` for tests). Used for `agentMode: 'pty'` and `'raw'`, and by the `ClaudeDispatcher`.
+`FakePtyBackend` for tests). Used for `agentMode: 'pty'` and `'raw'`.
 All the "is it waiting / is it done" heuristics live here behind one testable abstraction.
 
 `agentMode: 'pty'` marks the real interactive claude TUI (`claudeTui` in the composition root), which

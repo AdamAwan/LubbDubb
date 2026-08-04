@@ -12,7 +12,6 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     openEscalations: [],
     queuedJobs: [],
     recentDecisions: [],
-    steeringPriorities: [],
     agentHeadroom: 3,
     ...over,
   };

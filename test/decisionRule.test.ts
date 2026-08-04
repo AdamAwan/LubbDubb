@@ -18,7 +18,6 @@ function ctx(world: Partial<WorldSnapshot>): DispatchContext {
     openEscalations: [],
     queuedJobs: [],
     recentDecisions: [],
-    steeringPriorities: [],
     agentHeadroom: 3,
   };
 }
@@ -68,7 +67,7 @@ test('the store lifts the rule off the action into its own column and round-trip
     outcome: 'executed',
     detail: 'spawned',
   });
-  // Decisions with no rule identity (LLM dispatcher, bookkeeping) stay null.
+  // Decisions with no rule identity (bookkeeping, human-authorized acts) stay null.
   store.recordDecision({
     cycleId: 'c1',
     action: { type: 'no_op', reason: 'cycle rationale' },

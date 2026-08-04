@@ -30,7 +30,8 @@ is rejected and audited rather than executed.
 | `no_op`               | `reason`                                  | `rule`                                                                         |
 
 `reason` is mandatory on every action — it is what the audit log shows. `rule` defaults to `null`,
-because the LLM dispatcher reasons freely and emits none. Every action also accepts an optional
+because an act reaching the executor from outside the pulse (an accepted proposal, agent lifecycle)
+has no proposing rule. Every action also accepts an optional
 **`admission`** beside it, defaulting to `null`: `rule` names what proposed the act, `admission` what
 became of it, and both are lifted into their own decision columns (see
 [Two columns on the decision row](#two-columns-on-the-decision-row)).
@@ -571,24 +572,6 @@ expiry from re-asking on a PR that has merely been commented on.
 
 `buildRationale` produces `"Rule dispatcher: nothing actionable."` for a lone `no_op`, otherwise
 `"Rule dispatcher chose N action(s): <types>"`. It is persisted as its own decision row each cycle.
-
-## The `claude` dispatcher
-
-`src/dispatcher/claudeDispatcher.ts` drives a Claude Code session over the same `PtySession`
-abstraction as agents:
-
-- The prompt states the headroom, the allowed action types, the requirement that every action carries
-  a `reason`, the `confidence` contract for `reply_on_pr`, the operator's `steeringPriorities`, the
-  issue-pickup policy rendered as guidance, and the full state as JSON.
-- The model is asked to bracket a JSON object between `@@LUBBDUBB_PLAN_START@@` and
-  `@@LUBBDUBB_PLAN_END@@`. The session is finished on seeing the end sentinel, on `done`/`failed`/
-  `exit`, or on a 120-second timeout.
-- The extracted block is parsed and run through the **same** `parseActions`. No parseable block, or
-  invalid JSON, yields zero actions and an explanatory rationale — never a partial effect.
-
-It returns **no `upcoming`**, so the cockpit's Up next panel is empty under this dispatcher. It also
-does not implement the planning funnel or prompt templates; it is steered via `steeringPriorities`
-instead.
 
 ## Prompt templates
 

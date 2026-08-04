@@ -10,9 +10,6 @@
   "// startPaused": "Boot with dispatch paused (no new agents until resumed). The only config-level pause knob — live pause/resume is runtime-only and ephemeral. Default false.",
   "startPaused": false,
 
-  "// dispatcher": "Which dispatcher decides each cycle. 'rule' = deterministic, no model calls; the only one that implements prompt templates, the planning funnel, the assessor/assay/retrospective and the Up next queue. 'claude' = an LLM decides (output still schema-validated), driven over a PTY. Default 'rule'.",
-  "dispatcher": "rule",
-
   "// agentMode": "How agents are launched. 'stream' = real Claude Code over headless stream-JSON (production default, runs unattended, supports the waiting/answer loop). 'pty' = real Claude Code as an interactive terminal (needs first-run onboarding done; this is the runtime that resumes across restarts). 'raw' = run claudeCommand/claudeArgs verbatim, prompt passed via LUBBDUBB_PROMPT (mock-agent demo + tests). Default 'stream'.",
   "agentMode": "raw",
 
@@ -53,9 +50,6 @@
 
   "// sessionTranscriptRoot": "Where Claude Code keeps per-project session transcripts, which PTY mode tails for its legible transcript. Default '~/.claude/projects'. Override only if the agent runs with a different HOME than the server.",
   "sessionTranscriptRoot": "~/.claude/projects",
-
-  "// steeringPriorities": "Optional ordered hints injected into the LLM dispatcher's prompt (only meaningful with dispatcher 'claude'); carried in the state snapshot for display either way. Default [].",
-  "steeringPriorities": [],
 
   "// promptTemplatesDir": "Directory of operator overrides for the rule dispatcher's agent/escalation prompts. Each <prompt-id>.md replaces that prompt's built-in default; ids without a file keep theirs. A leading <!-- ... --> doc header is stripped before the prompt reaches the agent. A relative path resolves against repoRoot. Absent directory = all built-in defaults. Default '.lubbdubb/prompts'.",
   "promptTemplatesDir": ".lubbdubb/prompts",
@@ -112,7 +106,7 @@
   "// issueInReviewState": "The state a work item is moved to once a PR is open for it, so agents stop re-picking work already awaiting review/CI (e.g. 'In Review'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Unset = no automatic transition.",
   "issueInReviewState": "In Review",
 
-  "// planning": "The planning funnel for multi-PR issues. ON by default. Every watched open issue first gets a PLANNING agent (rule issue-plan, on branch plan/issue/<n>) that reads the repo and submits a verdict through the plan_submit tool (or .lubbdubb/plan.json as the fallback): 'single' (one PR — falls through to normal pickup, unchanged) or 'parts' (a decomposition the part scheduler owns: rule plan-part puts one agent per part on issue/<n>/<slug>, stacked on its dependency's branch while that dependency's PR is open). Progress is mirrored to the tracker as ONE status comment per plan, edited in place; completion never closes the issue. A planner that crashes or writes no plan fails OPEN after the usual attempt cap: the issue routes to 'single' and is worked as it would be without plans, so a planner failure can never park an issue. OFF leaves the funnel out entirely — rule issue-pickup un-narrowed, no planner ever dispatched. Only the 'rule' dispatcher implements it. Deep-merged.",
+  "// planning": "The planning funnel for multi-PR issues. ON by default. Every watched open issue first gets a PLANNING agent (rule issue-plan, on branch plan/issue/<n>) that reads the repo and submits a verdict through the plan_submit tool (or .lubbdubb/plan.json as the fallback): 'single' (one PR — falls through to normal pickup, unchanged) or 'parts' (a decomposition the part scheduler owns: rule plan-part puts one agent per part on issue/<n>/<slug>, stacked on its dependency's branch while that dependency's PR is open). Progress is mirrored to the tracker as ONE status comment per plan, edited in place; completion never closes the issue. A planner that crashes or writes no plan fails OPEN after the usual attempt cap: the issue routes to 'single' and is worked as it would be without plans, so a planner failure can never park an issue. OFF leaves the funnel out entirely — rule issue-pickup un-narrowed, no planner ever dispatched. Deep-merged.",
   "planning": {
     "// enabled": "Master switch. Default true.",
     "enabled": true,
@@ -124,19 +118,19 @@
     "gitFetchIntervalMs": 60000
   },
 
-  "// assessment": "The assessor (rule issue-assess) — the harness asking whether an issue that has HAD work and has nothing in flight is actually finished, and parking it as 'delivered' if so. ON by default, with the cost stated: it spends an agent per assessed issue and its verdict gates pickup (reversibly — moving the ticket in the tracker, or any comment/transition on it, releases the hold, and there is an operator clear). It is what stops a merged PR's issue being picked up again on GitHub, which has no 'In Review' state to park it in. A negative verdict names a cause and routes it: a plan shortfall proposes a replan, a part shortfall proposes one follow-up part, a goal shortfall escalates. Off, no assessor is dispatched and rule issue-pickup behaves as it did before it existed. Deep-merged; 'rule' dispatcher only.",
+  "// assessment": "The assessor (rule issue-assess) — the harness asking whether an issue that has HAD work and has nothing in flight is actually finished, and parking it as 'delivered' if so. ON by default, with the cost stated: it spends an agent per assessed issue and its verdict gates pickup (reversibly — moving the ticket in the tracker, or any comment/transition on it, releases the hold, and there is an operator clear). It is what stops a merged PR's issue being picked up again on GitHub, which has no 'In Review' state to park it in. A negative verdict names a cause and routes it: a plan shortfall proposes a replan, a part shortfall proposes one follow-up part, a goal shortfall escalates. Off, no assessor is dispatched and rule issue-pickup behaves as it did before it existed. Deep-merged.",
   "assessment": {
     "// enabled": "Master switch. Default true.",
     "enabled": true
   },
 
-  "// assay": "The goal assay (rule issue-assay) — the harness asking whether a fresh issue's TEXT can be worked from at all, before anything is dispatched against it. Every other gate in front of a ticket asks about policy; this one asks whether there is anything to act on. ON by default. Only an explicit 'unclear' verdict holds anything: an assayer that crashes, is killed or spends its attempt cap writes no row and the issue falls through to ordinary pickup with no escalation. A hold ends the moment the ticket's title/body is edited or anyone comments, and the refusal is kept as ONE living comment on the thread, retracted when the hold ends. There is an operator override (POST /api/issues/:number/assay). Off, no assayer runs and every gate in front of an issue behaves as it did. Deep-merged; 'rule' dispatcher only.",
+  "// assay": "The goal assay (rule issue-assay) — the harness asking whether a fresh issue's TEXT can be worked from at all, before anything is dispatched against it. Every other gate in front of a ticket asks about policy; this one asks whether there is anything to act on. ON by default. Only an explicit 'unclear' verdict holds anything: an assayer that crashes, is killed or spends its attempt cap writes no row and the issue falls through to ordinary pickup with no escalation. A hold ends the moment the ticket's title/body is edited or anyone comments, and the refusal is kept as ONE living comment on the thread, retracted when the hold ends. There is an operator override (POST /api/issues/:number/assay). Off, no assayer runs and every gate in front of an issue behaves as it did. Deep-merged.",
   "assay": {
     "// enabled": "Master switch. Default true.",
     "enabled": true
   },
 
-  "// retrospective": "The retrospective (rule issue-retro) — one DESK agent writing up a goal the harness has parked as delivered: what shipped, and what came out of the process of shipping it, from the issue's scratchpad plus the record the harness kept. ON by default, and unlike its three neighbours above it gates nothing: it runs once, after the work is over, so it can neither park an issue nor delay anything. Off, the Goal Floor's Manifest station reads 'Nothing written' and no agent is spent. Deep-merged; 'rule' dispatcher only.",
+  "// retrospective": "The retrospective (rule issue-retro) — one DESK agent writing up a goal the harness has parked as delivered: what shipped, and what came out of the process of shipping it, from the issue's scratchpad plus the record the harness kept. ON by default, and unlike its three neighbours above it gates nothing: it runs once, after the work is over, so it can neither park an issue nor delay anything. Off, the Goal Floor's Manifest station reads 'Nothing written' and no agent is spent. Deep-merged.",
   "retrospective": {
     "// enabled": "Master switch. Default true.",
     "enabled": true

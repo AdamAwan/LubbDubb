@@ -353,7 +353,7 @@ CREATE TABLE IF NOT EXISTS decisions (
   outcome    TEXT NOT NULL,
   detail     TEXT NOT NULL,
   -- The dispatcher rule that *proposed* the action (see src/dispatcher/rules.ts);
-  -- NULL when the decision has no rule identity (LLM dispatcher, bookkeeping).
+  -- NULL when the decision has no rule identity (bookkeeping, human-authorized acts).
   rule       TEXT,
   -- What *became* of that proposal: an admission-kind id from the same registry
   -- (branch-notify, cooldown-escalate), NULL when the proposal was admitted

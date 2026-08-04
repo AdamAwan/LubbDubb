@@ -184,7 +184,6 @@ function testConfig() {
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),

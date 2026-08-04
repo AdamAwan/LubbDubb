@@ -219,7 +219,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   as `DispatchResult.upcoming` (`QueueItem[]`: `dispatching`/`waiting`/`cooldown`). If you
   add a dispatch rule, route it through the candidate list — an inline `raw.push` of a
   `dispatch_*` action would bypass both the cut and the queue. The `Harness` caches the
-  last plan (`harness.upcoming`, null for the LLM dispatcher which returns none) and
+  last plan (`harness.upcoming`, null until the first cycle) and
   `buildStateSnapshot` ships it as `upcoming`; the cockpit's `UpNext` panel draws the
   cut-line. It's a per-pulse projection — never treat it as a persisted FIFO.
   - **Operator re-ordering (issue #128) is an override keyed on origin, not a mutation of the
@@ -250,8 +250,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
   from `store.listQueuedJobs()`) onto the front of the `Candidate` list **before any world-driven
   rule** — rule `manual-job` — so the headroom cut dispatches them first (a manual
   request takes the next free slot); a job below the cut shows as `waiting` in the Up next queue and
-  is retried next cycle. No cooldown throttle applies (a job is a one-shot request). The ClaudeDispatcher
-  gets the same queue in its prompt. The emitted `dispatch_*` action carries a `jobId`, and the executor
+  is retried next cycle. No cooldown throttle applies (a job is a one-shot request). The emitted `dispatch_*` action carries a `jobId`, and the executor
   calls `Store.markJobDispatched(jobId, task.id)` **only after** the agent actually spawns — so a job the
   cap/pause gate holds stays `queued`. `Store.cancelJob` drops a still-queued job; a dispatched one is a
   live agent (kill it instead). The `jobs` table is a fresh `CREATE TABLE`, so no `migrate()` entry is
@@ -270,7 +269,7 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     queued job the operator is entitled to have retried when the branch frees). **Deferred, not
     skipped**: `skipped` is the origin gate's word for "already being done", whereas a colliding job
     is distinct work naming a busy branch, and every active task ends. The executor is the site
-    because every dispatch passes it, the LLM dispatcher's prose-named branches included. It is a
+    because every dispatch passes it, whatever composed the action. It is a
     **no-op for every world-driven rule** — that is the point, and `test/jobQueue.test.ts` asserts it
     (a broad world, then: the gate never fired, yet no two live tasks share a branch), so a later
     rule that broke the 1:1 property fails a test instead of quietly sharing a checkout.
@@ -489,9 +488,8 @@ NOT EXISTS` never alters an existing table, so a **column added to an existing t
     _is_ rule `pr-review-comment`'s dispatch origin, so "what did the human say about this exact thing" is a lookup;
     widening to the world item would put a refusal to _merge_ in front of an agent fixing CI, so a
     rejected merge deliberately reaches no agent. It is in the **executor** for the branch gate's
-    reason (every dispatch passes), which is load-bearing here rather than tidy: a `reply_draft` is
-    only ever proposed off the LLM dispatcher's `reply_on_pr`, so a rule-dispatcher-side hook would
-    miss the one path that produces rejected replies. It is **appended** to the rendered prompt, not
+    reason (every dispatch passes): the note reaches an agent whether the act was proposed by a rule
+    or authorized outside the pulse, which a rule-dispatcher-side hook could not do. It is **appended** to the rendered prompt, not
     filled into it — templates are operator-overridable and `loadPromptTemplates` only rejects
     _unknown_ placeholders, so an override omitting a new `{rejection}` token would silently drop a
     human's words on exactly the deployments that customised most. Appending has no fallback to get
@@ -1272,7 +1270,7 @@ cockpit are agnostic to which is running:
 - **`StreamJsonSession`** (`agentMode: 'stream'`, the **production default**) — real `claude`
   over headless stream-JSON. No PTY, no TUI. This is what runs by default, so "how agents run"
   is usually _not_ a terminal.
-- **`PtySession`** (`agentMode: 'pty'`/`'raw'`, and the `ClaudeDispatcher`) — a real
+- **`PtySession`** (`agentMode: 'pty'`/`'raw'`) — a real
   pseudoterminal via `node-pty`. All the fiddly "is it waiting / is it done" heuristics live
   here behind one testable abstraction (`src/pty/backend.ts` is the swappable spawn seam).
 
@@ -1504,9 +1502,9 @@ preserve:
       and a prompt is where those already live: `finding-ticket` is an ordinary overridable entry in
       the template book, so house style is changed by dropping a file in `promptTemplatesDir`, not by
       patching a route. A capability seam would have moved that judgement inside the harness where an
-      override cannot reach it. Consequence: the book is no longer only the rule dispatcher's —
-      `loadPromptTemplates` is hoisted in `system.ts` and exposed as `System.prompts` so the route
-      renders the same under either dispatcher.
+      override cannot reach it. Consequence: the book is no longer only the dispatcher's —
+      `loadPromptTemplates` is hoisted in `system.ts` and exposed as `System.prompts` so a route
+      renders from the same book a pulse does.
     - **The one thing an agent cannot infer is _which_ tracker**, so that is what the harness supplies:
       the pure `trackerCoordinates(config)` renders coordinates from the same config block the
       **`issues` provider** is built from, so a ticket lands where the harness reads issues from and

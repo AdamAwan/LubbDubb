@@ -56,8 +56,7 @@ The Prompts panel is a collapsed button that opens the list of ids (each with th
 its doc and an `overridden` badge), and a row opens a modal carrying the doc in full, the placeholders
 an override may use, the path of the override file, and the effective template text. It is read-only:
 the path is what makes it actionable, since overriding is a file drop
-([16](16-http-api.md#get-apiprompts)). Under `dispatcher: 'claude'` it says so — that dispatcher
-composes its own prompts and none of the book fires. The demo build serves an empty book: the web
+([16](16-http-api.md#get-apiprompts)). The demo build serves an empty book: the web
 bundle imports no server code, and a copy of eighteen prompts shipped to fill the panel would be free
 to drift from the originals with nothing to catch it.
 
@@ -814,8 +813,7 @@ for the world to change — chosen from `config.injectable`.
   `POST /api/upnext/order`, which the dispatcher persists as a priority override and reads back into
   its ranking — so the order survives pulses and restarts while the panel stays a projection. It
   re-orders only: a held row keeps its held status wherever it lands, and `manual-job` items stay first. New
-  work the harness surfaces later slots in behind the arranged order until you re-arrange. Empty under
-  the `claude` dispatcher, which materialises no plan.
+  work the harness surfaces later slots in behind the arranged order until you re-arrange.
 - **Decision log** (`DecisionLog`) — the last 100 decisions with outcome, detail and, where present,
   the rule that fired, expandable into that rule's standing rationale.
 - **Activity** (`ActivityFeed`) — the last 100 world events.

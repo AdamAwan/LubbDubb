@@ -12,7 +12,8 @@ const base = {
   /**
    * Which dispatcher rule produced this action (a `DISPATCH_RULES` id), so the
    * audit log can explain the decision beyond its free-text reason. Optional —
-   * the LLM dispatcher reasons freely and omits it — so it defaults to null.
+   * an act reaching the executor from outside the pulse (an accepted proposal,
+   * agent lifecycle) has no proposing rule — so it defaults to null.
    */
   rule: z.string().nullable().default(null),
   /**
@@ -33,7 +34,8 @@ const base = {
 /**
  * Human-readable context about the item that triggered a dispatch, carried onto
  * the task so the cockpit can explain a running agent at a glance (issue #17).
- * Optional — an LLM dispatcher may omit it — so both default to null.
+ * Optional — an act composed outside a rule has no world item to describe — so
+ * both default to null.
  */
 const origin = {
   originTitle: z.string().nullable().default(null),

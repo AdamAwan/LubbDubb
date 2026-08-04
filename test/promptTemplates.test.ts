@@ -184,13 +184,11 @@ test('GET /api/prompts serves the book the dispatcher renders from, overrides an
     assert.equal(res.statusCode, 200);
     const body = res.json() as {
       dir: string;
-      dispatcher: string;
       templates: { id: string; template: string; overridden: boolean; placeholders: string[]; doc: string }[];
     };
     // The directory is what makes a read-only panel actionable: it names the file
     // an operator would create.
     assert.equal(body.dir, config.promptTemplatesDir);
-    assert.equal(body.dispatcher, config.dispatcher);
     const ci = body.templates.find((t) => t.id === 'pr-ci-fix');
     assert.ok(ci);
     assert.equal(ci.overridden, true);
@@ -217,7 +215,6 @@ function ctx(world: Partial<WorldSnapshot>): DispatchContext {
     openEscalations: [],
     queuedJobs: [],
     recentDecisions: [],
-    steeringPriorities: [],
     agentHeadroom: 3,
   };
 }

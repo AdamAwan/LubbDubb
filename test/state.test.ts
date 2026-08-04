@@ -12,7 +12,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 test('the state snapshot reports per-PR health', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const system = buildSystem(
-    loadConfig({ dbPath: ':memory:', dispatcher: 'rule', deskRoot: join(dir, 'd'), worktreeRoot: join(dir, 'w') }),
+    loadConfig({ dbPath: ':memory:', deskRoot: join(dir, 'd'), worktreeRoot: join(dir, 'w') }),
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() },
   );
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat', baseBranch: 'main' });

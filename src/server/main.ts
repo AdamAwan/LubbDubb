@@ -36,9 +36,7 @@ async function main(): Promise<void> {
   } else {
     console.log('[lubbdubb] cockpit auth is DISABLED — anyone who can reach this port can queue jobs');
   }
-  console.log(
-    `[lubbdubb] dispatcher=${config.dispatcher} heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`,
-  );
+  console.log(`[lubbdubb] heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`);
   console.log(
     `[lubbdubb] agent tools: ${mcpReady ? 'on' : config.mcp.enabled ? 'unavailable — sentinels only' : 'disabled'}`,
   );

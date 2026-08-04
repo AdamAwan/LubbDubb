@@ -18,7 +18,6 @@ function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
     dbPath: ':memory:',
-    dispatcher: 'rule',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
@@ -319,8 +318,9 @@ test("a rejection reaches the next agent on that ref, in the operator's own word
 });
 
 test('the executor refuses a duplicate proposal even when the dispatcher gate is bypassed', async () => {
-  // The LLM dispatcher composes actions freely, so the rule-side gate cannot be
-  // the only one. Two identical plans through the executor must ask once.
+  // The executor is reached by acts a rule never proposed (an accepted proposal
+  // re-running, an injected plan), so the rule-side gate cannot be the only one.
+  // Two identical plans through the executor must ask once.
   const sink = countingSink();
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink });
 

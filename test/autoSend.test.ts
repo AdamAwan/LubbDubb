@@ -14,7 +14,6 @@ function testConfig(autoSend?: Partial<AutoSendConfig>) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
     dbPath: ':memory:',
-    dispatcher: 'rule',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,

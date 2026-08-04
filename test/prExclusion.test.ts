@@ -17,7 +17,6 @@ function build(overrides: Partial<Config> = {}) {
     // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     dbPath: ':memory:',
-    dispatcher: 'rule',
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
