@@ -21,6 +21,10 @@ export function issueRetro(s: StageContext): void {
   const { ctx } = s;
   const written = new Set(ctx.retrospectiveOrigins ?? []);
   for (const issue of ctx.world.issues) {
+    // Deliberately **not** gated on `retained` (issue #234): with `issue-assess`,
+    // this is one of the two rules the union exists for. Both run after the work
+    // is over, which is exactly when a delivering PR has already closed the
+    // ticket — the run is what they belong to, not the tracker's answer.
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     const root = issueOrigin(issue.number);
     if (written.has(root)) continue;

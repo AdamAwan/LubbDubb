@@ -40,7 +40,7 @@ const {
   toneColor,
   returnRoute,
 } = await import('../web/src/skins/factory/vocabulary.js');
-const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress, retainedCompletion } = await import(
+const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress, retainedRun } = await import(
   '../web/src/skins/factory/goalFloor.js'
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
@@ -929,7 +929,7 @@ test('a refused floor draws the override, and a workable one does not', () => {
         onViewScratchpad: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
-        onDismissCompletion: () => undefined,
+        onDismissRun: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
         // Gates off: these two assert the plan and assay controls, not visibility.
         watchLabel: '',
@@ -990,7 +990,7 @@ test('the floor opens its plan whatever the plan is doing', () => {
         onViewScratchpad: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
-        onDismissCompletion: () => undefined,
+        onDismissRun: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
         // Gates off: these two assert the plan and assay controls, not visibility.
         watchLabel: '',
@@ -1066,7 +1066,10 @@ test('every goal-floor stage has a word', () => {
         signalPostStatus(state, comment).word.length > 0,
         `signal post ${state ?? 'no state'}/${comment} rendered no word`,
       );
-  assert.ok(launchStatus(true).word.length > 0 && launchStatus(false).word.length > 0);
+  // Three launch readings, each with a word of its own: 'not launched' is a fact,
+  // not the absence of the other two.
+  for (const reading of ['away', 'returned', 'unbuilt'] as const)
+    assert.ok(launchStatus(reading).word.length > 0, `launch ${reading} rendered no word`);
 
   // Every tone has a colour, including the two the floor added: a tone with no
   // value paints an SVG attribute with the string "undefined".
@@ -1274,12 +1277,12 @@ test('a completed goal is retained on the floor until dismissed (#203)', () => {
 
   assert.deepEqual(numbers([goal()]), [], 'an untagged, un-retained finished goal is not drawn');
   assert.deepEqual(
-    numbers([goal({ completion: { at: T, dismissed: false } })]),
+    numbers([goal({ run: { startedAt: T, completedAt: T, outcome: null, dismissed: false } })]),
     [1],
     'retention keeps it until dismissed',
   );
   assert.deepEqual(
-    numbers([goal({ completion: { at: T, dismissed: true } })]),
+    numbers([goal({ run: { startedAt: T, completedAt: T, outcome: 'judged', dismissed: true } })]),
     [],
     'dismissal is the one thing that removes it',
   );
@@ -1288,7 +1291,10 @@ test('a completed goal is retained on the floor until dismissed (#203)', () => {
   // is drawn like any other in-flight goal.
   assert.deepEqual(
     numbers([
-      goal({ pickup: { eligible: false, status: 'active', reasons: [] }, completion: { at: T, dismissed: true } }),
+      goal({
+        pickup: { eligible: false, status: 'active', reasons: [] },
+        run: { startedAt: T, completedAt: T, outcome: 'judged', dismissed: true },
+      }),
     ]),
     [1],
     'a dismissal never hides live work',
@@ -1296,9 +1302,9 @@ test('a completed goal is retained on the floor until dismissed (#203)', () => {
 
   // The predicate the dismiss control keys on — on the completion existing and not
   // yet cleared, never on the floor's state.
-  assert.equal(retainedCompletion(goal({ completion: { at: T, dismissed: false } })), true);
-  assert.equal(retainedCompletion(goal({ completion: { at: T, dismissed: true } })), false);
-  assert.equal(retainedCompletion(goal()), false);
+  assert.equal(retainedRun(goal({ run: { startedAt: T, completedAt: T, outcome: null, dismissed: false } })), true);
+  assert.equal(retainedRun(goal({ run: { startedAt: T, completedAt: T, outcome: 'judged', dismissed: true } })), false);
+  assert.equal(retainedRun(goal()), false);
 });
 
 /** And the panel reads that list, rather than the world's — including its empty state. */
@@ -1331,7 +1337,7 @@ test('the goal floor strip is the staked goals', () => {
         onViewScratchpad: () => undefined,
         onReplan: () => undefined,
         onSetAssay: () => undefined,
-        onDismissCompletion: () => undefined,
+        onDismissRun: () => undefined,
         onFetchWork: () => Promise.resolve({ nodes: [] }),
       }),
     );
@@ -1348,19 +1354,20 @@ test('the goal floor strip is the staked goals', () => {
 });
 
 /**
- * The tail is on the goal check's **yes** arm, which is why no floor in flight
- * reaches it: a shortfall returns before this point.
+ * The tail is on the goal check's **yes** arm, and since #234 a floor in flight
+ * draws it **unbuilt** rather than not at all: cutting the route short said
+ * "nothing has been checked" by omission, in a shape indistinguishable from the
+ * floor simply ending there — which is how three stations came to be drawn as
+ * built off a closed ticket with the goal check beneath them reading unbuilt.
  */
 test('the loop reaches an end, and the end is drawn', () => {
   const inFlight = buildGoalFloor(floorInput({ parts: [planPart('a', [], 'in_review', 1)] }));
-  assert.equal(
-    inFlight.machines.some((m) => m.kind === 'manifest'),
-    false,
-  );
-  assert.equal(
-    inFlight.machines.some((m) => m.kind === 'launch'),
-    false,
-  );
+  for (const kind of ['manifest', 'signal', 'launch'] as const) {
+    const station = inFlight.machines.find((m) => m.kind === kind);
+    assert.ok(station, `${kind} is drawn even with no verdict`);
+    assert.equal(station!.presence, 'unbuilt', `${kind} claims nothing the workflow has not reached`);
+  }
+  assert.equal(inFlight.machines.find((m) => m.kind === 'launch')?.status.word, 'Unbuilt');
   assert.equal(inFlight.machines.find((m) => m.kind === 'satellite')?.presence, 'unbuilt');
 
   const delivered = buildGoalFloor(
@@ -1396,6 +1403,10 @@ test('the loop reaches an end, and the end is drawn', () => {
       floorInput({
         pickup: 'delivered',
         workItemState: 'Done',
+        // The delivery row, not the conclusion beside it: since #234 the tail reads
+        // the goal check's own verdict, so a fixture without one draws an unbuilt
+        // signal post — which is the point, and covered above.
+        delivery: { summary: 'retry wraps both call sites', by: 'assessor', decidedAt: NOW },
         conclusion: { verdict: 'done', by: 'assessor', note: 'retry wraps both call sites', at: NOW },
         parts: [planPart('a', [], 'merged', 1)],
         ...over,
@@ -1517,8 +1528,8 @@ test('a goal floor with no standing delivery draws no goal check', () => {
   assert.equal(released.machines.find((m) => m.kind === 'satellite')?.status.word, 'Not yet built');
   assert.equal(released.machines.find((m) => m.kind === 'satellite')?.presence, 'unbuilt');
   assert.equal(
-    released.machines.some((m) => m.kind === 'launch'),
-    false,
+    released.machines.find((m) => m.kind === 'launch')?.presence,
+    'unbuilt',
     'a released issue is back in play, so nothing has launched',
   );
 });

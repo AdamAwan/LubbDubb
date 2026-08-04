@@ -497,13 +497,21 @@ _add_ settled machines the world has forgotten — a PR merged past `closedPrWin
 the whole of the merge: two sources each partly owning a field is how they start disagreeing. The
 fetch goes through `fetchWorkSubtree` on `CockpitActions`, because a skin may not import `api.js`.
 
-**A finished goal is kept until the operator dismisses it (#203).** The floor is otherwise built from
-the live world, so a completed goal — and the Manifest's way in to its retrospective — dropped off the
-moment the tracker stopped returning the issue (closed by hand) or its watch tag came off. So a goal
-observed complete is recorded server-side while it is still live (`floor_completions`, keyed on the
-issue origin, title captured then so it outlives the world forgetting the issue). "Complete"
-(`isGoalComplete`, `src/floor/completions.ts`, recorded each pulse in `harness.ts`) folds two kinds of
-input, and the rule between them is **evidence adds; a standing verdict subtracts**:
+**A run is kept until the operator dismisses it (#203, #234).** The floor is otherwise built from the
+live world, so a goal — and the Manifest's way in to its retrospective — dropped off the moment the
+tracker stopped returning the issue (closed by hand) or its watch tag came off. So the harness's run
+at a goal is recorded server-side while the issue is still live (`issue_runs`, keyed on the issue
+origin), and the row keeps the issue's title, body, labels, linked PR and workflow state as they last
+stood, because a retained run is **dispatched from** and not merely drawn.
+
+**Minted at pickup, not at completion (#234).** #203 recorded a _completion_, which is a row that is
+never written for a goal nobody finished — so an abandoned goal, or one whose ticket was closed
+mid-flight, disappeared with no card to dismiss. A run is minted the first pulse the harness has work
+under the goal (`hasPriorWork`, the same predicate `issue-assess` uses to tell "nothing has started"
+from "something finished"), and the completion instant is stamped later, when the signals say the goal
+is reached. "Complete" (`isGoalComplete`, `src/floor/runs.ts`, recorded each pulse in `harness.ts`)
+folds two kinds of input, and the rule between them is **evidence adds; a standing verdict
+subtracts**:
 
 - **Evidence** — a write-up exists, or a `delivered` verdict was ever reached. Each says the goal was
   reached at least once, and they are why the conclusion alone is not enough: a finished goal nobody
@@ -518,24 +526,48 @@ a `complete` plan — the exact contradiction the resolver's first arm exists to
 shortfall was not consulted at all, so an assessor's "nothing was delivered" lost to the stale `done`
 of the agent it was assessing.
 
-**The gate is on minting a completion, never on keeping one.** Retention stays one-way: nothing
-deletes a row, `recordFloorCompletion` is upsert-only and never resurrects a dismissal, and a
+**The gate is on stamping a completion, never on keeping a run.** Retention stays one-way: nothing
+deletes a row, `recordIssueRun` never clears a completion instant or resurrects a dismissal, and a
 genuinely finished goal resolves to `done` or `undeclared` — never `more_work` — so it cannot fall off
 the floor on its own. What no longer happens is the harness recording a goal as finished on the same
-pulse its own scheduler is putting agents on it. The snapshot then does two things: it stamps a still-present finished issue with a
-`completion` field, and it **synthesizes** the ones the world has forgotten into a separate
-`floorCompletions` list (rebuilt from the stored records through the _same_ `enrichIssue` path a live
-issue takes, so a retained card and a live one cannot disagree), which the floor merges in — the
-world's copy winning for a goal still present, so the Yard and world panels stay a view of the live
-world. `floorGoals` gains a third way onto the strip beside claimed and in-flight: a **retained
-completion**, drawn until dismissed. The order of its checks is load-bearing — in-flight is tested
-first, so a dismissed goal that re-enters production is drawn as live work and a dismissal can never
-hide it. **Dismissal is the one thing that removes a completed goal** (`POST
-/api/issues/:n/floor-dismiss` → `Store.dismissFloorCompletion`): no pulse or poll drops one, it is
-one-way and persists across a restart, and the report itself is untouched — the row is the card, not
-the write-up, which `GET /api/retrospectives/:ref` still serves. The Dismiss control hangs off the
-completion **existing and not yet cleared** (`retainedCompletion`), never off the floor's state — the
-lesson `planId` and `retroRef` learned.
+pulse its own scheduler is putting agents on it. The snapshot then does two things: it stamps every
+issue the harness has a run at with a `run` field (`startedAt`, `completedAt`, `outcome`,
+`dismissed`), and it rebuilds the runs the world has forgotten into a separate `retainedRuns` list —
+through `retainedRunIssues`, the _same_ function the dispatcher unions into its issue list, and then
+the _same_ `enrichIssue` path a live issue takes, so the card the operator sees and the subject the
+harness acts on are one thing. The floor merges that list in, the world's copy winning for a goal
+still present, so the Yard and world panels stay a view of the live world. `floorGoals` gains a third
+way onto the strip beside claimed and in-flight: a **retained run**, drawn until dismissed. The order
+of its checks is load-bearing — in-flight is tested first, so a dismissed goal that re-enters
+production is drawn as live work.
+
+**Dismissal is the terminal act, and since #234 it is a gate as well as the card** (`POST
+/api/issues/:n/dismiss-run` → `Store.dismissIssueRun`). This reverses #203's stated invariant that
+dismissal is _never_ a gate, deliberately and for the reason the retention exists at all: a run that
+outlives the ticket has to be endable, or the dispatcher would keep asking about a goal the operator
+has finished with. Two routes reach it and the row decides which — a run the harness had judged ends
+`judged`, one it had not ends `abandoned` — so the outcome is never claimed beyond the evidence.
+Operator-only, one-way, and it persists across a restart: a dismissed run is not unioned back into the
+issue list, so nothing further is scheduled for a goal whose ticket the tracker has stopped returning.
+While the ticket _is_ still returned it is the tracker's own answer that puts the goal in the world, so
+dismissal ends the retention rather than parking a live issue — the operator's `-ignore` tag is what
+says "leave this one alone", and a dismissal that could silently park an open ticket would make a
+mis-click far more expensive than the card it was aimed at. An accidental dismissal is undone by the
+goal being worked again, not by an un-dismiss. The report itself is untouched — the row is the run,
+not the write-up, which `GET /api/retrospectives/:ref` still serves. The Dismiss control hangs off the
+run **existing and not yet ended** (`retainedRun`), never off the floor's state — the lesson `planId`
+and `retroRef` learned.
+
+**The tail reads the goal check's verdict, and nothing else (#234).** The Manifest, the Signal post
+and the Launch sit on the satellite's yes arm; they used to be drawn off `delivery !== null ||
+pickupStatus === 'delivered' || pickupStatus === 'done'`, and `done` is _any closed issue_ — so three
+stations drew as built, under a green **Delivered · Away**, with the goal check beneath them reading
+**Not yet built**. They now read the delivery row the satellite reads. Where there is no verdict they
+are drawn `presence: 'unbuilt'` — the vocabulary the furnace already uses — rather than cut from the
+route: an omitted station says "not reached" in a shape indistinguishable from the floor simply ending
+there, which is how the contradiction went unnoticed. The Launch therefore has **three** readings, not
+two: `away`, `returned`, and `unbuilt`. A shortfall still returns before the Manifest, which is the
+one arm that draws nothing.
 
 **It replaced the tech tree rather than joining it.** The tree's one unique claim — depth is how many
 merges must land before a part can start — survives intact as the floor's column, and `stateOf` /

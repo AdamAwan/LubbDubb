@@ -165,10 +165,10 @@ const realApi = {
   // have; `null` clears it, which is a delete and not a synonym for `workable`.
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/assay`, { verdict }),
-  // Take a finished goal off the Goal Floor (issue #203). A completed goal is
-  // retained there so its report stays reachable; this is the one thing that
-  // removes it, and it persists across a restart.
-  dismissFloorCompletion: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/floor-dismiss`),
+  // End the harness's run at a goal (issues #203, #234). A run is retained on the
+  // floor so its report stays reachable; this is the one thing that ends it, it
+  // persists across a restart, and it stops the dispatcher acting on the goal.
+  dismissRun: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   // Collapse a released decomposition back to one pull request. 409s unless the
   // plan is `active` with nothing started — the server owns that rule.

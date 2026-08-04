@@ -27,6 +27,10 @@ export function workItemBackToPickup(s: StageContext): void {
   // the operator's own "start here" (e.g. "Ready" in ["Ready","Doing"]).
   const returnState = pickupStates[0]!;
   for (const issue of s.ctx.world.issues) {
+    // Returning a retained run to a pickup state would put work back in front of
+    // the fleet for a goal whose run the operator has not ended — the inverse of
+    // what the union is for (issue #234). Explicit, for `work-item-in-review`'s reason.
+    if (s.retained.has(issue.number)) continue;
     const state = issue.workItemState;
     if (state === undefined || issue.state !== 'open') continue;
     // The back-off arm owns an item in a pickup state, whatever else is true of

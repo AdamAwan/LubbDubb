@@ -7,7 +7,7 @@ import {
   buildGoalFloor,
   floorGoals,
   inProduction,
-  retainedCompletion,
+  retainedRun,
   type GoalFloorModel,
   type Machine,
 } from '../goalFloor.js';
@@ -60,13 +60,13 @@ const SCAN_ROW = 15;
 interface GoalFloorProps {
   issues: Issue[];
   /**
-   * Finished goals kept on the floor whose issue the live world has forgotten
-   * (issue #203). Merged with {@link GoalFloorProps.issues} here — the world's copy
-   * wins for a goal still present — so a completed goal, and its report, stay
-   * reachable until the operator dismisses it. Optional so an older server (which
-   * ships none) degrades to today's live-only floor.
+   * Runs whose issue the live world has forgotten (issues #203, #234). Merged with
+   * {@link GoalFloorProps.issues} here — the world's copy wins for a goal still
+   * present — so a goal, and its report, stay reachable until the operator ends
+   * the run. Optional so an older server (which ships none) degrades to today's
+   * live-only floor.
    */
-  floorCompletions?: Issue[];
+  retainedRuns?: Issue[];
   plans: Plan[];
   parts: PlanPart[];
   openPrs: PullRequest[];
@@ -91,11 +91,12 @@ interface GoalFloorProps {
    */
   onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
   /**
-   * Remove a finished goal from the floor (issue #203). The only thing that takes
-   * a retained completion off — a pulse or poll never does — and it persists, so
-   * the goal does not reappear. Its report stays readable until this is clicked.
+   * End the harness's run at this goal (issues #203, #234). The only thing that
+   * ends one — no pulse, poll or ticket close does — and it persists, so the goal
+   * does not reappear. Since #234 it also stops the dispatcher acting on the goal,
+   * which is what makes it the way to abandon one. Its report stays readable.
    */
-  onDismissCompletion: (issueNumber: number) => Promise<unknown> | unknown;
+  onDismissRun: (issueNumber: number) => Promise<unknown> | unknown;
   /** `GET /api/work/:ref`, routed through `CockpitActions` — a skin never reaches `api.js`. */
   onFetchWork: (ref: string) => Promise<{ nodes: WorkNodeView[] }>;
   /**
@@ -112,12 +113,12 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
   const [picked, setPicked] = useState<number | null>(null);
   const [recorded, setRecorded] = useState<WorkNodeView[]>([]);
 
-  // The live world plus the finished goals it has forgotten (issue #203), the
-  // world's copy winning for one still present, so a completed goal and its report
-  // stay reachable until dismissed. `floorGoals` then decides which are drawn.
+  // The live world plus the runs it has forgotten (issues #203, #234), the world's
+  // copy winning for one still present, so a goal and its report stay reachable
+  // until dismissed. `floorGoals` then decides which are drawn.
   const allIssues = [
     ...issues,
-    ...(props.floorCompletions ?? []).filter((c) => !issues.some((i) => i.number === c.number)),
+    ...(props.retainedRuns ?? []).filter((c) => !issues.some((i) => i.number === c.number)),
   ];
 
   // Every reading below is of the *staked* goals — the strip, the default pick and
@@ -262,20 +263,20 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
         </div>
       )}
 
-      {/* The dismiss control (issue #203). Drawn while this goal is a retained
-          completion the operator has not yet cleared — keyed on the completion
-          existing, never on the floor's state, the lesson `planId` and `retroRef`
-          learned. It sits below the Manifest so the way in to the report is right
-          above the button that ends it. Removing it is one-way: nothing else takes
-          a finished goal off the floor. */}
-      {retainedCompletion(current) && (
+      {/* The dismiss control (issues #203, #234). Drawn while the harness has a run
+          at this goal the operator has not ended — keyed on the run existing, never
+          on the floor's state, the lesson `planId` and `retroRef` learned. It sits
+          below the Manifest so the way in to the report is right above the button
+          that ends it. One-way, and terminal for the dispatcher as well as for the
+          card: this is both "I have read the report" and "abandon this goal". */}
+      {retainedRun(current) && (
         <div className="fx-gf-plan fx-sunk">
-          <span className="fx-gf-who">Completed</span>
+          <span className="fx-gf-who">{current.run?.completedAt ? 'Completed' : 'In hand'}</span>
           <span className="fx-gf-act">
             <AsyncButton
               className="fx-btn"
-              onClick={() => props.onDismissCompletion(current.number)}
-              title="Take this finished goal off the floor. Its retrospective and records stay in the store; this only stops drawing the card."
+              onClick={() => props.onDismissRun(current.number)}
+              title="End the harness's run at this goal: the card goes, and nothing further is scheduled for it. Its retrospective and records stay in the store."
             >
               Dismiss
             </AsyncButton>

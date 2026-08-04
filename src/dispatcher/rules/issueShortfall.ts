@@ -33,7 +33,7 @@ export function issueShortfall(s: StageContext): void {
   for (const shortfall of ctx.shortfalls ?? []) {
     const issueNumber = planIssueNumber(shortfall.originRef);
     if (issueNumber === null) continue;
-    const issue = ctx.world.issues.find((i) => i.number === issueNumber);
+    const issue = s.liveIssue(issueNumber);
     if (!issue || issue.state !== 'open') continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     const plan = s.plansByOrigin.get(issueOrigin(issueNumber)) ?? null;

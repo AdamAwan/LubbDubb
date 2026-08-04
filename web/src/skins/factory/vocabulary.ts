@@ -216,6 +216,14 @@ export function clip(text: string, max: number): string {
 /** Whether a machine is built, drawn-but-not-built, or never reached at all. */
 export type MachinePresence = 'built' | 'ghost' | 'unbuilt';
 
+/**
+ * What every station the workflow has not reached says. One constant rather than
+ * a word per stage: an unbuilt furnace and an unbuilt launch are the same fact
+ * about two different places, and three stations that had each spelled it
+ * themselves is how they would come to spell it differently.
+ */
+export const UNBUILT: MachineStatus = { word: 'Unbuilt', tone: 'off' };
+
 /** Every stage of the workflow that is a machine. Fixtures are not in here. */
 export type FloorStage =
   | 'patch'
@@ -498,9 +506,25 @@ export function signalPostStatus(
   return SIGNAL_WORDS[workItemState ? 'moved' : 'no_state'][comment];
 }
 
-/** The launch — `delivered`, or a launch that failed verification. */
-export function launchStatus(returned: boolean): MachineStatus {
-  return returned ? { word: 'Returned', tone: 'bad' } : { word: 'Away', tone: 'ok' };
+/**
+ * The launch: away, sent back, or not launched at all.
+ *
+ * The third reading is the one #234 added, and it is a fact of its own rather
+ * than the absence of the other two: a goal nothing has assessed has not
+ * *failed* to launch, it has not been checked. The station used to be omitted in
+ * that case, which drew the same conclusion by leaving the route short — and read
+ * identically to a floor that simply ended there.
+ */
+export type LaunchReading = 'away' | 'returned' | 'unbuilt';
+
+const LAUNCH_WORDS: Record<LaunchReading, MachineStatus> = {
+  away: { word: 'Away', tone: 'ok' },
+  returned: { word: 'Returned', tone: 'bad' },
+  unbuilt: UNBUILT,
+};
+
+export function launchStatus(reading: LaunchReading): MachineStatus {
+  return LAUNCH_WORDS[reading];
 }
 
 /**

@@ -62,6 +62,7 @@ import type {
   Finding,
   GoalAssayVerdict,
   IssueConclusionVerdict,
+  IssueRunOutcome,
   Issue as WorldIssue,
   Job,
   Plan,
@@ -175,11 +176,13 @@ export interface Issue extends WorldIssue {
   /** The shared pad — how much is there and when, never the trail itself. */
   scratchpad: { entries: number; updatedAt: string } | null;
   /**
-   * Whether the operator is keeping this finished goal on the Goal Floor, and
-   * whether they have dismissed it (issue #203). **Absent** is a live goal —
-   * three states off one optional field.
+   * The harness's run at this goal (issues #203, #234): minted the first pulse it
+   * had work under it, finished when the goal was first observed reached, and
+   * ended only by the operator's dismissal. **Absent** is a goal never worked —
+   * four states off one optional field, and the dismissal is terminal for the
+   * dispatcher as well as for the card.
    */
-  completion?: { at: string; dismissed: boolean };
+  run?: { startedAt: string; completedAt: string | null; outcome: IssueRunOutcome | null; dismissed: boolean };
 }
 
 /** The world as `/api/state` ships it: the baseline, with both lists enriched. */
@@ -255,11 +258,13 @@ export interface CockpitState {
    */
   recovery: OrphanedWork[];
   /**
-   * Finished goals the operator is keeping on the floor whose issue the world has
-   * forgotten (issue #203) — enriched through the same path as a live issue, so a
-   * retained card and a live one cannot disagree.
+   * Runs whose issue the world has forgotten (issues #203, #234) — rebuilt from
+   * the run's own snapshot and enriched through the same path as a live issue, so
+   * a retained card and a live one cannot disagree. The same list the dispatcher
+   * unions into its issue view, which is what makes a goal drawn here one the
+   * harness can still act on.
    */
-  floorCompletions: Issue[];
+  retainedRuns: Issue[];
   /** The multi-PR plan graph: one plan per planned issue, and every plan's parts. */
   plans: Plan[];
   planParts: PlanPart[];

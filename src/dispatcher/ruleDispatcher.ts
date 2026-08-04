@@ -299,6 +299,11 @@ export class RuleDispatcher implements Dispatcher {
     const assayParked = (issue: Issue): boolean =>
       assayHold(assays.get(issueOrigin(issue.number)) ?? null, issue, { signals: ctx.assaySignals }) !== null;
 
+    // The runs in the issue list that the tracker has forgotten (issue #234).
+    // Read by the rules that must not act on one — which is all of them but
+    // `issue-assess` and `issue-retro` — each saying so in its own body.
+    const retained = new Set(ctx.retainedIssues ?? []);
+
     // The issue-side world. Gate on *no open PR* rather than on `linkedPrNumber`
     // being unset: that field is sticky (the last PR to ever cross-reference the
     // issue), so gating on it retires an issue the first time any PR touches it,
@@ -310,6 +315,13 @@ export class RuleDispatcher implements Dispatcher {
     const eligibleIssues = ctx.world.issues
       .filter(
         (i) =>
+          // A retained run is never eligible for anything this list feeds
+          // (`issue-plan`, `issue-pickup`): the harness has already worked this
+          // goal and the operator has not ended the run, so putting a fresh agent
+          // on it is the one thing the union must not cause. Stated here rather
+          // than left to `state === 'open'` below, which would be true by
+          // coincidence — see {@link StageContext.retained}.
+          !retained.has(i.number) &&
           i.state === 'open' &&
           openPrForIssue(i, openPrs) === null &&
           !deliveryParked(i) &&
@@ -383,6 +395,9 @@ export class RuleDispatcher implements Dispatcher {
       // comes back round for pickup with your summary").
       shortfallsByOrigin: new Map((ctx.shortfalls ?? []).map((sf) => [sf.originRef, sf])),
       assays,
+      retained,
+      liveIssue: (issueNumber: number) =>
+        retained.has(issueNumber) ? null : (ctx.world.issues.find((i) => i.number === issueNumber) ?? null),
       /** Is this issue decomposed — i.e. owned by the part scheduler, not by pickup? */
       partsPlanFor: (issueNumber: number) => {
         if (!this.planning.enabled) return null;

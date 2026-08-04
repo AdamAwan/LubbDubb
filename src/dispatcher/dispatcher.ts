@@ -30,6 +30,19 @@ export interface DispatchContext {
    * work-item state back-off) resolve against these too. Absent/empty = nothing hidden.
    */
   excludedPrs?: PullRequest[];
+  /**
+   * Which of `world.issues` are **retained runs** rather than the tracker's own
+   * answer (issue #234): a goal the harness has worked, whose ticket the tracker
+   * no longer returns, and which the operator has not dismissed. They are in the
+   * issue list so the two rules that come *after* a merge — `issue-assess` and
+   * `issue-retro` — can still finish once the delivering PR closed the ticket.
+   *
+   * **Every other rule must skip them, in its own body.** A retained issue reads
+   * `closed`, which most gates already refuse, and inheriting that would leave the
+   * safety of half the rule book resting on a filter none of them names. Absent or
+   * empty means every issue in the world came from the connector.
+   */
+  retainedIssues?: number[];
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: Task[];
   agents: Agent[];

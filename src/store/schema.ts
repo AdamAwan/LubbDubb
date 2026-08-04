@@ -444,25 +444,38 @@ CREATE TABLE IF NOT EXISTS work_item_ignores (
   created_at TEXT NOT NULL
 );
 
--- A goal the operator keeps on the Goal Floor after it finished, until they
--- dismiss it (issue #203). The floor is otherwise built from the live world, and
--- a completed goal leaves it the moment the tracker stops returning the issue
--- (closed by hand) or its watch tag comes off — taking with it the one way in to
--- the run's report. So a completed goal is recorded here while it is still live,
--- and shown from this row even once the world has forgotten it.
+-- One run of the harness at a goal (issue #234), from the first pulse that saw
+-- work under it until the operator dismisses it.
 --
--- Not a column on retrospectives/issue_conclusions: retention is a cockpit
--- verdict re-read every snapshot, those are the run's own records, and a
--- dismissal must not depend on which report a goal happened to produce. Keyed on
--- the issue origin, so recording twice is one row (completed_at frozen) and
--- dismissing is a one-way write. Fresh CREATE TABLE, so no migrate() entry.
-CREATE TABLE IF NOT EXISTS floor_completions (
-  origin_ref   TEXT PRIMARY KEY,     -- "issue:12"
-  issue_number INTEGER NOT NULL,
-  title        TEXT NOT NULL,        -- captured while the issue is still live
-  completed_at TEXT NOT NULL,        -- first observed complete; frozen across re-records
-  dismissed_at TEXT,                 -- null until the operator dismisses; one-way
-  updated_at   TEXT NOT NULL
+-- It replaces floor_completions (#203), which recorded a *completion* and so
+-- was minted only for a goal already finished while its issue was still live.
+-- Two things were wrong with that. A goal nobody finished — abandoned, or its
+-- ticket closed mid-flight — was never recorded at all, so there was nothing to
+-- dismiss; and the row retained the *card* while ctx.world.issues still came
+-- straight off the tracker, so after a close the harness could draw a goal it
+-- could no longer act on. This row is what the dispatcher's issue list is
+-- unioned with, so the assessor and the retrospective — both of which come
+-- *after* a merge — still run once the ticket is closed.
+--
+-- The five snapshot columns are the issue as it last stood while live: a
+-- retained run is dispatched from, so its body feeds the assessor's and the
+-- retro's prompts and its labels feed every watch gate. migrate() backfills
+-- this table from floor_completions and drops it — a live database holds
+-- dismissals the operator has already made, and losing one resurrects a card
+-- they cleared.
+CREATE TABLE IF NOT EXISTS issue_runs (
+  origin_ref      TEXT PRIMARY KEY,  -- "issue:12"
+  issue_number    INTEGER NOT NULL,
+  title           TEXT NOT NULL,     -- captured while the issue is still live
+  body            TEXT NOT NULL,     -- and so is the rest of the snapshot
+  labels          TEXT NOT NULL,     -- JSON array
+  linked_pr       INTEGER,
+  work_item_state TEXT,
+  started_at      TEXT NOT NULL,     -- first pulse with work under this origin; frozen
+  completed_at    TEXT,              -- first observed complete; frozen. Null while it is not
+  outcome         TEXT,              -- 'judged' | 'abandoned', stamped at dismissal
+  dismissed_at    TEXT,              -- null until the operator dismisses; one-way
+  updated_at      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);

@@ -98,9 +98,18 @@ answer without leaving the file you added the column's reader to. Current entrie
 | `plans`      | `plans.ts`     | `risks`, `out_of_scope`, `document`, `discussing`                                                              |
 | `plan_parts` | `plans.ts`     | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
 
+**One migration is not an `ALTER`.** `adoptFloorCompletions()` carries #203's `floor_completions`
+into `issue_runs` and drops it (#234). A reshape rather than a column: `completed_at` was `NOT NULL`
+and a run minted at pickup has no completion, so stretching the column to mean two things would leave
+"minted" and "finished" indistinguishable on exactly the databases with history in them. It is guarded
+on `issue_runs` being **empty**, not on the old table existing, so a second boot cannot overwrite
+refreshed snapshots with the old shape's stale titles, and it runs in one transaction — carrying
+`dismissed_at` is the load-bearing part, since a backfill that silently dropped the operator's
+dismissals would put every cleared card back on the floor with the dispatcher acting on it again.
+
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
-`agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`, `scratch_entries`, `retrospectives`, `floor_completions`, `priority_overrides`, `work_nodes`,
+`agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`, `scratch_entries`, `retrospectives`, `issue_runs`, `priority_overrides`, `work_nodes`,
 `work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
 migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
 has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the fields above, which
@@ -129,7 +138,7 @@ introduced.
 | `issue_assays`       | Whether an issue's goal text can be worked from at all, judged before anything is dispatched. Gates the funnel; expires when the text changes or the world moves.                                         | `origin_ref` is `PRIMARY KEY`; `goal_ref` fingerprints the text judged                             |
 | `scratch_entries`    | The shared per-issue scratchpad: what the agents working one goal left for whoever works it next, and for the retrospective. **Append-only** — no update and no delete exists above the table.            | keyed on `pad_ref` (`issue:<n>`); ties on `created_at` break on `rowid`, which is insertion order  |
 | `retrospectives`     | One write-up per goal, produced after delivery. Gates nothing; nothing in the dispatcher reads it beyond whether a row exists.                                                                            | `origin_ref` is `PRIMARY KEY`; upserted, so `created_at` dates the first write-up                  |
-| `floor_completions`  | A finished goal the operator keeps on the Goal Floor until they dismiss it (#203). Recorded while the issue is still live so the title outlives the world forgetting it; gates nothing in the dispatcher. | `origin_ref` is `PRIMARY KEY`; upserted (`completed_at` frozen); `dismissed_at` is a one-way write |
+| `issue_runs`         | One run of the harness at a goal (#203, #234): minted the first pulse it has work under the issue, and living until the operator dismisses it. Carries the issue's title, body, labels, linked PR and workflow state as they last stood while live, because a retained run is **dispatched from** — it is unioned into the dispatcher's issue list, and a dismissal stops it. | `origin_ref` is `PRIMARY KEY`; upserted (`started_at` and `completed_at` frozen); `dismissed_at` is a one-way write that stamps `outcome` |
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.                                                                                                                  | `ref` is `PRIMARY KEY`                                                                             |
 | `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                                                                                                                             | `target_ref` is `PRIMARY KEY`                                                                      |
 | `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.                                                                                                                 | `target_ref` is `PRIMARY KEY`                                                                      |

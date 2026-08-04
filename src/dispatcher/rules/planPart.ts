@@ -46,7 +46,7 @@ export function planPart(s: StageContext): void {
     if (plan.status !== 'active' && !unapproved) continue; // complete/abandoned/single schedule nothing
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) continue;
-    const issue = ctx.world.issues.find((i) => i.number === issueNumber);
+    const issue = s.liveIssue(issueNumber);
     if (!issue || issue.state !== 'open') continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
 

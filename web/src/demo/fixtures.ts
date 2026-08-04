@@ -576,7 +576,7 @@ export function buildDemoState(): DemoSeed {
     // omitted because the wire sends them unconditionally — a demo that left them
     // out was a payload the real cockpit never receives.
     recovery: [],
-    floorCompletions: [],
+    retainedRuns: [],
     flags: [],
     artifactUrls: {},
     files: [],

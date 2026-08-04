@@ -32,7 +32,7 @@ export function planApproval(s: StageContext): void {
     if (plan.status !== 'awaiting_approval') continue;
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) continue;
-    const issue = ctx.world.issues.find((i) => i.number === issueNumber);
+    const issue = s.liveIssue(issueNumber);
     if (!issue || issue.state !== 'open') continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     if (planProposalHold(planProposalRef(plan.originRef), ctx.proposals ?? []) !== null) continue;

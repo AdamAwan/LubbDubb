@@ -5,15 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import type { System } from '../system.js';
-import type {
-  FloorCompletion,
-  Issue,
-  IssueAssay,
-  IssueDelivery,
-  Retrospective,
-  ScratchPadSummary,
-  WorldSnapshot,
-} from '../types.js';
+import type { Issue, IssueAssay, IssueDelivery, Retrospective, ScratchPadSummary, WorldSnapshot } from '../types.js';
 import type {
   CockpitState,
   PromptsPayload,
@@ -31,6 +23,7 @@ import { prHealth } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
+import { retainedRunIssues } from '../floor/runs.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type { IntegrationSelection } from '../integrations/integration.js';
@@ -1005,17 +998,17 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     return { ok: true, finding };
   });
 
-  // Dismiss a finished goal from the Goal Floor (issue #203). The only thing that
-  // removes a retained completion — a pulse or world refresh never drops one — and
-  // it persists across a restart, so the same goals do not reappear. Idempotent:
-  // dismissing an already-dismissed or unrecorded completion is a no-op 409, not an
-  // error state. One-way; an accidental dismissal is undone by the goal re-entering
-  // production, which the floor draws as live work regardless.
-  app.post('/api/issues/:number/floor-dismiss', async (req, reply) => {
+  // End a run (issues #203, #234). The only thing that ends one — no pulse, poll
+  // or ticket close does — and it persists across a restart. Since #234 it stops
+  // the dispatcher as well as removing the card: a dismissed run is not unioned
+  // back into the issue list, so nothing is scheduled for it again. Idempotent:
+  // dismissing an already-dismissed or unrecorded run is a no-op 409, not an error
+  // state. One-way; how it ended (`judged` / `abandoned`) is stamped from the row.
+  app.post('/api/issues/:number/dismiss-run', async (req, reply) => {
     const input = readRequest(req, { params: IssueNumberParams });
     if (!input.ok) return reply.code(400).send({ error: input.error });
-    const dismissed = store.dismissFloorCompletion(issueConclusionOrigin(input.params.number));
-    if (!dismissed) return reply.code(409).send({ error: 'no retained completion to dismiss' });
+    const dismissed = store.dismissIssueRun(issueConclusionOrigin(input.params.number));
+    if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
     hub.broadcast({ type: 'dirty' });
     return { ok: true };
   });
@@ -1603,12 +1596,12 @@ export function buildStateSnapshot(
   const deliveries = store.listDeliveries();
   const deliveriesByOrigin = new Map(deliveries.map((d) => [d.originRef, d]));
   const deliveryWindow = deliverySignalQuery(deliveries);
-  // Finished goals the operator is keeping on the Goal Floor (issue #203), keyed
-  // on the issue origin the completion field below reads off. Retained until
-  // dismissed, and shown even once the tracker has forgotten the issue — see the
-  // synthesis after the issue map.
-  const floorCompletions = store.listFloorCompletions();
-  const completionByOrigin = new Map(floorCompletions.map((c) => [c.originRef, c]));
+  // The harness's runs at each goal (issues #203, #234), keyed on the issue origin
+  // the run field below reads off. Minted at pickup and living until the operator
+  // dismisses them, so a goal is drawn — and acted on — after the tracker has
+  // forgotten the issue; see the retained list after the issue map.
+  const issueRuns = store.listIssueRuns();
+  const runByOrigin = new Map(issueRuns.map((r) => [r.originRef, r]));
   // The negative mirror, keyed the same way — the rows rule `issue-shortfall`
   // reads, so the chip and the rule cannot disagree about what fell short.
   const shortfalls = store.listShortfalls();
@@ -1719,7 +1712,7 @@ export function buildStateSnapshot(
   // and two enrichment paths would drift exactly on a finished goal.
   const enrichIssue = (issue: Issue) => {
     const origin = issueConclusionOrigin(issue.number);
-    const completion = completionByOrigin.get(origin);
+    const run = runByOrigin.get(origin);
     return {
       ...issue,
       pickup: issuePickupStatus(issue, pickupCtx),
@@ -1744,27 +1737,21 @@ export function buildStateSnapshot(
       // The shared pad the agents on this goal left each other — the reading, for
       // the retrospective's reason: the trail is fetched when a reader opens it.
       scratchpad: padReading(padsByOrigin.get(origin)),
-      // Whether the operator is keeping this finished goal on the floor, and
-      // whether they have dismissed it (issue #203). Absent when nothing has
-      // recorded a completion, so the floor's retention gate reads three states —
-      // live, retained, dismissed — off one optional field.
-      completion: completion ? { at: completion.completedAt, dismissed: completion.dismissedAt !== null } : undefined,
+      // The harness's run at this goal (issues #203, #234) — when it started, when
+      // it was first observed finished, and whether the operator has ended it.
+      // Absent when the harness has never had work under the goal, so the floor
+      // reads four states — untouched, running, finished, dismissed — off one
+      // optional field.
+      run: run
+        ? {
+            startedAt: run.startedAt,
+            completedAt: run.completedAt,
+            outcome: run.outcome,
+            dismissed: run.dismissedAt !== null,
+          }
+        : undefined,
     };
   };
-  // A finished goal the world has forgotten, rebuilt from its stored completion so
-  // `enrichIssue` can draw it exactly as it would a live one. `state: 'closed'` is
-  // what makes `issuePickupStatus` report `done`; the records it needs
-  // (conclusion, delivery, retrospective) are keyed on the origin and survive the
-  // world, so they are read there, not carried on this stub.
-  const synthCompletedIssue = (c: FloorCompletion): Issue => ({
-    id: `issue-${c.issueNumber}`,
-    number: c.issueNumber,
-    title: c.title,
-    body: '',
-    labels: [],
-    state: 'closed',
-    linkedPrNumber: null,
-  });
   return {
     config: {
       heartbeatIntervalMs: config.heartbeatIntervalMs,
@@ -1830,16 +1817,15 @@ export function buildStateSnapshot(
       // had deliberately moved back to a pickup state.
       issues: world.issues.map(enrichIssue),
     },
-    // Finished goals kept on the Goal Floor after the tracker forgot the issue
-    // (issue #203) — closed by hand, or the watch tag removed. Synthesized from
-    // the stored completion so the floor keeps the one way in to the run's report,
-    // and enriched through the *same* path as a live issue so a retained card and
-    // a live one cannot disagree about what a goal's records say. Dismissed and
-    // still-present completions are not here: the former is not retained, the
-    // latter already rides the world list above (with its `completion` field).
-    floorCompletions: floorCompletions
-      .filter((c) => c.dismissedAt === null && !world.issues.some((i) => i.number === c.issueNumber))
-      .map((c) => enrichIssue(synthCompletedIssue(c))),
+    // Runs whose issue the tracker no longer returns (issues #203, #234) — closed
+    // by hand, or the watch tag removed. Rebuilt from the run's own snapshot by
+    // the *same* `retainedRunIssues` the dispatcher unions into its issue list, so
+    // the card the operator sees and the subject the harness acts on are one
+    // thing; and enriched through the same path as a live issue, so the two cannot
+    // disagree about what a goal's records say. Dismissed and still-present runs
+    // are not here: the former is over, the latter already rides the world list
+    // above (with its `run` field).
+    retainedRuns: retainedRunIssues(issueRuns, world.issues).map(enrichIssue),
     // The plan graph, which until now existed only in the database: the per-issue
     // chip could say "2/5 parts merged" and nothing could say *which* five. The
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.

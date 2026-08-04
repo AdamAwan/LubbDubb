@@ -253,15 +253,18 @@ it, so it expires on the next edit exactly as an agent's does; an issue absent f
 a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
 no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict.
 
-### `POST /api/issues/:number/floor-dismiss`
+### `POST /api/issues/:number/dismiss-run`
 
-Take a finished goal off the Goal Floor (issue #203). A completed goal is otherwise retained there —
-recorded server-side while it is still live, and drawn even once the tracker has forgotten the issue —
-so the operator can still open its report; this is the **one** thing that removes it. No body. The
-write is one-way and idempotent: dismissing a goal with no retained completion, or one already
-dismissed, is a **409** rather than an error state, and the dismissal persists across a restart so the
-goal does not reappear. The report itself is untouched — the row is the card, not the write-up. 400 on
-a non-integer issue number.
+End the harness's run at a goal (issues #203, #234). A run is otherwise retained — minted while the
+issue is still live, and drawn *and acted on* even once the tracker has forgotten the issue — so this
+is the **one** thing that ends it. No body. Since #234 it is terminal for the dispatcher as well as
+for the card: a dismissed run is not unioned back into the issue list, so nothing further is
+scheduled for the goal, which is what makes this the way to abandon one. How it ended is stamped from
+the row — `judged` if the harness had judged the work, `abandoned` if it had not — so the outcome is
+never claimed beyond the evidence. The write is one-way and idempotent: dismissing a goal with no run,
+or one already dismissed, is a **409** rather than an error state, and the dismissal persists across a
+restart. The report itself is untouched — the row is the run, not the write-up. 400 on a non-integer
+issue number.
 
 ### `GET /api/work`
 
@@ -592,7 +595,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                   |
 | `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                               |
 | `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                           |
-| `floorCompletions`   | Finished goals kept on the Goal Floor whose issue the world has forgotten (#203), synthesized from their stored records through the same per-issue enrichment a live one takes. |
+| `retainedRuns`       | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
 | `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                        |
 | `tasks`              | Every task.                                                                                                                                                                 |
 | `jobs`               | Operator jobs, newest first.                                                                                                                                                |

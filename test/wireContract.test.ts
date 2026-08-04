@@ -105,7 +105,7 @@ test('a real snapshot is the cockpit AppState, with no cast in between', async (
   // live fetch — and every list the wire promises is still present.
   assert.equal(asContract.worldObservedAt, null);
   assert.deepEqual(asContract.world.issues, []);
-  for (const key of ['recovery', 'floorCompletions', 'plans', 'planParts', 'stacks', 'flags', 'files'] as const) {
+  for (const key of ['recovery', 'retainedRuns', 'plans', 'planParts', 'stacks', 'flags', 'files'] as const) {
     assert.ok(Array.isArray(asContract[key]), `${key} is always shipped, never omitted`);
   }
   system.store.close?.();

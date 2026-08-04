@@ -647,15 +647,55 @@ export interface IssueConclusion {
  * way until `dismissedAt` is set. Dismissal is one-way and persists across a
  * restart, so the same finished goals do not reappear.
  */
-export interface FloorCompletion {
+/**
+ * How a run ended, stamped at the moment it is dismissed (issue #234): the
+ * harness had judged the work, or the operator abandoned it. Derived from the
+ * row rather than passed in — a run with a completion instant was judged, one
+ * without was abandoned — so the two cannot be claimed independently of the
+ * evidence.
+ */
+export type IssueRunOutcome = 'judged' | 'abandoned';
+
+/**
+ * One run of the harness at a goal, from the first pulse that saw work under it
+ * to the operator's dismissal (issue #234).
+ *
+ * A run's life is **not** the tracker's answer. The tracker returns open issues,
+ * so a ticket closed by hand — often by the very PR that delivered it — used to
+ * take the whole goal out of `ctx.world.issues` mid-workflow, and the assessor
+ * and the retrospective that come *after* a merge never ran. The row is minted at
+ * pickup and lives until dismissed, which is also what gives an **abandoned**
+ * goal something to dismiss: it never completes, so a record minted on completion
+ * alone was never written for one.
+ *
+ * The five snapshot fields are the issue as it last stood while live. They are
+ * here because a retained run is dispatched from: `issue-assess` and `issue-retro`
+ * interpolate the body into their prompts, and every rule reads the labels through
+ * the watch gate — a stub with neither would put an assessor on a goal it cannot
+ * read, and hide a retained run from the gate that decides whether the operator
+ * still wants it worked.
+ */
+export interface IssueRun {
   /** The issue, as `issue:<n>` — the same origin every record and gate keys on. */
   originRef: string;
   issueNumber: number;
   /** The goal's title, captured while the issue was still in the world. */
   title: string;
-  /** When it was first observed complete; frozen across re-records. */
-  completedAt: string;
-  /** Null until the operator dismisses it — the one thing that removes it. */
+  /** Its description, captured the same way — what the assessor and the retro read. */
+  body: string;
+  /** Its labels, captured the same way — what every watch/ignore gate reads. */
+  labels: string[];
+  /** The PR that resolved it, captured the same way. */
+  linkedPrNumber: number | null;
+  /** The provider's native workflow state, where it has one; null otherwise. */
+  workItemState: string | null;
+  /** The first pulse the harness saw work under this origin. */
+  startedAt: string;
+  /** When the goal was first observed complete; frozen. Null while it is not. */
+  completedAt: string | null;
+  /** How it ended, stamped at dismissal and never before. */
+  outcome: IssueRunOutcome | null;
+  /** Null until the operator dismisses it — the one thing that ends a run. */
   dismissedAt: string | null;
   updatedAt: string;
 }

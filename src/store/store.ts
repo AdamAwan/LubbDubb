@@ -18,7 +18,7 @@ import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
 import { GraphStore } from './graph.js';
-import { FloorStore } from './floor.js';
+import { adoptFloorCompletions, FloorStore } from './floor.js';
 import type {
   Agent,
   AgentFile,
@@ -34,7 +34,7 @@ import type {
   Finding,
   FindingInput,
   FindingStatus,
-  FloorCompletion,
+  IssueRun,
   IssueConclusion,
   IssueDelivery,
   IssueShortfall,
@@ -105,6 +105,11 @@ export class Store {
     for (const columns of [TASK_COLUMNS, AGENT_COLUMNS, DECISION_COLUMNS, FINDING_COLUMNS, PLAN_COLUMNS]) {
       ensureColumns(this.db, columns);
     }
+    // The one migration that is not a column: #203's `floor_completions` becomes
+    // #234's `issue_runs`. Here for the same reason the pass above is — before any
+    // module is constructed, let alone reads — and it carries the operator's
+    // standing dismissals, which is what stops every cleared card coming back.
+    adoptFloorCompletions(this.db);
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
@@ -521,15 +526,15 @@ export class Store {
     return this.graph.listWorkItemIgnores();
   }
 
-  // -- Goal Floor completions ----------------------------------------------
+  // -- Runs at a goal -------------------------------------------------------
 
-  recordFloorCompletion(input: Parameters<FloorStore['recordFloorCompletion']>[0]): void {
-    this.floor.recordFloorCompletion(input);
+  recordIssueRun(input: Parameters<FloorStore['recordIssueRun']>[0]): void {
+    this.floor.recordIssueRun(input);
   }
-  dismissFloorCompletion(originRef: string): boolean {
-    return this.floor.dismissFloorCompletion(originRef);
+  dismissIssueRun(originRef: string): boolean {
+    return this.floor.dismissIssueRun(originRef);
   }
-  listFloorCompletions(): FloorCompletion[] {
-    return this.floor.listFloorCompletions();
+  listIssueRuns(): IssueRun[] {
+    return this.floor.listIssueRuns();
   }
 }
