@@ -71,6 +71,11 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   existed — and invisible is the whole failure: nothing errors. A brand-new table needs no entry,
   but a table being new **once** does not keep it exempt.
   → [14](docs/spec/14-persistence.md#migrations)
+- **A new issue-verdict writer goes through `Store.recordVerdict`, never a hand-rolled `DELETE`.**
+  Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist
+  is declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself compiles,
+  passes, and silently reintroduces the pairwise drift the matrix replaced.
+  → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
 
 ### Tests
 
