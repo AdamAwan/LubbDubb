@@ -540,7 +540,12 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
     reason: 'Small after all.',
   });
   assert.equal(fixed.isError, false);
-  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'single');
+  // `awaiting_approval`, not `single`: this system takes the default
+  // `requireApproval`, and the gate is on **both** arms — a single verdict is a
+  // verdict about shape too, and the planner is told so rather than left assuming
+  // its issue is being worked.
+  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
+  assert.match(fixed.text, /nothing is scheduled until an operator approves it/);
   system.store.close();
 });
 

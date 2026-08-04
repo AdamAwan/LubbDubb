@@ -88,8 +88,12 @@ export function ingestPlanDocument(
     plan,
     status,
     retired: retire.map((p) => p.slug),
+    // `active` is the *overridden* single, not merely "not `single`":
+    // `awaiting_approval` is the verdict honoured and gated, and reporting that as
+    // an override would tell the planner and the operator its verdict was refused
+    // by the world when it is simply waiting for a human.
     overriddenSingle:
-      doc.verdict === 'single' && status !== 'single' ? { liveParts: surviving.filter(partHasWork).length } : null,
+      doc.verdict === 'single' && status === 'active' ? { liveParts: surviving.filter(partHasWork).length } : null,
   };
 }
 
