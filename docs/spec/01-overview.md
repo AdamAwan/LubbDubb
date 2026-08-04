@@ -33,7 +33,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 | Action sink (write)  | `src/sink/actionSink.ts`            | The seam side-effectful actions are written through                    |
 | Integrations         | `src/integrations/`                 | Per-capability providers (`fake`, `github`, `azure`) behind both seams |
 | Harness              | `src/harness.ts`                    | The pulse: snapshot → diff → reconcile → decide → execute              |
-| Dispatcher           | `src/dispatcher/`                   | Decides what to do; deterministic rules or an LLM                      |
+| Dispatcher           | `src/dispatcher/`                   | Decides what to do, by walking an ordered pipeline of named rules      |
 | Executor             | `src/executor/actionExecutor.ts`    | Turns a validated action plan into effects, applying the guard rails   |
 | Agent manager        | `src/agents/agentManager.ts`        | Owns the live agent fleet: spawn, stream, park, answer, kill, reap     |
 | Agent runtimes       | `src/agents/`, `src/pty/`           | Two interchangeable ways to run an agent (stream-JSON, PTY)            |

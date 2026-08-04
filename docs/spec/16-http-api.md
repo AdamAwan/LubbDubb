@@ -135,12 +135,18 @@ refetches → each fan-out fails → recording the error broadcasts another `dir
 
 `{ agentId, transcript }`. 404 when the agent is unknown.
 
-### `GET /api/artifacts/:id`
+### `GET /artifacts/:id`
 
 Serves a local artifact an agent flagged, **addressed by flag id**. Rate-limited to 120/minute.
 Confined, sandboxed and content-typed — see [12](12-artifacts-and-files.md). 404 for an unknown flag,
 a missing agent or a path that escapes confinement; 400 for a URL ref (the cockpit links those
 directly).
+
+**It is deliberately outside the `/api` prefix**, so the prefix guard below does not apply to it, and
+it authorizes itself with a per-flag capability instead. Opening a chip is a browser navigation,
+which cannot carry the bearer token — see
+[12](12-artifacts-and-files.md#the-route-lives-outside-api-and-authorizes-itself-issue-129) for why
+the exception is a separate route rather than a hole in the guard.
 
 ### `POST /api/pulse`
 

@@ -43,6 +43,21 @@ and recording a failure must never throw.
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.
 
+### The stderr mirror sanitises, and only the mirror does
+
+The mirror writes **one line per entry**, so a newline in a value could end that line early and forge
+a second `[lubbdubb:error]` one — and both halves of the header arrive from outside the harness: an
+agent id off a request path, a provider name and exception text off the world.
+
+- **The header is flattened** (`oneLine`), which costs nothing, since a `message` is a sentence by
+  contract.
+- **`detail` is indented, not flattened.** It is deliberately multi-line — that is what it exists for
+  — so it keeps its shape while a forged header line is made visibly a continuation.
+
+The **stored** entry keeps its exact text. The store is structured rows rather than a line-oriented
+stream, and the cockpit renders the value as DOM text, where a newline forges nothing. Sanitising on
+the way in would corrupt the record to protect a transport that is not the record.
+
 ## The decision log
 
 Every action outcome is written by `Store.recordDecision`, which **lifts `action.rule` into the `rule`

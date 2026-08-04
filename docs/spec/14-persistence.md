@@ -146,6 +146,50 @@ repeat refreshes the row rather than duplicating. `getFlag`, `listFlags(agentId)
 without resetting status. `getFinding`, `listFindings(limit=100)`,
 `resolveFinding(id, status, jobId?)`.
 
+### Issue verdicts, and the exclusion matrix
+
+Four tables record a verdict about an issue, keyed on the same `issue:<n>` origin:
+`issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`. Some pairs may coexist
+and some contradict each other, and **which is which is declared once**, in `src/store/verdicts.ts`:
+
+```ts
+VERDICT_EXCLUSIONS: Record<VerdictKind, readonly VerdictKind[]> = {
+  conclusion: ['delivery'],
+  delivery: ['conclusion', 'shortfall'],
+  shortfall: ['delivery'],
+  assay: [],
+};
+```
+
+Writing a verdict clears every verdict its row names, for that origin, in one transaction. The
+private `Store.recordVerdict(kind, upsert, row)` is what applies it, and the four public writers —
+`recordIssueConclusion`, `recordDelivery`, `recordShortfall`, `recordAssay` — keep their names,
+signatures and row composition and call it instead of each hand-rolling a `DELETE`. The reasoning
+per row lives on the declaration; the summary is that a delivery and a conclusion are two answers to
+one question, a delivery and a shortfall are two polarities of one question, a shortfall spares the
+conclusion (that is the working agent's own statement about its own run, and
+`resolveIssueConclusion` ranks the two instead), and an assay answers a different question entirely.
+
+Three properties are why the matrix is data rather than prose (#222):
+
+- **`Record<VerdictKind, …>`**, so a fifth verdict table is a compile error until its row is stated.
+  Auditing four writers for a 5×5 matrix by inspection is the thing that does not scale.
+- **A deliberate "clears nothing" is an explicit empty entry.** As four inline `DELETE`s, `assay`
+  clearing nothing and `shortfall` not clearing conclusions looked identical — an absent statement —
+  and meant different things.
+- **The declaration is dependency-free** (no SQLite, no `Store`), so `test/verdictMatrix.test.ts`
+  walks it rather than re-typing it: a fixture map typed `Record<VerdictKind, Fixture>` asserts every
+  cell in both polarities, and covers a fifth table on the day it is added rather than when somebody
+  notices. It states only which rows may _exist_ together; which wins where two may coexist stays
+  `resolveIssueConclusion`'s question.
+
+`recordVerdict` deliberately does **not** compose the row. The four are not the same shape in the
+ways that matter — a conclusion preserves `created_at` where the others preserve `decided_at`, a
+shortfall normalises `part_slug` against `cause`, an assay keeps `comment_ref` only while `goal_ref`
+is unchanged — so a version of it that owned the row would be a `switch (kind)`: the same four
+half-rows, moved. The boundary is exactly what is uniform: an upsert keyed on `origin_ref`, plus a
+set of sibling rows to delete, in one transaction.
+
 ### Plans
 
 `upsertPlan`, `getPlan`, `getPlanByOrigin`, `listPlans`, `setPlanStatus`, `setPlanDiscussing(id,
