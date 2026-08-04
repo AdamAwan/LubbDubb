@@ -119,8 +119,8 @@ export interface Config {
   issueInReviewState?: string;
   /**
    * The planning funnel for multi-PR issues. **On by default**: every watched open
-   * issue gets a planning agent before any implementation work, and a `parts`
-   * verdict is put to you before its agents are spent (`requireApproval`). Off
+   * issue gets a planning agent before any implementation work, and its verdict —
+   * one PR or several — is put to you before any agent is spent (`requireApproval`). Off
    * leaves it out entirely — rule `issue-pickup` un-narrowed, no planner ever dispatched,
    * behaviour exactly what it is without plans. Deep-merged, so one field can be
    * set alone. Only the `rule` dispatcher implements the funnel.
