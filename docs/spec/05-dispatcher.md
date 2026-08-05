@@ -362,7 +362,10 @@ Opt-in: it fires only when the operator set **both** `issueInReviewState` and a 
 issues have none, so it is a no-op for them). It never fires on a closed item.
 
 - Item in a pickup state **and** (an open PR exists for it, or its plan is decomposed) → move it to
-  `issueInReviewState`.
+  `issueInReviewState`. Decomposed is `partsPlanFor`, which asks the plan's **parts**, not its status
+  ([08](08-planning.md#shape-is-the-parts)): a plan being delivered as one pull request is `active`
+  too, and reading that as decomposed would park its work item in the review state for the life of a
+  plan that schedules nothing.
 - Item in `issueInReviewState` with no open PR **and an explicit `more_work` conclusion** → move it
   back to the **first** entry of `issuePickupStates`. There is no separate config for the return
   state: the first pickup state is the operator's own "start here".
@@ -435,8 +438,10 @@ It fires for issue N when all of:
   driven off `eligibleIssues`, for rule `plan-part`'s reason — that list applies the workflow-state
   gate, and the Azure case this must cover is precisely an item rule `work-item-in-review` parked in
   the review state.
-- No `delivered` verdict stands, no open PR, and no plan still scheduling something
-  (`planning`/`active`/`awaiting_approval`).
+- No `delivered` verdict stands, no open PR, and no plan still scheduling something — `planInFlight`
+  (`src/plans/parts.ts`), which is `planning`/`awaiting_approval`, or `active` **with live parts**.
+  The shape matters here: an `active` plan with none is the single-PR arm, and its one PR having been
+  worked is the case this rule exists for ([08](08-planning.md#shape-is-the-parts)).
 - Nothing live on `issue:N` or any `issue:N:*` origin.
 - **At least one task has ever existed** on an origin that could have _delivered_ something
   (`hasPriorWork`).

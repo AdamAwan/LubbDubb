@@ -334,9 +334,10 @@ class DemoServer {
     const plan = (this.state.plans ?? []).find((p) => p.id === planId);
     const parts = (this.state.planParts ?? []).filter((p) => p.planId === planId && p.status !== 'retired');
     const started = parts.some((p) => ['dispatched', 'in_review', 'merged', 'concluded'].includes(p.status));
-    if (plan?.status === 'active' && !started) {
+    if (plan?.status === 'active' && parts.length > 0 && !started) {
+      // Retiring the parts *is* the collapse: the shape is the live part list, so
+      // the status stays `active` — the same write the real route makes.
       for (const part of parts) part.status = 'retired';
-      plan.status = 'single';
       plan.updatedAt = new Date().toISOString();
       this.dirty();
     }

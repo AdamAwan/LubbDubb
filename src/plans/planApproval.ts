@@ -1,6 +1,6 @@
 import type { Store } from '../store/store.js';
 import type { PlanPart } from '../types.js';
-import { amendedPlanStatus, liveParts, partsToRetire, releasedPlanStatus } from './parts.js';
+import { amendedPlanStatus, liveParts, partsToRetire, planShape } from './parts.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { abandonBlockers } from './planWedge.js';
 import { followupPartInput } from '../delivery/shortfall.js';
@@ -96,9 +96,9 @@ interface PlanSettlement {
  * `awaiting_approval` was never anything but the released status with the gate
  * closed.
  *
- * **Which** released status is {@link releasedPlanStatus}'s answer, not `active`
- * unconditionally: a released single verdict is `single`, so rule `issue-pickup`
- * works the issue whole. `active` on a plan with no parts would park it — see there.
+ * `active` on **either** arm: which arm it is, is the parts, and rule
+ * `issue-pickup` reads that shape rather than the status — so a released single
+ * verdict is worked whole without the status having to say so.
  */
 export function releasePlan(store: Store, planId: string, originRef: string): PlanSettlement {
   const plan = store.getPlan(planId);
@@ -106,12 +106,11 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing released` };
   const parts = liveParts(store.listPlanParts(planId));
-  const status = releasedPlanStatus(parts);
-  store.setPlanStatus(planId, status);
+  store.setPlanStatus(planId, 'active');
   return {
     ok: true,
     detail:
-      status === 'single'
+      planShape(parts) === 'single'
         ? `released the single-pull-request plan for ${originRef}; the issue is now picked up whole`
         : `released the ${parts.length}-part plan for ${originRef}; its parts are now schedulable`,
   };
@@ -185,6 +184,15 @@ export function abandonDecomposition(store: Store, planId: string, originRef: st
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not active — nothing changed` };
 
   const parts = store.listPlanParts(planId);
+  // The status no longer carries the shape, so `active` alone no longer means
+  // "decomposed": an issue already being worked whole reaches here and would
+  // otherwise be answered `ok` for retiring nothing at all.
+  if (planShape(parts) === 'single')
+    return {
+      ok: false,
+      detail: `plan ${planId} has no live parts — ${originRef} is already worked as one pull request`,
+    };
+
   const blockers = abandonBlockers(parts);
   if (blockers.length > 0)
     return {
@@ -194,9 +202,10 @@ export function abandonDecomposition(store: Store, planId: string, originRef: st
         `the flat branch — replan instead, or let those parts finish`,
     };
 
+  // Retiring the parts *is* the collapse — the shape is the live part list, so
+  // there is no second status write that could disagree with it.
   const retire = liveParts(parts);
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
-  store.setPlanStatus(planId, 'single');
   return {
     ok: true,
     detail: `retired ${retire.length} unstarted part(s); ${originRef} falls back to a single pull request`,
@@ -227,13 +236,12 @@ export function refusePlan(store: Store, planId: string, originRef: string, note
   const retire = partsToRetire(parts, []);
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
   const surviving = survivorsOf(parts, retire);
-  const status = amendedPlanStatus('single', surviving);
-  store.setPlanStatus(planId, status);
+  store.setPlanStatus(planId, amendedPlanStatus('single', surviving));
 
   return {
     ok: true,
     detail:
-      status === 'single'
+      planShape(surviving) === 'single'
         ? `retired ${retire.length} unstarted part(s); ${originRef} falls back to a single pull request`
         : `retired ${retire.length} unstarted part(s); ${surviving.length} part(s) already in flight keep running`,
   };

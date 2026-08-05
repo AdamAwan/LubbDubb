@@ -31,7 +31,7 @@ function planRow(fields: Partial<Plan> = {}): Plan {
     id: 'plan_1',
     originRef: 'issue:12',
     title: 'Add a widget',
-    status: 'single',
+    status: 'active',
     reason: null,
     risks: null,
     outOfScope: null,
@@ -220,7 +220,7 @@ test('a pickup agent is handed what the earlier agents on its issue wrote down',
     system.store.upsertPlan({
       originRef: 'issue:1',
       title: 'Ship the thing',
-      status: 'single',
+      status: 'active',
       reason: 'One PR.',
       document: 'The registry is the only place that knows about the tag.',
     });

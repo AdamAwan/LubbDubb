@@ -1,4 +1,13 @@
-import type { Issue, IssueConclusion, IssueDelivery, IssueRun, IssueShortfall, Plan, Task } from '../types.js';
+import type {
+  Issue,
+  IssueConclusion,
+  IssueDelivery,
+  IssueRun,
+  IssueShortfall,
+  Plan,
+  PlanPart,
+  Task,
+} from '../types.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { hasPriorWork } from '../delivery/assessment.js';
 
@@ -54,13 +63,17 @@ interface CompletionSignals {
   deliveries: readonly IssueDelivery[];
   shortfalls: readonly IssueShortfall[];
   plans: readonly Plan[];
+  /** The plans' parts — a plan's shape, which the conclusion resolver reads. */
+  planParts: readonly PlanPart[];
 }
 
 export function isGoalComplete(issueNumber: number, signals: CompletionSignals): boolean {
   const origin = issueConclusionOrigin(issueNumber);
+  const plan = signals.plans.find((p) => p.originRef === origin) ?? null;
   const resolved = resolveIssueConclusion(
     signals.conclusions.find((c) => c.originRef === origin) ?? null,
-    signals.plans.find((p) => p.originRef === origin) ?? null,
+    plan,
+    plan ? signals.planParts.filter((p) => p.planId === plan.id) : [],
     signals.shortfalls.find((s) => s.originRef === origin) ?? null,
   );
   if (resolved.verdict === 'more_work') return false;

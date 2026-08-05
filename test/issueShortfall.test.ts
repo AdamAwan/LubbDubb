@@ -19,7 +19,17 @@ import { proposalHold } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
-import type { Agent, Issue, IssueConclusion, IssueShortfall, Plan, Proposal, Task, WorldEvent } from '../src/types.js';
+import type {
+  Agent,
+  Issue,
+  IssueConclusion,
+  IssueShortfall,
+  Plan,
+  PlanPart,
+  Proposal,
+  Task,
+  WorldEvent,
+} from '../src/types.js';
 
 // Issue #159 — the assessor's negative verdict, and what it drives.
 //
@@ -106,7 +116,7 @@ test('a shortfall outranks the working agent’s own declaration without erasing
   // overwrote the agent's note, author and timestamp — and the resolver read
   // `by: 'assessor'` and `by: 'agent'` through one arm with no precedence.
   const agentSaid = conclusionRow({ verdict: 'done', by: 'agent', note: 'I delivered all of it' });
-  const resolved = resolveIssueConclusion(agentSaid, null, shortfallRow());
+  const resolved = resolveIssueConclusion(agentSaid, null, [], shortfallRow());
   assert.equal(resolved.verdict, 'more_work');
   assert.equal(resolved.by, 'assessor', 'the assessor is later and better informed');
   assert.equal(resolved.note, 'the CLI half is missing');
@@ -118,6 +128,7 @@ test('the operator’s toggle still wins over an assessment — it is the escape
   const resolved = resolveIssueConclusion(
     conclusionRow({ verdict: 'done', by: 'operator', note: 'I have tested it, it is fine' }),
     null,
+    [],
     shortfallRow(),
   );
   assert.equal(resolved.verdict, 'done');
@@ -126,8 +137,8 @@ test('the operator’s toggle still wins over an assessment — it is the escape
 
 test('with no shortfall the resolver is byte-for-byte what it was', () => {
   const agentSaid = conclusionRow({ verdict: 'done', by: 'agent', note: 'done' });
-  assert.deepEqual(resolveIssueConclusion(agentSaid, null), resolveIssueConclusion(agentSaid, null, null));
-  assert.equal(resolveIssueConclusion(null, null).verdict, 'undeclared');
+  assert.deepEqual(resolveIssueConclusion(agentSaid, null, []), resolveIssueConclusion(agentSaid, null, [], null));
+  assert.equal(resolveIssueConclusion(null, null, []).verdict, 'undeclared');
 });
 
 // -- decision 5: the operator stays in the loop -------------------------------
@@ -554,6 +565,32 @@ function planRow(over: Partial<Plan> = {}): Plan {
   };
 }
 
+/** One live part, so `plan_1` reads as the decomposition these tests mean. */
+function partRow(): PlanPart {
+  return {
+    id: 'plan_1:schema',
+    planId: 'plan_1',
+    slug: 'schema',
+    seq: 1,
+    title: 'Schema',
+    scope: 'src/store/',
+    rationale: null,
+    acceptance: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    dependsOn: [],
+    branch: null,
+    prNumber: 41,
+    status: 'in_review',
+    blockedReason: null,
+    taskId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
 function proposalRow(over: Partial<Proposal>): Proposal {
   return {
     id: 'prop_1',
@@ -592,6 +629,11 @@ function task(over: Partial<Task> = {}): Task {
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
+    // The plan rows above are decompositions, and a plan's **shape** is its parts:
+    // with none, `plan_1` would be a plan being delivered as one pull request and
+    // rule `issue-pickup` would work the issue while these assertions counted
+    // dispatches.
+    planParts: [partRow()],
     tasks: [task()],
     agents: [],
     openEscalations: [],

@@ -144,9 +144,9 @@ function PlanCard({
       {plan.reason && <div className="plan-reason">{plan.reason}</div>}
       {parts.length === 0 && (
         <div className="plan-reason">
-          {plan.status === 'single'
-            ? 'One pull request — this issue goes through ordinary pickup.'
-            : 'No parts declared yet.'}
+          {plan.status === 'planning'
+            ? 'No parts declared yet.'
+            : 'One pull request — this issue goes through ordinary pickup.'}
         </div>
       )}
       {parts.map((part, idx) => (

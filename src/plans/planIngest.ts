@@ -2,7 +2,7 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planPartInputs } from './planDocument.js';
-import { amendedPlanStatus, partHasWork, partsToRetire } from './parts.js';
+import { amendedPlanStatus, partHasWork, partsToRetire, singleOverruled } from './parts.js';
 
 /** What an ingestion did, so either caller can report it in its own idiom. */
 interface PlanIngestResult {
@@ -88,12 +88,14 @@ export function ingestPlanDocument(
     plan,
     status,
     retired: retire.map((p) => p.slug),
-    // `active` is the *overridden* single, not merely "not `single`":
-    // `awaiting_approval` is the verdict honoured and gated, and reporting that as
-    // an override would tell the planner and the operator its verdict was refused
-    // by the world when it is simply waiting for a human.
-    overriddenSingle:
-      doc.verdict === 'single' && status === 'active' ? { liveParts: surviving.filter(partHasWork).length } : null,
+    // Asked of the parts, never of the status: an honoured single verdict is
+    // `active` too (the shape is the empty part list), and `awaiting_approval` is
+    // the verdict honoured and gated. Reading either as an override would tell the
+    // planner and the operator its verdict was refused by the world when it was
+    // not.
+    overriddenSingle: singleOverruled(doc.verdict, surviving)
+      ? { liveParts: surviving.filter(partHasWork).length }
+      : null,
   };
 }
 

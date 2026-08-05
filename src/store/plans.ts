@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 import { liveParts, partSettled } from '../plans/parts.js';
 import type { PartOutcomeKind, Plan, PlanPart, PlanPartInput, PlanStatus } from '../types.js';
@@ -299,7 +300,8 @@ export class PlanStore {
    * anything outstanding after that => back to `active` (a replan can add work to a
    * finished plan). Returns the plan **only when the roll-up moved it**, so a caller
    * can treat the return as the "the plan just completed" edge rather than re-deriving
-   * it. A partless plan (`single`, or one still `planning`) is never touched, and a
+   * it. A partless plan — the single-PR arm, or one still `planning` — is never
+   * touched: what finishes that arm is the issue's own delivery, not a roll-up. A
    * retired part is not outstanding work — an amended plan that dropped its last
    * unstarted part is complete, not stuck.
    */
@@ -317,6 +319,26 @@ export class PlanStore {
     if (next === plan.status) return null;
     return this.setPlanStatus(planId, next);
   }
+}
+
+/**
+ * Absorb the retired `single` plan status into `active`.
+ *
+ * `single` was a *shape* wearing a lifecycle status, and the two are not
+ * exclusive: a plan being delivered as one pull request is still being delivered.
+ * Every consumer that switched on status therefore had to know about the shape,
+ * and the one that forgot — `PlanReconciler`, which lists only `active`,
+ * `complete` and `awaiting_approval` — quietly excluded single-PR plans from
+ * reconciliation, so their status comment was never written. The shape is now read
+ * off the live parts (`planShape`), which every one of those rows already carries:
+ * a `single` plan has none.
+ *
+ * A data migration rather than an `ensureColumns` entry — no column changes, the
+ * values in one do. Unconditional and idempotent: a database with no such rows
+ * updates none, and a second boot finds none left.
+ */
+export function absorbSinglePlanStatus(db: Database.Database): void {
+  db.prepare(`UPDATE plans SET status='active' WHERE status='single'`).run();
 }
 
 interface PlanRow {

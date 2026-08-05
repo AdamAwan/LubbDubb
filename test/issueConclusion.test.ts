@@ -10,7 +10,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { conclusionOrigin, issueConclusionOrigin, resolveIssueConclusion } from '../src/issueConclusion.js';
 import { outstandingWorkNote, validateConclusion } from '../src/mcp/conclusion.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
-import type { Agent, IssueConclusion, Plan } from '../src/types.js';
+import type { Agent, IssueConclusion, Plan, PlanPart } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // -- the pure resolver -------------------------------------------------------
@@ -46,29 +46,76 @@ function plan(status: Plan['status']): Plan {
   };
 }
 
+/**
+ * One live part, so a plan under test has a **shape**: the resolver reads the
+ * single-PR arm off an empty part list, not off a status. The tests below are
+ * about a decomposition unless they say otherwise, so that is the default.
+ */
+function partRow(): PlanPart {
+  return {
+    id: 'p1:a',
+    planId: 'p1',
+    slug: 'a',
+    seq: 1,
+    title: 'The a part',
+    scope: 'src/a/',
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    rationale: null,
+    acceptance: null,
+    dependsOn: [],
+    branch: null,
+    prNumber: null,
+    status: 'ready',
+    blockedReason: null,
+    taskId: null,
+    createdAt: 'then',
+    updatedAt: 'now',
+  };
+}
+
+const resolve = (
+  stored: IssueConclusion | null,
+  plan: Plan | null,
+  shortfall: Parameters<typeof resolveIssueConclusion>[3] = null,
+  parts: PlanPart[] = [partRow()],
+): ReturnType<typeof resolveIssueConclusion> => resolveIssueConclusion(stored, plan, parts, shortfall);
+
 test('nothing stored and no plan resolves to undeclared, not to more_work', () => {
-  const r = resolveIssueConclusion(null, null);
+  const r = resolve(null, null);
   assert.equal(r.verdict, 'undeclared');
   assert.equal(r.by, null);
 });
 
 test('a complete plan derives done; an in-flight one derives more_work', () => {
-  assert.equal(resolveIssueConclusion(null, plan('complete')).verdict, 'done');
-  assert.equal(resolveIssueConclusion(null, plan('complete')).by, 'plan');
-  assert.equal(resolveIssueConclusion(null, plan('active')).verdict, 'more_work');
-  assert.equal(resolveIssueConclusion(null, plan('awaiting_approval')).verdict, 'more_work');
+  assert.equal(resolve(null, plan('complete')).verdict, 'done');
+  assert.equal(resolve(null, plan('complete')).by, 'plan');
+  assert.equal(resolve(null, plan('active')).verdict, 'more_work');
+  assert.equal(resolve(null, plan('awaiting_approval')).verdict, 'more_work');
   // `planning` is in flight too: a plan being drawn up is an unsettled
   // decomposition, and the only two ways to reach it — a fresh plan and a replan
   // — are both goals nobody has finished.
-  assert.equal(resolveIssueConclusion(null, plan('planning')).verdict, 'more_work');
-  assert.equal(resolveIssueConclusion(null, plan('planning')).by, 'plan');
+  assert.equal(resolve(null, plan('planning')).verdict, 'more_work');
+  assert.equal(resolve(null, plan('planning')).by, 'plan');
 });
 
-// A `single` verdict is a statement about shape, not about whether the PR has
-// been written — deriving either verdict from it would be a guess.
-test('a single or abandoned plan derives nothing', () => {
-  assert.equal(resolveIssueConclusion(null, plan('single')).verdict, 'undeclared');
-  assert.equal(resolveIssueConclusion(null, plan('abandoned')).verdict, 'undeclared');
+// The single-PR arm and an abandoned plan are both statements about shape, not
+// about whether the PR has been written — deriving either verdict from one would
+// be a guess.
+test('a single-PR or abandoned plan derives nothing', () => {
+  assert.equal(resolve(null, plan('abandoned')).verdict, 'undeclared');
+  // The regression this guards: the single arm used to be its own plan *status*,
+  // which this resolver simply did not list as in flight. Folded into `active`, an
+  // unguarded read makes every issue worked whole say `more_work` for ever —
+  // parking its work item on the way back to pickup and drawing the goal unfinished
+  // however plainly its agent declared otherwise. The shape is the parts.
+  assert.equal(resolve(null, plan('active'), null, []).verdict, 'undeclared');
+  assert.equal(resolve(stored({ verdict: 'done' }), plan('active'), null, []).by, 'agent');
+  // A *gated* single verdict is still in flight: nothing has been worked at all
+  // until a human answers, so this arm is the status, not the shape.
+  assert.equal(resolve(null, plan('awaiting_approval'), null, []).verdict, 'more_work');
 });
 
 // The bug this ordering fixes: an issue worked `single` has one agent, that agent
@@ -78,25 +125,25 @@ test('a single or abandoned plan derives nothing', () => {
 // taken the issue back. Ownership, read backwards.
 test('a plan in flight beats a declaration made before it took the issue back', () => {
   for (const status of ['planning', 'active', 'awaiting_approval'] as const) {
-    const r = resolveIssueConclusion(stored({ verdict: 'done' }), plan(status));
+    const r = resolve(stored({ verdict: 'done' }), plan(status));
     assert.equal(r.verdict, 'more_work', status);
     assert.equal(r.by, 'plan', status);
   }
   // A settled plan does not: an agent saying work remains on an issue whose parts
   // all merged is telling the roll-up something it cannot see.
-  assert.equal(resolveIssueConclusion(stored({ verdict: 'done' }), plan('complete')).verdict, 'done');
-  assert.equal(resolveIssueConclusion(stored({ verdict: 'done' }), plan('single')).by, 'agent');
+  assert.equal(resolve(stored({ verdict: 'done' }), plan('complete')).verdict, 'done');
+  assert.equal(resolve(stored({ verdict: 'done' }), plan('complete')).by, 'agent');
 });
 
 // Arm 1 is still the escape hatch, and it is the only thing above the plan.
 test("the operator's toggle still beats a plan in flight", () => {
-  const r = resolveIssueConclusion(stored({ verdict: 'done', by: 'operator' }), plan('planning'));
+  const r = resolve(stored({ verdict: 'done', by: 'operator' }), plan('planning'));
   assert.equal(r.verdict, 'done');
   assert.equal(r.by, 'operator');
 });
 
 test("an agent's declaration beats the plan derivation", () => {
-  const r = resolveIssueConclusion(stored({ verdict: 'more_work' }), plan('complete'));
+  const r = resolve(stored({ verdict: 'more_work' }), plan('complete'));
   assert.equal(r.verdict, 'more_work');
   assert.equal(r.by, 'agent');
 });
@@ -104,7 +151,7 @@ test("an agent's declaration beats the plan derivation", () => {
 // The escape hatch: an operator looking at a complete plan and saying "there is
 // more to do here" must not be argued with by a derivation.
 test("the operator's toggle beats everything", () => {
-  const r = resolveIssueConclusion(stored({ verdict: 'more_work', by: 'operator' }), plan('complete'));
+  const r = resolve(stored({ verdict: 'more_work', by: 'operator' }), plan('complete'));
   assert.equal(r.verdict, 'more_work');
   assert.equal(r.by, 'operator');
 });
@@ -211,7 +258,7 @@ test('clearing a conclusion deletes the row rather than storing a third verdict'
   system.store.recordIssueConclusion({ originRef: 'issue:12', verdict: 'done', note: 'n', by: 'operator' });
   assert.equal(system.store.clearIssueConclusion('issue:12'), true);
   assert.equal(system.store.getIssueConclusion('issue:12'), null);
-  assert.equal(resolveIssueConclusion(null, null).verdict, 'undeclared');
+  assert.equal(resolve(null, null).verdict, 'undeclared');
   system.store.close?.();
 });
 

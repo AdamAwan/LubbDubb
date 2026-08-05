@@ -176,9 +176,12 @@ export function PlanModal({
             )}
             {live.length === 0 ? (
               <p className="empty">
-                {plan.status === 'single'
-                  ? 'One pull request — this issue goes through ordinary pickup.'
-                  : 'No parts declared yet.'}
+                {/* No live parts *is* the single-PR arm — the shape is the rows,
+                    not the status. Only a plan still being written has none for
+                    the other reason. */}
+                {plan.status === 'planning'
+                  ? 'No parts declared yet.'
+                  : 'One pull request — this issue goes through ordinary pickup.'}
               </p>
             ) : (
               <div>
@@ -271,7 +274,7 @@ export function PlanModal({
                   parts sit beneath: once released, Reject is gone (it settles an
                   `awaiting_approval` plan) and a replan fails back to `parts`, so
                   without this the only exit is the database. */}
-              {plan.status === 'active' && !started && (
+              {plan.status === 'active' && live.length > 0 && !started && (
                 <AsyncButton
                   className="ghost"
                   title="Retire the parts and work this issue as one pull request. Offered only while no part has started."

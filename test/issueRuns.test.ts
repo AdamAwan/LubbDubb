@@ -193,7 +193,7 @@ test('floor_completions is carried into issue_runs, dismissals and all, then dro
 // -- the pure fold -----------------------------------------------------------
 
 test('isGoalComplete reads any of the four completion signals, but not more_work', () => {
-  const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [] };
+  const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [], planParts: [] };
   assert.equal(isGoalComplete(12, none), false);
 
   assert.equal(isGoalComplete(12, { ...none, retrospectiveOrigins: ['issue:12'] }), true, 'a write-up');
@@ -295,7 +295,14 @@ test('isGoalComplete reads any of the four completion signals, but not more_work
 // one resolver: an operator argued with by a derivation, and an assessor's
 // verdict losing to the stale `done` of the agent it was assessing.
 test('a standing verdict of more_work outranks every piece of evidence', () => {
-  const base = { retrospectiveOrigins: ['issue:12'], conclusions: [], deliveries: [], shortfalls: [], plans: [] };
+  const base = {
+    retrospectiveOrigins: ['issue:12'],
+    conclusions: [],
+    deliveries: [],
+    shortfalls: [],
+    plans: [],
+    planParts: [],
+  };
   assert.equal(isGoalComplete(12, base), true, 'the write-up alone is enough');
 
   assert.equal(
@@ -363,6 +370,7 @@ test('a goal whose plan is being re-drawn is not stamped complete', () => {
       },
     ],
     plans: [{ id: 'p1', originRef: 'issue:12', title: '', status: 'planning', discussing: false } as never],
+    planParts: [],
   };
   assert.equal(isGoalComplete(12, signals), false);
   assert.deepEqual(
@@ -383,7 +391,7 @@ test('a goal whose plan is being re-drawn is not stamped complete', () => {
 // The #234 change to what mints a row: pickup, not completion. A goal nobody
 // finished is exactly the one an operator needs something to dismiss.
 test('runsToRecord mints at pickup, with the snapshot a retained run is dispatched from', () => {
-  const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [] };
+  const none = { retrospectiveOrigins: [], conclusions: [], deliveries: [], shortfalls: [], plans: [], planParts: [] };
   const worked = issue({ labels: ['lubbdubb-watch'], linkedPrNumber: 31 });
 
   assert.deepEqual(runsToRecord([worked], [], none), [], 'an untouched goal is not a run');

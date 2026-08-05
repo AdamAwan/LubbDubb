@@ -13,6 +13,7 @@ import {
   partBranch,
   partSettled,
   planIssueNumber,
+  planShape,
 } from './parts.js';
 import type { PlanningPolicy } from './planning.js';
 
@@ -56,6 +57,8 @@ interface PlanReconcilerDeps {
 export class PlanReconciler {
   private lastFetchAt = 0;
   private lastFetchError: string | null = null;
+  /** The last status-comment body sent per plan — see {@link PlanReconciler.writeStatusComment}. */
+  private readonly lastComment = new Map<string, string>();
 
   constructor(private readonly deps: PlanReconcilerDeps) {}
 
@@ -104,7 +107,17 @@ export class PlanReconciler {
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) return;
     const parts = store.listPlanParts(plan.id);
-    if (parts.length === 0) return;
+    // The single-PR arm. There is no part to fold reality onto and no flat-branch
+    // collision to check for — that branch is the one this arm *wants* — but the
+    // plan is being delivered, and it still owes the tracker its status comment.
+    // This used to return, back when the arm was a `single` plan status that never
+    // reached the loop at all: the issue was worked whole and the tracker was never
+    // told anything about it.
+    if (planShape(parts) === 'single') {
+      if (plan.status === 'awaiting_approval') return; // nothing to report until a human answers
+      await this.writeStatusComment(plan, [], issueNumber);
+      return;
+    }
 
     // `refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist — git
     // stores refs as files, so the flat branch blocks the directory. An issue worked
@@ -257,13 +270,21 @@ export class PlanReconciler {
   }
 
   private async writeStatusComment(plan: Plan, parts: PlanPart[], issueNumber: number): Promise<void> {
+    const body = renderPlanComment(plan, parts);
+    // The parts arm gates on observed news before it gets here; the single-PR arm
+    // has no such signal — its body is the verdict, which only a replan changes — so
+    // the body itself is the signal. Memoised rather than stored: a restart costs
+    // one idempotent edit, and a column would be a copy of the comment we already
+    // have a ref to.
+    if (this.lastComment.get(plan.id) === body) return;
     try {
       const result = await this.deps.sink.upsertIssueComment({
         number: issueNumber,
-        body: renderPlanComment(plan, parts),
+        body,
         commentRef: plan.statusCommentRef,
       });
       if (result.ref && result.ref !== plan.statusCommentRef) this.deps.store.setPlanStatusComment(plan.id, result.ref);
+      this.lastComment.set(plan.id, body);
     } catch (err) {
       // Progress reporting must never take the pulse down with it — the plan keeps
       // running, and the failure shows up in the Errors panel.

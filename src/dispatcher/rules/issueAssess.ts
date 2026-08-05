@@ -2,6 +2,7 @@ import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason, openPrForIssue } from '../issuePickup.js';
 import { assessBranch, assessOrigin, hasPriorWork } from '../../delivery/assessment.js';
 import { issueOrigin } from '../../plans/planning.js';
+import { planInFlight } from '../../plans/parts.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
@@ -41,8 +42,17 @@ export function issueAssess(s: StageContext): void {
     if (!hasPriorWork(issue.number, ctx.tasks)) continue;
     // A plan that still schedules something owns the issue — a decomposition in
     // flight is not a finished one, and an unapproved one is not even decided.
+    // `planInFlight`, not a status list: an `active` plan with no live parts is
+    // the single-PR arm, whose one PR having been worked is exactly the case this
+    // rule exists for.
     const plan = s.plansByOrigin.get(issueOrigin(issue.number));
-    if (plan && (plan.status === 'planning' || plan.status === 'active' || plan.status === 'awaiting_approval'))
+    if (
+      plan &&
+      planInFlight(
+        plan,
+        (ctx.planParts ?? []).filter((p) => p.planId === plan.id),
+      )
+    )
       continue;
     // Anything live under the issue — a pickup agent, a planner, a part — means
     // the answer is not yet knowable.

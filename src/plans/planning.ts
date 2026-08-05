@@ -116,9 +116,11 @@ interface PlanRouteInput {
   /** The plan origin's cooldown verdict — {@link plannerVerdict}. */
   verdict: DispatchVerdict;
   /**
-   * How many parts the plan already declares (retired ones excluded). Only read
-   * while a replan is in flight, and only to decide what a *failed* replan falls
-   * back to. Absent = none.
+   * How many parts the plan declares (retired ones excluded). Absent = none.
+   *
+   * This is the plan's **shape**, and it is why the arm is not read off the status
+   * alone: a plan with no live parts is the single arm, whatever else is true of
+   * it. It also decides what a *failed* replan falls back to.
    */
   existingParts?: number;
 }
@@ -131,7 +133,7 @@ interface PlanRouteInput {
  * Without it, "replan" on an issue the funnel already planned would be met with a
  * fifteen-minute cooldown from the original planner (or, worse, an already-spent
  * attempt cap), and the button would appear to do nothing. `planning` is only ever
- * reached by an explicit replan — ingestion writes `single`/`active` — so the
+ * reached by an explicit replan — ingestion writes `active`/`awaiting_approval` — so the
  * narrowed window can't loosen the throttle on a first-time planner.
  *
  * The boundary is **strict**: an attempt stamped in the same millisecond as the
@@ -179,7 +181,12 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   if (!input.planning.enabled) return { route: 'single', failedOpen: false };
   const plan = input.plan;
   if (plan) {
-    if (plan.status === 'single') return { route: 'single', failedOpen: false };
+    // The shape, not a status: a plan being delivered with no live parts *is* the
+    // single arm. Read this way rather than from a `single` status, because a
+    // status that carried the shape made the two exclusive — a single-PR plan
+    // could not also be running, so every stage that asks "is this plan live?"
+    // silently answered no for it.
+    if (plan.status === 'active' && (input.existingParts ?? 0) === 0) return { route: 'single', failedOpen: false };
     // Named rather than folded into `parts`: the two behave identically for
     // pickup (the issue is planned either way) and differently for everything
     // downstream, and this is the one place the arm is decided — so an

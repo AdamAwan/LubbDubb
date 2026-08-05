@@ -1,4 +1,12 @@
-import type { ConclusionAuthor, IssueConclusion, IssueConclusionVerdict, IssueShortfall, Plan } from './types.js';
+import type {
+  ConclusionAuthor,
+  IssueConclusion,
+  IssueConclusionVerdict,
+  IssueShortfall,
+  Plan,
+  PlanPart,
+} from './types.js';
+import { planInFlight } from './plans/parts.js';
 
 /**
  * Whether an issue is finished — one resolved verdict, from the standing
@@ -77,7 +85,8 @@ const UNDECLARED: ResolvedConclusion = { verdict: 'undeclared', by: null, note: 
  *    because the assessor is later and better informed than the agent that
  *    declared its own run, which is the sentence already in
  *    `Store.recordDelivery`'s doc comment, applied consistently.
- * 3. **A plan in flight** — `planning`, `active` or `awaiting_approval` — reads as
+ * 3. **A plan in flight** — `planning`, `awaiting_approval`, or `active` *with
+ *    live parts* — reads as
  *    more work, *above* the stored declaration rather than below it. See
  *    {@link planInFlightVerdict} for why that order is the one this module's own
  *    doctrine asks for.
@@ -101,6 +110,13 @@ const UNDECLARED: ResolvedConclusion = { verdict: 'undeclared', by: null, note: 
 export function resolveIssueConclusion(
   stored: IssueConclusion | null,
   plan: Plan | null,
+  /**
+   * The plan's parts — its **shape**, which arm 3 needs and the status no longer
+   * carries. Required rather than defaulted because either default is a wrong
+   * answer for the other arm: an empty list would read a decomposition as one
+   * pull request, and a non-empty one the reverse.
+   */
+  planParts: readonly PlanPart[],
   shortfall: IssueShortfall | null = null,
 ): ResolvedConclusion {
   // The operator's toggle is the only thing that may contradict an assessment, so
@@ -119,7 +135,7 @@ export function resolveIssueConclusion(
   // Above the stored declaration, not below it: a plan in flight has taken the
   // issue back, and a declaration made before it did is about a delivery attempt
   // the harness has since superseded.
-  const inFlight = planInFlightVerdict(plan);
+  const inFlight = planInFlightVerdict(plan, planParts);
   if (inFlight) return inFlight;
   if (stored) {
     return { verdict: stored.verdict, by: stored.by, note: stored.note, at: stored.updatedAt };
@@ -162,16 +178,22 @@ export function resolveIssueConclusion(
  * same status (`isPlanInDiscussion`) and 409s unless the plan was
  * `awaiting_approval`, so it is in flight on arrival and stays so.
  *
- * `single` is deliberately **not** derived from: it says the issue is delivered as
- * one PR, which is a statement about *shape*, not about whether that PR has been
+ * ## Why the single-PR arm is not in flight
+ *
+ * It is deliberately **not** derived from: it says the issue is delivered as one
+ * PR, which is a statement about *shape*, not about whether that PR has been
  * written. Treating it as `more_work` would be harmless but dishonest, and
- * treating it as `done` would be catastrophic — so a `single` plan leaves the
+ * treating it as `done` would be catastrophic — so a single-PR plan leaves the
  * issue exactly where an unplanned one sits, waiting on its agent to declare.
  * `abandoned` says nothing about completeness either.
+ *
+ * That arm is the **parts**, not the status: an `active` plan with no live parts
+ * is being delivered whole. Reading it off a `single` status was the same fact,
+ * right up until the status had to be two things at once.
  */
-function planInFlightVerdict(plan: Plan | null): ResolvedConclusion | null {
+function planInFlightVerdict(plan: Plan | null, parts: readonly PlanPart[]): ResolvedConclusion | null {
   if (!plan) return null;
-  if (plan.status === 'planning' || plan.status === 'active' || plan.status === 'awaiting_approval') {
+  if (planInFlight(plan, parts)) {
     return {
       verdict: 'more_work',
       by: 'plan',

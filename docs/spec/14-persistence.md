@@ -98,7 +98,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 | `plans`      | `plans.ts`     | `risks`, `out_of_scope`, `document`, `discussing`                                                              |
 | `plan_parts` | `plans.ts`     | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
 
-**One migration is not an `ALTER`.** `adoptFloorCompletions()` carries #203's `floor_completions`
+**Two migrations are not `ALTER`s.** `adoptFloorCompletions()` carries #203's `floor_completions`
 into `issue_runs` and drops it (#234). A reshape rather than a column: `completed_at` was `NOT NULL`
 and a run minted at pickup has no completion, so stretching the column to mean two things would leave
 "minted" and "finished" indistinguishable on exactly the databases with history in them. It is guarded
@@ -106,6 +106,13 @@ on `issue_runs` being **empty**, not on the old table existing, so a second boot
 refreshed snapshots with the old shape's stale titles, and it runs in one transaction — carrying
 `dismissed_at` is the load-bearing part, since a backfill that silently dropped the operator's
 dismissals would put every cleared card back on the floor with the dispatcher acting on it again.
+
+`absorbSinglePlanStatus()` is the other: no column changes, the values in one do —
+`UPDATE plans SET status='active' WHERE status='single'`. `single` was a plan **shape** wearing a
+lifecycle status, which made the two exclusive; the shape is now read off the live parts
+([08](08-planning.md#shape-is-the-parts)). Unconditional and idempotent — a database with no such rows
+updates none, and a second boot finds none left. Both run from `Store`'s constructor beside the
+`ensureColumns` pass, before any module is constructed, let alone reads.
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
@@ -269,10 +276,12 @@ discussing)`, `setPlanStatusComment`, `rollUpPlanStatus(planId)`, `upsertPlanPar
 (merges on slug, **never deletes**), `listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
 `markPartDispatched(id, taskId, branch)`.
 
-`plans.status` is `planning | single | awaiting_approval | active | complete | abandoned`. It is a
-_value_, not a column, so a database from an older build needs no migration: an existing row simply
-never holds the new one. `awaiting_approval` is the approval gate itself — see
-[08](08-planning.md#the-approval-gate).
+`plans.status` is `planning | awaiting_approval | active | complete | abandoned` — the plan's **life**,
+and nothing else. Whether the issue is being delivered as one pull request or several is `planShape`'s
+answer, read off the live `plan_parts` rows ([08](08-planning.md#shape-is-the-parts)); the retired
+`single` status is carried into `active` by `absorbSinglePlanStatus` above. A status value is otherwise
+a _value_, not a column, so adding one needs no migration: an existing row simply never holds the new
+one. `awaiting_approval` is the approval gate itself — see [08](08-planning.md#the-approval-gate).
 
 `upsertPlan` **preserves `risks`/`outOfScope`/`document` on absence** rather than clearing them, the
 same discipline it already applies to `statusCommentRef`: a caller that writes a status without

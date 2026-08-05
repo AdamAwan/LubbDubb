@@ -262,10 +262,13 @@ test('a planner writing plan.json persists the verdict at drain time, for both o
   );
 
   // A `single` verdict is a first-class row too — without it the planner would
-  // re-run on the same issue every cycle.
+  // re-run on the same issue every cycle. It lands `active` with no parts: the
+  // status is the plan's life, the parts are its shape.
   const b = plannerAgent(system, 'issue:13:plan');
   writeThroughHook(system, b, PLAN_FILE, '{"version":1,"verdict":"single","reason":"One PR is plenty."}');
-  assert.equal(system.store.getPlanByOrigin('issue:13')?.status, 'single');
+  const single = system.store.getPlanByOrigin('issue:13')!;
+  assert.equal(single.status, 'active');
+  assert.deepEqual(system.store.listPlanParts(single.id), []);
 
   system.store.close();
 });

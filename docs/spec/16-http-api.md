@@ -501,10 +501,12 @@ Returns `{ ok: true, plan }`.
 
 ### `POST /api/plans/:id/abandon`
 
-No body. 404 when the plan is unknown. **409 unless the plan is `active` and no part has started**
-(`partHasWork`) — the guard is the point, since retiring a part with an agent, a branch or a PR behind
-it would strand real work. Retires every live part and collapses the plan to `single`, so rule `issue-pickup` works
-the issue as one pull request. Broadcasts, runs a cycle. Returns `{ ok: true, detail, plan }`.
+No body. 404 when the plan is unknown. **409 unless the plan is `active`, has live parts, and no part
+has started** (`partHasWork`) — the guard is the point, since retiring a part with an agent, a branch
+or a PR behind it would strand real work, and a plan with no parts is already being worked whole.
+Retiring every live part **is** the collapse — the shape is the part list
+([08](08-planning.md#shape-is-the-parts)) — so rule `issue-pickup` then works the issue as one pull
+request. Broadcasts, runs a cycle. Returns `{ ok: true, detail, plan }`.
 
 This is the way out of a decomposition approved onto an issue whose flat `issue/<n>` branch was
 already taken: its parts block on the ref collision, and once released neither Reject (which settles
