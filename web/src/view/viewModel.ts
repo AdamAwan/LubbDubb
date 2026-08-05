@@ -48,6 +48,18 @@ export interface CockpitView {
   proposalFor: ReadonlyMap<string, Proposal>;
   /** Agents by id — the join behind an escalation's staleness reading. */
   agentById: ReadonlyMap<string, Agent>;
+  /**
+   * The open question an agent is waiting on an answer to, keyed by agent id —
+   * the join that lets a skin draw the ask *on the bot* rather than only in an
+   * inbox. One escalation rather than a list because the harness parks an agent
+   * at most once at a time (`system.ts`'s `waiting` handler returns early while
+   * one is open), so a list would promise a plurality that cannot occur.
+   *
+   * Derived from the same `status === 'open'` filter `openEscalations` is, which
+   * is what makes the two surfaces one reading: answering on either settles the
+   * row, and the next snapshot clears both with nothing kept in step by hand.
+   */
+  escalationByAgent: ReadonlyMap<string, Escalation>;
   /** Artifacts agents flagged mid-run, grouped for the card and drawer. */
   flagsByAgent: ReadonlyMap<string, AgentFlag[]>;
   /** Every file agents wrote, grouped for the drawer's "files changed" list. */
@@ -107,6 +119,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
   const live = state.agents.filter((a) => LIVE_STATUSES.includes(a.status));
   const past = state.agents.filter((a) => !LIVE_STATUSES.includes(a.status));
   const agentById = new Map(state.agents.map((a) => [a.id, a]));
+  const openEscalations = state.escalations.filter((e) => e.status === 'open');
 
   // The heartbeat is measured from the last pulse we *saw*, not from a server
   // field: `cycle:end` is what moves it, so a cockpit opened mid-interval counts
@@ -123,7 +136,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     crashed,
     live,
     past,
-    openEscalations: state.escalations.filter((e) => e.status === 'open'),
+    openEscalations,
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,
     liveOverlapCount: (state.overlaps ?? []).filter((o) => o.live).length,
 
@@ -136,6 +149,9 @@ export function buildViewModel(input: ViewInputs): CockpitView {
 
     proposalFor: new Map((state.proposals ?? []).map((p) => [p.escalationId ?? '', p])),
     agentById,
+    escalationByAgent: new Map(
+      openEscalations.flatMap((e) => (e.agentId ? ([[e.agentId, e]] as [string, Escalation][]) : [])),
+    ),
     flagsByAgent: groupByAgent(state.flags),
     filesByAgent: groupByAgent(state.files),
     tailByAgent: input.tails,

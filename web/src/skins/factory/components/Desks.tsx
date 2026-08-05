@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { SkinProps } from '../../types.js';
+import type { Escalation } from '../../../types.js';
 import { ConfirmButton } from '../../../components/ConfirmButton.js';
 import { EscalationCard } from '../../../components/EscalationCard.js';
 import { FindingsPanel } from '../../../components/FindingsPanel.js';
@@ -36,30 +37,43 @@ import { Icon } from './Sprite.js';
  * and the async flow; this is only where it is placed.
  */
 export function StampDesk({ view, actions }: SkinProps): JSX.Element {
-  const { state, now } = view;
   return (
     <div className="fx-body">
       {view.openEscalations.length === 0 && (
         <p className="fx-empty">Nothing needs your judgment. The line runs itself.</p>
       )}
       {view.openEscalations.map((e) => (
-        <EscalationCard
-          key={e.id}
-          escalation={e}
-          proposal={view.proposalFor.get(e.id)}
-          resumedAt={e.agentId ? (view.agentById.get(e.agentId)?.resumedAt ?? null) : null}
-          now={now}
-          refUrls={state.refUrls}
-          onAnswer={(text) => actions.answerEscalation(e.id, text)}
-          onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
-          onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
-          onDismiss={(id, note) => actions.dismissEscalation(id, note)}
-          onOpenAgent={(id) => actions.select(id)}
-          onComplete={(id) => actions.completeAgent(id)}
-          onViewPlan={(id) => actions.viewPlan(id)}
-        />
+        <Slip key={e.id} escalation={e} view={view} actions={actions} />
       ))}
     </div>
+  );
+}
+
+/**
+ * One escalation, wired.
+ *
+ * Extracted so the desk and the bot on the floor (#245) draw the *same* card
+ * through the *same* wiring: the refusal rules — a proposal cannot be answered
+ * with free text, a permission verdict goes to `/permission` and not `/answer` —
+ * live in `EscalationCard`, and a second wiring is a second way to get one of
+ * them wrong on one surface only.
+ */
+export function Slip({ escalation, view, actions }: SkinProps & { escalation: Escalation }): JSX.Element {
+  return (
+    <EscalationCard
+      escalation={escalation}
+      proposal={view.proposalFor.get(escalation.id)}
+      resumedAt={escalation.agentId ? (view.agentById.get(escalation.agentId)?.resumedAt ?? null) : null}
+      now={view.now}
+      refUrls={view.state.refUrls}
+      onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
+      onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
+      onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
+      onDismiss={(id, note) => actions.dismissEscalation(id, note)}
+      onOpenAgent={(id) => actions.select(id)}
+      onComplete={(id) => actions.completeAgent(id)}
+      onViewPlan={(id) => actions.viewPlan(id)}
+    />
   );
 }
 

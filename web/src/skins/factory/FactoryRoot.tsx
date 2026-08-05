@@ -6,7 +6,7 @@ import { WorldSummary } from '../../components/WorldSummary.js';
 import { relTime } from '../../components/util.js';
 import { SpriteSheet, Icon } from './components/Sprite.js';
 import { StatusBar } from './components/StatusBar.js';
-import { BlueprintDesk, FaultLog, FindingsDesk, StampDesk } from './components/Desks.js';
+import { BlueprintDesk, FaultLog, FindingsDesk, Slip, StampDesk } from './components/Desks.js';
 import { TheLine } from './components/TheLine.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
@@ -105,6 +105,13 @@ export function FactoryRoot({ view, actions }: SkinProps) {
   // panel that grows without limit for a reading nobody scrolls to the end of.
   const shiftsShown = view.past.slice(0, 24);
 
+  // The question a bot is parked on, ready to place. Built here rather than in
+  // `BotCard` so the floor and the stamp desk share one wiring of one card.
+  const askOf = (agentId: string) => {
+    const escalation = view.escalationByAgent.get(agentId);
+    return escalation ? <Slip escalation={escalation} view={view} actions={actions} /> : undefined;
+  };
+
   const bots = (
     <section className="fx-card fx-bev" data-fx="bots">
       <div className="fx-head">
@@ -149,6 +156,10 @@ export function FactoryRoot({ view, actions }: SkinProps) {
             now={now}
             lastLine={view.tailByAgent.get(a.id)}
             flags={view.flagsByAgent.get(a.id)}
+            /* The bot carries its own question (#245). The `shifts` list below
+               passes none: an ended agent's escalations are cascade-dismissed by
+               the harness, so an answer box there is chrome nothing can settle. */
+            escalation={askOf(a.id)}
             artifactUrls={state.artifactUrls ?? {}}
             refUrls={state.refUrls}
             onOpen={() => actions.select(a.id)}

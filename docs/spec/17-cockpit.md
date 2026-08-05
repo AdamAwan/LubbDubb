@@ -246,6 +246,11 @@ Five rules hold them:
 - **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
   listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
   answering still happens on the shared `EscalationCard`, which owns the refusal rules.
+- **The gauge notifies; it is not the only route.** "Something needs you, _somewhere_" is a question
+  a spatial view answers badly, which is why the desk exists — but it was also the only place an
+  operator could see _which_ bot was waiting, or answer it, and that made a notifier mandatory
+  (#245). The bot on the floor now carries its own question; see
+  [What the floor draws beyond the queue](#what-the-floor-draws-beyond-the-queue).
 
 **Shifts Ended is a sixth panel behind a click, and the one that does _not_ open from the bar.** The
 bots whose shift has ended are history, and a list of them under the bots that are out _now_ makes
@@ -321,6 +326,34 @@ argument for each is in its module's header, and the reason for the shape is wor
   behind butts together with no gap, because that is what a belt does when nothing is taking from
   it. Each run is omitted when empty — an empty flex child still takes the row's gap, and that gap
   is exactly where the gate sits.
+- **A bot carries the question it is waiting on** (`BotCard`, `view.escalationByAgent`). The bot
+  reads as _Asking you_ and is red, and the whole shared `EscalationCard` is placed inside it: the
+  prompt, the context, the one-click `options`, the answer box, the verdict buttons, the dismiss. So
+  an escalation can be read and answered end to end without leaving the floor, and the desk is the
+  fleet-wide notifier it was always right to be rather than the only route (#245). Three things hold
+  it:
+  - **The reading is keyed off the escalation, never off `agent.status`.** Parking is only a request
+    — the `escalate` tool returns at once — so an agent that carried on working still owes an answer,
+    and a bot that stopped reading as asking while the desk still listed the item would be the two
+    surfaces disagreeing. `EscalationCard`'s own `agent resumed` chip says which of the two is
+    happening. A parked bot with no open escalation keeps the older `Idle — needs you` reading and
+    its `waitingReason`; that text is dropped when the card is there, since the card carries the same
+    sentence with the answer attached.
+  - **The card is placed, not rebuilt.** `Slip` (`components/Desks.tsx`) wires it once and both the
+    desk and `FactoryRoot` render that, so the refusal rules — a proposal cannot be answered with
+    free text, a permission verdict goes to `/permission` and not `/answer`, "Dismiss (rejects)" vs
+    "Dismiss (denies)" — have one implementation and cannot hold on one surface only. `BotCard` takes
+    the finished element and owns nothing but the gap (`.fx-ask`), which keeps the skin's rule that
+    no CSS here targets a shared component's class.
+  - **The join is a view-model derivation**, `escalationByAgent`, off the same `status === 'open'`
+    filter `openEscalations` uses — which is what makes the two views one reading: answering settles
+    the row and the next snapshot clears both, with nothing kept in step by hand. One escalation per
+    agent rather than a list, because the harness parks an agent at most once at a time. An
+    escalation no agent raised (a plan approval) has no bot to sit on and stays the desk's alone, as
+    do ended shifts: a dead agent's escalations are cascade-dismissed, so an answer box there would
+    be chrome nothing can settle. The Line's bays and the Goal Floor keep reading a parked agent red
+    through `bayMachineStatus` and gain no answering affordance — one place per skin to answer from
+    the floor is the point.
 - **Inserters swing on a transfer, not on occupancy** (`inserterPhase`). An arm that ran for the
   life of an agent was the one moving thing on the floor carrying no information. A swing is one
   heartbeat from the agent's `startedAt`, and it carries the item while it swings.
@@ -677,8 +710,11 @@ progress; absent-is-not-stopped; scanners generated from the verdict with human 
 approval; ghosts; the tail; the silo's fixed denominator; production counting only what landed and
 admitting when the log is too short; the accumulator gauge clamping. It also pins the renders where
 being wrong would be worse than being absent: both belts stopping, the gate tracking the cut, the
-belt splitting into a moving and a compressed run, and the floor widening with the cap up to its
-bound.
+belt splitting into a moving and a compressed run, the floor widening with the cap up to its bound,
+and the bot on the floor carrying its own question — that a running agent with an open escalation
+still draws one, that an agent-less escalation stays the desk's alone, that answering empties both
+surfaces, and that a proposal reaching a bot arrives with its verdict buttons rather than a reply
+box.
 
 A skin registered but not otherwise tested still gets the conformance render for free, which is the
 point of driving it off `SKINS` — it is asserted on the day it is written rather than the day it

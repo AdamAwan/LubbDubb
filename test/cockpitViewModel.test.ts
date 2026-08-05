@@ -135,6 +135,34 @@ test('only open escalations and findings count toward the nudges', () => {
   assert.equal(view.liveOverlapCount, 1);
 });
 
+/**
+ * The join behind #245: a bot on the floor draws its own question, and it must be
+ * the *same* reading the alerts desk lists — both off `status === 'open'`, so an
+ * answer settles one row and clears both surfaces on the next snapshot. Keyed off
+ * `agentId` rather than off the agent's status, because parking is only a request:
+ * an agent that carried on working still owes the answer.
+ */
+test('an open question joins to the agent that asked it', () => {
+  const view = build(
+    stateWith({
+      agents: [AGENT({ id: 'a1', status: 'running' }), AGENT({ id: 'a2', status: 'waiting' })],
+      escalations: [
+        { id: 'e1', status: 'open', agentId: 'a1' },
+        { id: 'e2', status: 'answered', agentId: 'a2' },
+        { id: 'e3', status: 'open', agentId: null },
+      ] as never,
+    }),
+  );
+  assert.equal(view.escalationByAgent.get('a1')?.id, 'e1', 'a resumed agent still owes its answer');
+  assert.equal(view.escalationByAgent.get('a2'), undefined, 'an answered question clears the bot too');
+  assert.equal(view.escalationByAgent.size, 1, 'an escalation nobody raised belongs to no bot');
+  // The desk lists both open ones; only the join drops the agent-less row.
+  assert.deepEqual(
+    view.openEscalations.map((e) => e.id),
+    ['e1', 'e3'],
+  );
+});
+
 test('streamed output is exposed only for the open drawer', () => {
   const state = stateWith({ agents: [AGENT({ id: 'a1' }), AGENT({ id: 'a2' })] });
   const output = new Map([
