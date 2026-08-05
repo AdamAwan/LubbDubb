@@ -24,6 +24,7 @@ import {
 import { actOnShortfall, releasePlan } from '../plans/planApproval.js';
 import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
+import { attachmentsNote } from '../jobs/attachments.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { padTestimony, retroDossier } from '../retro/dossier.js';
 import { priorWorkBriefing } from '../briefing/priorWork.js';
@@ -566,7 +567,12 @@ export class ActionExecutor {
     // record only the harness kept. Appended for the same reason as the two notes
     // above, and the pad goes first — it is the half nothing else could supply.
     const briefing = retroBriefing(action.originRef, store);
-    const prompt = [action.prompt, guidance, outstanding, prior, briefing].filter(Boolean).join('\n\n');
+    // The images the operator attached to this request (issue #249). Appended for
+    // the reason the four notes above are, and on an **exact** origin match: an
+    // attachment belongs to one request, and a screenshot in front of an agent
+    // dispatched for something else is the widening `outstandingForOrigin` names.
+    const attachments = attachmentsFor(action.originRef, store);
+    const prompt = [action.prompt, guidance, outstanding, prior, briefing, attachments].filter(Boolean).join('\n\n');
     if (action.type === 'dispatch_code_agent') {
       const task = store.createTask({
         kind: 'code',
@@ -610,6 +616,19 @@ export class ActionExecutor {
  * they want done, whereas this channel exists because an agent has nowhere else
  * to leave a handover.
  */
+/**
+ * The images attached to the thing being dispatched — or null when there are
+ * none, which is every dispatch that did not come from a blueprint carrying one.
+ *
+ * In the executor, and for the branch gate's reason: every dispatch passes
+ * through here whatever composed it. The lookup is by the **exact** origin, which
+ * while the request is a blueprint is `job:<id>`.
+ */
+function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
+  if (!originRef) return null;
+  return attachmentsNote(store.listAttachments(originRef)) || null;
+}
+
 function outstandingForOrigin(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
   const stored = store.getIssueConclusion(originRef);

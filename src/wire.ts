@@ -394,6 +394,7 @@ export type {
   Escalation,
   Finding,
   Job,
+  JobAttachmentInput,
   Plan,
   PlanPart,
   Proposal,

@@ -15,7 +15,7 @@ unchanged, so no call site anywhere knows.
 | Module             | Tables                                                                      |
 | ------------------ | --------------------------------------------------------------------------- |
 | `tasks.ts`         | `tasks`                                                                     |
-| `jobs.ts`          | `jobs`                                                                      |
+| `jobs.ts`          | `jobs`, `job_attachments`                                                   |
 | `priority.ts`      | `priority_overrides`                                                        |
 | `findings.ts`      | `findings`                                                                  |
 | `plans.ts`         | `plans`, `plan_parts`                                                       |
@@ -124,6 +124,7 @@ introduced.
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `tasks`              | Units of work materialised at dispatch.                                                                                                                                                                   | —                                                                                                  |
 | `jobs`               | Operator-queued prompts awaiting a slot.                                                                                                                                                                  | —                                                                                                  |
+| `job_attachments`    | Images an operator attached to a blueprint (#249): what they are and where the file is. Bytes live on disk under `attachmentRoot`, never in the database.                                                  | `UNIQUE (target_ref, idx)`                                                                         |
 | `priority_overrides` | Operator "Up next" re-ordering, keyed on candidate origin.                                                                                                                                                | `origin` is `PRIMARY KEY`                                                                          |
 | `agents`             | One row per launched agent, including usage and the progress note.                                                                                                                                        | —                                                                                                  |
 | `usage_events`       | Timestamped per-report cost **deltas** (not cumulative), so rolling windows are a `SUM`.                                                                                                                  | —                                                                                                  |
@@ -151,7 +152,7 @@ introduced.
 | `error_events`       | Recorded failures — the Errors panel's backing store.                                                                                                                                                     | —                                                                                                  |
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
-`tasks(status)`, `jobs(status)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
+`tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
 `decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`,
 `work_nodes(parent_ref)`, `work_item_filings(job_id)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
 attempts are the `tasks` rows carrying its origin, so no separate attempts table exists — `tasks` only
@@ -173,6 +174,25 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
 
 `createJob`, `getJob`, `listJobs(limit=100)` (newest first), `listQueuedJobs()` (oldest first),
 `markJobDispatched(id, taskId)`, `cancelJob(id)` (still-queued only).
+
+#### Blueprint attachments
+
+`addAttachments(targetRef, files)`, `listAttachments(targetRef)`, `deleteAttachments(targetRef)`.
+
+- **Keyed on `target_ref`, not on a job id.** What an attachment belongs to outlives the row it
+  arrived with: a code blueprint becomes a desk *filing* job and then a ticket, so the images have to
+  follow the goal rather than the job. While the request is a blueprint the ref is `job:<id>`.
+- **The bytes are on disk, not in the database.** The row records the sniffed mime, the size, the
+  operator's filename as a display label and the absolute path. `AttachmentFiles`
+  (`src/jobs/attachmentFiles.ts`) owns the files, one directory per target ref; the stem is the index
+  and the extension is the **sniffed** format, so a client filename never reaches the filesystem.
+- **Write order is files, then rows.** An interrupted write leaves bytes nothing points at rather than
+  a row naming a path that does not resolve, and a path an agent cannot open is the failure that
+  matters. A deletion is the mirror — rows first, then files.
+- **Nothing ages them out.** Attachments live as long as what they are attached to, so a plan written
+  days later, and the retrospective after it, can still refer back to the screenshot the goal started
+  as. The **only** deletion is a blueprint cancelled before it ran, which nothing downstream can want;
+  a later retention sweep would be taking something this spec says is kept.
 
 ### Priority overrides
 

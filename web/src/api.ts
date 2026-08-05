@@ -1,4 +1,4 @@
-import type { AppState, RecoveryVerdict } from './types.js';
+import type { AppState, JobAttachmentInput, RecoveryVerdict } from './types.js';
 // The fetched-on-open routes, as whole payloads rather than shapes re-typed at
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
@@ -81,8 +81,24 @@ async function authFetch(url: string, init?: RequestInit): Promise<Response> {
 }
 
 async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  // A refusal carries the server's own words in `{error}` (every route refuses
+  // that way — see `src/server/validation.ts`), and a caller that shows the
+  // operator "400 Bad Request" instead is throwing away the only half that says
+  // what to do about it. The status line stays as the fallback for a body that
+  // isn't ours — a proxy's 502, fastify's own 413.
+  if (!res.ok) throw new Error((await refusalText(res)) ?? `${res.status} ${res.statusText}`);
   return (await res.json()) as T;
+}
+
+/** The server's `{error}` for a refused request, or null when the body isn't one. */
+async function refusalText(res: Response): Promise<string | null> {
+  try {
+    const body: unknown = await res.json();
+    const error = (body as { error?: unknown }).error;
+    return typeof error === 'string' && error ? error : null;
+  } catch {
+    return null;
+  }
 }
 
 /** POST a JSON body. Collapses the header/stringify boilerplate every action repeated. */
@@ -184,8 +200,17 @@ const realApi = {
   // Re-order the "Up next" queue (issue #128): the operator's desired priority
   // order of candidate origins, which the dispatcher reads back into its ranking.
   reorderUpNext: (origins: string[]) => post<{ ok: true }>('/api/upnext/order', { origins }),
-  launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
-    post<{ ok: true }>('/api/jobs', job),
+  // `attachments` carry base64 image bytes (issue #249), which is why this one
+  // route may send megabytes: the server's per-route bodyLimit is what bounds it,
+  // and the size/format bounds are the server's alone — the composer refuses early
+  // to save a round trip, never instead of the server.
+  launchJob: (job: {
+    prompt: string;
+    title?: string;
+    kind?: string;
+    branch?: string | null;
+    attachments?: JobAttachmentInput[];
+  }) => post<{ ok: true }>('/api/jobs', job),
   cancelJob: (id: string) => post<{ ok: true }>(`/api/jobs/${id}/cancel`),
   // A finding becomes work only here: the operator's click is the gate, because
   // an agent that could queue jobs could put agents on the fleet.

@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { Job } from '../types.js';
+import type { Job, JobAttachment } from '../types.js';
 import type { StoreContext } from './context.js';
 
 /**
@@ -67,6 +67,52 @@ export class JobStore {
     this.ctx.db.prepare(`UPDATE jobs SET status='cancelled', updated_at=? WHERE id=?`).run(updatedAt, id);
     return { ...existing, status: 'cancelled', updatedAt };
   }
+
+  /**
+   * Record the images stored for `targetRef` (issue #249). The bytes are already
+   * on disk — this is the record of what they are, written after the write so a
+   * row never names a file that was never created.
+   */
+  addAttachments(
+    targetRef: string,
+    files: { index: number; label: string; mime: string; bytes: number; path: string }[],
+  ): JobAttachment[] {
+    const createdAt = this.ctx.now();
+    const rows = files.map((file) => ({
+      id: `att_${nanoid(10)}`,
+      targetRef,
+      index: file.index,
+      label: file.label,
+      mime: file.mime,
+      bytes: file.bytes,
+      path: file.path,
+      createdAt,
+    }));
+    const insert = this.ctx.db.prepare(
+      `INSERT INTO job_attachments (id, target_ref, idx, label, mime, bytes, path, created_at)
+       VALUES (@id, @targetRef, @index, @label, @mime, @bytes, @path, @createdAt)`,
+    );
+    for (const row of rows) insert.run(row);
+    return rows;
+  }
+
+  /** What is attached to `targetRef`, in the order the operator attached it. */
+  listAttachments(targetRef: string): JobAttachment[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM job_attachments WHERE target_ref=? ORDER BY idx ASC`)
+      .all(targetRef) as AttachmentRow[];
+    return rows.map(rowToAttachment);
+  }
+
+  /**
+   * Forget what was attached to `targetRef` — a blueprint cancelled before it ran,
+   * the one case nothing downstream can want. Rows go first and the files after,
+   * so an interrupted deletion leaves orphaned bytes rather than a row pointing at
+   * a path that no longer resolves.
+   */
+  deleteAttachments(targetRef: string): void {
+    this.ctx.db.prepare(`DELETE FROM job_attachments WHERE target_ref=?`).run(targetRef);
+  }
 }
 
 interface JobRow {
@@ -79,6 +125,30 @@ interface JobRow {
   task_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface AttachmentRow {
+  id: string;
+  target_ref: string;
+  idx: number;
+  label: string;
+  mime: string;
+  bytes: number;
+  path: string;
+  created_at: string;
+}
+
+function rowToAttachment(r: AttachmentRow): JobAttachment {
+  return {
+    id: r.id,
+    targetRef: r.target_ref,
+    index: r.idx,
+    label: r.label,
+    mime: r.mime,
+    bytes: r.bytes,
+    path: r.path,
+    createdAt: r.created_at,
+  };
 }
 
 function rowToJob(r: JobRow): Job {

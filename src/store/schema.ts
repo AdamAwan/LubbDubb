@@ -31,6 +31,30 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at TEXT NOT NULL
 );
 
+-- Images an operator attached to a blueprint (issue #249). The bytes live on disk
+-- under attachmentRoot; this row is the record of what they are and where.
+--
+-- Keyed on target_ref, not on a job id, because what an attachment belongs to
+-- outlives the row it arrived with: a code blueprint becomes a desk *filing* job
+-- and then a ticket, and the image has to follow the goal rather than the job.
+-- While it is a blueprint the ref is job:<id>.
+--
+-- Nothing ages these out. Attachments live as long as what they are attached to,
+-- so a plan written days later — and the retrospective after it — can still refer
+-- back to the screenshot the goal started as. The one deletion is a blueprint
+-- cancelled before it filed, which nothing downstream can want.
+CREATE TABLE IF NOT EXISTS job_attachments (
+  id         TEXT PRIMARY KEY,
+  target_ref TEXT NOT NULL,          -- "job:<id>"
+  idx        INTEGER NOT NULL,       -- position in the operator's list; also the file's stem
+  label      TEXT NOT NULL,          -- the operator's filename, display only
+  mime       TEXT NOT NULL,          -- sniffed from the bytes, never client-declared
+  bytes      INTEGER NOT NULL,
+  path       TEXT NOT NULL,          -- absolute; what an agent is handed
+  created_at TEXT NOT NULL,
+  UNIQUE (target_ref, idx)
+);
+
 -- Operator priority overrides for the "Up next" queue (issue #128). One row per
 -- overridden candidate origin; rank (ascending, 0 = "do this next") re-orders
 -- the dispatcher's ranking. Keyed on the stable origin so it survives pulses and
@@ -483,6 +507,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_ref);
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
 CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);

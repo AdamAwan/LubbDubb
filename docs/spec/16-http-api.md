@@ -451,7 +451,9 @@ inherited `ignore`, a partial `policyChecks` map merging over the defaults, and 
 Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. There is no config-write path
 in the harness, and inventing one for this is a larger decision than making the policy visible.
 
-### `POST /api/jobs`
+### Launching a blueprint
+
+#### `POST /api/jobs`
 
 Queue an operator job. See [13](13-jobs-and-findings.md). 400 on a missing/empty prompt, a bad `kind`,
 a non-string `title` or `branch`; **409** when a code job names a branch a live task holds. Returns
@@ -459,6 +461,30 @@ a non-string `title` or `branch`; **409** when a code job names a branch a live 
 a watched ticket (a desk job + a `WorkItemFiling`) that enters the planning funnel, and returns
 `{ ok: true, job, filing, report }` with `job.kind === 'desk'` — the branch-collision 409 applies only
 to the direct-dispatch arm (a desk job, or a code job with no tracker).
+
+**Attachments (issue #249).** The body may carry `attachments: {name?, data}[]` — images the operator
+pasted, dropped or picked in the composer, `data` base64 of the raw file.
+
+- **Base64 in the existing JSON body, not `@fastify/multipart`.** A second request-parsing style would
+  mean a route that reads the request directly, which this surface's one rule forbids, plus a new
+  dependency; a third on the wire for a payload measured in single-digit megabytes is the cheaper
+  trade.
+- **A per-route `bodyLimit`** (`ATTACHMENT_BODY_LIMIT`, 32 MiB) replaces fastify's 1 MB default on
+  this route **only**. A body over it is fastify's own **413**, before validation runs. This route
+  already sits behind the bearer-token guard.
+- **There is no `mime` field.** A client-declared type is attacker-controlled; the type stored — and
+  the type an agent is told to trust — is sniffed from the decoded bytes.
+- **Bounds** are `src/jobs/attachments.ts`, and only there: at most **4** images, **5 MB** each
+  decoded, and **png / jpeg / gif / webp** decided by magic bytes. Each failure is a **400** naming the
+  file (by the operator's own label) and the bound it broke, and **no job row is created** — validation
+  runs before `createJob`, because a blueprint that says "make it look like this" without the "this" is
+  worse than no blueprint.
+- **The filename is never used as a path.** Files are stored `<index>.<ext>` from the sniffed format
+  under `attachmentRoot`, which removes traversal as a category rather than sanitising it; the
+  operator's name is kept as a display label. See [14](14-persistence.md#blueprint-attachments) and
+  [09](09-execution.md#an-operators-attachments-reach-the-agent).
+- The images follow **whichever job row this launch creates** — the blueprint itself, or the desk
+  filing job the tracker fork turns it into.
 
 ### `POST /api/upnext/order`
 
@@ -468,9 +494,11 @@ duplicate. Replaces the whole override set (ranked `0..n-1`), broadcasts `world:
 cycle so the new order takes effect immediately. It only re-orders — it never un-holds a held item,
 and `manual-job` items stay first regardless — so this is safe to run inline. Returns `{ ok: true, report }`.
 
-### `POST /api/jobs/:id/cancel`
+#### `POST /api/jobs/:id/cancel`
 
-409 when the job is absent or no longer queued. Returns `{ ok: true, job }`.
+409 when the job is absent or no longer queued. Returns `{ ok: true, job }`. Any attachments are
+dropped with it — rows first, then the files — the one deletion in the attachment story, since nothing
+downstream can want a blueprint that never ran.
 
 ### `POST /api/findings/:id/promote`
 

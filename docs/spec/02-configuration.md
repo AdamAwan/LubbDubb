@@ -33,7 +33,7 @@ from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays saf
 resolve them against the wrong directory:
 
 - `repoRoot` is resolved against `process.cwd()`.
-- `worktreeRoot`, `deskRoot` and `promptTemplatesDir` are resolved against **`repoRoot`** (not the
+- `worktreeRoot`, `deskRoot`, `attachmentRoot` and `promptTemplatesDir` are resolved against **`repoRoot`** (not the
   launch directory), so running LubbDubb from its own folder against a repo elsewhere does not
   scatter that repo's worktrees into the app's directory. An absolute override is honoured as-is.
 - Each entry of `claudeArgs` that is relative **and names an existing file** is made absolute.
@@ -62,6 +62,7 @@ resolve them against the wrong directory:
 | `defaultBranch` | `string` | `"main"`              | The integration branch. A new agent branch is cut from it, and a PR targeting anything else is treated as stacked. Not auto-detected. |
 | `worktreeRoot`  | `string` | `.lubbdubb/worktrees` | Root for per-branch worktrees.                                                                                                        |
 | `deskRoot`      | `string` | `.lubbdubb/desk`      | Root for desk-task scratch directories (one per task id).                                                                             |
+| `attachmentRoot` | `string` | `.lubbdubb/attachments` | Root for images attached to a blueprint (issue #249) — deliberately outside every worktree, so a screenshot cannot be committed onto a branch. Every agent launch is granted read access to this whole root via `permissions.additionalDirectories`, which is a real widening: an agent working one goal can read another goal's attachments. See [09](09-execution.md) and [10](10-agent-runtimes.md). |
 
 ### Dispatch behaviour
 

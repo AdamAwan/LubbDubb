@@ -39,6 +39,7 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Job,
+  JobAttachment,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -177,6 +178,15 @@ export class Store {
   }
   cancelJob(id: string): Job | null {
     return this.jobs.cancelJob(id);
+  }
+  addAttachments(targetRef: string, files: Parameters<JobStore['addAttachments']>[1]): JobAttachment[] {
+    return this.jobs.addAttachments(targetRef, files);
+  }
+  listAttachments(targetRef: string): JobAttachment[] {
+    return this.jobs.listAttachments(targetRef);
+  }
+  deleteAttachments(targetRef: string): void {
+    this.jobs.deleteAttachments(targetRef);
   }
 
   // -- Priority overrides (operator "Up next" re-ordering, issue #128) -------
