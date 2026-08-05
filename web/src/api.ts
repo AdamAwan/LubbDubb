@@ -132,7 +132,6 @@ const realApi = {
   pulse: () => post('/api/pulse'),
   // Clears the fault log for every cockpit, not just this one: the rows go.
   clearErrors: () => post<{ ok: true; cleared: number }>('/api/errors/clear'),
-  inject: (event: unknown) => post('/api/inject', event),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),
   // Clear an item without answering it, for when the thing was handled outside the
   // harness. The server picks the right "no" per kind (a permission request is
@@ -340,3 +339,18 @@ const DEMO = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DEMO
 export const isDemo = DEMO;
 export const api = DEMO ? demoApi : realApi;
 export const connectWs: typeof connectRealWs = DEMO ? connectDemoWs : connectRealWs;
+
+/**
+ * Faking a world change is a **demo** control, and it lives off the `api` seam
+ * rather than on it because the server has no route behind it: a real run reads
+ * a real provider, and a button that told the harness something had happened
+ * would be a way to lie to yourself about what it is reacting to.
+ *
+ * The rejecting arm is unreachable rather than defensive — `InjectPanel` renders
+ * only under {@link isDemo}, the same constant this folds on — but a refusal is
+ * the honest thing for a call that cannot be served, where a silent no-op would
+ * leave the panel reporting success.
+ */
+export const injectDemoEvent: (event: unknown) => Promise<{ ok: true }> = DEMO
+  ? demoApi.inject
+  : () => Promise.reject(new Error('event injection is a demo-only control'));

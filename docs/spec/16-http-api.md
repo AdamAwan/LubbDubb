@@ -21,7 +21,7 @@ is about.
 | `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/health`                                   |
 | `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                            |
 | `routes/artifacts.ts`   | `/artifacts/:id`, the capability signer, and the path confinement                            |
-| `routes/control.ts`     | `/api/inject`, `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude` |
+| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`                |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                |
 | `routes/findings.ts`    | Promote / file / dismiss                                                                     |
 | `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                  |
@@ -136,8 +136,7 @@ Four properties hold across the surface:
   `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a finding
   that does not exist is a 404 whatever the body says. Those three apply `checked` **a second time,
   by hand**, inside the outer handler (`return checked({body: X}, inner)(req, reply)`) rather than
-  reaching past it, so the ordering costs nothing in refusal paths. `/api/inject` does the same for
-  its 403: whether a deployment injects at all is not a question about the payload.
+  reaching past it, so the ordering costs nothing in refusal paths.
 - **A missing body is read as `{}`**, so a route whose fields are all optional may be called with no
   body at all, while a required field still refuses by name.
 
@@ -217,15 +216,6 @@ HTTP's.
 is not: it writes the store on demand rather than on the cockpit's poll, and a delete over a table with
 no bound on its row count is unbounded work behind a fixed-size request. One deliberate two-step click
 never approaches the ceiling.
-
-### `POST /api/inject`
-
-**403 unless a `fake` provider is configured** — defence in depth, since the cockpit also hides the
-panel. **400 (`invalid event`) unless the body matches the `InjectableEvent` variant its `kind`
-names** — not merely that a `kind` is present, which is all the old check tested while typing every
-other field as validated. The schema is annotated `z.ZodType<InjectableEvent>`, so a variant that
-drifts from the union in `connector.ts` fails `typecheck` rather than being caught by a cast. Applies
-the event, broadcasts `world:changed`, runs a cycle, and returns `{ ok: true, report }`.
 
 ### `POST /api/control`
 
@@ -641,7 +631,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 | Key                  | Contents                                                                                                                                                                                                                      |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `injectable`.                                                                                                                                      |
+| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `canFileTickets`.                                                                                                                                  |
 | `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
 | `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
 | `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                                                                             |

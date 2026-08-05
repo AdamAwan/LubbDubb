@@ -402,12 +402,12 @@ argument for each is in its module's header, and the reason for the shape is wor
 
 Two of the three desks carry a rule of their own:
 
-- **`BlueprintDesk`** is the `LaunchPanel`, and on this skin the `InjectPanel` hangs off
-  **`view.demo`** — the static Pages build — rather than off `config.injectable`. Injection fakes a
-  world change, which is only ever something the demo needs: a real run against a fake provider is
-  still a real run, and a panel that lies to the harness there is a way to lie to yourself about what
-  it is reacting to. The empty-floor line reads from the same predicate, so it never offers an
-  injection there is no panel for. Classic keeps `config.injectable`.
+- **`BlueprintDesk`** is the `LaunchPanel` plus the `InjectPanel`, which hangs off **`view.demo`** —
+  the static Pages build. Injection fakes a world change, which is only ever something the demo
+  needs: a real run against a fake provider is still a real run, and a panel that lies to the harness
+  there is a way to lie to yourself about what it is reacting to. The empty-floor line reads from the
+  same predicate, so it never offers an injection there is no panel for. Classic reads `view.demo`
+  too — one predicate, because there is no second thing for a second one to disagree with.
 - **`FaultLog`** offers a two-step **clear** whenever it has any, posting `POST /api/errors/clear`.
   Two-step because the rows go: nothing in the harness reads the fault log back, so a clear costs
   nothing anything decides on — but it costs the only copy, and for every cockpit rather than this
@@ -739,9 +739,9 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
   last progress note, and the question it was parked on if it was parked on one. A `never started` card
   says outright that no work was done and that the item is what is holding its origin and branch shut,
   since that is the fact behind an otherwise unexplained idle fleet.
-- **`InjectPanel`** — rendered **only** when `state.config.injectable`, i.e. some capability uses the
-  `fake` provider. A real-integration deployment does not see it, and the route refuses anyway. (The
-  factory skin narrows this further to the demo build — see below.)
+- **`InjectPanel`** — rendered **only** under `view.demo`, and it calls `injectDemoEvent` rather than
+  anything on the `api` seam: there is no server route behind it. See
+  [Demo mode](#demo-mode) for why the harness ships no injection surface at all.
 - **`LaunchPanel`** — stamp a blueprint: an operator job (prompt, optional title, code/desk, optional
   branch) and the queue, including cancel. The button is `+ New blueprint` behind a blue blueprint
   plate — drawn inline in the component rather than added to a skin's sprite sheet, because the panel
@@ -757,7 +757,7 @@ artifact chips from `flags`, and a kill button. Clicking opens the drawer. Below
 section shows the last 8 finished agents.
 
 When the fleet is empty the panel says so, and tells the operator whether to inject an event or wait
-for the world to change — chosen from `config.injectable`.
+for the world to change — chosen from `view.demo`, the same predicate the panel itself hangs off.
 
 ### Middle column
 
@@ -1082,7 +1082,20 @@ disagree with what the dispatcher does:
 
 ## Demo mode
 
-`npm run web:dev:demo` (and `web:build:demo`) build with `mode: demo`. `web/src/api.ts` then swaps
-`api` and `connectWs` for `demoApi` / `connectDemoWs` (`web/src/demo/`), which serve a scripted
-fixture world with no server and no real integrations. The top bar shows a `demo` chip. This is what
-the GitHub Pages deployment publishes.
+`npm run web:build:demo` builds with `mode: demo`. `web/src/api.ts` then swaps `api` and `connectWs`
+for `demoApi` / `connectDemoWs` (`web/src/demo/`), which serve a scripted fixture world with no
+server and no real integrations. The top bar shows a `demo` chip.
+
+**The statically hosted Pages build is the only demo there is**, and that is the whole of what the
+demo code has to serve. There is no second demo entry point — no dev-server demo mode, and no
+server-side demo either: the harness has no `/api/inject` route, no `config.injectable` flag and no
+inject panel of its own. Injection lives entirely in the browser fake, reached through
+`injectDemoEvent` in `web/src/api.ts`, which folds on the same `VITE_DEMO` constant `api` does so the
+demo module stays out of the production bundle.
+
+That is the bar for anything under `web/src/demo/`: it earns its place by being something the Pages
+build reaches. What that does **not** license is trimming the constant-answering arms of `demoApi`
+(`getPrompts`, `getConfig`, `getWorkRoots`, `decideRecovery` and the rest). They answer a constant
+because the demo has no server to ask, and they exist because `api` is one seam both halves satisfy
+structurally — a missing arm is a compile error at the call site, not dead weight. The honest reading
+of "unused" here is the panel that never draws, not the method that never runs.

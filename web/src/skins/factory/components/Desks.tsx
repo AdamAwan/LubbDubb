@@ -112,11 +112,11 @@ export function FaultLog({ view, actions }: SkinProps): JSX.Element {
 /**
  * The blueprint desk: stamp a job, and see what is queued behind it.
  *
- * Injection is a *demo* control, not a provider one — it fakes a world change,
- * which is only ever something the static Pages build needs. A real run against a
- * fake provider is still a real run, and a panel that lies to the harness there is
- * a way to lie to yourself about what it is reacting to. Hence `view.demo` and not
- * `config.injectable`.
+ * Injection is a *demo* control — it fakes a world change, which is only ever
+ * something the static Pages build needs. A real run against a fake provider is
+ * still a real run, and a panel that lies to the harness there is a way to lie to
+ * yourself about what it is reacting to, so `view.demo` is the whole gate: there
+ * is no server route behind the panel to reach by any other predicate.
  */
 export function BlueprintDesk({ view, actions }: SkinProps): JSX.Element {
   return (

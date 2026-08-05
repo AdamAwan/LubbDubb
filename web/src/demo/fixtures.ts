@@ -85,7 +85,6 @@ export function buildDemoState(): DemoSeed {
       // The demo world is all-fake, so the inject panel stays available — and by
       // the same token there is no tracker to file a ticket into, so that button
       // is hidden exactly as it would be on a `fake` deployment.
-      injectable: true,
       canFileTickets: false,
     },
     control: { cap: 3, paused: false },

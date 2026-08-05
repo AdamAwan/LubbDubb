@@ -179,28 +179,6 @@ test('the shortfall route keeps an absent cause and an explicit null apart', asy
   system.store.close?.();
 });
 
-test('/api/inject checks the payload its kind implies, not just that a kind is present', async () => {
-  const system = build();
-  const { app } = await buildApp(system);
-
-  const good = await app.inject({
-    method: 'POST',
-    url: '/api/inject',
-    payload: { kind: 'new_pr', number: 7, title: 'a PR', branch: 'feature/7' },
-  });
-  assert.equal(good.statusCode, 200);
-
-  // A known kind missing the fields it names used to reach the connector typed as
-  // though it carried them.
-  for (const payload of [{}, { kind: 'no_such_kind' }, { kind: 'ci_failed' }, { kind: 'ci_failed', prNumber: 'x' }]) {
-    const res = await app.inject({ method: 'POST', url: '/api/inject', payload });
-    assert.equal(res.statusCode, 400, JSON.stringify(payload));
-  }
-
-  await app.close();
-  system.store.close?.();
-});
-
 test('no route reads req.params or req.body through a type assertion', () => {
   // The claim the whole change rests on: an `as` on request input types every
   // field a handler then reads as though something validated it. Asserted on the
