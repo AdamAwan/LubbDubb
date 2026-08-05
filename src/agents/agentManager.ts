@@ -40,6 +40,7 @@ import { goalFingerprint } from '../intake/assay.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
+import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -186,8 +187,17 @@ interface AgentManagerEvents {
  * updates and re-emits them for the server to broadcast. Whitelisted waiting
  * prompts are auto-answered here; everything else surfaces as a `waiting` event
  * for the harness to escalate.
+ *
+ * The `implements AgentToolTarget` is load-bearing: it is what makes the eleven
+ * tool-facing methods below a *checked* contract rather than eleven coincidences.
+ * Satisfying it structurally meant a method could be renamed, or the interface
+ * grown, with nothing failing — `withCaller`'s own argument, one level up. The
+ * clause costs a `import type` and nothing else: it is erased at compile time, and
+ * the runtime edge it would notionally create already runs this way round (this
+ * file value-imports `assessmentOrigin`, `assayerOrigin` and `partConclusionOrigin`
+ * from `src/mcp/`, while `src/mcp/` reaches back only for types).
  */
-export class AgentManager extends EventEmitter {
+export class AgentManager extends EventEmitter implements AgentToolTarget {
   private readonly sessions = new Map<string, AgentSession>();
   // Exit code per agent, captured from the session's `exit` event so a `failed`
   // terminal can be recorded with its cause (the code arrives before `failed`).
@@ -448,9 +458,7 @@ export class AgentManager extends EventEmitter {
    *
    * Routed through the manager for the same reason as {@link recordFinding}: the
    * `finding` event is what repaints the cockpit now rather than next pulse.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   linkTicket(agentId: string, ticketRef: string): LinkTicketResult {
     return this.withCaller(agentId, ({ task }): LinkTicketResult => {
@@ -518,11 +526,7 @@ export class AgentManager extends EventEmitter {
    * Also like a finding, this does not require a *live* session: the note is a
    * durable line on the agent's row, and one written on an agent's last breath is
    * the summary of the run.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally rather than by an `implements` clause: the tool layer
-   * depends on the fleet, never the reverse. knip's member analysis is name-based, so
-   * without the tag it reads as uncalled.
+
    */
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
@@ -544,9 +548,7 @@ export class AgentManager extends EventEmitter {
    * Routed through the manager rather than straight to the store for
    * {@link recordProgress}'s reason: the event is what lets a reader hear about
    * this now rather than on the next pulse.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   appendScratch(
     agentId: string,
@@ -576,9 +578,7 @@ export class AgentManager extends EventEmitter {
    * Same access rule as the write, and a caller outside an issue subtree is
    * **refused** rather than handed an empty pad: an empty pad reads as "nobody has
    * written anything", which is a different and untrue answer.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   readScratch(agentId: string): { ok: true; padRef: string; entries: ScratchEntry[] } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
@@ -596,9 +596,7 @@ export class AgentManager extends EventEmitter {
    * every other caller by name, so the agent that *did* the work cannot write the
    * account of it. Idempotence is in the store's upsert: a second submission
    * revises one row.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   recordRetrospective(
     agentId: string,
@@ -635,9 +633,7 @@ export class AgentManager extends EventEmitter {
    * reason as {@link recordFinding}: the `conclusion` event repaints the cockpit
    * now rather than on the next pulse. Like a finding it needs no *live* session
    * — a verdict cast on an agent's last breath is the one that matters most.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   recordConclusion(
     agentId: string,
@@ -686,9 +682,7 @@ export class AgentManager extends EventEmitter {
    * a structured payload whose rejection the agent never hears costs a whole agent
    * to discover, which is the `plan.json` lesson. Each names the alternative, the
    * way `conclusionOrigin` and `partConclusionOrigin` do.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   recordAssessment(
     agentId: string,
@@ -782,9 +776,7 @@ export class AgentManager extends EventEmitter {
    * running would be silently swallowed: the verdict would claim to be about text
    * nobody assayed, and `assayHold`'s first arm — the one that re-opens the
    * question when the ticket changes — could never fire for it.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   recordAssay(
     agentId: string,
@@ -818,9 +810,7 @@ export class AgentManager extends EventEmitter {
    * than on the next pulse. Identity is structural — the part is resolved from the
    * credential's task origin, so an agent cannot conclude a sibling's work, and
    * {@link partConclusionOrigin} refuses every other kind of caller by name.
-   *
-   * @public — reached only through `AgentToolTarget` (`src/mcp/tools/context.ts`), which this
-   * class satisfies structurally; knip's member analysis is name-based.
+
    */
   recordPartOutcome(
     agentId: string,
