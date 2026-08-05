@@ -2,9 +2,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { SkinPicker } from '../skins/SkinPicker.js';
 import type { RunningConfigGroup } from '../types.js';
+import { CiPolicyTab } from './CiPolicyTab.js';
+import { PromptsTab } from './PromptsTab.js';
 
 /**
  * Settings: what this harness is running on, and how the cockpit looks.
+ *
+ * **Three tabs since #244.** Everything an operator configures now answers to
+ * one cog: the resolved config, the CI policy that decides what a red PR gets,
+ * and the prompt book. The last two were reachable only by reading files on the
+ * host — `ci.checks` not at all, and the book through a disclosure hanging off
+ * the Work panel, which is a place nobody looks for a setting.
+ *
+ * Each tab fetches its own payload and keeps it: the bodies are mounted lazily
+ * on first visit and stay mounted, so switching back is free and no tab pays for
+ * a route it never opened.
  *
  * **Fetched on open, never polled** — the prompt book's reason exactly.
  * `loadConfig` runs once at boot, so the answer cannot change while the tab is
@@ -30,6 +42,16 @@ export function SettingsModal({
 }) {
   const [groups, setGroups] = useState<RunningConfigGroup[] | null>(null);
   const [filter, setFilter] = useState('');
+  const [tab, setTab] = useState<TabId>('settings');
+  // Which bodies have ever been shown. A tab is mounted on its first visit and
+  // never unmounted, so its fetched-once payload survives a switch away — the
+  // alternative re-fetches a constant every time the operator changes tab.
+  const [visited, setVisited] = useState<ReadonlySet<TabId>>(() => new Set<TabId>(['settings']));
+
+  const show = (id: TabId) => {
+    setTab(id);
+    setVisited((seen) => (seen.has(id) ? seen : new Set([...seen, id])));
+  };
 
   useEffect(() => {
     let live = true;
@@ -62,79 +84,117 @@ export function SettingsModal({
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="pm-head">
           <span className="pm-title">Settings</span>
-          {groups && <span className="chip small">{chosen} configured</span>}
+          {tab === 'settings' && groups && <span className="chip small">{chosen} configured</span>}
           <button className="btn ghost small pm-close" onClick={onClose}>
             close
           </button>
         </div>
 
-        <div className="settings-section">
-          <span className="pm-section-label">Appearance</span>
-          <SkinPicker />
+        {/* Tabs, not a scroll: the three are different questions ("how is it
+            configured", "what happens to a red PR", "what do the agents get
+            told") and stacking them made the last two unfindable. */}
+        <div className="settings-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`btn ghost settings-tab${tab === t.id ? ' active' : ''}`}
+              onClick={() => show(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        <div className="settings-section">
-          <span className="pm-section-label">Live controls</span>
-          {/* The two values the frozen config below would otherwise lie about:
+        {visited.has('ci') && (
+          <div hidden={tab !== 'ci'} role="tabpanel">
+            <CiPolicyTab />
+          </div>
+        )}
+        {visited.has('prompts') && (
+          <div hidden={tab !== 'prompts'} role="tabpanel">
+            <PromptsTab />
+          </div>
+        )}
+
+        <div hidden={tab !== 'settings'} role="tabpanel">
+          <div className="settings-section">
+            <span className="pm-section-label">Appearance</span>
+            <SkinPicker />
+          </div>
+
+          <div className="settings-section">
+            <span className="pm-section-label">Live controls</span>
+            {/* The two values the frozen config below would otherwise lie about:
               both are runtime-adjustable and revert to config on restart. Named
               here rather than annotated on their rows so the config block stays
               one honest answer to "what is in the file". */}
-          <div className="settings-live">
-            <Live
-              label="Agent cap"
-              live={String(control.cap)}
-              configured={configuredValue(groups, 'maxConcurrentAgents')}
-              configuredLabel="maxConcurrentAgents"
-            />
-            <Live
-              label="Paused"
-              live={String(control.paused)}
-              configured={configuredValue(groups, 'startPaused')}
-              configuredLabel="startPaused"
-            />
+            <div className="settings-live">
+              <Live
+                label="Agent cap"
+                live={String(control.cap)}
+                configured={configuredValue(groups, 'maxConcurrentAgents')}
+                configuredLabel="maxConcurrentAgents"
+              />
+              <Live
+                label="Paused"
+                live={String(control.paused)}
+                configured={configuredValue(groups, 'startPaused')}
+                configuredLabel="startPaused"
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="settings-section">
-          <div className="pm-head">
-            <span className="pm-section-label">Running config</span>
-            <input
-              className="settings-filter"
-              placeholder="Filter…"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
+          <div className="settings-section">
+            <div className="pm-head">
+              <span className="pm-section-label">Running config</span>
+              <input
+                className="settings-filter"
+                placeholder="Filter…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </div>
+            <p className="muted settings-hint">
+              Read-only. Values in <strong>bold</strong> were configured; the rest are built-in defaults. Edit{' '}
+              <code>lubbdubb.config.json</code> and restart to change one.
+            </p>
+            {shown === null && <div className="muted">Loading…</div>}
+            {shown !== null && shown.length === 0 && (
+              <div className="muted">
+                {filter.trim() ? 'Nothing matches that filter.' : 'No config to show — the demo resolves none.'}
+              </div>
+            )}
+            {shown?.map((group) => (
+              <div className="settings-group" key={group.title}>
+                <span className="settings-group-title">{group.title}</span>
+                <table className="settings-table">
+                  <tbody>
+                    {group.entries.map((entry) => (
+                      <tr key={entry.path} className={entry.isDefault ? '' : 'chosen'}>
+                        <td className="settings-key">{entry.path}</td>
+                        <td className="settings-value">{format(entry.path, entry.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
-          <p className="muted settings-hint">
-            Read-only. Values in <strong>bold</strong> were configured; the rest are built-in defaults. Edit{' '}
-            <code>lubbdubb.config.json</code> and restart to change one.
-          </p>
-          {shown === null && <div className="muted">Loading…</div>}
-          {shown !== null && shown.length === 0 && (
-            <div className="muted">
-              {filter.trim() ? 'Nothing matches that filter.' : 'No config to show — the demo resolves none.'}
-            </div>
-          )}
-          {shown?.map((group) => (
-            <div className="settings-group" key={group.title}>
-              <span className="settings-group-title">{group.title}</span>
-              <table className="settings-table">
-                <tbody>
-                  {group.entries.map((entry) => (
-                    <tr key={entry.path} className={entry.isDefault ? '' : 'chosen'}>
-                      <td className="settings-key">{entry.path}</td>
-                      <td className="settings-value">{format(entry.path, entry.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
         </div>
       </div>
     </div>
   );
 }
+
+type TabId = 'settings' | 'ci' | 'prompts';
+
+const TABS: readonly { id: TabId; label: string }[] = [
+  { id: 'settings', label: 'Settings' },
+  { id: 'ci', label: 'CI policy' },
+  { id: 'prompts', label: 'Prompts' },
+];
 
 /**
  * What the config says for `path`, read back out of the fetched block rather than

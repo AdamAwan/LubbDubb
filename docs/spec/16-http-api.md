@@ -18,7 +18,7 @@ is about.
 
 | Module                  | Holds                                                                                        |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
-| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/health`                                   |
+| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                 |
 | `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                            |
 | `routes/artifacts.ts`   | `/artifacts/:id`, the capability signer, and the path confinement                            |
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`                |
@@ -424,6 +424,32 @@ is visible on the day it is written.
 
 Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. Nothing is redacted: `Config`
 holds no secrets by construction ([02](02-configuration.md)).
+
+### `GET /api/ci-policy`
+
+The **effective** per-check CI policy, for the settings modal's CI tab ([17](17-cockpit.md)):
+`{ policy: { rules, unmatched, policyKinds } }`, from `describeCiPolicy` in `src/ci/describeCiPolicy.ts`.
+
+Its own route rather than another group on `/api/config` because it is a _derivation_ and not a
+reading. `ci.checks` is already on that payload — as a raw JSON leaf, because `flatten` treats an
+array as one. What the array does not say is everything that matters: each rule ships its
+**effective** `onFailure` (`rule.onFailure ?? 'ignore'`) with `inherited` marking the ones that got it
+by omission, and `unmatched` states the constant `classifyCiFailures` applies to a check no rule
+claims — `dispatch`. Both are decided in [07](07-pull-requests.md) and neither is visible by reading
+the config file, which is what made a mis-scoped glob invisible until a PR behaved oddly.
+
+`policyKinds` is the Azure branch-policy kind → effective mode map read back through
+`policyCheckMode`, each entry marked default-or-chosen. **Null when `integrations.sourceControl` is
+not `azure`**: under any other provider these modes are consulted by nothing, and a table of defaults
+nothing reads is a worse answer than no table.
+
+Derived on the server for `isDefault`'s reason on `/api/config`: the web bundle imports no server code,
+so a cockpit-side derivation would be a second copy of these defaults, free to drift from the rule
+that consults them with nothing to catch it. `test/ciPolicy.test.ts` covers the empty policy, the
+inherited `ignore`, a partial `policyChecks` map merging over the defaults, and Azure absent.
+
+Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. There is no config-write path
+in the harness, and inventing one for this is a larger decision than making the policy visible.
 
 ### `POST /api/jobs`
 

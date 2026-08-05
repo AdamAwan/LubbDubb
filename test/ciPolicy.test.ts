@@ -8,6 +8,7 @@ import {
   validateCiPolicy,
   type CiPolicy,
 } from '../src/ci/ciPolicy.js';
+import { describeCiPolicy } from '../src/ci/describeCiPolicy.js';
 import { loadConfig } from '../src/config.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { prHealth } from '../src/prHealth.js';
@@ -537,4 +538,75 @@ test('/api/state ships the classification verdict, from the same call the dispat
   // the harness held.
   assert.deepEqual(shipped, classifyCiFailures(checks, ci));
   system.store.close?.();
+});
+
+// --------------------------------------------------------------------------
+// `describeCiPolicy` — what the cockpit's CI tab is shown (issue #244)
+// --------------------------------------------------------------------------
+
+test('describeCiPolicy: an empty policy still states the unmatched routing', () => {
+  const described = describeCiPolicy(loadConfig());
+  // The empty case is the one the tab has to get right: nothing configured does
+  // not mean nothing happens, it means every failing check dispatches.
+  assert.deepEqual(described, { rules: [], unmatched: 'dispatch', policyKinds: null });
+});
+
+test('describeCiPolicy: an omitted onFailure is reported as the inherited ignore', () => {
+  const described = describeCiPolicy(
+    loadConfig({
+      ci: {
+        checks: [
+          { match: 'deploy-*' },
+          { match: 'lint', onFailure: 'dispatch', guidance: 'run npm run format', urgent: true },
+          { match: 'flaky-*', onFailure: 'escalate' },
+        ],
+      },
+    }),
+  );
+
+  assert.deepEqual(described.rules, [
+    // The value `classifyCiFailures` acts on, not the absent field the file shows.
+    { match: 'deploy-*', onFailure: 'ignore', inherited: true, guidance: null, urgent: false },
+    { match: 'lint', onFailure: 'dispatch', inherited: false, guidance: 'run npm run format', urgent: true },
+    { match: 'flaky-*', onFailure: 'escalate', inherited: false, guidance: null, urgent: false },
+  ]);
+  // Order is the policy's own — first match wins, and the tab numbers them.
+  assert.deepEqual(
+    described.rules.map((r) => r.match),
+    ['deploy-*', 'lint', 'flaky-*'],
+  );
+});
+
+test('describeCiPolicy: policy kinds are Azure-only, and a partial map merges over the defaults', () => {
+  // Under GitHub the modes are consulted by nothing, so a table of them would be
+  // an answer to a question this harness never asks.
+  assert.equal(
+    describeCiPolicy(loadConfig({ integrations: { sourceControl: 'github', issues: 'fake' } })).policyKinds,
+    null,
+  );
+
+  const kinds = describeCiPolicy(
+    loadConfig({
+      integrations: { sourceControl: 'azure', issues: 'fake' },
+      azureDevOps: { organization: 'org', project: 'proj', repository: 'repo', policyChecks: { workItems: 'check' } },
+    }),
+  ).policyKinds;
+
+  assert.deepEqual(
+    kinds?.find((k) => k.kind === 'workItems'),
+    { kind: 'workItems', mode: 'check', isDefault: false },
+  );
+  // Everything the operator did not name keeps its default, and says so.
+  assert.deepEqual(
+    kinds?.find((k) => k.kind === 'build'),
+    { kind: 'build', mode: 'check', isDefault: true },
+  );
+  assert.deepEqual(
+    kinds?.find((k) => k.kind === 'comments'),
+    { kind: 'comments', mode: 'advisory', isDefault: true },
+  );
+  assert.deepEqual(
+    kinds?.find((k) => k.kind === 'reviewers'),
+    { kind: 'reviewers', mode: 'off', isDefault: true },
+  );
 });

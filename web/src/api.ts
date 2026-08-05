@@ -3,6 +3,7 @@ import type { AppState, RecoveryVerdict } from './types.js';
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
+  CiPolicyPayload,
   PromptsPayload,
   RetrospectivePayload,
   RunningConfigPayload,
@@ -118,6 +119,10 @@ const realApi = {
   // The running config, fetched on open for the same reason as the prompt book:
   // `loadConfig` runs once at boot, so this can never change while the tab is up.
   getConfig: () => authFetch('/api/config').then((r) => json<RunningConfigPayload>(r)),
+  // The effective CI policy behind the settings modal's CI tab. Derived on the
+  // server from the same defaults `classifyCiFailures` reads, so the tab cannot
+  // claim a routing the dispatcher would not take.
+  getCiPolicy: () => authFetch('/api/ci-policy').then((r) => json<CiPolicyPayload>(r)),
   // Ask an agent to create a tracker item for work nothing external accounts for.
   // An operator's click, never a rule: see src/graph/unrecorded.ts.
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),

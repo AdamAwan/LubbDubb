@@ -20,14 +20,19 @@ import type { PromptTemplateView } from '../types.js';
  * which is why the panel names that path for each id whether or not one exists —
  * that is what makes a viewer actionable without a write route whose only honest
  * answer to "when does this take effect" is "at the next restart".
+ *
+ * A **tab of the settings modal** since #244, rather than a disclosure hanging
+ * under the Work panel. The book is operator-facing configuration and belongs
+ * beside the rest of it; the disclosure toggle is gone because a tab already
+ * answers "is this open", and two collapse states in one panel is one too many.
  */
-export function PromptsPanel() {
-  const [open, setOpen] = useState(false);
+export function PromptsTab() {
   const [book, setBook] = useState<{ dir: string | null; templates: PromptTemplateView[] } | null>(null);
   const [shown, setShown] = useState<PromptTemplateView | null>(null);
 
+  // Fetched when the tab first mounts. The modal keeps every tab's body mounted
+  // once visited, so switching away and back does not re-fetch a constant.
   useEffect(() => {
-    if (!open || book) return;
     let live = true;
     void api.getPrompts().then((b) => {
       if (live) setBook(b);
@@ -35,17 +40,17 @@ export function PromptsPanel() {
     return () => {
       live = false;
     };
-  }, [open, book]);
+  }, []);
 
-  const count = book ? book.templates.length : null;
+  if (!book) return <div className="muted">Loading…</div>;
   return (
-    <div className="prompts-panel">
-      <button className="btn ghost prompts-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
-        {open ? '▾' : '▸'} Prompts{count === null ? '' : ` (${count})`}
-      </button>
-      {open && book && <PromptList book={book} onShow={setShown} />}
-      {shown && book && <PromptModal prompt={shown} dir={book.dir} onClose={() => setShown(null)} />}
-    </div>
+    <>
+      <PromptList book={book} onShow={setShown} />
+      {/* Nested inside the settings modal on purpose: its own Escape listener and
+          backdrop close *this* layer, and the settings modal registers neither,
+          so dismissing a template cannot take the modal behind it down too. */}
+      {shown && <PromptModal prompt={shown} dir={book.dir} onClose={() => setShown(null)} />}
+    </>
   );
 }
 
@@ -78,19 +83,17 @@ function PromptList({
     return <p className="empty">No prompt book to show — this cockpit is running against the demo backend.</p>;
   }
   return (
-    <>
-      <ul className="prompt-list">
-        {book.templates.map((t) => (
-          <li key={t.id}>
-            <button className="btn ghost prompt-row" onClick={() => onShow(t)}>
-              <code className="prompt-id">{t.id}</code>
-              {t.overridden && <span className="chip warn">overridden</span>}
-              <span className="muted prompt-doc">{firstSentence(t.doc)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </>
+    <ul className="prompt-list">
+      {book.templates.map((t) => (
+        <li key={t.id}>
+          <button className="btn ghost prompt-row" onClick={() => onShow(t)}>
+            <code className="prompt-id">{t.id}</code>
+            {t.overridden && <span className="chip warn">overridden</span>}
+            <span className="muted prompt-doc">{firstSentence(t.doc)}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

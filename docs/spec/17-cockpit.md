@@ -45,17 +45,17 @@ What stops that becoming N divergent cockpits is the split on **behaviour weight
 what another skin would replace wholesale. Resolved by putting the _call_ on `CockpitActions` and
 leaving only the drag UI skin-side.
 
-**Two panels hang off the shell rather than off a skin**, below it, so they read the same whichever
-theme is on: the work graph (`WorkTreePanel`) and the prompt book (`PromptsPanel`). Both are absent
-from the view-model because both ride their own routes, **fetched on open, never polled** — the graph
-because it only ever grows, the book because it never changes at all. A skin drawing either would have
-to reach `api.js` directly, which is exactly what the skin seam forbids and `test/cockpitSkins.test.ts`
-asserts.
+**One panel hangs off the shell rather than off a skin**, below it, so it reads the same whichever
+theme is on: the work graph (`WorkTreePanel`). It is absent from the view-model because it rides its
+own route, **fetched on open, never polled**, since it only ever grows. A skin drawing it would have
+to reach `api.js` directly, which is exactly what the skin seam forbids and
+`test/cockpitSkins.test.ts` asserts.
 
-The Prompts panel is a collapsed button that opens the list of ids (each with the opening sentence of
-its doc and an `overridden` badge), and a row opens a modal carrying the doc in full, the placeholders
-an override may use, the path of the override file, and the effective template text. It is read-only:
-the path is what makes it actionable, since overriding is a file drop
+The prompt book hung there too until #244 and is now a **tab of the settings modal** below — same
+fetched-on-open route, same shell ownership, a findable place. It lists the prompt ids (each with the
+opening sentence of its doc and an `overridden` badge), and a row opens a modal carrying the doc in
+full, the placeholders an override may use, the path of the override file, and the effective template
+text. It is read-only: the path is what makes it actionable, since overriding is a file drop
 ([16](16-http-api.md#get-apiprompts)). The demo build serves an empty book: the web
 bundle imports no server code, and a copy of eighteen prompts shipped to fill the panel would be free
 to drift from the originals with nothing to catch it.
@@ -625,14 +625,51 @@ the picker, so a skin failing to draw one is still a skin you could not leave.
 
 ### Settings
 
-A cog in each skin's chrome opens a shared modal carrying two things: the skin picker above, and the
-configuration this process is actually running on.
+A cog in each skin's chrome opens a shared modal. Since #244 it carries **three tabs**, which is
+everything an operator configures answering to one control:
 
-The arrangement is `PlanModal`'s exactly. The modal reads `GET /api/config`, which a skin may not do,
-so it hangs off the shell in `App.tsx` and the skin-side cog only flips `settingsOpen` through
+| Tab          | Reads             | Shows                                                                     |
+| ------------ | ----------------- | ------------------------------------------------------------------------- |
+| `Settings`   | `GET /api/config` | The skin picker, the live controls, and the configuration this process ran up on |
+| `CI policy`  | `GET /api/ci-policy` | What the harness does about a red PR, check by check                   |
+| `Prompts`    | `GET /api/prompts` | The rule dispatcher's prompt book                                       |
+
+The tabs exist because the last two were, in practice, unreadable. `ci.checks` was visible only by
+opening `lubbdubb.config.json` on the host, and the prompt book hung off the Work panel — a place
+nobody looks for a setting. Stacking all three down one scrolling panel would have reproduced the
+finding problem inside the modal.
+
+A tab's body is **mounted on its first visit and never unmounted**, hidden rather than torn down when
+another is selected. Each fetches a constant once, so unmounting would buy nothing and cost a re-fetch
+on every switch — and the filter typed into the running-config block survives a look at CI.
+
+The **prompt book's own modal nests inside this one**, and that is why the settings modal registers no
+Escape listener: `PromptModal` has one, so Escape and a backdrop click close the template being read
+and leave the modal behind it standing. Two listeners would close both layers on one key.
+
+The arrangement is `PlanModal`'s exactly. The modal reads routes a skin may not, so it hangs off the
+shell in `App.tsx` and the skin-side cog only flips `settingsOpen` through
 `CockpitActions.openSettings` — the same seam `viewPlan` uses, for the same reason.
 
-The config half is **read-only and fetched on open**, both for the prompt book's reasons
+#### The CI policy tab
+
+The ordered `ci.checks` rules as the running server has them: the glob, the **effective** `onFailure`,
+its `guidance` and `urgent` flag, numbered so "first match wins" is readable. A rule that omitted
+`onFailure` is drawn as `ignore` and said to have **inherited** it — an operator reading the config
+file sees an absent field and has no way to know the omission means "leave it alone" rather than
+"fall through to the default". Below the table, the routing a check matching **no rule** takes:
+`dispatch`. Under Azure, the branch-policy kinds and the mode each is surfaced under follow, marked
+default-or-chosen.
+
+An empty policy is a full answer rather than a blank tab: no rules means every failing check takes the
+unmatched routing, and the tab says so.
+
+Every effective value is computed by `describeCiPolicy` on the server
+([16](16-http-api.md#get-apici-policy)) — the component asserts nothing of its own about the policy,
+so it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: there is no
+config-write path in the harness at all.
+
+The config tab is **read-only and fetched on open**, both for the prompt book's reasons
 ([16](16-http-api.md)): `loadConfig` runs once at boot so polling would be paying for a constant, and
 a write route's honest answer to "when does this take effect" is "at the next restart". Values are
 grouped, and each one that differs from the built-in default is marked — the question an operator
