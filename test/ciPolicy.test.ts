@@ -493,7 +493,7 @@ test('/api/state ships the classification verdict, from the same call the dispat
   const { join } = await import('node:path');
   const { buildSystem } = await import('../src/system.js');
   const { FakePtyBackend } = await import('../src/pty/fakeBackend.js');
-  const { buildStateSnapshot } = await import('../src/server/app.js');
+  const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
 
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-ci-'));
   const ci: CiPolicy = {

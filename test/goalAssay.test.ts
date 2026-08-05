@@ -663,7 +663,7 @@ test('an operator verdict is a first-class one, and clearing it is a delete', ()
 // -- the cockpit's half ------------------------------------------------------
 
 test('/api/state ships the verdict beside the pickup reason, not inside it', async () => {
-  const { buildStateSnapshot } = await import('../src/server/app.js');
+  const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
   const system = build();
   system.connector.inject({
     kind: 'new_issue',

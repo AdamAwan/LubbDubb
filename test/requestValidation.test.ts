@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config.js';
@@ -206,10 +206,42 @@ test('no route reads req.params or req.body through a type assertion', () => {
   // field a handler then reads as though something validated it. Asserted on the
   // source rather than intended, so the 45th route cannot quietly reintroduce one.
   //
+  // Since #237 this walks `src/server/routes/` plus the two files that still hold
+  // request-reading code (`app.ts`'s auth hook, `validation.ts` itself), so a
+  // route group added as a new module is covered on the day it is written.
+  //
   // `req.query` is deliberately out of scope: both of its two sites assert the
   // value to `unknown` and test its type before use, so the assertion claims
   // nothing about the data.
-  const source = readFileSync(new URL('../src/server/app.ts', import.meta.url), 'utf8');
-  const assertions = [...source.matchAll(/req\.(params|body)[^\n]*\bas\b/g)].map((m) => m[0]);
+  const assertions = routeSources().flatMap(([file, source]) =>
+    [...source.matchAll(/req\.(params|body)[^\n]*\bas\b/g)].map((m) => `${file}: ${m[0]}`),
+  );
   assert.deepEqual(assertions, [], 'read these through readRequest and a zod schema instead');
 });
+
+test('no route reads a request itself — every one takes checked input', () => {
+  // The half of #223 that used to be held by nothing but this file's own grep
+  // (issue #237). A handler *handed* `params` and `body` has no raw request to
+  // assert about and no `if (!input.ok)` to forget, which is why the 36 verbatim
+  // copies of the 400 line are gone: `checked` is the only caller of
+  // `readRequest` left, so the refusal path is one path by construction rather
+  // than by 36 correct repetitions.
+  //
+  // A route that needs the body read *after* a 404/409 (`/api/findings/:id/*`,
+  // `/api/work/:ref/file`) applies `checked` by hand a second time rather than
+  // reaching past it, so those are covered by this too.
+  const callers = routeSources()
+    .filter(([, source]) => /\breadRequest\(/.test(source))
+    .map(([file]) => file);
+  assert.deepEqual(callers, [], 'wrap the handler in `checked` instead of reading the request');
+});
+
+/** Every source that declares a route, as `[name relative to src/server/, text]`. */
+function routeSources(): [string, string][] {
+  const server = new URL('../src/server/', import.meta.url);
+  const files = ['app.ts'];
+  for (const entry of readdirSync(new URL('routes/', server)).sort()) {
+    if (entry.endsWith('.ts')) files.push(`routes/${entry}`);
+  }
+  return files.map((file) => [file, readFileSync(new URL(file, server), 'utf8')]);
+}

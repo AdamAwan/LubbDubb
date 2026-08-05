@@ -15,7 +15,7 @@ import {
 import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
-import { buildStateSnapshot } from '../src/server/app.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';

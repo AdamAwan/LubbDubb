@@ -123,7 +123,7 @@ test('clearing is a delete, so "not delivered" has exactly one representation', 
  * delivery park, so the same issue reports `planning`. Both true; neither this.
  */
 test('/api/state ships a standing delivery beside the conclusion and the pickup status', async () => {
-  const { buildStateSnapshot } = await import('../src/server/app.js');
+  const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Make it better', body: 'the thing' });
   system.store.setWorldBaseline(await system.connector.getState());
@@ -152,7 +152,7 @@ test('/api/state ships a standing delivery beside the conclusion and the pickup 
  * be promising a park that has ended.
  */
 test('/api/state drops a delivery the world has overtaken', async () => {
-  const { buildStateSnapshot } = await import('../src/server/app.js');
+  const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Make it better', body: 'the thing' });
   system.store.setWorldBaseline(await system.connector.getState());

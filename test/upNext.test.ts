@@ -8,7 +8,7 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Job, WorldSnapshot } from '../src/types.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
-import { buildStateSnapshot } from '../src/server/app.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { Store } from '../src/store/store.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';

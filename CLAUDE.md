@@ -180,10 +180,16 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   from the environment, so `lubbdubb.config.json` stays safe to paste. Precedence is explicit
   overrides → `lubbdubb.config.json` → defaults, with `PORT` / `LUBBDUBB_DB` / `LUBBDUBB_HOST` /
   `LUBBDUBB_REPO_ROOT` env overrides. → [02](docs/spec/02-configuration.md)
-- **Route input is read through `readRequest`** (`src/server/validation.ts`) and never an `as` cast.
-  A refusal is a returned value and a 400, not a throw — `setErrorHandler` means _unanticipated_,
-  and routing typos there buries real faults. Asserted structurally against `app.ts`'s source.
-  → [16](docs/spec/16-http-api.md)
+- **A route handler never reads the request.** It is wrapped in `checked(schemas, handler)`
+  (`src/server/validation.ts`) and handed `{params, body, req, reply}` already parsed — never an `as`
+  cast, and never its own `code(400)` for a malformed request. A refusal is a returned value and a
+  400, not a throw — `setErrorHandler` means _unanticipated_, and routing typos there buries real
+  faults. Asserted structurally over every file in `src/server/routes/`.
+  → [16](docs/spec/16-http-api.md#request-validation)
+- **A new route goes in the module under `src/server/routes/` that owns its group**, and a new group
+  is a new module plus an entry in `app.ts`'s `ROUTE_MODULES`. `app.ts` is wiring only. A schema
+  encoding a domain rule (rather than a request shape) goes with the rule — `ShortfallBody` lives in
+  `src/delivery/shortfall.ts`. → [16](docs/spec/16-http-api.md#shape)
 
 ## Where to read further
 

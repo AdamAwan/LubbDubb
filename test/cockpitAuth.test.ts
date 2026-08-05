@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
@@ -38,22 +38,30 @@ function tokenOf(cockpitUrl: string | null): string {
 // matters is over the whole route table, read out of the source. A route added
 // later is covered by this test on the day it is written, which is the property
 // a hand-maintained list of paths cannot have.
+//
+// Since #237 the table is spread across `src/server/routes/`, so this walks the
+// *directory* rather than one file: a route group added as a new module is
+// covered by default, which the single-filename read it replaces could not be.
 // ---------------------------------------------------------------------------
 
 type RouteMethod = 'GET' | 'POST' | 'DELETE';
 
-/** Every `app.get`/`app.post`/`app.delete` path declared in `app.ts`, with params filled in. */
+/** Every `app.get`/`app.post`/`app.delete` path declared under `routes/`, with params filled in. */
 function declaredRoutes(): { method: RouteMethod; url: string }[] {
-  const source = readFileSync(new URL('../src/server/app.ts', import.meta.url), 'utf8');
+  const dir = new URL('../src/server/routes/', import.meta.url);
   const routes: { method: RouteMethod; url: string }[] = [];
-  for (const [, method, path] of source.matchAll(/\bapp\.(get|post|delete)\('([^']+)'/g)) {
-    if (!method || !path) continue;
-    routes.push({ method: method.toUpperCase() as RouteMethod, url: path.replace(/:[A-Za-z]+/g, '1') });
+  for (const file of readdirSync(dir).sort()) {
+    if (!file.endsWith('.ts')) continue;
+    const source = readFileSync(new URL(file, dir), 'utf8');
+    for (const [, method, path] of source.matchAll(/\bapp\.(get|post|delete)\(\s*'([^']+)'/g)) {
+      if (!method || !path) continue;
+      routes.push({ method: method.toUpperCase() as RouteMethod, url: path.replace(/:[A-Za-z]+/g, '1') });
+    }
   }
   return routes;
 }
 
-test('every API route declared in app.ts refuses an unauthenticated request', async () => {
+test('every API route declared under routes/ refuses an unauthenticated request', async () => {
   const routes = declaredRoutes();
   // Guards the guard: a regex that silently stopped matching would make every
   // assertion below vacuous.

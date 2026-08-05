@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { buildStateSnapshot } from '../src/server/app.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 test('the state snapshot reports per-PR health', async () => {

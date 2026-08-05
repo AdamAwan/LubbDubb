@@ -1,3 +1,4 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 /**
@@ -29,6 +30,11 @@ import { z } from 'zod';
  *   Several routes answer 404/409 off the store between the two (a finding that
  *   does not exist is not a bad request), so this reads whichever schemas it is
  *   given and the handler decides the order.
+ *
+ * {@link checked} is how a route says all of that in one word: it wraps the
+ * handler, so a handler is *handed* checked values and never sees the raw
+ * request. That is what removes the 36 verbatim copies of the 400 line that
+ * `buildApp` used to carry, and with them the way to forget one.
  */
 
 /** A request refused before the handler acted, carrying the 400 body's `error`. */
@@ -67,6 +73,37 @@ export function readRequest<P = undefined, B = undefined>(
   // `undefined`, which is what the generic defaults to for a route that declares
   // no such half.
   return { ok: true, params: params?.data as P, body: body?.data as B };
+}
+
+/**
+ * A route handler that receives *checked* input, wrapped into one Fastify
+ * handler. The single place on this surface that turns a refusal into a `400`.
+ *
+ * The 36 hand-written copies of `if (!input.ok) return reply.code(400)...` this
+ * replaces were the weak half of issue #223: every one of them was correct, and
+ * nothing but a source grep said the 37th had to be. A handler that is *handed*
+ * `params` and `body` has no raw request to assert about and no check to skip —
+ * the property is held by the signature rather than by a test reading the file.
+ *
+ * `req` and `reply` ride in the same record rather than as trailing positional
+ * arguments so a handler destructures exactly what it uses; most want `reply`
+ * for a 404/409 and nothing else.
+ *
+ * The wrapper is also **callable by hand**, which is what the three routes that
+ * answer 404/409 off the store between the params and the body do:
+ * `return checked({ body: X }, handler)(req, reply)` inside an outer
+ * `checked({ params: Y }, ...)`. Same one refusal path, in the order the route
+ * needs.
+ */
+export function checked<P = undefined, B = undefined>(
+  schemas: { params?: z.ZodType<P, z.ZodTypeDef, unknown>; body?: z.ZodType<B, z.ZodTypeDef, unknown> },
+  handler: (input: { params: P; body: B; req: FastifyRequest; reply: FastifyReply }) => unknown,
+): (req: FastifyRequest, reply: FastifyReply) => Promise<unknown> {
+  return async (req, reply) => {
+    const input = readRequest(req, schemas);
+    if (!input.ok) return reply.code(400).send({ error: input.error });
+    return handler({ params: input.params, body: input.body, req, reply });
+  };
 }
 
 /**
@@ -128,3 +165,12 @@ export function optionalText(field: string): z.ZodType<string | undefined> {
     .optional()
     .transform((text) => text || undefined);
 }
+
+/**
+ * The operator's override of a derived ticket title, shared by the two routes
+ * that file one — `/api/findings/:id/file` and `/api/work/:ref/file`. Here
+ * rather than in either of them because both offer the same override over their
+ * own derived default, and a second copy is how the two come to word it
+ * differently.
+ */
+export const TicketTitleBody = z.object({ title: optionalText('title') });
