@@ -600,6 +600,7 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
     title: string;
     body: string;
     state: string;
+    pickup: { status: string; reasons: string[] };
     run?: { dismissed: boolean };
     retrospective?: { summary: string };
   }[];
@@ -609,6 +610,10 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
   assert.equal(one!.body, 'the goal, as it last stood', 'and so is the goal itself');
   assert.equal(one!.state, 'closed');
   assert.equal(one!.run?.dismissed, false);
+  // The chip reads the run, not the tracker: `done` would say "nothing to do"
+  // about the one goal on the floor still waiting for the operator to end it.
+  assert.equal(one!.pickup.status, 'retained');
+  assert.deepEqual(one!.pickup.reasons, ['closed; run kept until you dismiss it']);
   assert.equal(one!.retrospective?.summary, 'It shipped in two parts.', 'its report rides the rebuilt issue');
 
   await app.close();

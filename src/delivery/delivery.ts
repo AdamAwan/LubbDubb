@@ -15,8 +15,9 @@ import type { Issue, IssueDelivery, WorldEvent } from '../types.js';
  *
  * This predicate is the park generalised off the tracker and onto a row the
  * harness owns. It is deliberately narrow: it gates **pickup and nothing else**,
- * and it is not a completion test. `closed` in the tracker remains the only
- * terminal answer, and remains the human's to give.
+ * and it is not a completion test. The terminal answer is the operator's dismissal
+ * of the run (issue #234), not this row and not the tracker's `closed` — a close is
+ * reporting, and a run outlives it.
  *
  * ## What ends it
  *

@@ -3,6 +3,7 @@ import type {
   Issue,
   IssueAssay,
   IssueDelivery,
+  IssueRun,
   Plan,
   PlanPart,
   PullRequest,
@@ -176,7 +177,8 @@ export function issueWatchGateReason(issue: Issue, policy: IssuePickupPolicy): s
 
 /** What LubbDubb is doing (or not) with one issue, and why. */
 type IssuePickupStatusKind =
-  | 'done' // closed — nothing to do
+  | 'done' // closed, and the harness holds no run — nothing to do
+  | 'retained' // closed, but its run lives until dismissed (issue #234)
   | 'has_pr' // resolved into a PR; the PR rules own it now
   | 'active' // an agent/task is on it right now
   | 'ignored' // carries the ignore tag — the operator said leave it alone
@@ -245,6 +247,12 @@ export interface IssuePickupContext {
    * eligible, and saying so is the difference between a queue and a silence.
    */
   assay?: AssayPolicy;
+  /**
+   * The harness's runs at each goal, so a closed issue can be told from a closed
+   * *ticket* (issue #234). Absent = nothing retained, which reads exactly as it did
+   * before runs existed.
+   */
+  runs?: IssueRun[];
   /** Remaining dispatch slots this cycle (0 while paused). */
   headroom: number;
   paused: boolean;
@@ -258,7 +266,30 @@ export interface IssuePickupContext {
  * the verdict matches what actually happens next cycle.
  */
 export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
-  if (issue.state !== 'open') return { eligible: false, status: 'done', reasons: ['closed'] };
+  if (issue.state !== 'open') {
+    // A close is the tracker's answer, not the run's end (issue #234). While the
+    // run lives, `done` is the wrong reading twice over: the harness may still act
+    // on the goal — `issue-assess` and `issue-retro` are dispatched off exactly
+    // these retained runs — and "nothing to do" hides the one thing the operator
+    // still has to do, which is dismiss it. `done` keeps its meaning for the case
+    // it was always right about: a closed ticket the harness never had a run at,
+    // or one whose run the operator already ended.
+    const run = ctx.runs?.find((r) => r.issueNumber === issue.number) ?? null;
+    if (run !== null && run.dismissedAt === null) {
+      return {
+        eligible: false,
+        status: 'retained',
+        // Off `completed_at`, the same evidence the dismissal reads its outcome
+        // from — so the chip and the outcome it will be stamped with agree.
+        reasons: [
+          run.completedAt !== null
+            ? 'closed; run kept until you dismiss it'
+            : 'closed mid-run; kept until you dismiss it',
+        ],
+      };
+    }
+    return { eligible: false, status: 'done', reasons: ['closed'] };
+  }
 
   // The plan comes *before* the PR gate for an issue that split into parts, and it
   // has to: a part's PR is on `issue/<n>/<slug>`, but `linkedPrNumber` is sticky and

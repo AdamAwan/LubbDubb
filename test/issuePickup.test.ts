@@ -8,7 +8,7 @@ import {
   openPrForIssue,
 } from '../src/dispatcher/issuePickup.js';
 import type { IssuePickupPolicy, IssuePickupContext } from '../src/dispatcher/issuePickup.js';
-import type { Decision, Issue, PullRequest, Task } from '../src/types.js';
+import type { Decision, Issue, IssueRun, PullRequest, Task } from '../src/types.js';
 
 const SCHEME: IssuePickupPolicy = {
   priorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
@@ -208,6 +208,24 @@ function dispatched(origin: string, createdAt: string): Decision {
   };
 }
 
+function run(over: Partial<IssueRun> = {}): IssueRun {
+  return {
+    originRef: 'issue:1',
+    issueNumber: 1,
+    title: 'X',
+    body: '',
+    labels: [],
+    linkedPrNumber: null,
+    workItemState: null,
+    startedAt: NOW,
+    completedAt: null,
+    outcome: null,
+    dismissedAt: null,
+    updatedAt: NOW,
+    ...over,
+  };
+}
+
 function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
   return {
     policy: { priorityLabels: {}, defaultPriority: 0 },
@@ -222,8 +240,40 @@ function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
   };
 }
 
-test('issuePickupStatus: a closed issue is done', () => {
+test('issuePickupStatus: a closed issue the harness never ran at is done', () => {
   const v = issuePickupStatus(issue({ state: 'closed' }), ctx());
+  assert.deepEqual(v, { eligible: false, status: 'done', reasons: ['closed'] });
+});
+
+// The other half of #234 in the chip: a close is the tracker's answer, and the run
+// it does not end is still something the operator has to dismiss.
+test('issuePickupStatus: a closed issue whose run still lives is retained, not done', () => {
+  const abandoned = issuePickupStatus(issue({ state: 'closed' }), ctx({ runs: [run({ completedAt: null })] }));
+  assert.deepEqual(abandoned, {
+    eligible: false,
+    status: 'retained',
+    reasons: ['closed mid-run; kept until you dismiss it'],
+  });
+
+  const judged = issuePickupStatus(issue({ state: 'closed' }), ctx({ runs: [run({ completedAt: NOW })] }));
+  assert.deepEqual(judged, {
+    eligible: false,
+    status: 'retained',
+    reasons: ['closed; run kept until you dismiss it'],
+  });
+});
+
+test('issuePickupStatus: a dismissed run gives the close back its plain done', () => {
+  const v = issuePickupStatus(
+    issue({ state: 'closed' }),
+    ctx({ runs: [run({ dismissedAt: NOW, outcome: 'judged' })] }),
+  );
+  assert.deepEqual(v, { eligible: false, status: 'done', reasons: ['closed'] });
+});
+
+// A run on a *different* goal must not answer for this one.
+test('issuePickupStatus: a run at another issue leaves the close alone', () => {
+  const v = issuePickupStatus(issue({ state: 'closed' }), ctx({ runs: [run({ issueNumber: 99 })] }));
   assert.deepEqual(v, { eligible: false, status: 'done', reasons: ['closed'] });
 });
 

@@ -1078,7 +1078,10 @@ disagree with what the dispatcher does:
 - **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue and rendered by `pickupChip`.
   `done` and `has_pr` render nothing, because the state chip and the "→ PR" chip already say it; an
   older server that ships no verdict renders nothing at all. Every other status shows its first reason,
-  with the full list in the `title`.
+  with the full list in the `title`. `retained` does render, and calmly: the state chip says `closed`
+  and nothing else on the row says the run is still being kept, which is the whole point of the
+  status — and it is parked on purpose, waiting on a dismissal rather than on anything going wrong,
+  so it joins `active` and `delivered` in taking no warning colour.
 
 ## Demo mode
 
