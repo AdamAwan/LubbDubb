@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { PromptsPayload, RunningConfigPayload } from '../../wire.js';
+import type { CiPolicyPayload, PromptsPayload, RunningConfigPayload } from '../../wire.js';
+import { describeCiPolicy } from '../../ci/describeCiPolicy.js';
 import { describeRunningConfig } from '../runningConfig.js';
 import { buildStateSnapshot } from '../stateSnapshot.js';
 import type { RouteContext } from './context.js';
@@ -47,6 +48,16 @@ export function register(app: FastifyInstance, { system, artifactSigner }: Route
   // the snapshot as `control`, and the modal draws them beside their configured
   // counterparts rather than letting this block claim a cap that is not in force.
   app.get('/api/config', async () => ({ groups: describeRunningConfig(config) }) satisfies RunningConfigPayload);
+
+  // What `config.ci.checks` *means*, for the settings modal's CI tab. Its own
+  // route rather than another group on `/api/config` because it is a derivation
+  // and not a reading: the raw array is already on that payload, and what the
+  // operator cannot get from it is the part `classifyCiFailures` supplies — the
+  // `ignore` a rule inherits by omitting `onFailure`, the `dispatch` an unmatched
+  // check gets, and which branch-policy kinds become checks at all.
+  //
+  // Fetched on open and read-only, for the two routes above's reasons exactly.
+  app.get('/api/ci-policy', async () => ({ policy: describeCiPolicy(config) }) satisfies CiPolicyPayload);
 
   app.get('/api/health', async () => ({ ok: true }));
 }

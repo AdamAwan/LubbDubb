@@ -1768,19 +1768,9 @@ body {
 }
 
 /* --- Prompt book -------------------------------------------------------- */
-/* The rule dispatcher's template book: a collapsed button, a list, a modal.
-   Hangs under the Work panel, below the skin, so it looks the same in both. */
-.prompts-panel {
-  margin-top: 16px;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-}
-.prompts-toggle {
-  padding: 4px 0;
-  border: 0;
-  color: var(--text);
-  font: inherit;
-}
+/* The rule dispatcher's template book: a list and a modal, drawn as a tab of the
+   settings modal since #244 — so the list needs no chrome of its own, and the
+   surrounding panel rules that used to give it one are gone with the panel. */
 .prompts-note {
   font-size: 12px;
   margin: 4px 0 8px;
@@ -2178,6 +2168,66 @@ body {
 }
 .settings-section {
   margin-top: 12px;
+}
+/* The tab strip. A row of ghost buttons with the active one underlined rather
+   than boxed: the modal is already a box, and a second border inside it reads as
+   a nested panel instead of a selection. */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-tab {
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+}
+.settings-tab:hover {
+  color: var(--text);
+}
+.settings-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--blue);
+  font-weight: 600;
+}
+/* CI policy tab. Same table as the running config, plus the ordinal that makes
+   "first match wins" readable at a glance. */
+/* `auto`, against the running config's `fixed`: the glob column is short and the
+   routing column carries wrapped guidance prose, so the two want very different
+   shares and letting the content say so beats picking percentages. */
+.ci-rules {
+  table-layout: auto;
+}
+.ci-rules th {
+  padding: 3px 6px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.ci-rules th:first-child {
+  width: 32px;
+}
+.ci-order {
+  text-align: right;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ci-urgent {
+  margin-left: 6px;
+}
+.ci-guidance {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.ci-unmatched {
+  margin: 10px 0 0;
+  font-size: 12px;
 }
 .settings-hint {
   font-size: 12px;

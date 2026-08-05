@@ -35,6 +35,7 @@
  * a key that is always sent but may be empty is `| null`.
  */
 
+import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
 import type { CiVerdict } from './ci/ciPolicy.js';
 import type { IssuePickupStatus } from './dispatcher/issuePickup.js';
 import type { DispatchRule } from './dispatcher/rules.js';
@@ -361,6 +362,18 @@ export interface RunningConfigPayload {
   groups: RunningConfigGroup[];
 }
 
+/**
+ * `/api/ci-policy` — the effective per-check CI policy, fetched on open for the
+ * running config's reason. Separate from {@link RunningConfigPayload} because it
+ * is a *derivation* and not a reading: `ci.checks` is already on that payload as
+ * a raw JSON leaf, and what this adds is what the leaf does not say — the
+ * inherited `ignore`, the unmatched `dispatch`, and which policy kinds become
+ * checks at all.
+ */
+export interface CiPolicyPayload {
+  policy: CiPolicyDescription;
+}
+
 // ---------------------------------------------------------------------------
 // The cockpit's import surface
 // ---------------------------------------------------------------------------
@@ -392,6 +405,7 @@ export type {
   WorldEventKind,
 } from './types.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
+export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
 export type { QueueItem } from './dispatcher/dispatcher.js';
 export type { DispatchRule } from './dispatcher/rules.js';
 export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';

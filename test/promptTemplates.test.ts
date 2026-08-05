@@ -15,7 +15,7 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { overridePath } from '../web/src/components/PromptsPanel.js';
+import { overridePath } from '../web/src/components/PromptsTab.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';

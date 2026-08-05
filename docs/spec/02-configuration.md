@@ -102,6 +102,13 @@ one job:
 dispatches: both are written for an agent that would never be sent, and dropping
 them silently is the failure worth catching at boot.
 
+The resolved policy is readable **from the cockpit** since #244 — the settings modal's CI tab
+([17](17-cockpit.md#the-ci-policy-tab)), off `GET /api/ci-policy`
+([16](16-http-api.md#get-apici-policy)). It shows the *effective* routing per rule rather than the
+field as written, which is the point: the two defaults above (`ignore` for an omitted `onFailure`,
+`dispatch` for a check no rule claims) are the whole reason reading the file is not the same as
+knowing the policy.
+
 ```json
 {
   "ci": {

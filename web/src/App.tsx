@@ -5,7 +5,6 @@ import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { WorkTreePanel } from './components/WorkTreePanel.js';
-import { PromptsPanel } from './components/PromptsPanel.js';
 import { SettingsModal } from './components/SettingsModal.js';
 
 /**
@@ -110,7 +109,6 @@ export function App() {
       <section className="work-panel">
         <h2>Work</h2>
         <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />
-        <PromptsPanel />
       </section>
     </>
   );

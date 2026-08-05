@@ -18,7 +18,7 @@ import type { CiCheck } from '../types.js';
  */
 
 /** What a failing check makes the harness do. */
-type CiFailureAction = 'dispatch' | 'ignore' | 'escalate';
+export type CiFailureAction = 'dispatch' | 'ignore' | 'escalate';
 
 /** Every legal `onFailure` value, so config validation and the type can't drift. */
 const CI_FAILURE_ACTIONS: readonly CiFailureAction[] = ['dispatch', 'ignore', 'escalate'];

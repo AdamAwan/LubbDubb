@@ -12,6 +12,7 @@ import type {
   Issue,
   Job,
   OpenPullRequest,
+  CiPolicyDescription,
   PromptTemplateView,
   RunningConfigGroup,
   Proposal,
@@ -1004,6 +1005,13 @@ export const demoApi = {
   // code — so a demo copy would be a duplicate free to drift with nothing to
   // catch it. The demo shows an empty config and says so.
   getConfig: () => Promise.resolve({ groups: [] as RunningConfigGroup[] }),
+  // The demo configures no `ci.checks`, so an empty policy is not a stand-in —
+  // it is what this backend is actually running on, and the tab's empty state is
+  // the true reading of it. `unmatched` is a constant of `classifyCiFailures`
+  // rather than config, which is why stating it here cannot drift from a value
+  // the demo chose.
+  getCiPolicy: () =>
+    Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
   // Nothing to file into either: the demo has no tracker, which is the same
   // reason the real route refuses when the issues provider is `fake`.
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),

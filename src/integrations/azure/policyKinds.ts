@@ -13,9 +13,17 @@
  */
 
 /** Every kind an evaluation can classify into, so config validation can't drift from the map. */
-const POLICY_KINDS = ['build', 'status', 'comments', 'workItems', 'reviewers', 'mergeStrategy', 'other'] as const;
+export const POLICY_KINDS = [
+  'build',
+  'status',
+  'comments',
+  'workItems',
+  'reviewers',
+  'mergeStrategy',
+  'other',
+] as const;
 
-type PolicyKind = (typeof POLICY_KINDS)[number];
+export type PolicyKind = (typeof POLICY_KINDS)[number];
 
 /**
  * How a kind is surfaced.
@@ -29,7 +37,7 @@ type PolicyKind = (typeof POLICY_KINDS)[number];
  */
 const POLICY_CHECK_MODES = ['check', 'advisory', 'off'] as const;
 
-type PolicyCheckMode = (typeof POLICY_CHECK_MODES)[number];
+export type PolicyCheckMode = (typeof POLICY_CHECK_MODES)[number];
 
 /** An operator's kind → mode map; absent kinds take {@link DEFAULT_POLICY_CHECK_MODES}. */
 export type PolicyCheckModes = Partial<Record<PolicyKind, PolicyCheckMode>>;
