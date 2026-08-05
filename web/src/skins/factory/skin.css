@@ -1057,6 +1057,11 @@
   content: '\201D';
   color: var(--grey);
 }
+/* The question a bot is parked on, sunk into the bot itself. Only the gap: the
+   card inside is a shared component, tinted through the tokens above. */
+.fx-ask {
+  margin-top: 9px;
+}
 .fx-acts {
   display: flex;
   flex-wrap: wrap;

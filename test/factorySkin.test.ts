@@ -44,7 +44,9 @@ const { buildGoalFloor, floorFixtures, floorGoals, layoutFloor, partProgress, re
   '../web/src/skins/factory/goalFloor.js'
 );
 const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloor.js');
-const { BlueprintDesk, FaultLog, FindingsDesk } = await import('../web/src/skins/factory/components/Desks.js');
+const { BlueprintDesk, FaultLog, FindingsDesk, StampDesk } = await import(
+  '../web/src/skins/factory/components/Desks.js'
+);
 const { conditionGlyph, ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await import(
   '../web/src/skins/factory/inspection.js'
 );
@@ -665,6 +667,89 @@ test('an ended shift is a count in the bots head, not a card on the floor', () =
   assert.match(bots, /<button[^>]*>[1-9]\d* shifts? ended</, 'the head must carry the count, as the way in');
   assert.doesNotMatch(markup, /fx-bot fx-sunk[^"]*spent/, 'and no bot whose shift ended may be drawn on the floor');
   assert.doesNotMatch(markup, /class="fx-sub">Shifts/, 'nor the subheading the list stood under');
+});
+
+/** The Bots panel alone — where a bot's own reading has to be, to be on the floor. */
+function botsPanel(markup: string): string {
+  return markup.slice(markup.indexOf('data-fx="bots"'), markup.indexOf('data-fx="goal-floor"'));
+}
+
+/**
+ * #245: the alerts gauge is a fine notifier and was the sole route. A bot parked
+ * on a question now says so *on the floor* and carries the whole card — the
+ * prompt, the context, the answer box — so an operator never has to open a list
+ * and map its rows back onto bots.
+ *
+ * Asserted on the demo world because it holds the case that a status check gets
+ * wrong: `agent-a1` is **running** with an open question, and `agent-a2` is
+ * parked. Both owe an answer.
+ */
+test('a bot on the floor carries the question it is waiting on', () => {
+  const bots = botsPanel(render());
+
+  assert.match(bots, /class="fx-ask"/, 'the bot must place the ask');
+  assert.match(bots, /Asking you/, 'and read as waiting on the operator at a glance');
+  assert.match(bots, /Rebase hit a conflict/, "the parked bot's question, in full");
+  // The PR number is linkified inside the prompt, so the sentence is matched up to it.
+  assert.match(bots, /Draft reply for PR /, 'and the resumed one still owes its answer');
+  assert.match(bots, /placeholder="Your answer…"/, 'answering happens here, not only in the desk');
+  assert.match(bots, />Dismiss</, 'as does clearing it');
+
+  // Not every escalation belongs to a bot: the plan approval has no agent, so it
+  // is the desk's alone rather than being hung on an unrelated card.
+  assert.doesNotMatch(bots, /decomposed into 3 parts/, 'an agent-less ask has no bot to sit on');
+});
+
+/**
+ * The two views are one reading, which is the acceptance the issue is most
+ * specific about: the desk keeps listing every open item — including the one no
+ * agent raised — and a settled item leaves *both* at once, because both filter the
+ * same `status === 'open'` off the same snapshot.
+ */
+test('the floor and the stamp desk cannot disagree about a question', () => {
+  const desk = renderDesk(StampDesk);
+  assert.match(desk, /Rebase hit a conflict/, 'the panel still lists every pending escalation');
+  assert.match(desk, /Draft reply for PR /);
+  assert.match(desk, /decomposed into 3 parts/);
+
+  const answered = (s: ReturnType<typeof buildDemoState>['state']) => {
+    for (const e of s.escalations) e.status = 'answered';
+  };
+  assert.doesNotMatch(botsPanel(render(answered)), /class="fx-ask"/, 'answering clears the bot');
+  assert.doesNotMatch(botsPanel(render(answered)), /Asking you/, 'and the reading on it');
+  assert.match(renderDesk(StampDesk, answered), /Nothing needs your judgment/, 'and empties the desk');
+});
+
+/**
+ * The shared card is reused rather than reimplemented compactly, and this is what
+ * that buys: the options an agent offered through `escalate` stay one click on the
+ * floor, and a proposal keeps its verdict buttons instead of a text box that
+ * cannot be branched on. A second implementation would be a second set of refusal
+ * rules to keep right.
+ */
+test('the floor answers with the same rules the desk does', () => {
+  const withOptions = botsPanel(
+    render((s) => {
+      const asked = s.escalations.find((e) => e.agentId === 'agent-a2')!;
+      asked.context = { ...asked.context, options: ['Take ours', 'Take theirs'] };
+    }),
+  );
+  assert.match(withOptions, /class="esc-quick"/, 'offered choices stay one click in the field');
+  assert.match(withOptions, />Take theirs</);
+
+  // A proposal reaches the floor through the same join, so it must arrive with a
+  // verdict rather than a reply box.
+  const proposal = botsPanel(
+    render((s) => {
+      // The parked bot's question alone, turned into a decision — so the absence of
+      // a reply box below is this card's, and not read off an unrelated bot.
+      s.escalations = s.escalations.filter((e) => e.id === 'esc-1');
+      s.proposals = [{ ...s.proposals![0]!, id: 'p-a2', kind: 'merge', status: 'pending', escalationId: 'esc-1' }];
+    }),
+  );
+  assert.match(proposal, /needs your decision/, 'a decision must read as one on the bot');
+  assert.match(proposal, />Approve merge</);
+  assert.doesNotMatch(proposal, /placeholder="Your answer…"/, 'a proposal is never answered with free text');
 });
 
 /**
