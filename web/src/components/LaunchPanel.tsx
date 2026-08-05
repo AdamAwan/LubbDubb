@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.js';
-import type { Job } from '../types.js';
+import type { AppState, Job } from '../types.js';
+import { AttachmentStrip } from './AttachmentStrip.js';
 import { SubmitButton, AsyncButton, useAsyncAction } from './AsyncButton.js';
 import { relTime } from './util.js';
 
@@ -62,7 +63,22 @@ async function readImage(file: File): Promise<Attached | null> {
  * when the fleet is at capacity. Queued blueprints are listed with their place in
  * line and a cancel button; once dispatched they graduate into the Fleet.
  */
-export function LaunchPanel({ jobs, onChanged }: { jobs: Job[]; onChanged: () => void }) {
+export function LaunchPanel({
+  jobs,
+  attachments,
+  attachmentUrls,
+  onChanged,
+}: {
+  jobs: Job[];
+  /**
+   * Every attachment in the snapshot; the strip below filters to this job's own
+   * (issue #249). Passed whole rather than pre-filtered so the panel and the issue
+   * list read one list through one component.
+   */
+  attachments: AppState['attachments'];
+  attachmentUrls: AppState['attachmentUrls'];
+  onChanged: () => void;
+}) {
   const [prompt, setPrompt] = useState('');
   const [kind, setKind] = useState<'code' | 'desk'>('code');
   const [open, setOpen] = useState(false);
@@ -247,6 +263,11 @@ export function LaunchPanel({ jobs, onChanged }: { jobs: Job[]; onChanged: () =>
               >
                 cancel
               </AsyncButton>
+              {/* What the operator attached, still keyed to this blueprint. When a
+                  code blueprint is filed as a ticket instead of dispatched, the
+                  images change hands and reappear under the issue — the same strip,
+                  one row down the funnel. */}
+              <AttachmentStrip targetRef={`job:${job.id}`} attachments={attachments} attachmentUrls={attachmentUrls} />
             </li>
           ))}
         </ul>

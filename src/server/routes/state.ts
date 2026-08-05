@@ -9,10 +9,10 @@ import type { RouteContext } from './context.js';
  * What the cockpit reads about the harness rather than about the work: the state
  * snapshot it polls, and the three constants it fetches once.
  */
-export function register(app: FastifyInstance, { system, artifactSigner }: RouteContext): void {
+export function register(app: FastifyInstance, { system, artifactSigner, attachmentSigner }: RouteContext): void {
   const { config } = system;
 
-  app.get('/api/state', async () => buildStateSnapshot(system, { artifactSigner }));
+  app.get('/api/state', async () => buildStateSnapshot(system, { artifactSigner, attachmentSigner }));
 
   // The prompt book the rule dispatcher renders from — what the harness says to
   // its agents, and which of those wordings the operator has replaced.

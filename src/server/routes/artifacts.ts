@@ -5,7 +5,15 @@ import { mintArtifactCapability, verifyArtifactCapability } from '../artifactCap
 import { checked, IdParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-/** Serving a local file an agent flagged, and the capability that authorizes the navigation. */
+/**
+ * Serving a local file the cockpit may look at — one an agent flagged, or one an
+ * operator attached to a blueprint — and the capability that authorizes it.
+ *
+ * The two routes share a shape because they share a problem: both are reached by
+ * the browser *without* the cockpit's bearer token (a navigation for the first, an
+ * `<img>` load for the second), so both sit outside the `/api` prefix guard and
+ * carry a short-lived, per-subject capability instead.
+ */
 export function register(app: FastifyInstance, { system, artifactKey }: RouteContext): void {
   const { store, config } = system;
 
@@ -61,6 +69,102 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       return reply.send(readFileSync(file));
     }),
   );
+
+  // Serve an image the operator attached to a blueprint (issue #249), addressed by
+  // its attachment id. Outside `/api` for the artifact route's reason and one more:
+  // this is loaded as an `<img src>`, a subresource fetch the browser makes on its
+  // own, which can no more carry the cockpit's `Authorization` header than a
+  // navigation can. So it authorizes itself with the same per-run capability,
+  // minted per attachment into the state snapshot.
+  //
+  // The path comes from the *stored row*, never from the request, and is
+  // re-confined to `attachmentRoot` before it is read — the same belt-and-braces
+  // the artifact route applies to a flag's ref. Nothing but this harness writes
+  // under that root, so the check has nothing to catch today; it is what keeps
+  // that true if something ever does.
+  app.get(
+    '/attachments/:id',
+    { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
+    checked({ params: IdParams }, async ({ params, req, reply }) => {
+      const { id } = params;
+      if (artifactKey) {
+        const tk = (req.query as { tk?: unknown })?.tk;
+        if (typeof tk !== 'string' || !verifyArtifactCapability(artifactKey, tk, attachmentSubject(id), Date.now()))
+          return reply.code(401).send({ error: 'missing or invalid attachment capability' });
+      }
+      const attachment = store.getAttachment(id);
+      if (!attachment) return reply.code(404).send({ error: 'attachment not found' });
+      const file = confinedTo(config.attachmentRoot, attachment.path);
+      if (!file) return reply.code(404).send({ error: 'attachment not found' });
+      reply
+        // The stored mime, which was sniffed from the bytes rather than declared by
+        // whoever uploaded them — with `nosniff`, so the browser does not go looking
+        // for a second opinion. `sandbox` for the artifact route's reason: these
+        // bytes came from outside the harness and are rendered on its own origin.
+        .header('content-type', attachment.mime)
+        .header('content-security-policy', 'sandbox')
+        .header('x-content-type-options', 'nosniff')
+        // Immutable: an attachment's bytes never change, and its id is minted with
+        // them. It is worth setting because the URL is stable across polls (see
+        // {@link attachmentSignerFor}); `private` because a capability URL must
+        // never be held by a shared cache.
+        .header('cache-control', 'private, max-age=300, immutable');
+      return reply.send(readFileSync(file));
+    }),
+  );
+}
+
+/**
+ * What an attachment capability is signed over. Namespaced so a capability minted
+ * for a flag cannot open an attachment (or the reverse) even if the two id spaces
+ * ever collided — free, and it means the two routes never have to reason about
+ * each other's ids.
+ */
+function attachmentSubject(id: string): string {
+  return `attachment:${id}`;
+}
+
+/**
+ * Mint a capability into every attachment URL the state snapshot ships — the
+ * `artifactSignerFor` of the route above, and deliberately the same key: both are
+ * per-run, both are short-lived, and one secret with two subjects is less to get
+ * wrong than two secrets.
+ *
+ * **The expiry is bucketed, unlike an artifact's.** An artifact URL is minted for
+ * a click that may never come, so a fresh expiry every poll costs nothing. A
+ * thumbnail is an `<img src>` the browser *is* loading, and a URL that changes on
+ * every state poll is a URL the cache can never hit: the image would be re-fetched
+ * every few seconds and flicker while it re-decoded. Rounding the expiry down to a
+ * bucket makes the string identical across the polls inside one bucket, so the
+ * browser's own cache does its job. The capability then lives between one and two
+ * buckets rather than exactly one TTL, which is the same order of short.
+ */
+export function attachmentSignerFor(key: Buffer): (attachmentId: string) => string {
+  return (id) => {
+    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
+    return mintArtifactCapability(key, attachmentSubject(id), bucket * ARTIFACT_CAP_TTL_MS);
+  };
+}
+
+/**
+ * Resolve a stored absolute path, honoured only if it lands inside `root` and is a
+ * regular file. Lexical containment first, then `realpathSync` on both sides, so a
+ * symlink under the root cannot point outside it — the two guards
+ * {@link resolveConfinedArtifact} makes, over one root and an always-absolute ref.
+ */
+function confinedTo(root: string, path: string): string | null {
+  const target = resolve(path);
+  const rootAbs = resolve(root);
+  if (target !== rootAbs && !target.startsWith(rootAbs + sep)) return null;
+  try {
+    const real = realpathSync(target);
+    const realRoot = realpathSync(rootAbs);
+    if (real !== realRoot && !real.startsWith(realRoot + sep)) return null;
+    if (!statSync(real).isFile()) return null;
+    return real;
+  } catch {
+    return null; // missing path, broken symlink, permission error — treat as not found
+  }
 }
 
 /**

@@ -185,6 +185,18 @@ export class Store {
   listAttachments(targetRef: string): JobAttachment[] {
     return this.jobs.listAttachments(targetRef);
   }
+  getAttachment(id: string): JobAttachment | null {
+    return this.jobs.getAttachment(id);
+  }
+  listAllAttachments(): JobAttachment[] {
+    return this.jobs.listAllAttachments();
+  }
+  nextAttachmentIndex(targetRef: string): number {
+    return this.jobs.nextAttachmentIndex(targetRef);
+  }
+  rekeyAttachments(targetRef: string, moved: Parameters<JobStore['rekeyAttachments']>[1]): void {
+    this.jobs.rekeyAttachments(targetRef, moved);
+  }
   deleteAttachments(targetRef: string): void {
     this.jobs.deleteAttachments(targetRef);
   }

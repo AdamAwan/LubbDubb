@@ -66,6 +66,7 @@ import type {
   IssueRunOutcome,
   Issue as WorldIssue,
   Job,
+  JobAttachment,
   Plan,
   PlanPart,
   Proposal,
@@ -284,6 +285,18 @@ export interface CockpitState {
    * capability. An http(s) flag is absent here — the cockpit links those directly.
    */
   artifactUrls: Record<string, string>;
+  /**
+   * Images an operator attached to a blueprint (issue #249), every ref in one
+   * list. The cockpit filters by `targetRef`: `job:<id>` while the blueprint is
+   * queued, `issue:<n>` once it has been filed as a ticket.
+   *
+   * The domain type, `path` and all — the same absolute-paths-are-shipped stance
+   * `AgentFile` and `Agent.cwd` already take, and it is what lets the operator
+   * match a thumbnail against the path their agent was told to read.
+   */
+  attachments: JobAttachment[];
+  /** Attachment id → the URL to load its bytes from, carrying its capability. */
+  attachmentUrls: Record<string, string>;
   /** Every file agents wrote (file-events hook), for the drawer's "files changed" list. */
   files: AgentFile[];
   /** Paths two concurrently-running agents both wrote (issue #113). */
@@ -394,6 +407,7 @@ export type {
   Escalation,
   Finding,
   Job,
+  JobAttachment,
   JobAttachmentInput,
   Plan,
   PlanPart,

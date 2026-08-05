@@ -97,7 +97,12 @@ export function ClassicRoot({ view, actions }: SkinProps) {
       )}
 
       {view.demo && <InjectPanel onInjected={actions.refresh} world={state.world} />}
-      <LaunchPanel jobs={state.jobs} onChanged={actions.refresh} />
+      <LaunchPanel
+        jobs={state.jobs}
+        attachments={state.attachments}
+        attachmentUrls={state.attachmentUrls}
+        onChanged={actions.refresh}
+      />
       <Vitals state={state} liveAgents={view.live.length} cap={state.control.cap} />
 
       <main className="grid">

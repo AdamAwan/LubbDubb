@@ -331,6 +331,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
     requirePlanApproval: config.planning.requireApproval,
+    // So `link_ticket` can move a blueprint's images off the filing job and onto
+    // the ticket it just created (issue #249) — the same instance the launch route
+    // wrote them with, since both halves must agree about the root.
+    attachments,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);

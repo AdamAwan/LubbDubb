@@ -177,7 +177,9 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
 
 #### Blueprint attachments
 
-`addAttachments(targetRef, files)`, `listAttachments(targetRef)`, `deleteAttachments(targetRef)`.
+`addAttachments(targetRef, files)`, `listAttachments(targetRef)`, `getAttachment(id)`,
+`listAllAttachments()`, `nextAttachmentIndex(targetRef)`, `rekeyAttachments(targetRef, moved)`,
+`deleteAttachments(targetRef)`.
 
 - **Keyed on `target_ref`, not on a job id.** What an attachment belongs to outlives the row it
   arrived with: a code blueprint becomes a desk *filing* job and then a ticket, so the images have to
@@ -189,6 +191,20 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
 - **Write order is files, then rows.** An interrupted write leaves bytes nothing points at rather than
   a row naming a path that does not resolve, and a path an agent cannot open is the failure that
   matters. A deletion is the mirror — rows first, then files.
+- **The ref changes hands once, at `link_ticket`.** A code blueprint with a tracker configured is
+  filed as a ticket rather than dispatched ([05](05-dispatcher.md), [16](16-http-api.md#launching-a-blueprint)),
+  so its images arrive keyed `job:<id>` and would otherwise be visible to the one agent that files the
+  ticket and writes no code. `AgentManager.linkTicket` re-keys them onto the `issue:<n>` the filing
+  created: `AttachmentFiles.relocate` moves the files, then `rekeyAttachments` rewrites the rows.
+  - **Files move first, rows second**, the write order above and for the same reason: the two halves
+    cannot be made atomic, and a crash between them must leave rows naming paths that still resolve.
+  - **The destination may already hold images** — an agent may link to the existing issue it decided
+    its blueprint duplicates — so the move renumbers from `nextAttachmentIndex(toRef)` rather than
+    keeping the stem. A fixed stem would silently overwrite another operator's screenshot, and
+    `UNIQUE (target_ref, idx)` would refuse the row after the file was already gone.
+  - **A failed move is recorded, not raised.** The link has already succeeded in the store, and
+    refusing it over a rename would leave the operator looking at an incomplete filing. What is lost
+    is the image's onward visibility, and [18](18-observability.md) carries the reason.
 - **Nothing ages them out.** Attachments live as long as what they are attached to, so a plan written
   days later, and the retrospective after it, can still refer back to the screenshot the goal started
   as. The **only** deletion is a blueprint cancelled before it ran, which nothing downstream can want;

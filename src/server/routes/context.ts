@@ -19,7 +19,15 @@ export interface RouteContext {
    * operator's choice and `/artifacts/:id` verifies nothing.
    */
   artifactSigner?: (flagId: string) => string;
-  /** The per-run key `/artifacts/:id` verifies those capabilities against; null when auth is off. */
+  /**
+   * The same, per blueprint attachment (issue #249) — an `<img>` load cannot carry
+   * the bearer token any more than a navigation can. Undefined when auth is off.
+   */
+  attachmentSigner?: (attachmentId: string) => string;
+  /**
+   * The per-run key `/artifacts/:id` and `/attachments/:id` verify those
+   * capabilities against; null when auth is off.
+   */
   artifactKey: Buffer | null;
 }
 
