@@ -60,10 +60,20 @@ Failure modes that are not obvious:
 
   Class-member analysis is **name-based**, so a method reached only through a structural seam — an
   interface the class satisfies without declaring `implements` — reads as unused. Two honest ways
-  out, and neither is an ignore list: declare the `implements` clause when the interface is the
-  class's own contract (`PtySession implements AgentSession`), or tag the member `@public` with a
-  note naming the seam when the interface belongs to a consumer that must not be depended on
-  backwards (`AgentManager.recordProgress`, reached through `AgentToolTarget` in `src/mcp/`).
+  out, and neither is an ignore list: declare the `implements` clause (`PtySession implements
+  AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@public` with a note
+  naming the seam.
+
+  **Reach for `implements` first**, including when the interface belongs to a consumer the class
+  should not depend on backwards. An `import type` is erased at compile time, so it adds no runtime
+  module edge and cannot invert a layering: the question to ask is what the *value* graph already
+  does. `AgentManager` was tagged for eleven methods on that reasoning while the same file
+  value-imported `assessmentOrigin`, `assayerOrigin` and `partConclusionOrigin` from `src/mcp/` —
+  the edge was already there, and the tags bought nothing but the loss of a checked contract.
+
+  That leaves `@public` for the case where the interface genuinely cannot be named — it would close
+  a real runtime cycle, or it lives outside the typecheck project. There are currently no instances
+  in `src/`, which is the state to keep it in.
 - **Two typecheckers.** `typecheck` covers the server (`tsconfig.json`) and `typecheck:web` the cockpit
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy
   both.
