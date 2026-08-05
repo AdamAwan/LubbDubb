@@ -43,6 +43,36 @@ coalesced return does not: no cycle ran.
 
 `runCycle` performs exactly this sequence. The order is load-bearing at four points, noted below.
 
+```mermaid
+flowchart TD
+    T(["Heartbeat timer · POST /api/pulse · boot"]) --> RH{"recovery.pendingCount() > 0?"}
+    RH -- yes --> HELD(["cycleId: held — no snapshot, no dispatch, no act"])
+    RH -- no --> CF{"cycle already in flight?"}
+    CF -- yes --> CO(["cycleId: coalesced"])
+    CF -- no --> START["emit cycle:start with the new cyc_* id"]
+
+    subgraph BODY ["one cycle"]
+        direction TB
+        START --> W["snapshot the world — connector.getState()"]
+        W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline"]
+        DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
+        REC --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
+        NAME --> GRAPH["record the work graph — after the reconciler, before decide"]
+        GRAPH --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
+        READ --> ANN["announce the assay's question on the ticket · record issue runs"]
+        ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
+        HR --> SPLIT["split the world for dispatch<br/>hide -ignore PRs · add the runs the tracker forgot"]
+        SPLIT --> DEC["dispatcher.decide(ctx)"]
+        DEC --> UP["cache the Up next plan · reconcile priority overrides"]
+        UP --> RAT["record the rationale as a no_op decision — an idle cycle audits too"]
+        RAT --> EXEC["executor.execute(cycleId, plan)"]
+    end
+
+    EXEC --> END(["emit cycle:end with the CycleReport"])
+    BODY -. a throw anywhere .-> ERR["errors.record({ source: 'cycle' })<br/>zeroed summary, the next pulse tries again"]
+    ERR --> END
+```
+
 1. **Emit `cycle:start`** with the new `cyc_*` id and the source.
 2. **Snapshot the world** — `connector.getState()`.
 3. **Record world changes** — diff against the previous snapshot, persist the events, emit

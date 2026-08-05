@@ -229,6 +229,23 @@ rule has run does a single walk apply the headroom cut:
 The whole ranked list — above and below the cut — is returned as `DispatchResult.upcoming`
 (`QueueItem[]`). This is what makes the cut visible instead of making below-cut work vanish.
 
+```mermaid
+flowchart TD
+    CTX(["DispatchContext"]) --> WALK["walk DISPATCH_PIPELINE in order,<br/>running each rule whose enabled predicate says the operator has it on"]
+    WALK --> NA["non-dispatch acts, pushed straight through<br/>merge_pr · propose_plan · set_work_item_state<br/>escalate_to_human · respond_to_agent"]
+    WALK --> CAND["one Candidate list, appended as the walk proceeds —<br/>so the pipeline order is the priority"]
+    CAND --> OV["rankByPriorityOverride<br/>manual jobs first · overridden origins next · the rest in their natural order"]
+    OV --> CUT{"the headroom cut — one walk"}
+    CUT -- origin already staffed --> SK["skipped entirely: it is being worked, so it is not up next"]
+    CUT -- "held: cooldown · capped · unapproved · superseded" --> Q1["queued with that status,<br/>never dispatched whatever the headroom"]
+    CUT -- headroom remains --> DI["the dispatch_* action is emitted;<br/>headroom decrements, queued as dispatching"]
+    CUT -- headroom spent --> Q2["queued as waiting"]
+    NA --> OUT(["DispatchResult<br/>actions · rejected · rationale · upcoming"])
+    DI --> OUT
+    Q1 --> OUT
+    Q2 --> OUT
+```
+
 **Any new dispatch rule must route through the candidate list.** An inline `raw.push` of a
 `dispatch_*` action bypasses both the headroom cut and the queue.
 
