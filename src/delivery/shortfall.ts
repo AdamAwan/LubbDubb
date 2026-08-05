@@ -34,10 +34,43 @@
  * ordinary escalation, deduped the way rule `pr-ci-blocked`'s is.
  */
 
+import { z } from 'zod';
+import { optionalText } from '../server/validation.js';
 import type { PlanPart, PlanPartInput, ShortfallCause } from '../types.js';
 
 /** What an assessor may say fell short, in the order the tool advertises them. */
 export const SHORTFALL_CAUSES = ['plan', 'part', 'goal'] as const;
+
+/**
+ * The operator's arm of the verdict, as a request body — here beside
+ * {@link SHORTFALL_CAUSES} and {@link shortfallArm} rather than in the route
+ * that reads it, because what it encodes is the rule and not the routing.
+ *
+ * `cause` distinguishes three states and the schema has to keep all three apart:
+ * **absent** records a shortfall naming no cause (an unplanned issue that simply
+ * is not finished), an explicit **null** *clears* one, and a named cause records
+ * it. Absent and null are the same value in JSON and opposite acts here, which is
+ * why `.optional()` wraps the union rather than `null` standing in for "not
+ * given".
+ *
+ * The one cross-field rule on the whole HTTP surface is the `.refine` below: a
+ * `part` cause names which part. It is the same fact {@link shortfallArm} routes
+ * on — arm B has no part to follow up without it — so the two are stated within
+ * a screen of each other rather than 800 lines into a route file.
+ */
+export const ShortfallBody = z
+  .object({
+    cause: z
+      .union([z.enum(SHORTFALL_CAUSES), z.null()], {
+        errorMap: () => ({ message: `cause must be null or one of ${SHORTFALL_CAUSES.join(', ')}` }),
+      })
+      .optional(),
+    part: optionalText('part'),
+    summary: optionalText('summary'),
+  })
+  .refine((body) => body.cause !== 'part' || body.part !== undefined, {
+    message: 'cause "part" needs the part slug in `part`',
+  });
 
 /** What each cause means to the agent choosing it, and what the harness will do about it. */
 export const SHORTFALL_CAUSE_HELP: Record<ShortfallCause, string> = {

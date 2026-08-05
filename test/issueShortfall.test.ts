@@ -459,7 +459,7 @@ test('the cockpit is shipped the verdict beside the pickup chip, not inside it',
   });
   await system.harness.runCycle('manual');
 
-  const { buildStateSnapshot } = await import('../src/server/app.js');
+  const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
   const snap = buildStateSnapshot(system);
   const row = snap.world.issues.find((i) => i.number === 12)!;
   assert.equal(row.shortfall?.cause, 'plan');

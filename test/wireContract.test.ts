@@ -6,7 +6,7 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { buildStateSnapshot } from '../src/server/app.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import type { CockpitState } from '../src/wire.js';
 import type { AppState } from '../web/src/types.js';
 

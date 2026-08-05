@@ -224,7 +224,7 @@ test('the stack model has exactly one importer, and it is the snapshot', () => {
   // as the shape `/api/state` ships and imports no value at all (asserted in
   // `test/wireContract.test.ts`). The one importer that *builds* stacks is still
   // the snapshot.
-  assert.deepEqual(importers, ['src/server/app.ts', 'src/wire.ts'], 'the stack model must stay cockpit-only');
+  assert.deepEqual(importers, ['src/server/stateSnapshot.ts', 'src/wire.ts'], 'the stack model must stay cockpit-only');
 });
 
 /** Every `.ts` under a source directory, recursively, as repo-relative paths. */

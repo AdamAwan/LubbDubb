@@ -57,7 +57,7 @@ async function withIssue(system: System): Promise<Issue> {
 }
 
 async function snapshot(system: System): Promise<CockpitState> {
-  const { buildStateSnapshot } = await import('../src/server/app.js');
+  const { buildStateSnapshot } = await import('../src/server/stateSnapshot.js');
   return buildStateSnapshot(system);
 }
 

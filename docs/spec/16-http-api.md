@@ -10,6 +10,41 @@ the store, and it needs no credential in an agent's argv.
 Rate limiting is registered with `global: false`: only routes that opt in are limited, so the
 cockpit's frequent state polling is never throttled.
 
+## Shape
+
+`app.ts` is **wiring and nothing else**: the auth hook, the error handler, the `/ws` socket, the
+static SPA, and a list of route modules it mounts in order. Everything else lives beside the thing it
+is about.
+
+| Module                  | Holds                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/health`                                   |
+| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                            |
+| `routes/artifacts.ts`   | `/artifacts/:id`, the capability signer, and the path confinement                            |
+| `routes/control.ts`     | `/api/inject`, `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude` |
+| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                |
+| `routes/findings.ts`    | Promote / file / dismiss                                                                     |
+| `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                  |
+| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                     |
+| `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                        |
+| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                          |
+| `routes/work.ts`        | The work graph and its ignore / file verdicts                                                |
+| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                               |
+
+Each module exports one `register(app, ctx)` — the `RouteModule` type in `routes/context.ts` — and
+takes a `RouteContext` of `{system, hub, artifactKey, artifactSigner}`. It is the facade shape
+`Store` has over `src/store/`, for the same reason: `buildApp` was a ~1,300-line closure holding all
+44 routes, their 14 schemas and the state snapshot, with no natural stopping size (issue #237).
+
+Two structural tests walk the **directory** rather than a filename, so a group added as a new module
+is covered on the day it is written: `test/cockpitAuth.test.ts` reads the route table out of
+`routes/` and requires a refusal from each, and `test/requestValidation.test.ts` asserts that no file
+there reads a request itself.
+
+A schema that encodes a **domain rule** rather than a request shape lives with the rule, not with the
+route: `ShortfallBody` is in `src/delivery/shortfall.ts` beside `SHORTFALL_CAUSES` and
+`shortfallArm`, which routes on the same fact its cross-field refinement checks.
+
 ## Authentication
 
 `src/server/auth.ts` holds the whole decision as one pure function, `authorizeRequest`, with a
@@ -42,10 +77,10 @@ the window too. The counter lives in the hook, not in `authorizeRequest`, which 
 `throttled` boolean so the verdict stays a pure function of its inputs.
 
 The guard matches a **path prefix**, so a route added later is protected without opting in;
-`test/cockpitAuth.test.ts` asserts this by walking the route table in `app.ts` and requiring a 401
-from each. The SPA shell and its assets are deliberately unguarded: the token arrives in a URL
-fragment the browser never sends, so the page has to load before it can authenticate, and it holds
-no world state of its own.
+`test/cockpitAuth.test.ts` asserts this by walking the route table out of `src/server/routes/` and
+requiring a 401 from each. The SPA shell and its assets are deliberately unguarded: the token
+arrives in a URL fragment the browser never sends, so the page has to load before it can
+authenticate, and it holds no world state of its own.
 
 **The first refusal of a run is recorded; the rest need `LUBBDUBB_DEBUG`.** A refusal that says
 nothing is indistinguishable, server-side, between a wrong token and a client sending none at all —
@@ -72,34 +107,44 @@ mirrors it to stderr and streams it to the cockpit), and returned as a plain `50
 
 ## Request validation
 
-Every route reads its path params and its body through a **zod schema**, via `readRequest`
-(`src/server/validation.ts`). Nothing on this surface asserts request input with a type assertion:
-`req.params as { number: string }` is a claim about data the server does not control, and the
-hand-written checks that used to follow one were written per route, so what a route validated was
-whatever its author remembered. `test/requestValidation.test.ts` asserts the absence structurally, on
-`app.ts`'s source, so a route added later cannot quietly reintroduce one. (`req.query` is out of
-scope on both of its sites — each asserts the value to `unknown` and tests its type before use, so
-the assertion claims nothing.)
+Every route reads its path params and its body through a **zod schema**. A handler does not read the
+request at all: it is **wrapped in `checked(schemas, handler)`** (`src/server/validation.ts`) and
+handed `{params, body, req, reply}` already parsed. `checked` is the only caller of `readRequest` and
+the only place a refusal becomes a `400`.
+
+That is the shape and not an implementation detail. `req.params as { number: string }` is a claim
+about data the server does not control, and the hand-written checks that used to follow one were
+written per route, so what a route validated was whatever its author remembered. Removing the
+assertions left 36 verbatim copies of `if (!input.ok) return reply.code(400).send({error})` — every
+one correct, and nothing but a source grep saying the 37th had to be (issue #237). A handler that is
+_handed_ checked values has no raw request to assert about and no check to skip.
+`test/requestValidation.test.ts` asserts both structurally, over every file in `src/server/routes/`.
+(`req.query` is out of scope on both of its sites — each asserts the value to `unknown` and tests its
+type before use, so the assertion claims nothing.)
 
 Four properties hold across the surface:
 
 - **A refusal is a value, never a throw.** `setErrorHandler` means "an unanticipated throw" and
   records every one to the error log; a malformed request is neither unanticipated nor the harness's
   fault, so routing it there would bury real faults under other people's typos. `readRequest` returns
-  `{ok: false, error}` and the route sends it as a `400 {error}`.
+  `{ok: false, error}` and `checked` sends it as a `400 {error}`.
 - **Every field states its own refusal in full** — `cap must be a number`, `invalid issue number` —
   because the 400 body joins the schema's messages and drops their field paths. A field declared
   without a message refuses with zod's stock text, which names nothing.
 - **Params are read before the body**, so a request naming no such item is refused for that whatever
   else its body got wrong. Where a route answers 404/409 off the store first (`/api/findings/:id/*`,
   `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a finding
-  that does not exist is a 404 whatever the body says.
+  that does not exist is a 404 whatever the body says. Those three apply `checked` **a second time,
+  by hand**, inside the outer handler (`return checked({body: X}, inner)(req, reply)`) rather than
+  reaching past it, so the ordering costs nothing in refusal paths. `/api/inject` does the same for
+  its 403: whether a deployment injects at all is not a question about the payload.
 - **A missing body is read as `{}`**, so a route whose fields are all optional may be called with no
   body at all, while a required field still refuses by name.
 
 The shared shapes are `IssueNumberParams` / `PrNumberParams` (a `:number` path segment parsed with
 the same `Number` + `Number.isInteger` pair the seven hand-written copies used, so no path the old
-check accepted is now refused), `IdParams`, `RefParams`, `requiredBoolean` and `optionalText`.
+check accepted is now refused), `IdParams`, `RefParams`, `TicketTitleBody`, `requiredBoolean` and
+`optionalText`.
 Optional text — a note, a summary, an operator's reworded title — is **trimmed, with blank read as
 absent**, which every route taking one already did before falling back to its own default.
 
@@ -233,6 +278,11 @@ fell short" has one representation); anything else records one, which clears any
 the store. `cause: 'part'` requires the part slug in `part`. 400 on a non-integer issue number, an
 unrecognised cause, or a `part` cause with no slug.
 
+The body's schema is `ShortfallBody` in **`src/delivery/shortfall.ts`**, not in the route: an
+**absent** `cause` and an explicit **null** are the same value in JSON and opposite acts, and the
+cross-field rule is the same fact `shortfallArm` routes on. Both belong beside the rule they encode,
+where the next person changing shortfall semantics is reading (issue #237).
+
 The escape hatch matters here in a way it does not for the other two verdicts. A shortfall lives
 until the arm it named has been performed, and **rejecting** rule `issue-shortfall`'s proposal deliberately leaves
 it standing — the verdict is still true; you simply declined to act on it. Without this route the row
@@ -256,7 +306,7 @@ no-op dressed as an override. 400 on a non-integer issue number or an unrecognis
 ### `POST /api/issues/:number/dismiss-run`
 
 End the harness's run at a goal (issues #203, #234). A run is otherwise retained — minted while the
-issue is still live, and drawn *and acted on* even once the tracker has forgotten the issue — so this
+issue is still live, and drawn _and acted on_ even once the tracker has forgotten the issue — so this
 is the **one** thing that ends it. No body. Since #234 it is terminal for the dispatcher as well as
 for the card: a dismissed run is not unioned back into the issue list, so nothing further is
 scheduled for the goal, which is what makes this the way to abandon one. How it ended is stamped from
@@ -589,30 +639,30 @@ read zero.
 `buildStateSnapshot(system)` assembles everything the cockpit needs in one response. Several values are
 read **once** and shared, so two parts of the UI cannot disagree.
 
-| Key                  | Contents                                                                                                                                                                    |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `injectable`.                                                |
-| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                   |
-| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                               |
-| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                           |
+| Key                  | Contents                                                                                                                                                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `injectable`.                                                                                                                                      |
+| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
+| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
+| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                                                                             |
 | `retainedRuns`       | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
-| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                        |
-| `tasks`              | Every task.                                                                                                                                                                 |
-| `jobs`               | Operator jobs, newest first.                                                                                                                                                |
-| `agents`             | Every agent row, including usage and the progress note.                                                                                                                     |
-| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                    |
-| `files`              | Every file every agent wrote.                                                                                                                                               |
-| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                                                              |
-| `findings`           | Every finding.                                                                                                                                                              |
-| `escalations`        | Every escalation.                                                                                                                                                           |
-| `recovery`           | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**. |
-| `decisions`          | The last 100 decisions.                                                                                                                                                     |
-| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                               |
-| `worldEvents`        | The last 100 world events.                                                                                                                                                  |
-| `errors`             | The last 100 recorded failures.                                                                                                                                             |
-| `refUrls`            | The `ref → URL` map.                                                                                                                                                        |
-| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                            |
-| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                                                                |
+| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
+| `tasks`              | Every task.                                                                                                                                                                                                                   |
+| `jobs`               | Operator jobs, newest first.                                                                                                                                                                                                  |
+| `agents`             | Every agent row, including usage and the progress note.                                                                                                                                                                       |
+| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                      |
+| `files`              | Every file every agent wrote.                                                                                                                                                                                                 |
+| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
+| `findings`           | Every finding.                                                                                                                                                                                                                |
+| `escalations`        | Every escalation.                                                                                                                                                                                                             |
+| `recovery`           | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
+| `decisions`          | The last 100 decisions.                                                                                                                                                                                                       |
+| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                              |
+| `worldEvents`        | The last 100 world events.                                                                                                                                                                                                    |
+| `errors`             | The last 100 recorded failures.                                                                                                                                                                                               |
+| `refUrls`            | The `ref → URL` map.                                                                                                                                                                                                          |
+| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                              |
+| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                                                                                                                  |
 
 Seven consistency points:
 

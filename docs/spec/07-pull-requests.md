@@ -157,7 +157,7 @@ parts the rungs deliver, not from a branch-name convention.
 **It is a lens.** Nothing in `src/dispatcher/` may read it: every input it folds is already a gate
 that fires on its own, so a rule consulting it would be a second opinion about a decision made
 elsewhere. `test/stacks.test.ts` asserts that structurally — no file under `src/dispatcher/` names
-`stacks/`, and the only importer is `src/server/app.ts`.
+`stacks/`, and the only importer is `src/server/stateSnapshot.ts`.
 
 A chain of one is not a stack. A merged rung is not a base. A cycle in the base edges terminates
 rather than hanging the pulse. It takes the **unfiltered** open list, so an `-ignore`d rung does not
@@ -283,7 +283,7 @@ folds is already a gate that fires on its own — the branch gate, `proposalHold
 made elsewhere, from a function sitting nowhere near the rule it duplicates. A verdict the dispatcher
 acts on is a new gate with its own failure modes; a verdict only the cockpit reads cannot change what
 happens, only what an operator can see. `test/prAttention.test.ts` asserts the property both
-structurally (one importer, `src/server/app.ts`) and behaviourally (building the snapshot between two
+structurally (one importer, `src/server/stateSnapshot.ts`) and behaviourally (building the snapshot between two
 pulses changes no decision).
 
 The concern list and the merge-readiness test are re-derived here from the same predicates rather
