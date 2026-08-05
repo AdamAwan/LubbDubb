@@ -96,7 +96,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
         />
       )}
 
-      {state.config.injectable && <InjectPanel onInjected={actions.refresh} world={state.world} />}
+      {view.demo && <InjectPanel onInjected={actions.refresh} world={state.world} />}
       <LaunchPanel jobs={state.jobs} onChanged={actions.refresh} />
       <Vitals state={state} liveAgents={view.live.length} cap={state.control.cap} />
 
@@ -110,7 +110,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
               <span className="empty-mark">♥</span>
               <p>
                 No agents running. The harness is idle
-                {state.config.injectable ? ' — inject an event to wake it' : ' — waiting for the world to change'}.
+                {view.demo ? ' — inject an event to wake it' : ' — waiting for the world to change'}.
               </p>
             </div>
           )}

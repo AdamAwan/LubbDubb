@@ -123,9 +123,8 @@ it to understand why a decision was made, and check the code before relying on a
 | `npm run smoke`       | The real end-to-end run (see below).                                          |
 | `npm run build`       | `tsc -p tsconfig.json`.                                                       |
 | `npm run web:dev`     | Vite dev server for the cockpit.                                              |
-| `npm run web:dev:demo`| The cockpit against the scripted demo backend, no server needed.              |
 | `npm run web:build`   | Production bundle into `web/dist`.                                            |
-| `npm run web:build:demo` | The demo bundle for GitHub Pages.                                          |
+| `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.        |
 | `npm run audit`       | `npm audit --audit-level=high`.                                               |
 | `npm run check`       | The one gate: the six stages above, concurrently, via `scripts/check.ts`.      |
 

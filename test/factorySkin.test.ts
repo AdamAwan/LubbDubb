@@ -476,20 +476,19 @@ test('raising the cap widens the floor', () => {
  * real run against a fake provider is still a real run, and a panel that lies to
  * the harness there is a way to lie to yourself about what it is reacting to. The
  * empty-floor line reads the same predicate, so it never offers an injection there
- * is no panel for.
+ * is no panel for. `view.demo` is the whole gate — there is no server route behind
+ * the panel for a second predicate to disagree with.
  */
-test('injection is a demo control, not a provider one', () => {
-  const demo = renderDesk(BlueprintDesk, (s) => (s.config.injectable = true));
+test('injection is a demo control, and the demo build is the whole of it', () => {
+  const demo = renderDesk(BlueprintDesk);
   assert.match(demo, /class="inject"/, 'the demo build must keep the inject panel');
 
-  // `injectable` still true — a fake provider is configured — and still no panel.
-  const real = renderDesk(BlueprintDesk, (s) => (s.config.injectable = true), false);
+  const real = renderDesk(BlueprintDesk, undefined, false);
   assert.doesNotMatch(real, /class="inject"/, 'a real run must not offer injection');
   assert.doesNotMatch(real, /Inject event/, 'nor its label');
 
   const idle = render((s) => {
     s.agents = [];
-    s.config.injectable = true;
   }, false);
   assert.match(idle, /waiting for the world to change/, 'the empty floor must not offer a panel that is gone');
 });

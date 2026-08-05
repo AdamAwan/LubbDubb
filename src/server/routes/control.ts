@@ -1,85 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { InjectableEvent } from '../../connector/connector.js';
-import { isWorldInjectable } from '../stateSnapshot.js';
 import { watchLabelsFor } from '../../watchLabels.js';
 import { checked, PrNumberParams, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-/**
- * The synthetic world events `/api/inject` accepts.
- *
- * The old check asserted the whole body to be an `InjectableEvent` and then
- * tested that `kind` was a string, which typed every other field as validated
- * while checking none of them — and this is the one body that reaches a
- * connector. Annotating the schema as
- * `z.ZodType<InjectableEvent>` is what removes the assertion rather than moving
- * it: TypeScript refuses the annotation if the parsed output is not an
- * `InjectableEvent`, so a variant that drifts from the union in `connector.ts`
- * fails `typecheck`. The other direction — the union gaining a kind this misses
- * — fails loudly at runtime as a 400 naming the kind, and only ever under the
- * `fake` provider this route is gated to.
- */
-const InjectEventBody: z.ZodType<InjectableEvent> = z.discriminatedUnion(
-  'kind',
-  [
-    z.object({ kind: z.literal('ci_failed'), prNumber: z.number() }),
-    z.object({ kind: z.literal('ci_passed'), prNumber: z.number() }),
-    z.object({ kind: z.literal('pr_comment'), prNumber: z.number(), author: z.string(), body: z.string() }),
-    z.object({
-      kind: z.literal('new_pr'),
-      number: z.number(),
-      title: z.string(),
-      branch: z.string(),
-      baseBranch: z.string().optional(),
-      labels: z.array(z.string()).optional(),
-    }),
-    z.object({ kind: z.literal('pr_approved'), prNumber: z.number() }),
-    z.object({
-      kind: z.literal('pr_mergeable'),
-      prNumber: z.number(),
-      mergeable: z.boolean().optional(),
-      mergeableState: z.enum(['dirty', 'behind', 'blocked', 'clean', 'unknown']).optional(),
-    }),
-    z.object({ kind: z.literal('pr_closed'), prNumber: z.number(), merged: z.boolean().optional() }),
-    z.object({
-      kind: z.literal('new_issue'),
-      number: z.number(),
-      title: z.string(),
-      body: z.string().optional(),
-      labels: z.array(z.string()).optional(),
-    }),
-    z.object({ kind: z.literal('issue_state'), number: z.number(), state: z.enum(['open', 'closed']) }),
-    z.object({ kind: z.literal('issue_linked_pr'), number: z.number(), prNumber: z.number() }),
-  ],
-  // One wording for both "no `kind` at all" and "a kind nothing handles", since
-  // the panel that sends these is a fixed set of buttons and anything else
-  // reaching here is a hand-written call.
-  { errorMap: () => ({ message: 'invalid event' }) },
-);
-
-/** The harness's own controls: beat it, inject a world, clear its faults, cap it, exclude a PR. */
+/** The harness's own controls: beat it, clear its faults, cap it, exclude a PR. */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, connector, harness, config, runtimeControl } = system;
   const { ignoreLabel } = watchLabelsFor(config.labelPrefix);
-
-  // `checked` is applied *inside* the handler rather than wrapping it, so the
-  // 403 is answered before the body is read: whether this deployment injects at
-  // all is not a question about the payload, and a malformed event on a real
-  // provider should hear the same refusal a well-formed one does.
-  app.post('/api/inject', async (req, reply) => {
-    // Defence in depth: the cockpit hides the panel, but the route itself also
-    // refuses when no fake provider is configured to receive the event.
-    if (!isWorldInjectable(config.integrations))
-      return reply.code(403).send({ error: 'event injection is only available with fake integrations' });
-    return checked({ body: InjectEventBody }, async ({ body }) => {
-      connector.inject(body);
-      hub.broadcast({ type: 'world:changed' });
-      // An injected event should provoke an immediate cycle.
-      const report = await harness.runCycle('manual');
-      return { ok: true, report };
-    })(req, reply);
-  });
 
   app.post('/api/pulse', async () => {
     const report = await harness.runCycle('manual');

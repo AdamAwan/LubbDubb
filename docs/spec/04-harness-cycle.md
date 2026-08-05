@@ -148,6 +148,5 @@ Returned by `runCycle` and carried on `cycle:end`:
 - The heartbeat timer.
 - `harness.runCycle('boot')` once at startup.
 - `POST /api/pulse`.
-- `POST /api/inject` (fake providers only), after applying the event.
 - `POST /api/jobs`, `POST /api/findings/:id/promote`, `POST /api/plans/:id/replan`, and each of the
   watch/exclude label toggles — each kicks a cycle so the change takes effect immediately.

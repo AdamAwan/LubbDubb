@@ -9,7 +9,6 @@ import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issueP
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { retainedRunIssues } from '../floor/runs.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
-import type { IntegrationSelection } from '../integrations/integration.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
@@ -18,18 +17,6 @@ import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { watchLabelsFor } from '../watchLabels.js';
-
-/**
- * Whether the configured world accepts synthetic events: only the `fake`
- * provider is injectable (`CompositeConnector.inject` records anything else as
- * `inject_unhandled`). Read in two places that must agree — the snapshot ships it
- * as `config.injectable` so the cockpit hides the inject panel, and
- * `/api/inject` refuses on it so a real-integration deployment doesn't expose a
- * demo affordance even to a direct call.
- */
-export function isWorldInjectable(integrations: IntegrationSelection): boolean {
-  return Object.values(integrations).some((provider) => provider === 'fake');
-}
 
 /**
  * The world the cockpit draws: the baseline the last pulse persisted, **never a
@@ -267,9 +254,6 @@ export function buildStateSnapshot(
       // set and how to render an item's effective watched/ignored state.
       watchLabel,
       ignoreLabel,
-      // Whether the inject panel should render: synthetic events only land on
-      // the `fake` provider, so real-integration deployments hide it.
-      injectable: isWorldInjectable(config.integrations),
       // Whether a finding can be filed as a ticket at all — there is nowhere to
       // file one under the `fake` provider. Shipped as a flag rather than left to
       // the cockpit to infer from the provider name, so the one place that

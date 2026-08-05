@@ -2,12 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "cockpit-demo",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--config", "web/vite.config.ts", "--mode", "demo"],
-      "port": 5173
-    },
-    {
       "name": "cockpit",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],

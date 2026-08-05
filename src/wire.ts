@@ -219,8 +219,6 @@ interface CockpitConfig {
   watchLabel: string;
   /** `${labelPrefix}-ignore` — the tag the ignore toggle sets and that marks an item ignored. */
   ignoreLabel: string;
-  /** Whether the world accepts injected events (a `fake` provider) — gates the inject panel. */
-  injectable: boolean;
   /**
    * Whether a real tracker is configured to file into — gates "File ticket" on a
    * finding and "File a work item" on unrecorded work, off the same predicate

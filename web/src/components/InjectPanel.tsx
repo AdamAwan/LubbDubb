@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { api } from '../api.js';
+import { injectDemoEvent } from '../api.js';
 import type { WorldSnapshot } from '../types.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
 /**
- * The "make the world move" panel. Since v1 runs on a FakeConnector, this is how
- * you simulate the outside world: a CI failure, a review comment, a new PR, a
- * new issue. Each injection provokes an immediate dispatch cycle server-side. Every
- * button spins while its injection is in flight so the click reads as "saving".
+ * The "make the world move" panel — a **demo-only** control, rendered only under
+ * `view.demo` (the static Pages build). This is how the demo simulates the
+ * outside world: a CI failure, a review comment, a new PR, a new issue. The
+ * in-browser fake applies each one and runs a cycle over it, exactly as a real
+ * observation would provoke. Every button spins while its injection is in flight
+ * so the click reads as "saving".
  */
 export function InjectPanel({ onInjected, world }: { onInjected: () => void; world: WorldSnapshot }) {
   const [raw, setRaw] = useState('');
@@ -15,7 +17,7 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
   const rawSubmit = useAsyncAction();
 
   const inject = async (event: unknown) => {
-    await api.inject(event);
+    await injectDemoEvent(event);
     onInjected();
   };
 

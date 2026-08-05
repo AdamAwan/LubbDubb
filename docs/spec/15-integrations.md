@@ -64,14 +64,16 @@ Implements both seams:
 - **`resolveRefUrl(ref)`** — the first `RefResolvable`, or `null`.
 - **`inject(event)`** — routes to the fake that owns the event kind and logs it. An event with no fake
   owner is recorded as `inject_unhandled` rather than throwing: you cannot fake-inject onto a real
-  provider.
+  provider. **There is no HTTP route behind this**: it is the test suite's world driver (316 call
+  sites) and nothing else. Faking a world change is a demo affordance, and the only demo is the
+  static Pages build, which has its own in-browser injection ([17](17-cockpit.md#demo-mode)).
 
 ## The `fake` provider
 
 Two integrations over one `FakeWorldStore`, which persists to `connector_state` so an injected world
 survives restarts. `FakeGitHubIntegration` owns PRs, `FakeIssuesIntegration` issues.
 
-They are the only `Injectable` providers. `POST /api/inject` accepts:
+They are the only `Injectable` providers. `inject(event)` accepts:
 
 | Kind                      | Effect                                                                 |
 | ------------------------- | ---------------------------------------------------------------------- |
@@ -93,9 +95,10 @@ The fake sink "sends" by reflecting the effect back into its own world (marking 
 handled) and recording a connector event, so nothing leaves the machine while the seam stays real and
 testable. It resolves no ref URLs, so refs render as plain text in the cockpit.
 
-`isWorldInjectable(integrations)` is true when **any** capability uses `fake`. It gates both the
-`/api/inject` route (403 otherwise) and the cockpit's inject panel, so a real-integration deployment
-does not expose a demo affordance.
+There is no `injectable` flag on the snapshot and no route to gate. A running harness reads its
+provider; a panel that told it something had happened would be a way to lie to yourself about what it
+is reacting to, and that is true against the `fake` provider too — a real run against a fake provider
+is still a real run.
 
 ## The `github` provider
 
