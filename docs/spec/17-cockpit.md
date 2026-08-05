@@ -684,6 +684,9 @@ A skin registered but not otherwise tested still gets the conformance render for
 point of driving it off `SKINS` — it is asserted on the day it is written rather than the day it
 breaks.
 
+`test/demoBackend.test.ts` covers the other thing driven off a declared table: that the demo backend
+has heard of every route the server declares. See [below](#what-the-demo-owes-the-server).
+
 ## Data flow
 
 One state object, one socket.
@@ -1086,3 +1089,32 @@ disagree with what the dispatcher does:
 `api` and `connectWs` for `demoApi` / `connectDemoWs` (`web/src/demo/`), which serve a scripted
 fixture world with no server and no real integrations. The top bar shows a `demo` chip. This is what
 the GitHub Pages deployment publishes.
+
+`demoBackend` is kept side-effect-free at module scope, so the `VITE_DEMO` branch in `api.ts` being
+statically false in the real build lets Rollup drop the whole thing. Good for the bundle, and it is
+also why the parity below has to be asserted: the module is invisible in every normal build, so
+nothing about day-to-day work surfaces drift in it.
+
+### What the demo owes the server
+
+**Every route `src/server/app.ts` declares has an entry in `web/src/demo/routes.ts`.** That table maps
+`METHOD path` — the path exactly as `app.ts` writes it, params and all — against either the `demoApi`
+method that answers it or `{absent: reason}`. It is the correspondence itself: `demoBackend`
+dispatches by method name rather than by URL, so before the table nothing anywhere held which route a
+demo method stood for.
+
+**Coverage is what is owed; fidelity is not.** The demo has no tracker, no worktrees and no
+`loadConfig`, and a route it answers with a constant is the honest arm — the prompt book and the
+running config both answer empty and say so rather than shipping a copy free to drift, and
+`fileWorkItem` refuses exactly as the real route does when the issues provider is `fake`. A route the
+demo cannot reach at all is a legitimate entry too, declared `absent` with the reason: `/api/health`
+is a supervisor's probe, `/artifacts/:id` is a browser navigation the demo world mints no URLs for,
+and `POST /api/issues/:number/{delivered,shortfall}` are reached by hand rather than by any cockpit
+control. **What must not be possible is a route the demo has never heard of** — that is the shape
+that survives `npm run check` and breaks after deploy.
+
+`test/demoBackend.test.ts` holds the table against the real one in both directions: no route without
+an entry, no entry naming a route that is gone, every named method callable, every `demoApi` method
+answering something, and no `absent` without a reason written out. The route table is read out of
+`app.ts`'s source by `declaredRoutes()` in `test/support/routeTable.ts`, shared with
+`test/cockpitAuth.test.ts` so the two walks cannot drift into matching different sets of routes.

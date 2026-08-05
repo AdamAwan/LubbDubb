@@ -10,6 +10,7 @@ import { loadConfig, type Config } from '../src/config.js';
 import { authorizeRequest, describeAuthAttempt, resolveCockpitToken } from '../src/server/auth.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { declaredRoutes } from './support/routeTable.js';
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-auth-'));
@@ -38,20 +39,11 @@ function tokenOf(cockpitUrl: string | null): string {
 // matters is over the whole route table, read out of the source. A route added
 // later is covered by this test on the day it is written, which is the property
 // a hand-maintained list of paths cannot have.
+//
+// The extractor lives in `test/support/routeTable.ts`: `test/demoBackend.test.ts`
+// walks the same table, and a second copy of it would be free to drift from this
+// one — including in the direction where both quietly match fewer routes.
 // ---------------------------------------------------------------------------
-
-type RouteMethod = 'GET' | 'POST' | 'DELETE';
-
-/** Every `app.get`/`app.post`/`app.delete` path declared in `app.ts`, with params filled in. */
-function declaredRoutes(): { method: RouteMethod; url: string }[] {
-  const source = readFileSync(new URL('../src/server/app.ts', import.meta.url), 'utf8');
-  const routes: { method: RouteMethod; url: string }[] = [];
-  for (const [, method, path] of source.matchAll(/\bapp\.(get|post|delete)\('([^']+)'/g)) {
-    if (!method || !path) continue;
-    routes.push({ method: method.toUpperCase() as RouteMethod, url: path.replace(/:[A-Za-z]+/g, '1') });
-  }
-  return routes;
-}
 
 test('every API route declared in app.ts refuses an unauthenticated request', async () => {
   const routes = declaredRoutes();
