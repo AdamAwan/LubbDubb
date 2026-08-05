@@ -136,6 +136,9 @@ export function buildStateSnapshot(
     assays,
     assaySignals: assayWindow ? store.listWorldEventsSince(assayWindow.since, assayWindow.refs) : [],
     assay: config.assay,
+    // So a closed ticket whose run still lives reads `retained` rather than
+    // `done` — the same rows the retained list below is built from (issue #234).
+    runs: issueRuns,
     headroom: control.paused ? 0 : Math.max(0, control.cap - store.countLiveAgents()),
     paused: control.paused,
   };

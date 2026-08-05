@@ -40,7 +40,9 @@ function pickupChip(pickup: Issue['pickup']) {
   // An agent on it is progress, and a delivered issue is parked on purpose — the
   // assessor's verdict, or the operator's. Neither is a warning; the reason string
   // already says who decided and what they saw, so it needs no colour to be read.
-  const calm = pickup.status === 'active' || pickup.status === 'delivered';
+  // A retained run joins them: the ticket closed and the run is being kept on
+  // purpose, waiting on a dismissal rather than on anything going wrong (#234).
+  const calm = pickup.status === 'active' || pickup.status === 'delivered' || pickup.status === 'retained';
   return (
     <span className={`chip small${calm ? '' : ' warn'}`} title={pickup.reasons.join(', ')}>
       {pickup.reasons[0] ?? pickup.status}

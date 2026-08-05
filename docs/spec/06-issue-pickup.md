@@ -110,7 +110,8 @@ chip.
 
 | Status      | Meaning                                                                |
 | ----------- | ---------------------------------------------------------------------- |
-| `done`      | Closed.                                                                |
+| `done`      | Closed, and the harness holds no run at it.                            |
+| `retained`  | Closed, but its run lives until the operator dismisses it.             |
 | `planning`  | In the plan funnel — a verdict is owed, or the issue split into parts. |
 | `has_pr`    | An open PR resolves it; the PR rules own it now.                       |
 | `active`    | A task on this origin is queued / running / waiting on you.            |
@@ -123,6 +124,14 @@ chip.
 | `blocked`   | Eligible, but dispatch is paused or the cap is reached.                |
 | `eligible`  | Would be picked up next cycle.                                         |
 
+The closed arm splits on the run, not on the tracker. A close is the tracker's answer and a run
+outlives it (issue #234), so `done` is kept for the case it was always right about — a closed ticket
+the harness never had a run at, or one whose run the operator has already dismissed — and everything
+else reads `retained`. Saying `done` there would be wrong twice: the harness may still dispatch
+`issue-assess` and `issue-retro` off exactly those runs, and "nothing to do" hides the one thing the
+operator still has to do. The reason line is taken off `completed_at`, the same evidence the
+dismissal stamps its outcome from, so the chip cannot promise an outcome the row will not give.
+
 The `parts` arm is answered **before** the open-PR gate, and it has to be: a part's PR is on
 `issue/<n>/<slug>`, but `linkedPrNumber` is sticky and will point at one, so the PR gate would report
 "has open PR #n" for every mid-plan issue and hide the plan behind whichever part opened last. For a
@@ -132,8 +141,8 @@ never moves again on its own — `"plan complete — all N parts merged; close t
 `IssuePickupContext` carries the same inputs rule `issue-pickup` consults: the policy, `DEFAULT_COOLDOWN`, the
 world's `takenAt` as "now", tasks, the last 200 decisions, the **unfiltered** open PR list, the plan
 graph, the planning policy, the standing delivery verdicts with the world transitions that may have
-ended one, the standing goal assays with the same, the assay policy, and the current headroom /
-paused flag.
+ended one, the standing goal assays with the same, the assay policy, the harness's runs at each goal
+(so a closed ticket can be told from a closed run), and the current headroom / paused flag.
 
 The `delivered` arm is asked **after** `has_pr` and `active`, and that order is deliberate: a
 delivered issue that somehow has an open PR is honestly `has_pr` — the PR rules own it — and one

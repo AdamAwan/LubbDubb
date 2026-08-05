@@ -264,6 +264,7 @@ export type PartProgress = 'shipped' | 'building' | 'ready' | 'locked' | 'blocke
 /** Every `issuePickupStatus` verdict, as the ore patch reads it. */
 type PickupStatus =
   | 'done'
+  | 'retained'
   | 'has_pr'
   | 'active'
   | 'ignored'
@@ -281,6 +282,11 @@ const PATCH_WORDS: Record<PickupStatus, MachineStatus> = {
   // everything it had, which is the good ending, not an absence.
   done: { word: 'Worked out', tone: 'ok' },
   delivered: { word: 'Worked out', tone: 'ok' },
+  // The seam is gone but the claim is still yours until you give it up: the ticket
+  // closed and the run did not, so this patch is neither worked out nor idle. Said
+  // in the vocabulary of ownership rather than of ore, because what ends it is the
+  // operator dismissing the run, not anything the mine does (issue #234).
+  retained: { word: 'Claim held', tone: 'ok' },
   has_pr: { word: 'Being mined', tone: 'ok' },
   active: { word: 'Being mined', tone: 'ok' },
   planning: { word: 'Being mined', tone: 'ok' },
