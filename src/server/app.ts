@@ -17,7 +17,7 @@ import {
 import { debugLog } from '../debug.js';
 import type { RouteModule } from './routes/context.js';
 import { register as registerAgents } from './routes/agents.js';
-import { artifactSignerFor, register as registerArtifacts } from './routes/artifacts.js';
+import { artifactSignerFor, attachmentSignerFor, register as registerArtifacts } from './routes/artifacts.js';
 import { register as registerControl } from './routes/control.js';
 import { register as registerEscalations } from './routes/escalations.js';
 import { register as registerFindings } from './routes/findings.js';
@@ -195,7 +195,13 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   });
 
   // -- Routes --------------------------------------------------------------
-  const ctx = { system, hub, artifactKey, artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined };
+  const ctx = {
+    system,
+    hub,
+    artifactKey,
+    artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
+    attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
+  };
   for (const registerRoutes of ROUTE_MODULES) registerRoutes(app, ctx);
 
   // -- Static SPA (production build) --------------------------------------

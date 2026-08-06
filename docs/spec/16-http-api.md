@@ -20,7 +20,7 @@ is about.
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                 |
 | `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                            |
-| `routes/artifacts.ts`   | `/artifacts/:id`, the capability signer, and the path confinement                            |
+| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement  |
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`                |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                |
 | `routes/findings.ts`    | Promote / file / dismiss                                                                     |
@@ -191,6 +191,30 @@ it authorizes itself with a per-flag capability instead. Opening a chip is a bro
 which cannot carry the bearer token — see
 [12](12-artifacts-and-files.md#the-route-lives-outside-api-and-authorizes-itself-issue-129) for why
 the exception is a separate route rather than a hole in the guard.
+
+### `GET /attachments/:id`
+
+Serves an image an operator attached to a blueprint (issue #249), **addressed by attachment id**.
+Rate-limited to 240/minute. 404 for an unknown id, or for a stored path that no longer resolves inside
+`attachmentRoot`. Responds with the **sniffed** mime, `x-content-type-options: nosniff`, a `sandbox`
+CSP, and `cache-control: private, max-age=300, immutable` — an attachment's bytes never change and its
+id is minted with them.
+
+**Outside the `/api` prefix, for the artifact route's reason and one more.** The cockpit loads these
+as `<img src>`, a subresource fetch the browser makes on its own; it can no more carry the bearer
+token than a navigation can. So it authorizes itself with the same per-run key the artifact
+capability uses, signed over `attachment:<id>` — namespaced so a capability for a flag cannot open an
+attachment. `/api/state` mints one URL per attachment into `attachmentUrls`; with auth off nothing is
+minted and the bare path is the whole URL.
+
+The expiry is **bucketed** rather than `now + ttl`, unlike an artifact's. An artifact URL is minted for
+a click that may never come; a thumbnail is an `<img src>` the browser is loading now, and a URL that
+changed on every state poll could never be cached — the image would be re-fetched every few seconds.
+Bucketing makes the string identical across the polls inside one bucket, at the cost of a capability
+living between one and two buckets instead of exactly one.
+
+The path served comes from the **stored row**, never from the request, and is re-confined to
+`attachmentRoot` before it is read — the belt-and-braces the artifact route applies to a flag's ref.
 
 ### `POST /api/pulse`
 
@@ -484,7 +508,9 @@ pasted, dropped or picked in the composer, `data` base64 of the raw file.
   operator's name is kept as a display label. See [14](14-persistence.md#blueprint-attachments) and
   [09](09-execution.md#an-operators-attachments-reach-the-agent).
 - The images follow **whichever job row this launch creates** — the blueprint itself, or the desk
-  filing job the tracker fork turns it into.
+  filing job the tracker fork turns it into — and change hands to `issue:<n>` when that filing agent
+  calls `link_ticket`, which is what keeps them in front of the whole planning funnel. See
+  [14](14-persistence.md#blueprint-attachments).
 
 ### `POST /api/upnext/order`
 
@@ -696,6 +722,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `agents`             | Every agent row, including usage and the progress note.                                                                                                                                                                       |
 | `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                      |
 | `files`              | Every file every agent wrote.                                                                                                                                                                                                 |
+| `attachments`, `attachmentUrls` | Images an operator attached to a blueprint (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed. |
 | `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
 | `findings`           | Every finding.                                                                                                                                                                                                                |
 | `escalations`        | Every escalation.                                                                                                                                                                                                             |

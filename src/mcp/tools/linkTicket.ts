@@ -40,6 +40,15 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
     // way: a finding an agent reported, or a work item for work the harness did
     // that nothing external accounted for.
     if (result.filing) {
+      // Said back rather than left silent: the operator's images were keyed to the
+      // job this agent is running, and they have just changed hands to the ticket
+      // it created (issue #249). An agent that pasted the paths into the ticket
+      // body should know they now belong to the goal, not to a job about to end.
+      const moved =
+        result.attachments > 0
+          ? ` The ${result.attachments === 1 ? 'image the operator attached' : `${result.attachments} images the operator attached`} ` +
+            `now belong to this ticket, and every agent dispatched for it will be handed ${result.attachments === 1 ? 'it' : 'them'}.`
+          : '';
       return ok({
         linked: true,
         workItem: {
@@ -47,7 +56,8 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
           status: result.filing.status,
           ticketRef: result.filing.ticketRef,
         },
-        note: 'Recorded against the work. It will hang off this item in the graph from the next pulse.',
+        attachmentsMoved: result.attachments,
+        note: `Recorded against the work. It will hang off this item in the graph from the next pulse.${moved}`,
       });
     }
     return ok({

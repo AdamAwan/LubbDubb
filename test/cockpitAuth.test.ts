@@ -76,13 +76,15 @@ test('every API route declared under routes/ refuses an unauthenticated request'
   const { app } = await buildApp(system);
 
   for (const route of routes) {
-    // `/artifacts/:id` is the one route deliberately outside the `/api` prefix
-    // (issue #129): a top-level browser navigation cannot carry the bearer header,
-    // so the chip opens a route that authorizes itself with a per-flag capability
-    // instead. The prefix guard therefore does *not* apply — but the route must
-    // still refuse a bare request, which is what makes moving it out of `/api`
-    // safe. Asserted here so it can't silently become reachable.
-    if (route.url.startsWith('/artifacts/')) {
+    // Two routes are deliberately outside the `/api` prefix, and for one reason:
+    // the browser reaches them without the bearer header. `/artifacts/:id` is
+    // opened by a top-level navigation (issue #129); `/attachments/:id` is loaded
+    // as an `<img src>` (issue #249). Neither can carry an `Authorization` header,
+    // so each authorizes itself with a short-lived per-subject capability and the
+    // prefix guard does *not* apply — but each must still refuse a bare request,
+    // which is what makes moving them out of `/api` safe. Asserted here so neither
+    // can silently become reachable.
+    if (route.url.startsWith('/artifacts/') || route.url.startsWith('/attachments/')) {
       const res = await app.inject({ method: route.method, url: route.url });
       assert.equal(res.statusCode, 401, `${route.url} must refuse a request carrying no capability`);
       continue;

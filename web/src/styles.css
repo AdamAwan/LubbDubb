@@ -464,6 +464,37 @@ body {
   font-size: 11px;
 }
 
+/* The strip of images attached to a piece of work — a queued blueprint, or the
+   issue that blueprint became (issue #249). One rule set for both, because it is
+   one component drawn in two places and the operator is meant to recognise the
+   same images across the tracker fork.
+
+   Sized as a chip, not as a figure: it sits in a row of chips and buttons and must
+   not push them apart. `object-fit: cover` on a square is what makes a wide
+   screenshot and a tall one read as the same kind of thing at this size; the full
+   image is one click away. */
+.attachment-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.attachment-thumb img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+}
+.attachment-thumb a:hover img {
+  border-color: var(--blue);
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

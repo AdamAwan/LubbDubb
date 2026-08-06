@@ -567,10 +567,9 @@ export class ActionExecutor {
     // record only the harness kept. Appended for the same reason as the two notes
     // above, and the pad goes first — it is the half nothing else could supply.
     const briefing = retroBriefing(action.originRef, store);
-    // The images the operator attached to this request (issue #249). Appended for
-    // the reason the four notes above are, and on an **exact** origin match: an
-    // attachment belongs to one request, and a screenshot in front of an agent
-    // dispatched for something else is the widening `outstandingForOrigin` names.
+    // The images the operator attached to this goal (issue #249). Appended for the
+    // reason the four notes above are, and scoped to the *goal* rather than the
+    // exact origin — see `attachmentsFor`.
     const attachments = attachmentsFor(action.originRef, store);
     const prompt = [action.prompt, guidance, outstanding, prior, briefing, attachments].filter(Boolean).join('\n\n');
     if (action.type === 'dispatch_code_agent') {
@@ -617,16 +616,31 @@ export class ActionExecutor {
  * to leave a handover.
  */
 /**
- * The images attached to the thing being dispatched — or null when there are
+ * The images attached to the goal being dispatched for — or null when there are
  * none, which is every dispatch that did not come from a blueprint carrying one.
  *
  * In the executor, and for the branch gate's reason: every dispatch passes
- * through here whatever composed it. The lookup is by the **exact** origin, which
- * while the request is a blueprint is `job:<id>`.
+ * through here whatever composed it.
+ *
+ * **The lookup is by goal, not by exact origin** (issue #249). Once a blueprint
+ * has been filed as a ticket its images are keyed `issue:<n>`, while the agents
+ * that go on to work it are dispatched for `issue:<n>:plan`, `:assay`, `:assess`,
+ * `:part:<slug>` and `:retro`. An exact match would put the screenshot in front of
+ * the filing agent alone — the one agent that writes no code — so the whole point
+ * of the ticket surviving would be lost. `padOriginFor` is the harness's own
+ * spelling of "which goal is this origin inside", already used to decide who
+ * shares a scratchpad, so the answer here and there cannot drift; an origin
+ * outside any issue subtree (a `job:<id>` blueprint that dispatched directly)
+ * falls back to itself, which is an exact match.
+ *
+ * The scoping is deliberately unconditional within a goal: a part agent working
+ * something the screenshot has nothing to do with is still shown it. That is the
+ * same trade the prior-work briefing already makes, and the alternative — guessing
+ * which part an image is "about" — is a guess the harness has no basis for.
  */
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
-  return attachmentsNote(store.listAttachments(originRef)) || null;
+  return attachmentsNote(store.listAttachments(padOriginFor(originRef) ?? originRef)) || null;
 }
 
 function outstandingForOrigin(originRef: string | null | undefined, store: Store): string | null {

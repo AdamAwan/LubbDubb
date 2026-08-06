@@ -836,6 +836,27 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
     than its status line.
   - **The browser's mime is not sent.** It drives the local preview only; the server decides the type
     from the bytes, so a field it ignores would read as one it honours.
+
+  Once launched, each queued blueprint in the panel's list carries an **`AttachmentStrip`** of what
+  was attached to it.
+- **`AttachmentStrip`** — the images attached to a piece of work, drawn wherever that work is: under a
+  queued blueprint in `LaunchPanel` (`job:<id>`) and on the issue row in `WorldSummary`
+  (`issue:<n>`). One component drawn twice, deliberately.
+
+  An attachment starts life keyed to a queued blueprint and, at the tracker fork, changes hands to the
+  ticket that blueprint became ([14](14-persistence.md#blueprint-attachments)). Those are two
+  different cards, and the point of the re-key is that the operator watches the screenshot move from
+  the first to the second rather than wondering where it went — which two components would sooner or
+  later disagree about, at exactly the moment the operator is comparing them.
+
+  - **The thumbnail is the full image, scaled by CSS**, the composer's rule and for its reason.
+  - **The URL comes from `attachmentUrls`**, never string-built, the same way artifact chips read
+    `artifactUrls`: it carries a short-lived capability that the cockpit's bearer token structurally
+    cannot substitute for, since an `<img>` load sends no `Authorization` header
+    ([16](16-http-api.md#get-attachmentsid)).
+  - **Clicking opens the image at its own size** in a new tab, `rel="noreferrer"` so the capability
+    does not ride out in a referrer. The `title` carries the operator's label and the absolute path the
+    agent was told to read, which is what lets a thumbnail be matched against a prompt.
 - **`Vitals`** — fleet-level counts.
 
 ### Left column — Fleet
