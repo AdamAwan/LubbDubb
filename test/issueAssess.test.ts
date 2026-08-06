@@ -13,7 +13,7 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { foldWorkGraph } from '../src/graph/workGraph.js';
-import type { Agent, Decision, Issue, IssueDelivery, Plan, Task } from '../src/types.js';
+import type { Agent, Decision, Issue, IssueDelivery, Plan, PlanPart, Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // Rule `issue-assess` — the assessor. What makes it fire, what makes it stand down, and the
@@ -89,6 +89,32 @@ function planningAssessor(): RuleDispatcher {
     { enabled: false },
     { enabled: false },
   );
+}
+
+/** One live part — a plan's **shape**: with none, `pl1` is delivered whole. */
+function part(): PlanPart {
+  return {
+    id: 'pl1:a',
+    planId: 'pl1',
+    slug: 'a',
+    seq: 1,
+    title: 'A',
+    scope: 'src/',
+    rationale: null,
+    acceptance: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    dependsOn: [],
+    branch: null,
+    prNumber: null,
+    status: 'ready',
+    blockedReason: null,
+    taskId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
 }
 
 function plan(status: Plan['status']): Plan {
@@ -208,7 +234,7 @@ test('an issue the planner routed to `single` is picked up, not assessed', async
   // and the loop closed with no PR ever written.
   const { actions } = await planningAssessor().decide(
     ctx({
-      plans: [plan('single')],
+      plans: [plan('active')],
       tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12', title: 'Plan issue #12' })],
     }),
   );
@@ -220,7 +246,7 @@ test('once the single PR has been worked, the assessor gets its turn', async () 
   // pickup agent ran and its PR left the open world, so the question is live again.
   const { actions } = await planningAssessor().decide(
     ctx({
-      plans: [plan('single')],
+      plans: [plan('active')],
       tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12' }), task({ id: 't2', originRef: 'issue:12' })],
     }),
   );
@@ -261,12 +287,18 @@ test('anything live under the issue stands the assessor down', async () => {
 
 test('a plan that still schedules something owns the issue', async () => {
   for (const status of ['planning', 'active', 'awaiting_approval'] as const) {
-    const { actions } = await assessor().decide(ctx({ plans: [plan(status)] }));
+    const { actions } = await assessor().decide(ctx({ plans: [plan(status)], planParts: [part()] }));
     assert.ok(!origins(actions).includes('issue:12:assess'), `a ${status} plan is not a finished one`);
   }
   // A complete plan schedules nothing further, so the issue is assessable.
-  const done = await assessor().decide(ctx({ plans: [plan('complete')] }));
+  const done = await assessor().decide(ctx({ plans: [plan('complete')], planParts: [part()] }));
   assert.ok(origins(done.actions).includes('issue:12:assess'));
+
+  // And an `active` plan with **no live parts** is the single-PR arm, which
+  // schedules nothing either: its one PR having been worked is the case this rule
+  // exists for. Read off a status list, this arm held the assessor off for ever.
+  const whole = await assessor().decide(ctx({ plans: [plan('active')] }));
+  assert.ok(origins(whole.actions).includes('issue:12:assess'));
 });
 
 test('a standing verdict is not re-assessed', async () => {

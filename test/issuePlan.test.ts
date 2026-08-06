@@ -13,7 +13,7 @@ import { DEFAULT_PLANNING, planBranch, planOrigin, resolvePlanRoute } from '../s
 import { PLAN_FILE } from '../src/plans/planDocument.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
-import type { Decision, Issue, Plan, WorldSnapshot } from '../src/types.js';
+import type { Decision, Issue, Plan, PlanPart, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 
 // -- the pure route ----------------------------------------------------------
@@ -34,6 +34,33 @@ function plan(status: Plan['status']): Plan {
     statusCommentRef: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
+  };
+}
+
+/** One part row — a plan's **shape**: a plan with none is being delivered whole. */
+function part(slug: string, seq: number, overrides: Partial<PlanPart> = {}): PlanPart {
+  return {
+    id: `plan_1:${slug}`,
+    planId: 'plan_1',
+    slug,
+    seq,
+    title: `The ${slug} part`,
+    scope: `src/${slug}/`,
+    rationale: null,
+    acceptance: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    dependsOn: [],
+    branch: null,
+    prNumber: null,
+    status: 'ready',
+    blockedReason: null,
+    taskId: null,
+    createdAt: '2026-07-25T00:00:00.000Z',
+    updatedAt: '2026-07-25T00:00:00.000Z',
+    ...overrides,
   };
 }
 
@@ -58,12 +85,16 @@ test('a persisted verdict decides the route; an unplanned issue awaits a planner
     route: 'planning',
     planner: 'cooldown',
   });
-  assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: plan('single'), verdict: v }), {
+  // The single arm is a plan being delivered with no live parts — the shape, read
+  // off the graph rather than off a status that could only ever be one or the other.
+  assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: plan('active'), verdict: v, existingParts: 0 }), {
     route: 'single',
     failedOpen: false,
   });
   for (const status of ['active', 'complete', 'abandoned'] as const) {
-    assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: plan(status), verdict: v }), { route: 'parts' });
+    assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: plan(status), verdict: v, existingParts: 2 }), {
+      route: 'parts',
+    });
   }
   // A row back in `planning` is a replan in flight — a planner is owed again.
   assert.equal(resolvePlanRoute({ planning: enabled, plan: plan('planning'), verdict: v }).route, 'planning');
@@ -128,9 +159,9 @@ test('rule `issue-plan` dispatches a planner instead of a pickup, on its own bra
 });
 
 test('planners rank ahead of pickups for scarce headroom', async () => {
-  // #7 is already planned `single` (a pickup); #12 needs a planner. One slot: the
+  // #7 is already planned as one PR (a pickup); #12 needs a planner. One slot: the
   // planner takes it, because a planner unblocks work.
-  const plans: Plan[] = [{ ...plan('single'), id: 'plan_7', originRef: 'issue:7' }];
+  const plans: Plan[] = [{ ...plan('active'), id: 'plan_7', originRef: 'issue:7' }];
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
     context([issue(7), issue(12)], { plans, agentHeadroom: 1 }),
   );
@@ -145,11 +176,16 @@ test('planners rank ahead of pickups for scarce headroom', async () => {
 
 test('rule `issue-pickup` fires only for a `single` plan, and is unchanged for one', async () => {
   const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', enabled);
+  // #7 is being delivered whole (no parts); #9 is decomposed, and its part row is
+  // what says so — the plan rows are identical.
   const plans: Plan[] = [
-    { ...plan('single'), id: 'plan_7', originRef: 'issue:7' },
+    { ...plan('active'), id: 'plan_7', originRef: 'issue:7' },
     { ...plan('active'), id: 'plan_9', originRef: 'issue:9' },
   ];
-  const planned = await dispatcher.decide(context([issue(7), issue(9)], { plans }));
+  // In review, so #9 is decomposed *and* has nothing for rule `plan-part` to
+  // dispatch — the assertion is about which rule fires for #7.
+  const planParts = [{ ...part('a', 1, { status: 'in_review', prNumber: 21 }), id: 'plan_9:a', planId: 'plan_9' }];
+  const planned = await dispatcher.decide(context([issue(7), issue(9)], { plans, planParts }));
   assert.deepEqual(
     planned.actions.map((a) => [a.rule, a.type === 'dispatch_code_agent' ? a.branch : null]),
     [['issue-pickup', 'issue/7']],
@@ -233,15 +269,15 @@ test('the pickup verdict explains an issue parked in the funnel', () => {
   });
   assert.deepEqual(issuePickupStatus(issue(12), running).reasons, ['planning agent running']);
 
-  const split = pickupCtx({ ...on, plans: [plan('active')] });
+  const split = pickupCtx({ ...on, plans: [plan('active')], planParts: [part('a', 1)] });
   assert.deepEqual(issuePickupStatus(issue(12), split), {
     eligible: false,
     status: 'planning',
-    reasons: ['plan split this into parts'],
+    reasons: ['0/1 parts done'],
   });
 
   // A `single` verdict falls through to the ordinary eligible verdict.
-  assert.equal(issuePickupStatus(issue(12), pickupCtx({ ...on, plans: [plan('single')] })).status, 'eligible');
+  assert.equal(issuePickupStatus(issue(12), pickupCtx({ ...on, plans: [plan('active')] })).status, 'eligible');
 });
 
 // -- end to end --------------------------------------------------------------
@@ -288,7 +324,7 @@ test('an injected issue routes through the planner when the funnel is on, straig
 
   // The planner's verdict, once persisted, hands the issue back to normal pickup —
   // and the planner never runs again, because the row is the memory.
-  on.store.upsertPlan({ originRef: 'issue:1', title: 'Ship the thing', status: 'single', reason: 'One PR.' });
+  on.store.upsertPlan({ originRef: 'issue:1', title: 'Ship the thing', status: 'active', reason: 'One PR.' });
   on.store.updateTask(planTask!.id, { status: 'done' });
   await on.harness.runCycle('manual');
   assert.deepEqual(

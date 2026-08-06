@@ -1083,7 +1083,7 @@ test('the floor opens its plan whatever the plan is doing', () => {
     );
   };
 
-  for (const status of ['planning', 'single', 'awaiting_approval', 'active', 'complete', 'abandoned'] as const) {
+  for (const status of ['planning', 'awaiting_approval', 'active', 'complete', 'abandoned'] as const) {
     const markup = renderFloor({ ...PLAN, status, reason: 'Three parts, stacked.' });
     assert.match(markup, /Open plan/, `a ${status} plan must be openable from the floor`);
     assert.match(markup, /Replan/, `a ${status} plan must be replannable from the floor`);
@@ -1123,9 +1123,10 @@ test('every goal-floor stage has a word', () => {
   // back rather than rendering blank.
   assert.ok(patchStatus('something-new').word.length > 0);
 
-  for (const s of ['planning', 'single', 'awaiting_approval', 'active', 'complete', 'abandoned'])
-    assert.ok(furnaceStatus(s).word.length > 0, `furnace ${s} rendered no word`);
-  assert.ok(furnaceStatus('something-new').word.length > 0);
+  for (const s of ['planning', 'awaiting_approval', 'active', 'complete', 'abandoned'])
+    for (const shape of ['single', 'parts'] as const)
+      assert.ok(furnaceStatus(s, shape).word.length > 0, `furnace ${s}/${shape} rendered no word`);
+  assert.ok(furnaceStatus('something-new', 'parts').word.length > 0);
 
   for (const v of ['workable', 'unclear'] as const) assert.ok(assayStatus(v).word.length > 0);
   for (const p of ['shipped', 'building', 'ready', 'locked', 'blocked'] as const)

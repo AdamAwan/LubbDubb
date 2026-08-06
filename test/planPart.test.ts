@@ -262,7 +262,7 @@ test('parts rank after planners, before pickups, bottom of the stack first', asy
   // ranked list: planner, then the plan bottom, then its dependent, then pickup.
   const plans: Plan[] = [
     { ...plan(), id: 'plan_9', originRef: 'issue:9' },
-    { ...plan(), id: 'plan_14', originRef: 'issue:14', status: 'single' },
+    { ...plan(), id: 'plan_14', originRef: 'issue:14', status: 'active' },
   ];
   const parts = [
     { ...part('b', 2, { dependsOn: ['a'] }), id: 'plan_9:b', planId: 'plan_9' },

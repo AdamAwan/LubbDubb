@@ -179,17 +179,22 @@ A work item parked in `inReviewState` is ambiguous: it sits there when work rema
 everything is delivered and it is waiting on test. No provider field distinguishes the two, so the
 harness keeps its own record of whether an issue is finished.
 
-`resolveIssueConclusion(stored, plan, shortfall)` (`src/issueConclusion.ts`, pure) folds one verdict —
+`resolveIssueConclusion(stored, plan, planParts, shortfall)` (`src/issueConclusion.ts`, pure) folds one verdict —
 `done` | `more_work` | `undeclared` — with this precedence:
 
 1. **The operator's toggle** (`POST /api/issues/:number/conclusion`), which wins over everything,
    including a plan roll-up.
 2. **A standing shortfall** — the assessor's "worked, and the goal is not reached".
-3. **A plan in flight**: `planning`, `active` or `awaiting_approval` → `more_work`.
+3. **A plan in flight**: `planning`, `awaiting_approval`, or `active` **with live parts** → `more_work`.
 4. **The agent's declaration**, via the `conclude_work` tool.
 5. **A `complete` plan** → `done`.
-6. Otherwise `undeclared`. `single` and `abandoned` derive nothing — a `single` verdict describes the
-   delivery's _shape_, not whether it has happened.
+6. Otherwise `undeclared`. The single-PR arm and `abandoned` derive nothing — one pull request
+   describes the delivery's _shape_, not whether it has happened, so the issue waits on its agent to
+   declare exactly as an unplanned one does.
+
+The parts are passed in because the shape is not in the status: an `active` plan with no live parts is
+being delivered whole ([08](08-planning.md#shape-is-the-parts)). Reading arm 3 off the status alone
+would make every single-PR issue say `more_work` for ever.
 
 **Arm 3 sits above the declaration because ownership does.** The rule this module states — _the
 verdict is asked of whoever owns the whole issue_ — used to be enforced by making the two arms

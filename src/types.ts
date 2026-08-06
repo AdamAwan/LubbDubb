@@ -973,27 +973,36 @@ export interface IssueShortfall {
 // ---------------------------------------------------------------------------
 
 /**
- * Where a plan sits in its life:
+ * Where a plan sits in its life — and **only** that. How the issue is being
+ * delivered (one pull request, or several) is not a status: it is read off the
+ * live parts, by `planShape`. The two were one field until a `single` status
+ * meant a plan could not also be *running*, and every consumer that switched on
+ * status had to know the shape — including the ones that forgot, which is how a
+ * single-PR issue silently stopped being reconciled and never posted its status
+ * comment.
+ *
  * - `planning` — a verdict is still being worked out (a replan in flight).
- * - `single`   — the planner said one PR; the issue falls through to normal pickup.
  * - `awaiting_approval` — the planner has spoken and `planning.requireApproval` is
  *   on, so a human has been asked to authorize the verdict (issue #109 phase 3) —
  *   a decomposition, or the decision to work the issue as one PR. Nothing is
  *   scheduled from it: this status *is* the gate, which is why release is a
- *   one-way move rather than a verdict re-read every pulse. It releases to the
- *   status its own arm is scheduled from — `active` or `single`, per
- *   `releasedPlanStatus`.
- * - `active`   — decomposed into parts, at least one still outstanding.
- * - `complete` — every part merged.
+ *   one-way move rather than a verdict re-read every pulse. It releases to
+ *   `active` on either arm.
+ * - `active`   — being delivered. With live parts that is a decomposition with at
+ *   least one part outstanding; with none, it is the single-PR arm, worked whole
+ *   by rule `issue-pickup`.
+ * - `complete` — every part settled. A single-PR plan does not reach it: what
+ *   finishes that arm is the issue's own delivery, which the plan does not own.
  * - `abandoned`— the operator gave up on the decomposition.
  */
-export type PlanStatus = 'planning' | 'single' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
+export type PlanStatus = 'planning' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
 
 /**
  * One issue's delivery plan — the planning agent's verdict, persisted so the
  * planner never re-runs on the same issue. Written for *both* outcomes: a
- * `single` plan is a first-class row, which is what turns today's one-agent /
- * one-PR path into an explicit outcome of the funnel rather than a bypass.
+ * single-PR plan is a first-class row with no parts, which is what turns today's
+ * one-agent / one-PR path into an explicit outcome of the funnel rather than a
+ * bypass.
  */
 export interface Plan {
   id: string;

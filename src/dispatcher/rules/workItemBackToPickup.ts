@@ -44,9 +44,11 @@ export function workItemBackToPickup(s: StageContext): void {
     // the item where it is — the first because it is finished, the second
     // because nobody vouched for it and re-doing merged work is the more
     // expensive mistake than waiting for a human to look.
+    const plan = s.plansByOrigin.get(issueOrigin(issue.number)) ?? null;
     const conclusion = resolveIssueConclusion(
       s.conclusions.get(issueOrigin(issue.number)) ?? null,
-      s.plansByOrigin.get(issueOrigin(issue.number)) ?? null,
+      plan,
+      plan ? (s.ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [],
       s.shortfallsByOrigin.get(issueOrigin(issue.number)) ?? null,
     );
     if (conclusion.verdict !== 'more_work') continue;

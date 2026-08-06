@@ -175,7 +175,7 @@ test('an issue that already has a plan is past this gate', async () => {
     createdAt: NOW,
     updatedAt: NOW,
   });
-  for (const status of ['planning', 'single', 'active', 'complete'] as const) {
+  for (const status of ['planning', 'awaiting_approval', 'active', 'complete'] as const) {
     const { actions } = await assayer().decide(ctx({ plans: [plan(status)] }));
     assert.ok(!origins(actions).includes('issue:12:assay'), `a ${status} plan means the funnel has read this`);
   }

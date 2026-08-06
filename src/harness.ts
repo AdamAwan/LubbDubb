@@ -217,6 +217,7 @@ export class Harness extends EventEmitter {
           deliveries,
           shortfalls,
           plans,
+          planParts: store.listAllPlanParts(),
         }))
           store.recordIssueRun(r);
       } catch (err) {

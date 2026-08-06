@@ -1389,7 +1389,7 @@ test('a bridge connection handshakes, lists tools and calls one over a real sock
     [...MCP_TOOL_NAMES].sort(),
   );
   assert.equal((replies[2]!.result as ToolResultText).isError, undefined);
-  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'single');
+  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'active');
 
   // Revoking removes the launch config with the credential.
   server.release(credential.token);

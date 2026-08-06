@@ -10,7 +10,7 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { DEFAULT_PLANNING, resolvePlanRoute } from '../src/plans/planning.js';
-import { amendedPlanStatus, releasedPlanStatus } from '../src/plans/parts.js';
+import { amendedPlanStatus, planShape } from '../src/plans/parts.js';
 import {
   abandonDecomposition,
   describeProposedParts,
@@ -30,12 +30,12 @@ import { gitRepo } from './support/gitRepo.js';
 // -- the pure half -----------------------------------------------------------
 
 test('requireApproval gates both arms, and off is byte-for-byte what it was', () => {
-  // Off is byte-for-byte what it was: a decomposition is work, and a single
-  // verdict is the route the funnel already falls open to.
+  // Off, both arms are `active` — the status is the plan's life, and which shape
+  // it is being delivered in is the parts (`planShape`), not a second status.
   assert.equal(amendedPlanStatus('parts', []), 'active');
   assert.equal(amendedPlanStatus('parts', [], false), 'active');
-  assert.equal(amendedPlanStatus('single', []), 'single');
-  assert.equal(amendedPlanStatus('single', [], false), 'single');
+  assert.equal(amendedPlanStatus('single', []), 'active');
+  assert.equal(amendedPlanStatus('single', [], false), 'active');
   // On, each is a proposal instead. The status *is* the gate, for both.
   assert.equal(amendedPlanStatus('parts', [], true), 'awaiting_approval');
   assert.equal(amendedPlanStatus('single', [], true), 'awaiting_approval');
@@ -46,16 +46,15 @@ test('requireApproval gates both arms, and off is byte-for-byte what it was', ()
   assert.equal(amendedPlanStatus('single', inFlight, false), 'active');
 });
 
-test('a released plan lands in the status its own arm is scheduled from', () => {
-  // A decomposition releases to `active`, where rule `plan-part` schedules parts.
-  assert.equal(releasedPlanStatus([partRow('a', 1)]), 'active');
-  // A single verdict releases to `single`. `active` would answer `parts` for an
-  // issue with no parts: nothing to schedule, pickup still narrowed off, and the
-  // roll-up never moves the row — an issue parked by its own approval.
-  assert.equal(releasedPlanStatus([]), 'single');
-  // Retired rows are not parts, so a refused-then-re-approved plan is the same
-  // single arm as one that never declared any.
-  assert.equal(releasedPlanStatus([{ ...partRow('a', 1), status: 'retired' }]), 'single');
+test('the shape is the parts, and a retired row is not one', () => {
+  assert.equal(planShape([partRow('a', 1)]), 'parts');
+  // No live parts *is* the single arm — the one reading rule `issue-pickup`, the
+  // reconciler and the conclusion resolver all take, so none of them can hold a
+  // different opinion about a plan than the others.
+  assert.equal(planShape([]), 'single');
+  // Retired rows are not parts, so an abandoned decomposition is the same single
+  // arm as a plan that never declared any.
+  assert.equal(planShape([{ ...partRow('a', 1), status: 'retired' }]), 'single');
 });
 
 test('the single arm of the ask carries a shape too, and says what each answer does', () => {
@@ -82,17 +81,20 @@ test('approval is on by default, in both places that default it', () => {
 });
 
 test('the funnel names the awaiting arm, so the chip and the rules read one verdict', () => {
-  const route = (status: Plan['status']): string =>
+  const route = (status: Plan['status'], existingParts = 1): string =>
     resolvePlanRoute({
       planning: { ...DEFAULT_PLANNING, enabled: true },
       plan: { ...planRow(), status },
       verdict: { kind: 'dispatch' } as DispatchVerdict,
+      existingParts,
     }).route;
   assert.equal(route('awaiting_approval'), 'awaiting_approval');
   // The arms either side of it are untouched.
   assert.equal(route('active'), 'parts');
-  assert.equal(route('single'), 'single');
   assert.equal(route('planning'), 'planning');
+  // And the single arm is the same `active` row with no live parts — the shape,
+  // read off the graph rather than off a status that could only be one or the other.
+  assert.equal(route('active', 0), 'single');
 });
 
 test('a plan proposal is held by a pending verdict only — not by a settled one', () => {
@@ -132,7 +134,9 @@ test('phase 4 stops at the plan predicate: a plan verdict has no signal expiry t
   await system.harness.runCycle('manual');
   const proposal = system.store.listProposals()[0]!;
   system.proposals.reject(proposal.id, 'one PR is fine');
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'single', 'the phase-3 route out still fires');
+  const refused = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(refused.status, 'active', 'the phase-3 route out still fires');
+  assert.equal(planShape(system.store.listPlanParts(refused.id)), 'single', 'and it falls back to one PR');
 
   system.connector.inject({ kind: 'new_pr', number: 5, title: 'One PR', branch: 'issue/12' });
   system.connector.inject({ kind: 'pr_comment', prNumber: 5, author: 'reviewer', body: 'a thought' });
@@ -143,7 +147,9 @@ test('phase 4 stops at the plan predicate: a plan verdict has no signal expiry t
     1,
     'a plan is proposed once per verdict — the world moving is not a new verdict',
   );
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'single');
+  const still = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(still.status, 'active');
+  assert.equal(planShape(system.store.listPlanParts(still.id)), 'single');
   system.store.close();
 });
 
@@ -339,8 +345,10 @@ test('rejecting schedules nothing and leaves the issue a route rather than parki
   assert.equal(rejected!.outcome, 'none');
   const plan = system.store.getPlanByOrigin('issue:12')!;
   // The route out: nothing was started, so the issue falls back to the single-PR
-  // path the funnel already fails open to — not to a status nothing schedules.
-  assert.equal(plan.status, 'single');
+  // path the funnel already fails open to. `active` with every part retired *is*
+  // that shape — the status is the plan's life, the parts are its shape.
+  assert.equal(plan.status, 'active');
+  assert.equal(planShape(system.store.listPlanParts(plan.id)), 'single');
   assert.deepEqual(
     system.store.listPlanParts(plan.id).map((p) => p.status),
     ['retired', 'retired'],
@@ -361,7 +369,9 @@ test('rejecting schedules nothing and leaves the issue a route rather than parki
 
 test('with approval off, a single verdict is picked up exactly as it was, and proposes nothing', async () => {
   const { system } = plannedSystem({ requireApproval: false, verdict: 'single' });
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'single');
+  const ingested = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(ingested.status, 'active');
+  assert.equal(planShape(system.store.listPlanParts(ingested.id)), 'single');
   await system.harness.runCycle('manual');
 
   assert.deepEqual(
@@ -405,9 +415,10 @@ test('accepting a single verdict releases it to `single`, and the issue is picke
 
   const accepted = await system.proposals.accept(proposal.id, 'one PR is right');
   assert.equal(accepted!.outcome, 'performed');
-  // `single`, not `active`: `active` on a plan with no parts answers `parts` for
-  // an issue with nothing to schedule — an issue parked by its own approval.
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'single');
+  // `active` on either arm; which arm it is, is the parts, and this one has none.
+  const released = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(released.status, 'active');
+  assert.equal(planShape(system.store.listPlanParts(released.id)), 'single');
   const audited = system.store.listDecisions().find((d) => d.cycleId === `human:${proposal.id}`)!;
   assert.match(audited.detail, /released the single-pull-request plan for issue:12/);
   assert.match(audited.detail, /authorized by you/);
@@ -753,7 +764,9 @@ test('abandoning a released decomposition falls the issue back to a single PR', 
 
   const settled = abandonDecomposition(store, plan.id, 'issue:12');
   assert.equal(settled.ok, true);
-  assert.equal(store.getPlan(plan.id)?.status, 'single');
+  // Retiring the parts *is* the collapse: no second status write to disagree with it.
+  assert.equal(store.getPlan(plan.id)?.status, 'active');
+  assert.equal(planShape(store.listPlanParts(plan.id)), 'single');
   assert.deepEqual(
     store.listPlanParts(plan.id).map((p) => p.status),
     ['retired', 'retired'],
@@ -809,14 +822,14 @@ test('the abandon route is the way out of an approved decomposition, and guards 
 
   const done = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/abandon` });
   assert.equal(done.statusCode, 200);
-  assert.equal(system.store.getPlan(plan.id)!.status, 'single');
+  assert.equal(planShape(system.store.listPlanParts(plan.id)), 'single');
   assert.ok(
     system.store.listPlanParts(plan.id).every((p) => p.status === 'retired'),
     'nothing is left for rule `plan-part` to schedule',
   );
 
-  // Idempotent by the same guard that makes it safe: a second click finds a
-  // `single` plan, not an active one, and 409s rather than re-retiring.
+  // Idempotent by the same guard that makes it safe: a second click finds a plan
+  // with no live parts — already worked whole — and 409s rather than re-retiring.
   assert.equal((await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/abandon` })).statusCode, 409);
   await app.close();
   system.store.close();

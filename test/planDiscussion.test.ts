@@ -88,16 +88,17 @@ test('/discuss/end refuses a plan that is not being discussed, and leaves it unt
 test('/discuss refuses a plan that is not awaiting approval, and leaves it untouched', async () => {
   const { system, app } = await buildTestApp();
   const plan = seedAwaitingApprovalPlan(system);
-  // `single` is the trace that actually parks an issue: an unguarded discussion
-  // ending on it writes `awaiting_approval` over zero parts, an operator approves
-  // an empty plan, and the issue is left with no ready part and no agent.
-  system.store.setPlanStatus(plan.id, 'single');
+  // A released plan is the trace that actually parks an issue: an unguarded
+  // discussion ending on it writes `awaiting_approval` over zero parts, an
+  // operator approves an empty plan, and the issue is left with no ready part and
+  // no agent.
+  system.store.setPlanStatus(plan.id, 'active');
 
   const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
   assert.equal(res.statusCode, 409);
 
   const after = system.store.getPlan(plan.id)!;
-  assert.equal(after.status, 'single', 'a refused call must not move the plan at all');
+  assert.equal(after.status, 'active', 'a refused call must not move the plan at all');
   assert.equal(after.discussing, false);
   await app.close();
   system.store.close();

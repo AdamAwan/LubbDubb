@@ -226,6 +226,61 @@ test('the status comment is written once and then edited in place, only when the
   assert.equal(h.store.getPlanByOrigin('issue:12')?.statusCommentRef, 'comment_1');
 });
 
+test('a plan being delivered whole writes its status comment too', async () => {
+  // The bug this closes: the single-PR arm was a `single` plan *status*, and
+  // `reconcile` lists `active`/`complete`/`awaiting_approval` — so those plans were
+  // never reconciled and never wrote a comment. An issue worked whole told its
+  // tracker nothing at all, silently, since there was no failure to record.
+  const store = new Store(':memory:');
+  const { sink, comments } = recordingSink();
+  const plan = store.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Big thing',
+    status: 'active',
+    reason: 'One PR is the right shape here.',
+  });
+  const reconciler = new PlanReconciler({
+    store,
+    git: new FakeGitObserver(),
+    sink,
+    planning: { ...DEFAULT_PLANNING, enabled: true },
+    defaultBranch: 'main',
+  });
+
+  await reconciler.reconcile(world());
+  assert.equal(comments.length, 1, 'the plan appearing is news on this arm too');
+  // The shape and the reason, not a progress count: rendering the partless arm
+  // through the rows said "0/0 parts done" — a progress report on work that was
+  // never split.
+  assert.match(comments[0]?.body ?? '', /One pull request/);
+  assert.match(comments[0]?.body ?? '', /One PR is the right shape here\./);
+  assert.doesNotMatch(comments[0]?.body ?? '', /parts? done/);
+  assert.equal(store.getPlan(plan.id)?.statusCommentRef, 'comment_1');
+
+  // Its body is the verdict, which nothing but a replan changes, so the body is
+  // the news: an unchanged pulse must not rewrite it.
+  await reconciler.reconcile(world());
+  assert.equal(comments.length, 1);
+  store.close();
+});
+
+test('an unapproved plan announces nothing, on either shape', async () => {
+  const store = new Store(':memory:');
+  const { sink, comments } = recordingSink();
+  store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'awaiting_approval', reason: 'One PR.' });
+  const reconciler = new PlanReconciler({
+    store,
+    git: new FakeGitObserver(),
+    sink,
+    planning: { ...DEFAULT_PLANNING, enabled: true },
+    defaultBranch: 'main',
+  });
+
+  await reconciler.reconcile(world());
+  assert.equal(comments.length, 0, 'a verdict nobody has answered announces no commitment on the tracker');
+  store.close();
+});
+
 test('an existing issue/<n> branch blocks the parts, and says so', async () => {
   // Refs are files: `refs/heads/issue/12` and `refs/heads/issue/12/schema` cannot
   // coexist. An issue worked as `single` first and later replanned hits exactly this.

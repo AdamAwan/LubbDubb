@@ -16,7 +16,13 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { issuePickupStatus, type IssuePickupContext } from '../src/dispatcher/issuePickup.js';
 import { basePrOf, inheritedCiFailure, prHealth } from '../src/prHealth.js';
 import { DEFAULT_PLANNING, resolvePlanRoute, plannerVerdict } from '../src/plans/planning.js';
-import { amendedPlanStatus, currentPlanSummary, partsToRetire, planProgress } from '../src/plans/parts.js';
+import {
+  amendedPlanStatus,
+  currentPlanSummary,
+  partsToRetire,
+  planProgress,
+  singleOverruled,
+} from '../src/plans/parts.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
@@ -301,7 +307,12 @@ test('an amended plan retires what it dropped, but never what has work in the wo
 });
 
 test('a `single` verdict only collapses a plan while nothing has left the harness', () => {
-  assert.equal(amendedPlanStatus('single', [part('a', 1, { status: 'pending' })]), 'single');
+  // The collapse is the *parts* — ingestion retires the ones nothing was started
+  // for, and `singleOverruled` is what says the world refused it. The status is
+  // `active` throughout: it is the plan's life, not its shape.
+  assert.equal(singleOverruled('single', [part('a', 1, { status: 'pending' })]), false);
+  assert.equal(singleOverruled('single', [part('a', 1, { status: 'in_review', prNumber: 40 })]), true);
+  assert.equal(singleOverruled('parts', [part('a', 1, { status: 'in_review', prNumber: 40 })]), false);
   assert.equal(amendedPlanStatus('single', [part('a', 1, { status: 'in_review', prNumber: 40 })]), 'active');
   assert.equal(amendedPlanStatus('parts', [part('a', 1, { status: 'merged' })]), 'active');
 });

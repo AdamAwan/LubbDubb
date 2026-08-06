@@ -1,5 +1,13 @@
 import type { System } from '../system.js';
-import type { Issue, IssueAssay, IssueDelivery, Retrospective, ScratchPadSummary, WorldSnapshot } from '../types.js';
+import type {
+  Issue,
+  IssueAssay,
+  IssueDelivery,
+  PlanPart,
+  Retrospective,
+  ScratchPadSummary,
+  WorldSnapshot,
+} from '../types.js';
 import type { CockpitState } from '../wire.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
@@ -78,6 +86,12 @@ export function buildStateSnapshot(
   // and the snapshot itself, so the chip and the panel can't disagree.
   const plans = store.listPlans();
   const planParts = store.listAllPlanParts();
+  // A plan's parts are its **shape** — the conclusion resolver asks for them
+  // because "one pull request" is no live parts, not a status.
+  const planPartsOf = (origin: string): PlanPart[] => {
+    const plan = plans.find((p) => p.originRef === origin);
+    return plan ? planParts.filter((p) => p.planId === plan.id) : [];
+  };
   // The same rows, translated for the wire (#171). The plan reconciler's one
   // living status comment is stored as a **provider comment id**, which is what
   // `upsertIssueComment` round-trips and exactly what the cockpit must not hold:
@@ -221,6 +235,7 @@ export function buildStateSnapshot(
       conclusion: resolveIssueConclusion(
         conclusions.get(origin) ?? null,
         plans.find((p) => p.originRef === origin) ?? null,
+        planPartsOf(origin),
         shortfallsByOrigin.get(origin) ?? null,
       ),
       // Beside the conclusion and the pickup verdict, never inside either: what

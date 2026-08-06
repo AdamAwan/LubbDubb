@@ -284,14 +284,19 @@ CREATE TABLE IF NOT EXISTS retrospectives (
 );
 
 -- One delivery plan per issue — the planning agent's verdict. Written for *both*
--- outcomes ('single' as much as a decomposition), so the planner never re-runs on
--- the same issue. The graph lives here and nowhere else: it is scheduling intent,
--- which has no home in the target repository.
+-- outcomes (one pull request as much as a decomposition), so the planner never
+-- re-runs on the same issue. The graph lives here and nowhere else: it is
+-- scheduling intent, which has no home in the target repository.
+--
+-- The status is the plan's life and nothing else. Which shape it is being
+-- delivered in is read off plan_parts — no live parts is the single-PR arm. It was
+-- a 'single' status until that made shape and life exclusive; absorbSinglePlanStatus
+-- carries those rows over.
 CREATE TABLE IF NOT EXISTS plans (
   id          TEXT PRIMARY KEY,
   origin_ref  TEXT NOT NULL UNIQUE,   -- "issue:12"
   title       TEXT NOT NULL,
-  status      TEXT NOT NULL,          -- planning | single | active | complete | abandoned
+  status      TEXT NOT NULL,          -- planning | awaiting_approval | active | complete | abandoned
   reason      TEXT,                   -- the planner's justification for its verdict
   risks       TEXT,                   -- what could go wrong with this split
   out_of_scope TEXT,                  -- what the planner deliberately left out
@@ -302,7 +307,8 @@ CREATE TABLE IF NOT EXISTS plans (
   updated_at  TEXT NOT NULL
 );
 
--- Parts of a multi-PR plan. Empty for a 'single' plan. The slug is author-chosen
+-- Parts of a multi-PR plan, and the record of which shape the plan is: no live
+-- rows here is the single-PR arm. The slug is author-chosen
 -- and stable, so an amended plan merges onto these rows rather than wiping them —
 -- in-flight parts keep their branch and PR across a replan.
 CREATE TABLE IF NOT EXISTS plan_parts (

@@ -539,7 +539,9 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     name: plan ? furnaceName(plan, parts.length) : refused ? 'Never reached' : 'Nothing smelted',
     meta: plan ? [`plan · ${plan.status.replace(/_/g, ' ')}`] : ['—'],
     presence: plan ? 'built' : 'unbuilt',
-    status: plan ? furnaceStatus(plan.status) : { word: 'Unbuilt', tone: 'off' },
+    status: plan
+      ? furnaceStatus(plan.status, parts.length === 0 ? 'single' : 'parts')
+      : { word: 'Unbuilt', tone: 'off' },
     scanners: [],
     prNumber: null,
     link: null,
@@ -867,8 +869,10 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
 }
 
 function furnaceName(plan: Plan, live: number): string {
-  if (plan.status === 'single') return 'One PR will do';
   if (plan.status === 'planning') return 'Reading the repository';
+  // The shape, off the parts — a plan being delivered whole has none. Asked after
+  // `planning` so a replan in flight still reads as one, whatever it will decide.
+  if (live === 0) return 'One PR will do';
   return live === 1 ? 'Smelted into 1 part' : `Smelted into ${live} parts`;
 }
 

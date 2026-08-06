@@ -325,21 +325,28 @@ export function assayStatus(verdict: 'workable' | 'unclear'): MachineStatus {
 }
 
 /** Every `Plan.status`, as the furnace reads it. */
-type PlanStatus = 'planning' | 'single' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
+type PlanStatus = 'planning' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
 
 const FURNACE_WORDS: Record<PlanStatus, MachineStatus> = {
   planning: { word: 'Smelting', tone: 'idle' },
-  // A `single` verdict is a decision, not an absence: the planner read the
-  // repository and said one pull request will do. Nothing drew that before.
-  single: { word: 'No splitter', tone: 'ok' },
   awaiting_approval: { word: 'Blueprint on the desk', tone: 'ghost' },
   active: { word: 'Plan active', tone: 'ok' },
   complete: { word: 'Plan complete', tone: 'ok' },
   abandoned: { word: 'Gone cold', tone: 'off' },
 };
 
-/** The furnace — the planner (rule `issue-plan`). A floor with no plan draws it unbuilt. */
-export function furnaceStatus(status: string): MachineStatus {
+/**
+ * The furnace — the planner (rule `issue-plan`). A floor with no plan draws it
+ * unbuilt.
+ *
+ * The single-PR arm is a **shape**, read off the parts, and it is a decision
+ * rather than an absence: the planner read the repository and said one pull
+ * request will do. It is asked separately from the status because the two are
+ * independent — a plan can be running *and* be one pull request, which is exactly
+ * what a `single` status could not say.
+ */
+export function furnaceStatus(status: string, shape: 'single' | 'parts'): MachineStatus {
+  if (shape === 'single' && (status === 'active' || status === 'complete')) return { word: 'No splitter', tone: 'ok' };
   return FURNACE_WORDS[status as PlanStatus] ?? { word: 'Gone cold', tone: 'off' };
 }
 

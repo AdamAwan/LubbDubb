@@ -23,7 +23,8 @@ and `issuePickupStatus` read it, so the cockpit's chip can never disagree with w
 Resolution order:
 
 1. Planning disabled → `single`.
-2. A plan row with status `single` → `single`.
+2. An `active` plan row with **no live parts** → `single`. That is the shape, and it is read off the
+   part rows rather than off the status — see [Shape is the parts](#shape-is-the-parts).
 3. A plan row with status `awaiting_approval` → `awaiting_approval`.
 4. A plan row with any status other than `planning` (`active`, `complete`, `abandoned`) → `parts`.
 5. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
@@ -65,7 +66,7 @@ The plan origin's cooldown verdict, with one adjustment: while a plan row sits i
 made **before** `plan.updatedAt` are not this replan's attempts. Without it, "Replan" on an
 already-planned issue would be met with a 15-minute cooldown from the original planner (or an
 already-spent cap) and the button would appear to do nothing. `planning` is only ever reached by an
-explicit replan — ingestion writes `single` or `active` — so the narrowed window cannot loosen the
+explicit replan — ingestion writes `active` or `awaiting_approval` — so the narrowed window cannot loosen the
 throttle on a first-time planner.
 
 The boundary is **strict** (`>`, not `>=`): an attempt stamped in the same millisecond as
@@ -181,8 +182,8 @@ transport (`AgentManager` for the file path, `McpToolDeps` for the tool path) ra
 config here, so ingestion stays store-only and neither transport can persist a verdict the other
 would not.
 
-The verdict is persisted for **both** outcomes — a `single` plan is a first-class row. Without one the
-planner would re-run on the same issue every cycle.
+The verdict is persisted for **both** outcomes — a single-PR plan is a first-class row with no parts.
+Without one the planner would re-run on the same issue every cycle.
 
 For an amendment:
 
@@ -191,16 +192,18 @@ For an amendment:
    agent, a branch or a PR is left exactly as it is. Retiring it would strand a PR the reconciler
    still folds reality onto, and a reviewer would have no idea the harness had written it off.
    Un-declaring in-flight work is a request to _stop_, which is a kill, not a plan edit.
-2. `amendedPlanStatus(verdict, surviving, requireApproval)` — `parts` is `active`, or
-   `awaiting_approval` when approval is required; `single` is honoured only while nothing survives
-   with work, otherwise the plan stays `active`. **Both verdicts are gated**: a honoured `single` is
-   `single`, or `awaiting_approval` when approval is required, for the reason under
+2. `amendedPlanStatus(verdict, surviving, requireApproval)` — `active`, or `awaiting_approval` when
+   approval is required. **Both verdicts are gated**, for the reason under
    [the approval gate](#the-approval-gate). The one arm that is never gated is the _overridden_
-   `single` — parts are in flight, the collapse was refused, and there is no decision left in it.
+   `single` (`singleOverruled`) — parts are in flight, the collapse was refused, and there is no
+   decision left in it. Which shape was ingested is not written at all: it is the surviving parts,
+   read back by `planShape`.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes).
 
-An overridden `single` is reported rather than silently applied: `overriddenSingle` is returned, the
+An overridden `single` is reported rather than silently applied — asked of the parts
+(`singleOverruled`), never of the status, since an honoured single verdict is `active` too:
+`overriddenSingle` is returned, the
 tool path tells the **agent** and records an operator-facing error, and the file path (which cannot
 answer the agent) records the error alone.
 
@@ -361,11 +364,12 @@ scheduled until you approve" was the whole promise of the gate. So a `single` ve
 and rule `issue-pickup` starts nothing until it is released.
 
 **One `single` arm is never gated, at either setting**: the verdict the harness _overruled_. When live
-parts already carry a branch or a PR, `amendedPlanStatus` keeps the plan `active` and the caller says
-so out loud (`overriddenSingle`) — the collapse was refused, so there is no decision left in it, and
-asking a human to approve a verdict that will not be honoured would be a question with no answer. That
-is also why `overriddenSingle` keys on `active` rather than "not `single`": `awaiting_approval` is the
-verdict honoured and waiting, not overridden.
+parts already carry a branch or a PR, `singleOverruled` is true, `amendedPlanStatus` keeps the plan
+`active` ungated, and the caller says so out loud (`overriddenSingle`) — the collapse was refused, so
+there is no decision left in it, and asking a human to approve a verdict that will not be honoured
+would be a question with no answer. That is also why `overriddenSingle` keys on the **parts** rather
+than on the status: an honoured single verdict is `active` too, and `awaiting_approval` is the verdict
+honoured and waiting, not overridden.
 
 **The default changes nothing for a deployment that has not turned the funnel on**, because
 `planning.enabled` is still `false` by default — this only decides what happens once an operator
@@ -377,20 +381,33 @@ write a proposal — on each arm, and that accepting it releases the arm's own s
 default sites (`config.ts`, `DEFAULT_PLANNING`) cannot drift apart unnoticed.
 
 **The gate is the plan's status.** Ingestion persists the verdict as `awaiting_approval` instead of
-`active`/`single`; accepting moves it to whichever of those its arm is scheduled from, and that is
-the whole effect, because `awaiting_approval` is the released status with the gate closed. Rule
-`plan-part`'s question — "is this plan released" — is therefore the status check it already had, and a
-superseded verdict structurally cannot release a new one, because a replan resets the row.
+`active`; releasing writes `active` on **either** arm, and that is the whole effect, because
+`awaiting_approval` is the released status with the gate closed. Rule `plan-part`'s question — "is
+this plan released" — is therefore the status check it already had, and a superseded verdict
+structurally cannot release a new one, because a replan resets the row.
 
-**Which released status is `releasedPlanStatus(parts)`** (`src/plans/parts.ts`), and it is not
-`active` unconditionally: a released single verdict must be `single`, or `resolvePlanRoute` answers
-`parts` for an issue with no parts — rule `plan-part` schedules nothing, rule `issue-pickup` stays
-narrowed off, the roll-up returns early on an empty plan, and the issue is parked _by its own
-approval_. Which arm a row is, is read off its parts rather than stored: a `parts` verdict always
-declares at least one part (`planDocument` refuses an empty one) and ingestion writes them before the
-gate closes, while a `single` verdict retires every part nothing was started for. So **no live parts
-_is_ the single arm**, and a verdict column on the row would be a second answer to a question the
-parts already answer.
+### Shape is the parts
+
+Which arm a released plan is on is **read off its parts, never stored** — `planShape(parts)` in
+`src/plans/parts.ts`. A `parts` verdict always declares at least one part (`planDocument` refuses an
+empty one) and ingestion writes them before the gate closes, while a `single` verdict retires every
+part nothing was started for. So **no live parts _is_ the single arm**, and a verdict column on the
+row would be a second answer to a question the parts already answer.
+
+It was a `single` plan **status** until it was not, and the reason it moved is worth stating: shape
+and life are independent, and a status cannot hold both. A plan being delivered as one pull request is
+still being delivered — but `single` sat in the same field as `active`, so every consumer that
+switched on status had to know about the shape, and the one that forgot was silent. `PlanReconciler`
+lists `active`, `complete` and `awaiting_approval`; a `single` plan was in none of them, so it was
+never reconciled and **never wrote its status comment** — an issue worked whole told the tracker
+nothing at all, with no error anywhere. `absorbSinglePlanStatus` (`src/store/plans.ts`) carries those
+rows into `active` on boot.
+
+The consumers that ask the shape rather than the status: `resolvePlanRoute` (arm 2 above),
+`PlanReconciler.reconcilePlan` (the partless arm writes the status comment and folds nothing),
+`planInFlightVerdict` in `src/issueConclusion.ts` (a single-PR plan is *not* in flight — its agent's
+declaration is what speaks), `abandonDecomposition` (a plan with no parts has nothing to collapse),
+and the cockpit's furnace and plan cards.
 
 | Step                 | What happens                                                                                                                                                                                                                                                                             |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -433,17 +450,19 @@ the review state for the life of the plan, and `resolvePlanRoute` fails a spent 
 `refusePlan` (`src/plans/planApproval.ts`) therefore leaves the issue a **route**, and which route
 depends on the arm it is refusing.
 
-A refused **decomposition** retires every part `partHasWork` says nothing was started for, then takes
-`amendedPlanStatus('single', survivors)`:
+A refused **decomposition** retires every part `partHasWork` says nothing was started for, then writes
+`amendedPlanStatus('single', survivors)` — `active` either way, with the survivors deciding what that
+means:
 
-- **`single`** — nothing was in flight, so the issue falls back to being worked as one PR by rule `issue-pickup`.
-- **`active`** — parts are in flight, which means a _replan_ is being refused: the work already
+- **no survivors** — nothing was in flight, so the shape is now single and the issue falls back to
+  being worked as one PR by rule `issue-pickup`.
+- **survivors** — parts are in flight, which means a _replan_ is being refused: the work already
   running carries on and the amendment's new parts are the ones retired. Collapsing here is impossible
   anyway, since git cannot create the flat `issue/<n>` branch beside the existing part refs.
 
 A refused **single** verdict (no live parts) is the arm with nowhere to fall: the single-PR route is
-what a refused decomposition falls _back_ to, so writing `single` here would perform the very thing
-the operator declined, and `abandoned` would park the issue. "Not as one pull request" is a question
+what a refused decomposition falls _back_ to, so releasing it here would perform the very thing the
+operator declined, and `abandoned` would park the issue. "Not as one pull request" is a question
 only a planner can answer again — so the plan goes to **`planning`** with the operator's note appended
 to `plan.reason`, which is the same one status write `POST /api/plans/:id/replan` makes, and rule
 `issue-plan` dispatches a replan from it on the next pulse. The note is not decoration: a planner shown
@@ -573,7 +592,9 @@ three different jobs (`src/plans/planWedge.ts`):
   git fact in front of a judgement about _shape_, the branch is one command from being gone, and the
   operator's only exit would become the opposite verdict to the one they were giving.
 - **A way out** — `abandonDecomposition` (`planApproval.ts`, `POST /api/plans/:id/abandon`) retires
-  the parts and collapses the plan to `single`. A separate act rather than a loosened `refusePlan`
+  the parts, which **is** the collapse to one pull request — the shape is the live part list, so there
+  is no second status write that could disagree with it, and a plan that already has no parts is
+  refused rather than answered `ok` for retiring nothing. A separate act rather than a loosened `refusePlan`
   guard because it is a different sentence: refusing says _I will not authorize this_, abandoning says
   _I authorized it, it cannot run, work the issue whole instead_. The bar is `partHasWork`, so nothing
   with an agent, a branch or a PR behind it is retired — which is also what makes the collapse safe,
@@ -602,7 +623,24 @@ right, and both rest on it being visible — which, until #171, it was not excep
 tracker. Absent (no comment written yet) and unresolvable (a provider that builds no URLs) both reach
 the cockpit as silence rather than as a link to nowhere.
 
-`Store.rollUpPlanStatus` moves a plan to `complete` when every live part is `merged`.
+**Both shapes write one.** A decomposition renders its part rows; the single-PR arm has none, and
+renders the shape and the planner's reason instead — "one pull request, this issue is being delivered
+whole, not decomposed". Rendering that arm through the part count said "0/0 parts done", a progress
+report on work that was never split. It is the arm that wrote **nothing at all** until the shape came
+out of the status: a `single` plan was in none of the statuses `PlanReconciler.reconcile` lists, so it
+was never reconciled, and an issue worked whole told its tracker nothing — silently, since there was
+no failure to record.
+
+The partless arm has no observed news to gate on (its body is the verdict, which only a replan
+changes), so the **body itself** is the signal: `writeStatusComment` memoises the last body sent per
+plan and sends only on a difference. Memoised rather than stored — a restart costs one idempotent
+edit, and a column would be a copy of the comment there is already a ref to. Nothing is written while
+a plan is `awaiting_approval`, on either shape: an unapproved verdict has no progress to report, and
+posting one would announce a commitment on the tracker that the operator has not made.
+
+`Store.rollUpPlanStatus` moves a plan to `complete` when every live part is `merged`. A partless plan
+is never touched by it: what finishes the single-PR arm is the issue's own delivery, which the plan
+does not own.
 
 ## Replan
 

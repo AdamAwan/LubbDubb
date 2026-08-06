@@ -8,7 +8,7 @@ import { TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore } from './jobs.js';
 import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
-import { PlanStore, PLAN_COLUMNS } from './plans.js';
+import { absorbSinglePlanStatus, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { IssueVerdictStore } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
@@ -106,11 +106,14 @@ export class Store {
     for (const columns of [TASK_COLUMNS, AGENT_COLUMNS, DECISION_COLUMNS, FINDING_COLUMNS, PLAN_COLUMNS]) {
       ensureColumns(this.db, columns);
     }
-    // The one migration that is not a column: #203's `floor_completions` becomes
-    // #234's `issue_runs`. Here for the same reason the pass above is — before any
-    // module is constructed, let alone reads — and it carries the operator's
-    // standing dismissals, which is what stops every cleared card coming back.
+    // The migrations that are not columns, here for the same reason the pass above
+    // is — before any module is constructed, let alone reads. #203's
+    // `floor_completions` becomes #234's `issue_runs`, carrying the operator's
+    // standing dismissals, which is what stops every cleared card coming back; and
+    // the retired `single` plan status is absorbed into `active`, the shape it
+    // carried now read off the parts.
     adoptFloorCompletions(this.db);
+    absorbSinglePlanStatus(this.db);
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
