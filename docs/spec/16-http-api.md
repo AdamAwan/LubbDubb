@@ -20,7 +20,7 @@ is about.
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                 |
 | `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                            |
-| `routes/artifacts.ts`   | `/artifacts/:id`, the capability signer, and the path confinement                            |
+| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement  |
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`                |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                |
 | `routes/findings.ts`    | Promote / file / dismiss                                                                     |
@@ -191,6 +191,30 @@ it authorizes itself with a per-flag capability instead. Opening a chip is a bro
 which cannot carry the bearer token — see
 [12](12-artifacts-and-files.md#the-route-lives-outside-api-and-authorizes-itself-issue-129) for why
 the exception is a separate route rather than a hole in the guard.
+
+### `GET /attachments/:id`
+
+Serves an image an operator attached to a blueprint (issue #249), **addressed by attachment id**.
+Rate-limited to 240/minute. 404 for an unknown id, or for a stored path that no longer resolves inside
+`attachmentRoot`. Responds with the **sniffed** mime, `x-content-type-options: nosniff`, a `sandbox`
+CSP, and `cache-control: private, max-age=300, immutable` — an attachment's bytes never change and its
+id is minted with them.
+
+**Outside the `/api` prefix, for the artifact route's reason and one more.** The cockpit loads these
+as `<img src>`, a subresource fetch the browser makes on its own; it can no more carry the bearer
+token than a navigation can. So it authorizes itself with the same per-run key the artifact
+capability uses, signed over `attachment:<id>` — namespaced so a capability for a flag cannot open an
+attachment. `/api/state` mints one URL per attachment into `attachmentUrls`; with auth off nothing is
+minted and the bare path is the whole URL.
+
+The expiry is **bucketed** rather than `now + ttl`, unlike an artifact's. An artifact URL is minted for
+a click that may never come; a thumbnail is an `<img src>` the browser is loading now, and a URL that
+changed on every state poll could never be cached — the image would be re-fetched every few seconds.
+Bucketing makes the string identical across the polls inside one bucket, at the cost of a capability
+living between one and two buckets instead of exactly one.
+
+The path served comes from the **stored row**, never from the request, and is re-confined to
+`attachmentRoot` before it is read — the belt-and-braces the artifact route applies to a flag's ref.
 
 ### `POST /api/pulse`
 
@@ -451,7 +475,9 @@ inherited `ignore`, a partial `policyChecks` map merging over the defaults, and 
 Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. There is no config-write path
 in the harness, and inventing one for this is a larger decision than making the policy visible.
 
-### `POST /api/jobs`
+### Launching a blueprint
+
+#### `POST /api/jobs`
 
 Queue an operator job. See [13](13-jobs-and-findings.md). 400 on a missing/empty prompt, a bad `kind`,
 a non-string `title` or `branch`; **409** when a code job names a branch a live task holds. Returns
@@ -459,6 +485,32 @@ a non-string `title` or `branch`; **409** when a code job names a branch a live 
 a watched ticket (a desk job + a `WorkItemFiling`) that enters the planning funnel, and returns
 `{ ok: true, job, filing, report }` with `job.kind === 'desk'` — the branch-collision 409 applies only
 to the direct-dispatch arm (a desk job, or a code job with no tracker).
+
+**Attachments (issue #249).** The body may carry `attachments: {name?, data}[]` — images the operator
+pasted, dropped or picked in the composer, `data` base64 of the raw file.
+
+- **Base64 in the existing JSON body, not `@fastify/multipart`.** A second request-parsing style would
+  mean a route that reads the request directly, which this surface's one rule forbids, plus a new
+  dependency; a third on the wire for a payload measured in single-digit megabytes is the cheaper
+  trade.
+- **A per-route `bodyLimit`** (`ATTACHMENT_BODY_LIMIT`, 32 MiB) replaces fastify's 1 MB default on
+  this route **only**. A body over it is fastify's own **413**, before validation runs. This route
+  already sits behind the bearer-token guard.
+- **There is no `mime` field.** A client-declared type is attacker-controlled; the type stored — and
+  the type an agent is told to trust — is sniffed from the decoded bytes.
+- **Bounds** are `src/jobs/attachments.ts`, and only there: at most **4** images, **5 MB** each
+  decoded, and **png / jpeg / gif / webp** decided by magic bytes. Each failure is a **400** naming the
+  file (by the operator's own label) and the bound it broke, and **no job row is created** — validation
+  runs before `createJob`, because a blueprint that says "make it look like this" without the "this" is
+  worse than no blueprint.
+- **The filename is never used as a path.** Files are stored `<index>.<ext>` from the sniffed format
+  under `attachmentRoot`, which removes traversal as a category rather than sanitising it; the
+  operator's name is kept as a display label. See [14](14-persistence.md#blueprint-attachments) and
+  [09](09-execution.md#an-operators-attachments-reach-the-agent).
+- The images follow **whichever job row this launch creates** — the blueprint itself, or the desk
+  filing job the tracker fork turns it into — and change hands to `issue:<n>` when that filing agent
+  calls `link_ticket`, which is what keeps them in front of the whole planning funnel. See
+  [14](14-persistence.md#blueprint-attachments).
 
 ### `POST /api/upnext/order`
 
@@ -468,9 +520,11 @@ duplicate. Replaces the whole override set (ranked `0..n-1`), broadcasts `world:
 cycle so the new order takes effect immediately. It only re-orders — it never un-holds a held item,
 and `manual-job` items stay first regardless — so this is safe to run inline. Returns `{ ok: true, report }`.
 
-### `POST /api/jobs/:id/cancel`
+#### `POST /api/jobs/:id/cancel`
 
-409 when the job is absent or no longer queued. Returns `{ ok: true, job }`.
+409 when the job is absent or no longer queued. Returns `{ ok: true, job }`. Any attachments are
+dropped with it — rows first, then the files — the one deletion in the attachment story, since nothing
+downstream can want a blueprint that never ran.
 
 ### `POST /api/findings/:id/promote`
 
@@ -668,6 +722,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `agents`             | Every agent row, including usage and the progress note.                                                                                                                                                                       |
 | `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                      |
 | `files`              | Every file every agent wrote.                                                                                                                                                                                                 |
+| `attachments`, `attachmentUrls` | Images an operator attached to a blueprint (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed. |
 | `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
 | `findings`           | Every finding.                                                                                                                                                                                                                |
 | `escalations`        | Every escalation.                                                                                                                                                                                                             |

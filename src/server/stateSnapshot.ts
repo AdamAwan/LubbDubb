@@ -43,7 +43,7 @@ import { watchLabelsFor } from '../watchLabels.js';
  */
 export function buildStateSnapshot(
   system: System,
-  opts?: { artifactSigner?: (flagId: string) => string },
+  opts?: { artifactSigner?: (flagId: string) => string; attachmentSigner?: (attachmentId: string) => string },
 ): CockpitState {
   const { store, connector, config, runtimeControl, harness, recovery } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
@@ -59,6 +59,8 @@ export function buildStateSnapshot(
   // Hoisted (not inlined into the returned object) because the artifact-URL map
   // below is derived from the same list.
   const flags = store.listAllFlags();
+  // Hoisted for the same reason: the URL map below is derived from the same rows.
+  const attachments = store.listAllAttachments();
   // What agents noticed outside their own tasks. Read here (not only in the
   // panel) because their refs feed the link map below: a finding often names an
   // item that is *not* in the current world — a closed duplicate, say — so its
@@ -343,6 +345,16 @@ export function buildStateSnapshot(
     // from this map rather than string-building a URL, the same way it looks refs
     // up in refUrls — an http(s) flag is absent here and linked directly.
     artifactUrls: artifactUrls(flags, opts?.artifactSigner),
+    // The images an operator attached to a blueprint (issue #249), every ref in
+    // one list. The cockpit filters it by `targetRef` — `job:<id>` under a queued
+    // blueprint, `issue:<n>` under the ticket that blueprint became — which is the
+    // whole visible half of the re-key: the operator watches the screenshot move
+    // from the queue onto the goal rather than disappearing at the fork.
+    attachments,
+    // The URL to fetch each attachment's bytes from, with its capability. Built
+    // the same way `artifactUrls` is and for the same reason: an `<img src>` the
+    // browser loads on its own carries no bearer token.
+    attachmentUrls: attachmentUrls(attachments, opts?.attachmentSigner),
     // Every file agents wrote (captured by the file-events hook), grouped by
     // agentId in the drawer's "files changed" list; the report-like ones also
     // appear above as artifact chips.
@@ -393,6 +405,23 @@ function artifactUrls(
     // A signer is present exactly when auth is on. Off, the route needs no
     // capability, so the bare path is the whole URL.
     map[flag.id] = signer ? `${base}?tk=${encodeURIComponent(signer(flag.id))}` : base;
+  }
+  return map;
+}
+
+/**
+ * Build the `attachment id → URL` map the cockpit points its thumbnails at.
+ *
+ * Unlike `artifactUrls` nothing is skipped: every attachment is a local file this
+ * harness wrote, so every one of them is served here.
+ */
+function attachmentUrls(attachments: { id: string }[], signer?: (id: string) => string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const attachment of attachments) {
+    const base = `/attachments/${encodeURIComponent(attachment.id)}`;
+    // A signer is present exactly when auth is on. Off, the route verifies
+    // nothing, so the bare path is the whole URL.
+    map[attachment.id] = signer ? `${base}?tk=${encodeURIComponent(signer(attachment.id))}` : base;
   }
   return map;
 }

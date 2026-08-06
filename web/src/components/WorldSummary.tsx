@@ -21,6 +21,7 @@ import type { AppState, Issue, Plan, PullRequest } from '../types.js';
 import { watchBucket, type WatchBucket } from '../worldBuckets.js';
 import { statusDot, refLink, refChip } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
+import { AttachmentStrip } from './AttachmentStrip.js';
 
 /**
  * The per-issue pickup chip (mirrors the PR health chip): what the harness is
@@ -531,6 +532,16 @@ export function WorldSummary({
                 })}
               </>
             )}
+            {/* Last, because it is the one block in this row rather than a chip.
+                Drawn here at all because a code blueprint carrying a screenshot
+                becomes a *ticket*: the queue card the image was attached to is
+                gone by the time the funnel runs, and this row is where the goal
+                now lives (issue #249). */}
+            <AttachmentStrip
+              targetRef={`issue:${i.number}`}
+              attachments={state.attachments}
+              attachmentUrls={state.attachmentUrls}
+            />
           </div>
         );
       })}

@@ -359,6 +359,58 @@ body {
   padding: 8px 10px;
   font: inherit;
 }
+/* Attached images (issue #249): a strip of thumbnails between the prompt and the
+   controls, so what is going with the blueprint is visible without leaving the
+   composer. The thumbnail is the operator's own bytes scaled by CSS — nothing
+   re-encodes or resizes them anywhere in this feature. */
+.launch-attachments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.launch-attachment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  max-width: 220px;
+}
+.launch-attachment img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  flex: none;
+}
+.launch-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.launch-attachment-drop {
+  flex: none;
+  padding: 0 6px;
+  line-height: 1;
+}
+/* The server's refusal, in its own words. Sized like body text rather than a
+   toast: it names a file and a bound, which is a sentence to read, not a flash. */
+.launch-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+}
+/* The picker itself is never drawn — the visible control is a cockpit button that
+   clicks it, so the composer keeps one button vocabulary. */
+.launch-file-input {
+  display: none;
+}
 .launch-controls {
   display: flex;
   gap: 8px;
@@ -410,6 +462,37 @@ body {
 }
 .launch-age {
   font-size: 11px;
+}
+
+/* The strip of images attached to a piece of work — a queued blueprint, or the
+   issue that blueprint became (issue #249). One rule set for both, because it is
+   one component drawn in two places and the operator is meant to recognise the
+   same images across the tracker fork.
+
+   Sized as a chip, not as a figure: it sits in a row of chips and buttons and must
+   not push them apart. `object-fit: cover` on a square is what makes a wide
+   screenshot and a tall one read as the same kind of thing at this size; the full
+   image is one click away. */
+.attachment-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.attachment-thumb img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+}
+.attachment-thumb a:hover img {
+  border-color: var(--blue);
 }
 
 .grid {

@@ -293,6 +293,21 @@ export interface Config {
   worktreeRoot: string;
   /** Root under which desk (no-code) scratch dirs are created. */
   deskRoot: string;
+  /**
+   * Root under which images attached to a blueprint are stored (issue #249).
+   * Deliberately **outside every worktree**, so a screenshot can never be
+   * committed onto a branch, and canonical rather than copied per dispatch — one
+   * file is what lets the planner, each part agent and the retrospective read the
+   * same image.
+   *
+   * Every agent the harness launches is granted read access to this whole root
+   * via `permissions.additionalDirectories`, for the life of the launch. That is a
+   * real widening: an agent working an unrelated goal can read another goal's
+   * attachments. It is the harness's own directory and nothing else writes there,
+   * and it is a config key so a deployment that wants it elsewhere (a tmpfs, a
+   * per-tenant path) can say so.
+   */
+  attachmentRoot: string;
   /** The git repo the harness operates on (worktrees are cut from here). */
   repoRoot: string;
   /**
@@ -452,6 +467,7 @@ const DEFAULTS: Config = {
   promptTemplatesDir: '.lubbdubb/prompts',
   worktreeRoot: '.lubbdubb/worktrees',
   deskRoot: '.lubbdubb/desk',
+  attachmentRoot: '.lubbdubb/attachments',
   repoRoot: process.cwd(),
   defaultBranch: 'main',
   dbPath: '.lubbdubb/lubbdubb.sqlite',
@@ -461,13 +477,13 @@ const DEFAULTS: Config = {
 };
 
 /**
- * Resolve the four path fields against the roots they belong to, in place.
+ * Resolve the five path fields against the roots they belong to, in place.
  *
  * Lifted out of {@link loadConfig} so a *baseline* config can be built by the
  * same rules (see {@link defaultConfig}). Comparing a running config against the
- * raw {@link DEFAULTS} would report `repoRoot`, `worktreeRoot`, `deskRoot` and
- * `promptTemplatesDir` as operator-customised on every deployment, since these
- * four are literals there and absolute here.
+ * raw {@link DEFAULTS} would report `repoRoot`, `worktreeRoot`, `deskRoot`,
+ * `attachmentRoot` and `promptTemplatesDir` as operator-customised on every
+ * deployment, since these five are literals there and absolute here.
  */
 function resolveRootPaths(merged: Config): void {
   // The repo defaults to wherever the app is launched (`process.cwd()`). A
@@ -486,6 +502,10 @@ function resolveRootPaths(merged: Config): void {
   // launch dir (the single-repo default) this is a no-op.
   merged.worktreeRoot = resolve(merged.repoRoot, merged.worktreeRoot);
   merged.deskRoot = resolve(merged.repoRoot, merged.deskRoot);
+  // Attachments belong to the repo being operated on for the same reason, and the
+  // absolute path is load-bearing twice over: it is what an agent's prompt names,
+  // and what the launch grants read access to.
+  merged.attachmentRoot = resolve(merged.repoRoot, merged.attachmentRoot);
 
   // Prompt overrides belong to the repo being operated on, like the worktree
   // roots above — resolve relative to repoRoot, honour an absolute override.

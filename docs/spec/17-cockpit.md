@@ -820,6 +820,43 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
   plate — drawn inline in the component rather than added to a skin's sprite sheet, because the panel
   is shared and the sprites are not. It is the one glyph in the cockpit that is not `currentColor`: a
   blueprint is blue the way a warning is amber, so the colour is the noun.
+
+  It also takes **images** (issue #249) — a screenshot of the panel to change, the broken screen — by
+  **paste** into the prompt (⌘/Ctrl+V, the common case), by **drop** anywhere on the composer, and by
+  an **Attach image** button over a hidden file input. Each attachment shows as a thumbnail with the
+  operator's filename and a × that removes it before launch; ⌘/Ctrl+Enter still submits.
+
+  - **The thumbnail is the same base64 the request carries**, scaled by CSS. Nothing in this feature
+    resizes, re-encodes or generates a thumbnail: the stored bytes are the operator's bytes.
+  - **The composer states no bounds.** How many, how big and which formats are the server's rules
+    (`src/jobs/attachments.ts`), and a second copy here is how the two come to disagree — so the panel
+    refuses only what is not an image at all (a category, not a number) and otherwise reports the
+    server's refusal verbatim in an inline error, keeping the prompt and its attachments for a retry.
+    That works because `json()` in `web/src/api.ts` now surfaces a refused request's `{error}` rather
+    than its status line.
+  - **The browser's mime is not sent.** It drives the local preview only; the server decides the type
+    from the bytes, so a field it ignores would read as one it honours.
+
+  Once launched, each queued blueprint in the panel's list carries an **`AttachmentStrip`** of what
+  was attached to it.
+- **`AttachmentStrip`** — the images attached to a piece of work, drawn wherever that work is: under a
+  queued blueprint in `LaunchPanel` (`job:<id>`) and on the issue row in `WorldSummary`
+  (`issue:<n>`). One component drawn twice, deliberately.
+
+  An attachment starts life keyed to a queued blueprint and, at the tracker fork, changes hands to the
+  ticket that blueprint became ([14](14-persistence.md#blueprint-attachments)). Those are two
+  different cards, and the point of the re-key is that the operator watches the screenshot move from
+  the first to the second rather than wondering where it went — which two components would sooner or
+  later disagree about, at exactly the moment the operator is comparing them.
+
+  - **The thumbnail is the full image, scaled by CSS**, the composer's rule and for its reason.
+  - **The URL comes from `attachmentUrls`**, never string-built, the same way artifact chips read
+    `artifactUrls`: it carries a short-lived capability that the cockpit's bearer token structurally
+    cannot substitute for, since an `<img>` load sends no `Authorization` header
+    ([16](16-http-api.md#get-attachmentsid)).
+  - **Clicking opens the image at its own size** in a new tab, `rel="noreferrer"` so the capability
+    does not ride out in a referrer. The `title` carries the operator's label and the absolute path the
+    agent was told to read, which is what lets a thumbnail be matched against a prompt.
 - **`Vitals`** — fleet-level counts.
 
 ### Left column — Fleet

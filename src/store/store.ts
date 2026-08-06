@@ -39,6 +39,7 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Job,
+  JobAttachment,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -177,6 +178,27 @@ export class Store {
   }
   cancelJob(id: string): Job | null {
     return this.jobs.cancelJob(id);
+  }
+  addAttachments(targetRef: string, files: Parameters<JobStore['addAttachments']>[1]): JobAttachment[] {
+    return this.jobs.addAttachments(targetRef, files);
+  }
+  listAttachments(targetRef: string): JobAttachment[] {
+    return this.jobs.listAttachments(targetRef);
+  }
+  getAttachment(id: string): JobAttachment | null {
+    return this.jobs.getAttachment(id);
+  }
+  listAllAttachments(): JobAttachment[] {
+    return this.jobs.listAllAttachments();
+  }
+  nextAttachmentIndex(targetRef: string): number {
+    return this.jobs.nextAttachmentIndex(targetRef);
+  }
+  rekeyAttachments(targetRef: string, moved: Parameters<JobStore['rekeyAttachments']>[1]): void {
+    this.jobs.rekeyAttachments(targetRef, moved);
+  }
+  deleteAttachments(targetRef: string): void {
+    this.jobs.deleteAttachments(targetRef);
   }
 
   // -- Priority overrides (operator "Up next" re-ordering, issue #128) -------

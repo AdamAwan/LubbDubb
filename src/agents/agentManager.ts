@@ -31,7 +31,13 @@ import type {
  */
 type LinkTicketResult =
   | { ok: true; finding: Finding; filing?: undefined }
-  | { ok: true; filing: WorkItemFiling; finding?: undefined }
+  | {
+      ok: true;
+      filing: WorkItemFiling;
+      finding?: undefined;
+      /** How many of the operator's images moved from the filing job onto the ticket (issue #249). */
+      attachments: number;
+    }
   | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
@@ -128,8 +134,29 @@ interface AgentManagerOptions {
    * else. Unset = the default (no approval gate).
    */
   requirePlanApproval?: boolean;
+  /**
+   * The disk half of a blueprint's attachments (issue #249). Present so
+   * {@link AgentManager.linkTicket} can move an operator's images off the filing
+   * job and onto the ticket that filing created; unset in tests and runtimes that
+   * never file, where a re-key has nothing to move.
+   */
+  attachments?: AttachmentRelocator;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
+}
+
+/**
+ * What this class needs of {@link ../jobs/attachmentFiles.js AttachmentFiles}:
+ * to empty one ref's directory into another's. Narrow for the reason
+ * {@link McpChannel} is — the manager moves files it never wrote and never reads.
+ */
+interface AttachmentRelocator {
+  relocate(
+    fromRef: string,
+    toRef: string,
+    files: { id: string; path: string }[],
+    nextIndex: number,
+  ): { id: string; index: number; path: string }[];
 }
 
 interface AgentManagerEvents {
@@ -499,9 +526,15 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
             error: `the work item for ${filing.targetRef} is ${filing.status}, not awaiting a ticket — nothing to link.`,
           };
         }
+        // The images the operator attached to the blueprint this filing came from
+        // now belong to the ticket (issue #249). Done here rather than in the tool,
+        // because the filing — and so the `job:<id>` the images are keyed under —
+        // is resolved from the credential, and this is the one moment the harness
+        // learns which issue that blueprint became.
+        const moved = this.rekeyAttachments(filing.targetRef, ticketRef);
         // No bespoke event: the Work panel is fetch-on-open, and the parent edge it
         // draws is written by the next pulse's fold, not from here.
-        return { ok: true, filing: linked };
+        return { ok: true, filing: linked, attachments: moved };
       }
 
       // Idempotence lives in the write, not in a read-then-check here.
@@ -515,6 +548,41 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.emit('finding', { agentId, taskId: task.id, finding: linked, created: false });
       return { ok: true, finding: linked };
     });
+  }
+
+  /**
+   * Move an operator's attachments from the ref they arrived on to the one the
+   * work now lives under, returning how many moved (issue #249).
+   *
+   * **Why the attachments move at all.** A code blueprint carrying a screenshot is
+   * not dispatched onto a branch when a tracker is configured: it is filed as a
+   * ticket, and the planning funnel — assay, planner, each part agent, the retro —
+   * takes over under `issue:<n>`. Left keyed on `job:<id>`, the image would be
+   * visible to exactly one agent, the one that filed the ticket and wrote no code.
+   * Re-keying is what makes it the *goal's* image rather than the job's.
+   *
+   * **Failure is recorded, not raised.** The link is the act the agent was
+   * dispatched to perform and it has already succeeded in the store; refusing it
+   * because a rename failed would leave a filing the operator sees as incomplete
+   * over a screenshot. What is lost instead is the image's onward visibility, and
+   * that is a recorded error rather than a silent one.
+   */
+  private rekeyAttachments(fromRef: string, toRef: string): number {
+    const rows = this.store.listAttachments(fromRef);
+    if (rows.length === 0 || !this.opts.attachments) return 0;
+    try {
+      const moved = this.opts.attachments.relocate(fromRef, toRef, rows, this.store.nextAttachmentIndex(toRef));
+      this.store.rekeyAttachments(toRef, moved);
+      return moved.length;
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'agent',
+        message:
+          `Could not move ${rows.length} attachment(s) from ${fromRef} to ${toRef}: ${(err as Error).message}. ` +
+          `The files are still keyed to the filing job, so the agents working the ticket will not see them.`,
+      });
+      return 0;
+    }
   }
 
   /**

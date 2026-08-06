@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { Job } from '../types.js';
+import type { Job, JobAttachment } from '../types.js';
 import type { StoreContext } from './context.js';
 
 /**
@@ -67,6 +67,108 @@ export class JobStore {
     this.ctx.db.prepare(`UPDATE jobs SET status='cancelled', updated_at=? WHERE id=?`).run(updatedAt, id);
     return { ...existing, status: 'cancelled', updatedAt };
   }
+
+  /**
+   * Record the images stored for `targetRef` (issue #249). The bytes are already
+   * on disk — this is the record of what they are, written after the write so a
+   * row never names a file that was never created.
+   */
+  addAttachments(
+    targetRef: string,
+    files: { index: number; label: string; mime: string; bytes: number; path: string }[],
+  ): JobAttachment[] {
+    const createdAt = this.ctx.now();
+    const rows = files.map((file) => ({
+      id: `att_${nanoid(10)}`,
+      targetRef,
+      index: file.index,
+      label: file.label,
+      mime: file.mime,
+      bytes: file.bytes,
+      path: file.path,
+      createdAt,
+    }));
+    const insert = this.ctx.db.prepare(
+      `INSERT INTO job_attachments (id, target_ref, idx, label, mime, bytes, path, created_at)
+       VALUES (@id, @targetRef, @index, @label, @mime, @bytes, @path, @createdAt)`,
+    );
+    for (const row of rows) insert.run(row);
+    return rows;
+  }
+
+  /** What is attached to `targetRef`, in the order the operator attached it. */
+  listAttachments(targetRef: string): JobAttachment[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM job_attachments WHERE target_ref=? ORDER BY idx ASC`)
+      .all(targetRef) as AttachmentRow[];
+    return rows.map(rowToAttachment);
+  }
+
+  /** One attachment by id — what the serving route resolves a request to. */
+  getAttachment(id: string): JobAttachment | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM job_attachments WHERE id=?`).get(id) as AttachmentRow | undefined;
+    return row ? rowToAttachment(row) : null;
+  }
+
+  /**
+   * Every attachment the harness holds, newest ref last. One read for the whole
+   * cockpit snapshot: the strips are drawn per queued blueprint and per issue, and
+   * there are a handful of rows in total — a query per card would be a join the
+   * browser does anyway.
+   */
+  listAllAttachments(): JobAttachment[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM job_attachments ORDER BY created_at ASC, idx ASC`)
+      .all() as AttachmentRow[];
+    return rows.map(rowToAttachment);
+  }
+
+  /**
+   * The first index free under `targetRef` — 0 when nothing is attached to it yet.
+   *
+   * A re-key needs this because the destination may already hold images: a filing
+   * agent may link its blueprint to an issue that **already exists** (the one it
+   * decided the blueprint duplicates), and that issue may have arrived through a
+   * blueprint of its own. Renumbering from here is what keeps `UNIQUE(target_ref,
+   * idx)` — and the files' own stems — collision-free.
+   */
+  nextAttachmentIndex(targetRef: string): number {
+    const row = this.ctx.db.prepare(`SELECT MAX(idx) AS max FROM job_attachments WHERE target_ref=?`).get(targetRef) as
+      | { max: number | null }
+      | undefined;
+    return row?.max === null || row?.max === undefined ? 0 : row.max + 1;
+  }
+
+  /**
+   * Move attachment rows onto `targetRef` at their new index and path — the
+   * second half of the re-key `link_ticket` performs when a blueprint becomes a
+   * ticket (issue #249).
+   *
+   * **Rows are rewritten after the files have moved**, never before. The two
+   * halves cannot be made atomic — one is SQLite, the other is a rename — so the
+   * order chooses which way a crash between them fails: files already at their new
+   * paths with rows still naming the old ones is a recoverable inconsistency
+   * nobody reads, while the reverse hands an agent a path that does not resolve,
+   * which is the failure that matters. One transaction, so the rows at least agree
+   * with each other.
+   */
+  rekeyAttachments(targetRef: string, moved: { id: string; index: number; path: string }[]): void {
+    if (moved.length === 0) return;
+    const update = this.ctx.db.prepare(`UPDATE job_attachments SET target_ref=?, idx=?, path=? WHERE id=?`);
+    this.ctx.db.transaction(() => {
+      for (const row of moved) update.run(targetRef, row.index, row.path, row.id);
+    })();
+  }
+
+  /**
+   * Forget what was attached to `targetRef` — a blueprint cancelled before it ran,
+   * the one case nothing downstream can want. Rows go first and the files after,
+   * so an interrupted deletion leaves orphaned bytes rather than a row pointing at
+   * a path that no longer resolves.
+   */
+  deleteAttachments(targetRef: string): void {
+    this.ctx.db.prepare(`DELETE FROM job_attachments WHERE target_ref=?`).run(targetRef);
+  }
 }
 
 interface JobRow {
@@ -79,6 +181,30 @@ interface JobRow {
   task_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface AttachmentRow {
+  id: string;
+  target_ref: string;
+  idx: number;
+  label: string;
+  mime: string;
+  bytes: number;
+  path: string;
+  created_at: string;
+}
+
+function rowToAttachment(r: AttachmentRow): JobAttachment {
+  return {
+    id: r.id,
+    targetRef: r.target_ref,
+    index: r.idx,
+    label: r.label,
+    mime: r.mime,
+    bytes: r.bytes,
+    path: r.path,
+    createdAt: r.created_at,
+  };
 }
 
 function rowToJob(r: JobRow): Job {

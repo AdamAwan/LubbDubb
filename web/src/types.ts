@@ -35,6 +35,8 @@ export type {
   Finding,
   Issue,
   Job,
+  JobAttachment,
+  JobAttachmentInput,
   OpenPullRequest,
   OrphanedWork,
   Plan,

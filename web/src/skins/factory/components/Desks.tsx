@@ -135,7 +135,12 @@ export function FaultLog({ view, actions }: SkinProps): JSX.Element {
 export function BlueprintDesk({ view, actions }: SkinProps): JSX.Element {
   return (
     <>
-      <LaunchPanel jobs={view.state.jobs} onChanged={actions.refresh} />
+      <LaunchPanel
+        jobs={view.state.jobs}
+        attachments={view.state.attachments}
+        attachmentUrls={view.state.attachmentUrls}
+        onChanged={actions.refresh}
+      />
       {view.demo && <InjectPanel onInjected={actions.refresh} world={view.state.world} />}
     </>
   );

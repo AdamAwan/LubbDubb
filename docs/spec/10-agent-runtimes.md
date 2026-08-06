@@ -76,7 +76,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 ```
 -p --input-format stream-json --output-format stream-json --verbose
 --append-system-prompt <protocol>
-[--settings <file-events + permissions.allow fragments>]
+[--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
 [...claudeArgs]
@@ -87,7 +87,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 ```
 --append-system-prompt <protocol>
 (--session-id <id> | --resume <id>)
-[--settings <merged status-line + file-events + permissions.allow fragments>]
+[--settings <merged status-line + file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
 [...claudeArgs]
@@ -98,9 +98,10 @@ Points that are load-bearing:
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
 - `--session-id` and `--resume` are mutually exclusive; a resume must not also mint the id.
-- `--settings` has no array form, so the status-line, file-events and `permissions.allow` fragments
+- `--settings` has no array form, so the status-line, file-events and `permissions` fragments
   are **merged into one JSON object** (`collectSettings`) — disjoint top-level keys, so the merge is
-  lossless. `collectSettings` is used by **both** runtimes, so the allow-list reaches headless agents.
+  lossless. The two halves of `permissions` (`allow` and `additionalDirectories`) are built into one
+  object rather than assigned twice, or whichever was written first would be dropped. `collectSettings` is used by **both** runtimes, so the allow-list reaches headless agents.
 - Operator `claudeArgs` are appended last, so an explicit flag there has the last word.
 - The status line never renders headless, so it is wired for PTY only. `PostToolUse` hooks _do_ fire
   headless, so file-events capture is wired for both.
@@ -135,6 +136,19 @@ root. Two mechanisms replace that, mirroring the "authorise the routine, ask abo
   `PermissionDesk`, and how the operator's Allow/Deny reaches the same live agent.
 
 `agentPermissionMode` stays available and unchanged, root-refusal caveat included.
+
+### Reading outside the worktree
+
+Every launch also carries `permissions.additionalDirectories: [attachmentRoot]`, in the same
+`--settings` fragment as the allow-list and for the same reason it is not on `--allowedTools`.
+
+It exists because a blueprint's attachments (issue #249) are stored **once**, outside every worktree —
+see [09](09-execution.md#an-operators-attachments-reach-the-agent) — so the absolute path the prompt
+names is one the agent could not otherwise open. It is a **standing grant for the life of the launch**
+and it is not per-goal: an agent working an unrelated issue can read another goal's attachments. That
+is a real widening, and the mitigations are that the root is the harness's own directory (nothing else
+writes there), that it is config'd (`attachmentRoot`), and that stored filenames never come from a
+client.
 
 ## `StreamJsonSession`
 

@@ -128,6 +128,17 @@ interface ClaudeArgsOptions {
    */
   allowedTools?: string[];
   /**
+   * Directories outside the agent's cwd it may read (`permissions.additionalDirectories`
+   * in the same `--settings` fragment as {@link allowedTools}). One entry today:
+   * the attachment root (issue #249), where a blueprint's images live — outside
+   * every worktree, so without this grant the path in the agent's prompt is one it
+   * cannot open.
+   *
+   * In `--settings` rather than `--allowedTools` for that flag's stated reason: an
+   * operator adjusting one must not be able to clobber the MCP grants.
+   */
+  additionalDirectories?: string[];
+  /**
    * The qualified MCP tool name for `--permission-prompt-tool` — the permission
    * backstop (issue #130 phase B). When a tool call is covered by neither the
    * allow-list nor the permission mode, Claude Code calls this tool instead of
@@ -204,7 +215,13 @@ function collectSettings(opts: ClaudeArgsOptions): string | null {
   const settings: Record<string, unknown> = {};
   if (opts.statusLine) Object.assign(settings, STATUS_LINE_SETTINGS);
   if (opts.fileEvents) Object.assign(settings, FILE_EVENTS_SETTINGS);
-  if (opts.allowedTools?.length) settings.permissions = { allow: opts.allowedTools };
+  // One `permissions` object, however many of its halves were asked for: the
+  // allow-list and the extra readable directories are separate concerns that share
+  // a key, and writing it twice would drop whichever was written first.
+  const permissions: Record<string, unknown> = {};
+  if (opts.allowedTools?.length) permissions.allow = opts.allowedTools;
+  if (opts.additionalDirectories?.length) permissions.additionalDirectories = opts.additionalDirectories;
+  if (Object.keys(permissions).length > 0) settings.permissions = permissions;
   return Object.keys(settings).length > 0 ? JSON.stringify(settings) : null;
 }
 

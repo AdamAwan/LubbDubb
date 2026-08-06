@@ -91,7 +91,9 @@ can explain a running agent without re-fetching from the provider. Its **prompt*
 anything an operator said when they refused an act for the same origin — see
 [A rejection's reason reaches the next agent](#a-rejections-reason-reaches-the-next-agent) — plus what
 the earlier agents on the same goal worked out, see
-[What earlier agents worked out reaches the next one](#what-earlier-agents-worked-out-reaches-the-next-one).
+[What earlier agents worked out reaches the next one](#what-earlier-agents-worked-out-reaches-the-next-one),
+plus the images the operator attached to it, see
+[An operator's attachments reach the agent](#an-operators-attachments-reach-the-agent).
 
 ## Authorizing an outbound act
 
@@ -286,6 +288,37 @@ prompt.
   agent's prompt is byte-identical to one composed before this existed; the pad is capped at the most
   recent 15 entries and the write-up at 4 000 characters, with the elision stated and `scratch_read`
   named, or a partial record reads as the whole one.
+
+## An operator's attachments reach the agent
+
+A blueprint launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
+change, the broken screen, a before/after pair. They are written once under `attachmentRoot`
+(`src/jobs/attachmentFiles.ts`) and recorded in `job_attachments`, keyed on the ref they belong to,
+which while the request is a blueprint is `job:<id>` and afterwards is the `issue:<n>` the blueprint
+was filed as. See [14](14-persistence.md#blueprint-attachments) for the rows and the re-key, and
+[16](16-http-api.md#launching-a-blueprint) for how they arrive.
+
+`materializeTask` appends `attachmentsNote(...)` (`src/jobs/attachments.ts`, pure) to the dispatch
+prompt: one line per image giving its **absolute path**, the mime **sniffed from its bytes**, and the
+operator's own filename as a label.
+
+- **Appended, not filled in**, for the rejection note's reason.
+- **One canonical file, not a copy per dispatch.** A copy into each agent's cwd would risk the
+  screenshot being committed onto a branch and would duplicate it once per agent on a goal. The single
+  file is readable instead through a `permissions.additionalDirectories` grant on every launch, see
+  [10](10-agent-runtimes.md#reading-outside-the-worktree).
+- **Scoped to the goal, not to the exact origin.** The lookup is `padOriginFor(originRef) ?? originRef`
+  — the harness's own spelling of "which goal is this origin inside", already used to decide who shares
+  a scratchpad, so the two cannot drift. It has to be: a filed blueprint's images are keyed `issue:<n>`
+  while the agents that go on to work it are dispatched for `issue:<n>:assay`, `:plan`, `:part:<slug>`
+  and `:retro`. An exact match would put the screenshot in front of the filing agent alone, the one
+  agent that writes no code. An origin outside any issue subtree — a `job:<id>` blueprint that
+  dispatched directly, because no tracker is configured — falls back to itself, which is an exact match.
+  - Within a goal the append is **unconditional**: a part agent working something the screenshot has
+    nothing to do with is still shown it. That is the trade the prior-work briefing already makes, and
+    the alternative is guessing which part an image is "about", which the harness has no basis for.
+- **The label is quoted as the operator's**, never as an instruction — a filename is not a directive,
+  and it is never used to build a path.
 
 ## `set_work_item_state` — not authorized, just done
 

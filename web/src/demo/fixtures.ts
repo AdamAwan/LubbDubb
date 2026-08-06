@@ -578,6 +578,11 @@ export function buildDemoState(): DemoSeed {
     retainedRuns: [],
     flags: [],
     artifactUrls: {},
+    // The demo has no attachments: their bytes live on a disk the demo does not
+    // have, and a thumbnail is the one thing here that cannot be faked from a
+    // fixture.
+    attachments: [],
+    attachmentUrls: {},
     files: [],
     // A path two live agents are both editing from different branches. Neither
     // dispatch gate is violated — the collision only exists inside the worktrees,

@@ -24,6 +24,7 @@ import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
 import { StatusFileRateLimits } from './agents/statusLine.js';
 import { FileEventsSpool } from './agents/fileEvents.js';
+import { AttachmentFiles } from './jobs/attachmentFiles.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
 import { ProposalDesk } from './proposals/proposalDesk.js';
@@ -102,6 +103,12 @@ export interface System {
    * the real runtimes (stream/pty).
    */
   fileEvents: FileEventsSpool;
+  /**
+   * Where images attached to a blueprint are written (issue #249). Exposed because
+   * the launch route stores them and the cancel route removes them, and both need
+   * the same root the agents are granted read access to.
+   */
+  attachments: AttachmentFiles;
   /**
    * The agents' typed channel back to the harness (issue #108). Always present,
    * but inert until `listen()` succeeds *and* `config.mcp.enabled` let it reach
@@ -201,6 +208,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   };
   const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
 
+  // Blueprint attachments (issue #249): one canonical file per image under the
+  // config'd root, outside every worktree. Every launch is granted read access to
+  // that root, which is what makes the path in an agent's prompt openable.
+  const attachments = new AttachmentFiles(config.attachmentRoot);
+  const additionalDirectories = [config.attachmentRoot];
+
   const perm = config.agentPermissionMode;
   const extraArgs = config.claudeArgs;
   const allowedTools = config.agentAllowedTools;
@@ -221,6 +234,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           permissionMode: perm,
           extraArgs,
           allowedTools,
+          additionalDirectories,
           fileEvents: true,
           mcpConfigPath,
           permissionPromptTool,
@@ -238,6 +252,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           permissionMode: perm,
           extraArgs,
           allowedTools,
+          additionalDirectories,
           sessionId,
           resume,
           statusLine: true,
@@ -316,6 +331,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
     requirePlanApproval: config.planning.requireApproval,
+    // So `link_ticket` can move a blueprint's images off the filing job and onto
+    // the ticket it just created (issue #249) — the same instance the launch route
+    // wrote them with, since both halves must agree about the root.
+    attachments,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
@@ -519,6 +538,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     prompts,
     rateLimits,
     fileEvents,
+    attachments,
     mcp,
     errors,
   };

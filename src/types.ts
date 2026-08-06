@@ -311,6 +311,46 @@ export interface Job {
   updatedAt: string;
 }
 
+/**
+ * An image an operator attached to a blueprint, as it arrives on the wire
+ * (issue #249). `data` is base64 of the raw file — no data-URL prefix.
+ *
+ * There is deliberately **no `mime` field**: a client-declared type is
+ * attacker-controlled, and the type an agent is told to trust is the one sniffed
+ * from the decoded bytes (`src/jobs/attachments.ts`). `name` is a display label
+ * only and is never used to build a path.
+ */
+export interface JobAttachmentInput {
+  /** The operator's own filename, kept for display. Optional — a pasted screenshot has none. */
+  name?: string;
+  /** The file's bytes, base64-encoded. */
+  data: string;
+}
+
+/**
+ * An attachment as stored: the file on disk, plus what an agent is told about it.
+ *
+ * Keyed on `targetRef` rather than on a job id, because the thing an attachment
+ * belongs to outlives the row it arrived with — a code blueprint becomes a desk
+ * filing job and then a ticket, and the image has to follow.
+ */
+export interface JobAttachment {
+  id: string;
+  /** What it is attached to: `job:<id>` while the blueprint is one. */
+  targetRef: string;
+  /** Position in the operator's list, 0-based — also the file's stem on disk. */
+  index: number;
+  /** The operator's filename, for display. Never used as a path. */
+  label: string;
+  /** The image type, decided by magic bytes on the decoded buffer. */
+  mime: string;
+  /** Size of the stored file in bytes. */
+  bytes: number;
+  /** Absolute path to the stored file — what an agent is handed. */
+  path: string;
+  createdAt: string;
+}
+
 /** What a work-graph node represents. `assess` is written only by stage 2. */
 export type WorkNodeKind = 'issue' | 'plan' | 'part' | 'pr' | 'concern' | 'job' | 'assess';
 

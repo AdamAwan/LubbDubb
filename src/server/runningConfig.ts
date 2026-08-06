@@ -77,7 +77,16 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   { title: 'Features', keys: ['planning', 'assessment', 'assay', 'retrospective', 'mcp', 'autoSend', 'ci'] },
   {
     title: 'Paths',
-    keys: ['repoRoot', 'defaultBranch', 'worktreeRoot', 'deskRoot', 'promptTemplatesDir', 'docsFolderPrefix', 'dbPath'],
+    keys: [
+      'repoRoot',
+      'defaultBranch',
+      'worktreeRoot',
+      'deskRoot',
+      'attachmentRoot',
+      'promptTemplatesDir',
+      'docsFolderPrefix',
+      'dbPath',
+    ],
   },
   { title: 'Server', keys: ['port', 'host', 'auth'] },
 ];

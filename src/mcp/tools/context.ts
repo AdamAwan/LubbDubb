@@ -38,7 +38,13 @@ export interface AgentToolTarget {
     ticketRef: string,
   ):
     | { ok: true; finding: Finding; filing?: undefined }
-    | { ok: true; filing: WorkItemFiling; finding?: undefined }
+    | {
+        ok: true;
+        filing: WorkItemFiling;
+        finding?: undefined;
+        /** How many of the operator's images moved from the filing job onto the ticket (issue #249). */
+        attachments: number;
+      }
     | { ok: false; error: string };
   recordConclusion(
     agentId: string,
