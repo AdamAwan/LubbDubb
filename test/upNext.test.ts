@@ -84,7 +84,7 @@ test('label-encoded priority orders the queue', async () => {
   assert.equal(result.upcoming?.[0]?.status, 'dispatching');
 });
 
-test('cross-PR sort: failing CI outranks a review comment for scarce headroom', async () => {
+test('cross-PR sort: a review comment outranks failing CI for scarce headroom', async () => {
   const d = new RuleDispatcher();
   const result = await d.decide(
     ctx(
@@ -106,12 +106,12 @@ test('cross-PR sort: failing CI outranks a review comment for scarce headroom', 
   );
   const dispatched = result.actions.filter((a) => a.type === 'dispatch_code_agent');
   assert.equal(dispatched.length, 1);
-  assert.equal((dispatched[0] as { originRef: string }).originRef, 'pr:2:ci', 'the CI fix wins the slot');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'pr:1:comments', 'the review wins the slot');
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status]),
     [
-      ['pr:2:ci', 'dispatching'],
-      ['pr:1:comments', 'waiting'],
+      ['pr:1:comments', 'dispatching'],
+      ['pr:2:ci', 'waiting'],
     ],
   );
 });

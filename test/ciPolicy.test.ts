@@ -388,6 +388,33 @@ test('rule `pr-ci-failing`: an urgent check sorts its PR ahead of other PR conce
   );
 });
 
+test('rule `pr-ci-failing`: an urgent check still jumps the queue on a PR that also has a review open', async () => {
+  // `urgent` is carried by the CI concern, which stopped being the top concern
+  // when the review comment moved ahead of it. Read off the winner it would
+  // silently become conditional on nobody having commented — so it is read off
+  // every concern on the PR. The agent still goes out for the review; only the
+  // PR's position in the queue is the flag's business.
+  const urgentAndReviewed = pr(9, {
+    ciChecks: checks(['security-scan', 'failing']),
+    unresolvedComments: [{ id: 'c1', author: 'someone', body: 'different approach please', handled: false }],
+  });
+  const result = await decide(
+    [pr(5, { ciChecks: checks(['lint', 'failing']) }), urgentAndReviewed],
+    policy({ match: 'security-*', onFailure: 'dispatch', urgent: true }, { match: 'lint', onFailure: 'dispatch' }),
+    { agentHeadroom: 1 },
+  );
+
+  const dispatched = result.actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0]!.originRef, 'pr:9:comments', 'the review is what the agent is sent for');
+  assert.equal(dispatched[0]!.rule, 'pr-review-comment');
+  assert.equal(
+    result.upcoming?.some((q) => q.origin === 'pr:5:ci'),
+    true,
+    'the non-urgent PR lost the one slot, and is still visible in the queue',
+  );
+});
+
 test('rule `pr-ci-failing`: a stacked PR whose base is red is still suppressed, policy or no policy', async () => {
   const base = pr(1, { branch: 'feature/1', ciChecks: checks(['lint', 'failing']) });
   const child = pr(2, { branch: 'feature/2', baseBranch: 'feature/1', ciChecks: checks(['lint', 'failing']) });

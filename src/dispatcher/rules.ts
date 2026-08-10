@@ -91,14 +91,21 @@ const RULES = [
       'A job the operator queued from the cockpit is drained before any world-driven rule, claiming the next free slot first — so a manual request takes priority, and simply waits in the queue when the fleet is at capacity.',
   },
 
-  // ---- PR concerns. The first three collect concerns for one branch; the -----
+  // ---- PR concerns. Three of these collect concerns for one branch; the -----
   // order they appear in here *is* the urgency order the fold reads.
+  {
+    id: 'pr-review-comment',
+    kind: 'rule',
+    name: 'Unhandled review comments',
+    description:
+      'Every unresolved review thread on a PR goes to one code agent together, to either fix the code or draft a reply defending the approach — review feedback must never silently rot. All of them at once, not one per cycle: comments from a single review pass are related, so answering them in isolation produces duplicate or contradictory fixes. It leads the PR concerns because a review is the one signal that can invalidate the diff itself: fixing CI or resolving a conflict against code a reviewer is about to have rewritten spends an agent on work the next push throws away, and re-conflicts the branch a second time.',
+  },
   {
     id: 'pr-ci-failing',
     kind: 'rule',
     name: 'Failing CI',
     description:
-      'A PR with failing CI gets a code agent on its branch to investigate and push a fix — broken builds block everything downstream, so this outranks all other work.',
+      'A PR with failing CI gets a code agent on its branch to investigate and push a fix — broken builds block everything downstream, so this outranks every concern but an open review.',
   },
   {
     id: 'pr-ci-blocked',
@@ -112,14 +119,7 @@ const RULES = [
     kind: 'rule',
     name: 'Base out of date',
     description:
-      'A PR that is behind its base branch (clean update) or conflicts with it (resolve and push) gets a code agent, so it never sits unmergeable while the base moves on.',
-  },
-  {
-    id: 'pr-review-comment',
-    kind: 'rule',
-    name: 'Unhandled review comments',
-    description:
-      'Every unresolved review thread on a PR goes to one code agent together, to either fix the code or draft a reply defending the approach — review feedback must never silently rot. All of them at once, not one per cycle: comments from a single review pass are related, so answering them in isolation produces duplicate or contradictory fixes.',
+      'A PR that is behind its base branch (clean update) or conflicts with it (resolve and push) gets a code agent, so it never sits unmergeable while the base moves on. Last of the three, because a merge resolved now against code an open review is about to change is a conflict resolved twice.',
   },
   {
     id: 'pr-merge-ready',
