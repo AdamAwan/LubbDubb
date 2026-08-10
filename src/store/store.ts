@@ -15,6 +15,7 @@ import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
+import { BranchReapStore } from './branchReaps.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -93,6 +94,7 @@ export class Store {
   private readonly transcripts: TranscriptStore;
   private readonly escalations: EscalationStore;
   private readonly landings: StackLandingStore;
+  private readonly branchReaps: BranchReapStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -130,6 +132,7 @@ export class Store {
     this.transcripts = new TranscriptStore(ctx);
     this.escalations = new EscalationStore(ctx);
     this.landings = new StackLandingStore(ctx);
+    this.branchReaps = new BranchReapStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -498,6 +501,15 @@ export class Store {
     reason: string | null,
   ): StackLanding | null {
     return this.landings.settleStackLanding(id, status, reason);
+  }
+
+  // -- Branch reaps (merged branches already cleaned up) --------------------
+
+  recordBranchReap(prNumber: number, branch: string): void {
+    this.branchReaps.recordBranchReap(prNumber, branch);
+  }
+  reapedPrs(): ReadonlySet<number> {
+    return this.branchReaps.reapedPrs();
   }
 
   // -- Decisions (audit) ---------------------------------------------------

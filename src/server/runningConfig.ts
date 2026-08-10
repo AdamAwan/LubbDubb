@@ -74,7 +74,10 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'issueInReviewState',
     ],
   },
-  { title: 'Features', keys: ['planning', 'assessment', 'assay', 'retrospective', 'mcp', 'autoSend', 'ci'] },
+  {
+    title: 'Features',
+    keys: ['planning', 'assessment', 'assay', 'retrospective', 'mcp', 'autoSend', 'ci', 'reapMergedBranches'],
+  },
   {
     title: 'Paths',
     keys: [

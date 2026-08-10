@@ -81,6 +81,9 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     async setPullBase() {
       return { ok: true };
     },
+    async deleteBranch() {
+      return { ok: true };
+    },
   };
 }
 
@@ -284,6 +287,9 @@ test('a send failure never drops the reply — it falls back to escalation', asy
     async setPullBase() {
       return { ok: true };
     },
+    async deleteBranch() {
+      return { ok: true };
+    },
   };
   const system = buildSystem(config, {
     worktrees: new FakeWorktreeManager(),
@@ -380,6 +386,9 @@ test('a merge failure never merges silently — it escalates for approval', asyn
       return { ok: true };
     },
     async setPullBase() {
+      return { ok: true };
+    },
+    async deleteBranch() {
       return { ok: true };
     },
   };

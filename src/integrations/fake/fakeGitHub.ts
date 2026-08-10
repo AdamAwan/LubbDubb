@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
 import type {
+  BranchDeleteInput,
   PrBaseInput,
   PrCreateInput,
   PrLabelInput,
@@ -11,6 +12,7 @@ import type {
 } from '../../sink/actionSink.js';
 import type { PullRequest } from '../../types.js';
 import type {
+  BranchDeleteCapable,
   Capability,
   Injectable,
   Integration,
@@ -51,6 +53,7 @@ export class FakeGitHubIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBaseCapable,
+    BranchDeleteCapable,
     Injectable
 {
   readonly id = 'sourceControl:fake';
@@ -216,6 +219,15 @@ export class FakeGitHubIntegration
       mutatePr(world, input.prNumber, (pr) => (pr.baseBranch = input.base));
     });
     return { ok: true, ref: `fake-base_${nanoid(6)}` };
+  }
+
+  /**
+   * Delete a branch. The fake has no ref store — a branch exists here only as the
+   * `branch` of some pull request, and the pull request outlives it — so there is
+   * nothing to mutate and the reap's own record is what stops it asking twice.
+   */
+  deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
+    return Promise.resolve({ ok: true, ref: input.branch });
   }
 
   /** Reflect harness progress back so the deterministic dispatcher stops re-triggering. */

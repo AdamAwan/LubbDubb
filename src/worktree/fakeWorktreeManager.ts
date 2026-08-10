@@ -33,6 +33,8 @@ export class FakeWorktreeManager implements Worktrees {
   readonly ensured: FakeWorktreeCall[] = [];
   /** Every branch `remove` was called for, in order — including ones with no worktree. */
   readonly removed: string[] = [];
+  /** Every branch `deleteBranch` was called for, in order — the local half of a reap. */
+  readonly deleted: string[] = [];
 
   private readonly root: string;
   private readonly dirs = new Map<string, string>();
@@ -49,6 +51,11 @@ export class FakeWorktreeManager implements Worktrees {
     mkdirSync(dir, { recursive: true });
     this.dirs.set(branch, dir);
     return Promise.resolve(dir);
+  }
+
+  deleteBranch(branch: string): Promise<void> {
+    this.deleted.push(branch);
+    return this.remove(branch);
   }
 
   remove(branch: string): Promise<void> {

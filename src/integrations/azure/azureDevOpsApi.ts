@@ -90,6 +90,11 @@ export interface AzureDevOpsApi {
   setPullTitle(pullRequestId: number, title: string): Promise<void>;
   /** Retarget a pull request's base. Azure never does this itself when a rung merges. */
   setPullBase(pullRequestId: number, base: string): Promise<void>;
+  /**
+   * Delete a branch. Returns whether a ref was actually removed: `false` means it
+   * was already gone, which the reap treats as success.
+   */
+  deleteBranch(branch: string): Promise<boolean>;
 }
 
 /** A work-item comment's own id — what an in-place edit addresses. */

@@ -23,7 +23,7 @@ predicate and the desk that performs its writes live in separate files, as `prRe
 
 `reapableBranches(world, ctx)` yields `BranchReapInput[]` (`{ prNumber, branch }`), where `ctx`
 carries the default branch, whether `filters.prAuthor` is configured, the tasks, and the set of
-already-reaped branches — so the function stays pure and the store read happens in the desk. A
+already-reaped pull request numbers — so the function stays pure and the store read happens in the desk. A
 branch is reapable when every one of these holds:
 
 - **The PR merged.** `prState(pr) === 'merged'`, read from `world.closedPullRequests` — the
@@ -40,7 +40,7 @@ branch is reapable when every one of these holds:
 - **No agent is on it.** No task on the branch is `queued`, `running` or `waiting`. The same guard
   the worktree reap in `system.ts` already applies: an agent can still be finishing on a branch
   whose PR has merged.
-- **It has not already been reaped.** No `branch_reaps` row for it (below).
+- **It has not already been reaped.** No `branch_reaps` row for that pull request (below).
 
 ### Why the base check is load-bearing
 
@@ -102,9 +102,13 @@ without a record the desk would re-issue a delete for an already-gone branch on 
 hours.
 
 New table `branch_reaps`, owned by a new store module `src/store/branchReaps.ts` taking the usual
-`{db, now}` `StoreContext`, with `Store` delegating under the same method names: `{ branch,
-pr_number, at }`, one row written after a successful reap, read by the predicate as the
-already-reaped gate. A brand-new table needs no `ColumnMigrations` entry.
+`{db, now}` `StoreContext`, with `Store` delegating under the same method names: `{ pr_number,
+branch, at }`, one row written after a successful reap, read by the predicate as the already-reaped
+gate. A brand-new table needs no `ColumnMigrations` entry.
+
+**Keyed on the pull request, not the branch.** A branch name is reusable — `issue/12` can land, be
+re-cut by a later dispatch and land again — and a row keyed on the name would suppress the second
+reap silently and forever, since the table is unbounded in age.
 
 Stored rather than derived because the world does not answer the question. "Has this branch been
 reaped" is not visible in any provider payload, and asking git or the provider per merged PR per
@@ -127,7 +131,6 @@ Every failure path routes through `errors.record` and none of them fails the cyc
 | Remote branch already absent (404)  | Success. The reap is recorded and never retried.            |
 | Remote delete fails otherwise       | Recorded; no `branch_reaps` row, so it is retried next pulse. |
 | Local `worktree remove` / `branch -D` fails | Recorded; the remote delete is not attempted this pulse.    |
-| Provider lacks the capability       | The desk does the local half and records nothing as an error. |
 
 ## Tests
 

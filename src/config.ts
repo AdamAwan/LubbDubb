@@ -319,6 +319,21 @@ export interface Config {
    * anywhere, and a wrong guess silently mis-bases work.
    */
   defaultBranch: string;
+  /**
+   * Delete the branch behind a pull request once the harness observes it **merged**
+   * — the worktree and local ref, then the branch on the remote. On by default:
+   * leaving a dead branch on both sides of every landed PR is an omission rather
+   * than a policy, and a long-running deployment accumulates one per merge forever.
+   *
+   * Set `false` on a repository where a merged branch is somebody else's
+   * expectation (a deploy pipeline that reads it, a mirror that tracks it). Nothing
+   * else changes: the reap writes nothing that another rule reads.
+   *
+   * Only the harness's own pull requests are ever reaped, on the same
+   * `filters.prAuthor` test the naming convention uses, and never a branch another
+   * open PR still targets. → `src/branchReap.ts`.
+   */
+  reapMergedBranches: boolean;
   /** SQLite file. */
   dbPath: string;
   /** HTTP/WS port. */
@@ -470,6 +485,7 @@ const DEFAULTS: Config = {
   attachmentRoot: '.lubbdubb/attachments',
   repoRoot: process.cwd(),
   defaultBranch: 'main',
+  reapMergedBranches: true,
   dbPath: '.lubbdubb/lubbdubb.sqlite',
   port: 4300,
   host: '127.0.0.1',

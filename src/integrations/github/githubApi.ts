@@ -77,6 +77,11 @@ export interface GitHubApi {
   setPullTitle(number: number, title: string): Promise<void>;
   /** Retarget a pull request's base — a stack rung whose parent merged. */
   setPullBase(number: number, base: string): Promise<void>;
+  /**
+   * Delete a branch. Returns whether a ref was actually removed: `false` means it
+   * was already gone, which the reap treats as success (see {@link ActionSink.deleteBranch}).
+   */
+  deleteBranch(branch: string): Promise<boolean>;
 }
 
 export interface GhPullSummary {

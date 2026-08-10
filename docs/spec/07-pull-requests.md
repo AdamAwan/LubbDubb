@@ -223,6 +223,41 @@ operator re-authorizing a chain they have looked at again.
 and the world, which is what keeps the lens out of the harness's per-pulse decision path. The only
 place the model is consulted is `landingScope`, at the click, in the route.
 
+## Reaping a merged branch
+
+When a pull request merges, the branch behind it is deleted — the worktree and the local ref, then
+the branch on the remote. `reapableBranches` (`src/branchReap.ts`) is the predicate, pure and
+unit-tested; `BranchReapDesk` performs it on the pulse, beside the rename and the retarget and in
+the same register: mechanical bookkeeping, **not** auto-send gated, a failure recorded and never
+failing the cycle. Config key `reapMergedBranches`, on by default.
+
+A branch is reapable when all of:
+
+- **Its pull request merged.** `prState(pr) === 'merged'`, read from the closed-PR window. An
+  **abandoned** PR's branch holds work that never landed, so deleting it destroys the only copy —
+  the same line `retargetsFor` draws, and `prState` never invents `closed` from absence.
+- **The pull request is ours** — `isOurPr` (`src/prOwnership.ts`), the gate `renamablePrs` uses,
+  asked in one place because two wordings of "which pull requests are mine" would drift.
+- **Nothing still stands on the branch.** It is not `defaultBranch`, and no open pull request names
+  it as `baseBranch`. **This is the load-bearing one**: deleting the base of an open PR orphans it,
+  and GitHub closes it outright. `retargetsFor` moves a rung off its merged parent, but that write
+  lands on a **later pulse** — and on Azure it is the only thing that moves it at all. So a merged
+  parent is held until the world shows nothing based on it. Holding costs one pulse; reaping first
+  destroys a stack silently.
+- **No agent is on it** — no `queued`/`running`/`waiting` task on the branch, the same guard the
+  worktree reap in `system.ts` applies.
+- **It has not been reaped already** — the `branch_reaps` row, keyed on the pull request rather than
+  the branch, so a branch name re-cut and landed a second time is reaped again.
+
+The local half is `Worktrees.deleteBranch`: the worktree, then `git branch -D`. **`-D`, not `-d`** —
+`merge_pr` squashes, and a squash-merged branch has no ancestry link to its base, so `-d`'s
+merged-check says no for every branch this is ever called on and the reap would silently delete
+nothing. The safety `-d` offers is already given by the predicate above.
+
+Local first, then remote: a failed remote delete is retried next pulse, while a failed local delete
+after the remote copy is gone leaves nothing to retry against. A branch already absent on the remote
+is **success**, not failure — see [15](15-integrations.md).
+
 ## Naming
 
 Every pull request the harness opens is titled from `pr-title`, an ordinary overridable entry in the

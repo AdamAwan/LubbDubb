@@ -52,6 +52,8 @@ interface Script {
   updates?: Record<number, AzWorkItemUpdate[]>;
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems';
   createdPullNumber?: number;
+  /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
+  missingBranches?: string[];
 }
 
 interface Recorded {
@@ -69,6 +71,7 @@ interface Recorded {
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
   baseSets: Array<{ id: number; base: string }>;
+  deletedBranches: string[];
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -87,6 +90,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     createdPulls: [],
     titleSets: [],
     baseSets: [],
+    deletedBranches: [],
   };
   const api: AzureDevOpsApi = {
     async createPull(input) {
@@ -98,6 +102,10 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setPullBase(id, base) {
       recorded.baseSets.push({ id, base });
+    },
+    async deleteBranch(branch) {
+      recorded.deletedBranches.push(branch);
+      return script.missingBranches?.includes(branch) !== true;
     },
     async viewerUniqueName() {
       return script.viewer ?? 'bot@acme.com';
@@ -971,6 +979,19 @@ test('createPullRequest returns the new id (the REST arm adds the refs/heads pre
   assert.deepEqual(recorded.createdPulls, [
     { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
   ]);
+});
+
+test('deleteBranch reaps a merged branch, and an already-absent one is still a success', async () => {
+  const { api, recorded } = fakeApi({ missingBranches: ['issue/13'] });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+
+  assert.deepEqual(await sc.deleteBranch({ branch: 'issue/12' }), { ok: true, ref: 'issue/12' });
+  assert.deepEqual(await sc.deleteBranch({ branch: 'issue/13' }), {
+    ok: true,
+    ref: 'issue/13 (already absent)',
+  });
+  // Branches stay plain across the seam; only restAzureDevOpsApi speaks refs/heads.
+  assert.deepEqual(recorded.deletedBranches, ['issue/12', 'issue/13']);
 });
 
 test('setPullBase is the retarget Azure never does itself when a rung merges', async () => {

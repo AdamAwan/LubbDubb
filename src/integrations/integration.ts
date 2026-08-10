@@ -3,6 +3,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type {
+  BranchDeleteInput,
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
@@ -140,6 +141,15 @@ export interface PrBaseCapable {
 
 export function isPrBaseCapable(x: Integration): x is Integration & PrBaseCapable {
   return typeof (x as Partial<PrBaseCapable>).setPullBase === 'function';
+}
+
+/** An integration that can delete a branch — the reap after a pull request merges. */
+export interface BranchDeleteCapable {
+  deleteBranch(input: BranchDeleteInput): Promise<SendResult>;
+}
+
+export function isBranchDeleteCapable(x: Integration): x is Integration & BranchDeleteCapable {
+  return typeof (x as Partial<BranchDeleteCapable>).deleteBranch === 'function';
 }
 
 /** An integration that can add/remove a label on an issue / work item — the watch/ignore toggle. */

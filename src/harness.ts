@@ -16,6 +16,7 @@ import { retainedRunIssues, runsToRecord } from './floor/runs.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
+import type { BranchReapDesk } from './branchReapDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 import type { UpcomingPlan } from './wire.js';
@@ -48,6 +49,8 @@ interface HarnessDeps {
   assays?: AssayDesk;
   /** Keeps open pull requests on the naming convention. Absent = no renaming. */
   naming?: PrNamingDesk;
+  /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
+  branchReaps?: BranchReapDesk;
   /**
    * Reconciles the operator's standing stack-landing authorizations with the
    * world. Absent = no landings (tests that do not care).
@@ -163,6 +166,14 @@ export class Harness extends EventEmitter {
       // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
       // world already on convention writes nothing.
       await this.deps.naming?.run(world);
+      // The same register, one step later in a pull request's life: a merged branch
+      // is deleted locally and on the remote. It reads the same snapshot the
+      // retarget above was decided from, so a rung the retarget has just moved still
+      // reads as based on its merged parent here and holds that parent's branch for
+      // one more pulse. That lag is the safe direction, and deliberately not closed
+      // by re-reading the world: reaping a branch an open PR is still based on
+      // destroys the stack.
+      await this.deps.branchReaps?.run(world);
       // What the world has made of the operator's standing stack landings: a chain
       // fully merged is finished, and a rung that has gone red since it was
       // authorized stops the chain and surfaces. Before `decide`, so a stopped
