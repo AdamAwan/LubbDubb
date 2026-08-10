@@ -1892,42 +1892,55 @@
   font-size: 11px;
   letter-spacing: 0;
 }
+/* The spine, and the rows it brackets are the rack's own `.fx-part` rows — the
+   grid is inherited, so every column past the title still lines up with the loose
+   rows above and below the cluster. */
 .fx-stack-rungs {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  gap: 3px;
   border-left: 8px solid var(--fx-belt-dark);
   padding-left: 10px;
-}
-.fx-stack-rung {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  background: var(--panel-2);
-  border-top: 1px solid var(--border-hi);
-  border-left: 1px solid var(--border-hi);
-  border-bottom: 1px solid var(--border-lo);
-  border-right: 1px solid var(--border-lo);
-  padding: 5px 8px;
-}
-.fx-stack-rung.bottom {
-  border-top-color: var(--green);
-  border-left-color: var(--green);
-}
-.fx-stack-pos {
-  color: var(--muted);
-  font-size: 11px;
-  min-width: 1ch;
-}
-.fx-stack-title {
-  font-family: var(--font-mono);
-  font-size: 12px;
   min-width: 0;
 }
-.fx-stack-base {
-  margin-left: auto;
-  color: var(--muted);
+/* A rung's row gains a second line, so the grid gains a row. Every cell of the
+   first line is pinned to it rather than stretching down the pair. */
+.fx-part.rung {
+  grid-template-rows: auto auto;
+  align-items: start;
+  padding-top: 5px;
+}
+.fx-part.rung > * {
+  grid-row: 1;
+  align-self: center;
+}
+.fx-part.rung .fx-part-stripe {
+  grid-row: 1 / 3;
+  align-self: stretch;
+}
+/* Spans the title and the why cells: the note is a sentence about the rung, and
+   the two fixed columns to its right belong to the strip read downward. */
+.fx-part-note {
+  grid-row: 2 !important;
+  grid-column: 4 / 6;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
+  color: var(--grey);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fx-part-note.clear {
+  color: var(--green);
+}
+/* The position rides inside the ref cell rather than taking a column of its own —
+   a new track here would push every cell after it out of line with the loose rows. */
+.fx-part-pos {
+  color: var(--muted);
+  font-size: 10px;
+  margin-right: 5px;
+}
+/* A rung with no pull request in this snapshot: present, ordered, and asserting
+   nothing about its health. */
+.fx-part.ghost {
+  opacity: 0.5;
 }
