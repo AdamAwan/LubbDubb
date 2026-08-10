@@ -1892,12 +1892,53 @@
   font-size: 11px;
   letter-spacing: 0;
 }
+/* The "land the stack" control and the state a click leaves behind. The chip sits
+   before the button rather than after it so the head line reads left-to-right as
+   what is happening, then what you can do about it. */
+.fx-stack-state {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--border-lo);
+}
+.fx-stack-state.landing {
+  color: var(--green);
+  border-color: var(--green);
+}
+.fx-stack-state.stopped {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+.fx-stack-land {
+  font-size: 11px;
+}
+/* Why the button is withheld, or why the chain stopped. Muted, because it is the
+   server's sentence and not an alarm — the chip above it carries the severity. */
+.fx-stack-why {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.fx-stack.stopped .fx-stack-why {
+  color: var(--amber);
+}
 .fx-stack-rungs {
   display: flex;
   flex-direction: column;
   gap: 4px;
   border-left: 8px solid var(--fx-belt-dark);
   padding-left: 10px;
+}
+/* The spine says what the chain is doing: lit while it is landing, warned when it
+   has stopped. It is the belt, so the one place a stack's state is visible from
+   across the panel is the thing the metaphor already gave it. */
+.fx-stack.landing .fx-stack-rungs {
+  border-left-color: var(--green);
+}
+.fx-stack.stopped .fx-stack-rungs {
+  border-left-color: var(--amber);
 }
 .fx-stack-rung {
   display: flex;

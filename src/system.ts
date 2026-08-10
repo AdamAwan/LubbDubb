@@ -28,6 +28,7 @@ import { AttachmentFiles } from './jobs/attachmentFiles.js';
 import type { SessionFactory } from './agents/session.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
 import { ProposalDesk } from './proposals/proposalDesk.js';
+import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { PrNamingDesk } from './prNamingDesk.js';
@@ -57,6 +58,11 @@ export interface System {
    * missing wire between "approve" and "the approved thing happens".
    */
   proposals: ProposalDesk;
+  /**
+   * Where an operator's standing authorization to land a whole stack is recorded,
+   * ended, and reconciled with the world each pulse (see `src/stacks/landing.ts`).
+   */
+  landings: StackLandingDesk;
   /**
    * The permission backstop (issue #130 phase B): where an agent's tool call that
    * the allow-list doesn't cover blocks until the operator allows or denies it.
@@ -361,8 +367,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // reference each cycle. Ephemeral by design: a restart reverts to config.
   const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused);
 
+  // Recorded before the executor, which asks it whether a rung's merge is already
+  // authorized. It reaches nothing but the store and the inbox, so the two are
+  // wired one way and there is no cycle to break.
+  const landings = new StackLandingDesk(store, escalations, errors);
+
   const executor = new ActionExecutor({
     store,
+    landings,
     agents,
     worktrees,
     escalations,
@@ -447,6 +459,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     assays,
     naming,
     graph,
+    landings,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
@@ -527,6 +540,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     agents,
     escalations,
     proposals,
+    landings,
     permissions,
     recovery,
     executor,

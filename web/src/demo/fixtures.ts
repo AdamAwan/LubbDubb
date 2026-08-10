@@ -394,6 +394,9 @@ export function buildDemoState(): DemoSeed {
         ],
       },
     ],
+    // Withheld, because rung #144 is red — the state worth having in the demo, since
+    // "why can't I click it" is the question the control has to answer on its own.
+    stackLandings: [{ ref: 'stack:143', offer: false, blockedBy: '#144 CI failing', landing: null, landed: 0 }],
     plans: [
       {
         id: 'plan-212',

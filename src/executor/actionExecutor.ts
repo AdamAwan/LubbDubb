@@ -4,6 +4,7 @@ import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
+import type { StackLandingDesk } from '../stacks/landingDesk.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { AutoSendConfig } from '../config.js';
 import type { RuntimeControl } from '../runtimeControl.js';
@@ -36,6 +37,11 @@ interface ExecutorDeps {
   agents: AgentManager;
   worktrees: Worktrees;
   escalations: EscalationInbox;
+  /**
+   * The operator's standing authorizations over whole stacks. Asked whether a
+   * rung's merge is already authorized, and told when one it authorized failed.
+   */
+  landings: StackLandingDesk;
   /** Outbound seam for side-effectful actions the harness may auto-send. */
   sink: ActionSink;
   /** Confidence-gated auto-send policy. */
@@ -350,8 +356,20 @@ export class ActionExecutor {
     // Absent confidence means "no confidence stated" -> treat as 0 -> never auto-send.
     const confidence = action.confidence ?? 0;
     const verdict = autoSendVerdict(this.deps.autoSend, action.type, confidence);
+    // The operator's standing authorization over a whole chain, asked only of a
+    // merge — a stack landing says nothing about replies. It is a *second*
+    // decider, not a widening of the gate above: auto-send answers "the harness
+    // cleared its own threshold", this answers "you authorized this chain in
+    // advance", and the audit row exists to tell those apart.
+    //
+    // Asked after the hold, like the gate, so a rejection you gave still governs;
+    // and asked *before* the escalation below, so an authorized chain does not
+    // fill the inbox with the questions it exists to answer. A rung the operator
+    // never authorized is not here, because the intent's scope is the PR numbers
+    // it was clicked over.
+    const landing = merge ? store.standingLandingForPr(action.prNumber) : null;
 
-    if (verdict.authorized) {
+    if (verdict.authorized || landing) {
       const proposal = store.createProposal({
         kind,
         ref,
@@ -362,7 +380,17 @@ export class ActionExecutor {
       });
       // The row was created `pending` one statement ago, so this compare-and-set
       // always wins; `?? proposal` is the type narrowing, not a fallback path.
-      const accepted = store.decideProposal(proposal.id, 'accepted', verdict.note, 'auto_send') ?? proposal;
+      //
+      // The landing wins the attribution when both would authorize. An operator
+      // who authorized the chain by hand is a stronger and more specific answer
+      // to "who authorized this" than a threshold that happens to also clear it.
+      const [note, decider] = landing
+        ? [
+            `you authorized landing ${landing.ref} (${landing.rungs.length} pull requests) on ${landing.createdAt}`,
+            'stack_landing' as const,
+          ]
+        : [verdict.authorized ? verdict.note : '', 'auto_send' as const];
+      const accepted = store.decideProposal(proposal.id, 'accepted', note, decider) ?? proposal;
       const run = await this.runAuthorized(accepted, cycleId);
       return { ...run, recorded: true };
     }
@@ -486,6 +514,13 @@ export class ActionExecutor {
       );
     } catch (err) {
       const message = (err as Error).message;
+      // A merge a standing intent authorized and that would not go through ends
+      // the intent. Otherwise the act is re-proposed once its settle window
+      // lapses, authorized again by the same intent, and retried every cycle
+      // behind an escalation nobody asked for. Only the intent that authorized
+      // *this* PR is touched, and the desk no-ops when there is none — a failed
+      // human-accepted merge stops nothing.
+      if (act.kind === 'merge') this.deps.landings.stopForFailedMerge(act.prNumber, message);
       const esc =
         act.kind === 'merge'
           ? this.deps.escalations.create({

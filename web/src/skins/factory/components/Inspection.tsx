@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { PullRequest, Stack } from '../../../types.js';
+import type { PullRequest, Stack, StackLandingView } from '../../../types.js';
 import { refLink } from '../../../components/util.js';
 import { Icon } from './Sprite.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
@@ -129,17 +129,68 @@ function Row({
  * base of each named beneath it so the chain is legible without the reader holding
  * branch names in their head.
  */
-function StackRun({ stack, refUrls }: { stack: Stack; refUrls: Record<string, string> }): JSX.Element {
+function StackRun({
+  stack,
+  landing,
+  refUrls,
+  onLand,
+}: {
+  stack: Stack;
+  /** The control's state for this chain, as the server decided it. Absent on an older snapshot. */
+  landing: StackLandingView | undefined;
+  refUrls: Record<string, string>;
+  onLand: (ref: string, land: boolean) => void;
+}): JSX.Element {
   const topFirst = [...stack.rungs].reverse();
+  const intent = landing?.landing ?? null;
+  const standing = intent?.status === 'standing';
+  const stopped = intent?.status === 'stopped';
   return (
-    <div className="fx-stack">
+    <div className={`fx-stack${standing ? ' landing' : ''}${stopped ? ' stopped' : ''}`}>
       <p className="fx-stack-head">
         {stack.issueNumber !== null && refLink(`#${stack.issueNumber}`, refUrls)}{' '}
         <span>{stack.issueTitle ?? 'Stacked pull requests'}</span>
         <span className="fx-stack-ref">
           {stack.planId ? 'from plan' : 'observed'} · {stack.rungs.length} PRs
         </span>
+        {/* The click's whole effect arrives over the next several cycles, so the head
+            line has to carry it: without a standing state the button reads as having
+            done nothing. The count is the intent's own — the derived stack shrinks as
+            rungs land, so it cannot supply the denominator. */}
+        {intent && (
+          <span className={`fx-stack-state ${standing ? 'landing' : 'stopped'}`}>
+            {standing ? '◆ landing' : '▲ stopped'} · {landing?.landed ?? 0} of {intent.rungs.length}
+          </span>
+        )}
+        {standing ? (
+          <AsyncButton
+            className="ghost fx-stack-land"
+            onClick={() => onLand(stack.ref, false)}
+            title="Stop landing this stack — nothing further merges without you"
+          >
+            stop
+          </AsyncButton>
+        ) : (
+          <AsyncButton
+            className="ghost fx-stack-land"
+            disabled={!landing?.offer}
+            onClick={() => onLand(stack.ref, true)}
+            title={
+              landing?.offer
+                ? 'Merge this whole chain bottom-up, one rung per cycle, without asking again'
+                : `Every rung must be green first — ${landing?.blockedBy ?? 'a rung is not ready'}`
+            }
+          >
+            land the stack
+          </AsyncButton>
+        )}
       </p>
+      {/* Why the button is withheld, or why the chain stopped — in the server's own
+          words. A disabled control that says nothing is one an operator can only
+          guess at, and guessing is what a stop must never leave them doing. */}
+      {(stopped || (!standing && landing && !landing.offer)) && (
+        <p className="fx-stack-why">{stopped ? intent?.reason : landing?.blockedBy}</p>
+      )}
       <div className="fx-stack-rungs">
         {topFirst.map((rung) => (
           <div key={rung.prNumber} className={`fx-stack-rung${rung.position === 1 ? ' bottom' : ''}`}>
@@ -158,17 +209,22 @@ export function Inspection({
   prs,
   closed,
   stacks,
+  stackLandings,
   refUrls,
   ignoreLabel,
   onToggleExclude,
+  onLandStack,
 }: {
   prs: PullRequest[];
   closed: PullRequest[];
   /** Chains of stacked PRs, drawn on the rack because a stack is a fact about pull requests. */
   stacks: Stack[];
+  /** The "land the stack" control's state per chain — offered, standing, or stopped. */
+  stackLandings: StackLandingView[];
   refUrls: Record<string, string>;
   ignoreLabel: string;
   onToggleExclude: (prNumber: number, excluded: boolean) => void;
+  onLandStack: (ref: string, land: boolean) => void;
 }): JSX.Element {
   const { yours, inHand } = rack(prs);
   const loaded = loadedCount(closed);
@@ -219,7 +275,13 @@ export function Inspection({
         <>
           <p className="fx-sub">Stacked &middot; {stacks.length}</p>
           {stacks.map((stack) => (
-            <StackRun key={stack.ref} stack={stack} refUrls={refUrls} />
+            <StackRun
+              key={stack.ref}
+              stack={stack}
+              landing={stackLandings.find((l) => l.ref === stack.ref)}
+              refUrls={refUrls}
+              onLand={onLandStack}
+            />
           ))}
         </>
       )}

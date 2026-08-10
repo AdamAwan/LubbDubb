@@ -75,6 +75,7 @@ import type {
   ScratchEntry,
   ShortfallAuthor,
   ShortfallCause,
+  StackLanding,
   Task,
   WorkNode,
   WorldEvent,
@@ -213,6 +214,29 @@ export interface UpcomingPlan {
   items: QueueItem[];
 }
 
+/**
+ * What the rack needs to draw the "land the stack" control on one chain: whether
+ * it may be offered, and what the operator has already authorized.
+ *
+ * `offer` is decided on the server and shipped rather than re-derived in the
+ * skin, for the reason `PrAttention` is: a client-side second opinion about
+ * whether a merge may be authorized is exactly the drift that outlives the change
+ * that introduces it. The route asks the same function again before recording,
+ * because a disabled button is a courtesy and not a gate.
+ */
+export interface StackLandingView {
+  /** The stack this concerns, as `/api/state` is currently deriving it. */
+  ref: string;
+  /** Whether every rung is clear, so the click may be offered at all. */
+  offer: boolean;
+  /** The first thing withholding the button, for the sentence beside it. */
+  blockedBy: string | null;
+  /** The operator's standing (or stopped) intent over this chain, if there is one. */
+  landing: StackLanding | null;
+  /** How many of `landing.rungs` have merged — the "1" in "landing 1 of 3". */
+  landed: number;
+}
+
 /** The frozen half of the running config the cockpit needs to draw itself. */
 interface CockpitConfig {
   heartbeatIntervalMs: number;
@@ -274,6 +298,17 @@ export interface CockpitState {
    * same terms as one a plan produced.
    */
   stacks: Stack[];
+  /**
+   * One entry per chain in {@link stacks}: whether "land the stack" may be
+   * offered, and the operator's standing intent over it if there is one.
+   *
+   * Beside `stacks` rather than folded into it, because `buildStacks` is a pure
+   * fold over the world and an intent is a stored row — and because the two are
+   * joined by *rung membership*, not by ref: `Stack.ref` names the bottom rung,
+   * which is the first thing to merge, so a match on it would lose the intent at
+   * the very moment the operator most needs to see it progressing.
+   */
+  stackLandings: StackLandingView[];
   tasks: Task[];
   /** Operator-launched jobs, newest first — the queue and its recent history. */
   jobs: Job[];
@@ -414,6 +449,7 @@ export type {
   Proposal,
   Retrospective,
   ScratchEntry,
+  StackLanding,
   Task,
   WorkNode,
   WorldEvent,

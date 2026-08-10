@@ -661,11 +661,11 @@ the picker, so a skin failing to draw one is still a skin you could not leave.
 A cog in each skin's chrome opens a shared modal. Since #244 it carries **three tabs**, which is
 everything an operator configures answering to one control:
 
-| Tab          | Reads             | Shows                                                                     |
-| ------------ | ----------------- | ------------------------------------------------------------------------- |
-| `Settings`   | `GET /api/config` | The skin picker, the live controls, and the configuration this process ran up on |
-| `CI policy`  | `GET /api/ci-policy` | What the harness does about a red PR, check by check                   |
-| `Prompts`    | `GET /api/prompts` | The rule dispatcher's prompt book                                       |
+| Tab         | Reads                | Shows                                                                            |
+| ----------- | -------------------- | -------------------------------------------------------------------------------- |
+| `Settings`  | `GET /api/config`    | The skin picker, the live controls, and the configuration this process ran up on |
+| `CI policy` | `GET /api/ci-policy` | What the harness does about a red PR, check by check                             |
+| `Prompts`   | `GET /api/prompts`   | The rule dispatcher's prompt book                                                |
 
 The tabs exist because the last two were, in practice, unreadable. `ci.checks` was visible only by
 opening `lubbdubb.config.json` on the host, and the prompt book hung off the Work panel — a place
@@ -839,6 +839,7 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
 
   Once launched, each queued blueprint in the panel's list carries an **`AttachmentStrip`** of what
   was attached to it.
+
 - **`AttachmentStrip`** — the images attached to a piece of work, drawn wherever that work is: under a
   queued blueprint in `LaunchPanel` (`job:<id>`) and on the issue row in `WorldSummary`
   (`issue:<n>`). One component drawn twice, deliberately.
@@ -857,6 +858,7 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
   - **Clicking opens the image at its own size** in a new tab, `rel="noreferrer"` so the capability
     does not ride out in a referrer. The `title` carries the operator's label and the absolute path the
     agent was told to read, which is what lets a thumbnail be matched against a prompt.
+
 - **`Vitals`** — fleet-level counts.
 
 ### Left column — Fleet
@@ -984,6 +986,39 @@ matching open PR draws no health at all rather than asserting health the snapsho
 
 A stack is drawn whether or not a plan produced it — `from plan` versus `observed` — which is the
 whole point of the model being derived from pull requests rather than from `plan_parts`.
+
+### Land the stack
+
+On the factory rack, a chain's head line carries one control: **land the stack**. It records a
+standing authorization that merges the whole chain bottom-up over the next several cycles — see
+[07](07-pull-requests.md#landing-a-stack) for what it is and why it cannot be a loop.
+
+Its state comes from `/api/state`'s `stackLandings`, one entry per chain, carrying `offer`,
+`blockedBy`, the intent itself and how many of its rungs have landed. **The verdict is the server's**,
+not the skin's, for the reason `attention` is: a client-side second opinion about whether a merge may
+be authorized is exactly the drift that outlives the change introducing it. `POST /api/stacks/:ref/land`
+asks the same function again before recording, because a disabled button is a courtesy and not a gate;
+it refuses an unready chain with a 409 (the request is well-formed — the world is what is wrong).
+
+Four states, and the third is why the control needs any of this:
+
+| State    | Head line                                                     |
+| -------- | ------------------------------------------------------------- |
+| offered  | `#12 Fix intake · 3 PRs · [ land the stack ]`                 |
+| withheld | the button disabled, and `#126 CI failing` beneath it         |
+| landing  | `◆ landing · 1 of 3` and a `[ stop ]`                         |
+| stopped  | `▲ stopped · 1 of 3`, the reason beneath, and the button back |
+
+A click whose effects arrive over the next several cycles must leave a visible state or it reads as
+having done nothing — so the standing chip is not decoration. The count is the **intent's** own
+(`landed` of `landing.rungs.length`): the derived stack shrinks as rungs land, so it cannot supply the
+denominator. The rung spine takes the state's colour, so a chain that has stopped is legible from
+across the panel. `[ stop ]` is offered throughout: an intent that could only be set would make an
+accidental click unrecallable.
+
+The intent is matched to a chain by **rung membership, never by ref** — `Stack.ref` renames itself
+when the bottom rung merges, so a match on the ref would lose the intent at the very moment the
+operator most needs to watch it.
 
 ## The agent drawer
 

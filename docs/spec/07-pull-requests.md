@@ -163,6 +163,66 @@ A chain of one is not a stack. A merged rung is not a base. A cycle in the base 
 rather than hanging the pulse. It takes the **unfiltered** open list, so an `-ignore`d rung does not
 put a hole in the chain.
 
+### Landing a stack
+
+An operator's standing authorization to merge a whole chain: one click, and each rung's merge is
+accepted as it is proposed, until the chain is gone or something goes wrong. The record is
+`StackLanding`, the table is `stack_landings` (`src/store/landings.ts`), and the logic is
+`src/stacks/landing.ts`.
+
+**It adds no merge path, and it is not a loop.** Rule `pr-merge-ready` proposes exactly one merge per
+chain — the bottom rung, the only one `isStackedPr` does not hold — and the rung above it becomes
+proposable only once that lands and the provider retargets it, which is observed on a **later pulse**.
+So the chain already lands bottom-up across cycles; the intent only decides who says yes. A merge
+still happens exactly one way: a `merge` proposal accepted through `ActionExecutor.runAuthorized`.
+
+A synchronous "merge each rung in order" loop is therefore wrong twice over — it would block on a
+retarget that has not happened, or merge the bottom rung and report that it merged three.
+
+**The scope is the rung PR numbers, not the stack ref.** `Stack.ref` is `stack:<bottom rung's PR
+number>`, and the bottom rung is precisely the one that merges first — so the ref is stable only until
+the intent's first success. Keying on it would land one rung and orphan the intent, silently. Keying
+on the numbers captured at the click also makes the authorization exactly what the operator read: a
+rung stacked _on top_ afterwards is not in the list, so it is not authorized, and no rule is needed to
+say so. `landingFor` matches an intent to a chain by rung overlap for the same reason.
+
+**The decider is `stack_landing`, a third one.** Not `auto_send`: that answers "the harness cleared its
+own confidence threshold", and this answers "the operator authorized this chain in advance". The
+proposal's note names the intent and when it was given, and `authorityOf` keeps the row grouped with
+the pulse rather than prefixing it `human:` — the prefix marks a decision applied _outside_ a cycle,
+which this is not.
+
+**The button is offered only when every rung is clear** (`landingReadiness`), and it is disabled
+rather than warned about: offering it while a rung above the bottom is unread would authorize merging
+code whose ladder the operator cannot see. Clear means CI passing, approved, no unresolved comments,
+no conflict. `behind` and `blocked` are deliberately **excluded** — a rung is behind because the one
+beneath it has not landed, and it clears itself on retarget, so counting it would withhold the button
+from every real stack. The line: the operator is authorizing _code they have read_, and `behind` is a
+fact about the queue, not about the code.
+
+**A rung that goes red stops the intent** (`settleLandings`, run once per pulse from the harness).
+It does not wait, and it does not resume. Rule `pr-merge-ready` already refuses to propose a red rung,
+so nothing merges either way; the only question is whether the intent waits silently or says so. Waiting
+silently means CI fails, an agent fixes it three cycles later, and the merge is authorized — landing
+code in a state nobody saw. Three things stop an intent: a remaining rung faults, a remaining rung
+leaves the open set without merging, or a merge the intent authorized fails at the sink (without which
+it would be re-proposed and retried every cycle after the settle window). Stopping records the reason
+**and raises an escalation**, because a chain that drops below two rungs stops being a stack and its
+head line leaves the rack entirely.
+
+**Stopping and offering are asked by different predicates, and must be.** `rungFault` is not the
+negation of `rungVerdict`: retargeting a rung re-runs its checks, so every rung passes through
+`pending` on its way to landing, and stopping there would stop every intent at its first success.
+Pending waits. Only a definite adverse verdict — CI failing, approval explicitly withdrawn, a new
+unresolved comment, a real conflict — stops the chain. An absent `approved` is unknown, not withdrawn.
+
+A stopped intent is never resumed. The button returns once the rungs are clear, and that click is the
+operator re-authorizing a chain they have looked at again.
+
+`settleLandings` **never calls `buildStacks`** — it re-reads the chain from the intent's own numbers
+and the world, which is what keeps the lens out of the harness's per-pulse decision path. The only
+place the model is consulted is `landingScope`, at the click, in the route.
+
 ## Naming
 
 Every pull request the harness opens is titled from `pr-title`, an ordinary overridable entry in the

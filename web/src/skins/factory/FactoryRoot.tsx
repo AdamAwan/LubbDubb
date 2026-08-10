@@ -210,9 +210,11 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         prs={state.world.pullRequests}
         closed={state.world.closedPullRequests ?? []}
         stacks={state.stacks ?? []}
+        stackLandings={state.stackLandings ?? []}
         refUrls={state.refUrls}
         ignoreLabel={state.config.ignoreLabel}
         onToggleExclude={(prNumber, excluded) => actions.setPrExcluded(prNumber, excluded)}
+        onLandStack={(ref, land) => actions.setStackLanding(ref, land)}
       />
     </section>
   );

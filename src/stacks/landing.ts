@@ -1,0 +1,207 @@
+import type { Plan, PlanPart, PullRequest, StackLanding } from '../types.js';
+import { buildStacks } from './stack.js';
+
+/**
+ * The pure half of landing a stack: whether the click may be offered, what it
+ * authorizes, and what the world has since made of it. No store and no sink, so
+ * the three questions that decide whether this feature is safe are testable on
+ * their own — the shape `src/proposals/proposals.ts` takes for the same reason.
+ *
+ * **Nothing here merges anything.** Rule `pr-merge-ready` proposes exactly one
+ * merge per chain (the bottom rung — the only one whose base is the integration
+ * branch), and a rung becomes proposable only once the one beneath it has landed
+ * and the provider has retargeted it, which is observed on a later pulse. So the
+ * chain already lands bottom-up across cycles; a {@link StackLanding} only keeps
+ * answering yes. A loop over rungs here would either block on a retarget that
+ * has not happened, or merge the bottom rung and report three.
+ */
+
+/** Why a rung is not clear, or null when it is. */
+interface RungVerdict {
+  clear: boolean;
+  blockedBy: string | null;
+}
+
+/**
+ * Whether a rung is clear enough to *authorize* — the gate in front of the
+ * button, asked of every rung including the ones that cannot merge for a while
+ * yet.
+ *
+ * **`behind` and `blocked` are deliberately not consulted.** A rung is behind
+ * precisely because the rung beneath it has not landed, and it clears itself the
+ * moment the provider retargets. Counting it would withhold the button from every
+ * real stack, which is the feature not existing. The line this draws is worth
+ * keeping: the operator is authorizing *code they have read*, and `behind` is a
+ * fact about the queue, not about the code.
+ *
+ * Everything else that stops a merge is consulted, in the order an operator would
+ * ask it, so the sentence the rack shows names the thing furthest from ready.
+ */
+function rungVerdict(pr: PullRequest): RungVerdict {
+  if (pr.ciStatus === 'failing') return { clear: false, blockedBy: `#${pr.number} CI failing` };
+  if (pr.ciStatus !== 'passing') return { clear: false, blockedBy: `#${pr.number} checks not reported yet` };
+  if (pr.approved !== true) return { clear: false, blockedBy: `#${pr.number} not approved` };
+  const unresolved = pr.unresolvedComments.filter((c) => !c.handled).length;
+  if (unresolved > 0)
+    return {
+      clear: false,
+      blockedBy: `#${pr.number} has ${unresolved} unresolved comment${unresolved === 1 ? '' : 's'}`,
+    };
+  if (pr.mergeable === false || pr.mergeableState === 'dirty')
+    return { clear: false, blockedBy: `#${pr.number} conflicts with its base` };
+  return { clear: true, blockedBy: null };
+}
+
+/**
+ * Whether a rung has *gone wrong* since it was authorized — the gate that stops a
+ * standing intent, and pointedly **not** the negation of {@link rungVerdict}.
+ *
+ * The two must differ on one state: CI that is pending or unreported. Retargeting
+ * a rung onto its new base re-runs its checks, so every rung goes through
+ * `pending` on the way to landing. Stopping there would stop every intent at its
+ * first success — the feature killing itself the moment it worked. So waiting is
+ * waiting, and only a definite adverse verdict stops the chain.
+ *
+ * `approved` absent means the provider has not said, which is not a withdrawal.
+ * Only an explicit `false` counts, the same "absent = unknown" reading the rest
+ * of the world model takes.
+ */
+export function rungFault(pr: PullRequest): string | null {
+  if (pr.ciStatus === 'failing') return `#${pr.number} CI failing`;
+  if (pr.approved === false) return `#${pr.number} approval withdrawn`;
+  const unresolved = pr.unresolvedComments.filter((c) => !c.handled).length;
+  if (unresolved > 0) return `#${pr.number} has ${unresolved} unresolved comment${unresolved === 1 ? '' : 's'}`;
+  if (pr.mergeable === false || pr.mergeableState === 'dirty') return `#${pr.number} conflicts with its base`;
+  return null;
+}
+
+/**
+ * The button's gate: every rung clear, or it is not offered.
+ *
+ * Not offered-and-warning — **disabled**. Offering it while a rung above the
+ * bottom is unread would authorize merging code whose ladder the operator cannot
+ * see, which is the one thing a standing authorization must not do.
+ *
+ * Decided here, on the server, and shipped to the cockpit rather than re-derived
+ * there: the route re-asks this same function before recording, because a
+ * disabled button is a courtesy and not a gate. Two readers, one answer.
+ */
+export function landingReadiness(rungPrs: PullRequest[]): { offer: boolean; blockedBy: string | null } {
+  for (const pr of rungPrs) {
+    const verdict = rungVerdict(pr);
+    if (!verdict.clear) return { offer: false, blockedBy: verdict.blockedBy };
+  }
+  return { offer: rungPrs.length > 0, blockedBy: null };
+}
+
+/**
+ * Resolve a stack ref to the rungs a click over it authorizes — the one place the
+ * stack model is consulted on this path, and it is consulted at the click and
+ * never again. Everything downstream keys on the PR numbers this returns.
+ *
+ * The client sends the ref alone. The rungs are the server's own reading, so the
+ * scope of an authorization is never something a caller supplied.
+ */
+export function landingScope(
+  ref: string,
+  openPrs: PullRequest[],
+  plans: Plan[],
+  parts: PlanPart[],
+  defaultBranch: string,
+): { ok: true; rungs: number[]; prs: PullRequest[] } | { ok: false; error: string } {
+  const stack = buildStacks(openPrs, plans, parts, defaultBranch).find((s) => s.ref === ref);
+  if (!stack) return { ok: false, error: `no open stack ${ref}` };
+  const prs = stack.rungs.map((rung) => openPrs.find((pr) => pr.number === rung.prNumber));
+  // Unreachable while `buildStacks` folds the very list being searched, and
+  // checked anyway: a scope with a hole in it would authorize a chain the
+  // operator was never shown, which is the one error worth being loud about.
+  if (prs.some((pr) => pr === undefined))
+    return { ok: false, error: `stack ${ref} names a pull request that is not open` };
+  return { ok: true, rungs: stack.rungs.map((r) => r.prNumber), prs: prs as PullRequest[] };
+}
+
+/** What a pulse made of one standing intent. `null` where it still stands. */
+interface LandingSettlement {
+  landing: StackLanding;
+  status: 'landed' | 'stopped';
+  reason: string | null;
+}
+
+/** The world a settlement is judged against — open and recently-closed pull requests. */
+interface SettleWorld {
+  pullRequests: PullRequest[];
+  closedPullRequests?: PullRequest[];
+}
+
+/**
+ * What the world has made of each standing intent: finished, stopped, or neither.
+ *
+ * **It never calls `buildStacks`.** The intent carries its rungs' numbers, so the
+ * chain is re-read from the numbers and the world rather than re-derived, which
+ * is what keeps the stack lens out of the harness's per-pulse decision path.
+ *
+ * The order of the checks is the order they matter in. A rung that left the open
+ * set is settled first — merged is progress, anything else is a fact about the
+ * chain that outranks whatever the remaining rungs look like — and only then are
+ * the survivors examined for a fault.
+ */
+export function settleLandings(landings: StackLanding[], world: SettleWorld): LandingSettlement[] {
+  const open = new Map<number, PullRequest>();
+  for (const pr of world.pullRequests) if (!pr.merged) open.set(pr.number, pr);
+  const closed = new Map<number, PullRequest>();
+  for (const pr of world.closedPullRequests ?? []) closed.set(pr.number, pr);
+  // A merged rung can be reported either way for a pulse or two — merged and
+  // still in the open list, or moved to the closed one — so both readings count.
+  const merged = (n: number): boolean => {
+    const pr = world.pullRequests.find((p) => p.number === n) ?? closed.get(n);
+    return pr !== undefined && (pr.merged === true || pr.state === 'merged');
+  };
+
+  const settlements: LandingSettlement[] = [];
+  for (const landing of landings) {
+    const remaining = landing.rungs.filter((n) => !merged(n));
+    if (remaining.length === 0) {
+      settlements.push({ landing, status: 'landed', reason: null });
+      continue;
+    }
+    // A rung that is neither open nor merged left the chain some other way —
+    // closed by hand, or aged out of a world the provider no longer reports. The
+    // intent cannot finish, and saying "landed" about a PR nothing observed
+    // merging would be the one lie this record must never tell.
+    const gone = remaining.find((n) => !open.has(n));
+    if (gone !== undefined) {
+      settlements.push({
+        landing,
+        status: 'stopped',
+        reason: `#${gone} is no longer open and nothing says it merged`,
+      });
+      continue;
+    }
+    const fault = remaining.map((n) => rungFault(open.get(n)!)).find((f) => f !== null);
+    if (fault) settlements.push({ landing, status: 'stopped', reason: fault });
+  }
+  return settlements;
+}
+
+/**
+ * The intent covering a chain the cockpit is drawing, matched by **rung overlap
+ * and not by ref**.
+ *
+ * The ref would be the obvious key and it is the wrong one: `stack:<bottom PR>`
+ * renames itself the instant the bottom rung merges, so a match on it would lose
+ * the intent at the first success — exactly when the operator most needs to see
+ * "landing 1 of 3". Any overlap is unambiguous, since a PR belongs to one chain.
+ */
+export function landingFor(rungPrNumbers: number[], landings: StackLanding[]): StackLanding | null {
+  return landings.find((l) => l.rungs.some((n) => rungPrNumbers.includes(n))) ?? null;
+}
+
+/** How many of an intent's rungs have landed — the numerator of "landing 1 of 3". */
+export function landedCount(landing: StackLanding, world: SettleWorld): number {
+  const byNumber = new Map<number, PullRequest>();
+  for (const pr of [...(world.closedPullRequests ?? []), ...world.pullRequests]) byNumber.set(pr.number, pr);
+  return landing.rungs.filter((n) => {
+    const pr = byNumber.get(n);
+    return pr !== undefined && (pr.merged === true || pr.state === 'merged');
+  }).length;
+}
