@@ -73,7 +73,9 @@ function seedFinding(system: System): Finding {
   return system.store.recordFinding(agent.id, task.id, task.originRef, {
     kind: 'out_of_scope',
     ref: null,
-    summary: 'The ingest API buffers a 200MB body before rejecting it. Not what I was sent for.',
+    summary: 'The ingest API buffers a 200MB body before rejecting it',
+    where: 'src/server/routes/ingest.ts',
+    detail: 'Not what I was sent for. RSS peaked at 1.4GB.',
   }).finding;
 }
 
@@ -141,6 +143,8 @@ test('the filing prompt carries the report, its provenance, and the tracker', ()
     kind: 'duplicate',
     ref: 'issue:41',
     summary: 'Same work as #41.',
+    where: 'src/providers/azure.ts',
+    detail: 'Both want the same provider seam.',
     status: 'open',
     jobId: null,
     ticketRef: null,
@@ -152,6 +156,11 @@ test('the filing prompt carries the report, its provenance, and the tracker', ()
 
   const prompt = defaultPromptTemplates().render('finding-ticket', vars);
   assert.match(prompt, /Same work as #41\./); // the report, verbatim
+  // `where` and `detail` ride in on the existing `{summary}` placeholder rather
+  // than each taking one of their own, so an operator override that predates
+  // them still renders them. → CLAUDE.md, "Prompts and templates".
+  assert.match(prompt, /src\/providers\/azure\.ts/);
+  assert.match(prompt, /Both want the same provider seam\./);
   assert.match(prompt, /pr:142:ci/); // who saw it, and while doing what
   assert.match(prompt, /issue:41/); // what it is about
   assert.match(prompt, /the GitHub repository a\/b\./); // where it goes

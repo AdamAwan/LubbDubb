@@ -137,6 +137,8 @@ test('a route that answers off the store still does so before reading its body',
     kind: 'duplicate',
     ref: 'issue:41',
     summary: 'same as #41',
+    where: null,
+    detail: null,
   });
   const badBody = await app.inject({
     method: 'POST',

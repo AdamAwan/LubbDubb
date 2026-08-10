@@ -21,7 +21,12 @@ export const escalate: ToolFactory = ({ deps, agent, ok }) => ({
         items: { type: 'string' },
         description: 'Concrete answers the human can pick with one click.',
       },
-      detail: { type: 'string', description: 'Optional background the human needs to decide.' },
+      detail: {
+        type: 'string',
+        description:
+          'Optional background the human needs to decide. Markdown — the cockpit renders it, so ' +
+          'use headings and lists for structure and a fenced code block for errors or output.',
+      },
     },
     required: ['question'],
   },

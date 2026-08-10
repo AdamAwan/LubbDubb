@@ -1,6 +1,7 @@
 import type { Finding } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
-import { refLink, relTime } from './util.js';
+import { renderMarkdown } from './markdown.js';
+import { linkify, refLink, relTime } from './util.js';
 
 /** What each kind means, in the operator's terms — the chip's tooltip. */
 const KIND_HELP: Record<Finding['kind'], string> = {
@@ -100,6 +101,13 @@ function FindingCard({
           {finding.kind.replace(/_/g, ' ')}
         </span>
         {finding.ref && <span className="chip small mono">{refLink(finding.ref, refUrls)}</span>}
+        {/* Where it is, beside what it is about — the two coordinates an operator
+            reads together, and the reason neither belongs in the summary. */}
+        {finding.where && (
+          <span className="chip small mono finding-where" title="Where the agent saw it">
+            {finding.where}
+          </span>
+        )}
         {!isOpen && (
           <span className="chip small" title={isFiling ? 'An agent is creating the ticket' : undefined}>
             {isFiling ? 'filing…' : finding.status}
@@ -110,7 +118,21 @@ function FindingCard({
         {finding.ticketRef && <span className="chip small mono">{refLink(finding.ticketRef, refUrls)}</span>}
         <span className="muted finding-time">{relTime(finding.createdAt, now)}</span>
       </div>
-      <div className="finding-summary">{finding.summary}</div>
+      {/* The claim, and only the claim. Validation refuses a newline in it, so for
+          anything filed since the split this is one line; the clamp is for the rows
+          that predate it, which hold a whole report here and would otherwise be the
+          wall of text this panel exists to stop. `linkify` because an id written
+          into the sentence should still be a link. */}
+      <div className="finding-summary">{linkify(finding.summary, refUrls)}</div>
+      {/* Collapsed, because detail is what you open when the headline did not settle
+          it. Markdown so a stack trace is a code block rather than a paragraph — the
+          renderer emits React children, so nothing in it is executable. */}
+      {finding.detail && (
+        <details className="finding-detail">
+          <summary className="muted small">Detail</summary>
+          <div className="finding-detail-body">{renderMarkdown(finding.detail)}</div>
+        </details>
+      )}
       <div className="finding-foot">
         {/* Provenance, always: a finding is one agent's reading of something it saw
             while doing something else, and "who, while working on what" is most of
