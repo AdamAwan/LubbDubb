@@ -77,6 +77,11 @@ Failure modes that are not obvious:
 - **Two typecheckers.** `typecheck` covers the server (`tsconfig.json`) and `typecheck:web` the cockpit
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy
   both.
+- **lint walks the repo root, so nested checkouts are ignored by path.** `eslint.config.js` ignores
+  `.lubbdubb/**` and `.claude/worktrees/**` alongside the build outputs: both hold worktrees of this
+  same repository, and linting them reports every finding a second time under a path that is not the
+  one to fix. One abandoned worktree was enough to bury `src/`, `test/` and `web/` under 2,644
+  duplicate errors — the gate stays useful only while its output is about the checkout you are in.
 - **format:check** is Prettier in check mode over `src/**/*.ts`, `test/**/*.ts`, `web/**/*.{ts,tsx}`,
   `scripts/*.ts` and root-level `*.{json,md}`. Run `npm run format` to fix; do not hand-format.
 
