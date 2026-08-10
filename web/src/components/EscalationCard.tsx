@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { Escalation, Proposal } from '../types.js';
+import type { AgentAskQuestion, Escalation, Proposal } from '../types.js';
 import { relTime, linkify } from './util.js';
 import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
+import { QuestionnaireModal } from './QuestionnaireModal.js';
 
 export function EscalationCard({
   escalation,
@@ -11,6 +12,7 @@ export function EscalationCard({
   now,
   refUrls,
   onAnswer,
+  onAnswerQuestions,
   onDecide,
   onPermission,
   onDismiss,
@@ -32,6 +34,13 @@ export function EscalationCard({
   now?: number;
   refUrls: Record<string, string>;
   onAnswer: (text: string) => Promise<unknown> | unknown;
+  /**
+   * Answer a questionnaire: one entry per question, positional, null for the ones
+   * left blank. Separate from {@link onAnswer} because the server folds these into
+   * the single reply the agent reads — the cockpit must not invent that wording,
+   * or two clients would say the same thing differently.
+   */
+  onAnswerQuestions?: (answers: (string | null)[]) => Promise<unknown> | unknown;
   onDecide?: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
   /** Allow or deny a permission request an agent is blocked on (issue #130). */
   onPermission?: (id: string, allow: boolean, note?: string) => Promise<unknown> | unknown;
@@ -49,6 +58,7 @@ export function EscalationCard({
   onViewPlan?: (planId: string) => void;
 }) {
   const [text, setText] = useState('');
+  const [asking, setAsking] = useState(false);
   const send = useAsyncAction();
   const { context } = escalation;
   const signal = describeSignal(context.originRef, context.prNumber);
@@ -60,6 +70,11 @@ export function EscalationCard({
   // guess from wording. Fall back to the guess when it didn't say (the sentinel path).
   const offered = agentOptions(context.options);
   const quick = offered ?? quickAnswers(escalation.prompt);
+  // Several questions asked at once. The list does not unpack into the panel —
+  // "Needs you" is a list of things needing you, and one item that becomes three
+  // is a list that no longer reads as one — so the card carries a count and a
+  // button, and the questions live in the modal.
+  const questions = onAnswerQuestions ? questionnaire(context.questions) : null;
   // A decision, not a question. Free text can't be branched on — that is the
   // whole reason the proposal exists — so the text box is replaced rather than
   // supplemented: the note rides *with* the verdict instead of standing in for it.
@@ -72,6 +87,11 @@ export function EscalationCard({
     <div className="card escalation">
       <div className="card-head">
         <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
+        {questions && (
+          <span className="chip small info" title="Answered together, in one reply">
+            {questions.length} questions
+          </span>
+        )}
         {decidable && (
           <span className="chip small warn" title="Accepting performs this act; nothing happens until you do">
             needs your decision
@@ -161,7 +181,7 @@ export function EscalationCard({
 
       {permission ? <pre className="esc-output">{permission.summary}</pre> : null}
 
-      {!decidable && !permission && quick.length > 0 && (
+      {!decidable && !permission && !questions && quick.length > 0 && (
         <div className="esc-quick">
           {quick.map((q) => (
             <AsyncButton key={q} className="small" onClick={() => onAnswer(q)}>
@@ -215,6 +235,12 @@ export function EscalationCard({
             Reject
           </AsyncButton>
         </div>
+      ) : questions ? (
+        <div className="esc-quick">
+          <AsyncButton className="primary" onClick={() => setAsking(true)}>
+            Answer {questions.length} questions →
+          </AsyncButton>
+        </div>
       ) : (
         <form
           className="reply"
@@ -247,6 +273,15 @@ export function EscalationCard({
           {resumed && <span className="muted small">the agent moved on without this</span>}
         </div>
       )}
+
+      {asking && questions && onAnswerQuestions ? (
+        <QuestionnaireModal
+          prompt={escalation.prompt}
+          questions={questions}
+          onClose={() => setAsking(false)}
+          onSend={onAnswerQuestions}
+        />
+      ) : null}
     </div>
   );
 }
@@ -325,4 +360,28 @@ function agentOptions(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   const options = value.filter((o): o is string => typeof o === 'string' && o.trim() !== '');
   return options.length > 0 ? options : null;
+}
+
+/**
+ * The questionnaire an agent raised, or null if it raised none. Defensive for the
+ * same reason as {@link agentOptions}: `context` is an open bag whose contents
+ * reached us from a model's tool arguments, so an entry without a question is
+ * dropped rather than rendered as an empty card nobody can answer.
+ */
+function questionnaire(value: unknown): AgentAskQuestion[] | null {
+  if (!Array.isArray(value)) return null;
+  const questions = value.flatMap((raw): AgentAskQuestion[] => {
+    if (typeof raw !== 'object' || raw === null) return [];
+    const entry: Record<string, unknown> = raw;
+    if (typeof entry.question !== 'string' || entry.question.trim() === '') return [];
+    const options = agentOptions(entry.options);
+    return [
+      {
+        question: entry.question,
+        ...(typeof entry.detail === 'string' ? { detail: entry.detail } : {}),
+        ...(options ? { options } : {}),
+      },
+    ];
+  });
+  return questions.length > 0 ? questions : null;
 }

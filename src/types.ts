@@ -1174,6 +1174,23 @@ export interface AgentAsk {
   options?: string[];
   /** Background the human needs in order to decide. */
   detail?: string;
+  /**
+   * When the agent needs several things settled: one entry per question, each
+   * with its own options and its own answer box. `question` stays the headline —
+   * what the inbox row shows — and this is the questionnaire behind it, which the
+   * cockpit opens in a modal rather than unpacking into the panel.
+   */
+  questions?: AgentAskQuestion[];
+}
+
+/** One question of an {@link AgentAsk}'s questionnaire — the whole ask, in miniature. */
+export interface AgentAskQuestion {
+  /** What this one asks. */
+  question: string;
+  /** Background for this question alone. Markdown, like {@link AgentAsk.detail}. */
+  detail?: string;
+  /** Concrete answers; clicking one fills this question's box rather than sending. */
+  options?: string[];
 }
 
 type EscalationStatus = 'open' | 'answered' | 'dismissed';
@@ -1192,6 +1209,12 @@ export interface EscalationContext {
   originRef?: string | null;
   /** Tail of the agent's transcript leading up to the question (sentinels stripped). */
   recentOutput?: string;
+  /**
+   * The questionnaire an agent raised through `escalate` — see
+   * {@link AgentAsk.questions}. Its presence is what makes the card open a modal
+   * instead of offering one box, and what lets `/answer` take positional answers.
+   */
+  questions?: AgentAskQuestion[];
   // -- reply_on_pr / merge_pr escalations --------------------------------
   prNumber?: number;
   commentId?: string | null;

@@ -67,6 +67,7 @@ export function Slip({ escalation, view, actions }: SkinProps & { escalation: Es
       now={view.now}
       refUrls={view.state.refUrls}
       onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
+      onAnswerQuestions={(answers) => actions.answerQuestions(escalation.id, answers)}
       onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
       onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
       onDismiss={(id, note) => actions.dismissEscalation(id, note)}

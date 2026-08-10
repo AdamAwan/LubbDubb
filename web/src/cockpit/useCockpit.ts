@@ -155,6 +155,7 @@ export function useCockpit(): CockpitStatus {
       respondAgent: (id, text) => api.respondAgent(id, text).then(() => undefined),
 
       answerEscalation: (id, text) => then(api.answerEscalation(id, text)),
+      answerQuestions: (id, answers) => then(api.answerQuestions(id, answers)),
       dismissEscalation: (id, note) => then(api.dismissEscalation(id, note)),
       decideProposal: (id, verdict, note) =>
         then(verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)),

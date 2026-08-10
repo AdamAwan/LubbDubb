@@ -894,6 +894,16 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
   request** (`context.permission`, issue #130) renders the command and **Allow / Deny** buttons
   instead of the answer box — the agent is blocked in a tool call, so the verdict goes to
   `POST /api/escalations/:id/permission`, not `/answer`.
+
+  A **questionnaire** (`context.questions`) is the third replacement for the answer box: a count chip
+  and an **Answer N questions →** button opening `QuestionnaireModal`, one card per question with its
+  own detail, options and box. The list does not unpack into the panel — "Needs you" is a list of
+  things needing you, and one item that becomes three is a list that no longer reads as one. Its
+  options **fill** the box rather than sending, which is what separates them from the card's one-click
+  chips: those settle a question, where here every answer waits for the others, so picking one and
+  then qualifying it costs nothing. One **Send answers** posts the whole array to `/answer`; a
+  question left blank is sent as an explicit non-answer, so the agent knows not to wait on it. The
+  card is shared, so the modal styles itself through the tokens alone and neither skin gains markup.
 - **Plans** (`PlanPanel`, rendered only when plans exist) — each plan's parts drawn as a stack, joined
   to `upcoming` **by origin** (`issue:<n>:part:<slug>`) so the dispatch cut is visible, with a
   **Replan** button. A plan `awaiting_approval` says so on the card and states that nothing below is

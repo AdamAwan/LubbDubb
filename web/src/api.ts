@@ -154,6 +154,10 @@ const realApi = {
   // Clears the fault log for every cockpit, not just this one: the rows go.
   clearErrors: () => post<{ ok: true; cleared: number }>('/api/errors/clear'),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),
+  // A questionnaire's answers go up as a list and are folded into the one reply
+  // the agent reads by the server, not here: the wording an agent is answered in
+  // is a domain rule, and a second client must not be able to phrase it its own way.
+  answerQuestions: (id: string, answers: (string | null)[]) => post(`/api/escalations/${id}/answer`, { answers }),
   // Clear an item without answering it, for when the thing was handled outside the
   // harness. The server picks the right "no" per kind (a permission request is
   // denied, a proposal rejected) so nothing is left blocked — see the route.
