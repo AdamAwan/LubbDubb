@@ -107,7 +107,12 @@ export class ActionExecutor {
         case 'dispatch_code_agent':
         case 'dispatch_desk_agent': {
           const origin = action.originRef;
-          if (origin && store.findActiveTaskByOrigin(origin)) {
+          // Two ways the same work can already be in flight: a task dispatched on
+          // this origin, and a job standing in for it — a requeue, whose task says
+          // `job:<id>`. The second is what closes the window a requeue filed *after*
+          // the snapshot opens, which the dispatcher's `activeOrigins` cannot see
+          // because it was decided from a world that predates the requeue (#249).
+          if (origin && (store.findActiveTaskByOrigin(origin) || store.findStandingJobByOrigin(origin))) {
             record('skipped', `Skipped: work for ${origin} is already in flight.`);
             break;
           }

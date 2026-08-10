@@ -151,6 +151,40 @@ test('requeue retires the task and files a job that carries the work forward', a
   assert.match(job.prompt, /did not survive a harness restart/);
   assert.ok(job.prompt.includes(original.prompt), 'the original instruction is carried verbatim');
   if (original.originRef) assert.ok(job.prompt.includes(original.originRef), 'the origin is named as provenance');
+  assert.equal(job.originRef, original.originRef, 'and carried as a ref, not only as prose in the prompt');
+  system.store.close();
+});
+
+test('the rule that produced the original does not dispatch it again while a requeue redoes it', async () => {
+  const { system, taskId } = await systemWithCrashedAgent();
+  const origin = system.store.getTask(taskId)!.originRef!;
+  system.recovery.decide(taskId, 'requeue');
+
+  // Cycle one dispatches the job; cycle two is the one that used to put a second
+  // agent on the same work, because the job's task says `job:<id>` and nothing
+  // else in the store still claimed the origin (issue #249).
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+
+  assert.ok(
+    !(system.harness.upcoming?.items ?? []).some((c) => c.origin === origin),
+    'the work is in flight, so it is not even a candidate',
+  );
+  const live = system.store.listTasks().filter((t) => t.originRef === origin && t.status !== 'interrupted');
+  assert.deepEqual(live, [], 'and no second task is dispatched onto it');
+  system.store.close();
+});
+
+test('the origin is claimable again once the requeued job is over', async () => {
+  const { system, taskId } = await systemWithCrashedAgent();
+  const origin = system.store.getTask(taskId)!.originRef!;
+  system.recovery.decide(taskId, 'requeue');
+  await system.harness.runCycle('manual');
+
+  const job = system.store.listJobs()[0]!;
+  assert.equal(system.store.findStandingJobByOrigin(origin)?.id, job.id);
+  system.store.updateTask(job.taskId!, { status: 'done' });
+  assert.equal(system.store.findStandingJobByOrigin(origin), null, 'a job holds the origin only while its task runs');
   system.store.close();
 });
 

@@ -218,10 +218,14 @@ const MAX_PROMPT = 8000;
  * executor's branch gate defers it rather than colliding if the branch is meanwhile
  * busy.
  *
- * The cost, stated: the job's origin is `job:<id>`, so the link back to `pr:42:ci`
- * (or whatever dispatched the original) is provenance in the prompt rather than a
- * ref the gates key on. That is why the preamble names the origin explicitly — a
- * fresh agent reading this needs to know it is redoing work, and which work.
+ * The job's *dispatch* origin is `job:<id>` — that is what the executor marks
+ * dispatched and what the work graph folds its PR onto — so the link back to
+ * `pr:42:ci` (or whatever dispatched the original) rides on `Job.originRef`, the
+ * work the job stands in for. The gates read it: without it the rule that produced
+ * the original sees nothing in flight and dispatches the same work a second time,
+ * which is precisely what happened to a requeued retro (issue #249). The preamble
+ * names the origin as well, because a fresh agent reading this needs to know in
+ * words that it is redoing work, and which work.
  *
  * `prior` is the agent that was on the task, or **null** when none ever ran. The
  * two arms say materially different things and cannot be collapsed: after a crash

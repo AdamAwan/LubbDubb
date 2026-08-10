@@ -54,6 +54,14 @@ export interface DispatchContext {
    */
   queuedJobs: Job[];
   /**
+   * Live jobs that stand in for another origin's work — a crash recovery's
+   * requeue, whose `originRef` is the `issue:41:retro` (or `pr:42:ci`) the
+   * original dispatch was keyed on. Folded into `activeOrigins`, so the rule that
+   * produced the original does not dispatch it again while the requeue redoes it.
+   * Absent/empty means nothing is being redone.
+   */
+  standingJobs?: Job[];
+  /**
    * Every persisted plan, keyed by its `issue:<n>` origin — the planning funnel's
    * memory. Absent/empty means no issue has a verdict yet; with the funnel off it
    * stays empty for good and every issue routes straight to pickup.

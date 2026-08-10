@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   kind       TEXT NOT NULL,
   branch     TEXT,
   status     TEXT NOT NULL,
+  -- The origin this job stands in for, when it redoes work that had one of its
+  -- own (a requeued crash). Null for the ordinary operator job.
+  origin_ref TEXT,
   task_id    TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

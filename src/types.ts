@@ -305,6 +305,19 @@ export interface Job {
   /** For code jobs: the branch to work on. Null => derived (`job/<id>`) at dispatch. */
   branch: string | null;
   status: JobStatus;
+  /**
+   * The origin whose work this job stands in for — `issue:41:retro` for a retro a
+   * crash recovery **requeued**, and null for the ordinary operator job, which
+   * stands in for nothing.
+   *
+   * A job's *own* origin is always `job:<id>`: that is what the dispatch is keyed
+   * on, what the executor marks dispatched, and what the work graph folds its PR
+   * onto. This field is the other half — the work being redone — and it exists
+   * because the gates that stop two agents landing on one piece of work read
+   * origins. Without it a requeued `issue:41:retro` is invisible to the rule that
+   * dispatches retros, which dispatches a second one while the first is running.
+   */
+  originRef: string | null;
   /** The task this job was dispatched as, once it has been. Null while queued. */
   taskId: string | null;
   createdAt: string;

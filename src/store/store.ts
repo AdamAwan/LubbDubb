@@ -5,7 +5,7 @@ import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
 import { ensureColumns } from './migrate.js';
 import { TaskStore, TASK_COLUMNS } from './tasks.js';
-import { JobStore } from './jobs.js';
+import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { absorbSinglePlanStatus, PlanStore, PLAN_COLUMNS } from './plans.js';
@@ -109,7 +109,7 @@ export class Store {
     this.db.exec(SCHEMA);
     // Before any module is constructed, let alone reads: a domain module reading
     // a migrated column on a database created by an older build reads `undefined`.
-    for (const columns of [TASK_COLUMNS, AGENT_COLUMNS, DECISION_COLUMNS, FINDING_COLUMNS, PLAN_COLUMNS]) {
+    for (const columns of [TASK_COLUMNS, AGENT_COLUMNS, DECISION_COLUMNS, FINDING_COLUMNS, PLAN_COLUMNS, JOB_COLUMNS]) {
       ensureColumns(this.db, columns);
     }
     // The migrations that are not columns, here for the same reason the pass above
@@ -183,6 +183,12 @@ export class Store {
   }
   listQueuedJobs(): Job[] {
     return this.jobs.listQueuedJobs();
+  }
+  listStandingJobs(): Job[] {
+    return this.jobs.listStandingJobs();
+  }
+  findStandingJobByOrigin(originRef: string): Job | null {
+    return this.jobs.findStandingJobByOrigin(originRef);
   }
   markJobDispatched(id: string, taskId: string): void {
     this.jobs.markJobDispatched(id, taskId);

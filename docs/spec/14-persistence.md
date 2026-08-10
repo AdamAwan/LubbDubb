@@ -97,6 +97,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 | `findings`   | `findings.ts`  | `ticket_ref`, `where_at`, `detail`                                                                             |
 | `plans`      | `plans.ts`     | `risks`, `out_of_scope`, `document`, `discussing`                                                              |
 | `plan_parts` | `plans.ts`     | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
+| `jobs`       | `jobs.ts`      | `origin_ref`                                                                                                   |
 
 `findings.where_at` is the one column whose name does not match its field: `where` is SQL, so the
 column is `where_at` and `rowToFinding` maps it to `where`. Both new columns are nullable, and a row

@@ -62,6 +62,7 @@ function job(over: Partial<Job> = {}): Job {
     kind: 'code',
     branch: null,
     status: 'dispatched',
+    originRef: null,
     taskId: 't1',
     createdAt: '2026-07-28T09:00:00.000Z',
     updatedAt: '2026-07-28T09:00:00.000Z',
