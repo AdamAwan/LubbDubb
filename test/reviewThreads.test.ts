@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   prCommentOrigin,
   prCommentsOrigin,
+  reviewRecheckNote,
   reviewThreadNote,
   reviewThreadsNote,
 } from '../src/dispatcher/reviewThreads.js';
@@ -57,6 +58,25 @@ test('no threads renders nothing at all', () => {
   // Appended text lands after the cached prefix, so an empty render must be
   // byte-identical to a prompt composed before any of this existed.
   assert.equal(reviewThreadsNote([]), '');
+});
+
+test('the re-check names the read that answers it, on this PR', () => {
+  // The whole instruction is "go and look again", so it has to say *how*: an
+  // agent told to check without being told the call shells out to `gh`, or
+  // guesses, or skips it.
+  const note = reviewRecheckNote(42);
+  assert.match(note, /world_read\("pr", "pr:42"\)/);
+  assert.match(note, /unresolvedComments/);
+  assert.match(note, /observedAt/);
+});
+
+test('the re-check covers a thread that appeared and a thread that was edited', () => {
+  // Two different misses, and only the first has any other path to the agent —
+  // notify delivers a *new* thread to a running agent, and an edit to a thread
+  // already in the prompt is no signal at all.
+  const note = reviewRecheckNote(7);
+  assert.match(note, /not above/);
+  assert.match(note, /edited after you started/);
 });
 
 test('a notify line names the PR, the author and the thread', () => {

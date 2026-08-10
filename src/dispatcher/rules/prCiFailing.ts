@@ -5,7 +5,13 @@ import { askedAlready } from '../admission.js';
 import { ciFailureNote, ciNeedsHuman, classifyCiFailures, type CiVerdict } from '../../ci/ciPolicy.js';
 import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
 import { DISPATCH_PIPELINE, type DispatchRuleId } from '../rules.js';
-import { prCommentOrigin, prCommentsOrigin, reviewThreadNote, reviewThreadsNote } from '../reviewThreads.js';
+import {
+  prCommentOrigin,
+  prCommentsOrigin,
+  reviewRecheckNote,
+  reviewThreadNote,
+  reviewThreadsNote,
+} from '../reviewThreads.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
 
 /**
@@ -133,14 +139,17 @@ export function prCiFailing(s: StageContext): void {
         // Appended, never interpolated (see `reviewThreadsNote`). `author` and
         // `comment` stay filled so an override written against the old
         // one-comment prompt still renders something true — the full set
-        // follows it either way.
+        // follows it either way, and the re-check after it: the list is a
+        // reading taken now, and the review keeps moving while the agent works.
         prompt:
           s.templates.render('pr-review-comment', {
             number: pr.number,
             branch: pr.branch,
             author: authors.join(', '),
             comment: unhandled[0]!.body,
-          }) + reviewThreadsNote(unhandled),
+          }) +
+          reviewThreadsNote(unhandled) +
+          reviewRecheckNote(pr.number),
         dispatchReason: many
           ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
           : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,

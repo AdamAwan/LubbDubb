@@ -51,6 +51,41 @@ export function reviewThreadsNote(threads: PrComment[]): string {
 }
 
 /**
+ * The closing check appended after {@link reviewThreadsNote}: read the threads
+ * again before finishing, and answer what is there now.
+ *
+ * The list in the prompt is a reading taken at dispatch, and a review is a live
+ * thing — a reviewer leaves a fourth comment, or rewords the second, while the
+ * agent is working. The branch-notify path in `prCiFailing` covers only part of
+ * that: it delivers a thread the agent was never told about, only while the
+ * agent is *running*, and an **edit** to a thread already in the prompt is no
+ * new signal at all, so it is delivered to nobody. Anything it misses waits for
+ * the next dispatch, which costs another attempt against the cooldown cap and,
+ * at the cap, escalates to a human instead.
+ *
+ * Checking is cheap and the agent is the one who can do it: `world_read` serves
+ * the same snapshot the dispatcher decided on, `unresolvedComments` and all, so
+ * comparing it against the list it was handed is a read of the current review
+ * rather than a memory of the one it started from.
+ *
+ * **Appended, never interpolated**, for {@link reviewThreadsNote}'s reason — and
+ * more so here, since an override predating this cannot know to ask for it.
+ */
+export function reviewRecheckNote(prNumber: number): string {
+  return (
+    '\n\nBefore you finish, read that list again — it was taken when you were dispatched, and a review moves ' +
+    `while you work. Call world_read("pr", "pr:${prNumber}") and compare its unresolvedComments against the ` +
+    'threads above:\n\n' +
+    '- A thread that is not above arrived after you started. It is yours — answer it in this dispatch.\n' +
+    '- A thread whose body no longer reads as it does above was edited after you started. Answer the wording ' +
+    'you can see now, and say that it changed.\n\n' +
+    'The reading carries an observedAt: it is the last cycle’s snapshot rather than a live fetch, so if the ' +
+    'work took a while, read it once more at the very end. Then account for every thread by its id — what you ' +
+    'changed for it, or what you are defending and why. A thread you never mention reads as one you missed.'
+  );
+}
+
+/**
  * The line a *running* agent on the branch is sent when a thread it has not been
  * told about appears. One per thread, collapsed into a single note by the caller.
  */

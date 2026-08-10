@@ -396,6 +396,27 @@ Two things fall out, and both are load-bearing:
   prompt, since `activeOrigins` sees task origins only and cannot tell that the running agent was
   launched with those threads (`dispatchedSignalsByBranch`).
 
+### The agent checks the list again before it finishes
+
+The thread list in the prompt is a reading taken at dispatch, and a review keeps moving: a reviewer
+leaves a fourth comment, or rewords the second, while the agent is working. The notify path above
+covers only part of that — it delivers a thread the agent was **never told about**, and only while
+the agent is `running`. An edit to a thread already in its prompt is no new signal, so it reaches
+nobody, and a thread landing after the agent's last turn waits for the next dispatch: another attempt
+against the cooldown cap, and at the cap a human instead of an agent.
+
+So the agent is asked to close that gap itself. `reviewRecheckNote` (`src/dispatcher/reviewThreads.ts`)
+is appended after the thread list and tells it to call `world_read("pr", "pr:<n>")` before finishing
+and compare `unresolvedComments` against the threads it was handed: a thread that is not in the
+prompt arrived after it started and is its to answer, and a body that no longer matches was edited.
+It is the same snapshot the dispatch was decided against, carrying `observedAt`, so the note also
+says to read once more at the end of a long run. The agent then accounts for every thread by id,
+which is what makes a missed one visible rather than merely absent.
+
+Appended, never interpolated, for the reason above and one more: an override written before this
+existed cannot know to ask for the re-check, and those are the deployments where an agent silently
+answering a stale review costs the most.
+
 The thread ref is also the ref a refused `reply_draft` proposal is filed under, so `rejectionGuidance`
 takes the **list** of refs a dispatch names — its origin plus its signals — and matches each whole.
 That is not a widening to the world item, which must never happen there: matching the origin alone

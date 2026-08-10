@@ -9,7 +9,7 @@ import { buildSystem } from '../src/system.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
-import { reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
+import { reviewRecheckNote, reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { gitRepo } from './support/gitRepo.js';
@@ -56,13 +56,14 @@ function draftPlan(prNumber: number, commentId: string): DispatchResult {
 
 /**
  * What rule `pr-review-comment` dispatches with before a rejection note is appended: the rendered
- * template plus the threads themselves, which are appended rather than
- * interpolated so an operator override cannot drop them.
+ * template, the threads themselves, and the re-check that follows them — all
+ * appended rather than interpolated so an operator override cannot drop them.
  */
 function reviewCommentPrompt(number: number, branch: string, comment: string, id = 'c1'): string {
   return (
     defaultPromptTemplates().render('pr-review-comment', { number, branch, author: 'reviewer', comment }) +
-    reviewThreadsNote([{ id, author: 'reviewer', body: comment, handled: false }])
+    reviewThreadsNote([{ id, author: 'reviewer', body: comment, handled: false }]) +
+    reviewRecheckNote(number)
   );
 }
 
