@@ -355,7 +355,62 @@ test('a finding is validated at the boundary, with the reason handed back', () =
 
   const good = validateFinding({ kind: 'duplicate', summary: '  Same as #41. ', ref: 'issue:41:plan' });
   assert.ok(good.ok);
-  assert.deepEqual(good.input, { kind: 'duplicate', ref: 'issue:41', summary: 'Same as #41.' });
+  assert.deepEqual(good.input, {
+    kind: 'duplicate',
+    ref: 'issue:41',
+    summary: 'Same as #41.',
+    where: null,
+    detail: null,
+  });
+});
+
+/**
+ * The three fields are three fields, and validation is what keeps them that way.
+ *
+ * The newline refusal is the load-bearing one: the failure this split exists to
+ * fix is an agent writing the claim, the location and a stack trace into one
+ * string, and the only moment that is cheap to fix is the agent's own turn. So
+ * the refusals name the field the text belongs in — an error that only said "too
+ * long" would get the same paragraph back, shortened.
+ */
+test('a finding is refused when the summary is a blob, and the error says where the text goes', () => {
+  const multiline = validateFinding({
+    kind: 'out_of_scope',
+    summary: 'The retry helper squares the delay.\n\nStack:\n  at backoff (src/net/backoff.ts:41)',
+  });
+  assert.equal(multiline.ok, false);
+  assert.match(!multiline.ok ? multiline.error : '', /single line/);
+  assert.match(!multiline.ok ? multiline.error : '', /detail/);
+
+  const long = validateFinding({ kind: 'out_of_scope', summary: 'x'.repeat(161) });
+  assert.equal(long.ok, false);
+  assert.match(!long.ok ? long.error : '', /161 characters/);
+  assert.match(!long.ok ? long.error : '', /move the rest into detail/);
+
+  const fatDetail = validateFinding({ kind: 'out_of_scope', summary: 'ok', detail: 'x'.repeat(2001) });
+  assert.equal(fatDetail.ok, false);
+  assert.match(!fatDetail.ok ? fatDetail.error : '', /detail is 2001 characters/);
+
+  const fatWhere = validateFinding({ kind: 'out_of_scope', summary: 'ok', where: 'x'.repeat(201) });
+  assert.equal(fatWhere.ok, false);
+  assert.match(!fatWhere.ok ? fatWhere.error : '', /where is 201 characters/);
+
+  // All five, and the optional two trimmed the way the summary is.
+  const full = validateFinding({
+    kind: 'blocked',
+    summary: 'The typings are missing the field',
+    where: '  node_modules/azure-devops-node-api  ',
+    detail: '  It exists on the wire.  ',
+    ref: 'issue:205',
+  });
+  assert.ok(full.ok);
+  assert.deepEqual(full.input, {
+    kind: 'blocked',
+    ref: 'issue:205',
+    summary: 'The typings are missing the field',
+    where: 'node_modules/azure-devops-node-api',
+    detail: 'It exists on the wire.',
+  });
 });
 
 test('a promoted finding carries its provenance into the job it becomes', () => {
@@ -367,6 +422,8 @@ test('a promoted finding carries its provenance into the job it becomes', () => 
     kind: 'out_of_scope',
     ref: 'issue:41',
     summary: 'The retry helper squares the delay instead of doubling it.',
+    where: 'src/net/backoff.ts:41',
+    detail: 'The 5th retry waits ~17 minutes.',
     status: 'open',
     jobId: null,
     ticketRef: null,
@@ -374,6 +431,12 @@ test('a promoted finding carries its provenance into the job it becomes', () => 
     updatedAt: TAKEN_AT,
   });
   assert.match(request.title, /^\[out_of_scope\] issue:41 /);
+  // The title is the headline alone — the evidence must not leak into it.
+  assert.doesNotMatch(request.title, /backoff\.ts/);
+  // But the prompt carries all three, so the promoted agent starts where the
+  // reporting one was standing.
+  assert.match(request.prompt, /src\/net\/backoff\.ts:41/);
+  assert.match(request.prompt, /~17 minutes/);
   // Who saw it and what they were doing at the time — the thing a PR comment
   // could never be trusted to keep attached to the claim.
   assert.match(request.prompt, /pr:142:ci/);
@@ -895,7 +958,9 @@ test('a finding is a write, so it stays structurally attributed — there is no 
   // front of an operator, and a finding is read as testimony about work its author
   // actually did. So the schema offers nothing that could name a different agent.
   const schema = advertisedSchema(system, one, 'report_finding');
-  assert.deepEqual(Object.keys(schema.properties).sort(), ['kind', 'ref', 'summary']);
+  // `where` and `detail` are text the reporter writes about its own observation,
+  // so they change nothing here: still nothing that could name a different agent.
+  assert.deepEqual(Object.keys(schema.properties).sort(), ['detail', 'kind', 'ref', 'summary', 'where']);
 
   await callTool(system, one, 'report_finding', { kind: 'blocked', summary: 'Upstream typings are wrong.' });
   await callTool(system, two, 'report_finding', { kind: 'duplicate', summary: 'Same as #41.', ref: 'issue:41' });
@@ -903,6 +968,42 @@ test('a finding is a write, so it stays structurally attributed — there is no 
   const byAgent = new Map(system.store.listFindings().map((f) => [f.agentId, f]));
   assert.equal(byAgent.get(one.id)?.originRef, 'pr:142:ci');
   assert.equal(byAgent.get(two.id)?.originRef, 'issue:12');
+  system.store.close();
+});
+
+/**
+ * The columns, end to end. `where` and `detail` were added to an *existing*
+ * table, so they live in `FINDING_COLUMNS` — and the failure mode of forgetting
+ * that is silence: the insert names a column the database has never heard of, or
+ * worse, the read comes back undefined on every store from before today. Filing
+ * one through the real tool and reading it back off the store is what catches it.
+ */
+test('a finding carries where and detail through the channel, and a repeat keeps the newer evidence', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'pr:142:ci');
+
+  await callTool(system, agent, 'report_finding', {
+    kind: 'out_of_scope',
+    summary: 'The retry helper squares the delay instead of doubling it',
+    where: 'src/net/backoff.ts:41',
+    detail: 'The 5th retry waits ~17 minutes.\n\n```\ndelay = base ** attempt\n```',
+  });
+  const filed = system.store.listFindings()[0]!;
+  assert.equal(filed.where, 'src/net/backoff.ts:41');
+  assert.match(filed.detail ?? '', /```/);
+
+  // Same claim, better evidence. The summary is the key, so this is one finding —
+  // and the evidence it keeps is the newer one, not the thinner one it was first
+  // filed with.
+  await callTool(system, agent, 'report_finding', {
+    kind: 'out_of_scope',
+    summary: 'The retry helper squares the delay instead of doubling it',
+    where: 'src/net/backoff.ts:41',
+    detail: 'Confirmed: `ingest.flaky.test.ts` times out on the 4th retry.',
+  });
+  const all = system.store.listFindings();
+  assert.equal(all.length, 1, 'a repeat of the same claim refreshes rather than piling up');
+  assert.match(all[0]!.detail ?? '', /Confirmed/);
   system.store.close();
 });
 

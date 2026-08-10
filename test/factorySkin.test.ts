@@ -575,6 +575,8 @@ test('the findings gauge counts open findings, and only those', () => {
     kind: 'out_of_scope' as const,
     ref: null,
     summary: `something ${id}`,
+    where: null,
+    detail: null,
     status: status as 'open',
     jobId: null,
     ticketRef: null,

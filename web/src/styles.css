@@ -777,6 +777,30 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* The agent writing to a human, not terminal output: prose type, structure kept,
+   and its own fenced blocks left monospaced. Scrolls at the same height as
+   `.esc-output` so a long one cannot push the answer buttons off the card. */
+.esc-detail {
+  margin: 6px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.esc-detail > :first-child {
+  margin-top: 0;
+}
+.esc-detail > :last-child {
+  margin-bottom: 0;
+}
+.esc-detail pre {
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+  font-size: 12px;
+}
 .esc-agent-actions {
   display: flex;
   align-items: center;
@@ -1516,6 +1540,44 @@ body {
 .finding-summary {
   margin: 4px 0;
   overflow-wrap: anywhere;
+  /* Two lines, then an ellipsis. A finding filed since `summary` became one line
+     never reaches it; one filed before holds an entire report in this field, and
+     clamping is the honest thing to do with it — the card stays a card, and the
+     text is still all there for a hover or a select. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.finding-where {
+  /* Long enough to be a path; not long enough to push the timestamp off. */
+  max-width: 46ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.finding-detail > summary {
+  cursor: pointer;
+  user-select: none;
+}
+.finding-detail-body {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.finding-detail-body > :first-child {
+  margin-top: 0;
+}
+.finding-detail-body > :last-child {
+  margin-bottom: 0;
+}
+.finding-detail-body pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  overflow-x: auto;
+  font-size: 12px;
 }
 .finding-foot {
   display: flex;

@@ -627,8 +627,15 @@ export function buildDemoState(): DemoSeed {
         originRef: 'pr:142:ci',
         kind: 'out_of_scope',
         ref: null,
-        summary:
-          'The retry helper in src/net/backoff.ts squares the delay instead of doubling it, so the 5th retry waits ~17 minutes. Not what I was sent to fix, but it is why the flaky test times out.',
+        summary: 'The retry helper squares the delay instead of doubling it, so the 5th retry waits ~17 minutes',
+        where: 'src/net/backoff.ts:41',
+        detail:
+          'Not what I was sent to fix, but it is why `ingest.flaky.test.ts` times out — the ' +
+          'test budget is 60s and the 4th retry alone sleeps 256s.\n\n' +
+          '```\n' +
+          'delay = base ** attempt   // 2, 4, 16, 256, 65536\n' +
+          'delay = base * 2 ** attempt   // what the comment above it describes\n' +
+          '```',
         status: 'open',
         jobId: null,
         ticketRef: null,
@@ -642,7 +649,9 @@ export function buildDemoState(): DemoSeed {
         originRef: 'issue:139',
         kind: 'duplicate',
         ref: 'issue:118',
-        summary: 'This asks for the same provider seam as #118, which already has a merged design doc.',
+        summary: 'This asks for the same provider seam as #118, which already has a merged design doc',
+        where: null,
+        detail: null,
         status: 'open',
         jobId: null,
         ticketRef: null,
@@ -656,8 +665,12 @@ export function buildDemoState(): DemoSeed {
         originRef: 'issue:205',
         kind: 'blocked',
         ref: 'issue:205',
+        // Deliberately unsplit: a row filed before `where`/`detail` existed, so the
+        // demo shows what the card does with one (clamps it, does not pretend).
         summary:
           'The real fix is in the upstream azure-devops-node-api types — the field exists on the wire but not in the published typings. Nothing I can change from this repo.',
+        where: null,
+        detail: null,
         status: 'dismissed',
         jobId: null,
         ticketRef: null,
@@ -673,8 +686,9 @@ export function buildDemoState(): DemoSeed {
         originRef: 'pr:142:ci',
         kind: 'out_of_scope',
         ref: null,
-        summary:
-          'The ingest API has no request-size limit, so a 200MB body is buffered before anything rejects it. Unrelated to the CI failure I was sent for.',
+        summary: 'The ingest API has no request-size limit, so a 200MB body is buffered before anything rejects it',
+        where: 'src/server/routes/ingest.ts, the POST /v1/events handler',
+        detail: 'Unrelated to the CI failure I was sent for. Reproduced with a 200MB body — RSS peaked at 1.4GB.',
         status: 'filed',
         jobId: 'job-filed-1',
         ticketRef: 'issue:214',
@@ -818,7 +832,18 @@ export function buildDemoState(): DemoSeed {
         status: 'open',
         prompt:
           'Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it as one PR.',
-        context: { originRef: 'issue:231', planId: 'plan-231' },
+        context: {
+          originRef: 'issue:231',
+          planId: 'plan-231',
+          // Markdown, so the demo shows the rendered path rather than the grey
+          // block it used to be.
+          detail:
+            'Split on the seams the tests already draw:\n\n' +
+            '- **signer** — pure, no deps, lands first\n' +
+            '- **route** — needs the signer\n' +
+            '- **mint** — needs both\n\n' +
+            'One PR would put the signer rewrite and the route change in the same review.',
+        },
         agentId: null,
         taskId: null,
         response: null,

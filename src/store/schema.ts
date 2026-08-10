@@ -149,7 +149,9 @@ CREATE TABLE IF NOT EXISTS findings (
   origin_ref TEXT,
   kind       TEXT NOT NULL,          -- duplicate | blocked | out_of_scope
   ref        TEXT,                   -- the world item it is about ("issue:41"), if any
-  summary    TEXT NOT NULL,
+  summary    TEXT NOT NULL,          -- the claim, one line (validation refuses a newline)
+  where_at   TEXT,                   -- what locates it: file and line, package, service
+  detail     TEXT,                   -- the evidence, markdown
   status     TEXT NOT NULL,          -- open | promoted | dismissed | filing | filed
   job_id     TEXT,
   ticket_ref TEXT,                   -- the ticket it was filed as ("issue:314"), once created

@@ -20,8 +20,21 @@ export const reportFinding: ToolFactory = ({ deps, agent, ok }) => ({
       summary: {
         type: 'string',
         description:
-          'One or two sentences an operator can act on without asking you: what it is, where, ' +
-          'and why it matters. Include the evidence — you are the only one who saw it.',
+          'The claim, on ONE line under 160 characters — what it is and why it matters. No ' +
+          'newlines: an operator scans this in a list. Everything else goes in where and detail.',
+      },
+      where: {
+        type: 'string',
+        description:
+          'Where you saw it: file and line, package, service, endpoint — whatever locates it. ' +
+          'Omit it when the summary already says, or when there is nowhere to point.',
+      },
+      detail: {
+        type: 'string',
+        description:
+          'The evidence, in markdown: the error, how to reproduce it, your reasoning. Put ' +
+          'stack traces and command output in a fenced code block. You are the only one who ' +
+          'saw it — but keep it out of the summary. Omit it when the claim stands on its own.',
       },
       ref: {
         type: 'string',

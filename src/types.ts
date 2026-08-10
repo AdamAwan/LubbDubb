@@ -611,7 +611,28 @@ export interface Finding {
   kind: FindingKind;
   /** The world item the finding is *about* (`issue:41`), or null — not every finding has one. */
   ref: string | null;
+  /**
+   * The claim, on one line. Validation refuses a newline here, which is what
+   * keeps the three fields three fields: an agent with more to say has
+   * {@link Finding.where} and {@link Finding.detail} to say it in, and a
+   * summary that swallowed both is the undifferentiated block this split
+   * replaced. Rows filed before the split still hold one — the card clamps
+   * rather than pretending they have structure.
+   */
   summary: string;
+  /**
+   * What locates it — file and line, package, service, endpoint. Free text,
+   * because "where" means something different per kind and a closed vocabulary
+   * would be guessed at. Null when the summary already says it, or when there
+   * is nowhere to point.
+   */
+  where: string | null;
+  /**
+   * The evidence: the error, the repro, the reasoning. Markdown, rendered as
+   * such in the cockpit, so a stack trace lands in a code block instead of the
+   * middle of a paragraph. Null when the claim stands on its own.
+   */
+  detail: string | null;
   status: FindingStatus;
   /**
    * The operator-queued job this became — the one that works it (`promoted`) or
@@ -630,7 +651,7 @@ export interface Finding {
 }
 
 /** A finding as reported, before the store assigns identity and status. */
-export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary'>;
+export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary' | 'where' | 'detail'>;
 
 /**
  * What someone said about whether an issue is finished.

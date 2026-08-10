@@ -54,8 +54,25 @@ export const FINDING_KIND_HELP: Record<FindingKind, string> = {
   out_of_scope: 'something real you found that is not your task — an unrelated bug, a gap nobody has filed',
 };
 
-/** The longest summary we store. Long enough for a paragraph, short enough to read in a list. */
-const MAX_SUMMARY = 2000;
+/**
+ * The three text fields, and what each may hold.
+ *
+ * A finding used to be one `summary` asked for "what it is, where, and why it
+ * matters" plus the evidence — four things in one string, which is how it
+ * arrived in the cockpit as a single undifferentiated block with the claim, the
+ * identifier and the stack trace all at the same weight. Naming the parts is
+ * what separates them; nothing else can, because the structure was never in the
+ * text to begin with.
+ *
+ * `summary` is capped short and refuses a newline, and that refusal is the
+ * load-bearing part of the split: it turns a blob into a tool error the agent
+ * fixes inside its own turn rather than something an operator reads hours later.
+ * `where` and `detail` are optional, because a required field an agent has
+ * nothing for comes back as "N/A" and noise is worse than a blob.
+ */
+const MAX_SUMMARY = 160;
+const MAX_WHERE = 200;
+const MAX_DETAIL = 2000;
 
 /**
  * Normalise the item a finding is *about*.
@@ -103,6 +120,35 @@ export function parseFindingRef(ref: unknown): { ok: true; ref: string | null } 
 const MAX_TITLE = 80;
 
 /**
+ * The three fields recomposed into one block of prose, for the places a finding
+ * is handed to *another agent* rather than drawn on a card.
+ *
+ * It exists so `where` and `detail` reach the promoted and the filing agent
+ * without either gaining a `{token}` of its own. Prompt templates are
+ * operator-overridable and `loadPromptTemplates` rejects only *unknown*
+ * placeholders, so a new one is silently dropped by every override that never
+ * learned about it — folding the new fields into the existing `summary` value
+ * has no such fallback to get wrong. → CLAUDE.md, "Prompts and templates".
+ *
+ * A legacy row is its own report: null `where` and `detail` collapse to the
+ * summary alone, which is exactly what those rows used to render as.
+ */
+function findingReport(finding: Finding): string {
+  return [
+    finding.summary,
+    finding.where ? `\nWhere: ${finding.where}` : '',
+    finding.detail ? `\n${finding.detail}` : '',
+  ]
+    .join('')
+    .trim();
+}
+
+/** The one line a finding is titled by — its summary, or the first line of a pre-split blob. */
+function findingHeadline(finding: Finding): string {
+  return finding.summary.split('\n')[0]?.trim() ?? finding.summary;
+}
+
+/**
  * What a finding becomes when an operator promotes it: the title and prompt of a
  * queued job. Pure, so the wording is testable and the route is left with the
  * `Store.createJob` call.
@@ -113,9 +159,8 @@ const MAX_TITLE = 80;
  * thing a PR comment could never be trusted to keep attached.
  */
 export function findingJobRequest(finding: Finding): { title: string; prompt: string } {
-  const firstLine = finding.summary.split('\n')[0]?.trim() ?? finding.summary;
   const label = `[${finding.kind}]${finding.ref ? ` ${finding.ref}` : ''} `;
-  const title = `${label}${firstLine}`.slice(0, MAX_TITLE);
+  const title = `${label}${findingHeadline(finding)}`.slice(0, MAX_TITLE);
   const about = finding.ref ? ` about ${finding.ref}` : '';
   const prompt = [
     `An operator promoted a finding${about} into work. It was reported by an agent working ` +
@@ -124,7 +169,7 @@ export function findingJobRequest(finding: Finding): { title: string; prompt: st
     '',
     'The report, verbatim:',
     '',
-    finding.summary,
+    findingReport(finding),
     '',
     'Verify it before acting on it — it is one agent’s reading, not an established fact. If it turns out ' +
       'not to hold, say so and stop rather than inventing work to justify the dispatch.',
@@ -186,15 +231,16 @@ export function findingTicketFields(
   finding: Finding,
   tracker: string,
 ): { title: string; vars: Record<string, string> } {
-  const firstLine = finding.summary.split('\n')[0]?.trim() ?? finding.summary;
-  const title = `File ticket: ${firstLine}`.slice(0, MAX_TITLE);
+  const title = `File ticket: ${findingHeadline(finding)}`.slice(0, MAX_TITLE);
   return {
     title,
     vars: {
       kind: finding.kind,
       kindHelp: FINDING_KIND_HELP[finding.kind],
       ref: finding.ref ?? 'nothing the harness tracks',
-      summary: finding.summary,
+      // The whole report, not the headline: the `{summary}` placeholder is what
+      // every override already renders, so the new fields ride in on it.
+      summary: findingReport(finding),
       originRef: finding.originRef ?? 'an untracked task',
       tracker,
     },
@@ -219,12 +265,38 @@ export function validateFinding(
   }
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
   if (!summary) {
-    return { ok: false, error: 'summary is required: one or two sentences an operator can act on without asking you.' };
+    return { ok: false, error: 'summary is required: one line an operator can act on without asking you.' };
+  }
+  // Both refusals name the field the text belongs in. An error that only says
+  // "too long" gets the same paragraph back, shortened.
+  if (/[\r\n]/.test(summary)) {
+    return {
+      ok: false,
+      error:
+        'summary must be a single line — the claim on its own. Put the error, the repro and the ' +
+        'reasoning in detail, and the file or package in where.',
+    };
   }
   if (summary.length > MAX_SUMMARY) {
-    return { ok: false, error: `summary is ${summary.length} characters; keep it under ${MAX_SUMMARY}.` };
+    return {
+      ok: false,
+      error:
+        `summary is ${summary.length} characters; keep it under ${MAX_SUMMARY}. It is the one line an ` +
+        'operator scans — move the rest into detail.',
+    };
+  }
+  const where = typeof args.where === 'string' ? args.where.trim() : '';
+  if (where.length > MAX_WHERE) {
+    return { ok: false, error: `where is ${where.length} characters; keep it under ${MAX_WHERE}.` };
+  }
+  const detail = typeof args.detail === 'string' ? args.detail.trim() : '';
+  if (detail.length > MAX_DETAIL) {
+    return { ok: false, error: `detail is ${detail.length} characters; keep it under ${MAX_DETAIL}.` };
   }
   const ref = parseFindingRef(args.ref);
   if (!ref.ok) return { ok: false, error: ref.error };
-  return { ok: true, input: { kind: kind as FindingKind, ref: ref.ref, summary } };
+  return {
+    ok: true,
+    input: { kind: kind as FindingKind, ref: ref.ref, summary, where: where || null, detail: detail || null },
+  };
 }

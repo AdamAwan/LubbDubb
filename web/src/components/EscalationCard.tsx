@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Escalation, Proposal } from '../types.js';
 import { relTime, linkify } from './util.js';
+import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 
 export function EscalationCard({
@@ -103,10 +104,13 @@ export function EscalationCard({
         </details>
       ) : null}
 
+      {/* Markdown, unlike `recentOutput` above it: that is terminal output and
+          preformatted is what it *is*, while this is the agent writing to a human
+          and a `<pre>` flattens its structure into one grey block. */}
       {context.detail ? (
         <details className="esc-context" open>
           <summary className="muted small">Detail from the agent</summary>
-          <pre className="esc-output">{String(context.detail)}</pre>
+          <div className="esc-detail">{renderMarkdown(String(context.detail))}</div>
         </details>
       ) : null}
 

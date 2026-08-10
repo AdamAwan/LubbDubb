@@ -6,6 +6,9 @@ import type { StoreContext } from './context.js';
 export const FINDING_COLUMNS: ColumnMigrations = {
   findings: {
     ticket_ref: 'TEXT',
+    // `where` is SQL — the column is `where_at`, the field is `where`.
+    where_at: 'TEXT',
+    detail: 'TEXT',
   },
 };
 
@@ -23,11 +26,14 @@ export class FindingStore {
    * own, resolved from its credential by the tool layer — there is no argument
    * for them, so a finding cannot be filed as another agent.
    *
-   * An identical repeat (same agent, kind, ref and summary) refreshes the
-   * existing row instead of inserting: an agent that reports the same thing on
-   * every turn should not fill the operator's list. The status is deliberately
-   * *not* reset — a dismissed finding repeated verbatim stays dismissed, which is
-   * what dismissing it meant.
+   * A repeat (same agent, kind, ref and summary) refreshes the existing row
+   * instead of inserting: an agent that reports the same thing on every turn
+   * should not fill the operator's list. The summary is the whole key because it
+   * is the claim — `where` and `detail` are the same claim's supporting text, so
+   * a repeat carrying better evidence overwrites them rather than being filed
+   * again beside the thinner one. The status is deliberately *not* reset: a
+   * dismissed finding repeated stays dismissed, which is what dismissing it
+   * meant.
    */
   recordFinding(
     agentId: string,
@@ -41,8 +47,13 @@ export class FindingStore {
       .prepare(`SELECT * FROM findings WHERE agent_id=? AND kind=? AND ref IS ? AND summary=?`)
       .get(agentId, input.kind, input.ref, input.summary) as FindingRow | undefined;
     if (existing) {
-      this.ctx.db.prepare(`UPDATE findings SET updated_at=? WHERE id=?`).run(ts, existing.id);
-      return { finding: { ...rowToFinding(existing), updatedAt: ts }, created: false };
+      this.ctx.db
+        .prepare(`UPDATE findings SET where_at=?, detail=?, updated_at=? WHERE id=?`)
+        .run(input.where, input.detail, ts, existing.id);
+      return {
+        finding: { ...rowToFinding(existing), where: input.where, detail: input.detail, updatedAt: ts },
+        created: false,
+      };
     }
     const finding: Finding = {
       id: `find_${nanoid(10)}`,
@@ -52,6 +63,8 @@ export class FindingStore {
       kind: input.kind,
       ref: input.ref,
       summary: input.summary,
+      where: input.where,
+      detail: input.detail,
       status: 'open',
       jobId: null,
       ticketRef: null,
@@ -60,8 +73,8 @@ export class FindingStore {
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO findings (id, agent_id, task_id, origin_ref, kind, ref, summary, status, job_id, ticket_ref, created_at, updated_at)
-         VALUES (@id, @agentId, @taskId, @originRef, @kind, @ref, @summary, @status, @jobId, @ticketRef, @createdAt, @updatedAt)`,
+        `INSERT INTO findings (id, agent_id, task_id, origin_ref, kind, ref, summary, where_at, detail, status, job_id, ticket_ref, created_at, updated_at)
+         VALUES (@id, @agentId, @taskId, @originRef, @kind, @ref, @summary, @where, @detail, @status, @jobId, @ticketRef, @createdAt, @updatedAt)`,
       )
       .run(finding);
     return { finding, created: true };
@@ -137,6 +150,8 @@ interface FindingRow {
   job_id: string | null;
   /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
   ticket_ref: string | null | undefined;
+  where_at: string | null | undefined;
+  detail: string | null | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -150,6 +165,10 @@ function rowToFinding(r: FindingRow): Finding {
     kind: r.kind as FindingKind,
     ref: r.ref,
     summary: r.summary,
+    // A row from before the split has neither column; it is all summary, and the
+    // card clamps it rather than inventing a structure it never had.
+    where: r.where_at ?? null,
+    detail: r.detail ?? null,
     status: r.status as FindingStatus,
     jobId: r.job_id,
     ticketRef: r.ticket_ref ?? null,

@@ -1269,6 +1269,29 @@ The assay's is the sharper case of the two: that comment is the harness explaini
 ticket, why it will not act — so it sits **beside** the overrides and not among them. The two buttons
 change the verdict; this only opens what was already said.
 
+## Agent-authored prose
+
+Text an agent wrote for a human to read is drawn by **structure**, not as one run of characters. Three
+rules, and the split between the first two is the whole of it:
+
+- **Prose is markdown.** `renderMarkdown` (`web/src/components/markdown.ts`) — a hand-written subset,
+  for `ansi.ts`'s reason: the surface needed is small, and it emits React children, so HTML in
+  agent-authored text is escaped rather than interpreted and there is no sanitiser in the path to get
+  wrong. Used by the plan and retro modals, a finding's `detail`, and an escalation's `detail`.
+- **Captured output stays `<pre>`.** An escalation's `recentOutput` and a draft reply are what the
+  process emitted, and preformatted is what they *are*. Markdown-rendering them would reflow columns
+  that mean something.
+- **A field the operator scans is drawn as one line.** A finding's `summary` is validated to be one
+  ([13](13-jobs-and-findings.md#the-three-text-fields)) and clamped to two in CSS regardless, because
+  rows filed before that validation existed hold an entire report in it. The clamp is the honest
+  treatment of those: the card stays a card, and no structure is invented that the text never had.
+
+`FindingsPanel` is where all three meet. The head line carries the kind, the ref chip, and a `where`
+chip beside it — the two coordinates an operator reads together, which is why neither belongs in the
+summary. The summary is the claim, through `linkify` so an id inside the sentence is still a link.
+`detail` is a collapsed `<details>`: it is what you open when the headline did not settle it, and
+markdown means a stack trace in it is a scrolling code block rather than a paragraph.
+
 ## Chips and verdicts
 
 Three per-item verdicts are computed **on the server** and merely rendered here, so the UI can never

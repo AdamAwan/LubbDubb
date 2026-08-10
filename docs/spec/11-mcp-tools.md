@@ -68,6 +68,11 @@ raises one escalation, not two.
 Returns `{parked, escalationId, note}`. An `escalationId` of `null` means an operator whitelist rule
 auto-answered it and the agent was never parked — said explicitly, rather than implying a human saw it.
 
+`detail` is **markdown**, and the card renders it as such. This one is a description, not a
+validation: unlike `report_finding.summary` there is no one-line invariant to hold, and `question` is
+already the short field. Terminal output the harness captured stays preformatted — see
+[17](17-cockpit.md#agent-authored-prose).
+
 ### `world_read`
 
 Arguments `{kind: 'pr'|'issue', ref?}`. Closes the `gh`-shell-out gap: an agent that needed a
@@ -111,16 +116,22 @@ so it cannot reach another repository or project.
 
 ### `report_finding`
 
-Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope', summary, ref?}`. See
-[13](13-jobs-and-findings.md) for the full vocabulary and the promotion path. Three properties:
+Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope', summary, where?, detail?, ref?}`. See
+[13](13-jobs-and-findings.md) for the full vocabulary and the promotion path. Four properties:
 
 - **It queues nothing, and that is the design.** A queued job is dispatched by rule `manual-job` ahead of every
   world-driven rule, so an agent that could queue jobs could put agents on the fleet — a capability
   escalation. Promotion is an operator's click. The tool's description **and** its response say so, so
   an agent does not report a bug and then assume its fix is scheduled.
-- **Identity is structural, with full force.** The schema is `{kind, summary, ref}` and nothing else;
-  `agentId`/`taskId`/`originRef` come from the credential. This is a write that puts words in an
-  agent's mouth in front of an operator and is read as testimony about work its author actually did.
+- **Identity is structural, with full force.** The schema is `{kind, summary, where, detail, ref}` and
+  nothing else; `agentId`/`taskId`/`originRef` come from the credential. This is a write that puts
+  words in an agent's mouth in front of an operator and is read as testimony about work its author
+  actually did. The two text fields change nothing here — they are the reporter describing its own
+  observation, not naming anyone.
+- **`summary` is one line and the boundary enforces it.** A newline is refused, with the error naming
+  `where` and `detail` as the fields the rest belongs in. The point is the timing: a report that
+  arrives as one blob is fixable for the price of a tool call in the agent's own turn, and unfixable
+  by the time an operator is reading it.
 - **`ref` is kind-strict and a bare number is refused.** Unlike `world_read` there is no `kind`
   argument to say whether `41` is an issue or a PR, and a duplicate report must not guess. Anything
   off-vocabulary is refused with "omit ref, describe it in the summary".
