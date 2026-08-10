@@ -253,8 +253,10 @@ function renderRack(prs: PullRequest[], stacks: Stack[] = []): string {
       closed: [],
       stacks,
       refUrls: {},
+      stackLandings: [],
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
+      onLandStack: () => {},
     }),
   );
 }
@@ -2098,8 +2100,10 @@ test('the rack says the rack is empty rather than drawing nothing', () => {
       closed: [],
       stacks: [],
       refUrls: {},
+      stackLandings: [],
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
+      onLandStack: () => {},
     }),
   );
   assert.match(html, /Nothing on the rack/);
@@ -2147,8 +2151,10 @@ test('a drawn rack carries the group split, the states and the check names', () 
       closed: [mk(140, { merged: true }), mk(141, { state: 'closed' })],
       stacks: [],
       refUrls: {},
+      stackLandings: [],
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
+      onLandStack: () => {},
     }),
   );
 
@@ -2198,8 +2204,10 @@ test('every open rack row carries a watch/ignore toggle, and it reads off the ig
       closed: [],
       stacks: [],
       refUrls: {},
+      stackLandings: [],
       ignoreLabel: 'lubbdubb-ignore',
       onToggleExclude: () => {},
+      onLandStack: () => {},
     }),
   );
   // An un-tagged PR offers "ignore"; the tagged one offers the way back, "watch".
@@ -2227,8 +2235,10 @@ test('the toggle is disabled when no ignore label is configured', () => {
       closed: [],
       stacks: [],
       refUrls: {},
+      stackLandings: [],
       ignoreLabel: '',
       onToggleExclude: () => {},
+      onLandStack: () => {},
     }),
   );
   assert.match(html, /class="btn ghost fx-part-toggle"[^>]*disabled/);

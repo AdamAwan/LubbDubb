@@ -74,6 +74,14 @@ export interface CockpitActions {
   dismissFinding(id: string): Promise<void>;
 
   setPrExcluded(prNumber: number, excluded: boolean): Promise<void>;
+  /**
+   * Authorize landing a whole chain of stacked pull requests, or call that off.
+   *
+   * On the seam rather than in the skin for every mutation's reason: a skin may
+   * not import `api.js`. `landing: false` is the revoke — the standing intent is
+   * settled, not un-set, so the record of what was authorized survives.
+   */
+  setStackLanding(ref: string, landing: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**

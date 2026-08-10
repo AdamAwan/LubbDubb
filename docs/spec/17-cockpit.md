@@ -1021,6 +1021,39 @@ rendered rungs carry a toggle and a ladder apiece with no `Stacked` heading left
 A stack is drawn whether or not a plan produced it — `from plan` versus `observed` — which is the
 whole point of the model being derived from pull requests rather than from `plan_parts`.
 
+### Land the stack
+
+On the factory rack, a chain's head line carries one control: **land the stack**. It records a
+standing authorization that merges the whole chain bottom-up over the next several cycles — see
+[07](07-pull-requests.md#landing-a-stack) for what it is and why it cannot be a loop.
+
+Its state comes from `/api/state`'s `stackLandings`, one entry per chain, carrying `offer`,
+`blockedBy`, the intent itself and how many of its rungs have landed. **The verdict is the server's**,
+not the skin's, for the reason `attention` is: a client-side second opinion about whether a merge may
+be authorized is exactly the drift that outlives the change introducing it. `POST /api/stacks/:ref/land`
+asks the same function again before recording, because a disabled button is a courtesy and not a gate;
+it refuses an unready chain with a 409 (the request is well-formed — the world is what is wrong).
+
+Four states, and the third is why the control needs any of this:
+
+| State    | Head line                                                     |
+| -------- | ------------------------------------------------------------- |
+| offered  | `#12 Fix intake · 3 PRs · [ land the stack ]`                 |
+| withheld | the button disabled, and `#126 CI failing` beneath it         |
+| landing  | `◆ landing · 1 of 3` and a `[ stop ]`                         |
+| stopped  | `▲ stopped · 1 of 3`, the reason beneath, and the button back |
+
+A click whose effects arrive over the next several cycles must leave a visible state or it reads as
+having done nothing — so the standing chip is not decoration. The count is the **intent's** own
+(`landed` of `landing.rungs.length`): the derived stack shrinks as rungs land, so it cannot supply the
+denominator. The rung spine takes the state's colour, so a chain that has stopped is legible from
+across the panel. `[ stop ]` is offered throughout: an intent that could only be set would make an
+accidental click unrecallable.
+
+The intent is matched to a chain by **rung membership, never by ref** — `Stack.ref` renames itself
+when the bottom rung merges, so a match on the ref would lose the intent at the very moment the
+operator most needs to watch it.
+
 ## The agent drawer
 
 `AgentDrawer` opens over the page for one agent.

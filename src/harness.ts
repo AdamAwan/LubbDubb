@@ -20,6 +20,7 @@ import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
+import type { StackLandingDesk } from './stacks/landingDesk.js';
 
 interface HarnessDeps {
   store: Store;
@@ -47,6 +48,11 @@ interface HarnessDeps {
   assays?: AssayDesk;
   /** Keeps open pull requests on the naming convention. Absent = no renaming. */
   naming?: PrNamingDesk;
+  /**
+   * Reconciles the operator's standing stack-landing authorizations with the
+   * world. Absent = no landings (tests that do not care).
+   */
+  landings?: StackLandingDesk;
   /**
    * Writes the durable work graph each pulse. Absent = no graph (tests that do not
    * care). Stage 1 is a lens: nothing reads what it writes.
@@ -157,6 +163,14 @@ export class Harness extends EventEmitter {
       // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
       // world already on convention writes nothing.
       await this.deps.naming?.run(world);
+      // What the world has made of the operator's standing stack landings: a chain
+      // fully merged is finished, and a rung that has gone red since it was
+      // authorized stops the chain and surfaces. Before `decide`, so a stopped
+      // intent cannot authorize a merge in the very cycle it stopped — the executor
+      // reads the same rows a few lines later. It settles rows and raises inbox
+      // items; it decides no dispatch, and it deliberately does not rebuild the
+      // stack model to do it (see `src/stacks/landing.ts`).
+      this.deps.landings?.settle(world);
       // Record what the world and the store now say happened, after the reconciler
       // so part→PR observations are fresh, and before `decide` so stage 2 can read
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after

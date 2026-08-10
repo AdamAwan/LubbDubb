@@ -1,4 +1,4 @@
-import type { AppState, JobAttachmentInput, RecoveryVerdict } from './types.js';
+import type { AppState, JobAttachmentInput, RecoveryVerdict, StackLanding } from './types.js';
 // The fetched-on-open routes, as whole payloads rather than shapes re-typed at
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
@@ -174,6 +174,16 @@ const realApi = {
     post<{ ok: true; cap: number; paused: boolean }>('/api/control', patch),
   setPrExcluded: (prNumber: number, excluded: boolean) =>
     post<{ ok: true; excluded: boolean }>(`/api/prs/${prNumber}/exclude`, { excluded }),
+  // Land a whole chain: one standing authorization that keeps accepting each
+  // rung's merge as the harness proposes it, cycle after cycle. A DELETE calls it
+  // off, for the reason the ignore toggle uses one — the store's undo is a
+  // settlement, not a second flag.
+  setStackLanding: (ref: string, landing: boolean) =>
+    landing
+      ? post<{ ok: true; landing: StackLanding }>(`/api/stacks/${encodeURIComponent(ref)}/land`)
+      : authFetch(`/api/stacks/${encodeURIComponent(ref)}/land`, { method: 'DELETE' }).then((r) =>
+          json<{ ok: true; landing: StackLanding }>(r),
+        ),
   setIssueWatched: (issueNumber: number, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/issues/${issueNumber}/watch`, { watched }),
   // The operator's override of whether an issue is finished. `null` clears it,

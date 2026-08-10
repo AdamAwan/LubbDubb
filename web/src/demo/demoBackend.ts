@@ -220,6 +220,39 @@ class DemoServer {
     return { ok: true, cap, paused };
   }
 
+  /**
+   * Authorize (or call off) landing a whole stack. The demo has no pulse that
+   * merges anything, so this records the intent and lets the rack draw it —
+   * which is the half worth demonstrating, since the effects of the real one
+   * arrive over several cycles.
+   */
+  async setStackLanding(ref: string, landing: boolean): Promise<{ ok: true }> {
+    const view = this.state.stackLandings.find((v) => v.ref === ref);
+    if (!view) return { ok: true };
+    if (!landing) {
+      view.landing = null;
+      this.addDecision('no_op', 'skipped', `stopped landing ${ref}`);
+      this.dirty();
+      return { ok: true };
+    }
+    if (!view.offer) return { ok: true };
+    const stack = this.state.stacks.find((st) => st.ref === ref);
+    const at = new Date().toISOString();
+    view.landing = {
+      id: `land_demo_${ref}`,
+      ref,
+      rungs: (stack?.rungs ?? []).map((r) => r.prNumber),
+      status: 'standing',
+      reason: null,
+      createdAt: at,
+      updatedAt: at,
+    };
+    view.landed = 0;
+    this.addDecision('merge_pr', 'executed', `authorized landing ${ref}`);
+    this.dirty();
+    return { ok: true };
+  }
+
   /** Toggle the exclusion tag on a PR — the demo mirror of the real label write-back. */
   async setPrExcluded(prNumber: number, excluded: boolean): Promise<{ ok: true; excluded: boolean }> {
     const tag = this.state.config.ignoreLabel;
@@ -1026,6 +1059,7 @@ export const demoApi = {
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
+  setStackLanding: (ref: string, landing: boolean) => getServer().setStackLanding(ref, landing),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     getServer().setIssueConclusion(issueNumber, verdict),

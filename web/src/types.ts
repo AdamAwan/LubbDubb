@@ -48,6 +48,8 @@ export type {
   RecoveryVerdict,
   RunningConfigGroup,
   Stack,
+  StackLanding,
+  StackLandingView,
   StackRung,
   Task,
   UpcomingPlan,

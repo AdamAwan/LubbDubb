@@ -1256,12 +1256,61 @@ export interface Proposal {
    * accepting its own proposal because the confidence gate cleared it (phase 2) —
    * one authorization representation rather than two, so the audit log answers
    * "who authorized this outbound act" the same way for both.
+   *
+   * `stack_landing` is the third, and it is a third rather than a reuse of
+   * `auto_send` because it answers the question differently: not "the harness
+   * cleared its own threshold" but "the operator authorized this whole chain in
+   * advance, before any of it was proposed". Folding it into `auto_send` would
+   * put a merge nobody's confidence gate ever judged under the gate's name.
    */
-  decidedBy: 'human' | 'auto_send' | null;
+  decidedBy: 'human' | 'auto_send' | 'stack_landing' | null;
   decidedAt: string | null;
   /** The inbox item this hangs off, so answering and deciding stay one surface. */
   escalationId: string | null;
   createdAt: string;
+}
+
+/**
+ * Where a standing intent ends up. Only `standing` authorizes anything; the
+ * other three are terminal, and they are three rather than one because "it
+ * finished", "you called it off" and "something went wrong" are different
+ * answers to *why is this chain not landing*, and only the last needs surfacing.
+ */
+export type StackLandingStatus = 'standing' | 'landed' | 'stopped' | 'revoked';
+
+/**
+ * An operator's standing authorization to land a whole stack of pull requests —
+ * one click that keeps saying yes to each rung's merge as the harness proposes
+ * it, cycle after cycle.
+ *
+ * **It is not a merge, and it schedules none.** Rule `pr-merge-ready` already
+ * proposes exactly one merge per stack — the bottom rung, the only one whose base
+ * is the integration branch — and the rung above it becomes proposable only once
+ * that lands and the provider retargets it, which is observed on a later pulse.
+ * So a chain landing bottom-up over several cycles is what the harness does
+ * anyway; this record only decides who accepts those proposals. A merge still
+ * happens exactly one way, through `ActionExecutor.runAuthorized`.
+ *
+ * **Its scope is {@link rungs}, not {@link ref}.** `Stack.ref` is
+ * `stack:<bottom rung's PR number>` and the bottom rung is precisely the one that
+ * merges first, so the ref is stable only until the intent's first success. An
+ * intent keyed on it would land one rung and then be orphaned — silently, which
+ * is the whole failure this feature exists to avoid. Keying on the PR numbers
+ * captured at the click also makes the authorization exactly what the operator
+ * read: a rung stacked *on top* afterwards is not in the list, so it is not
+ * authorized, with no rule needed to say so.
+ */
+export interface StackLanding {
+  id: string;
+  /** The stack's ref as it read at the click. Display and idempotence only. */
+  ref: string;
+  /** The authorization: the rungs' PR numbers, bottom-first, as they stood then. */
+  rungs: number[];
+  status: StackLandingStatus;
+  /** Why it stopped, in the words the rack chip and the escalation both quote. */
+  reason: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------

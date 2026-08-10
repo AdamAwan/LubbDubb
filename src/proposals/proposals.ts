@@ -178,6 +178,10 @@ const SETTLE_WINDOW_MS = 15 * 60_000;
 function decidedByLabel(decidedBy: Proposal['decidedBy']): string {
   if (decidedBy === 'human') return 'you';
   if (decidedBy === 'auto_send') return 'auto-send';
+  // Still "you" — a stack landing *is* the operator, deciding once for a whole
+  // chain instead of once per rung — and distinguished, because "which click" is
+  // the thing an audit trail over an act nobody watched has to be able to say.
+  if (decidedBy === 'stack_landing') return 'you, landing the stack';
   return 'an unrecorded decider';
 }
 
@@ -416,6 +420,13 @@ export function authorityOf(proposal: Proposal, pulseCycleId: string | null): Au
   if (proposal.decidedBy === 'human') return { cycleId: `human:${proposal.id}`, by, approved: 'You approved' };
   const cycleId = pulseCycleId ?? `${proposal.decidedBy ?? 'undecided'}:${proposal.id}`;
   if (proposal.decidedBy === 'auto_send') return { cycleId, by, approved: 'Auto-send authorized' };
+  // Deliberately **not** the `human:` prefix, though a human is behind it. The
+  // prefix marks a decision made *outside* the pulse — a click being applied at a
+  // route — and this one is applied inside the cycle that formed the action, so
+  // it belongs grouped with that pulse exactly as auto-send's does. What the
+  // operator clicked, and when, is on the proposal's note; the row that says "you
+  // clicked something just now" is the one this must not impersonate.
+  if (proposal.decidedBy === 'stack_landing') return { cycleId, by, approved: 'Landing the stack authorized' };
   return { cycleId, by, approved: `${by} authorized` };
 }
 

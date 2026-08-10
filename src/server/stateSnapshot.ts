@@ -11,6 +11,7 @@ import type {
 import type { CockpitState } from '../wire.js';
 import { buildRefUrls, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
+import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
@@ -86,6 +87,10 @@ export function buildStateSnapshot(
   // and the snapshot itself, so the chip and the panel can't disagree.
   const plans = store.listPlans();
   const planParts = store.listAllPlanParts();
+  const stacks = buildStacks(world.pullRequests, plans, planParts, config.defaultBranch);
+  // Standing *and* stopped: a stopped intent is the one the rack most has to keep
+  // showing, since it is the state that says nothing further will merge on its own.
+  const landings = store.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped');
   // A plan's parts are its **shape** — the conclusion resolver asks for them
   // because "one pull request" is no live parts, not a status.
   const planPartsOf = (origin: string): PlanPart[] => {
@@ -346,7 +351,26 @@ export function buildStateSnapshot(
     // a plan *adopts* a stack, so a chain a human opened by hand is drawn on the
     // same terms as one a plan produced. The unfiltered open list, for the reason
     // `inheritedCiFailure` takes it — an -ignore'd rung would hole the chain.
-    stacks: buildStacks(world.pullRequests, plans, planParts, config.defaultBranch),
+    stacks,
+    // The "land the stack" control, one entry per chain above: whether the click
+    // may be offered, and the operator's standing intent over it. Joined to a
+    // stack by rung membership rather than by ref — see `landingFor`.
+    stackLandings: stacks.map((stack) => {
+      const rungPrs = stack.rungs.flatMap((rung) => {
+        const pr = world.pullRequests.find((p) => p.number === rung.prNumber);
+        return pr ? [pr] : [];
+      });
+      const landing = landingFor(
+        stack.rungs.map((r) => r.prNumber),
+        landings,
+      );
+      return {
+        ref: stack.ref,
+        ...landingReadiness(rungPrs),
+        landing,
+        landed: landing ? landedCount(landing, world) : 0,
+      };
+    }),
     tasks,
     // Operator-launched jobs (newest first) — the cockpit shows the queued
     // ones and their place in line, plus recently-dispatched/cancelled history.

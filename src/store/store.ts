@@ -14,6 +14,7 @@ import { ScratchStore } from './scratch.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
+import { StackLandingStore } from './landings.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -49,6 +50,8 @@ import type {
   PlanStatus,
   PriorityOverride,
   Proposal,
+  StackLanding,
+  StackLandingStatus,
   Task,
   WorkNode,
   WorkNodeObservation,
@@ -89,6 +92,7 @@ export class Store {
   private readonly agents: AgentStore;
   private readonly transcripts: TranscriptStore;
   private readonly escalations: EscalationStore;
+  private readonly landings: StackLandingStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -125,6 +129,7 @@ export class Store {
     this.agents = new AgentStore(ctx);
     this.transcripts = new TranscriptStore(ctx);
     this.escalations = new EscalationStore(ctx);
+    this.landings = new StackLandingStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -468,6 +473,31 @@ export class Store {
   }
   listProposals(): Proposal[] {
     return this.escalations.listProposals();
+  }
+
+  // -- Stack landings (a standing authorization over a whole chain) ----------
+
+  recordStackLanding(ref: string, rungs: number[]): StackLanding {
+    return this.landings.recordStackLanding(ref, rungs);
+  }
+  getStackLanding(id: string): StackLanding | null {
+    return this.landings.getStackLanding(id);
+  }
+  listStackLandings(limit?: number): StackLanding[] {
+    return this.landings.listStackLandings(limit);
+  }
+  listStandingLandings(): StackLanding[] {
+    return this.landings.listStandingLandings();
+  }
+  standingLandingForPr(prNumber: number): StackLanding | null {
+    return this.landings.standingLandingForPr(prNumber);
+  }
+  settleStackLanding(
+    id: string,
+    status: Exclude<StackLandingStatus, 'standing'>,
+    reason: string | null,
+  ): StackLanding | null {
+    return this.landings.settleStackLanding(id, status, reason);
   }
 
   // -- Decisions (audit) ---------------------------------------------------
