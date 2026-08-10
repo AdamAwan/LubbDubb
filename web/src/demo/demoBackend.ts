@@ -8,6 +8,7 @@
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
   AppState,
+  CockpitDecision,
   Decision,
   Issue,
   Job,
@@ -262,7 +263,15 @@ class DemoServer {
       if (excluded) labels.add(tag);
       else labels.delete(tag);
       pr.labels = [...labels];
-      this.addDecision('no_op', 'executed', `${excluded ? 'tagged' : 'untagged'} PR #${prNumber} (${tag})`);
+      this.addDecision(
+        'no_op',
+        'executed',
+        `${excluded ? 'tagged' : 'untagged'} PR #${prNumber} (${tag})`,
+        undefined,
+        undefined,
+        undefined,
+        `pr:${prNumber}`,
+      );
       this.dirty();
     }
     return { ok: true, excluded };
@@ -280,7 +289,15 @@ class DemoServer {
         verdict === null
           ? { verdict: 'undeclared', by: null, note: '', at: null }
           : { verdict, by: 'operator', note: 'Set by the operator from the cockpit.', at: new Date().toISOString() };
-      this.addDecision('no_op', 'executed', `issue #${issueNumber} → ${verdict ?? 'unconcluded'}`);
+      this.addDecision(
+        'no_op',
+        'executed',
+        `issue #${issueNumber} → ${verdict ?? 'unconcluded'}`,
+        undefined,
+        undefined,
+        undefined,
+        `issue:${issueNumber}`,
+      );
       this.dirty();
     }
     return { ok: true };
@@ -304,7 +321,15 @@ class DemoServer {
               summary: 'Set by the operator from the cockpit.',
               decidedAt: new Date().toISOString(),
             };
-      this.addDecision('no_op', 'executed', `issue #${issueNumber} → ${verdict ?? 'unassayed'}`);
+      this.addDecision(
+        'no_op',
+        'executed',
+        `issue #${issueNumber} → ${verdict ?? 'unassayed'}`,
+        undefined,
+        undefined,
+        undefined,
+        `issue:${issueNumber}`,
+      );
       this.dirty();
     }
     return { ok: true };
@@ -321,7 +346,15 @@ class DemoServer {
     const target = present ?? forgotten;
     if (target?.run) {
       target.run = { ...target.run, dismissed: true };
-      this.addDecision('no_op', 'executed', `issue #${issueNumber} run dismissed`);
+      this.addDecision(
+        'no_op',
+        'executed',
+        `issue #${issueNumber} run dismissed`,
+        undefined,
+        undefined,
+        undefined,
+        `issue:${issueNumber}`,
+      );
       this.dirty();
     }
     return { ok: true };
@@ -332,7 +365,15 @@ class DemoServer {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
       issue.labels = applyWatch(issue.labels, this.state.config, watched);
-      this.addDecision('no_op', 'executed', `${watched ? 'watching' : 'ignoring'} issue #${issueNumber}`);
+      this.addDecision(
+        'no_op',
+        'executed',
+        `${watched ? 'watching' : 'ignoring'} issue #${issueNumber}`,
+        undefined,
+        undefined,
+        undefined,
+        `issue:${issueNumber}`,
+      );
       if (watched)
         this.trySpawn('code', `Implement issue #${issueNumber}`, `issue/${issueNumber}`, `issue:${issueNumber}`);
       this.dirty();
@@ -614,8 +655,9 @@ class DemoServer {
     reason?: string,
     rule?: string,
     admission?: string,
+    subjectRef?: string,
   ): void {
-    const dec: Decision = {
+    const dec: CockpitDecision = {
       id: this.id('dec'),
       cycleId: this.id('cycle'),
       action: { type, reason: reason ?? detail },
@@ -623,6 +665,10 @@ class DemoServer {
       detail,
       rule: rule ?? null,
       admission: admission ?? null,
+      // The demo composes actions as `{type, reason}` alone, so there is no
+      // payload for the server's `decisionSubjectRef` to read even in principle:
+      // the caller names the subject, or the row has none and draws a dash.
+      subjectRef: subjectRef ?? null,
       createdAt: new Date().toISOString(),
     };
     this.state.decisions = [dec, ...this.state.decisions].slice(0, 40);
@@ -705,7 +751,15 @@ class DemoServer {
       ...this.state.agents,
     ];
     this.transcripts.set(agentId, `$ claude ${kind}\nPicking up: ${title}`);
-    this.addDecision(dispatchAction(kind), 'executed', `dispatched agent for ${title}`);
+    this.addDecision(
+      dispatchAction(kind),
+      'executed',
+      `dispatched agent for ${title}`,
+      undefined,
+      undefined,
+      undefined,
+      originRef ?? undefined,
+    );
     return taskId;
   }
 

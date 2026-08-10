@@ -432,6 +432,14 @@ argument for each is in its module's header, and the reason for the shape is wor
   per-cell levels that do not exist. A brownout dims the machinery and nothing else — the reading
   belongs on the floor, but not at the cost of the text needed to act on it. Both are absent
   entirely when the subscriber limits were never captured; there is no denominator on an API key.
+- **The shift log gives the subject its own column** (`EventLog`). `Tick · Action · Ref · Detail ·
+  Rule · Outcome · By`. `linkify` still runs over Detail, so a sentence naming `#142` gets its link
+  where it stands — but a detail is prose, and half the harness's own details name their subject in
+  some other shape ("dispatched agent for …", "replanning …") or not at all. Ref draws
+  `decision.subjectRef`, the server's answer to what the row is *about*, through `refLink`: the
+  colon form is the harness's own vocabulary and is worth reading whether or not it resolves, so an
+  unresolvable ref stays on screen as text rather than vanishing. A row about nothing external draws
+  a dash — see [16](16-http-api.md#refurls) for why the derivation is the server's.
 
 Two of the three desks carry a rule of their own:
 
@@ -629,6 +637,12 @@ arm in `test/factorySkin.test.ts`.
 `Machine.link` is `{ref, label} | null` and is **never set beside `prNumber`**: they share one corner
 of the node, so a machine claiming two ways out would draw one over the other. The test asserts that
 rather than trusting it.
+
+**Two machines carry one.** The signal post's `notice ↗` above, and the **ore patch**'s `ticket ↗` —
+the one machine on the floor that *is* a ticket. Both are captioned rather than printed for the same
+reason: the ref is already on the meta line under the name (`issue:12 · In Progress`), so the corner
+has room for a word and not for the ref again. Both go through `refChip`, so a provider that builds no
+URLs draws neither caption rather than a caption over nothing.
 
 One thing is still deliberately **not** drawn. Quality-pillar commentary is not drawn at all, for the
 stronger version of the old reason — nothing in the harness writes it, so a third line there would be
@@ -1202,28 +1216,44 @@ a caption with no link asserts something exists while giving nobody a way to rea
 outcome #171 ruled out. So an unwritten comment, an older server that sends none, and a provider that
 builds no URLs are all one silence.
 
-**Every reference the UI shows is routed through one of the three (#199).** The rule is uniform: a
-PR/issue number links as `refLink('#'+n, refUrls)`, a colon-form origin/structured ref as
-`refLink(ref, refUrls)`, free text carrying `#n` mentions through `linkify(text, refUrls)`. So the
-decision log, the activity feed (`ActivityFeed`) and its factory twin (`Signals`), the findings
+**Every reference the UI shows is routed through one of the three (#199), with no exceptions.** The
+rule is uniform: a PR/issue number links as `refLink('#'+n, refUrls)`, a colon-form origin/structured
+ref as `refLink(ref, refUrls)`, free text carrying `#n` mentions through `linkify(text, refUrls)`. So
+the decision log, the activity feed (`ActivityFeed`) and its factory twin (`Signals`), the findings
 panel, escalations, the plan panel/modal, the PR and issue rows, the up-next queue, the fleet cards
 (origin ref and branch), the overlap and recovery panels, and the work-tree panel all draw links
 wherever the provider can resolve them.
 
-For those link sites to actually resolve, three ref families the item lists do not cover are keyed on
+For those link sites to actually resolve, five ref families the item lists do not cover are keyed on
 their own in `buildRefUrls` (see [16](16-http-api.md#refurls)): **world-event refs** (`pr:42`,
 `issue:13` — the structured ref each activity entry draws), **task origin refs** (`pr:142:ci`,
-`issue:13:part:x` — what the fleet/overlap/recovery cards link), and, on the `/api/work` routes, the
-**work roots and stacked base refs**. A `job:<id>` origin, or anything the provider can't map, is
-simply omitted and renders plain.
+`issue:13:part:x` — what the fleet/overlap/recovery cards link), **every goal's own canonical ref**
+(`issue:13` for each world issue and each retained run — what the Goal Floor's patch strip and the
+belt's crates speak, and a family keyed only when a task or event happens to name it is one that
+links on a busy world and renders plain on a quiet one), **each decision's subject ref** (below),
+and, on the `/api/work` routes, the **work roots and stacked base refs**. A `job:<id>` origin, or
+anything the provider can't map, is simply omitted and renders plain.
 
-Two surfaces are deliberately left as plain text, because their medium cannot host a practical link
-rather than for want of a URL: the factory **Line**'s belt crates (a continuously-moving target) and
-its SVG bay HUD, and the Goal Floor's **patch-tab strip** (each tab is a `<button>` that selects the
-goal, and an `<a>` nested in a button is invalid interactive content). Every ref they show is linked
-elsewhere — the shared `WorldSummary`/`WorkTree` panels, the fleet cards, and the classic skin — so
-nothing is unreachable; this mirrors the Goal Floor's own SVG `<text>` meta lines, which stay plain
-while only the compact PR chip is `foreignObject`-wrapped.
+### The factory's four late arrivals
+
+Four surfaces were once left as plain text on the grounds that their medium could not host a
+practical link. Each reason was about the medium and each had an answer, so all four now link:
+
+| Surface                    | The medium's answer                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Line** belt crates       | Ordinary HTML — the crate always printed its origin, so `refLink` keeps the token as the label                        |
+| **Line** SVG bay HUD       | A `foreignObject` (the Goal Floor's PR-chip wrapper), inside a `<g>` that stops the click reaching the bay's own handler |
+| Goal Floor **patch strip** | Tab and link are **siblings** in `.fx-gf-patch-slot`, never nested — an `<a>` in a `<button>` is invalid interactive content |
+| **Bots in the Field** name | `refChip` on `.fx-job`, so the heading an operator reaches for is the way in; only the name, never `Asking you` / `Idle` |
+
+The Goal Floor's ore-patch **machine** carries one too — `ticket ↗`, through `Machine.link`, the same
+captioned route the signal post's status comment uses and for the same reason: the meta line under it
+already prints `issue:<n>`, so the corner has room for a word rather than a ref.
+
+The bay HUD is the one that needs the wrapper: the whole bay is a `role="button"` that opens the
+transcript, so without `stopPropagation` on click *and* keydown the ref would open the drawer as well
+as the tracker. The Goal Floor's SVG `<text>` meta lines stay plain — only what is a *reference* is
+wrapped.
 
 ### What the harness has said on a ticket
 

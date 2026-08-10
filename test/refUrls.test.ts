@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
-import { buildRefUrls, issueCommentRef } from '../src/server/refUrls.js';
+import { buildRefUrls, decisionSubjectRef, issueCommentRef } from '../src/server/refUrls.js';
 
 // --------------------------------------------------------------------------
 // githubRefUrl — the provider's canonical ref → URL mapping (pure)
@@ -154,4 +154,41 @@ test('buildRefUrls: keys a comment ref by itself, and omits it when unresolvable
   });
   assert.equal(map['issue:12:comment:456'], 'https://gh/issues/12#issuecomment-456');
   assert.equal(map['issue:99:comment:1'], undefined);
+});
+
+// --------------------------------------------------------------------------
+// decisionSubjectRef — what an audited act is *about*
+// --------------------------------------------------------------------------
+
+test('decisionSubjectRef: each action names its subject in the vocabulary refUrls answers', () => {
+  const ref = (action: Record<string, unknown>) => decisionSubjectRef(action as { type: string });
+
+  assert.equal(ref({ type: 'dispatch_code_agent', originRef: 'issue:13:part:schema' }), 'issue:13:part:schema');
+  assert.equal(ref({ type: 'dispatch_desk_agent', originRef: 'issue:13:plan' }), 'issue:13:plan');
+  assert.equal(ref({ type: 'propose_plan', originRef: 'issue:13' }), 'issue:13');
+  assert.equal(ref({ type: 'propose_shortfall', originRef: 'issue:13' }), 'issue:13');
+  // A PR-numbered act is translated into the colon form rather than shipped as a
+  // number: `#42` is the *other* key family, and `refUrls` keys both — but the
+  // column reads a structured ref, so this is the one it can look up.
+  assert.equal(ref({ type: 'reply_on_pr', prNumber: 42 }), 'pr:42');
+  assert.equal(ref({ type: 'merge_pr', prNumber: 42 }), 'pr:42');
+  assert.equal(ref({ type: 'set_work_item_state', number: 13 }), 'issue:13');
+  assert.equal(ref({ type: 'respond_to_agent', originRefs: ['pr:42:comment:c1', 'pr:42:ci'] }), 'pr:42:comment:c1');
+});
+
+test('decisionSubjectRef: an act about nothing external has no ref, and never guesses one', () => {
+  const ref = (action: Record<string, unknown>) => decisionSubjectRef(action as { type: string });
+
+  assert.equal(ref({ type: 'escalate_to_human', agentId: 'agent-1' }), null);
+  assert.equal(ref({ type: 'no_op' }), null);
+  assert.equal(ref({ type: 'respond_to_agent', agentId: 'agent-1' }), null);
+  // A dispatch composed outside a rule carries no origin — `originRef` defaults to
+  // null in the schema, so this is the ordinary shape and not a malformed one.
+  assert.equal(ref({ type: 'dispatch_code_agent', originRef: null }), null);
+  // `number` is a work item on exactly one action type. The switch is what stops
+  // it being read as one the day some other action grows a field by that name.
+  assert.equal(ref({ type: 'merge_pr', number: 13 }), null);
+  // An unknown type from an older or newer row: no ref, rather than a scan for
+  // likely-looking fields that would key a confident link to the wrong thing.
+  assert.equal(ref({ type: 'something_new', originRef: 'issue:13' }), null);
 });

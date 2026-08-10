@@ -848,6 +848,7 @@ export function buildDemoState(): DemoSeed {
         id: 'dec-4',
         cycleId: 'cycle-103',
         action: { type: 'reply_on_pr', reason: 'reviewer asked for a config change on #142' },
+        subjectRef: 'pr:142',
         outcome: 'executed',
         detail: 'Drafted a reply and escalated for approval (confidence 0.62 below threshold)',
         rule: null,
@@ -858,6 +859,7 @@ export function buildDemoState(): DemoSeed {
         id: 'dec-3',
         cycleId: 'cycle-102',
         action: { type: 'dispatch_code_agent', reason: 'PR #142 CI is failing' },
+        subjectRef: 'pr:142:ci',
         outcome: 'executed',
         detail: 'Dispatched agent onto feature/rate-limit',
         rule: 'pr-ci-failing',
@@ -868,6 +870,8 @@ export function buildDemoState(): DemoSeed {
         id: 'dec-2',
         cycleId: 'cycle-101',
         action: { type: 'escalate_to_human', reason: 'agent parked on a human' },
+        // An escalation is about a human, not a ticket: the column draws a dash.
+        subjectRef: null,
         outcome: 'executed',
         detail: 'Rebase conflict on PR #139 needs a call',
         rule: 'pr-base-update',
@@ -878,6 +882,7 @@ export function buildDemoState(): DemoSeed {
         id: 'dec-1',
         cycleId: 'cycle-98',
         action: { type: 'merge_pr', reason: 'PR #141 is merge-ready' },
+        subjectRef: 'pr:141',
         outcome: 'deferred',
         detail: 'auto-merge disabled — leaving for a human',
         rule: 'pr-merge-ready',
@@ -980,6 +985,24 @@ export function buildDemoState(): DemoSeed {
       // builds them. Absent from this map ⇒ the cockpit draws no way in at all.
       'issue:212:comment:8391': 'https://github.com/example/lubbdubb/issues/212#issuecomment-8391',
       'issue:219:comment:8402': 'https://github.com/example/lubbdubb/issues/219#issuecomment-8402',
+      // The colon form, which is what the factory speaks: a patch's ref, a crate's
+      // origin, a bot's origin and a decision's subject are all structured refs,
+      // and the `#n` keys above answer none of them. The server keys both families
+      // for the same items (see `buildRefUrls`), so the demo does too — otherwise
+      // the Pages build is the one place every new link renders as plain text.
+      'issue:205': 'https://github.com/example/lubbdubb/issues/205',
+      'issue:208': 'https://github.com/example/lubbdubb/issues/208',
+      'issue:210': 'https://github.com/example/lubbdubb/issues/210',
+      'issue:212': 'https://github.com/example/lubbdubb/issues/212',
+      'issue:219': 'https://github.com/example/lubbdubb/issues/219',
+      'issue:231': 'https://github.com/example/lubbdubb/issues/231',
+      'issue:212:part:writes': 'https://github.com/example/lubbdubb/issues/212',
+      'issue:231:part:route': 'https://github.com/example/lubbdubb/issues/231',
+      'issue:231:part:signer': 'https://github.com/example/lubbdubb/issues/231',
+      'pr:139': 'https://github.com/example/lubbdubb/pull/139',
+      'pr:141': 'https://github.com/example/lubbdubb/pull/141',
+      'pr:142': 'https://github.com/example/lubbdubb/pull/142',
+      'pr:142:ci': 'https://github.com/example/lubbdubb/pull/142/checks',
     },
     // The rule book the server ships in /api/state (src/dispatcher/rules.ts) —
     // canned to just the rules the demo's decisions reference.

@@ -9,7 +9,7 @@ import type {
   WorldSnapshot,
 } from '../types.js';
 import type { CockpitState } from '../wire.js';
-import { buildRefUrls, issueCommentRef } from './refUrls.js';
+import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth } from '../prHealth.js';
@@ -190,6 +190,10 @@ export function buildStateSnapshot(
   // map — and an event can name a PR that merged out of the open list, so its ref
   // is resolved on its own rather than borrowed from a world item now gone.
   const worldEvents = store.listWorldEvents(100);
+  // The audit rows the shift log draws, each carrying the one external thing it is
+  // about. Derived here so the ref that keys `refUrls` below and the ref the column
+  // looks up in it are the same string — see `decisionSubjectRef`.
+  const shiftLog = store.listDecisions(100).map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
   // The provider builds every URL (see CompositeConnector.resolveRefUrl); the
   // cockpit only looks refs up in this map, so it stays provider-agnostic.
   const refUrls = buildRefUrls({
@@ -221,6 +225,19 @@ export function buildStateSnapshot(
       // the colon-form origin is not the `#n` the item lists are keyed by. A
       // `job:<id>` origin resolves to nothing and is simply omitted.
       ...tasks.map((t) => t.originRef),
+      // Every goal's own canonical ref. The `#n` keys above cover the same
+      // tickets, but the factory's Goal Floor and the belt speak in the
+      // colon form (`issue:13` is the patch's ref, and a crate's origin), and a
+      // family that is only keyed when a task or a world event happens to name it
+      // is one that links on a busy world and renders plain on a quiet one.
+      ...world.issues.map((i) => `issue:${i.number}`),
+      // The goals whose run outlives the ticket (issues #203, #234): retained runs
+      // are synthesized below and are, by definition, absent from `world.issues`,
+      // so their patch would be the one tab on the strip that never links.
+      ...issueRuns.map((r) => r.originRef),
+      // What each audited decision is about, keyed off the same derivation the
+      // row ships — see `shiftLog`.
+      ...shiftLog.map((d) => d.subjectRef),
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
@@ -414,7 +431,7 @@ export function buildStateSnapshot(
     // than a text box, and the decision log reads the settled ones as the human
     // half of the audit trail.
     proposals,
-    decisions: store.listDecisions(100),
+    decisions: shiftLog,
     // The "Up next" queue: the last cycle's ordered pickup plan with the
     // headroom cut (issue #69). A per-pulse projection — null until a cycle
     // has run, or when the active dispatcher doesn't materialise a plan.

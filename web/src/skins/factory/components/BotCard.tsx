@@ -64,8 +64,23 @@ export function BotCard({
     <article className={`fx-bot fx-sunk ${asking || state === 'idle' ? 'idle' : ''} ${past ? 'spent' : ''}`}>
       <div className="fx-bot-top">
         <Icon name={asking || state === 'idle' ? 'alert' : iconForOrigin(origin)} />
+        {/* The bot's *name* is the ticket it is working, so it links to it — the
+            heading is what an operator reaches for, and leaving the way out on the
+            small grey ref beside it made the obvious target the wrong one. Only
+            the name links: `Asking you` and `Idle — needs you` are states, not
+            names, and an external link on one would point away from the very card
+            that resolves it. Falls back to the plain title, never a dead link. */}
         <span className="fx-job" title={task?.title ?? agent.id}>
-          {asking ? 'Asking you' : state === 'idle' ? 'Idle — needs you' : (task?.title ?? agent.id)}
+          {asking
+            ? 'Asking you'
+            : state === 'idle'
+              ? 'Idle — needs you'
+              : (refChip(origin, task?.title ?? agent.id, refUrls, {
+                  className: 'ext-ref',
+                  title: origin ?? undefined,
+                }) ??
+                task?.title ??
+                agent.id)}
         </span>
         <span className="fx-ref">
           {/* The origin links when the provider resolved it, else it stays the

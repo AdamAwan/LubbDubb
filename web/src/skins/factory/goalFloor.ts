@@ -484,7 +484,11 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     status: patchStatus(pickupStatus),
     scanners: [],
     prNumber: null,
-    link: null,
+    // The one machine on the floor that *is* a ticket, so it carries the way out
+    // to it. Captioned rather than printed, for the signal post's reason: the meta
+    // line below already states `issue:12`, and the corner has room for a word, not
+    // a ref. Nothing is drawn when the provider resolved no URL (`refChip`).
+    link: { ref: patchRef, label: 'ticket ↗' },
     fill: null,
     siloLabel: null,
   });

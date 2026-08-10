@@ -216,20 +216,30 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
         {goals.map((issue) => {
           const status = patchStatus(issue.pickup?.status ?? 'eligible');
           const on = issue.number === current.number;
+          // The tab and the way out to the ticket are **siblings**, not one
+          // control: an `<a>` inside a `<button>` is invalid interactive content,
+          // and a patch that navigated instead of selecting would lose the strip
+          // its one job. The wrapper is `presentation` so the tablist still owns
+          // tabs and nothing else.
           return (
-            <button
-              key={issue.id}
-              role="tab"
-              aria-selected={on}
-              className={`fx-gf-patch ${on ? 'on' : ''}`}
-              style={{ ['--fx-tone' as string]: toneColor(status.tone) }}
-              onClick={() => setPicked(issue.number)}
-              title={issue.title}
-            >
-              <span className="fx-ref">issue:{issue.number} · ore patch</span>
-              <span className="fx-job">{clip(issue.title, 30)}</span>
-              <span className="fx-gf-patch-word">{status.word}</span>
-            </button>
+            <div key={issue.id} className="fx-gf-patch-slot" role="presentation">
+              <button
+                role="tab"
+                aria-selected={on}
+                className={`fx-gf-patch ${on ? 'on' : ''}`}
+                style={{ ['--fx-tone' as string]: toneColor(status.tone) }}
+                onClick={() => setPicked(issue.number)}
+                title={issue.title}
+              >
+                <span className="fx-ref">issue:{issue.number} · ore patch</span>
+                <span className="fx-job">{clip(issue.title, 30)}</span>
+                <span className="fx-gf-patch-word">{status.word}</span>
+              </button>
+              {refChip(`issue:${issue.number}`, '↗', refUrls, {
+                className: 'ext-ref fx-gf-patch-out',
+                title: `Open issue #${issue.number} on the tracker`,
+              })}
+            </div>
           );
         })}
       </div>

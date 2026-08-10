@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
-import type { Decision, DispatchRule } from '../../../types.js';
-import { linkify, decisionAttribution } from '../../../components/util.js';
+import type { CockpitDecision, DispatchRule } from '../../../types.js';
+import { linkify, decisionAttribution, refLink } from '../../../components/util.js';
 import { Icon, type IconName } from './Sprite.js';
 
 /** The machine that carried the act out — the same vocabulary the floor uses. */
@@ -29,13 +29,21 @@ const stamp = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hou
  * throttled pickup showing only `Attempt cap reached` was the whole defect.
  * `decisionAttribution` is shared with Classic so neither skin has to re-decide
  * what a pre-split row means.
+ *
+ * **Ref is its own column**, and the detail line no longer has to carry the way
+ * out. `linkify` still runs over Detail — a sentence naming "#142" gets its link
+ * where it stands — but a detail is prose, and half the harness's own details name
+ * their subject in some other shape ("dispatched agent for …", "replanning …") or
+ * not at all. `subjectRef` is the server's answer to what the row is *about*
+ * (`decisionSubjectRef`), so the column resolves whatever the sentence happened to
+ * say, and a row about nothing external draws a dash rather than a dead chip.
  */
 export function EventLog({
   decisions,
   rules,
   refUrls,
 }: {
-  decisions: Decision[];
+  decisions: CockpitDecision[];
   rules: Record<string, DispatchRule>;
   refUrls: Record<string, string>;
 }): JSX.Element {
@@ -48,6 +56,7 @@ export function EventLog({
           <tr>
             <th>Tick</th>
             <th>Action</th>
+            <th>Ref</th>
             <th>Detail</th>
             <th>Rule</th>
             <th>Outcome</th>
@@ -74,6 +83,10 @@ export function EventLog({
                     {d.action.type.replace(/_/g, ' ')}
                   </span>
                 </td>
+                {/* `refLink`, not `refChip`: the colon form is the harness's own
+                    vocabulary and is worth reading whether or not it resolves, so
+                    an unresolvable ref stays on screen as text. */}
+                <td className="r">{d.subjectRef ? refLink(d.subjectRef, refUrls) : '—'}</td>
                 <td>{linkify(d.detail, refUrls)}</td>
                 <td title={proposed?.rule?.description ?? note}>{proposed?.rule?.name ?? '—'}</td>
                 <td title={became?.rule?.description ?? note}>{became?.rule?.name ?? '—'}</td>

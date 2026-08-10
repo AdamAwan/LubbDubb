@@ -647,7 +647,9 @@ test('every panel is a tile of one grid, inspection beside bots', () => {
   assert.doesNotMatch(markup, /class="fx-rail/, 'no rail may wrap a panel out of the grid');
   const grid = markup.slice(markup.indexOf('class="fx-grid"'));
 
-  const order = [...grid.matchAll(/class="fx-line-wrap|data-fx="([a-z-]+)"/g)].map((m) => m[1] ?? 'line');
+  // The Line names itself like every other panel now that its bays carry links a
+  // test has to find, so the alternation on its class is gone with the exception.
+  const order = [...grid.matchAll(/data-fx="([a-z-]+)"/g)].map((m) => m[1]);
   assert.deepEqual(
     order,
     ['line', 'inspection', 'bots', 'goal-floor', 'yard', 'shift-log', 'signals'],
@@ -2416,4 +2418,122 @@ test('a rejoining plan, ingested by the server, draws its merger on the floor', 
     wire.meta.includes('waits on: schema + api'),
     `the merger must name every prerequisite, got ${JSON.stringify(wire.meta)}`,
   );
+});
+
+// ---- links out to the tracker -------------------------------------------
+//
+// Four surfaces the factory used to leave as plain text: the belt crates and the
+// SVG bay HUD (both "a moving target"), the Goal Floor's patch strip (an `<a>`
+// cannot nest in the `<button>` that selects the goal) and the bots' own names.
+// Each reason was about the medium, and each has an answer — a `foreignObject`, a
+// sibling in a wrapper — so the rule is now the one #199 stated with no
+// exceptions: every ref the cockpit shows is routed through `refLink`/`refChip`.
+//
+// Asserted against the demo world because it is the one that ships colon-form
+// keys for every family the factory speaks in; a `#n`-only map would pass these
+// by accident on the surfaces that print `#n` and silently skip the rest.
+
+/**
+ * Every anchor in a run of markup, as `[href, text]`. A list rather than a map
+ * keyed on href: a bot's name and the ref beside it point at the same ticket, so
+ * a map loses one of the two — and which one it loses is the thing under test.
+ */
+function links(markup: string): [string, string][] {
+  return [...markup.matchAll(/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/g)].map((m) => [m[1]!, m[2]!]);
+}
+
+const panel = (markup: string, name: string): string => {
+  const from = markup.indexOf(`data-fx="${name}"`);
+  const rest = markup.slice(from);
+  const to = rest.indexOf('data-fx="', 1);
+  return to === -1 ? rest : rest.slice(0, to);
+};
+
+test('the belt crates and the bay HUD link their origin ref', () => {
+  const markup = render();
+  const line = panel(markup, 'line');
+  const hrefs = links(line).map(([href]) => href);
+
+  // A crate prints its origin and now opens it. `refLink`, so the token stays the
+  // label — a crate captioned anything else stops being the thing the queue named.
+  assert.match(line, /class="fx-item-ref"><a [^>]*>issue:208<\/a>/, 'a crate must link the ref it prints');
+  // The bay HUD is inside the SVG, so the link rides in a `foreignObject`. The
+  // wrapper exists to stop the click reaching the bay's own open-transcript
+  // handler; without it the ref opens the drawer as well as the tracker.
+  assert.match(line, /<foreignObject[^>]*><span class="fx-bay-ref"><a /, 'the bay HUD links through a foreignObject');
+  assert.ok(
+    hrefs.some((h) => h.endsWith('/pull/142')),
+    `the working bay's origin must resolve, got ${JSON.stringify(hrefs)}`,
+  );
+});
+
+test('a ref the provider could not resolve still prints, and links nowhere', () => {
+  // The whole rule the cockpit has for links, asserted on the two surfaces that
+  // just grew one: a missing key is plain text, never a dead anchor.
+  const line = panel(
+    render((s) => {
+      s.refUrls = {};
+    }),
+    'line',
+  );
+  assert.match(line, /class="fx-item-ref">issue:208</, 'the crate keeps its ref as text');
+  assert.match(line, /class="fx-bay-ref">pr:142</, 'so does the bay HUD');
+  assert.equal(links(line).length, 0, 'and neither invents a link');
+});
+
+test("a bot's name is the way in to the ticket it is working", () => {
+  // Every live bot in the demo world is parked on a question, and `Asking you` is
+  // a state rather than a name — so the escalations come off, which is exactly the
+  // fold the card makes: a working bot is named after the work.
+  const bots = botsPanel(
+    render((st) => {
+      st.escalations = [];
+    }),
+  );
+  // The name, not the small grey ref beside it: the heading is what an operator
+  // reaches for. `refChip`, so an unresolvable origin leaves the plain title.
+  assert.match(bots, /class="fx-job"[^>]*><a [^>]*>[^<]+<\/a>/, 'the bot name must carry the link');
+  assert.ok(
+    links(bots).some(([, text]) => /^Fix failing CI/.test(text)),
+    `the linked text must be the bot's name, got ${JSON.stringify(links(bots))}`,
+  );
+});
+
+test('the shift log gives the subject its own column', () => {
+  const log = panel(render(), 'shift-log');
+  assert.match(log, /<th>Ref<\/th>/, 'Ref is a column of its own, not something the detail has to carry');
+  // The demo's decisions name their subject as a canonical ref, which is what the
+  // server ships (`decisionSubjectRef`) rather than what the sentence happened to
+  // say. A row about no external thing draws a dash.
+  assert.match(log, /class="r"><a [^>]*>pr:142<\/a>/, 'a decision about a PR links it');
+  assert.match(log, /class="r">—</, 'and one about nothing external draws a dash');
+});
+
+test('the goal floor links the ticket, from the strip and from the patch itself', () => {
+  const markup = render();
+  const floor = panel(markup, 'goal-floor');
+
+  // The strip: the tab still selects, and the way out is a sibling in the slot.
+  assert.match(floor, /class="fx-gf-patch-slot"/, 'each patch is a slot holding the tab and its link');
+  assert.match(floor, /class="ext-ref fx-gf-patch-out"/, 'and the strip carries a way out per goal');
+  assert.doesNotMatch(floor, /<button[^>]*class="fx-gf-patch[^"]*"[^>]*>(?:(?!<\/button>)[\s\S])*?<a /, 'never nested');
+
+  // The floor: the ore patch is the one machine that *is* a ticket, so it carries
+  // the link the signal post's status comment does — captioned, never printing the
+  // ref, because the meta line under it already states `issue:<n>`.
+  assert.match(floor, /ticket ↗/, 'the ore patch machine carries the way out to its ticket');
+});
+
+test('an unresolvable goal draws no way out at all', () => {
+  // `refChip`'s rule, on both of the floor's new sites: a caption with no link
+  // asserts something exists while giving nobody a way to read it.
+  const floor = panel(
+    render((s) => {
+      s.refUrls = {};
+    }),
+    'goal-floor',
+  );
+  assert.doesNotMatch(floor, /fx-gf-patch-out/, 'no corner link on the strip');
+  assert.doesNotMatch(floor, /ticket ↗/, 'and no caption on the patch machine');
+  assert.match(floor, /class="fx-gf-patch-slot"/, 'the strip itself is unchanged');
 });
