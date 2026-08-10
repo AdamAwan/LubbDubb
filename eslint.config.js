@@ -7,7 +7,17 @@ import globals from 'globals';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'web/dist/**', 'coverage/**', 'node_modules/**', '.lubbdubb/**'],
+    // `.claude/worktrees/` holds sibling checkouts of this same repo — linting them
+    // duplicates every finding under a path that is not the one to fix, and buries a
+    // real error in thousands of copies.
+    ignores: [
+      'dist/**',
+      'web/dist/**',
+      'coverage/**',
+      'node_modules/**',
+      '.lubbdubb/**',
+      '.claude/worktrees/**',
+    ],
   },
 
   // Base JS + TypeScript recommended rules for all source.
