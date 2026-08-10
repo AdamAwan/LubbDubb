@@ -101,6 +101,53 @@ test('buildStateSnapshot keys each task origin ref so agent/overlap/recovery car
   system.store.close();
 });
 
+test('buildStateSnapshot keys every goal by its canonical ref, so the factory floor can link it', async () => {
+  // The Goal Floor's patch strip and the belt's crates speak the colon form
+  // (`issue:13` is a patch's ref and a crate's origin), which the `#n` keys the
+  // issue list is built from do not answer. Keyed on the issue existing, not on
+  // some task or world event happening to name it — a family that links on a busy
+  // world and renders plain on a quiet one is the same defect either way.
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
+  system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
+  system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
+  system.store.setWorldBaseline(await system.connector.getState());
+
+  const snap = await buildStateSnapshot(system);
+
+  assert.equal(snap.refUrls['issue:13'], 'https://example.test/issue:13');
+  system.store.close();
+});
+
+test('buildStateSnapshot gives each decision the ref it is about, and keys it', async () => {
+  // The shift log's Ref column. The ref is derived on the server and shipped on
+  // the row so the string that keys the map and the string looked up in it are the
+  // same one — see `decisionSubjectRef`.
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
+  system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
+  system.store.recordDecision({
+    cycleId: 'cycle-1',
+    action: { type: 'merge_pr', reason: 'merge-ready', prNumber: 42 },
+    outcome: 'executed',
+    detail: 'squashed it',
+  });
+  system.store.recordDecision({
+    cycleId: 'cycle-1',
+    action: { type: 'no_op', reason: 'nothing to do' },
+    outcome: 'executed',
+    detail: 'nothing to dispatch this cycle',
+  });
+  system.store.setWorldBaseline(await system.connector.getState());
+
+  const snap = await buildStateSnapshot(system);
+  const bySubject = snap.decisions.map((d) => d.subjectRef);
+
+  assert.ok(bySubject.includes('pr:42'), `the merge must name its PR, got ${JSON.stringify(bySubject)}`);
+  assert.ok(bySubject.includes(null), 'and an act about nothing external must ship null, not an invented ref');
+  // Keyed, or the column would draw the ref it was handed as plain text.
+  assert.equal(snap.refUrls['pr:42'], 'https://example.test/pr:42');
+  system.store.close();
+});
+
 test('buildStateSnapshot attaches a pickup verdict to every issue', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'Bug' });

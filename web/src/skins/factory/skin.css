@@ -877,6 +877,21 @@
   letter-spacing: 0.04em;
   opacity: 0.78;
 }
+/* The bay's origin ref, in a `foreignObject` so it can be an `<a>`. It matches
+   `.fx-mono.on` by eye and not by rule: that class fills SVG text, and this is
+   HTML, so `color` is what shows. Truncation is CSS rather than the `clip()` the
+   `<text>` lines use — an ellipsis beats a hard cut, and only a box that wraps can
+   have one. */
+.fx-bay-ref {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ============================ arrangements ============================
 
@@ -1105,6 +1120,13 @@
 .fx-table td.a {
   color: var(--text);
   white-space: nowrap;
+}
+/* The subject ref. `nowrap` because a colon-form ref broken across two lines
+   reads as two refs, and the column is narrow by design — Detail beside it is
+   what absorbs the width. */
+.fx-table td.r {
+  white-space: nowrap;
+  color: var(--grey);
 }
 .fx-table td.a span {
   display: flex;
@@ -1491,11 +1513,31 @@
   overflow-x: auto;
   padding-bottom: 9px;
 }
-.fx-gf-patch {
+/* A patch and its way out to the ticket, as siblings: the tab selects, the corner
+   link navigates, and neither can be nested in the other (an `<a>` inside a
+   `<button>` is invalid interactive content). The slot carries the strip's sizing
+   so the button below can go back to filling its box. */
+.fx-gf-patch-slot {
+  position: relative;
   flex: 0 0 auto;
   /* A fixed band, not content-sized: a long ticket title otherwise makes one
-     patch as wide as the panel and the strip stops being scannable. */
+     patch as wide as the panel and the strip stops being scannable. On the slot
+     rather than the tab, so the corner link is inside the band and not beyond it. */
   width: 216px;
+}
+.fx-gf-patch-out {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 3px;
+  /* Above the tab it sits on, or the button's own background takes the click. */
+  z-index: 1;
+}
+.fx-gf-patch {
+  width: 100%;
   text-align: left;
   background: var(--panel);
   color: var(--text);
@@ -1540,6 +1582,12 @@
 .fx-gf-patch:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+/* The corner link sits over this row, so the row gives it its width back. Only
+   this row: the title below runs the full band, which is what the fixed width is
+   for. */
+.fx-gf-patch .fx-ref {
+  padding-right: 14px;
 }
 .fx-gf-patch-word {
   font-family: var(--font-mono);

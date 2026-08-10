@@ -97,6 +97,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       now={now}
       intervalMs={state.config.heartbeatIntervalMs}
       stopped={stopped}
+      refUrls={state.refUrls}
       onOpen={(id) => actions.select(id)}
     />
   );

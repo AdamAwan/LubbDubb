@@ -215,6 +215,24 @@ export interface UpcomingPlan {
 }
 
 /**
+ * An audited decision, plus the one external thing it is *about* as a canonical
+ * ref (`issue:13`, `pr:42`) — the shift log's Ref column.
+ *
+ * The ref is computed on the server by `decisionSubjectRef` and shipped rather
+ * than derived in the browser from `action`, which the cockpit does hold. That is
+ * deliberate: the same answer keys `refUrls` and is looked up in it, and a second
+ * reading of the action bag is a second chance to key one shape and look up
+ * another — a failure that shows up only as a ref rendering plain, on exactly the
+ * action types the two readings disagree about.
+ *
+ * Null is a real reading: an escalation, a note to an agent naming no origin and
+ * a no-op have no external subject, and the column draws a dash.
+ */
+export interface CockpitDecision extends Decision {
+  subjectRef: string | null;
+}
+
+/**
  * What the rack needs to draw the "land the stack" control on one chain: whether
  * it may be offered, and what the operator has already authorized.
  *
@@ -341,7 +359,7 @@ export interface CockpitState {
   escalations: Escalation[];
   /** Acts put to a human, newest first. */
   proposals: Proposal[];
-  decisions: Decision[];
+  decisions: CockpitDecision[];
   /**
    * The dispatcher's "Up next" queue from the last pulse — null until a cycle has
    * run. A per-pulse projection, recomputed from the world every cycle, never a

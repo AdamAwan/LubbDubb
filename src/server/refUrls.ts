@@ -48,6 +48,52 @@ export function issueCommentRef(originRef: string | null, commentId: string | nu
   return match ? `issue:${match[1]}:comment:${commentId}` : null;
 }
 
+/**
+ * The one external thing a decision is *about*, as a canonical ref — what the
+ * shift log's Ref column links.
+ *
+ * Derived **here**, on the server, and shipped on the row (`CockpitDecision`)
+ * rather than re-derived in the browser, for the reason {@link issueCommentRef}
+ * is: the same answer has to key `refUrls` and be looked up in it, and two
+ * readings of the action bag are two chances to key one shape and look up
+ * another — which fails silently, as a ref that renders plain on exactly the
+ * actions whose payload the two disagree about.
+ *
+ * A switch on `type` rather than a scan for likely-looking fields: `number` is a
+ * work item on `set_work_item_state` and would be read as one on any action that
+ * grows a field by that name. Actions with no external subject — an escalation,
+ * a note to an agent that names no origin, a no-op — return null and draw a dash.
+ */
+export function decisionSubjectRef(action: { type: string; [key: string]: unknown }): string | null {
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  switch (action.type) {
+    case 'dispatch_code_agent':
+    case 'dispatch_desk_agent':
+    case 'propose_plan':
+    case 'propose_shortfall':
+      return str(action.originRef);
+    case 'reply_on_pr':
+    case 'merge_pr': {
+      const n = num(action.prNumber);
+      return n === null ? null : `pr:${n}`;
+    }
+    case 'set_work_item_state': {
+      const n = num(action.number);
+      return n === null ? null : `issue:${n}`;
+    }
+    case 'respond_to_agent': {
+      // The note covers a set of PR concerns; the first is the one the row is
+      // about. One of several is a better answer than none, and naming them all
+      // would be a column that wraps.
+      const refs = Array.isArray(action.originRefs) ? action.originRefs : [];
+      return str(refs[0]);
+    }
+    default:
+      return null;
+  }
+}
+
 export function buildRefUrls(inputs: RefUrlInputs): Record<string, string> {
   const { pullRequests, issues, taskBranches, refs, resolve } = inputs;
   const map: Record<string, string> = {};

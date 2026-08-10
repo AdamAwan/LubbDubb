@@ -729,7 +729,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `findings`           | Every finding.                                                                                                                                                                                                                |
 | `escalations`        | Every escalation.                                                                                                                                                                                                             |
 | `recovery`           | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
-| `decisions`          | The last 100 decisions.                                                                                                                                                                                                       |
+| `decisions`          | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                       |
 | `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                              |
 | `worldEvents`        | The last 100 world events.                                                                                                                                                                                                    |
 | `errors`             | The last 100 recorded failures.                                                                                                                                                                                               |
@@ -737,7 +737,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                              |
 | `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                                                                                                                  |
 
-Seven consistency points:
+Eight consistency points:
 
 - **The pickup verdict uses the same inputs rule `issue-pickup` consults** — the policy, `DEFAULT_COOLDOWN`, the
   world's `takenAt`, tasks, the last 200 decisions, the **unfiltered** open PR list, the plan graph,
@@ -775,12 +775,22 @@ Seven consistency points:
   provider could not build a URL — both draw nothing rather than a boolean nobody can act on.
 - **`refUrls` covers closed PRs too**, since the cockpit's "recently closed" section links their
   numbers, and it resolves finding refs directly (a finding often names an item not in the world).
-- **`refUrls` also keys world-event refs and every task's origin ref** (#199), on top of the `#n` item
-  keys. The activity feed / signals panels draw a world event's structured `ref` (`pr:42`, `issue:13`),
-  and the fleet, overlap and recovery cards draw a task's colon-form origin (`pr:142:ci`,
-  `issue:13:part:x`) — neither is the `#n` the item lists key by, so each is resolved on its own.
-  A `job:<id>` origin resolves to nothing and is omitted, and the feed's `#n`-in-prose still links off
-  the item keys through `linkify`.
+- **`refUrls` also keys world-event refs, every task's origin ref, every goal's own ref and every
+  decision's subject** (#199), on top of the `#n` item keys. The activity feed / signals panels draw a
+  world event's structured `ref` (`pr:42`, `issue:13`); the fleet, overlap and recovery cards draw a
+  task's colon-form origin (`pr:142:ci`, `issue:13:part:x`); the factory's Goal Floor and belt speak
+  `issue:<n>` for every world issue **and every retained run** (which is by definition absent from the
+  issue list); and the shift log's Ref column draws `decision.subjectRef`. None of those is the `#n`
+  the item lists key by, so each is resolved on its own. A `job:<id>` origin resolves to nothing and is
+  omitted, and the feed's `#n`-in-prose still links off the item keys through `linkify`.
+- **A decision's subject ref is derived on the server and shipped on the row** (`decisionSubjectRef`,
+  `src/server/refUrls.ts`), not re-derived in the browser from the `action` bag the cockpit also
+  holds. The same string keys `refUrls` and is looked up in it, and two readings of that bag are two
+  chances to key one shape and look up another — a failure whose only symptom is a ref rendering
+  plain, on exactly the action types the two readings disagree about. It is a `switch` on
+  `action.type` rather than a scan for likely-looking fields, because `number` is a work item on
+  `set_work_item_state` alone and would be read as one on any action that later grows a field by that
+  name. An unknown type, or an act about nothing external, is null: the column draws a dash.
 
 `usage.windows` are summed from `usage_events` (all modes, self-computed); `usage.rateLimits` is the
 freshest PTY status-line payload, or `null`, in which case the cockpit chip falls back to cost.

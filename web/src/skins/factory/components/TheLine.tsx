@@ -1,6 +1,6 @@
 import type { CSSProperties, JSX } from 'react';
 import type { Agent, QueueItem, Task } from '../../../types.js';
-import { elapsed } from '../../../components/util.js';
+import { elapsed, refLink } from '../../../components/util.js';
 import { Icon, Lamp, LampMark } from './Sprite.js';
 import { beltTier } from '../production.js';
 import {
@@ -69,6 +69,13 @@ interface LineProps {
   intervalMs: number;
   /** The harness is running no cycles: paused by an operator, or held on recovery. */
   stopped: boolean;
+  /**
+   * The server-built `ref → URL` map. The bay HUD and the belt crates both print an
+   * origin ref, and both now link it where the provider resolved one — the floor
+   * being animated is not a reason for the one ref an operator wants to open to be
+   * the one they have to go and find somewhere else.
+   */
+  refUrls: Record<string, string>;
   onOpen(agentId: string): void;
 }
 
@@ -209,7 +216,17 @@ function Inserter({ x, phase, delay }: { x: number; phase: InserterPhase; delay:
   );
 }
 
-export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, onOpen }: LineProps): JSX.Element {
+export function TheLine({
+  live,
+  taskFor,
+  cap,
+  items,
+  now,
+  intervalMs,
+  stopped,
+  refUrls,
+  onOpen,
+}: LineProps): JSX.Element {
   // One bay per slot, capped at what the plan has room to draw. Over-cap fleets
   // are named in the header rather than silently cropped.
   const slots = Math.max(1, Math.min(MAX_BAYS, cap));
@@ -243,7 +260,10 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
       >
         <Icon name={iconForOrigin(item.origin)} />
         <span>
-          <span className="fx-item-ref">{item.origin}</span>
+          {/* The crate's own ref, linked. `refLink` rather than `refChip`: the
+              origin is the label here — it is what the crate has always printed —
+              so an unresolvable one keeps printing rather than vanishing. */}
+          <span className="fx-item-ref">{refLink(item.origin, refUrls)}</span>
           <span className="fx-item-why">
             <Lamp tone={status.tone} />
             {status.word}
@@ -254,7 +274,7 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
   };
 
   return (
-    <section className="fx-line-wrap fx-bev">
+    <section className="fx-line-wrap fx-bev" data-fx="line">
       <div className="fx-head">
         <div>
           <Icon name="belt" />
@@ -409,9 +429,20 @@ export function TheLine({ live, taskFor, cap, items, now, intervalMs, stopped, o
                   <text className="fx-hud" x={x + 58} y={BAY_Y + 32} fill={state === 'idle' ? 'var(--red)' : undefined}>
                     {clip(task?.title ?? 'Working', 13)}
                   </text>
-                  <text className="fx-mono on" x={x + 58} y={BAY_Y + 48}>
-                    {clip(origin ?? agent.id, 22)}
-                  </text>
+                  {/* The bay's origin ref, linked. A `foreignObject` because SVG
+                      `<text>` cannot host one — the same wrapper the Goal Floor
+                      uses for its PR chip, and the reason the meta lines around it
+                      stay plain `<text>`.
+
+                      `stopPropagation` on the group, because the whole bay is a
+                      button that opens the transcript: without it a click on the
+                      link would open the drawer *and* navigate. The bay keeps its
+                      own click; the ref is the one hole in it. */}
+                  <g onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                    <foreignObject x={x + 56} y={BAY_Y + 37} width={BAY_W - 82} height="15">
+                      <span className="fx-bay-ref">{refLink(origin ?? agent.id, refUrls)}</span>
+                    </foreignObject>
+                  </g>
                   <text className="fx-mono" x={x + 58} y={BAY_Y + 62}>
                     {clip(task?.branch ?? 'no branch', 22)}
                   </text>

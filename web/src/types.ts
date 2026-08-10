@@ -27,6 +27,7 @@ export type {
   AgentFlag,
   CiPolicyDescription,
   CiRuleDescription,
+  CockpitDecision,
   Decision,
   DispatchRule,
   ErrorLogEntry,
