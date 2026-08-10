@@ -136,7 +136,7 @@ test('nothing is superseded when no rule in front of pickup is on', async () => 
 
 // -- concern urgency comes off the pipeline ----------------------------------
 
-test('CI outranks a review comment on one PR, because that is their pipeline order', async () => {
+test('a review comment outranks CI on one PR, because that is their pipeline order', async () => {
   const pr: PullRequest = {
     id: 'p1',
     number: 42,
@@ -150,8 +150,41 @@ test('CI outranks a review comment on one PR, because that is their pipeline ord
   );
 
   const dispatch = actions.find((a) => a.type === 'dispatch_code_agent');
-  assert.equal(dispatch?.rule, 'pr-ci-failing', 'one agent per branch, and CI is the concern it is sent for');
-  assert.equal(dispatch?.originRef, 'pr:42:ci');
+  assert.equal(
+    dispatch?.rule,
+    'pr-review-comment',
+    'one agent per branch, and the review is the concern it is sent for',
+  );
+  assert.equal(dispatch?.originRef, 'pr:42:comments');
+});
+
+test('a review comment outranks a merge conflict, because the review is about to rewrite the hunks', async () => {
+  // The reason the comment concern leads: resolving a conflict against code the
+  // reviewer is asking to be written differently resolves it twice.
+  const pr: PullRequest = {
+    id: 'p1',
+    number: 42,
+    title: 'X',
+    branch: 'feat',
+    ciStatus: 'passing',
+    mergeable: false,
+    mergeableState: 'dirty',
+    unresolvedComments: [{ id: 'c1', author: 'someone', body: 'use the other approach', handled: false }],
+  };
+  const { actions, upcoming } = await new RuleDispatcher().decide(
+    ctx({ world: { takenAt: NOW, pullRequests: [pr], issues: [] } }),
+  );
+
+  const dispatch = actions.find((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatch?.rule, 'pr-review-comment');
+  assert.equal(dispatch?.originRef, 'pr:42:comments');
+  // The conflict is not lost — it is simply not what this branch's one agent was
+  // sent for, and no second candidate exists for a branch already staffed.
+  assert.equal(
+    upcoming?.some((q) => q.origin === 'pr:42:mergeable'),
+    false,
+    'one agent per branch: the losing concern does not become a queue entry of its own',
+  );
 });
 
 // -- ask once ----------------------------------------------------------------

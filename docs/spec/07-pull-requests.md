@@ -362,14 +362,22 @@ list; see [04](04-harness-cycle.md).
 For each open, unmerged PR in the dispatch world, the dispatcher builds every concern that would on
 its own warrant a code agent, in urgency order:
 
-1. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `inheritedCiFailure` returns null.
-2. **Base** (`pr:<n>:mergeable`) — when `needsBaseUpdate(pr)`. The base is `pr.baseBranch ?? config.defaultBranch`.
-3. **Comments** (`pr:<n>:comments`) — **one concern for every unhandled thread on the PR**, not one per
+1. **Comments** (`pr:<n>:comments`) — **one concern for every unhandled thread on the PR**, not one per
    thread.
+2. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `inheritedCiFailure` returns null.
+3. **Base** (`pr:<n>:mergeable`) — when `needsBaseUpdate(pr)`. The base is `pr.baseBranch ?? config.defaultBranch`.
 
 Then, by the branch's agent state: notify a running agent, hold for a busy one, or make the most
-urgent concern a dispatch candidate. Candidates from all PRs are ranked together — concern class
-first (CI > base > comment), then PR number — before the headroom cut.
+urgent concern a dispatch candidate. Candidates from all PRs are ranked together — an operator-flagged
+`urgent` CI check first, then concern class (comment > CI > base), then PR number — before the
+headroom cut.
+
+**Comments lead, and that is the whole ordering decision.** A review is the one PR signal that can
+invalidate the diff rather than report something wrong around it: a reviewer asking for a different
+approach means the code the CI failure is about, and the hunks the merge conflict is in, are both
+about to be rewritten. An agent sent at CI or at the base first spends itself on work the next push
+discards — and, for the base merge, resolves the same conflict twice, because the rewrite re-conflicts
+the branch. Neither concern is lost; each gets its agent on the diff the review settled on.
 
 ### A review is answered as a whole
 

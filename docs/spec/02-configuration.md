@@ -207,8 +207,9 @@ which is what keeps "the harness will fix this" from ever becoming "the PR canno
 
 `comments` defaults to `advisory` rather than `check` because the harness already models that signal
 at higher fidelity: rule `pr-review-comment` acts per unresolved thread, with the author and body in the prompt. As an
-ordinary check it would let rule `pr-ci-failing` outrank rule `pr-review-comment` and send the generic CI-fix prompt instead — the
-same work with strictly less information.
+ordinary check it would restate the same fact as a second concern on the same PR under a different
+origin (`pr:<n>:ci`), carrying the generic CI-fix prompt — the same work with strictly less
+information, and a PR that reads as CI-failing for as long as a review is open.
 
 Work-item linking is `off` by default; promoting it means an agent making writes against a tracker.
 To have an agent fix it:

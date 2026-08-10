@@ -21,23 +21,90 @@ import { isActive, type RawAction, type StageContext } from './context.js';
  * collected here and ranked across PRs below — world order is arbitrary, so it
  * must not decide who wins scarce headroom.
  *
- * **One pass covering five rules**, registered under the first of them, which is
- * why `pr-ci-blocked`, `pr-base-update`, `pr-review-comment` and `pr-merge-ready`
- * have no stage of their own. They are not independent: the four concern rules
- * feed one per-PR list whose *top* entry alone becomes a dispatch, because one
- * agent works a branch. Their relative urgency is their order in
- * {@link DISPATCH_PIPELINE} — see {@link concernUrgency}, which reads it rather
- * than restating it.
+ * **One pass covering five rules**, registered in `STAGES` under `pr-ci-failing`,
+ * which is why `pr-review-comment`, `pr-ci-blocked`, `pr-base-update` and
+ * `pr-merge-ready` have no stage of their own. They are not independent: the
+ * four concern rules feed one per-PR list whose *top* entry alone becomes a
+ * dispatch, because one agent works a branch. Their relative urgency is their
+ * order in {@link DISPATCH_PIPELINE} — see {@link concernUrgency}, which reads
+ * it rather than restating it.
+ *
+ * The registration is under `pr-ci-failing` rather than under whichever of the
+ * five the pipeline currently puts first, and that is deliberate: the five are
+ * contiguous, so nothing else runs between them and the pass contributes its
+ * candidates at the same point in the walk whichever id carries it. Chasing the
+ * first id through this map on every reorder would be a second copy of the
+ * ordering, which is the arrangement the rule numbers rotted under.
  */
 export function prCiFailing(s: StageContext): void {
   const { ctx } = s;
-  const prCandidates: Array<{ pr: PullRequest; top: PrConcern }> = [];
+  const prCandidates: Array<{ pr: PullRequest; top: PrConcern; urgent: boolean }> = [];
   for (const pr of ctx.world.pullRequests) {
     if (pr.merged) continue; // a merged PR is done — never act on it.
 
     // Every concern that would, on its own, warrant a code agent on this
-    // branch, ordered by urgency: CI > base-update > review comments.
+    // branch, ordered by urgency: review comments > CI > base-update.
     const concerns: PrConcern[] = [];
+    // Review feedback is **one** concern for the whole PR, never one per thread.
+    // A review is written as a unit — the same person leaving three comments in
+    // one pass, each assuming the others — so an agent handed a single thread in
+    // isolation makes a fix for comment 1 that contradicts comment 3, or does
+    // the same edit twice a cycle apart. One agent, one branch, every open
+    // thread in front of it at once.
+    //
+    // De-dup stays per *thread* (`signals` below): dispatch is per branch, but
+    // "has this agent been told about *this* comment" is per comment, or a
+    // reviewer's fourth comment is swallowed by the origin its first three
+    // already claimed.
+    //
+    // **First of the three, and that is the whole ordering decision.** A review
+    // is the one PR signal that can invalidate the diff rather than describe
+    // something wrong around it: a reviewer asking for a different approach
+    // means the code the CI failure is about, and the hunks the merge conflict
+    // is in, are both about to be rewritten. Fixing either first spends an agent
+    // on work the next push discards — and, for the base merge, resolves the
+    // same conflict twice, since the rewrite re-conflicts the branch. CI and the
+    // base still get their agent; they get it on the diff the review settled on.
+    const unhandled = pr.unresolvedComments.filter((c) => !c.handled);
+    if (unhandled.length > 0) {
+      const authors = [...new Set(unhandled.map((c) => c.author))];
+      const many = unhandled.length > 1;
+      concerns.push({
+        rule: 'pr-review-comment',
+        origin: prCommentsOrigin(pr.number),
+        title: many
+          ? `Address ${unhandled.length} review comments on PR #${pr.number}`
+          : `Address review comment on PR #${pr.number}`,
+        // Appended, never interpolated (see `reviewThreadsNote`). `author` and
+        // `comment` stay filled so an override written against the old
+        // one-comment prompt still renders something true — the full set
+        // follows it either way, and the re-check after it: the list is a
+        // reading taken now, and the review keeps moving while the agent works.
+        prompt:
+          s.templates.render('pr-review-comment', {
+            number: pr.number,
+            branch: pr.branch,
+            author: authors.join(', '),
+            comment: unhandled[0]!.body,
+          }) +
+          reviewThreadsNote(unhandled) +
+          reviewRecheckNote(pr.number),
+        dispatchReason: many
+          ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
+          : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,
+        // Only reached when this concern carries no fresh signals of its own,
+        // which cannot happen — kept honest rather than unreachable-by-luck.
+        note: `Unhandled review feedback on PR #${pr.number} from ${authors.join(', ')}.`,
+        originTitle: pr.title,
+        originSummary: many
+          ? `${unhandled.length} review threads on PR #${pr.number} from ${authors.join(', ')}`
+          : `Review comment from ${authors[0]}: ${unhandled[0]!.body}`,
+        signals: unhandled.map((c) => ({
+          ref: prCommentOrigin(pr.number, c.id),
+          note: reviewThreadNote(pr.number, c),
+        })),
+      });
+    }
     // A stacked PR's CI runs the commits of the PR underneath it, so a red base
     // turns every PR above it red. Dispatching on that would put an agent on each
     // of them to fix code that is not theirs — the failure multiplies up the
@@ -115,57 +182,6 @@ export function prCiFailing(s: StageContext): void {
         originSummary: `PR #${pr.number} on branch ${pr.branch} · ${behind ? `behind ${base}` : `conflicts with ${base}`}`,
       });
     }
-    // Review feedback is **one** concern for the whole PR, never one per thread.
-    // A review is written as a unit — the same person leaving three comments in
-    // one pass, each assuming the others — so an agent handed a single thread in
-    // isolation makes a fix for comment 1 that contradicts comment 3, or does
-    // the same edit twice a cycle apart. One agent, one branch, every open
-    // thread in front of it at once.
-    //
-    // De-dup stays per *thread* (`signals` below): dispatch is per branch, but
-    // "has this agent been told about *this* comment" is per comment, or a
-    // reviewer's fourth comment is swallowed by the origin its first three
-    // already claimed.
-    const unhandled = pr.unresolvedComments.filter((c) => !c.handled);
-    if (unhandled.length > 0) {
-      const authors = [...new Set(unhandled.map((c) => c.author))];
-      const many = unhandled.length > 1;
-      concerns.push({
-        rule: 'pr-review-comment',
-        origin: prCommentsOrigin(pr.number),
-        title: many
-          ? `Address ${unhandled.length} review comments on PR #${pr.number}`
-          : `Address review comment on PR #${pr.number}`,
-        // Appended, never interpolated (see `reviewThreadsNote`). `author` and
-        // `comment` stay filled so an override written against the old
-        // one-comment prompt still renders something true — the full set
-        // follows it either way, and the re-check after it: the list is a
-        // reading taken now, and the review keeps moving while the agent works.
-        prompt:
-          s.templates.render('pr-review-comment', {
-            number: pr.number,
-            branch: pr.branch,
-            author: authors.join(', '),
-            comment: unhandled[0]!.body,
-          }) +
-          reviewThreadsNote(unhandled) +
-          reviewRecheckNote(pr.number),
-        dispatchReason: many
-          ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
-          : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,
-        // Only reached when this concern carries no fresh signals of its own,
-        // which cannot happen — kept honest rather than unreachable-by-luck.
-        note: `Unhandled review feedback on PR #${pr.number} from ${authors.join(', ')}.`,
-        originTitle: pr.title,
-        originSummary: many
-          ? `${unhandled.length} review threads on PR #${pr.number} from ${authors.join(', ')}`
-          : `Review comment from ${authors[0]}: ${unhandled[0]!.body}`,
-        signals: unhandled.map((c) => ({
-          ref: prCommentOrigin(pr.number, c.id),
-          note: reviewThreadNote(pr.number, c),
-        })),
-      });
-    }
 
     if (concerns.length > 0) {
       const branch = resolveBranchAgent(ctx, pr.branch);
@@ -219,7 +235,15 @@ export function prCiFailing(s: StageContext): void {
       } else if (branch.kind === 'free') {
         // No agent on this branch — a dispatch candidate for the most urgent
         // concern; ranked cross-PR (and throttled) after the loop.
-        prCandidates.push({ pr, top: concerns[0]! });
+        //
+        // `urgent` is read off **every** concern on the PR, not off `top`. The
+        // flag is the operator saying "a red security scan jumps the queue", and
+        // it is set by a CI check — which is no longer the top concern when the
+        // PR also has an open review. Reading it from `top` would have made the
+        // operator's escalation quietly conditional on nobody having commented,
+        // which is not a rule anyone wrote down. Which concern the agent is sent
+        // for is still `top`; this only decides where the PR sits in the queue.
+        prCandidates.push({ pr, top: concerns[0]!, urgent: concerns.some((c) => c.urgent === true) });
       }
       // branch.kind === 'busy' (queued / starting / parked waiting): hold every
       // note. Injecting into a waiting agent would un-park a human escalation,
@@ -272,11 +296,11 @@ export function prCiFailing(s: StageContext): void {
   }
 
   // Cross-PR ranking: an operator-flagged urgent check first, then the most
-  // urgent concern class (CI > base-update > review comment), tie-break by PR
+  // urgent concern class (review comment > CI > base-update), tie-break by PR
   // number for determinism.
   prCandidates.sort(
     (a, b) =>
-      Number(b.top.urgent ?? false) - Number(a.top.urgent ?? false) ||
+      Number(b.urgent) - Number(a.urgent) ||
       concernUrgency(a.top.rule) - concernUrgency(b.top.rule) ||
       a.pr.number - b.pr.number,
   );
@@ -345,6 +369,9 @@ interface PrConcern {
    * carrying `urgent` — the operator saying a red security scan outranks a
    * behind-base branch elsewhere. Never re-orders past a held verdict or the
    * headroom cut; it decides position in the queue and nothing else.
+   *
+   * Read across the PR's whole concern list rather than off the one that won,
+   * because the concern that carries it is no longer the one that wins.
    */
   urgent?: boolean;
   /**
@@ -389,7 +416,7 @@ function ciDispatchReason(prNumber: number, verdict: CiVerdict): string {
 }
 
 /**
- * Cross-PR rank of a concern class: CI beats base-update beats review comment.
+ * Cross-PR rank of a concern class: review comment beats CI beats base-update.
  *
  * Read off the pipeline rather than restated here. It used to be three hardcoded
  * numbers that happened to agree with the order the concerns are pushed in and

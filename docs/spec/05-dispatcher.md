@@ -74,10 +74,10 @@ unconditional.
 | Id                         | Name                                 | `enabled`        | Fires when                                                                                                                                                |
 | -------------------------- | ------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `manual-job`               | Operator-launched job                | —                | A queued job exists. Drained ahead of every world-driven rule.                                                                                            |
+| `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                       |
 | `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch. |
 | `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                         |
 | `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base or conflicts with it.                                                                                                           |
-| `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                       |
 | `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                            |
 | `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                          |
 | `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                  |
@@ -97,6 +97,17 @@ configured **both** `issueInReviewState` and a non-empty `issuePickupStates`.
 The four PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than five,
 because at most one agent works a branch and the fold that picks the top concern has to see them
 together. Their relative urgency is still their pipeline order — `concernUrgency` looks up the index.
+The pass is registered in `STAGES` under `pr-ci-failing` and stays there whatever the order inside the
+group: the five are contiguous, so nothing runs between them and the pass contributes at the same
+point in the walk whichever id carries it. Moving the registration to track "the first of them" would
+be a second copy of the ordering.
+
+**A review outranks CI, and CI outranks the base.** A review is the one PR signal that can invalidate
+the diff rather than report something wrong around it — a reviewer asking for a different approach
+means the code the CI failure is about, and the hunks the conflict is in, are both about to be
+rewritten. An agent sent at CI or at a conflict first does work the next push discards, and in the
+base case resolves the same conflict twice, since the rewrite re-conflicts the branch. Both still get
+their agent; they get it against the diff the review settled on.
 
 ### Where a rule's body lives
 
@@ -255,10 +266,13 @@ Candidates are appended as the pipeline is walked, so **the pipeline order _is_ 
 is no second list to keep in step with it. What each stage contributes:
 
 1. **Queued jobs** (`manual-job`), oldest first — a manual request takes the next free slot.
-2. **PR concerns** (`pr-ci-failing` / `pr-base-update` / `pr-review-comment`), ranked **cross-PR** by
+2. **PR concerns** (`pr-review-comment` / `pr-ci-failing` / `pr-base-update`), ranked **cross-PR** by
    concern class then by PR number. World order is arbitrary and must not decide who wins scarce
    headroom. Only the single most urgent concern per PR becomes a candidate, and "most urgent" is
-   their pipeline order.
+   their pipeline order. An operator-flagged `urgent` CI check sorts its PR ahead of all of them, and
+   is read off **every** concern on the PR rather than off the one that won — the flag is set by a CI
+   check, which is not the top concern on a PR that also has an open review, and reading it from the
+   winner would make the operator's escalation conditional on nobody having commented.
 3. **Goal assays** (`issue-assay`) — asking whether a goal can be worked from comes before deciding
    _how_ to work it, so an assay ranks ahead of the planner and **supersedes both** the planner and
    the pickup for that issue this cycle.
