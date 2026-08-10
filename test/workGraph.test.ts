@@ -354,6 +354,7 @@ function job(over: Partial<Job> = {}): Job {
     kind: 'code',
     branch: 'chore/lint',
     status: 'queued',
+    originRef: null,
     taskId: null,
     createdAt: '2026-07-28T09:00:00.000Z',
     updatedAt: '2026-07-28T09:00:00.000Z',

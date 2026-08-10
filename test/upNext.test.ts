@@ -198,6 +198,7 @@ const queuedJob = (id: string): Job => ({
   prompt: 'do it',
   kind: 'code',
   branch: `job/${id}`,
+  originRef: null,
   status: 'queued',
   taskId: null,
   createdAt: 'n',

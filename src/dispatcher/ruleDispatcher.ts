@@ -258,6 +258,9 @@ export class RuleDispatcher implements Dispatcher {
     const activeOrigins = new Set(
       ctx.tasks.filter((t) => isActive(t) && t.originRef).map((t) => t.originRef as string),
     );
+    // Work a requeue is redoing is in flight too, and its task says `job:<id>` —
+    // the origin the rule that produced it keys on is on the job (issue #249).
+    for (const job of ctx.standingJobs ?? []) if (job.originRef) activeOrigins.add(job.originRef);
     // Ranked agent-dispatch candidates in dispatch-priority order. The headroom
     // cut is applied *after* ranking (rank-then-slice), so below-cut candidates
     // survive as the visible "Up next" queue instead of being dropped (issue #69).

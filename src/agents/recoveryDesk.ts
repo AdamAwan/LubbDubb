@@ -263,6 +263,10 @@ export class RecoveryDesk {
       prompt: request.prompt,
       kind: task.kind,
       branch: task.branch,
+      // What the job stands in for. The dispatch is still keyed on `job:<id>`;
+      // this is what keeps the world-driven rule that produced the original from
+      // dispatching it a second time while the requeue is redoing it.
+      originRef: task.originRef,
     });
     return this.settled({
       verdict,

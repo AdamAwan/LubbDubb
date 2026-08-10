@@ -489,8 +489,14 @@ wires. `waitingReason` is the state signal:
 task with no agent is _active_ to `activeOrigins`, `findActiveTaskByOrigin` and `findActiveTaskByBranch`
 alike, so parking the work there would wedge its origin and branch shut for good — which is not
 hypothetical, it is the state arm two exists to find. The job (`requeueJobRequest(task, prior)`, pure)
-carries the original prompt verbatim, plus a preamble naming the origin. Its origin is `job:<id>`, so the
-link back to the original origin is provenance in the prompt, not a ref the gates key on.
+carries the original prompt verbatim, plus a preamble naming the origin.
+
+Its *dispatch* origin is `job:<id>`, and the original origin rides on `Job.originRef` — the work the
+job **stands in for**. The gates read that field while the job is queued and while the task it became
+is live, so the rule that produced the original does not staff the same work a second time; without
+it, a requeued retro and a freshly dispatched `issue:249:retro` ran at once (#249). See
+[13](13-jobs-and-findings.md#standing-in-for-another-origin) for the predicate and its two readers.
+The preamble still names the origin in words, because a fresh agent needs to know it is redoing work.
 
 `prior` is the agent that was on the task, or **null** when none ever ran, and the two arms say
 materially different things: after a crash the branch may carry commits a fresh agent must read first

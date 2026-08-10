@@ -16,6 +16,7 @@ interface Job {
   kind: 'code' | 'desk';
   branch: string | null; // code jobs; null => derived job/<id> at dispatch
   status: 'queued' | 'dispatched' | 'cancelled';
+  originRef: string | null; // the work this job stands in for; null for an ordinary job
   taskId: string | null; // set once dispatched
   createdAt;
   updatedAt;
@@ -94,6 +95,30 @@ cut dispatches them first: a manual request takes the next free slot. A job belo
 - The emitted action carries `jobId`, and the executor calls `Store.markJobDispatched(jobId, task.id)`
   **only after** the agent actually spawns, so a job the cap or pause gate held stays `queued`.
 
+### Standing in for another origin
+
+`Job.originRef` is the work a job **redoes**, and only a crash recovery's requeue sets it (see
+[10](10-agent-runtimes.md#crash-recovery)): the retired task's origin, `issue:41:retro` or `pr:42:ci`.
+It is not the job's own origin, which stays `job:<id>` — that is what the dispatch is keyed on, what
+`markJobDispatched` matches, and what the work graph folds the job's PR onto.
+
+It exists because the gates that stop two agents landing on one piece of work read **origins**. A
+requeued retro's task says `job:<id>`, so without this field the rule that dispatched the original
+sees nothing in flight and dispatches a second agent onto the same goal — which is what happened to
+issue #249, where two retro agents ran at once and both would have called `retro_submit`.
+
+A job **stands in** for its origin while it is `queued`, or while the task it became is still active
+(`dispatched` is terminal for a job, so the task is the only thing that says whether the work is
+still going on). That predicate is stated once, in `src/store/jobs.ts`, and asked by both readers:
+
+- `DispatchContext.standingJobs` (`store.listStandingJobs()`) is folded into the dispatcher's
+  `activeOrigins`, so no rule even produces a candidate for work a requeue is redoing.
+- `store.findStandingJobByOrigin` is the executor's half of the same gate, which closes the window a
+  requeue filed **after** the snapshot the dispatcher decided on opens.
+
+The origin is claimable again the moment the requeued job's task ends — the requeue holds the work,
+it does not retire it.
+
 ### The branch invariant
 
 Rule `manual-job` is the **one** dispatch path where origin and branch are not 1:1, so it is the one that needs
@@ -114,7 +139,8 @@ quietly sharing a checkout.
 `Store.cancelJob` drops a still-`queued` job. A job already dispatched **cannot** be cancelled here —
 it is a live agent, so kill it instead. The route 409s when the job is absent or no longer queued.
 
-`jobs` is a fresh `CREATE TABLE`, so it needs no `migrate()` entry. Tests: `test/jobQueue.test.ts`.
+`jobs` was a fresh `CREATE TABLE`, but `origin_ref` post-dates it, so it has a `JOB_COLUMNS` entry
+([14](14-persistence.md#migrations)). Tests: `test/jobQueue.test.ts`.
 
 ## Findings
 

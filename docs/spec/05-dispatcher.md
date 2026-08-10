@@ -126,6 +126,12 @@ runs: a projection of the world, an append-only collector (`raw`, `candidates`),
 several rules must answer identically (`partsPlanFor`, `deliveryParked`, `assayParked`, `consider`).
 Deriving one of those twice is exactly how two rules come to disagree about an issue.
 
+**`activeOrigins` counts work a requeue is redoing.** It is the origins of every active task, plus
+the `originRef` of every job standing in for one (`DispatchContext.standingJobs`). A crash recovery's
+requeue retires the task and files a job, whose own origin is `job:<id>` — so without the second half
+the rule that produced the original sees nothing in flight and staffs the same work twice (#249). The
+job's side of it is [13](13-jobs-and-findings.md#standing-in-for-another-origin).
+
 **Two rules may act on a retained run; the rest say so themselves.** `ctx.world.issues` is the live
 tracker unioned with the runs it has forgotten (#234 — see
 [03](03-world-model.md#what-is-in-the-dispatchers-world-and-what-puts-it-there)), and

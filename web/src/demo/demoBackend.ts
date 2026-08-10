@@ -784,6 +784,7 @@ class DemoServer {
       kind,
       branch,
       status: 'queued',
+      originRef: null,
       taskId: null,
       createdAt: nowIso,
       updatedAt: nowIso,

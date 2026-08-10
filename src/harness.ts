@@ -191,6 +191,10 @@ export class Harness extends EventEmitter {
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
       const queuedJobs = store.listQueuedJobs();
+      // Work a requeue is redoing, keyed on the origin it stands in for rather
+      // than on its own `job:<id>` — what stops the rule that produced the
+      // original dispatching a second agent onto it (issue #249).
+      const standingJobs = store.listStandingJobs();
       // The plan funnel's memory: which issues already have a verdict, so a planner
       // never re-runs and pickup only fires for the ones that resolved to `single`.
       const plans = store.listPlans();
@@ -315,6 +319,7 @@ export class Harness extends EventEmitter {
         agents,
         openEscalations,
         queuedJobs,
+        standingJobs,
         plans,
         planParts,
         conclusions,
