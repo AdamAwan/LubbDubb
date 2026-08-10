@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
-import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, WorldEvent } from '../web/src/types.js';
+import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, Stack, WorldEvent } from '../web/src/types.js';
 import type { StatusTone } from '../web/src/skins/factory/vocabulary.js';
 
 // Same reason as `cockpitSkins.test.ts`: Vite compiles the cockpit's JSX with the
@@ -47,7 +47,7 @@ const { GoalFloor } = await import('../web/src/skins/factory/components/GoalFloo
 const { BlueprintDesk, FaultLog, FindingsDesk, StampDesk } = await import(
   '../web/src/skins/factory/components/Desks.js'
 );
-const { conditionGlyph, ladderFor, loadedCount, mergeGates, prCourt, rack, rackGroup } = await import(
+const { conditionGlyph, ladderFor, loadedCount, mergeGates, prCourt, rackCount, rackEntries, rackGroup } = await import(
   '../web/src/skins/factory/inspection.js'
 );
 const { Inspection } = await import('../web/src/skins/factory/components/Inspection.js');
@@ -246,12 +246,12 @@ function rowTrackCount(markup: string): number {
 }
 
 /** The rack alone, for assertions about one row's markup. */
-function renderRack(prs: PullRequest[]): string {
+function renderRack(prs: PullRequest[], stacks: Stack[] = []): string {
   return renderToStaticMarkup(
     createElement(Inspection, {
       prs,
       closed: [],
-      stacks: [],
+      stacks,
       refUrls: {},
       stackLandings: [],
       ignoreLabel: 'lubbdubb-ignore',
@@ -1752,16 +1752,14 @@ test('the rack groups on the court, and a merge-ready PR needs no arm of its own
   assert.equal(rackGroup(ready), 'yours');
   assert.equal(rackGroup({ ...ready, attention: { status: 'harness', reasons: ['merge-ready'] } }), 'in_hand');
 
-  const grouped = rack([at(8, 'harness'), at(3, 'you'), at(5, 'harness'), at(1, 'stalled')]);
+  const grouped = rackEntries([at(8, 'harness'), at(3, 'you'), at(5, 'harness'), at(1, 'stalled')], []);
+  const numbers = (entries: { kind: string; pr?: PullRequest }[]) => entries.map((e) => e.pr?.number);
   assert.deepEqual(
-    grouped.yours.map((p) => p.number),
+    numbers(grouped.yours),
     [1, 3],
     'your court first, and by number inside it — never by how full the ladder is',
   );
-  assert.deepEqual(
-    grouped.inHand.map((p) => p.number),
-    [5, 8],
-  );
+  assert.deepEqual(numbers(grouped.inHand), [5, 8]);
 
   // The chip is the server's word, never re-derived. `next` rather than `bad`:
   // red is the fault colour everywhere else on the floor, and a question the
@@ -1824,6 +1822,117 @@ test('a glyph does not change the row grid', () => {
   // be a track, and this is what says so rather than assuming it.
   assert.equal(rowTrackCount(withGlyph), 7, 'stripe, ladder, ref, title, why, court, toggle');
   assert.equal(rowTrackCount(noGlyph), rowTrackCount(withGlyph), 'a glyph adds no cell to the row');
+});
+
+/**
+ * A stack is drawn *in* the rack's groups, as the same rows everything else gets.
+ *
+ * The two claims that matter, and both were false while stacks were a section of
+ * their own beneath the rack: a rung carries the ladder, the court chip and the
+ * watch/ignore toggle every other part carries, and the chain is never split across
+ * the two headings — a stack goes whole to the group of its most urgent rung.
+ */
+test('a stack is a bracketed run of ordinary rows, in the group of its most urgent rung', () => {
+  const pr = (number: number, status: string, over: Partial<PullRequest> = {}): PullRequest =>
+    ({
+      id: `pr-${number}`,
+      number,
+      title: `Rung ${number}`,
+      branch: `b${number}`,
+      ciStatus: 'passing',
+      unresolvedComments: [],
+      labels: [],
+      merged: false,
+      approved: true,
+      mergeable: true,
+      mergeableState: 'clean',
+      attention: { status, reasons: [`because ${status}`] },
+      ...over,
+    }) as PullRequest;
+
+  const rung = (prNumber: number, position: number, base: string) => ({
+    prNumber,
+    title: `Rung ${prNumber}`,
+    branch: `b${prNumber}`,
+    base,
+    position,
+    partSlug: null,
+  });
+  const stack: Stack = {
+    ref: 'stack:10',
+    issueNumber: 4,
+    issueTitle: 'A stacked issue',
+    planId: 'plan-1',
+    rungs: [rung(10, 1, 'main'), rung(11, 2, 'b10'), rung(12, 3, 'b11')],
+  };
+
+  // The bottom rung is yours; the two above are not. The whole cluster still goes to
+  // your court, because a chain split in half is no longer an order.
+  const prs = [pr(10, 'you'), pr(11, 'elsewhere'), pr(12, 'elsewhere'), pr(20, 'harness')];
+  const { yours, inHand } = rackEntries(prs, [stack]);
+  assert.deepEqual(
+    yours.map((e) => (e.kind === 'stack' ? e.stack.ref : e.pr.number)),
+    ['stack:10'],
+  );
+  assert.deepEqual(
+    inHand.map((e) => (e.kind === 'stack' ? e.stack.ref : e.pr.number)),
+    [20],
+    'a rung never also appears loose',
+  );
+  assert.equal(rackCount(yours), 3, 'the heading counts pull requests, not clusters');
+  assert.equal(rackCount(inHand), 1);
+
+  // Nothing above the bottom is held by it while it is clear, and a rung that *is*
+  // holding names itself to everything above it.
+  const clean = yours[0];
+  assert.ok(clean?.kind === 'stack');
+  assert.deepEqual(
+    clean.rungs.map((r) => r.blockedBy),
+    [null, null, null],
+    'a clear ladder below holds nothing above it',
+  );
+  const held = rackEntries([pr(10, 'you', { ciStatus: 'failing' }), pr(11, 'elsewhere'), pr(12, 'elsewhere')], [stack])
+    .yours[0];
+  assert.ok(held?.kind === 'stack');
+  assert.deepEqual(
+    held.rungs.map((r) => r.blockedBy),
+    [null, 10, 10],
+    'the nearest rung below still holding is what the ones above wait on',
+  );
+
+  // A rung with no PR in this snapshot — `buildStacks` runs on the unfiltered open
+  // list, so an ignored rung must not put a hole in the chain.
+  const ghosted = rackEntries([pr(10, 'you'), pr(12, 'elsewhere')], [stack]).yours[0];
+  assert.ok(ghosted?.kind === 'stack');
+  assert.deepEqual(
+    ghosted.rungs.map((r) => r.pr === null),
+    [false, true, false],
+  );
+  assert.equal(ghosted.rungs[2]?.blockedBy, 11, 'a rung the view cannot vouch for holds what is above it');
+
+  const markup = renderRack(prs, [stack]);
+  assert.match(markup, /Your court · 3/, 'the count is parts, not clusters');
+  assert.ok(!/Stacked/.test(markup), 'and there is no section of its own left under the rack');
+  assert.match(markup, /fx-stack-rungs/, 'the spine still brackets the run');
+  // The rungs are `.fx-part` rows, so they carry everything a loose row carries.
+  assert.equal((markup.match(/class="fx-part[ "]/g) ?? []).length, 4, 'three rungs and one loose PR, all as rows');
+  assert.equal((markup.match(/fx-part-toggle/g) ?? []).length, 4, 'including the watch/ignore toggle');
+  assert.equal((markup.match(/fx-lad-scan/g) ?? []).length, 4, 'and the ladder');
+  assert.match(markup, /→ main · next to merge/, 'the bottom rung, clear, is the one that merges next');
+  assert.match(markup, /→ b10<\/span>/, 'and every rung names its base');
+
+  // The stripe is the row's *own* verdict, never the heading it sits under. A whole
+  // stack lands in your court on the strength of one rung, so taking the stripe from
+  // the heading painted the two queued rungs above it red — a decision to make on a
+  // row where there is none.
+  // `[ "]` because `fx-part` is a prefix of the `.fx-parts` wrapper, for the same
+  // reason `rowTrackCount` guards against it.
+  const stripes = [...markup.matchAll(/<div class="fx-part([ "][^"]*)"/g)].map((m) => m[1]?.trim());
+  assert.deepEqual(
+    stripes,
+    ['hand rung', 'hand rung', 'you rung', 'hand'],
+    'top-first: two queued rungs recessed, the bottom rung yours, then the loose in-hand PR',
+  );
 });
 
 /**

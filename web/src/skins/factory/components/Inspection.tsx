@@ -3,10 +3,19 @@ import type { PullRequest, Stack, StackLandingView } from '../../../types.js';
 import { refLink } from '../../../components/util.js';
 import { Icon } from './Sprite.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
-import { conditionGlyph, ladderFor, loadedCount, prCourt, rack, rackReason } from '../inspection.js';
+import {
+  conditionGlyph,
+  ladderFor,
+  loadedCount,
+  prCourt,
+  rackCount,
+  rackEntries,
+  rackGroup,
+  rackReason,
+} from '../inspection.js';
 import { clip } from '../vocabulary.js';
 import type { Scanner } from '../scanners.js';
-import type { MergeGate } from '../inspection.js';
+import type { MergeGate, RackEntry, RackRung } from '../inspection.js';
 
 /**
  * Parts Inspection: every open pull request as one row.
@@ -15,6 +24,11 @@ import type { MergeGate } from '../inspection.js';
  * else below and dimmed. Neither group collapses: a fold would put a second click
  * between an operator and *is anything stuck*, and one glance is the whole claim
  * this panel makes.
+ *
+ * A stack is drawn **in** those groups rather than in a list beneath them, as a
+ * bracketed run of the same rows. It was a section of its own once, and the cost
+ * was that the rows an operator most needed the ladder and the watch/ignore toggle
+ * on were the only rows that had neither.
  */
 
 /**
@@ -54,31 +68,44 @@ function Ladder({ scanners, gates }: { scanners: Scanner[]; gates: MergeGate[] }
 function Row({
   pr,
   refUrls,
-  inHand,
   ignoreLabel,
   onToggleExclude,
+  position,
+  note,
+  noteTone,
 }: {
   pr: PullRequest;
   refUrls: Record<string, string>;
-  inHand: boolean;
   ignoreLabel: string;
   onToggleExclude: (prNumber: number, excluded: boolean) => void;
+  /** The rung's 1-based position, when this row is a rung. Drawn inside the ref cell. */
+  position?: number;
+  /** The rung's second line. Present only on a rung, and only when it has something to say. */
+  note?: string;
+  noteTone?: 'clear' | 'held';
 }) {
   const court = prCourt(pr);
   const ladder = ladderFor(pr);
   const reason = rackReason(pr);
   const glyph = conditionGlyph(reason);
-  // The stripe is the row's own severity, and it is read from the group — the
-  // function that already answers "is this yours" — never from the court chip's
-  // colour. Inferring it from a tone made a palette change able to un-stripe every
-  // row needing a decision.
+  // The stripe and the recess are the row's **own** severity, read from `rackGroup`
+  // — the function that already answers "is this yours" — never from the court
+  // chip's colour, and never from the heading the row happens to sit under. Taking
+  // it from the heading was fine while a heading was the only way a row got there;
+  // a stack goes whole to the group of its most urgent rung, so a queued rung would
+  // wear the red stripe of the one below it. Inferring it from a tone, likewise,
+  // made a palette change able to un-stripe every row needing a decision.
+  const inHand = rackGroup(pr) === 'in_hand';
   const tone = inHand ? '' : pr.attention?.status === 'stalled' ? ' stalled' : ' you';
   const isExcluded = (pr.labels ?? []).includes(ignoreLabel);
   return (
-    <div className={`fx-part${inHand ? ' hand' : ''}${tone}`}>
+    <div className={`fx-part${inHand ? ' hand' : ''}${tone}${position === undefined ? '' : ' rung'}`}>
       <span className="fx-part-stripe" />
       <Ladder scanners={ladder.scanners} gates={ladder.gates} />
-      <span className="fx-ref">{refLink(`#${pr.number}`, refUrls)}</span>
+      <span className="fx-ref">
+        {position !== undefined && <span className="fx-part-pos">{position}</span>}
+        {refLink(`#${pr.number}`, refUrls)}
+      </span>
       <p className="fx-job" title={pr.title}>
         {clip(pr.title, 60)}
       </p>
@@ -113,35 +140,87 @@ function Row({
           {isExcluded ? 'watch' : 'ignore'}
         </AsyncButton>
       )}
+      {/* The rung's second line, and a grid item of its own so it spans the title and
+          why columns rather than squeezing into either. Absent on every unstacked row,
+          which is why the row's track count is unchanged off the rack's stacked runs. */}
+      {note !== undefined && <span className={`fx-part-note ${noteTone ?? 'held'}`}>{note}</span>}
     </div>
   );
 }
 
 /**
- * A stack, on the rack.
+ * A rung the snapshot carries no pull request for.
+ *
+ * `buildStacks` runs on the unfiltered open list so an `-ignore`d rung cannot put a
+ * hole in the chain, which means the rack can be handed a rung it has no PR for. It
+ * draws from the rung's own fields and asserts no health it does not have — the same
+ * rule `conditionGlyph` follows in returning null rather than a confident glyph.
+ */
+function GhostRung({ rung, note }: { rung: RackRung; note: string }): JSX.Element {
+  return (
+    <div className="fx-part hand rung ghost">
+      <span className="fx-part-stripe" />
+      <span className="fx-lad" />
+      <span className="fx-ref">
+        <span className="fx-part-pos">{rung.rung.position}</span>#{rung.rung.prNumber}
+      </span>
+      <p className="fx-job" title={rung.rung.title}>
+        {clip(rung.rung.title, 60)}
+      </p>
+      <span className="fx-part-why" />
+      <span className="fx-court off">Not in this view</span>
+      <span />
+      <span className="fx-part-note held">{note}</span>
+    </div>
+  );
+}
+
+/**
+ * The second line under a rung: where it targets, and what is in front of it.
+ *
+ * The base is here rather than on the head because it is a fact about the rung, and
+ * "waiting on #N" names the nearest rung below still holding — read off the same
+ * `ladderFor` the row above it draws, so the note and the ladder cannot disagree.
+ */
+function rungNote(r: RackRung, bottom: boolean): { text: string; tone: 'clear' | 'held' } {
+  const base = `→ ${r.rung.base}`;
+  if (r.blockedBy !== null) return { text: `${base} · waiting on #${r.blockedBy} below`, tone: 'held' };
+  if (bottom && r.clear) return { text: `${base} · next to merge`, tone: 'clear' };
+  return { text: base, tone: 'held' };
+}
+
+/**
+ * A stack, on the rack, as a bracketed run of ordinary rows.
  *
  * Drawn here rather than as a belt on the line because a stack is a fact about
  * *pull requests*, and the rack is where pull requests are read — a belt would
  * have said it was a fact about scheduling, which is the confusion the plan panel
  * already risks by drawing parts as a stack.
  *
- * Rungs are listed top-first, with the one that merges next at the bottom, and the
- * base of each named beneath it so the chain is legible without the reader holding
- * branch names in their head.
+ * Rungs are listed top-first, with the one that merges next at the bottom. They are
+ * the *same* `Row` every other part gets, because a rung **is** a pull request and
+ * an operator reading it in two places must not get two accounts of it — which is
+ * the rule the old thin rung list broke by having no ladder, no court chip and no
+ * watch/ignore toggle on precisely the parts most likely to be stuck.
  */
-function StackRun({
-  stack,
+function StackCluster({
+  entry,
   landing,
   refUrls,
-  onLand,
+  ignoreLabel,
+  onToggleExclude,
+  onLandStack,
 }: {
-  stack: Stack;
-  /** The control's state for this chain, as the server decided it. Absent on an older snapshot. */
+  entry: Extract<RackEntry, { kind: 'stack' }>;
+  /** The "land the stack" control's state, as the server decided it. Absent on an older snapshot. */
   landing: StackLandingView | undefined;
   refUrls: Record<string, string>;
-  onLand: (ref: string, land: boolean) => void;
+  ignoreLabel: string;
+  onToggleExclude: (prNumber: number, excluded: boolean) => void;
+  onLandStack: (ref: string, land: boolean) => void;
 }): JSX.Element {
-  const topFirst = [...stack.rungs].reverse();
+  const { stack, rungs } = entry;
+  const topFirst = [...rungs].reverse();
   const intent = landing?.landing ?? null;
   const standing = intent?.status === 'standing';
   const stopped = intent?.status === 'stopped';
@@ -151,12 +230,12 @@ function StackRun({
         {stack.issueNumber !== null && refLink(`#${stack.issueNumber}`, refUrls)}{' '}
         <span>{stack.issueTitle ?? 'Stacked pull requests'}</span>
         <span className="fx-stack-ref">
-          {stack.planId ? 'from plan' : 'observed'} · {stack.rungs.length} PRs
+          {stack.planId ? 'from plan' : 'observed'} · {stack.rungs.length} PRs · merges bottom-up
         </span>
         {/* The click's whole effect arrives over the next several cycles, so the head
             line has to carry it: without a standing state the button reads as having
-            done nothing. The count is the intent's own — the derived stack shrinks as
-            rungs land, so it cannot supply the denominator. */}
+            done nothing. The count is the intent's own — the cluster shrinks as rungs
+            land, so it cannot supply the denominator. */}
         {intent && (
           <span className={`fx-stack-state ${standing ? 'landing' : 'stopped'}`}>
             {standing ? '◆ landing' : '▲ stopped'} · {landing?.landed ?? 0} of {intent.rungs.length}
@@ -165,7 +244,7 @@ function StackRun({
         {standing ? (
           <AsyncButton
             className="ghost fx-stack-land"
-            onClick={() => onLand(stack.ref, false)}
+            onClick={() => onLandStack(stack.ref, false)}
             title="Stop landing this stack — nothing further merges without you"
           >
             stop
@@ -174,7 +253,7 @@ function StackRun({
           <AsyncButton
             className="ghost fx-stack-land"
             disabled={!landing?.offer}
-            onClick={() => onLand(stack.ref, true)}
+            onClick={() => onLandStack(stack.ref, true)}
             title={
               landing?.offer
                 ? 'Merge this whole chain bottom-up, one rung per cycle, without asking again'
@@ -186,22 +265,61 @@ function StackRun({
         )}
       </p>
       {/* Why the button is withheld, or why the chain stopped — in the server's own
-          words. A disabled control that says nothing is one an operator can only
-          guess at, and guessing is what a stop must never leave them doing. */}
+          words. A disabled control that says nothing is one an operator can only guess
+          at, and guessing is what a stop must never leave them doing. */}
       {(stopped || (!standing && landing && !landing.offer)) && (
         <p className="fx-stack-why">{stopped ? intent?.reason : landing?.blockedBy}</p>
       )}
       <div className="fx-stack-rungs">
-        {topFirst.map((rung) => (
-          <div key={rung.prNumber} className={`fx-stack-rung${rung.position === 1 ? ' bottom' : ''}`}>
-            <span className="fx-stack-pos">{rung.position}</span>
-            {refLink(`#${rung.prNumber}`, refUrls)}
-            <span className="fx-stack-title">{rung.title}</span>
-            <span className="fx-stack-base">&rarr; {rung.base}</span>
-          </div>
-        ))}
+        {topFirst.map((r) => {
+          const note = rungNote(r, r.rung.position === 1);
+          return r.pr ? (
+            <Row
+              key={r.rung.prNumber}
+              pr={r.pr}
+              refUrls={refUrls}
+              ignoreLabel={ignoreLabel}
+              onToggleExclude={onToggleExclude}
+              position={r.rung.position}
+              note={note.text}
+              noteTone={note.tone}
+            />
+          ) : (
+            <GhostRung key={r.rung.prNumber} rung={r} note={note.text} />
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+/** One entry, whichever kind it is. */
+function Entry({
+  entry,
+  stackLandings,
+  refUrls,
+  ignoreLabel,
+  onToggleExclude,
+  onLandStack,
+}: {
+  entry: RackEntry;
+  stackLandings: StackLandingView[];
+  refUrls: Record<string, string>;
+  ignoreLabel: string;
+  onToggleExclude: (prNumber: number, excluded: boolean) => void;
+  onLandStack: (ref: string, land: boolean) => void;
+}): JSX.Element {
+  return entry.kind === 'stack' ? (
+    <StackCluster
+      entry={entry}
+      landing={stackLandings.find((l) => l.ref === entry.stack.ref)}
+      refUrls={refUrls}
+      ignoreLabel={ignoreLabel}
+      onToggleExclude={onToggleExclude}
+      onLandStack={onLandStack}
+    />
+  ) : (
+    <Row pr={entry.pr} refUrls={refUrls} ignoreLabel={ignoreLabel} onToggleExclude={onToggleExclude} />
   );
 }
 
@@ -226,7 +344,7 @@ export function Inspection({
   onToggleExclude: (prNumber: number, excluded: boolean) => void;
   onLandStack: (ref: string, land: boolean) => void;
 }): JSX.Element {
-  const { yours, inHand } = rack(prs);
+  const { yours, inHand } = rackEntries(prs, stacks);
   const loaded = loadedCount(closed);
 
   return (
@@ -235,18 +353,22 @@ export function Inspection({
           from one that broke — the rule the fault gauge is kept muted-but-present for. */}
       {prs.length === 0 && <p className="fx-empty">Nothing on the rack — no open pull requests.</p>}
 
+      {/* The counts are pull requests, not entries — a three-rung stack under this
+          heading is three parts to read, and counting it as one would understate the
+          only number the heading is there to give. */}
       {yours.length > 0 && (
         <>
-          <p className="fx-sub">Your court · {yours.length}</p>
+          <p className="fx-sub">Your court · {rackCount(yours)}</p>
           <div className="fx-parts">
-            {yours.map((pr) => (
-              <Row
-                key={pr.id}
-                pr={pr}
+            {yours.map((entry) => (
+              <Entry
+                key={entry.kind === 'stack' ? entry.stack.ref : entry.pr.id}
+                entry={entry}
+                stackLandings={stackLandings}
                 refUrls={refUrls}
-                inHand={false}
                 ignoreLabel={ignoreLabel}
                 onToggleExclude={onToggleExclude}
+                onLandStack={onLandStack}
               />
             ))}
           </div>
@@ -255,34 +377,20 @@ export function Inspection({
 
       {inHand.length > 0 && (
         <>
-          <p className="fx-sub">In hand · {inHand.length}</p>
+          <p className="fx-sub">In hand · {rackCount(inHand)}</p>
           <div className="fx-parts">
-            {inHand.map((pr) => (
-              <Row
-                key={pr.id}
-                pr={pr}
+            {inHand.map((entry) => (
+              <Entry
+                key={entry.kind === 'stack' ? entry.stack.ref : entry.pr.id}
+                entry={entry}
+                stackLandings={stackLandings}
                 refUrls={refUrls}
-                inHand
                 ignoreLabel={ignoreLabel}
                 onToggleExclude={onToggleExclude}
+                onLandStack={onLandStack}
               />
             ))}
           </div>
-        </>
-      )}
-
-      {stacks.length > 0 && (
-        <>
-          <p className="fx-sub">Stacked &middot; {stacks.length}</p>
-          {stacks.map((stack) => (
-            <StackRun
-              key={stack.ref}
-              stack={stack}
-              landing={stackLandings.find((l) => l.ref === stack.ref)}
-              refUrls={refUrls}
-              onLand={onLandStack}
-            />
-          ))}
         </>
       )}
 

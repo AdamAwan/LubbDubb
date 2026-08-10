@@ -984,6 +984,40 @@ The health chip is the one the PR list already shows rather than a new one: a ru
 request, and an operator reading it in two places must not get two accounts of it. A rung with no
 matching open PR draws no health at all rather than asserting health the snapshot does not carry.
 
+### Stacks on the factory rack
+
+The factory draws a stack **inside** the rack's two groups, as a bracketed run of the rack's own
+rows, and not in a section of its own beneath them. A section beneath was the first arrangement and
+it inverted the panel's job: the rows an operator most needed the ladder, the court chip and the
+watch/ignore toggle on were the only rows with none of the three. A rung is now a `.fx-part` row like
+every other part, plus a position, its base, and the note below.
+
+`rackEntries(prs, stacks)` in `factory/inspection.ts` is the fold, and it replaces `rack`. It returns
+`RackEntry[]` per group — a loose pull request, or a stack with its rungs joined back to their PRs:
+
+- **A stack goes whole to the group of its most urgent rung** — `yours` if any rung's `rackGroup` is
+  `yours`, else `in_hand`. It is never split across the two headings. Splitting would be the honest
+  answer about attention and the wrong answer about the panel's job: a stack is read as an order, and
+  an order broken in half is not one. A rung that landed under _Your court_ without being yours
+  carries the court chip that says so, which is the same sentence its row would have made alone.
+- **A rung never also appears loose.** Ordering is by pull-request number throughout, a cluster
+  sorting on its bottom rung, so clusters and loose rows interleave exactly as rows did before there
+  were clusters.
+- **The headings count pull requests, not entries** (`rackCount`) — a three-rung stack is three parts
+  to read. `FactoryRoot`'s header count is the same fold, so the two cannot disagree.
+- **A rung the snapshot carries no PR for still draws**, from the rung's own fields, with no ladder
+  and a muted chip. `buildStacks` runs on the unfiltered open list precisely so an `-ignore`d rung
+  cannot put a hole in the chain, so the rack must be able to be handed one.
+
+The rung's second line names its base and, when something below it is still holding, `waiting on #N
+below`. That "holding" is read off the same `ladderFor` the row above it draws — anything unmet on
+the ladder, a `muted` scanner excepted, because policy saying a check does not count is policy saying
+it does not hold — so the note and the ladder can never disagree about the same rung. The bottom
+rung, when clear, reads `next to merge`.
+
+`test/factorySkin.test.ts` asserts both halves: the grouping and blocked-by fold, and that the
+rendered rungs carry a toggle and a ladder apiece with no `Stacked` heading left under the rack.
+
 A stack is drawn whether or not a plan produced it — `from plan` versus `observed` — which is the
 whole point of the model being derived from pull requests rather than from `plan_parts`.
 
