@@ -587,7 +587,19 @@ conversation that stopped. Does not touch the discussion agent itself. Returns `
 
 ### `POST /api/escalations/:id/answer`
 
-Body `{response}`. 400 when the response is missing, the escalation is unknown, or it is not `open`.
+Body `{response}` **or** `{answers}`, exactly one — a request carrying both is a 400, because which
+text the agent would receive is ambiguous. `response` is the free-text answer to a single question.
+`answers` is one entry per question of a questionnaire (`context.questions`, raised through
+`escalate`), positional, `null` for the ones left blank; the server folds them into the single reply
+the agent reads via `formatAnswers` in `src/escalation/questionnaire.ts`. **The fold is the server's,
+not the cockpit's**: the wording an agent is answered in is a domain rule, and a second client must
+not be able to phrase it its own way. An unanswered question is sent as an explicit non-answer rather
+than omitted — an agent that asked three things and heard about two would sit waiting on the third.
+The arm is a 400 when the item carries no questionnaire, when the array's length disagrees with it
+(a client that disagrees about what was asked would put answers under the wrong questions), and when
+every entry is blank.
+
+400 when the response is missing, the escalation is unknown, or it is not `open`.
 **409 when the item carries a pending proposal** (a merge, a drafted reply, or a plan's
 decomposition): free text cannot be branched on, so answering here would settle the inbox item while
 leaving the proposal pending. The error names the accept/reject routes that do settle it.

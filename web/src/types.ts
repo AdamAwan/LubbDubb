@@ -23,6 +23,7 @@
  */
 export type {
   Agent,
+  AgentAskQuestion,
   AgentFile,
   AgentFlag,
   CiPolicyDescription,

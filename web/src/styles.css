@@ -166,6 +166,10 @@ body {
   color: var(--amber);
   border-color: var(--amber-line);
 }
+.chip.info {
+  color: var(--blue);
+  border-color: var(--blue-line);
+}
 
 .btn {
   background: var(--panel-2);
@@ -2508,4 +2512,95 @@ body {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+/*
+ * Questionnaire modal — several questions, answered together. Borrows the plan
+ * modal's backdrop and frame (`.plan-modal`) because it is the same kind of
+ * thing: a document opened over the cockpit, not a panel inside it. What it adds
+ * is the per-question card, which has to read as a unit — question, background,
+ * options and box — with enough separation that answers cannot be mistaken for
+ * each other.
+ */
+.qn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+.qn-q {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 9px 11px;
+}
+/* Answered, at a glance: which ones are left is the thing you scan for. */
+.qn-q.answered {
+  border-color: var(--green);
+}
+.qn-q-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.qn-num {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex: none;
+}
+.qn-text {
+  font-weight: 600;
+}
+.qn-detail {
+  padding-left: 0;
+  color: var(--muted);
+}
+.qn-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0 6px;
+}
+/* Dashed until picked, because these fill the box rather than being the answer —
+   a solid chip beside a solid button reads as a second Send. */
+.qn-opt {
+  background: none;
+  border: 1px dashed var(--border);
+  color: var(--text);
+  border-radius: var(--r-pill);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.qn-opt.picked {
+  border-style: solid;
+  border-color: var(--blue-line-2);
+  background: var(--blue-fill);
+  color: var(--blue);
+}
+.qn-box {
+  width: 100%;
+  min-height: 2.4em;
+  margin-top: 6px;
+  resize: vertical;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font: inherit;
+  padding: 6px 8px;
+}
+.qn-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.qn-foot .btn {
+  margin-left: auto;
 }

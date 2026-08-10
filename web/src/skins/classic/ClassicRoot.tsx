@@ -170,6 +170,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
               now={now}
               refUrls={state.refUrls}
               onAnswer={(text) => actions.answerEscalation(e.id, text)}
+              onAnswerQuestions={(answers) => actions.answerQuestions(e.id, answers)}
               onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
               onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
               onDismiss={(id, note) => actions.dismissEscalation(id, note)}

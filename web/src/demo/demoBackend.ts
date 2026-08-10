@@ -151,6 +151,25 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * The demo's stand-in for the fold the real route does in
+   * `src/escalation/questionnaire.ts`. Restated rather than imported: that module
+   * carries runtime, and the cockpit reaches the harness through `src/wire.ts`
+   * alone — see `test/wireContract.test.ts`. Kept to the same shape so the demo
+   * transcript reads like a real one.
+   */
+  async answerQuestions(id: string, answers: (string | null)[]): Promise<{ ok: true }> {
+    const esc = this.state.escalations.find((e) => e.id === id);
+    const questions = esc?.context?.questions ?? [];
+    const reply = questions
+      .map((q, i) => {
+        const given = answers[i]?.trim() ?? '';
+        return `${i + 1}. ${q.question}\n> ${given === '' ? '(no answer)' : given}`;
+      })
+      .join('\n\n');
+    return this.answerEscalation(id, reply);
+  }
+
   async answerEscalation(id: string, response: string): Promise<{ ok: true }> {
     const esc = this.state.escalations.find((e) => e.id === id);
     if (esc) {
@@ -1108,6 +1127,7 @@ export const demoApi = {
   clearErrors: () => getServer().clearErrors(),
   inject: (event: unknown) => getServer().inject(event),
   answerEscalation: (id: string, response: string) => getServer().answerEscalation(id, response),
+  answerQuestions: (id: string, answers: (string | null)[]) => getServer().answerQuestions(id, answers),
   decidePermission: (id: string, allow: boolean, note?: string) => getServer().decidePermission(id, allow, note),
   dismissEscalation: (id: string, note?: string) => getServer().dismissEscalation(id, note),
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),

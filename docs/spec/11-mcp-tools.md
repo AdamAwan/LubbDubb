@@ -59,14 +59,25 @@ and reports `{accepted, status, retired}` plus a `warning` when a `single` verdi
 
 ### `escalate`
 
-Arguments `{question, kind?: 'approve'|'choose'|'clarify'|'review', options?, detail?}`. Routes through
-`AgentManager.ask` → the same `handleWaiting` the WAITING sentinel drives, so the whitelist, the drain
+Arguments `{question, kind?: 'approve'|'choose'|'clarify'|'review', options?, detail?, questions?}`.
+Routes through `AgentManager.ask` → the same `handleWaiting` the WAITING sentinel drives, so the whitelist, the drain
 and the store writes cannot diverge between the two. Whichever detector fires first owns the park; the
 `parked` latch makes the second a no-op. An agent that calls `escalate` **and** prints the sentinel
 raises one escalation, not two.
 
 Returns `{parked, escalationId, note}`. An `escalationId` of `null` means an operator whitelist rule
 auto-answered it and the agent was never parked — said explicitly, rather than implying a human saw it.
+
+`questions` is how an agent asks for several things at once: a list of `{question, detail?, options?}`,
+each rendered as its own card with its own answer box, all answered in one reply. `question` stays the
+headline — the line the inbox row shows — and the list is what sits behind it. Without it an agent with
+three things to settle had one box, so it wrote all three into `detail` and spent `options` on "which
+shall we start with?", paying a round trip per question. Capped at ten in the handler rather than
+trusted from the schema's `maxItems`, which is advice to a model; a malformed entry is dropped rather
+than failing the call, and the return value carries `questionsFiled` so the agent can see how many
+landed. The answers come back as one numbered message with each question restated and the ones left
+blank marked as unanswered — see [16](16-http-api.md#post-apiescalationsidanswer) for the fold and
+[17](17-cockpit.md) for the modal.
 
 `detail` is **markdown**, and the card renders it as such. This one is a description, not a
 validation: unlike `report_finding.summary` there is no one-line invariant to hold, and `question` is

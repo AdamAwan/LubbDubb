@@ -453,6 +453,7 @@ export interface CiPolicyPayload {
  */
 export type {
   Agent,
+  AgentAskQuestion,
   AgentFile,
   AgentFlag,
   Decision,

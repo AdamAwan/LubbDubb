@@ -24,6 +24,8 @@ export interface CockpitActions {
   respondAgent(agentId: string, text: string): Promise<void>;
 
   answerEscalation(id: string, text: string): Promise<void>;
+  /** Answer a multi-question ask; positional against the escalation's questions. */
+  answerQuestions(id: string, answers: (string | null)[]): Promise<void>;
   dismissEscalation(id: string, note?: string): Promise<void>;
   decideProposal(id: string, verdict: 'accept' | 'reject', note?: string): Promise<void>;
   decidePermission(id: string, allow: boolean, note?: string): Promise<void>;

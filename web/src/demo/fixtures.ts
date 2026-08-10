@@ -851,6 +851,41 @@ export function buildDemoState(): DemoSeed {
         answeredAt: null,
       },
       {
+        // Several questions in one park (the questionnaire). The demo carries one
+        // because it is the shape that changes how the inbox reads: a count chip
+        // and a button where the answer box was, with the questions in a modal.
+        id: 'esc-4',
+        type: 'resolve_ambiguity',
+        status: 'open',
+        prompt: "I've read the plan against the code — three things I'd question before we approve it.",
+        context: {
+          taskTitle: 'Discuss the plan for issue #231',
+          originRef: 'issue:231',
+          questions: [
+            {
+              question: 'Part one is fat — split it, or leave it as two parts?',
+              detail:
+                'Store module + schema + routes + `/api/state` + the gate + both cockpit skins + six ' +
+                'specs. The riskiest bit (the gate) is buried in a big single review.',
+              options: ['Split into three parts', 'Keep two parts'],
+            },
+            {
+              question: "Keep `requestedBy: 'operator'` with a null origin?",
+              detail: "An operator parking a note for themselves is scope the acceptance criteria don't ask for.",
+              options: ['Keep it', 'Cut it'],
+            },
+            { question: 'Rename `PartExpectedKind` to `expectedKind` in the part-two file list?' },
+          ],
+        },
+        // Deskbound, like the plan approval above: the floor draws one question per
+        // bot, and a second on `agent-a2` would shadow its rebase conflict there.
+        agentId: null,
+        taskId: null,
+        response: null,
+        createdAt: ago(1),
+        answeredAt: null,
+      },
+      {
         id: 'esc-1',
         type: 'answer_question',
         status: 'open',

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecovery.js';
+import { formatAnswers } from '../../escalation/questionnaire.js';
 import { checked, IdParams, optionalText, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -16,16 +17,25 @@ import type { RouteContext } from './context.js';
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, harness, escalations, proposals, permissions, recovery } = system;
 
-  const AnswerBody = z.object({
-    response: z
-      .string({ required_error: 'response required', invalid_type_error: 'response required' })
-      .min(1, 'response required'),
-  });
+  /**
+   * Two ways in, one thing out. `response` is the free-text answer to a single
+   * question; `answers` is one entry per question of a questionnaire, positional
+   * against `context.questions`, which the server — not the cockpit — folds into
+   * the single reply the agent reads. Exactly one of them, because a request
+   * carrying both leaves it ambiguous which text the agent was meant to get.
+   */
+  const AnswerBody = z
+    .object({
+      response: z.string().min(1, 'response required').optional(),
+      answers: z.array(z.string().nullable()).min(1, 'answers required').optional(),
+    })
+    .refine((b) => (b.response === undefined) !== (b.answers === undefined), {
+      message: 'send either response (free text) or answers (one per question)',
+    });
   app.post(
     '/api/escalations/:id/answer',
     checked({ params: IdParams, body: AnswerBody }, async ({ params, body, reply }) => {
       const { id } = params;
-      const { response } = body;
       // An item carrying a pending proposal is a decision, not a question: free text
       // cannot be branched on, so answering one here would settle the inbox item
       // while leaving the proposal pending — which holds the rule that made it off
@@ -54,6 +64,25 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
             `the agent that asked this crashed — decide its recovery via ` +
             `/api/recovery/${orphaned.taskId} first (restore keeps this question open)`,
         });
+      // Fold a questionnaire's answers into the one reply the agent receives. The
+      // checks are refusals rather than best-effort padding: a mismatched array is
+      // a client that disagrees with the server about what was asked, and answering
+      // anyway would put an answer under the wrong question.
+      let response: string;
+      if (body.answers) {
+        const questions = item?.context?.questions;
+        if (!Array.isArray(questions) || questions.length === 0)
+          return reply.code(400).send({ error: 'this item has no questionnaire — answer it with `response`' });
+        if (body.answers.length !== questions.length)
+          return reply.code(400).send({ error: `expected ${questions.length} answers, got ${body.answers.length}` });
+        if (body.answers.every((a) => a === null || a.trim() === ''))
+          return reply.code(400).send({ error: 'answer at least one question' });
+        response = formatAnswers(questions, body.answers);
+      } else if (body.response) {
+        response = body.response;
+      } else {
+        return reply.code(400).send({ error: 'response required' });
+      }
       try {
         const result = escalations.answer(id, response);
         return { ok: true, ...result };

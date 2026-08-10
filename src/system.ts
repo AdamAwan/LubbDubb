@@ -508,6 +508,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         recentOutput: recentOutputExcerpt(store.getTranscript(agentId)),
         ...(ask?.options ? { options: ask.options } : {}),
         ...(ask?.detail ? { detail: ask.detail } : {}),
+        ...(ask?.questions ? { questions: ask.questions } : {}),
       },
       agentId,
       taskId,
