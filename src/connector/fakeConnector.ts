@@ -1,6 +1,7 @@
 import type { Connector, InjectableEvent } from './connector.js';
 import type {
   ActionSink,
+  BranchDeleteInput,
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
@@ -80,6 +81,10 @@ export class FakeConnector implements Connector, ActionSink {
 
   setPullBase(input: PrBaseInput): Promise<SendResult> {
     return this.composite.setPullBase(input);
+  }
+
+  deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
+    return this.composite.deleteBranch(input);
   }
 
   /** Apply an event to the fake world (routes to the owning module) and log it. */

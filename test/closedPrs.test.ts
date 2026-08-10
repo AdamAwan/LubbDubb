@@ -205,6 +205,7 @@ function ghApi(closed: GhClosedPull[], recorded: string[]): GitHubApi {
     createPull: unused,
     setPullTitle: unused,
     setPullBase: unused,
+    deleteBranch: unused,
   };
 }
 
@@ -307,6 +308,7 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
     createPull: unused,
     setPullTitle: unused,
     setPullBase: unused,
+    deleteBranch: unused,
     setWorkItemState: unused,
     createWorkItemComment: unused,
     updateWorkItemComment: unused,

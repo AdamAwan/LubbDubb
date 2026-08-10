@@ -1,5 +1,6 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
+  BranchDeleteInput,
   MergeMethod,
   PrBaseInput,
   PrCreateInput,
@@ -11,6 +12,7 @@ import type {
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
+  BranchDeleteCapable,
   Capability,
   Integration,
   PrBaseCapable,
@@ -52,7 +54,15 @@ interface AzureSourceControlOpts {
  * instead of an injected fake world, so it is *not* `Injectable`.
  */
 export class AzureDevOpsSourceControlIntegration
-  implements Integration, PrReplyCapable, PrMergeCapable, PrLabelCapable, PrCreateCapable, PrTitleCapable, PrBaseCapable
+  implements
+    Integration,
+    PrReplyCapable,
+    PrMergeCapable,
+    PrLabelCapable,
+    PrCreateCapable,
+    PrTitleCapable,
+    PrBaseCapable,
+    BranchDeleteCapable
 {
   readonly id = 'sourceControl:azure';
   readonly capability: Capability = 'sourceControl';
@@ -172,6 +182,14 @@ export class AzureDevOpsSourceControlIntegration
   async setPullTitle(input: PrTitleInput): Promise<SendResult> {
     await this.opts.api.setPullTitle(input.prNumber, input.title);
     return { ok: true };
+  }
+
+  async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
+    const deleted = await this.opts.api.deleteBranch(input.branch);
+    // Already gone is success — see `ActionSink.deleteBranch`. On Azure that is the
+    // rarer case (it has no delete-on-merge setting), but a branch a human deleted
+    // by hand reaches here exactly the same way.
+    return { ok: true, ref: deleted ? input.branch : `${input.branch} (already absent)` };
   }
 
   async setPullBase(input: PrBaseInput): Promise<SendResult> {

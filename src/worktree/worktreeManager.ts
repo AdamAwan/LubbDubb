@@ -19,6 +19,11 @@ export interface Worktrees {
   ensure(branch: string, base?: string): Promise<string>;
   /** Drop the worktree for `branch` if one exists; a no-op otherwise. */
   remove(branch: string): Promise<void>;
+  /**
+   * Drop the worktree *and* the local branch ref — the local half of the reap after
+   * a pull request merges. A branch that does not exist locally is a no-op.
+   */
+  deleteBranch(branch: string): Promise<void>;
 }
 
 /**
@@ -85,6 +90,25 @@ export class WorktreeManager implements Worktrees {
     const dir = await this.findExisting(branch);
     if (!dir) return;
     await this.git(['worktree', 'remove', '--force', dir]);
+  }
+
+  /**
+   * Drop the worktree and then the branch ref itself, for a branch whose pull
+   * request has merged.
+   *
+   * **`-D`, not `-d`.** `merge_pr` squashes, and a squash-merged branch has no
+   * ancestry link to the base it landed in — so `-d`'s "is this merged" test says no
+   * for every branch this is ever called on, and the reap would silently never
+   * delete anything. The safety `-d` offers is already provided by the caller, which
+   * only asks for branches the provider says are merged.
+   *
+   * A branch that is not there is a no-op rather than a failure: the reap's question
+   * is whether the ref is gone, and both answers satisfy it.
+   */
+  async deleteBranch(branch: string): Promise<void> {
+    await this.remove(branch);
+    if (!(await this.branchExists(branch))) return;
+    await this.git(['branch', '-D', branch]);
   }
 
   /**

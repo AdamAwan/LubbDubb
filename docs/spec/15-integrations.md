@@ -42,8 +42,15 @@ providers share one `FakeWorldStore` so their world stays coherent.
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
 `PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
-`PrBaseCapable`, `IssueLabelCapable`, `WorkItemStateCapable`, `IssueCommentCapable`, `RefResolvable`,
-and the fake-only `Injectable`.
+`PrBaseCapable`, `BranchDeleteCapable`, `IssueLabelCapable`, `WorkItemStateCapable`,
+`IssueCommentCapable`, `RefResolvable`, and the fake-only `Injectable`.
+
+`BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
+providers implement it, and both report **already gone as success**: GitHub's "automatically delete
+head branches" setting removes the branch at merge time, so absence is the common case rather than a
+failure. GitHub deletes the ref; Azure has no delete verb for one and updates it to the zero object
+id, which needs the id it currently points at, so the Azure arm is two calls and the first is also
+the already-gone check.
 
 The three PR-write capabilities are deliberately separate rather than one `PrWriteCapable`, because a
 provider may genuinely have one and not the others: GitHub retargets a stack itself when a rung

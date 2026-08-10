@@ -1,6 +1,7 @@
 import type { Connector, InjectableEvent } from '../connector/connector.js';
 import type {
   ActionSink,
+  BranchDeleteInput,
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
@@ -14,6 +15,7 @@ import type {
 } from '../sink/actionSink.js';
 import type { WorldSnapshot } from '../types.js';
 import {
+  isBranchDeleteCapable,
   isInjectable,
   isIssueCommentCapable,
   isIssueLabelCapable,
@@ -88,6 +90,13 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrBaseCapable);
     if (!handler) throw new Error('no integration can retarget PRs (no sourceControl provider is PrBaseCapable)');
     return handler.setPullBase(input);
+  }
+
+  async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
+    const handler = this.integrations.find(isBranchDeleteCapable);
+    if (!handler)
+      throw new Error('no integration can delete branches (no sourceControl provider is BranchDeleteCapable)');
+    return handler.deleteBranch(input);
   }
 
   async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {

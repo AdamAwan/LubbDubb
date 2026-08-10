@@ -178,6 +178,9 @@
   "// defaultBranch": "The repository's integration branch. A NEW agent branch is cut from it (origin/<defaultBranch> preferred over the local ref), it is the base named in a PR's base-update prompt when the provider reports none, and a PR targeting anything else is treated as stacked. Existing branches/worktrees are reused untouched and never re-based. Not auto-detected — the harness may run against a clone whose HEAD is anywhere, and a wrong guess silently mis-bases work. Default 'main'.",
   "defaultBranch": "main",
 
+  "// reapMergedBranches": "Delete the branch behind a pull request once the harness observes it MERGED: the worktree and the local ref, then the branch on the remote. Only the harness's own PRs (the same filters.prAuthor test the naming convention uses), never the default branch, and never a branch another open PR still targets — deleting an open PR's base orphans it. An abandoned PR keeps its branch: the work under it never landed. A branch already gone on the remote counts as success, which is the common case where the provider deletes head branches on merge. Default true; set false where a merged branch is somebody else's expectation.",
+  "reapMergedBranches": true,
+
   "// worktreeRoot": "Root under which per-branch worktrees are created. A relative value resolves against repoRoot (not the launch dir). Default '.lubbdubb/worktrees'.",
   "worktreeRoot": ".lubbdubb/worktrees",
 

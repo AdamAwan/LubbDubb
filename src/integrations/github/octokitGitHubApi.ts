@@ -355,6 +355,24 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.octokit.pulls.update({ ...this.base, pull_number: number, base });
   }
 
+  /**
+   * Delete a branch ref. A 404 (or 422 "Reference does not exist") means the branch
+   * is already gone — the common case on a repository with "automatically delete
+   * head branches" on, where GitHub removed it at merge time. Reported as `false`
+   * rather than thrown: the reap wants "the branch is not there", and both answers
+   * satisfy it.
+   */
+  async deleteBranch(branch: string): Promise<boolean> {
+    try {
+      await this.octokit.git.deleteRef({ ...this.base, ref: `heads/${branch}` });
+      return true;
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 404 || status === 422) return false;
+      throw err;
+    }
+  }
+
   /** Shared labels-API write — PRs and issues are the same endpoint on GitHub. */
   private async setLabel(number: number, label: string, present: boolean): Promise<void> {
     // addLabels is additive and idempotent; removeLabel 404s when the label isn't

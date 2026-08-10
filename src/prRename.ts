@@ -1,3 +1,4 @@
+import { isOurPr } from './prOwnership.js';
 import { prTitleFields, renderPrTitle } from './prTitle.js';
 import type { PrTitleInput } from './sink/actionSink.js';
 import type { Issue, PullRequest } from './types.js';
@@ -5,16 +6,8 @@ import type { Issue, PullRequest } from './types.js';
 /**
  * Which pull requests the harness may rename onto the convention.
  *
- * **`filters.prAuthor` is the gate, because it is already the operator's answer to
- * "which pull requests are mine"** — and both providers apply it *at fetch time*,
- * to the open and closed lists alike. So when it is set, every PR in the harness's
- * world is the operator's own **by construction**: the provider never surfaced
- * anyone else's, and no attribution logic is needed here at all.
- *
- * When it is unset the world holds everyone's pull requests and the harness
- * genuinely cannot tell them apart, so it falls back to the ones it opened itself
- * — which it knows without asking anyone. **A colleague's pull request is renamed
- * under neither arm**, and that is the whole point of having two.
+ * Whose a pull request is, is {@link isOurPr}'s question — the same one the merged-branch
+ * reap asks, answered in one place.
  *
  * Renaming is mechanical bookkeeping, like `setWorkItemState` and
  * `upsertIssueComment`, so it is deliberately not auto-send gated. What keeps it
@@ -36,7 +29,7 @@ export function renamablePrs(prs: PullRequest[], ctx: PrRenameContext): PrTitleI
   const out: PrTitleInput[] = [];
   for (const pr of prs) {
     if (pr.merged) continue;
-    if (!mayRename(pr, ctx)) continue;
+    if (!isOurPr(pr, ctx.prAuthorConfigured)) continue;
 
     const issue = issueFor(pr, ctx.issues);
     // The convention is keyed on an issue number, so a PR that resolves to no issue
@@ -60,23 +53,6 @@ export function renamablePrs(prs: PullRequest[], ctx: PrRenameContext): PrTitleI
     if (title !== pr.title) out.push({ prNumber: pr.number, title });
   }
   return out;
-}
-
-function mayRename(pr: PullRequest, ctx: PrRenameContext): boolean {
-  return ctx.prAuthorConfigured || isHarnessBranch(pr.branch);
-}
-
-/**
- * `issue/12` or `issue/12/<slug>` — the two branch shapes only a dispatch produces,
- * and therefore the unset arm's answer to "did the harness open this".
- *
- * Derived rather than stored: a PR on one of those can only have come from a
- * dispatch, so recording every opened PR number in a table of its own would be a
- * second answer to a question the branch already answers. Arm A of the
- * unrecorded-work fold's attribution, reused.
- */
-function isHarnessBranch(branch: string): boolean {
-  return /^issue\/\d+(\/.+)?$/.test(branch);
 }
 
 /**

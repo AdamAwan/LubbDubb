@@ -115,6 +115,9 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     async setPullBase() {
       return { ok: true };
     },
+    async deleteBranch() {
+      return { ok: true };
+    },
   };
 }
 

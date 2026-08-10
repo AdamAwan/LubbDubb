@@ -1,5 +1,6 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
+  BranchDeleteInput,
   PrBaseInput,
   PrCreateInput,
   PrLabelInput,
@@ -10,6 +11,7 @@ import type {
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
 import type {
+  BranchDeleteCapable,
   Capability,
   Integration,
   PrBaseCapable,
@@ -70,6 +72,7 @@ export class GitHubSourceControlIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBaseCapable,
+    BranchDeleteCapable,
     RefResolvable
 {
   readonly id = 'sourceControl:github';
@@ -214,6 +217,13 @@ export class GitHubSourceControlIntegration
   async setPullTitle(input: PrTitleInput): Promise<SendResult> {
     await this.opts.api.setPullTitle(input.prNumber, input.title);
     return { ok: true };
+  }
+
+  async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
+    const deleted = await this.opts.api.deleteBranch(input.branch);
+    // Already gone is success. `ref` distinguishes the two for the audit log without
+    // making the caller care, because nothing downstream should.
+    return { ok: true, ref: deleted ? input.branch : `${input.branch} (already absent)` };
   }
 
   async setPullBase(input: PrBaseInput): Promise<SendResult> {

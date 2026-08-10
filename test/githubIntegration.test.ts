@@ -41,6 +41,8 @@ interface Script {
   timeline?: Record<number, GhTimelineEvent[]>;
   throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads';
   createdPullNumber?: number;
+  /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
+  missingBranches?: string[];
 }
 
 interface Recorded {
@@ -54,6 +56,7 @@ interface Recorded {
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ number: number; title: string }>;
   baseSets: Array<{ number: number; base: string }>;
+  deletedBranches: string[];
 }
 
 function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
@@ -68,6 +71,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     createdPulls: [],
     titleSets: [],
     baseSets: [],
+    deletedBranches: [],
   };
   const api: GitHubApi = {
     async createPull(input) {
@@ -79,6 +83,10 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async setPullBase(number, base) {
       recorded.baseSets.push({ number, base });
+    },
+    async deleteBranch(branch) {
+      recorded.deletedBranches.push(branch);
+      return script.missingBranches?.includes(branch) !== true;
     },
     async viewerLogin() {
       return script.viewer ?? 'lubbdubb-bot';
@@ -750,6 +758,21 @@ test('createPullRequest posts head/base to the pulls API and returns the new num
   assert.deepEqual(recorded.createdPulls, [
     { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
   ]);
+});
+
+test('deleteBranch reaps a merged branch, and an already-absent one is still a success', async () => {
+  const { api, recorded } = fakeApi({ missingBranches: ['issue/13'] });
+  const sc = new GitHubSourceControlIntegration({ api });
+
+  assert.deepEqual(await sc.deleteBranch({ branch: 'issue/12' }), { ok: true, ref: 'issue/12' });
+  // A repository with "automatically delete head branches" on removed it at merge
+  // time. That is the common case, not a failure — throwing here would put a
+  // permanent stream of noise in the error log on the best-configured repos.
+  assert.deepEqual(await sc.deleteBranch({ branch: 'issue/13' }), {
+    ok: true,
+    ref: 'issue/13 (already absent)',
+  });
+  assert.deepEqual(recorded.deletedBranches, ['issue/12', 'issue/13']);
 });
 
 test('setPullTitle and setPullBase each write only their own field', async () => {

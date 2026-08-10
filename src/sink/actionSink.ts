@@ -54,6 +54,11 @@ export interface PrBaseInput {
   base: string;
 }
 
+export interface BranchDeleteInput {
+  /** The branch to delete, plain — each provider adds its own `refs/heads/` prefix. */
+  branch: string;
+}
+
 export interface WorkItemStateInput {
   /** The work item / issue number to transition. */
   number: number;
@@ -131,4 +136,16 @@ export interface ActionSink {
    * Idempotent: callers skip a write whose base is already right. Throws if it fails.
    */
   setPullBase(input: PrBaseInput): Promise<SendResult>;
+  /**
+   * Delete a branch on the remote — the branch behind a pull request that has
+   * merged. Mechanical bookkeeping like {@link setPullTitle}, so it is not auto-send
+   * gated.
+   *
+   * **A branch that is already gone is a success, not a failure.** A repository with
+   * GitHub's "automatically delete head branches" setting on will have deleted it at
+   * merge time, so already-absent is the common case rather than an error — and
+   * throwing on it would put a permanent stream of noise in the error log on exactly
+   * the repositories configured best. Throws for anything else.
+   */
+  deleteBranch(input: BranchDeleteInput): Promise<SendResult>;
 }

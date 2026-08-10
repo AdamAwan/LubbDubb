@@ -241,6 +241,33 @@ test('the fake removes what it made, and a removal of nothing is a no-op', async
   assert.ok(existsSync(await wt.ensure('issue/12', 'main')));
 });
 
+test('deleteBranch drops the worktree and the branch ref, squash-merged or not', async () => {
+  const repo = initRepo();
+  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+
+  // No base: forked from the repo's HEAD, whatever `git init` named it.
+  const dir = await wt.ensure('issue/12');
+  writeFileSync(join(dir, 'work.txt'), 'work');
+  git(dir, ['add', '.']);
+  git(dir, ['commit', '-q', '-m', 'work']);
+  // Landed the way `merge_pr` lands things: squashed, so the branch has *no*
+  // ancestry link to main. `git branch -d` refuses on exactly this, which is why
+  // the reap uses -D — with -d it would silently never delete anything.
+  git(repo, ['merge', '-q', '--squash', 'issue/12']);
+  git(repo, ['commit', '-q', '-m', 'squashed']);
+
+  await wt.deleteBranch('issue/12');
+
+  assert.equal(existsSync(dir), false, 'the worktree should be gone');
+  assert.equal(git(repo, ['branch', '--list', 'issue/12']), '', 'the local branch should be gone');
+});
+
+test('deleteBranch on a branch that does not exist is a no-op', async () => {
+  const repo = initRepo();
+  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  await wt.deleteBranch('never/existed');
+});
+
 /**
  * The regression guard for what the seam is *for*. `config.repoRoot` defaults to
  * `process.cwd()`, so a test that dispatches a code agent without injecting the

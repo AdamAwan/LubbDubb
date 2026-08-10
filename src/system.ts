@@ -32,6 +32,7 @@ import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { PrNamingDesk } from './prNamingDesk.js';
+import { BranchReapDesk } from './branchReapDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
@@ -439,14 +440,29 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // The naming convention's outbound half. `filters.prAuthor` being configured is
   // the operator's own answer to "which pull requests are mine", and both providers
   // apply it at fetch time — so when it is set the world is already only theirs.
+  const prAuthorConfigured =
+    config.github?.filters?.prAuthor !== undefined || config.azureDevOps?.filters?.prAuthor !== undefined;
   const naming = new PrNamingDesk({
     sink: opts.sink ?? connector,
     defaultBranch: config.defaultBranch,
-    prAuthorConfigured:
-      config.github?.filters?.prAuthor !== undefined || config.azureDevOps?.filters?.prAuthor !== undefined,
+    prAuthorConfigured,
     template: prompts.render('pr-title', {}),
     errors,
   });
+  // The other half of tidying up after a pull request: once it has merged, the
+  // branch behind it goes — worktree, local ref, then the remote. Undefined when the
+  // operator turned it off, which is how the pulse learns to skip it entirely rather
+  // than run a desk that decides to do nothing.
+  const branchReaps = config.reapMergedBranches
+    ? new BranchReapDesk({
+        sink: opts.sink ?? connector,
+        store,
+        worktrees,
+        defaultBranch: config.defaultBranch,
+        prAuthorConfigured,
+        errors,
+      })
+    : undefined;
 
   const graph = new WorkGraphRecorder({ store, errors });
 
@@ -458,6 +474,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     plans,
     assays,
     naming,
+    branchReaps,
     graph,
     landings,
     // Holds the pulse while a previous run's agents await a verdict.

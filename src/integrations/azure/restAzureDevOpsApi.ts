@@ -29,6 +29,9 @@ const CONNECTION_DATA_API_VERSION = '7.1-preview.1';
 /** The policy evaluations resource is preview-only under 7.1. */
 const POLICY_API_VERSION = '7.1-preview.1';
 
+/** Azure deletes a ref by updating it to this — there is no delete verb for one. */
+const ZERO_OBJECT_ID = '0000000000000000000000000000000000000000';
+
 /** Work-item comments are preview-only under 7.1 (7.1 flat is rejected). */
 const WORK_ITEM_COMMENTS_API_VERSION = '7.1-preview.4';
 
@@ -649,6 +652,29 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       method: 'PATCH',
       body: JSON.stringify({ targetRefName: headsRef(base) }),
     });
+  }
+
+  /**
+   * Delete a branch. Azure has no delete verb for a ref: you *update* it to the zero
+   * object id, and the update is optimistic — it needs the id the ref currently
+   * points at. So this is two calls, and the first one is also the already-gone
+   * check: a filter that matches no ref means the branch is not there, which the
+   * reap treats as success rather than as a failure to delete.
+   */
+  async deleteBranch(branch: string): Promise<boolean> {
+    const plain = branch.replace(/^refs\/heads\//, '');
+    const refs = await this.request<{ value: { name: string; objectId: string }[] }>(
+      this.withApiVersion(`${this.repoUrl}/refs`, { filter: `heads/${plain}` }),
+    );
+    // The filter is a prefix match, so `heads/issue/12` also returns `issue/120`.
+    // Only an exact name is this branch.
+    const ref = refs.value.find((r) => r.name === headsRef(plain));
+    if (!ref) return false;
+    await this.request(this.withApiVersion(`${this.repoUrl}/refs`), {
+      method: 'POST',
+      body: JSON.stringify([{ name: ref.name, oldObjectId: ref.objectId, newObjectId: ZERO_OBJECT_ID }]),
+    });
+    return true;
   }
 
   async setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void> {

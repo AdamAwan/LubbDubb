@@ -26,6 +26,7 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
       createPullRequest: unused,
       setPullTitle: unused,
       setPullBase: unused,
+      deleteBranch: unused,
       async upsertIssueComment(input): Promise<SendResult> {
         comments.push(input);
         // The provider hands back a stable id; the reconciler must reuse it.
