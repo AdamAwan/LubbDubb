@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
       "port": 4300
+    },
+    {
+      "name": "cockpit-demo",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "web/vite.config.ts", "--mode", "demo", "--port", "4301", "--strictPort"],
+      "port": 4301
     }
   ]
 }

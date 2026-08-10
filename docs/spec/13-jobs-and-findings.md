@@ -131,7 +131,9 @@ interface Finding {
   originRef; // from the credential, never from an argument
   kind: 'duplicate' | 'blocked' | 'out_of_scope';
   ref: string | null; // the world item it is about
-  summary;
+  summary; // the claim, one line — validation refuses a newline
+  where: string | null; // what locates it: file and line, package, service
+  detail: string | null; // the evidence, markdown
   status: 'open' | 'promoted' | 'dismissed' | 'filing' | 'filed';
   jobId: string | null; // the job it became — working it, or filing it
   ticketRef: string | null; // the ticket it was filed as ("issue:314")
@@ -154,13 +156,36 @@ that it implies a **different operator action** — that is the axis worth split
 There is deliberately **no catch-all fourth**: a bucket implying no action is where findings rot, and
 the summary is free text already.
 
+### The three text fields
+
+`summary` was once the only one, and its description asked for what it is, where, and why it matters,
+plus the evidence — four things in one string. What arrived was one undifferentiated block, with the
+claim, the identifier and the stack trace at the same weight, which is a wall to read and no faster to
+skim than the PR comment it replaced. The structure was never in the text, so no renderer could put it
+there; only naming the parts can.
+
+| field     | required | holds                                                                     |
+| --------- | -------- | ------------------------------------------------------------------------- |
+| `summary` | yes      | the claim, one line, ≤160 characters                                      |
+| `where`   | no       | what locates it — file and line, package, service, endpoint               |
+| `detail`  | no       | the evidence — error, repro, reasoning — as markdown                      |
+
+Everything past `summary` is **optional on purpose**. A required field an agent has nothing for comes
+back as "N/A", and a list of those is worse than a blob. `where` is free text rather than a closed
+vocabulary because "where" means a different thing per kind, and a schema for it would be guessed at.
+
 ### Validation
 
 `validateFinding(args)` (`src/mcp/findings.ts`), pure:
 
 - `kind` must be one of the three; the error lists all three with their help text.
-- `summary` is required and at most 2000 characters — long enough for a paragraph, short enough to read
-  in a list.
+- `summary` is required, at most 160 characters, and **must not contain a newline**. That refusal is
+  the load-bearing part of the split: the only cheap moment to fix a blob is the agent's own turn, and
+  a rejection there costs one tool call, where an unreadable card costs an operator every time they
+  open it. Both refusals name the field the text belongs in — an error that only said "too long" would
+  get the same paragraph back, shortened.
+- `where` is optional, at most 200 characters. `detail` is optional, at most 2000 — the cap that used
+  to be on `summary`, which is where a paragraph now legitimately goes.
 - `ref` is optional. `parseFindingRef` accepts the closed `pr:` / `issue:` vocabulary,
   suffix-tolerant so an origin ref passes back verbatim. A **bare number is refused** — unlike
   `world_read` there is no `kind` argument to disambiguate issue #41 from PR #41, and a duplicate
@@ -179,8 +204,14 @@ carries it. The `Hub` broadcasts `agent:finding` plus a `dirty`.
 Unlike `escalate`, it does **not** require a live session: a finding is a durable note, and one filed on
 an agent's last breath is still true.
 
-A **verbatim repeat** (same agent, kind, ref, summary) refreshes the row **without resetting status**,
-so dismissing one means something.
+A **repeat** (same agent, kind, ref, summary) refreshes the row **without resetting status**, so
+dismissing one means something. The summary is the whole key because it is the claim; `where` and
+`detail` are that claim's supporting text, so a repeat carrying better evidence **overwrites** them
+rather than being filed again beside the thinner one.
+
+**Rows filed before the split are not migrated.** They hold a whole report in `summary` and null in
+both new columns. No content migration guesses at where the seams were; the card clamps the headline
+instead, so an old row reads as a slightly tall card rather than a lie about its own structure.
 
 ### It queues nothing
 
@@ -206,6 +237,11 @@ The only path from a finding to an agent, and it starts with an operator's click
   and that is the one thing a PR comment could never be trusted to keep attached. It ends by telling
   the agent to verify the claim before acting on it, and to say so and stop if it does not hold rather
   than inventing work to justify the dispatch.
+- **`where` and `detail` reach the promoted and filing agents through the existing `{summary}` value,
+  not through placeholders of their own.** `findingReport` recomposes the three fields into one block,
+  which both `findingJobRequest` and `findingTicketFields` pass as `summary`. A new `{token}` would be
+  silently dropped by every operator override that never learned about it — precisely the deployments
+  that customised most — and there is no fallback to get wrong here. → [05](05-dispatcher.md#prompt-templates)
 - The operator may override `title`, `prompt` and `kind` in the request body.
 - The job is created **first**, then the finding is resolved to `promoted` with the job id — so a
   failed create leaves the finding open.

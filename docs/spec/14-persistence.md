@@ -94,9 +94,14 @@ answer without leaving the file you added the column's reader to. Current entrie
 | `tasks`      | `tasks.ts`     | `origin_title`, `origin_summary`, `dispatch_reason`                                                            |
 | `agents`     | `agents.ts`    | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at`       |
 | `decisions`  | `decisions.ts` | `rule`, `admission`                                                                                            |
-| `findings`   | `findings.ts`  | `ticket_ref`                                                                                                   |
+| `findings`   | `findings.ts`  | `ticket_ref`, `where_at`, `detail`                                                                             |
 | `plans`      | `plans.ts`     | `risks`, `out_of_scope`, `document`, `discussing`                                                              |
 | `plan_parts` | `plans.ts`     | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
+
+`findings.where_at` is the one column whose name does not match its field: `where` is SQL, so the
+column is `where_at` and `rowToFinding` maps it to `where`. Both new columns are nullable, and a row
+from before them reads as `null` on each — the pre-split report stays whole in `summary`
+([13](13-jobs-and-findings.md#the-three-text-fields)).
 
 **Two migrations are not `ALTER`s.** `adoptFloorCompletions()` carries #203's `floor_completions`
 into `issue_runs` and drops it (#234). A reshape rather than a column: `completed_at` was `NOT NULL`
@@ -119,7 +124,7 @@ updates none, and a second boot finds none left. Both run from `Store`'s constru
 `agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`, `scratch_entries`, `retrospectives`, `issue_runs`, `priority_overrides`, `work_nodes`,
 `work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
 migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
-has since gained `ticket_ref`, and `plans`/`plan_parts` have since gained the fields above, which
+has since gained `ticket_ref` and then `where_at`/`detail`, and `plans`/`plan_parts` have since gained the fields above, which
 is exactly the case this table exists for. `CREATE TABLE IF NOT EXISTS` never alters an existing table,
 so a column added without an `ensureColumns` entry is invisible on every database from before that
 column existed — "this table is fresh, so it needs no entry" is only ever true on the day the table is
