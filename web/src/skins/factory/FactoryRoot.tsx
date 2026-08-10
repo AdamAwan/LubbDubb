@@ -15,7 +15,7 @@ import { Modal, type FactoryModal } from './components/Modal.js';
 import { Production } from './components/Production.js';
 import { Signals } from './components/Signals.js';
 import { GoalFloor } from './components/GoalFloor.js';
-import { rack } from './inspection.js';
+import { rackCount, rackEntries } from './inspection.js';
 import { powerReading } from './power.js';
 import { productionReading } from './production.js';
 
@@ -65,9 +65,10 @@ export function FactoryRoot({ view, actions }: SkinProps) {
   const { state, now } = view;
   const [modal, setModal] = useState<FactoryModal | null>(null);
   const stopped = view.pulseHeld || state.control.paused;
-  // Off the same pure `rack` the panel draws, so the header count and the group it
-  // counts can never disagree.
-  const yoursCount = rack(state.world.pullRequests).yours.length;
+  // Off the same pure fold the panel draws, so the header count and the group it
+  // counts can never disagree — including about a stack, whose rungs land in your
+  // court whole and are counted one apiece.
+  const yoursCount = rackCount(rackEntries(state.world.pullRequests, state.stacks ?? []).yours);
   const power = powerReading(state.usage);
   const production = productionReading({
     decisions: state.decisions,

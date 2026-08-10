@@ -1,4 +1,4 @@
-import type { PullRequest } from '../../types.js';
+import type { PullRequest, Stack, StackRung } from '../../types.js';
 import { scannersFor, type Scanner } from './scanners.js';
 import type { StatusTone } from './vocabulary.js';
 import type { IconName } from './components/Sprite.js';
@@ -134,20 +134,94 @@ export function rackReason(pr: PullRequest): string {
 }
 
 /**
- * The rack, in reading order: your court first, then the rest.
+ * A rung, joined back to the pull request it is.
  *
- * Ordering *inside* a group is by PR number and nothing cleverer. The old sort was
- * fullest-first, which is exactly backwards for the panel's job — it put the PRs
- * you have to decide on below the ones the harness was already fixing — and a
- * second ordering axis derived from the ladder would be a client-side opinion about
- * urgency sitting nowhere near the verdict that decides it.
+ * `pr` is null when the snapshot the rack was handed does not carry it —
+ * `buildStacks` runs on the **unfiltered** open list, deliberately, so an
+ * `-ignore`d rung cannot put a hole in the chain. Such a rung still draws, from
+ * the rung's own fields, and asserts no health it does not have.
  */
-export function rack(prs: PullRequest[]): { yours: PullRequest[]; inHand: PullRequest[] } {
-  const byNumber = (a: PullRequest, b: PullRequest) => a.number - b.number;
-  return {
-    yours: prs.filter((pr) => rackGroup(pr) === 'yours').sort(byNumber),
-    inHand: prs.filter((pr) => rackGroup(pr) === 'in_hand').sort(byNumber),
-  };
+export interface RackRung {
+  rung: StackRung;
+  pr: PullRequest | null;
+  /** Nearest rung below that is still holding — what this one waits on. Null at the bottom. */
+  blockedBy: number | null;
+  /** Nothing on this rung's ladder is unmet. The bottom rung being clear is "next to merge". */
+  clear: boolean;
+}
+
+/** One entry on the rack, in reading order: a loose pull request, or a stack as one cluster. */
+export type RackEntry =
+  | { kind: 'pr'; sort: number; pr: PullRequest }
+  | { kind: 'stack'; sort: number; stack: Stack; rungs: RackRung[] };
+
+/**
+ * Is anything on this rung's ladder unmet?
+ *
+ * Read off `ladderFor` rather than re-derived, so the "waiting on #N below" note
+ * and the ladder drawn two rows down can never disagree about the same rung. A
+ * `muted` scanner is policy saying it does not count, so it does not hold.
+ */
+function holding(pr: PullRequest | null): boolean {
+  if (!pr) return true;
+  const { scanners, gates } = ladderFor(pr);
+  return gates.some((g) => !g.met) || scanners.some((s) => s.state !== 'pass' && s.state !== 'muted');
+}
+
+/**
+ * The rack, with stacks folded in as clusters rather than listed beneath it.
+ *
+ * A stack goes to the group of its **most urgent rung** — `yours` if any rung is
+ * yours — and the chain is never split across the two headings. Splitting it would
+ * be the honest answer about attention and the wrong answer about the panel's job:
+ * a stack is read as an order, and an order broken in half is not one. The rungs
+ * that landed under *Your court* without being yours carry their own court chip
+ * saying so, which is the same sentence the row would have made on its own.
+ *
+ * A rung never also appears loose. Ordering is by pull-request number and nothing
+ * cleverer, a cluster sorting on its bottom rung, so clusters and loose rows
+ * interleave exactly as the rows did before there were clusters. A second ordering
+ * axis derived from the ladder would be a client-side opinion about urgency sitting
+ * nowhere near the verdict that decides it.
+ */
+export function rackEntries(prs: PullRequest[], stacks: Stack[]): { yours: RackEntry[]; inHand: RackEntry[] } {
+  const byNumber = new Map(prs.map((pr) => [pr.number, pr]));
+  const claimed = new Set<number>();
+  const yours: RackEntry[] = [];
+  const inHand: RackEntry[] = [];
+
+  for (const stack of stacks) {
+    const joined = stack.rungs.map((rung) => ({ rung, pr: byNumber.get(rung.prNumber) ?? null }));
+    for (const { rung } of joined) claimed.add(rung.prNumber);
+    const held = joined.map(({ pr }) => holding(pr));
+    const rungs: RackRung[] = joined.map(({ rung, pr }, i) => {
+      let blockedBy: number | null = null;
+      for (let j = i - 1; j >= 0; j -= 1) {
+        if (held[j] === true) {
+          blockedBy = joined[j]?.rung.prNumber ?? null;
+          break;
+        }
+      }
+      return { rung, pr, blockedBy, clear: held[i] === false };
+    });
+    const mine = rungs.some((r) => r.pr !== null && rackGroup(r.pr) === 'yours');
+    const entry: RackEntry = { kind: 'stack', sort: stack.rungs[0]?.prNumber ?? 0, stack, rungs };
+    (mine ? yours : inHand).push(entry);
+  }
+
+  for (const pr of prs) {
+    if (claimed.has(pr.number)) continue;
+    const entry: RackEntry = { kind: 'pr', sort: pr.number, pr };
+    (rackGroup(pr) === 'yours' ? yours : inHand).push(entry);
+  }
+
+  const bySort = (a: RackEntry, b: RackEntry) => a.sort - b.sort;
+  return { yours: yours.sort(bySort), inHand: inHand.sort(bySort) };
+}
+
+/** How many pull requests an entry list draws — a cluster counts its rungs, not itself. */
+export function rackCount(entries: RackEntry[]): number {
+  return entries.reduce((n, e) => n + (e.kind === 'stack' ? e.rungs.length : 1), 0);
 }
 
 /** Merges inside the retained closed-PR window — all that survives of the Launches log. */
