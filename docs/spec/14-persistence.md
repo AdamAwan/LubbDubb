@@ -29,6 +29,7 @@ unchanged, so no call site anywhere knows.
 | `world.ts`         | `world_events`, `world_baseline`, `connector_state`                         |
 | `errors.ts`        | `error_events`                                                              |
 | `graph.ts`         | `work_nodes`, `work_item_filings`, `work_item_ignores`                      |
+| `bugFilings.ts`    | `issue_bug_filings`                                                         |
 | `floor.ts`         | `floor_completions`                                                         |
 
 Four properties, all asserted structurally in `test/storeModules.test.ts` rather than intended:
@@ -125,7 +126,7 @@ updates none, and a second boot finds none left. Both run from `Store`'s constru
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,
 `agent_files`, `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays`, `scratch_entries`, `retrospectives`, `issue_runs`, `priority_overrides`, `work_nodes`,
-`work_item_filings` and `work_item_ignores` were all introduced as new tables and therefore needed no
+`work_item_filings`, `work_item_ignores` and `issue_bug_filings` were all introduced as new tables and therefore needed no
 migration entry **at the time** — but a table being new once is not a table staying exempt: `findings`
 has since gained `ticket_ref` and then `where_at`/`detail`, and `plans`/`plan_parts` have since gained the fields above, which
 is exactly the case this table exists for. `CREATE TABLE IF NOT EXISTS` never alters an existing table,
@@ -159,6 +160,7 @@ introduced.
 | `work_nodes`         | The durable work graph: every node the harness has observed, and what it descended from.                                                                                                                                                                                                                                                                                      | `ref` is `PRIMARY KEY`                                                                                                                    |
 | `work_item_filings`  | A tracker item an operator had filed for work nothing external accounted for.                                                                                                                                                                                                                                                                                                 | `target_ref` is `PRIMARY KEY`                                                                                                             |
 | `work_item_ignores`  | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.                                                                                                                                                                                                                                                                                     | `target_ref` is `PRIMARY KEY`                                                                                                             |
+| `issue_bug_filings`  | A bug an operator raised against a story from the cockpit — they ran it and it does not do what they expect. Keyed on the **job**, not the story, so one story can carry several bugs: it can be wrong in more than one way, and each is its own bug. The operator's report is not a column; the desk job's prompt carries it verbatim.                                        | `job_id` is `PRIMARY KEY`; `origin_ref` indexed                                                                                           |
 | `agent_transcripts`  | Chunked agent output.                                                                                                                                                                                                                                                                                                                                                         | `PRIMARY KEY (agent_id, seq)`                                                                                                             |
 | `escalations`        | The human-in-the-loop inbox. `context` is JSON.                                                                                                                                                                                                                                                                                                                               | —                                                                                                                                         |
 | `decisions`          | The audit log. `action` is JSON; `rule` and `admission` are lifted off it at record time.                                                                                                                                                                                                                                                                                     | —                                                                                                                                         |
@@ -171,7 +173,7 @@ introduced.
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
 `decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`,
-`work_nodes(parent_ref)`, `work_item_filings(job_id)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
+`work_nodes(parent_ref)`, `work_item_filings(job_id)`, `issue_bug_filings(origin_ref)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
 attempts are the `tasks` rows carrying its origin, so no separate attempts table exists — `tasks` only
 lacked the index.
 

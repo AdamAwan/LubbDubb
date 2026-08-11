@@ -1145,6 +1145,9 @@ export const demoApi = {
   // Nothing to file into either: the demo has no tracker, which is the same
   // reason the real route refuses when the issues provider is `fake`.
   fileWorkItem: (_ref: string) => Promise.resolve({ ok: false }),
+  // Same reason, and the cockpit never calls it: `canFileTickets` is false in the
+  // demo fixtures, so the "raise issue" button is not drawn to be clicked.
+  raiseBug: (_issueNumber: number, _summary: string, _title?: string) => Promise.resolve({ ok: false }),
   setWorkItemIgnored: (_ref: string, _ignored: boolean) => Promise.resolve({ ok: true as const }),
   pulse: () => getServer().pulse(),
   clearErrors: () => getServer().clearErrors(),

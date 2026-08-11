@@ -5,7 +5,8 @@ import type { ToolFactory } from './context.js';
 export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
   description:
     'Report the tracker item you just created for the thing you were dispatched to file — a ' +
-    'finding, or a work item for work the harness did that nothing accounted for. Only for a ' +
+    'finding, a work item for work the harness did that nothing accounted for, or a bug an ' +
+    'operator raised on a story. Only for a ' +
     'filing job: if you were not dispatched to file something, this is not your tool. Calling it ' +
     'is what completes the filing: until you do, the operator sees a filing whose item never ' +
     'appeared. Pass the ref of the item you created (or of the existing one you decided it ' +
@@ -36,9 +37,16 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
     // link.
     const result = deps.agents.linkTicket(agent.id, parsed.ref);
     if (!result.ok) return toolError(result.error);
-    // Two things a filing job can be for, resolved from the credential the same
-    // way: a finding an agent reported, or a work item for work the harness did
-    // that nothing external accounted for.
+    // Three things a filing job can be for, resolved from the credential the same
+    // way: a finding an agent reported, a work item for work the harness did that
+    // nothing external accounted for, or a bug an operator raised on a story.
+    if (result.bug) {
+      return ok({
+        linked: true,
+        bug: { originRef: result.bug.originRef, status: result.bug.status, ticketRef: result.bug.ticketRef },
+        note: 'Recorded against the story the operator raised it from. Your filing task is done.',
+      });
+    }
     if (result.filing) {
       // Said back rather than left silent: the operator's images were keyed to the
       // job this agent is running, and they have just changed hands to the ticket

@@ -38,6 +38,7 @@ type PromptId =
   | 'pr-concern-escalation'
   | 'finding-ticket'
   | 'work-item-ticket'
+  | 'raise-bug'
   | 'blueprint-ticket'
   | 'pr-title';
 
@@ -284,6 +285,34 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'GitHub/Azure DevOps and report the ref back via link_ticket. Override this to control how ' +
       'tickets are worded, labelled, or typed in your tracker. Placeholders: {kind} {kindHelp} {ref} ' +
       '{summary} {originRef} {tracker}.',
+  },
+  'raise-bug': {
+    placeholders: ['number', 'title', 'summary', 'tracker'],
+    template:
+      'An operator ran work item #{number} ("{title}") and it does not do what they expect. **File a ' +
+      'bug for it — do not fix it.**\n\n' +
+      'Their report, verbatim:\n\n{summary}\n\n' +
+      'This is the operator speaking, not an agent: it is what they observed running the thing, which ' +
+      'is not something you can find in the repository. Treat it as the goal. Where you cannot ' +
+      'reproduce or locate it, say so in the bug — do not narrow it to whatever you did find, and do ' +
+      'not decide it is not a bug.\n\n' +
+      'File it in {tracker}\n\n' +
+      'Before you create anything, search the existing open items for the same symptom. If one already ' +
+      'covers it, do not file a second — link the existing one instead. Write the bug for someone who ' +
+      'was not there: a title naming the symptom (not the suspected cause), and a body carrying the ' +
+      'report above verbatim, what you were able to verify against the repository, and where you think ' +
+      'it lives if you found it. Say which parts you confirmed and which are the operator’s word — ' +
+      'they observed a symptom, and the diagnosis is yours and provisional.\n\n' +
+      'When the bug exists, call the link_ticket tool with its ref ("issue:314") so it shows up against ' +
+      'the story in the cockpit. That call is what finishes this task: without it the operator sees a ' +
+      'filing that never completed. If you decided not to file because it already exists, call ' +
+      'link_ticket with the existing item’s ref.',
+    doc:
+      'Sent to a desk agent when an operator clicks "raise issue" on a work item, to file a bug in ' +
+      'GitHub/Azure DevOps linked back to that story and report the ref via link_ticket. The operator ' +
+      'types the symptom; the agent writes it up. Override this to control how bugs are worded, ' +
+      'labelled, or typed in your tracker — a project whose bug type is not called "Bug" (the Basic ' +
+      'process calls it "Issue") overrides here. Placeholders: {number} {title} {summary} {tracker}.',
   },
   'blueprint-ticket': {
     placeholders: ['request', 'tracker', 'watchLabel', 'labelling'],

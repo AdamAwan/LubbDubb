@@ -22,6 +22,34 @@ import { watchBucket, type WatchBucket } from '../worldBuckets.js';
 import { statusDot, refLink, refChip } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
+import { RaiseBugModal } from './RaiseBugModal.js';
+
+/**
+ * The bugs raised from this row: one chip each, in the order they were raised.
+ *
+ * Both statuses are drawn, because they say different things — `raising` means a
+ * desk agent is writing it up and there is nothing to click yet, and a filed one
+ * links to the item itself. A filing that never completed therefore stays visible
+ * as a filing rather than silently reading like one that was never made.
+ *
+ * The link goes through `refUrls` like every other ref chip; a provider that
+ * resolved no URL degrades to the ref's own label rather than a dead link.
+ */
+function bugChips(bugFilings: AppState['bugFilings'], issueNumber: number, refUrls: Record<string, string>) {
+  const mine = (bugFilings ?? []).filter((b) => b.originRef === `issue:${issueNumber}`);
+  if (mine.length === 0) return null;
+  return mine.map((bug) =>
+    bug.status === 'filing' ? (
+      <span key={bug.jobId} className="chip small" title="An agent is writing this bug up in the tracker now">
+        raising bug…
+      </span>
+    ) : (
+      <span key={bug.jobId} className="chip small" title="A bug you raised from this item">
+        → bug {refLink(`#${bug.ticketRef?.slice('issue:'.length) ?? '?'}`, refUrls)}
+      </span>
+    ),
+  );
+}
 
 /**
  * The per-issue pickup chip (mirrors the PR health chip): what the harness is
@@ -261,6 +289,7 @@ export function WorldSummary({
   onToggleIssueWatch,
   onSetConclusion,
   onSetAssay,
+  onRaiseBug,
   onViewPlan,
   onViewScratchpad,
 }: {
@@ -279,12 +308,21 @@ export function WorldSummary({
   onSetConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) => Promise<unknown> | unknown;
   /** Override the intake verdict — see {@link ASSAY_EXPIRY} for what it is beside. */
   onSetAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) => Promise<unknown> | unknown;
+  /**
+   * Raise a bug against an item: the operator ran it and it does not do what they
+   * expect. Unlike its neighbours this files into the tracker and leaves the
+   * item's own verdict alone — the bug is its own work item and carries the work.
+   */
+  onRaiseBug: (issueNumber: number, summary: string, title?: string) => Promise<unknown> | unknown;
   /** Open the full plan for an issue's decomposition, when it has one. */
   onViewPlan: (planId: string) => void;
   /** Open a goal's shared notepad, when the agents on it wrote anything. */
   onViewScratchpad: (issueRef: string) => void;
 }) {
   const [tab, setTab] = useState<WatchBucket>('watched');
+  // The item whose "raise issue" was clicked, or null. Held as the issue itself so
+  // the modal can name it — one modal for the whole list, not one per row.
+  const [raisingBug, setRaisingBug] = useState<Issue | null>(null);
   const { pullRequests, issues } = state.world;
   // Newest first: a PR you were watching disappears mid-session otherwise, with
   // nothing to say whether it landed or was abandoned.
@@ -497,6 +535,22 @@ export function WorldSummary({
                 more work
               </AsyncButton>
             )}
+            {/* The bugs already raised from this row, and the way to raise another.
+                Deliberately *not* gated on `i.state === 'open'` like the two verdict
+                buttons above: "the harness closed this and it does not work" is the
+                case the control exists for. Gated instead on there being a tracker
+                to file into, off the same flag the finding and work-item filing
+                buttons read. */}
+            {bugChips(state.bugFilings, i.number, refUrls)}
+            {state.config.canFileTickets && (
+              <button
+                className="btn ghost world-toggle"
+                onClick={() => setRaisingBug(i)}
+                title="Report that this does not work as you expect — an agent files it as a bug linked to this item, and this item's own state is left alone"
+              >
+                raise issue
+              </button>
+            )}
             {/* Only a refusal gets an override. A `workable` verdict blocks
                 nothing, so a button on one would offer to change a reading that
                 changes no behaviour — and clearing is a *third* option rather
@@ -545,6 +599,16 @@ export function WorldSummary({
           </div>
         );
       })}
+      {/* One modal for the whole list, keyed off which row was clicked — the
+          pattern `PlanModal` uses, where several surfaces open one dialog. */}
+      {raisingBug && (
+        <RaiseBugModal
+          issueNumber={raisingBug.number}
+          issueTitle={raisingBug.title}
+          onSubmit={(summary, title) => Promise.resolve(onRaiseBug(raisingBug.number, summary, title))}
+          onClose={() => setRaisingBug(null)}
+        />
+      )}
     </div>
   );
 }

@@ -525,6 +525,23 @@ CREATE TABLE IF NOT EXISTS work_item_filings (
   updated_at TEXT NOT NULL
 );
 
+-- A bug the operator raised against a story from the cockpit: they ran the thing
+-- and it does not do what they expect, which is the one fact no agent on the goal
+-- can derive. Keyed on the *job*, not the story, so one story can carry several
+-- bugs over its life — the difference from work_item_filings above, whose target
+-- key deliberately allows one filing per node.
+--
+-- The operator's report is not a column: the desk job's prompt carries it verbatim
+-- and is durable, and a second copy is two records of one sentence free to drift.
+CREATE TABLE IF NOT EXISTS issue_bug_filings (
+  job_id     TEXT PRIMARY KEY,
+  origin_ref TEXT NOT NULL,          -- the story it was raised from ("issue:12")
+  status     TEXT NOT NULL,          -- filing | filed
+  ticket_ref TEXT,                   -- the bug it was filed as ("issue:314"), once created
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- The other answer to the same question, and the reason it is a table of its own
 -- rather than a third work_item_filings status: that row's job_id is NOT NULL
 -- because a filing *is* an agent doing something, and an ignore is the operator
@@ -588,5 +605,6 @@ CREATE INDEX IF NOT EXISTS idx_usage_events_at ON usage_events(at);
 CREATE INDEX IF NOT EXISTS idx_error_events_created ON error_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_work_nodes_parent ON work_nodes(parent_ref);
 CREATE INDEX IF NOT EXISTS idx_work_item_filings_job ON work_item_filings(job_id);
+CREATE INDEX IF NOT EXISTS idx_issue_bug_filings_origin ON issue_bug_filings(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_tasks_origin ON tasks(origin_ref);
 `;

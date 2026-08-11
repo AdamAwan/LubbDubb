@@ -989,8 +989,23 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
   `sameWorktree` case.
 - **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
   toggle; issues with their state, linked PR, pickup chip, **plan chip**, conclusion chip and
-  **shortfall** chip, a watch toggle, the conclusion toggles and the **assay override**; and a
-  **Recently closed** section marking each PR merged vs closed-unmerged.
+  **shortfall** chip, a watch toggle, the conclusion toggles, the **assay override** and **raise
+  issue**; and a **Recently closed** section marking each PR merged vs closed-unmerged.
+
+  **`raise issue`** is the one control on the row that files into the tracker rather than writing a
+  verdict about the item (`POST /api/issues/:number/bug`, [16](16-http-api.md)). It opens
+  `RaiseBugModal`, which takes the operator's own report — a modal and not an inline field because it
+  is the only control here that wants a paragraph of prose, and that prose is the whole feature: a
+  desk agent writes the bug from it, and it is the one fact about a goal no agent on it can derive.
+  Submit is disabled until the report is non-empty, the same rule the route enforces rather than a
+  second opinion about it, and a failed post keeps the modal open with the text intact.
+
+  It is gated on `config.canFileTickets` — the flag that already hides the finding and work-item
+  filing buttons — and, unlike the two verdict buttons beside it, **not** on the item being open:
+  "the harness closed this and it does not work" is the case it exists for. Each bug already raised
+  draws its own chip from `state.bugFilings`, `raising bug…` while the desk agent works and
+  `→ bug #456` once `link_ticket` reports back, so a filing that never completed stays visible as a
+  filing instead of reading like one that was never made. Several per item is normal.
 
   The assay override draws on an issue the intake verdict **refused** and nowhere else
   (`POST /api/issues/:number/assay`, [16](16-http-api.md)). A `workable` verdict blocks nothing, so a

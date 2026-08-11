@@ -83,6 +83,9 @@ export function buildStateSnapshot(
   // ref (`pr:42:merge`) names the item its card links to, so it feeds the link
   // map below as well as the cards themselves.
   const proposals = store.listProposals();
+  // Bugs the operator raised from a story row. Read here for findings' reason: the
+  // ref each carries once filed is a brand-new item the world lists do not hold yet.
+  const bugFilings = store.listBugFilings();
   // Every file every agent wrote, read once: the drawer groups it by agent, and
   // the overlap detector below joins it *across* agents — the one question the
   // rows could always answer and nothing ever asked.
@@ -212,6 +215,10 @@ export function buildStateSnapshot(
     refs: [
       ...findings.map((f) => f.ref),
       ...findings.map((f) => f.ticketRef),
+      // Both halves of a raised bug: the story it came from, and the bug itself once
+      // the filing agent reports it — the chip on the row links the latter.
+      ...bugFilings.map((b) => b.originRef),
+      ...bugFilings.map((b) => b.ticketRef),
       ...humanTasks.map((t) => t.originRef),
       ...proposals.map((p) => p.ref),
       // The comments the harness maintains on a ticket without being asked — the
@@ -430,6 +437,10 @@ export function buildStateSnapshot(
     // Operator-facing only: nothing in the dispatcher reads them, and one becomes
     // work only through `POST /api/findings/:id/promote`.
     findings,
+    // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
+    // with a ref once it exists. Several per story is the normal case, not an error —
+    // a story can be wrong in more than one way.
+    bugFilings,
     // Open ones and a settled tail alike, exactly as `findings` ships: "we asked
     // and it was declined" is information, and a row that vanished on being
     // settled would take the operator's own note with it.
