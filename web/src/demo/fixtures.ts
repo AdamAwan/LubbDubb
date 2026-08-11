@@ -1104,7 +1104,7 @@ export function buildDemoState(): DemoSeed {
             {
               question: 'Part one is fat — split it, or leave it as two parts?',
               detail:
-                'Store module + schema + routes + `/api/state` + the gate + both cockpit skins + six ' +
+                'Store module + schema + routes + `/api/state` + the gate + the cockpit floor + six ' +
                 'specs. The riskiest bit (the gate) is buried in a big single review.',
               options: ['Split into three parts', 'Keep two parts'],
             },

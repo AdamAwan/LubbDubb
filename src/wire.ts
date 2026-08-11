@@ -239,7 +239,7 @@ export interface CockpitDecision extends Decision {
  * it may be offered, and what the operator has already authorized.
  *
  * `offer` is decided on the server and shipped rather than re-derived in the
- * skin, for the reason `PrAttention` is: a client-side second opinion about
+ * cockpit, for the reason `PrAttention` is: a client-side second opinion about
  * whether a merge may be authorized is exactly the drift that outlives the change
  * that introduces it. The route asks the same function again before recording,
  * because a disabled button is a courtesy and not a gate.

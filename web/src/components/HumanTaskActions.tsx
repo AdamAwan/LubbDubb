@@ -5,12 +5,12 @@ import { AsyncButton } from './AsyncButton.js';
 /**
  * The two ways a human task settles, and the one refusal rule between them.
  *
- * Shared rather than drawn per skin, and for the reason `EscalationCard` is: this
- * is the piece with an async flow and a rule that can refuse, so it has exactly
- * one implementation and each skin embeds it. What a skin owns is the station it
- * sits in — the classic card, the factory's bench plate — and what it passes is
- * `buttonClass`, the same seam `ConfirmButton` already takes so a `.fx-btn` and a
- * `.btn ghost` are one component wearing two skins.
+ * Shared rather than redrawn at each station, and for the reason `EscalationCard`
+ * is: this is the piece with an async flow and a rule that can refuse, so it has
+ * exactly one implementation and the station embeds it. What the station owns is
+ * its own chrome, and what it passes is `buttonClass`, the same seam
+ * `ConfirmButton` already takes so a `.fx-btn` and a `.btn ghost` are one
+ * component wearing two faces.
  *
  * **Done** settles it, and where the task backs a plan step it concludes that
  * part, releasing every sibling that named it. **Decline** takes a note the
@@ -26,7 +26,7 @@ export function HumanTaskActions({
   onDecline,
 }: {
   task: HumanTask;
-  /** The skin's button modifiers — `ghost` in classic, `fx-btn` on the floor. */
+  /** The station's button modifiers — `fx-btn` on the floor, `ghost` in a modal. */
   buttonClass?: string;
   onDone: (id: string) => Promise<unknown> | unknown;
   onDecline: (id: string, note: string) => Promise<unknown> | unknown;

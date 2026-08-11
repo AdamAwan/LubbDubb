@@ -28,7 +28,7 @@ says which owns what.
 npm run check   # format:check, lint, typecheck, typecheck:web, knip, test
 ```
 
-CI enforces the same six. Three failure modes are not obvious ([19](docs/spec/19-development.md) has
+CI enforces the same six. Two failure modes are not obvious ([19](docs/spec/19-development.md) has
 the rest):
 
 - **knip runs with every rule at `error`** — an unimported `export`, an unnamed type, an unused
@@ -38,9 +38,6 @@ the rest):
   `@public` naming the seam. Never an ignore list.
 - **Two typecheckers.** `typecheck` (server) and `typecheck:web` (cockpit) are separate passes; a
   change spanning `src/` and `web/` must satisfy both.
-- **`test/fixtures/` is in `.prettierignore`** because those files are **byte-exact goldens** an
-  assertion compares against. Formatting one breaks a test with a diff that looks nothing like its
-  cause. Run `npm run format`; never hand-format, and never `npx prettier --write test/`.
 
 A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are native builds.
 

@@ -5,17 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <title>LubbDubb — Cockpit</title>
-    <!-- Stamp the chosen skin before first paint. In the bundle this would run
-         after the stylesheet had already painted the default, so switching skins
-         would flash the old one first. Deliberately tolerant: any failure leaves
-         the attribute unset, which is exactly the default skin. -->
-    <script>
-      try {
-        document.documentElement.dataset.skin = localStorage.getItem('lubbdubb.skin') || 'classic';
-      } catch (e) {
-        document.documentElement.dataset.skin = 'classic';
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>

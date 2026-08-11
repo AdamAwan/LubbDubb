@@ -707,9 +707,9 @@ withdraws any pending plan proposal, and kicks a cycle. That is all it does.
 Clearing `discussing` is not optional when a replan is requested mid-conversation: the flag is what
 picks the template rule `issue-plan` renders from `planning`, so leaving it set would render `discuss-plan` on
 the next dispatch instead of the `issue-replan` this call actually asked for — the two routes would
-disagree about what plain `planning` means. `PlanPanel.tsx` and the factory skin's `GoalFloor.tsx` keep
-Replan visible during a discussion for exactly this reason (the modal hides it, they don't); the route
-must be safe to call in that state, not merely reachable.
+disagree about what plain `planning` means. The Goal Floor's plan bar keeps Replan visible during a
+discussion for exactly this reason; the route must be safe to call in that state, not merely
+reachable.
 
 The withdrawal is not optional under `requireApproval`: a pending verdict holds rule `plan-approval` off the plan,
 so the amended decomposition would never be put to anyone — and the stale card, if accepted, would

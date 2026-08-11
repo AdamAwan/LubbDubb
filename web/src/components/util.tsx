@@ -161,7 +161,7 @@ export function elapsed(fromIso: string, toIso: string | null, now: number = Dat
  * row keeps in separate columns (`rule` / `admission`), resolved against the
  * rule book for display.
  *
- * One function for both skins rather than the fold written twice: the old-row
+ * One function for every caller rather than the fold written twice: the old-row
  * case below is a judgement about what a row *means*, and two renderers reaching
  * it independently is how they come to disagree about the same row.
  *

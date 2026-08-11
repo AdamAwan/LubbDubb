@@ -19,8 +19,8 @@ type CockpitStatus =
   | { kind: 'ready'; view: CockpitView; actions: CockpitActions };
 
 /**
- * Everything between the harness and a skin: the snapshot fetch, the websocket, the
- * coalescing refresh, and which drawer is open. Skins receive its output and never
+ * Everything between the harness and the floor: the snapshot fetch, the websocket,
+ * the coalescing refresh, and which drawer is open. The floor receives its output and never
  * see any of this — which is the point, since it is the half that must behave
  * identically whatever the cockpit looks like.
  */

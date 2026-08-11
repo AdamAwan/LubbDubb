@@ -69,7 +69,7 @@ export function dependenciesOf(part: PlanPart, index: Map<string, PlanPart>): Pl
  * guarded by the walking set: ingestion refuses cycles, but this runs against
  * whatever the store happens to hold, and a dispatch-order heuristic must not spin.
  *
- * (`layoutFloor` in the cockpit's factory skin computes the same longest-path
+ * (`layoutFloor` on the cockpit's Goal Floor computes the same longest-path
  * depth for a *column*. Deliberately not shared: the two answer for different
  * purposes, and `test/workGraph.test.ts` asserts `src/` and `web/` stay apart.)
  */

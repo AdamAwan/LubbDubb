@@ -12,44 +12,37 @@ and that `src/wire.ts` is the only server module the SPA names at all. See
 
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 
-## Layers, and what a skin is
+## Layers
 
-The cockpit is three layers, split so that how it _looks_ is replaceable without touching how it
-behaves:
+The cockpit is three layers, split so that how it _looks_ stays separable from how it behaves:
 
 | Layer        | Path                        | Job                                                                                            |
 | ------------ | --------------------------- | ---------------------------------------------------------------------------------------------- |
 | Wiring       | `web/src/cockpit/`          | fetch, websocket, coalesced refresh, which drawer is open, the bound `CockpitActions`. No JSX. |
 | Derivation   | `web/src/view/viewModel.ts` | the pure `buildViewModel` → `CockpitView`. No React.                                           |
-| Presentation | `web/src/skins/<id>/`       | one directory per skin, listed in `skins/registry.ts`.                                         |
+| Presentation | `web/src/factory/`          | the Factory Floor — the whole drawn surface, rooted at `FactoryRoot`.                          |
 
-`App.tsx` is only the shell: acquire state, resolve the skin, render its root. The two screens it
-still owns — "Connecting…" and the locked-out page — stay there because neither has a view-model to
-draw, and a refused credential must read the same however the cockpit is themed.
+`App.tsx` is only the shell: acquire state, render `FactoryRoot`. The two screens it still owns —
+"Connecting…" and the locked-out page — stay there because neither has a view-model to draw.
 
-**A skin owns its whole layout.** It is handed a finished `CockpitView` and renders whatever tree it
-likes, rather than overriding slots in a shared page: the treatments worth having redraw the data
-(a dispatch queue as a belt feeding machines) rather than rearrange the panels, and a slot contract
-wide enough for that is no longer a contract.
+**The floor owns its whole layout.** It is handed a finished `CockpitView` and renders whatever tree
+it likes rather than filling slots in a shared page, because the reading worth having redraws the
+data (a dispatch queue as a belt feeding machines) rather than arranging panels.
 
-What stops that becoming N divergent cockpits is the split on **behaviour weight**:
+What keeps that from swallowing the cockpit's rules is the split on **behaviour weight**:
 
 - **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold
   semantics: `AgentDrawer`, `EscalationCard`, `RecoveryPanel`, `InjectPanel`, `LaunchPanel`,
-  `FindingsPanel`, `PlanPanel`, the buttons, and the leaf helpers. The escalation 409 rules and the
-  recovery verdicts get exactly one implementation.
-- **Skin-owned** (`web/src/skins/<id>/`) — anything that draws over data it was handed: the fleet
-  card, the queue, vitals, the feeds, the chips, the topbar.
+  `FindingsPanel`, `WorldSummary`, the buttons, and the leaf helpers. The escalation 409 rules and
+  the recovery verdicts get exactly one implementation, and the floor embeds them and tints them
+  through the tokens.
+- **Drawn** (`web/src/factory/`) — anything that draws over data it was handed: the belt, the bays,
+  the desks, the gauges, the chips, the status bar.
 
-`UpNext` sits on the line: it carries the reorder drag, which is a mutation, and it is also exactly
-what another skin would replace wholesale. Resolved by putting the _call_ on `CockpitActions` and
-leaving only the drag UI skin-side.
-
-**One panel hangs off the shell rather than off a skin**, below it, so it reads the same whichever
-theme is on: the work graph (`WorkTreePanel`). It is absent from the view-model because it rides its
-own route, **fetched on open, never polled**, since it only ever grows. A skin drawing it would have
-to reach `api.js` directly, which is exactly what the skin seam forbids and
-`test/cockpitSkins.test.ts` asserts.
+**One panel hangs off the shell rather than off the floor**, below it: the work graph
+(`WorkTreePanel`). It is absent from the view-model because it rides its own route, **fetched on
+open, never polled**, since it only ever grows. Drawing it from `factory/` would mean reaching
+`api.js` directly, which is exactly what the seam forbids and `test/factoryFloor.test.ts` asserts.
 
 The prompt book hung there too until #244 and is now a **tab of the settings modal** below — same
 fetched-on-open route, same shell ownership, a findable place. It lists the prompt ids (each with the
@@ -60,43 +53,40 @@ text. It is read-only: the path is what makes it actionable, since overriding is
 bundle imports no server code, and a copy of eighteen prompts shipped to fill the panel would be free
 to drift from the originals with nothing to catch it.
 
-`WorldSummary` moved the other way — out of Classic and into `components/` when the second skin
-arrived. Most of it is drawing, but the watch/ignore toggles, the conclusion verdict and the assay
-override are operator controls with refusal rules behind them, which is the side of the split they
-belong on. A skin reimplementing it would sooner or later ship a world view missing a toggle, and
-switching skins would silently take a capability away. The assay override is the sharpest case, which
-is why it is here and not only on the Goal Floor: an `unclear` verdict is the one intake reading that
-_blocks_ dispatch ([06](06-issue-pickup.md)), so a skin without it is a cockpit you cannot un-block an
-issue from.
+`WorldSummary` is shared rather than drawn for that split's reason. Most of it is drawing, but the
+watch/ignore toggles, the conclusion verdict and the assay override are operator controls with
+refusal rules behind them. A second implementation would sooner or later ship a world view missing a
+toggle, and the capability would be gone with no error to say so. The assay override is the sharpest
+case, which is why it is here and not only on the Goal Floor: an `unclear` verdict is the one intake
+reading that _blocks_ dispatch ([06](06-issue-pickup.md)), so a cockpit without it is one you cannot
+un-block an issue from.
 
-**Skins never import `api.js`.** Every mutation is enumerated on `CockpitActions`, pre-bound, so a
-skin cannot grow a capability another lacks — a difference that would surface only as a button
-existing in one theme. Asserted structurally in `test/cockpitSkins.test.ts`.
+**Nothing under `factory/` imports `api.js`.** Every mutation is enumerated on `CockpitActions`,
+pre-bound, so drawing code cannot grow a capability with no refusal rule behind it — it would surface
+only as a button nobody wrote a rule for. Asserted structurally in `test/factoryFloor.test.ts`.
 
 ### Tokens
 
-Tokens in `styles.css` are the styling contract **for shared components**, which is narrower than
-the usual meaning: a skin may write whatever CSS it likes for its own markup, but a shared component
-must be restyleable without being edited. So shared components style themselves only through tokens,
-and skins define the tokens. Beyond colour that means `--r-*` (radius — the one non-colour token
-that genuinely blocks a treatment, since a square-cornered skin is unreachable by palette alone),
-`--font-ui|mono|display`, and `--border-hi`/`--border-lo` so a bevel is expressible. Classic points
-both border tokens at `--border`, so its panels stay flat.
+Tokens on `:root` in `styles.css` are the styling contract **for shared components**, which is
+narrower than the usual meaning: `factory.css` writes whatever CSS it likes for its own `.fx` markup,
+but a shared component must be restyleable without being edited. So shared components style
+themselves only through tokens, and nothing in `factory.css` targets a shared component's class —
+the moment it reaches into `.escalation-card` the two stop being separable and a change to one
+silently redraws the other. Beyond colour the set covers `--r-*` (radius — all `0`, since nothing on
+a factory floor is rounded), `--font-ui|mono|display`, and `--border-hi`/`--border-lo`, the light/dark
+pair that makes the bevel expressible.
 
-A skin's stylesheet is imported from `main.tsx`, not from the skin's own module. A `.css` import
-inside a skin would be invisible to `tsx`, which has no CSS loader and would throw when
-`test/cockpitSkins.test.ts` pulls the skin modules in. Each sheet is scoped to its own `[data-skin]`
-selector, so loading all of them costs a few kilobytes and collides with nothing.
+`factory.css` is imported from `main.tsx`, not from a module under `factory/`. A `.css` import there
+would be invisible to `tsx`, which has no CSS loader and would throw when `test/factoryFloor.test.ts`
+pulls those modules in.
 
-### The skins
+### The floor
 
-**Classic** — three columns: fleet, your inbox, the queue and the feeds. Rounded, cool, flat.
-
-**Factory Floor** (`skins/factory/`) — the dispatcher's decision drawn as a production line. The
+**Factory Floor** (`web/src/factory/`) — the dispatcher's decision drawn as a production line. The
 fleet cap is a roboport with a pad per slot, each slot is a machine bay, the "Up next" queue is a
 belt of crates, and the headroom cut is a hazard-striped gate the belt backs up behind. It exists to
-make one claim visible that Classic makes you assemble from three panels: **a bay runs only when it
-has both an item and a bot**.
+make one claim visible that a column-per-subject layout makes you assemble by eye: **a bay runs only
+when it has both an item and a bot**.
 
 Three properties keep it a view rather than a costume, and they are what to preserve when changing
 it:
@@ -107,11 +97,11 @@ it:
 - **The rocket means one thing: a goal closing.** `iconForStage('launch')` and
   `iconForEventKind('issue_closed')` are the only two places it appears. It used to be spent on
   `pr_merged` as well, which double-booked it and left the one event that _is_ a launch falling
-  through to a flask; `test/factorySkin.test.ts` now asserts that nothing about a pull request wears
+  through to a flask; `test/factoryFloor.test.ts` now asserts that nothing about a pull request wears
   it.
 - **The belt is the harness running, so it stops when the harness does** (paused, or held on
   recovery), as does the radar sweep. A belt still moving while no cycle will run is the one
-  genuinely misleading thing this layout could draw, so `test/factorySkin.test.ts` asserts it rather
+  genuinely misleading thing this layout could draw, so `test/factoryFloor.test.ts` asserts it rather
   than trusting the CSS. The same test pins the gate to the dispatching prefix — a gate that drifted
   off the cut would be confidently wrong, which is worse than no picture.
 - **The vocabulary is stated once**, in the pure `factory/vocabulary.ts`, so the belt and the bay
@@ -159,7 +149,7 @@ Four consequences to preserve:
 
 - **Document order is reading order**, so no panel carries an `order`. The `order` values that used
   to restore the reading order when the rails dissolved are gone with them; a panel moved in
-  `FactoryRoot` moves on the floor, which is the point. `test/factorySkin.test.ts` pins the sequence
+  `FactoryRoot` moves on the floor, which is the point. `test/factoryFloor.test.ts` pins the sequence
   and pins every panel as a _direct_ child of the grid — a wrapper re-introduced round any of them
   takes it out of the grid and its span rule then does nothing.
 - **The goal floor and the yard span the full width, and the goal floor's drawing grows into it.**
@@ -173,7 +163,7 @@ Four consequences to preserve:
 - **The full-bleed pictures need a container that caps them.** The line and the production graph
   scale with their container; given the whole of a 3440px display, the graph alone became a
   ~500px-tall chart that ate the first screen. Spans are what stop that, which is why widening the
-  old centred ribbon without also tiling it made the skin worse rather than better. The graph is no
+  old centred ribbon without also tiling it made the floor worse rather than better. The graph is no
   longer on the floor at all (below), but the constraint is the line's too.
 - **The Bench is the first tile, above the line.** Work a person does by hand comes ahead of
   everything the line does by itself, and it is the one panel on this floor whose contents are the
@@ -182,40 +172,40 @@ Four consequences to preserve:
   read across the top of the floor, and halving it would put the work you are the blocker for in a
   column beside the work you are not. It is drawn **only when something is on it** — a panel with
   nothing in it is not a panel — so a floor with an empty bench has no `bench` tile at all, which
-  `test/factorySkin.test.ts` asserts from both sides along with the reading order.
+  `test/factoryFloor.test.ts` asserts from both sides along with the reading order.
 
   It is a **panel and not a desk**. The three desks are counts in the status bar you open when you
   want them, which is right for things read as "how many"; this is a list you work through, and a
   plan step on it is holding assemblers shut somewhere below.
 
-  **The bench is drawn by this skin** (`components/Bench.tsx`), not by the shared
-  `HumanTaskPanel`. That is the one place the skinned/shared split lands differently from findings
+  **The bench is drawn by the floor** (`components/Bench.tsx`) rather than as a list of cards. That
+  is the one place the drawn/shared split lands differently from findings
   and recovery, and the reason is what the split is actually for: those two are _flows_ with refusal
   rules, and this is a _list of machines_. Everything else on this floor is a machine with a lamp, a
-  plate and a caption; Classic's cards dropped into a factory card read as a form somebody left on
+  plate and a caption; plain cards dropped into a factory card read as a form somebody left on
   the shop floor. So each task is a **station** — `fx-station`, an `fx-sunk` plate with an amber
   edge, a `Lamp`, the instruction as its heading and the origin and age on the right — laid out two
   to a row from 1100px, because a bench is a row of stations you walk along rather than a column you
   scroll.
 
-  What the skin does **not** redraw is the pair of buttons and the rule between them:
+  What the floor does **not** redraw is the pair of buttons and the rule between them:
   `HumanTaskActions` is shared, embedded here with `buttonClass="fx-btn"`, exactly as `BotCard`
   embeds the wired `EscalationCard` and for the same stated reason — the refusal that a decline needs
-  a note has one implementation whichever skin you are looking at. `ConfirmButton`'s `className` seam
+  a note has one implementation wherever you meet it. `ConfirmButton`'s `className` seam
   is the precedent for the prop.
 
-  Three things the station says that the classic card cannot:
+  Three things the station says that a plain card cannot:
 
   - **It has a lamp**, because it is a machine: `warn` while it waits on you, `off` once done,
     `ghost` for one you declined — drawn but not built, which is what a declined step is. **Never
     `bad`**: red on this floor means one thing, an agent parked on a question only you can answer,
     and a task nobody is blocked on must not borrow it.
   - **What it is holding.** A plan step counts the live siblings that named its slug and says "3
-    parts cannot start until this is done" — derived in the skin off `planParts`, a read-only view
+    parts cannot start until this is done" — derived on the floor off `planParts`, a read-only view
     like every other reading here. It is the fact only the floor has the parts to state, and the
     difference between a chore and the reason the line is short. A standalone ask draws no count
     rather than a zero, because it genuinely holds nothing.
-  - **The instructions are open, not folded away.** Classic collapses them behind a `<details>`
+  - **The instructions are open, not folded away.** A list you scan can fold them behind a `<details>`
     because its column is a list you scan; the bench is a thing you stand at and work from, and a
     disclosure you have to open first is a step between you and the job. The sheet is capped and
     scrolls inside itself rather than pushing the line off the screen.
@@ -271,9 +261,9 @@ Five rules hold them:
   a raised face, a hover lift and a pointer. Icons are distinct per gauge (`alert`, `gear`, `chest`,
   `blueprint`, `lamp`) so five adjacent buttons stay legible. **The chevron is the narrower word** —
   it says _there is a panel behind this_ — so all five carry one and `Scan`, which runs a pulse
-  rather than opening anything, does not (`.fx-run`). `test/factorySkin.test.ts` counts the ways in
+  rather than opening anything, does not (`.fx-run`). `test/factoryFloor.test.ts` counts the ways in
   by chevron for that reason.
-- **Only Alerts is ever red**, and that is the skin's existing rule rather than a new one: red means
+- **Only Alerts is ever red**, and that is the floor's existing rule rather than a new one: red means
   an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
   finding is something a bot noticed on its way past rather than something it is stuck on (amber),
   and a queued blueprint is waiting on a slot, not on you (neither).
@@ -287,7 +277,7 @@ Five rules hold them:
 - **A zero count mutes a gauge; it never removes it.** Faults is the only way to the fault log, which
   carries the two-step `clear` — a control that must not become unreachable because the log happens
   to be empty — and a gauge that vanished would reflow the bar every time its number left zero.
-  `test/factorySkin.test.ts` asserts all four survive a zero, counting the ways in by chevron.
+  `test/factoryFloor.test.ts` asserts all four survive a zero, counting the ways in by chevron.
 - **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
   listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
   answering still happens on the shared `EscalationCard`, which owns the refusal rules.
@@ -316,8 +306,8 @@ rules now hold it, and each removes a duplicate rather than shrinking a survivor
 point moved in by ~260px without a reading being lost:
 
 - **The reading and its control are one gauge.** `Bots` _is_ `FleetControl`, wearing the gauge's icon
-  and label; the shared component is unchanged, because a skin may not reach `api.js` and embedding it
-  is the sanctioned route to a control. Its own `cap` caption is hidden in the skin's CSS — a third
+  and label; the shared component is unchanged, because `factory/` may not reach `api.js` and embedding
+  it is the sanctioned route to a control. Its own `cap` caption is hidden in `factory.css` — a third
   word for one number.
 - **The gauge is the button.** `ScanRead` presses, and the countdown on its face is what says whether
   pressing it is worth anything. It stays pressable while paused or held: that is precisely when an
@@ -334,7 +324,7 @@ fix, one level up. So a dropped socket **empties the floor**: the bar is the ide
 `Link · offline` reading, and the rails, the recovery banner, the modals and the drawer are not
 rendered at all — one `Off the air` card in their place. Nothing is being polled into a lie, the
 harness is unaffected and says so, and the reconnect brings the floor back by itself.
-`test/factorySkin.test.ts` asserts both halves: one fleet reading and no second scan button while
+`test/factoryFloor.test.ts` asserts both halves: one fleet reading and no second scan button while
 connected, and no gauge at all while not.
 
 #### What the floor draws beyond the queue
@@ -388,7 +378,7 @@ argument for each is in its module's header, and the reason for the shape is wor
     desk and `FactoryRoot` render that, so the refusal rules — a proposal cannot be answered with
     free text, a permission verdict goes to `/permission` and not `/answer`, "Dismiss (rejects)" vs
     "Dismiss (denies)" — have one implementation and cannot hold on one surface only. `BotCard` takes
-    the finished element and owns nothing but the gap (`.fx-ask`), which keeps the skin's rule that
+    the finished element and owns nothing but the gap (`.fx-ask`), which keeps the floor's rule that
     no CSS here targets a shared component's class.
   - **The join is a view-model derivation**, `escalationByAgent`, off the same `status === 'open'`
     filter `openEscalations` uses — which is what makes the two views one reading: answering settles
@@ -397,7 +387,7 @@ argument for each is in its module's header, and the reason for the shape is wor
     escalation no agent raised (a plan approval) has no bot to sit on and stays the desk's alone, as
     do ended shifts: a dead agent's escalations are cascade-dismissed, so an answer box there would
     be chrome nothing can settle. The Line's bays and the Goal Floor keep reading a parked agent red
-    through `bayMachineStatus` and gain no answering affordance — one place per skin to answer from
+    through `bayMachineStatus` and gain no answering affordance — one place to answer from
     the floor is the point.
 - **Inserters swing on a transfer, not on occupancy** (`inserterPhase`). An arm that ran for the
   life of an agent was the one moving thing on the floor carrying no information. A swing is one
@@ -428,21 +418,21 @@ argument for each is in its module's header, and the reason for the shape is wor
     `not_ours` is amber — failing and none is, which the old single CI cell could not say and which is
     the whole reason per-check policy exists; `muted` is a dashed outline, `awaiting` blue, passing
     green. Red is left to the court chip and the row stripe, so it keeps meaning _a question only you
-    can answer_ on a row with four failing checks. No check **name** is written in the skin; every one
+    can answer_ on a row with four failing checks. No check **name** is written on the floor; every one
     comes off the verdict.
   - **`attention.status` names the court, read off the server and never re-derived**
     (`prCourt`); `attention.reasons`/`health.reasons` are quoted, never parsed. An empty rack still
     draws — a surface that vanishes when quiet is indistinguishable from one that broke. The merge
     count from `closedPullRequests` is all that survives of the Launches log, in the header.
   - **The Yard gives up its PR list.** `WorldSummary` takes `showPullRequests` (default `true`, so
-    Classic — which has no strip — is unchanged, golden included); the factory passes `false`, and the
+    the floor passes `false`, and the
     flag gates the tab counts and the recently-closed list as well as the rows, or the counts would
     not match what the tab shows. One subject, one place: the argument that dissolved the act rail.
   - **The watch/ignore toggle moves with the PRs.** `showPullRequests={false}` also drops the
     exclude toggle `WorldSummary` renders on every PR row, so once the factory moved its PRs onto the
     rack the toggle had no home — the only way to `-ignore` a PR from the cockpit was to switch to
-    Classic. So each open rack row carries it (`onToggleExclude` → `actions.setPrExcluded` →
-    `POST /api/prs/:n/exclude`, the same label write Classic makes): `ignore` when untagged, `watch`
+    The Yard. So each open rack row carries it (`onToggleExclude` → `actions.setPrExcluded` →
+    `POST /api/prs/:n/exclude`, the same label write `WorldSummary` makes): `ignore` when untagged, `watch`
     to lift it, read off `pr.labels.includes(ignoreLabel)`. With **no `ignoreLabel` configured** the
     gate is off, so the button renders **disabled rather than absent** — the control keeps its place
     on the row and the reason is one hover away, the same rule the empty rack is drawn for. A merged
@@ -456,7 +446,7 @@ argument for each is in its module's header, and the reason for the shape is wor
   watches, and it is **not on the floor**: it draws at two sizes off one set of plotting functions —
   the **spark** on the status bar's Output gauge (two series, gauge weight; see
   [the five ways in](#the-five-ways-in)) and the **full graph** — axes, deltas, spend, the
-  truncation caveat — behind the click, in the skin's `Modal`. Two components drawing the same
+  truncation caveat — behind the click, in the floor's `Modal`. Two components drawing the same
   series independently would be two things to keep in step for no gain; the only difference between
   them is the rectangle they plot into, how heavy the strokes are in it, and whether the axes are
   labelled. `FactoryRoot` derives the reading once and hands it to both, so the gauge and the graph
@@ -492,7 +482,7 @@ Two of the three desks carry a rule of their own:
   the static Pages build. Injection fakes a world change, which is only ever something the demo
   needs: a real run against a fake provider is still a real run, and a panel that lies to the harness
   there is a way to lie to yourself about what it is reacting to. The empty-floor line reads from the
-  same predicate, so it never offers an injection there is no panel for. Classic reads `view.demo`
+  same predicate, so it never offers an injection there is no panel for. The shell reads `view.demo`
   too — one predicate, because there is no second thing for a second one to disagree with.
 - **`FaultLog`** offers a two-step **clear** whenever it has any, posting `POST /api/errors/clear`.
   Two-step because the rows go: nothing in the harness reads the fault log back, so a clear costs
@@ -577,13 +567,13 @@ Seven properties, and they are what to preserve:
 - **The belt is the harness running.** A lit belt animates only while cycles run; paused or held on
   recovery, they all stop. `cold` is a different fact and a different class — an edge nothing can
   travel yet, because the machine behind it has not produced anything. Asserted in
-  `test/factorySkin.test.ts` rather than trusted to the CSS.
+  `test/factoryFloor.test.ts` rather than trusted to the CSS.
 
 **Two sources, with different jobs.** `/api/state` is the live reading and wins wherever both speak;
 `GET /api/work/issue:<n>` is fetched **once** when a floor is opened, never on a poll, and may only
 _add_ settled machines the world has forgotten — a PR merged past `closedPrWindowMs`. That one line is
 the whole of the merge: two sources each partly owning a field is how they start disagreeing. The
-fetch goes through `fetchWorkSubtree` on `CockpitActions`, because a skin may not import `api.js`.
+fetch goes through `fetchWorkSubtree` on `CockpitActions`, because `factory/` may not import `api.js`.
 
 **A run is kept until the operator dismisses it (#203, #234).** The floor is otherwise built from the
 live world, so a goal — and the Manifest's way in to its retrospective — dropped off the moment the
@@ -691,7 +681,7 @@ while the machine's `link` — captioned `notice ↗`, never printing the ref, w
 appears only when `refUrls` has a URL for it. Keeping them apart is what lets a plan under a provider
 that builds no URLs still say a notice went out, without offering a way in that goes nowhere.
 `signalPostStatus` is a closed fold with a word per combination of the two signals, asserted arm by
-arm in `test/factorySkin.test.ts`.
+arm in `test/factoryFloor.test.ts`.
 
 `Machine.link` is `{ref, label} | null` and is **never set beside `prNumber`**: they share one corner
 of the node, so a machine claiming two ways out would draw one over the other. The test asserts that
@@ -713,30 +703,14 @@ reference is the vocabulary — a bay, an inserter, a roboport — which is nobo
 display face is Bahnschrift/DIN Alternate, already present on Windows and macOS respectively, rather
 than a bundled webfont.
 
-### Choosing one
-
-`localStorage['lubbdubb.skin']`, stamped onto `<html data-skin>` by a small script in `index.html`
-**before first paint** — in the bundle it would run after the default had already painted, so
-switching would flash the old skin. An unrecognised or missing id falls back to Classic silently: a
-stale id is a normal thing to find after a skin is renamed, not an error. The picker is a _shared_
-component so a half-built skin is never the one you cannot escape from, and applying is a reload,
-since a skin owns the whole tree and switching unmounts everything anyway.
-
-The choice is deliberately **not** in `Config` or `/api/state`. It is a per-viewer preference;
-shipping it in the snapshot would make one operator's taste global to every cockpit.
-
-The picker itself lives inside the **settings modal** below; what each skin embeds is the cog that
-opens it. That inherits the picker's own rule rather than weakening it — the cog is now the way _to_
-the picker, so a skin failing to draw one is still a skin you could not leave.
-
 ### Settings
 
-A cog in each skin's chrome opens a shared modal. Since #244 it carries **three tabs**, which is
+A cog in the status bar opens a shared modal. Since #244 it carries **three tabs**, which is
 everything an operator configures answering to one control:
 
 | Tab         | Reads                | Shows                                                                            |
 | ----------- | -------------------- | -------------------------------------------------------------------------------- |
-| `Settings`  | `GET /api/config`    | The skin picker, the live controls, and the configuration this process ran up on |
+| `Settings`  | `GET /api/config`    | The live controls, and the configuration this process ran up on                  |
 | `CI policy` | `GET /api/ci-policy` | What the harness does about a red PR, check by check                             |
 | `Prompts`   | `GET /api/prompts`   | The rule dispatcher's prompt book                                                |
 
@@ -753,8 +727,8 @@ The **prompt book's own modal nests inside this one**, and that is why the setti
 Escape listener: `PromptModal` has one, so Escape and a backdrop click close the template being read
 and leave the modal behind it standing. Two listeners would close both layers on one key.
 
-The arrangement is `PlanModal`'s exactly. The modal reads routes a skin may not, so it hangs off the
-shell in `App.tsx` and the skin-side cog only flips `settingsOpen` through
+The arrangement is `PlanModal`'s exactly. The modal reads routes `factory/` may not, so it hangs off
+the shell in `App.tsx` and the floor-side cog only flips `settingsOpen` through
 `CockpitActions.openSettings` — the same seam `viewPlan` uses, for the same reason.
 
 #### The CI policy tab
@@ -796,22 +770,13 @@ hide a useful value while implying the invariant is not real.
 ### Tests
 
 `test/cockpitViewModel.test.ts` covers the derivations (untestable while they lived inside a
-component). `test/cockpitSkins.test.ts` holds the structural no-`api` rule, a conformance render of
-every registered skin against the demo fixtures, the unknown-id fallback, and a byte-for-byte golden
-of Classic's markup (`test/fixtures/classic-markup.html`, regenerate with `UPDATE_GOLDEN=1`). The
-golden fixes the static tree only — not effects, not CSS — and its value is forward-looking: a
-change to Classic's DOM has to be deliberate enough to regenerate it.
+component). `test/factoryFloor.test.ts` holds the structural no-`api` rule, and renders the floor
+against the demo fixtures.
 
-The golden render is wrapped in a **clock, locale and timezone pin**. The clock is obvious
-(`buildDemoState` stamps relative to `Date.now()`), the other two less so: `UsageChip` formats the
-rate-limit reset with `toLocaleTimeString([])`, i.e. the _runtime's_ locale and zone, so the same
-instant is `14:20` on one machine and `02:20 PM` on another and the golden silently records whichever
-laptop generated it. It did — the test was red on the Linux runner from the day it landed while
-passing locally. The formatters are pinned rather than the component changed, because which clock
-format an operator sees is correctly their machine's business; it is only the golden that needs it to
-be nobody's. An assertion beside the comparison fails if the pin ever stops taking effect.
+The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative
+to `Date.now()` and the rendered relative times would drift between runs otherwise.
 
-`test/factorySkin.test.ts` covers that skin's pure vocabulary exhaustively (every `QueueItem.status`
+`test/factoryFloor.test.ts` covers the floor's pure vocabulary exhaustively (every `QueueItem.status`
 and every Goal Floor stage has a machine word; only `waiting` reads as jammed; the two `waiting`s do
 not read alike; a paused floor outranks every other diagnosis; every `StatusTone` resolves to a
 colour) plus each derivation added beside it: the floor's longest-path columns, lanes, fixtures,
@@ -825,10 +790,6 @@ and the bot on the floor carrying its own question — that a running agent with
 still draws one, that an agent-less escalation stays the desk's alone, that answering empties both
 surfaces, and that a proposal reaching a bot arrives with its verdict buttons rather than a reply
 box.
-
-A skin registered but not otherwise tested still gets the conformance render for free, which is the
-point of driving it off `SKINS` — it is asserted on the day it is written rather than the day it
-breaks.
 
 ## Data flow
 
@@ -890,7 +851,7 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
   [Demo mode](#demo-mode) for why the harness ships no injection surface at all.
 - **`LaunchPanel`** — stamp a blueprint: an operator job (prompt, optional title, code/desk, optional
   branch) and the queue, including cancel. The button is `+ New blueprint` behind a blue blueprint
-  plate — drawn inline in the component rather than added to a skin's sprite sheet, because the panel
+  plate — drawn inline in the component rather than added to the floor's sprite sheet, because the panel
   is shared and the sprites are not. It is the one glyph in the cockpit that is not `currentColor`: a
   blueprint is blue the way a warning is amber, so the colour is the noun.
 
@@ -962,7 +923,7 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
   chips: those settle a question, where here every answer waits for the others, so picking one and
   then qualifying it costs nothing. One **Send answers** posts the whole array to `/answer`; a
   question left blank is sent as an explicit non-answer, so the agent knows not to wait on it. The
-  card is shared, so the modal styles itself through the tokens alone and neither skin gains markup.
+  card is shared, so the modal styles itself through the tokens alone and the floor gains no markup.
 
   **How a card is laid out, and the one rule behind it: `prompt` is the harness speaking to you, and
   `context.detail` is text the harness is _quoting_ from an agent.** Two mechanisms follow, doing two
@@ -1118,11 +1079,9 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
 ## The stack panel
 
 Chains of stacked pull requests, from `/api/state`'s `stacks` (see
-[07](07-pull-requests.md) for the fold). Drawn in both skins, differently on purpose:
+[07](07-pull-requests.md) for the fold). Drawn on **the rack** (`Inspection.tsx`), not on the line:
 
-- **Classic** — `web/src/components/StackPanel.tsx`, one card per stack, styled through tokens only,
-  so the treatment follows whichever skin is active.
-- **Factory** — on **the rack** (`Inspection.tsx`), not on the line. A stack is a fact about _pull
+- A stack is a fact about _pull
   requests_, and the rack is where pull requests are read; a belt would have said it was a fact about
   scheduling, which is the confusion the plan panel already risks by drawing parts as a stack.
 
@@ -1166,7 +1125,7 @@ the ladder, a `muted` scanner excepted, because policy saying a check does not c
 it does not hold — so the note and the ladder can never disagree about the same rung. The bottom
 rung, when clear, reads `next to merge`.
 
-`test/factorySkin.test.ts` asserts both halves: the grouping and blocked-by fold, and that the
+`test/factoryFloor.test.ts` asserts both halves: the grouping and blocked-by fold, and that the
 rendered rungs carry a toggle and a ladder apiece with no `Stacked` heading left under the rack.
 
 A stack is drawn whether or not a plan produced it — `from plan` versus `observed` — which is the
@@ -1180,7 +1139,7 @@ standing authorization that merges the whole chain bottom-up over the next sever
 
 Its state comes from `/api/state`'s `stackLandings`, one entry per chain, carrying `offer`,
 `blockedBy`, the intent itself and how many of its rungs have landed. **The verdict is the server's**,
-not the skin's, for the reason `attention` is: a client-side second opinion about whether a merge may
+not the floor's, for the reason `attention` is: a client-side second opinion about whether a merge may
 be authorized is exactly the drift that outlives the change introducing it. `POST /api/stacks/:ref/land`
 asks the same function again before recording, because a disabled button is a courtesy and not a gate;
 it refuses an unready chain with a 409 (the request is well-formed — the world is what is wrong).
@@ -1262,11 +1221,11 @@ Plans panel drew rows whose `scope` was a tooltip. There was no way to say "show
 #231" from anywhere, at any time, once or after it was answered.
 
 **It is shell-owned**, opened through `viewPlan(planId: string | null)` on `CockpitActions` — the same
-seam `select(agentId)` already uses for "which drawer is open is cockpit state, not skin state", and
-for the same reason: one implementation of the modal across both skins, while each skin keeps its own
-drawing of a plan elsewhere (Classic's `PlanPanel` rows, the Goal Floor's assembly machines). A skin must
-not reach `api.js` (`test/cockpitSkins.test.ts`), so the seam is the only way a skin-side button can
-open a shared modal.
+seam `select(agentId)` already uses for "which drawer is open is cockpit state, not floor state", and
+for the same reason: one implementation of the modal, while the floor keeps its own drawing of a plan
+elsewhere (the Goal Floor's assembly machines). `factory/` must not reach `api.js`
+(`test/factoryFloor.test.ts`), so the seam is the only way a floor-side button can open a shared
+modal.
 
 **Two tabs**, because the decision view has to stay short enough to hold in your head:
 
@@ -1297,9 +1256,8 @@ no injection surface to reason about at all.
 **Entry points** — the button or chip appears wherever a plan is mentioned:
 
 - the approval card in "Needs you" (`EscalationCard`), when `proposal.kind === 'plan'`;
-- each row of the classic `PlanPanel`, and the Goal Floor's own plan bar;
-- a **`plan · <status>`** chip on the issue's row in the **shared** `WorldSummary`, so both skins get
-  it for free.
+- the Goal Floor's own plan bar;
+- a **`plan · <status>`** chip on the issue's row in the **shared** `WorldSummary`.
 
 The modal is useful **after** approval too, as the record of what was agreed — which is most of why it
 is a modal reachable from anywhere rather than a section of the approval card that disappears once
@@ -1320,7 +1278,7 @@ between them they left the modal reachable only during the approval window.
   drawn out of one, and names the plan's status because that is the one fact deciding whether opening
   it is a decision or a reading.
 
-`test/factorySkin.test.ts` asserts the floor's way in across **every** plan status rather than only
+`test/factoryFloor.test.ts` asserts the floor's way in across **every** plan status rather than only
 the one that was broken, so a later attempt to hang it off a plate fails a test.
 
 ## The notepad modal
@@ -1334,8 +1292,8 @@ checkable against nothing, and an operator watching a goal go wrong could not re
 was written.
 
 **Shell-owned**, opened through `viewScratchpad(issueRef: string | null)` on `CockpitActions` — the
-plan and retrospective modals' seam, and for their reason: one implementation across both skins, and a
-skin may not reach `api.js` to open it another way. The trail is fetched on open
+plan and retrospective modals' seam, and for their reason: one implementation, and `factory/` may not
+reach `api.js` to open it another way. The trail is fetched on open
 (`GET /api/scratchpads/:ref`); the snapshot carries only the count and the age.
 
 **Three states, and the third is the point**: loading, the trail, and an **error** — a fetch that
@@ -1350,7 +1308,7 @@ testimony, and rendering it would let a stray backtick or hash change what that 
 **Entry points**, both keyed on the pad **having entries** and neither on what the goal is doing —
 `planId`/`retroRef`'s lesson, applied rather than relearned:
 
-- a **`notepad · <n>`** chip on the issue's row in the **shared** `WorldSummary`, so both skins get it;
+- a **`notepad · <n>`** chip on the issue's row in the **shared** `WorldSummary`;
 - a **Notepad** button in the Goal Floor's readings cluster, before Retrospective, because the pad is
   what the write-up was made from — the raw testimony first, the account of it second.
 

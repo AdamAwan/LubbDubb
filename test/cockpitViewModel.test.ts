@@ -4,7 +4,7 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { AppState, Agent } from '../web/src/types.js';
 
 /**
- * These derivations lived inside `App`'s render body until skins split the
+ * These derivations lived inside `App`'s render body until the view model split the
  * cockpit into layers, which is why none of them had a test: a pure function
  * trapped in a component is only reachable through a browser.
  */
