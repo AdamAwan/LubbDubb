@@ -6,16 +6,25 @@ import type {
   Integration,
   IssueCommentCapable,
   IssueLabelCapable,
+  RefResolvable,
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItemUpdate } from './azureDevOpsApi.js';
+import { azureRefUrl } from './refUrl.js';
 
 interface AzureWorkItemsOpts {
   /** The Azure DevOps client, already bound to a single organization/project. */
   api: AzureDevOpsApi;
   /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
   errors?: ErrorRecorder;
+  /**
+   * Azure target identity, for building web URLs. When unset, ref resolution
+   * returns null — the same contract `GitHubIssuesIntegration` has for owner/repo.
+   */
+  organization?: string;
+  project?: string;
+  repository?: string;
   /** Only surface work items carrying this tag. Unset = all open work items. */
   workItemTag?: string;
   /** Only surface work items assigned to this uniqueName (UPN). Unset = all assignees. */
@@ -38,7 +47,7 @@ interface AzureWorkItemsOpts {
  * `labels`, so the provider-agnostic pickup/priority gates work unchanged.
  */
 export class AzureDevOpsWorkItemsIntegration
-  implements Integration, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable
+  implements Integration, RefResolvable, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable
 {
   readonly id = 'issues:azure';
   readonly capability: Capability = 'issues';
@@ -46,6 +55,11 @@ export class AzureDevOpsWorkItemsIntegration
   private lastGood: Issue[] = [];
 
   constructor(private readonly opts: AzureWorkItemsOpts) {}
+
+  resolveRefUrl(ref: string): string | null {
+    const { organization, project, repository } = this.opts;
+    return organization && project && repository ? azureRefUrl(organization, project, repository, ref) : null;
+  }
 
   async snapshot(): Promise<WorldSlice> {
     try {

@@ -21,10 +21,12 @@ import type {
   PrMergeCapable,
   PrReplyCapable,
   PrTitleCapable,
+  RefResolvable,
   WorldSlice,
 } from '../integration.js';
 import { closedWindowStart } from '../closedWindow.js';
 import type { AzClosedPull, AzPolicyEvaluation, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
+import { azureRefUrl } from './refUrl.js';
 import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKinds.js';
 
 interface AzureSourceControlOpts {
@@ -32,6 +34,14 @@ interface AzureSourceControlOpts {
   api: AzureDevOpsApi;
   /** Central error sink: snapshot failures surface in the cockpit's Errors panel. */
   errors?: ErrorRecorder;
+  /**
+   * Azure target identity, for building web URLs. When unset, ref resolution
+   * returns null — the same contract `GitHubSourceControlIntegration` has for
+   * owner/repo.
+   */
+  organization?: string;
+  project?: string;
+  repository?: string;
   /** Only surface PRs opened by this uniqueName. Unset = all active PRs. */
   prAuthor?: string;
   /** Which branch-policy kinds become CI checks, and at what mode. Unset = the defaults. */
@@ -62,7 +72,8 @@ export class AzureDevOpsSourceControlIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBaseCapable,
-    BranchDeleteCapable
+    BranchDeleteCapable,
+    RefResolvable
 {
   readonly id = 'sourceControl:azure';
   readonly capability: Capability = 'sourceControl';
@@ -74,6 +85,16 @@ export class AzureDevOpsSourceControlIntegration
   private mergeCommits = new Map<number, string>();
 
   constructor(private readonly opts: AzureSourceControlOpts) {}
+
+  /**
+   * Resolves *every* ref shape, work items included, not just the ones this
+   * capability owns: `CompositeConnector.resolveRefUrl` routes to the first
+   * resolvable integration, and `sourceControl` is built first.
+   */
+  resolveRefUrl(ref: string): string | null {
+    const { organization, project, repository } = this.opts;
+    return organization && project && repository ? azureRefUrl(organization, project, repository, ref) : null;
+  }
 
   async snapshot(): Promise<WorldSlice> {
     try {

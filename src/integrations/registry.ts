@@ -39,6 +39,9 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         api,
         errors: ctx.errors,
         prAuthor: az.filters?.prAuthor,
+        organization: az.organization,
+        project: az.project,
+        repository: az.repository,
         policyChecks: az.policyChecks,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
       });
@@ -61,6 +64,9 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new AzureDevOpsWorkItemsIntegration({
         api,
         errors: ctx.errors,
+        organization: az.organization,
+        project: az.project,
+        repository: az.repository,
         workItemTag: az.filters?.workItemTag,
         assignedTo: az.filters?.workItemAssignedTo,
         ownershipTag: ownershipLabel(ctx),
