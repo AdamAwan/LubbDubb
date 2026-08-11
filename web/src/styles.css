@@ -1086,6 +1086,33 @@ body {
 .terminal .ansi-dim {
   opacity: 0.65;
 }
+/* A tool call folds to one line, so the agent's reasoning is the spine of the pane
+   and its evidence is a click away. See components/transcriptBlocks.ts. */
+.terminal .tool-block > summary {
+  cursor: pointer;
+  list-style: none;
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 -3px;
+}
+.terminal .tool-block > summary::-webkit-details-marker {
+  display: none;
+}
+.terminal .tool-block > summary:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.terminal .tool-body {
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  margin: 2px 0 0 3px;
+}
+.terminal .tool-block:not([open]) .tool-body {
+  display: none;
+}
+/* An error is opened by the renderer and reads as one, not as a collapsed aside. */
+.terminal .tool-block.error > summary {
+  color: #ff8a8a;
+}
 /* Jump-to-latest: shown only when the stream ran ahead while scrolled up. */
 .term-jump {
   position: absolute;

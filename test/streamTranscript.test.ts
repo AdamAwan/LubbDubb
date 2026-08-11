@@ -80,3 +80,26 @@ test('renderBlocks renders assistant text and a tool call together, visually sep
   // A newline boundary separates prose from the tool line.
   assert.ok(out.indexOf('Bash') > out.indexOf('\n'), 'tool label sits on its own line');
 });
+
+test('renderBlocks labels a multi-line result with its line count', () => {
+  const out = plain(renderBlocks([{ type: 'tool_result', content: 'a\nb\nc' }]));
+  assert.match(out, /↳ result · 3 lines/);
+});
+
+test('renderBlocks omits the count for a single-line result', () => {
+  const out = plain(renderBlocks([{ type: 'tool_result', content: 'just one' }]));
+  assert.match(out, /↳ result\n/);
+  assert.ok(!out.includes('· 1 line'), 'no count for a one-line result');
+});
+
+test('the result count is the pre-truncation total', () => {
+  const body = Array.from({ length: MAX_RESULT_LINES + 14 }, (_, i) => `line-${i}`).join('\n');
+  const out = plain(renderBlocks([{ type: 'tool_result', content: body }]));
+  assert.match(out, new RegExp(`↳ result · ${MAX_RESULT_LINES + 14} lines`));
+  assert.ok(/\+14 more lines/.test(out), 'still reports what was hidden');
+});
+
+test('an error result is labelled and counted the same way', () => {
+  const out = plain(renderBlocks([{ type: 'tool_result', is_error: true, content: 'boom\ntrace' }]));
+  assert.match(out, /↳ error · 2 lines/);
+});

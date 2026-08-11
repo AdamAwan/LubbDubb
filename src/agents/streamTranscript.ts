@@ -30,7 +30,7 @@ export interface ContentBlock {
 export const HUMAN_BLOCK = 'human';
 
 /** Tool output longer than this many lines is truncated with a remaining-lines marker. */
-export const MAX_RESULT_LINES = 12;
+export const MAX_RESULT_LINES = 200;
 /** Cap on a one-line tool-input summary before it's ellipsised. */
 const MAX_SUMMARY_LEN = 140;
 
@@ -93,7 +93,11 @@ function renderToolUse(b: ContentBlock): string {
 function renderToolResult(b: ContentBlock): string {
   const body = sanitise(extractResultText(b.content));
   const { text, hidden } = truncateLines(body, MAX_RESULT_LINES);
-  const label = b.is_error ? `${RED}  ↳ error${RESET}` : `${GRAY}  ↳ result${RESET}`;
+  // Pre-truncation total: the cockpit folds this into the collapsed summary, and the
+  // server is the only side that still knows what was cut.
+  const total = body === '' ? 0 : body.split('\n').length;
+  const count = total > 1 ? `${DIM} · ${total} lines${RESET}` : '';
+  const label = b.is_error ? `${RED}  ↳ error${RESET}${count}` : `${GRAY}  ↳ result${RESET}${count}`;
   const indented = text
     .split('\n')
     .map((l) => `  ${l}`)
