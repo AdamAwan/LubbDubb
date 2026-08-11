@@ -1222,6 +1222,31 @@ The one terminal feature it reproduces is SGR colour, via the pure parser in
 `web/src/components/ansi.ts` (`parseAnsi` / `ansiClass`, tested in `test/ansi.test.ts`), which handles
 the five codes `renderBlocks` emits and threads the active style across streamed deltas.
 
+### Tool calls fold out of the way
+
+The pane is read to follow an agent's **reasoning**, and tool output drowned it — one `grep` filled the
+view and pushed the thinking into fragments. So a tool call renders as a **collapsed block**: one dim
+line carrying the tool name, its one-line input summary, and the result's `· N lines` suffix
+([10](10-agent-runtimes.md)). Clicking it reveals the output. Prose reads continuously between them.
+
+- **An error result is never collapsed.** It opens expanded and red, because a failure that hides is
+  worse than one that takes up space.
+- **Expansion is DOM-only state.** A reseed — an agent switch, or a non-append change to the buffer —
+  rebuilds the pane with every block collapsed. Nothing is remembered per tool call.
+- **A result folds into the call above it only when that call is unambiguous.** Two tool calls with no
+  result between them means the agent fired them in parallel, and the stream carries no ids to pair
+  them by; each result then renders as its own standalone collapsed block rather than being attributed
+  to the wrong call.
+- **A PTY transcript carries no markers**, so it renders as plain prose with nothing to collapse. That
+  is a property of the runtime, not a gap.
+
+The structure is found, not shipped: the transcript is still a flat text stream, and
+`web/src/components/transcriptBlocks.ts` (`feedBlocks`, pure, tested in `test/transcriptBlocks.test.ts`)
+recognises the labelled lines the server writes and emits DOM operations the drawer applies. Its tests
+feed it **real `renderBlocks` output**, so the writer and the reader of those markers cannot drift apart
+quietly. A partial trailing line is held in parse state — a marker split across two deltas must not
+half-parse — and rendered separately so streaming text is still shown while it arrives.
+
 **No xterm remains anywhere.** The browser-side `@xterm/xterm` and `@xterm/addon-fit` went first, and
 `@xterm/headless` went with the server-side screen-scraping it existed to do.
 
