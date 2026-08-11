@@ -101,13 +101,13 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 export async function acquireCheckLock(options: AcquireOptions): Promise<Lock> {
   const { path, pollMs = 250, onWait } = options;
-  mkdirSync(dirname(path), { recursive: true });
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   let announced = false;
 
   for (;;) {
     try {
       // 'wx' is the whole lock: O_EXCL, so exactly one of two racing runs creates it.
-      const fd = openSync(path, 'wx');
+      const fd = openSync(path, 'wx', 0o600);
       const holder: Holder = { pid: process.pid, startedAt: Date.now() };
       writeSync(fd, JSON.stringify(holder));
       closeSync(fd);
