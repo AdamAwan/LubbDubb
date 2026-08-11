@@ -55,27 +55,27 @@ deliberately left unchecked, and why, is in
 
 ## The specification
 
-| #                                    | Document                   | Covers                                                                             |
-| ------------------------------------ | -------------------------- | ---------------------------------------------------------------------------------- |
-| [01](spec/01-overview.md)            | System overview            | What the harness is, its components, the pulse, the seams, the standing invariants |
-| [02](spec/02-configuration.md)       | Configuration              | Every config key, its default, precedence, env overrides, path resolution          |
-| [03](spec/03-world-model.md)         | World model                | Domain types, the world snapshot, the ref vocabulary, world diffing, closed PRs    |
-| [04](spec/04-harness-cycle.md)       | The harness cycle          | Heartbeat, pulse ordering, coalescing, the world baseline, headroom, exclusion     |
-| [05](spec/05-dispatcher.md)          | Dispatch                   | The dispatcher seam, the rule book, ranking, the Up next queue, cooldowns, actions |
-| [06](spec/06-issue-pickup.md)        | Issue pickup and labels    | Watch/ignore tags, priority, workflow states, the per-issue pickup verdict         |
-| [07](spec/07-pull-requests.md)       | Pull requests              | Health predicates, conflicts, stacks, inherited CI, the merge gate                 |
-| [08](spec/08-planning.md)            | The planning funnel        | Plans, parts, the plan document, reconciliation, replan                            |
-| [09](spec/09-execution.md)           | Action execution           | The executor's gates, auto-send, task materialisation, worktrees, git              |
-| [10](spec/10-agent-runtimes.md)      | Agent runtimes             | Sessions, sentinels, PTY and stream runtimes, transcripts, resume, usage           |
-| [11](spec/11-mcp-tools.md)           | The MCP tool channel       | The tools, identity, transport, launch flags, degradation                          |
-| [12](spec/12-artifacts-and-files.md) | Artifacts, files, overlaps | Flag sentinel, the file-events hook, artifact serving, file-overlap detection      |
-| [13](spec/13-jobs-and-findings.md)   | Jobs and findings          | The operator job queue, agent findings, promotion                                  |
-| [14](spec/14-persistence.md)         | Persistence                | The SQLite schema, migrations, the Store API surface, durability rules             |
-| [15](spec/15-integrations.md)        | Integrations               | The connector/sink seams, and the fake, GitHub and Azure DevOps providers          |
-| [16](spec/16-http-api.md)            | HTTP and WebSocket API     | Every route, the state snapshot, the event stream                                  |
-| [17](spec/17-cockpit.md)             | The cockpit                | The web UI: panels, live updates, demo mode                                        |
-| [18](spec/18-observability.md)       | Observability              | The error log, decision log, activity feed, usage accounting, debug logging        |
-| [19](spec/19-development.md)         | Development and quality    | The `check` gate, test seams, the smoke run, build outputs                         |
+| #                                    | Document                    | Covers                                                                             |
+| ------------------------------------ | --------------------------- | ---------------------------------------------------------------------------------- |
+| [01](spec/01-overview.md)            | System overview             | What the harness is, its components, the pulse, the seams, the standing invariants |
+| [02](spec/02-configuration.md)       | Configuration               | Every config key, its default, precedence, env overrides, path resolution          |
+| [03](spec/03-world-model.md)         | World model                 | Domain types, the world snapshot, the ref vocabulary, world diffing, closed PRs    |
+| [04](spec/04-harness-cycle.md)       | The harness cycle           | Heartbeat, pulse ordering, coalescing, the world baseline, headroom, exclusion     |
+| [05](spec/05-dispatcher.md)          | Dispatch                    | The dispatcher seam, the rule book, ranking, the Up next queue, cooldowns, actions |
+| [06](spec/06-issue-pickup.md)        | Issue pickup and labels     | Watch/ignore tags, priority, workflow states, the per-issue pickup verdict         |
+| [07](spec/07-pull-requests.md)       | Pull requests               | Health predicates, conflicts, stacks, inherited CI, the merge gate                 |
+| [08](spec/08-planning.md)            | The planning funnel         | Plans, parts, the plan document, reconciliation, replan                            |
+| [09](spec/09-execution.md)           | Action execution            | The executor's gates, auto-send, task materialisation, worktrees, git              |
+| [10](spec/10-agent-runtimes.md)      | Agent runtimes              | Sessions, sentinels, PTY and stream runtimes, transcripts, resume, usage           |
+| [11](spec/11-mcp-tools.md)           | The MCP tool channel        | The tools, identity, transport, launch flags, degradation                          |
+| [12](spec/12-artifacts-and-files.md) | Artifacts, files, overlaps  | Flag sentinel, the file-events hook, artifact serving, file-overlap detection      |
+| [13](spec/13-jobs-and-findings.md)   | Jobs, findings, human tasks | The operator job queue, agent findings, promotion, and work only a person can do   |
+| [14](spec/14-persistence.md)         | Persistence                 | The SQLite schema, migrations, the Store API surface, durability rules             |
+| [15](spec/15-integrations.md)        | Integrations                | The connector/sink seams, and the fake, GitHub and Azure DevOps providers          |
+| [16](spec/16-http-api.md)            | HTTP and WebSocket API      | Every route, the state snapshot, the event stream                                  |
+| [17](spec/17-cockpit.md)             | The cockpit                 | The web UI: panels, live updates, demo mode                                        |
+| [18](spec/18-observability.md)       | Observability               | The error log, decision log, activity feed, usage accounting, debug logging        |
+| [19](spec/19-development.md)         | Development and quality     | The `check` gate, test seams, the smoke run, build outputs                         |
 
 ## Conventions used throughout
 

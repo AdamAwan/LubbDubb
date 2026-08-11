@@ -654,8 +654,25 @@ test('every panel is a tile of one grid, inspection beside bots', () => {
   const order = [...grid.matchAll(/data-fx="([a-z-]+)"/g)].map((m) => m[1]);
   assert.deepEqual(
     order,
-    ['line', 'inspection', 'bots', 'goal-floor', 'yard', 'shift-log', 'signals'],
+    ['bench', 'line', 'inspection', 'bots', 'goal-floor', 'yard', 'shift-log', 'signals'],
     'the grid must hold every panel, in reading order, with the two halves of the moment adjacent',
+  );
+});
+
+/**
+ * The Bench is **above the line**, and the assertion above pins that rather than
+ * merely allowing it: a person's step comes before anything the line does by
+ * itself, and it is the one panel on this floor whose contents are the operator's
+ * own to do. It is drawn only when there is something on it — a panel with
+ * nothing in it is not a panel — so a floor with an empty bench has no `bench`
+ * tile at all, which is what this checks from the other side.
+ */
+test('the bench is drawn only when a person is actually waited on', () => {
+  const markup = render();
+  assert.match(markup, /data-fx="bench"/, 'the demo world has open human tasks, so the bench is on the floor');
+  assert.ok(
+    markup.indexOf('data-fx="bench"') < markup.indexOf('class="fx-line'),
+    'and it is above the line, not beside or below it',
   );
 });
 

@@ -21,6 +21,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                     |
 | `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                  |
 | `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                                           |
+| `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                 |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                                        |
 | `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                                      |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                              |
@@ -146,6 +147,38 @@ Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope', summary, where?, detail?
 - **`ref` is kind-strict and a bare number is refused.** Unlike `world_read` there is no `kind`
   argument to say whether `41` is an issue or a PR, and a duplicate report must not guess. Anything
   off-vocabulary is refused with "omit ref, describe it in the summary".
+
+### `request_human_task`
+
+Arguments `{title, detail?}` and **nothing that names work**. See
+[13](13-jobs-and-findings.md#human-tasks) for the entity and its lifecycle. Four properties:
+
+- **It is not `escalate`, and the description says which is which.** `escalate` is for needing an
+  _answer_ to carry on: it parks the agent, holding a slot and a worktree until a human replies. This
+  is for needing a person to _do something_, which may take until Tuesday — so the agent files it and
+  gets on with, or concludes, whatever it can. Left to one tool, every "somebody has to flip this
+  setting" would park an agent overnight.
+- **It queues nothing and blocks nothing by itself**, said in the response as well as the
+  description, `report_finding`'s discipline for its reason. The half that _can_ hold work off the
+  fleet is a plan part declared `expectedKind: 'human'`, which arrives through `plan_submit` and the
+  approval gate. So the capability an agent gains here is "ask a person", never "stop the fleet", and
+  nothing in the dispatcher reads `human_tasks`.
+- **Identity is structural.** The schema is `{title, detail}` and nothing else; `agentId`/`taskId`/
+  `originRef` come from the credential. This write puts an obligation on a person under an agent's
+  name, so it must say truthfully which agent asked and what it was working on.
+- **`title` is one line and the boundary enforces it**, with the error naming `detail` as the field
+  the rest belongs in — `report_finding.summary`'s refusal, and for exactly its reason: this string is
+  a panel headline, fixable for one tool call in the agent's own turn and unfixable by the time an
+  operator is reading it. `detail` is optional, because a required field an agent has nothing for
+  comes back as "N/A".
+
+Unfenced by origin: it is hard to name an agent that legitimately has no reason to need a person. It
+does not require a live session either, and that matters more here than for a finding — the
+commonest moment to realise a person is needed is the moment an agent is giving up on doing something
+itself.
+
+It routes through `AgentManager.requestHumanTask` for the `humanTask` event, so the cockpit repaints
+on the ask rather than on the next pulse.
 
 ### `note_progress`
 

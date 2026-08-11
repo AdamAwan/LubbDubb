@@ -8,6 +8,7 @@ import { UsageChip } from '../../components/UsageChip.js';
 import { PlanPanel } from '../../components/PlanPanel.js';
 import { StackPanel } from '../../components/StackPanel.js';
 import { FindingsPanel } from '../../components/FindingsPanel.js';
+import { HumanTaskPanel } from '../../components/HumanTaskPanel.js';
 import { RecoveryPanel } from '../../components/RecoveryPanel.js';
 import { WorldSummary } from '../../components/WorldSummary.js';
 import { AsyncButton } from '../../components/AsyncButton.js';
@@ -179,6 +180,27 @@ export function ClassicRoot({ view, actions }: SkinProps) {
               onViewPlan={(id) => actions.viewPlan(id)}
             />
           ))}
+
+          {/* Directly under "Needs you" and above everything the fleet owns: it is
+              the other list of things only you can settle, and the one whose items
+              can hold a plan's parts shut. Not *inside* "Needs you", because an
+              escalation is a question holding one agent open and these are work
+              that outlives every agent — see `HumanTaskPanel`. */}
+          {(state.humanTasks?.length ?? 0) > 0 && (
+            <>
+              <h3 className="muted">
+                Your bench
+                {view.openHumanTaskCount > 0 && <span className="count">{view.openHumanTaskCount}</span>}
+              </h3>
+              <HumanTaskPanel
+                tasks={state.humanTasks ?? []}
+                now={now}
+                refUrls={state.refUrls}
+                onDone={(id) => actions.completeHumanTask(id)}
+                onDecline={(id, note) => actions.declineHumanTask(id, note)}
+              />
+            </>
+          )}
 
           {(state.plans?.length ?? 0) > 0 && (
             <>

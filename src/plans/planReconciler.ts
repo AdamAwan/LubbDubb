@@ -11,6 +11,7 @@ import {
   dependencySatisfied,
   observePartPr,
   partBranch,
+  partIsHuman,
   partSettled,
   planIssueNumber,
   planShape,
@@ -127,8 +128,23 @@ export class PlanReconciler {
     const flat = await this.deps.git.presence(issueBranch(issueNumber));
     const collision = flat.local || flat.remote;
 
+    // The backing rows for this plan's human steps. Read once per plan rather than
+    // per part, and *not* filtered to open ones: `declined` is precisely the state
+    // this loop has to see, and filtering would hand it silence for a refusal.
+    const declined = new Set(
+      this.deps.store
+        .listHumanTasksForParts(parts.filter(partIsHuman).map((p) => p.id))
+        .filter((t) => t.status === 'declined')
+        .map((t) => t.partId),
+    );
+
     const next = new Map<string, Partial<PlanPart>>();
     for (const part of parts) {
+      // A human part has no pull request to fold and no agent to have stalled.
+      // What settles it is an operator marking its task done, which writes
+      // `concluded` directly; what stops it is their declining it, handled with
+      // the other blocking reading below.
+      if (partIsHuman(part)) continue;
       // A retired part is out of the plan: an amendment dropped it before anything
       // was started for it, so there is no reality to fold on and nothing that
       // should quietly bring it back.
@@ -151,12 +167,20 @@ export class PlanReconciler {
 
     for (const part of observed) {
       if (part.status !== 'pending' && part.status !== 'ready' && part.status !== 'blocked') continue;
-      const status = collision ? 'blocked' : await this.readiness(part, index, issueNumber);
+      // Two things block a part, and the collision is asked first because it is
+      // the wider fact: when git cannot cut any branch for this plan, a declined
+      // step is not the reason the operator needs to read.
+      const refused = declined.has(part.id);
+      const status = collision || refused ? 'blocked' : await this.readiness(part, index, issueNumber);
       // The reason travels with the status, so a part that is still blocked on a
       // pulse where nothing flipped can still say why — and one that is no longer
       // blocked stops claiming a collision that has been resolved. `differs` keeps
       // both writes to real transitions.
-      const blockedReason = status === 'blocked' ? refCollisionReason(issueNumber) : null;
+      const blockedReason = collision
+        ? refCollisionReason(issueNumber)
+        : refused
+          ? declinedStepReason(part.title)
+          : null;
       if (status !== part.status || blockedReason !== part.blockedReason)
         next.set(part.slug, { ...next.get(part.slug), status, blockedReason });
     }
@@ -297,11 +321,35 @@ export class PlanReconciler {
 }
 
 /**
+ * Why a part a person owned is `blocked`: they were asked, and they said no.
+ *
+ * A declined step is not folded into a terminal, and that is the decision this
+ * function encodes. Concluding the part would settle it, `partSettled` would
+ * answer true, and every dependent waiting on the thing that was refused would be
+ * released to an agent — the plan completing on work nobody did. So the part stops
+ * where it is, its dependents stay `pending`, and the operator's own words stand
+ * on the row as the account of why. The ways out are the two already on the panel:
+ * Replan, or abandon the decomposition.
+ *
+ * The operator's note is not repeated here. It is on the {@link HumanTask} row the
+ * panel draws beside this one, and a copy would be a second place for it to be
+ * edited out of step.
+ */
+function declinedStepReason(title: string): string {
+  return (
+    `"${title}" is a step for a person, and it was declined. Nothing that depends on it can start. ` +
+    `Replan the issue, or abandon the decomposition to work it whole.`
+  );
+}
+
+/**
  * Why every part of a plan is `blocked`, in the harness's own words.
  *
- * The ref collision is the *only* thing that blocks a part — {@link
- * PlanReconciler.readiness} answers `pending` or `ready` and never `blocked` — so
- * this is a complete account of the status rather than one case among several.
+ * This is one of the two things that block a part — the other is
+ * {@link declinedStepReason} — and {@link PlanReconciler.readiness} is still not
+ * among them: it answers `pending` or `ready` and never `blocked`. Both blocking
+ * readings are facts the reconciler observes rather than derives from the graph,
+ * which is why they live together in its loop and why each states its own reason.
  *
  * It is one function because the sentence the operator reads on the Goal Floor
  * and the sentence in the Errors panel have to be one string. Before, only the

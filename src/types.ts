@@ -667,6 +667,75 @@ export interface Finding {
 export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary' | 'where' | 'detail'>;
 
 /**
+ * Where a piece of work only a person can do has got to. Two terminals, and both
+ * are settlements — there is no way for one to lapse, expire or be deleted.
+ *
+ * `declined` is not a failure state and not a tidy-up: it is the operator saying
+ * *no, and here is why*, which is a fact the plan, the next agent and a later
+ * replan all need. A task nobody will ever do that says nothing about why is the
+ * shape this repo refuses everywhere else.
+ */
+export type HumanTaskStatus = 'open' | 'done' | 'declined';
+
+/**
+ * A unit of work only a person can do: flipping a setting in a console nobody
+ * gave the fleet an account for, plugging something in, looking at a rendered
+ * screen and saying whether it is right.
+ *
+ * **It is not an {@link Escalation}, and the difference is not a nuance.** An
+ * escalation is a *question*: exactly one running agent is blocked on it, holding
+ * a slot and a worktree; it is settled by typing an answer into that session, and
+ * it dies with the agent. A human task is *work*: no agent is blocked on it, it
+ * outlives every agent and every restart, and other work can be made to depend on
+ * it. An agent that needs an answer to carry on escalates. An agent that needs a
+ * person to *do something* — which may take until Tuesday — requests one of these
+ * and gets on with, or concludes, what it can.
+ *
+ * Attribution is structural on the agent arm, as for a {@link Finding}:
+ * `agentId`/`taskId`/`originRef` come from the credential the call arrived on,
+ * never from an argument. A null `agentId` means no individual agent asked —
+ * either an operator filed it from the cockpit, or a plan declared it as a step,
+ * and {@link HumanTask.partId} is what tells those two apart. There is no
+ * `requestedBy` column, so nothing can disagree with the ids beside it.
+ */
+export interface HumanTask {
+  id: string;
+  /**
+   * The ask, on one line. Validation refuses a newline for
+   * {@link Finding.summary}'s reason: this string is the headline of a panel row,
+   * and the only cheap moment to fix a blob is the requesting agent's own turn.
+   */
+  title: string;
+  /** What to do and how to know it is done. Markdown, rendered as such. Null when the title says it all. */
+  detail: string | null;
+  /** The work this belongs to — `issue:<n>`, `issue:<n>:part:<slug>`, `pr:<n>` — or null for a standalone ask. */
+  originRef: string | null;
+  /**
+   * The plan part this task *is*, when a planner declared a step for a person
+   * (`expectedKind: 'human'`). Null for every other human task.
+   *
+   * This is the only field through which a human task ever holds work off the
+   * fleet, and it is deliberately the only one: the part is the scheduling node
+   * that `dependsOn` and the reconciler's readiness pass already understand, so
+   * blocking needs no second mechanism beside them. A standalone human task
+   * blocks nothing — it is a visible obligation, not a gate.
+   */
+  partId: string | null;
+  /** The agent that asked for it, from its credential. Null when an operator filed it themselves. */
+  agentId: string | null;
+  taskId: string | null;
+  status: HumanTaskStatus;
+  /** The operator's note. Required on `declined`, optional on `done`, null while open. */
+  resolution: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
+/** A human task as requested, before the store assigns identity and status. */
+export type HumanTaskInput = Pick<HumanTask, 'title' | 'detail'>;
+
+/**
  * What someone said about whether an issue is finished.
  *
  * `undeclared` is a value, not the absence of one, and that distinction is the
@@ -1078,11 +1147,19 @@ type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged
 
 /**
  * What a part produces. `code` ends in a merged pull request, which the world
- * observes; the other two end in a record already durable in the store the moment
- * the agent writes it — which is why the plan reconciler's fold differs by kind,
- * and why only these two are declarable through `conclude_part`.
+ * observes; `report` and `determination` end in a record already durable in the
+ * store the moment the agent writes it — which is why the plan reconciler's fold
+ * differs by kind, and why only those two are declarable through `conclude_part`.
+ *
+ * `human` is the fourth and the only one no agent ever produces: the part is work
+ * a person does by hand, backed by a {@link HumanTask} row, and it is settled by
+ * an operator marking that task done. It is a kind rather than a flag beside the
+ * kinds because every consumer that already asks "what did this part produce"
+ * — the plan comment, the modal, the floor, the retro dossier — then reads it for
+ * free, and because collapsing it into `determination` would lose the one fact
+ * worth keeping: that the thing which finished this part was a human.
  */
-export type PartOutcomeKind = 'code' | 'report' | 'determination';
+export type PartOutcomeKind = 'code' | 'report' | 'determination' | 'human';
 
 /** One part of a multi-PR plan — a single reviewable PR's worth of work. */
 export interface PlanPart {

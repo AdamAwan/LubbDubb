@@ -11,6 +11,7 @@ import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
 import { planSubmit } from './tools/planSubmit.js';
 import { reportFinding } from './tools/reportFinding.js';
+import { requestHumanTask } from './tools/requestHumanTask.js';
 import { requestPermission } from './tools/requestPermission.js';
 import { retroSubmit } from './tools/retroSubmit.js';
 import { scratchAppend } from './tools/scratchAppend.js';
@@ -38,6 +39,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   escalate,
   world_read: worldRead,
   report_finding: reportFinding,
+  request_human_task: requestHumanTask,
   note_progress: noteProgress,
   request_permission: requestPermission,
   link_ticket: linkTicket,

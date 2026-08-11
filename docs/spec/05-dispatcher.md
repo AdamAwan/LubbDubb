@@ -71,25 +71,25 @@ pipeline is the ordered subset that runs.
 `enabled` is the predicate that switches an optional rule into the pipeline; a rule with none is
 unconditional.
 
-| Id                         | Name                                 | `enabled`        | Fires when                                                                                                                                                |
-| -------------------------- | ------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `manual-job`               | Operator-launched job                | —                | A queued job exists. Drained ahead of every world-driven rule.                                                                                            |
-| `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                       |
-| `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch. |
-| `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                         |
-| `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base or conflicts with it.                                                                                                           |
-| `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                            |
-| `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                          |
-| `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                  |
-| `issue-assay`              | Issue goal needs checking            | `assay`          | A watched open issue nothing has been started for has no verdict on its goal text.                                                                        |
-| `issue-plan`               | Issue needs a plan                   | `planning`       | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                 |
-| `issue-assess`             | Issue may be finished                | `assessment`     | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                        |
-| `issue-shortfall`          | Assessment says the goal was missed  | —                | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                        |
+| Id                         | Name                                 | `enabled`        | Fires when                                                                                                                                                    |
+| -------------------------- | ------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `manual-job`               | Operator-launched job                | —                | A queued job exists. Drained ahead of every world-driven rule.                                                                                                |
+| `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                           |
+| `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.     |
+| `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                             |
+| `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base or conflicts with it.                                                                                                               |
+| `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                |
+| `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                              |
+| `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                      |
+| `issue-assay`              | Issue goal needs checking            | `assay`          | A watched open issue nothing has been started for has no verdict on its goal text.                                                                            |
+| `issue-plan`               | Issue needs a plan                   | `planning`       | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                     |
+| `issue-assess`             | Issue may be finished                | `assessment`     | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                           |
+| `issue-shortfall`          | Assessment says the goal was missed  | —                | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                            |
 | `issue-retro`              | Delivered goal needs a retrospective | `retrospective`  | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included. |
-| `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                  |
-| `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                |
-| `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                        |
-| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`. Never a retained run.                                            |
+| `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                      |
+| `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                    |
+| `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                            |
+| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`. Never a retained run.                                               |
 
 `workItemStates` is the one condition that is not a feature flag: it is true when the operator has
 configured **both** `issueInReviewState` and a non-empty `issuePickupStates`.
@@ -136,7 +136,7 @@ job's side of it is [13](13-jobs-and-findings.md#standing-in-for-another-origin)
 tracker unioned with the runs it has forgotten (#234 — see
 [03](03-world-model.md#what-is-in-the-dispatchers-world-and-what-puts-it-there)), and
 `StageContext.retained` names which are which. Only `issue-assess` and `issue-retro` act on one: they
-are the two steps that come *after* a merge, which is exactly when a PR carrying `closes #N` has
+are the two steps that come _after_ a merge, which is exactly when a PR carrying `closes #N` has
 already taken the ticket out of the world. Every other rule excludes them **in its own body** —
 `eligibleIssues` for `issue-plan`/`issue-pickup`, a direct `retained` test in the two work-item rules,
 and `StageContext.liveIssue` for the plan- and shortfall-driven rules, which returns null for a
@@ -198,13 +198,13 @@ names **what proposed** an act, `decisions.admission` **what became of it**. Bot
 each into its own column. `AdmissionId` (`Extract<…, {kind: 'admission'}>` off the registry) types the
 second, so a rule id structurally cannot land there.
 
-| Emission                                | `rule`                  | `admission`         |
-| --------------------------------------- | ----------------------- | ------------------- |
-| An ordinary dispatch, merge, escalation  | the rule that proposed it | null              |
-| The PR-concern attempt cap               | the top concern's rule  | `cooldown-escalate` |
-| `plan-part`'s attempt cap                | `plan-part`             | `cooldown-escalate` |
-| `issue-pickup`'s attempt cap             | `issue-pickup`          | `cooldown-escalate` |
-| The branch note                          | **null**                | `branch-notify`     |
+| Emission                                | `rule`                    | `admission`         |
+| --------------------------------------- | ------------------------- | ------------------- |
+| An ordinary dispatch, merge, escalation | the rule that proposed it | null                |
+| The PR-concern attempt cap              | the top concern's rule    | `cooldown-escalate` |
+| `plan-part`'s attempt cap               | `plan-part`               | `cooldown-escalate` |
+| `issue-pickup`'s attempt cap            | `issue-pickup`            | `cooldown-escalate` |
+| The branch note                         | **null**                  | `branch-notify`     |
 
 **Only these two admissions ever reach the column.** The rest (`cooldown`, `capped`, `unapproved`,
 `superseded`, `waiting`) hold a candidate that was never executed, so there is no decision row for
@@ -212,12 +212,12 @@ them at all — they are queue statuses on the Up next projection and nothing mo
 
 **The branch note's `rule` is null deliberately.** Its `fresh` set is a flatMap over every concern on
 the PR, so one note can carry a CI signal and a review thread at once and no single rule proposed it.
-Attributing it to the top concern would name a proposer picked by the *urgency* order — which exists
+Attributing it to the top concern would name a proposer picked by the _urgency_ order — which exists
 to decide who gets the one agent when the branch is **free** — for a note whose other half that rule
 never asked for. Nothing is lost by refusing: `originRefs` already lists every concern the note
 covers, which is a finer answer than a rule id.
 
-**Rows written before the split keep their shape, forever.** They carry the *outcome* in `rule` with
+**Rows written before the split keep their shape, forever.** They carry the _outcome_ in `rule` with
 `admission` NULL, and which rule was throttled on one is not recoverable — history is not rewritten.
 Both cockpit renderers resolve a row through the shared `decisionAttribution`, which names such an id
 as an **Outcome** rather than a proposer and states the gap, so the two shapes are told apart instead
@@ -290,7 +290,13 @@ is no second list to keep in step with it. What each stage contributes:
    appears nowhere in this ranking: it only proposes and escalates.
 6. **Retrospectives** (`issue-retro`), a desk agent per delivered goal with no write-up.
 7. **Plan parts** (`plan-part`), ranked by dependency depth, then issue number, then part sequence, so
-   the bottom of a stack is cut before the branch its dependents will base on is needed.
+   the bottom of a stack is cut before the branch its dependents will base on is needed. A part a
+   **person** owns (`partIsHuman` — `expectedKind: 'human'`) is filtered out before any of that: it
+   produces no candidate at all, so it costs no cooldown arithmetic, no attempt cap, no slot and
+   nothing for the headroom cut to hold. It is deliberately not "queued and held" the way `capped`
+   and `unapproved` are, because those two say _the fleet will get to this_ and this one never will —
+   it is waiting on a person, and the cockpit's bench is where it is visible.
+   → [13](13-jobs-and-findings.md#human-tasks)
 8. **Issue pickups** (`issue-pickup`), ordered by label-encoded priority then issue number.
 
 A superseded candidate is **queued, not dropped** — with the superseding rule named in its `reason`,

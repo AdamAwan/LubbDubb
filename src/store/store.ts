@@ -8,6 +8,7 @@ import { TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
+import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { IssueVerdictStore } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
@@ -36,6 +37,8 @@ import type {
   Finding,
   FindingInput,
   FindingStatus,
+  HumanTask,
+  HumanTaskStatus,
   IssueRun,
   IssueConclusion,
   IssueDelivery,
@@ -87,6 +90,7 @@ export class Store {
   private readonly jobs: JobStore;
   private readonly priority: PriorityStore;
   private readonly findings: FindingStore;
+  private readonly humanTasks: HumanTaskStore;
   private readonly plans: PlanStore;
   private readonly verdicts: IssueVerdictStore;
   private readonly scratch: ScratchStore;
@@ -109,7 +113,15 @@ export class Store {
     this.db.exec(SCHEMA);
     // Before any module is constructed, let alone reads: a domain module reading
     // a migrated column on a database created by an older build reads `undefined`.
-    for (const columns of [TASK_COLUMNS, AGENT_COLUMNS, DECISION_COLUMNS, FINDING_COLUMNS, PLAN_COLUMNS, JOB_COLUMNS]) {
+    for (const columns of [
+      TASK_COLUMNS,
+      AGENT_COLUMNS,
+      DECISION_COLUMNS,
+      FINDING_COLUMNS,
+      HUMAN_TASK_COLUMNS,
+      PLAN_COLUMNS,
+      JOB_COLUMNS,
+    ]) {
       ensureColumns(this.db, columns);
     }
     // The migrations that are not columns, here for the same reason the pass above
@@ -125,6 +137,7 @@ export class Store {
     this.jobs = new JobStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.findings = new FindingStore(ctx);
+    this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);
     this.verdicts = new IssueVerdictStore(ctx);
     this.scratch = new ScratchStore(ctx);
@@ -260,6 +273,24 @@ export class Store {
     return this.findings.linkFindingTicket(id, ticketRef);
   }
 
+  // -- Human tasks (work only a person can do) -------------------------------
+
+  recordHumanTask(input: Parameters<HumanTaskStore['recordHumanTask']>[0]): { task: HumanTask; created: boolean } {
+    return this.humanTasks.recordHumanTask(input);
+  }
+  getHumanTask(id: string): HumanTask | null {
+    return this.humanTasks.getHumanTask(id);
+  }
+  listHumanTasks(limit?: number): HumanTask[] {
+    return this.humanTasks.listHumanTasks(limit);
+  }
+  listHumanTasksForParts(partIds: string[]): HumanTask[] {
+    return this.humanTasks.listHumanTasksForParts(partIds);
+  }
+  settleHumanTask(id: string, status: Exclude<HumanTaskStatus, 'open'>, resolution: string | null): HumanTask | null {
+    return this.humanTasks.settleHumanTask(id, status, resolution);
+  }
+
   // -- Plans (the multi-PR issue funnel) -----------------------------------
 
   upsertPlan(input: Parameters<PlanStore['upsertPlan']>[0]): Plan {
@@ -288,6 +319,9 @@ export class Store {
   }
   markPartDispatched(id: string, taskId: string, branch: string): PlanPart | null {
     return this.plans.markPartDispatched(id, taskId, branch);
+  }
+  concludeHumanPart(id: string, summary: string): PlanPart | null {
+    return this.plans.concludeHumanPart(id, summary);
   }
   concludePlanPart(id: string, outcome: Parameters<PlanStore['concludePlanPart']>[1]): PlanPart | null {
     return this.plans.concludePlanPart(id, outcome);

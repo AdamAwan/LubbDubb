@@ -16,20 +16,21 @@ cockpit's frequent state polling is never throttled.
 static SPA, and a list of route modules it mounts in order. Everything else lives beside the thing it
 is about.
 
-| Module                  | Holds                                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------- |
-| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                 |
-| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                            |
-| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement  |
-| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`                |
-| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                |
-| `routes/findings.ts`    | Promote / file / dismiss                                                                     |
-| `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                  |
-| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                     |
-| `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                        |
-| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                          |
-| `routes/work.ts`        | The work graph and its ignore / file verdicts                                                |
-| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                               |
+| Module                  | Holds                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                |
+| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                           |
+| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement |
+| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`               |
+| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                               |
+| `routes/findings.ts`    | Promote / file / dismiss                                                                    |
+| `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                          |
+| `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                 |
+| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                    |
+| `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                       |
+| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
+| `routes/work.ts`        | The work graph and its ignore / file verdicts                                               |
+| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                              |
 
 Each module exports one `register(app, ctx)` — the `RouteModule` type in `routes/context.ts` — and
 takes a `RouteContext` of `{system, hub, artifactKey, artifactSigner}`. It is the facade shape
@@ -546,6 +547,31 @@ reports the ticket through `link_ticket` — see [11](11-mcp-tools.md).
 
 409 when absent or already resolved. Returns `{ ok: true, finding }`.
 
+### `POST /api/human-tasks`
+
+Body `{title, detail?, originRef?}`. The operator's own arm beside the `request_human_task` tool; the
+row is the same one with no agent behind it, which is exactly what a null `agentId` means. Validated
+through the **same** pure `validateHumanTask` the tool uses — a one-line title is a property of the
+panel row, not of who typed it — so a newline or an over-long title is a 400 naming `detail` as where
+the rest belongs. Broadcasts `dirty`. Returns `{ ok: true, humanTask }`.
+
+### `POST /api/human-tasks/:id/done`
+
+Body `{note?}`. 409 when the task is absent or already settled — compare-and-set against `open` in the
+write, so a second click cannot overwrite the first verdict. When the task backs a plan part, the task
+is settled **first** and `Store.concludeHumanPart` second (a failed part write then leaves a settled
+task an operator can see, where the other order would leave a concluded part nothing accounts for),
+and a cycle is run so the dependents it releases are dispatchable immediately. Returns
+`{ ok: true, humanTask, part, report }`.
+
+### `POST /api/human-tasks/:id/decline`
+
+Body `{note}`, **required and non-empty**: a planner shown only "declined" has no reason to decide
+differently to the way it just decided. 409 when absent or already settled. **The backing part is
+deliberately not concluded** — that would release every dependent waiting on the thing that was
+refused. The next pulse's reconciler blocks it with its own account of why; see
+[08](08-planning.md#a-step-for-a-person). Returns `{ ok: true, humanTask, report }`.
+
 ### `POST /api/plans/:id/replan`
 
 404 when the plan is unknown. Flips the plan to `planning`, **withdraws any pending plan proposal**
@@ -723,31 +749,32 @@ read zero.
 `buildStateSnapshot(system)` assembles everything the cockpit needs in one response. Several values are
 read **once** and shared, so two parts of the UI cannot disagree.
 
-| Key                  | Contents                                                                                                                                                                                                                      |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`             | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `canFileTickets`.                                                                                                                                  |
-| `control`            | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
-| `worldObservedAt`    | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
-| `world`              | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                                                                             |
-| `retainedRuns`       | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
-| `plans`, `planParts` | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
-| `tasks`              | Every task.                                                                                                                                                                                                                   |
-| `jobs`               | Operator jobs, newest first.                                                                                                                                                                                                  |
-| `agents`             | Every agent row, including usage and the progress note.                                                                                                                                                                       |
-| `flags`              | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                      |
-| `files`              | Every file every agent wrote.                                                                                                                                                                                                 |
-| `attachments`, `attachmentUrls` | Images an operator attached to a blueprint (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed. |
-| `overlaps`           | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
-| `findings`           | Every finding.                                                                                                                                                                                                                |
-| `escalations`        | Every escalation.                                                                                                                                                                                                             |
-| `recovery`           | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
-| `decisions`          | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                       |
-| `upcoming`           | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                              |
-| `worldEvents`        | The last 100 world events.                                                                                                                                                                                                    |
-| `errors`             | The last 100 recorded failures.                                                                                                                                                                                               |
-| `refUrls`            | The `ref → URL` map.                                                                                                                                                                                                          |
-| `dispatchRules`      | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                              |
-| `usage`              | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                                                                                                                  |
+| Key                             | Contents                                                                                                                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `canFileTickets`.                                                                                                                                  |
+| `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
+| `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
+| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                                                                             |
+| `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
+| `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
+| `tasks`                         | Every task.                                                                                                                                                                                                                   |
+| `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                  |
+| `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                       |
+| `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                      |
+| `files`                         | Every file every agent wrote.                                                                                                                                                                                                 |
+| `attachments`, `attachmentUrls` | Images an operator attached to a blueprint (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.     |
+| `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
+| `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Beside `findings` rather than inside `escalations`: nobody is parked on one.                                                                          |
+| `findings`                      | Every finding.                                                                                                                                                                                                                |
+| `escalations`                   | Every escalation.                                                                                                                                                                                                             |
+| `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
+| `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                      |
+| `upcoming`                      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                              |
+| `worldEvents`                   | The last 100 world events.                                                                                                                                                                                                    |
+| `errors`                        | The last 100 recorded failures.                                                                                                                                                                                               |
+| `refUrls`                       | The `ref → URL` map.                                                                                                                                                                                                          |
+| `dispatchRules`                 | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                              |
+| `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                                                                                                                  |
 
 Eight consistency points:
 

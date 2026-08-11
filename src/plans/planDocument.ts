@@ -47,8 +47,15 @@ const PartSchema = z.object({
    * must keep validating — and `code` is the assumption everything else already
    * made. `determination` is what lets a planner decompose investigative work
    * honestly instead of inventing a pull request for it.
+   *
+   * `human` is the step no agent runs: a person flips the setting in a console
+   * nobody gave the fleet an account for, plugs the thing in, or looks at the
+   * rendered screen and says whether it is right. Ingestion backs such a part
+   * with a `human_tasks` row and rule `plan-part` never dispatches it, so a
+   * sibling naming it in `dependsOn` waits for a person exactly the way it would
+   * otherwise wait for a merge — no second blocking mechanism, and none needed.
    */
-  expectedKind: z.enum(['code', 'report', 'determination']).optional(),
+  expectedKind: z.enum(['code', 'report', 'determination', 'human']).optional(),
 });
 
 /**

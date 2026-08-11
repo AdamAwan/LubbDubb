@@ -250,6 +250,30 @@ export class PlanStore {
   }
 
   /**
+   * A part a person owns finished, because the operator marked its human task
+   * done. `concluded`, with `outcome_kind='human'` — the record of *what* closed
+   * it, which is the whole reason `human` is a kind rather than a flag.
+   *
+   * Its own method rather than a {@link PlanStore.concludePlanPart} call, because
+   * the guards are opposites and both are load-bearing. That one insists the part
+   * was `dispatched` or `in_review`, which is exactly right for a part an agent
+   * worked and exactly wrong here: a human part is never dispatched at all, so it
+   * settles from `pending`, `ready` or `blocked`. Widening the other guard would
+   * have let an agent conclude a part nobody had started.
+   */
+  concludeHumanPart(id: string, summary: string): PlanPart | null {
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE plan_parts SET status='concluded', outcome_kind='human', outcome_summary=?, blocked_reason=NULL,
+           updated_at=? WHERE id=? AND status IN ('pending','ready','blocked')`,
+      )
+      .run(summary, this.ctx.now(), id);
+    if (result.changes === 0) return null;
+    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    return row ? rowToPlanPart(row) : null;
+  }
+
+  /**
    * Move a plan to a new status, optionally rewriting the reason that goes with it.
    *
    * `reason` is optional and **preserved on absence**, like every other narrative
@@ -430,9 +454,16 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
  * are the only part of the row a *human* can edit by hand, so an unrecognised
  * value degrades to "unstated" instead of putting a status nothing switches on
  * into the type.
+ *
+ * **A new {@link PartOutcomeKind} must be added here too**, and that is a sharp
+ * edge rather than a chore: this narrowing is not a type guard the compiler
+ * checks against the union, so a kind missing from it is written to SQLite, read
+ * back as `null`, and silently reads as `code` everywhere downstream — a step for
+ * a person would be handed to an agent. It cost one test to find and would have
+ * cost a fleet to find in production.
  */
 function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | null {
-  return raw === 'code' || raw === 'report' || raw === 'determination' ? raw : null;
+  return raw === 'code' || raw === 'report' || raw === 'determination' || raw === 'human' ? raw : null;
 }
 
 function parseDependsOn(raw: string): string[] {

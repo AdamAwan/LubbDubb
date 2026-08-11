@@ -62,6 +62,7 @@ import type {
   Escalation,
   Finding,
   GoalAssayVerdict,
+  HumanTask,
   IssueConclusionVerdict,
   IssueRunOutcome,
   Issue as WorldIssue,
@@ -356,6 +357,13 @@ export interface CockpitState {
   overlaps: FileOverlap[];
   /** What agents noticed outside their own tasks, newest first. */
   findings: Finding[];
+  /**
+   * Work only a person can do, newest first — open ones and a settled tail.
+   *
+   * Beside `findings` rather than inside `escalations`, because it is not an
+   * alert: no agent is parked on one, and it outlives every agent that asked.
+   */
+  humanTasks: HumanTask[];
   escalations: Escalation[];
   /** Acts put to a human, newest first. */
   proposals: Proposal[];
@@ -460,6 +468,7 @@ export type {
   ErrorLogEntry,
   Escalation,
   Finding,
+  HumanTask,
   Job,
   JobAttachment,
   JobAttachmentInput,

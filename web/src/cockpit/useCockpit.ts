@@ -175,6 +175,8 @@ export function useCockpit(): CockpitStatus {
       promoteFinding: (id) => then(api.promoteFinding(id)),
       fileFinding: (id) => then(api.fileFinding(id)),
       dismissFinding: (id) => then(api.dismissFinding(id)),
+      completeHumanTask: (id) => then(api.completeHumanTask(id)),
+      declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
 
       setPrExcluded: (n, excluded) => then(api.setPrExcluded(n, excluded)),
       setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
