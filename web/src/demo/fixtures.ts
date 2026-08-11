@@ -402,12 +402,7 @@ export function buildDemoState(): DemoSeed {
           pickup: {
             eligible: false,
             status: 'assay',
-            reasons: [
-              'the goal assay could not act on this goal — "Nothing here names which ordering is wrong, ' +
-                'or what the right one would be." (' +
-                ago(52) +
-                ')',
-            ],
+            reasons: ['the goal assay could not act on this goal'],
           },
           assay: {
             verdict: 'unclear',

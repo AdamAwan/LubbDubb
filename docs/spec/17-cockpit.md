@@ -1477,7 +1477,10 @@ disagree with what the dispatcher does:
   status — and it is parked on purpose, waiting on a dismissal rather than on anything going wrong,
   so it joins `active` and `delivered` in taking no warning colour. `container` renders nothing
   either, and for the oldest reason on the list: the hierarchy chip beside it already names the type
-  and the children, and the verdict's reason is a whole sentence restating them.
+  and the children, and the verdict's reason is a whole sentence restating them. A **refused assay**
+  is the mirror of that split: `assayHold`'s reason says what happened, and the panel appends the
+  assayer's own words and a relative decision time to the chip's `title` — read off `Issue.assay`,
+  which the row already has. A verdict's prose belongs in a tooltip or on the ticket, never in a chip.
 
 ## The work-item tree
 

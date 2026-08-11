@@ -462,6 +462,13 @@ refuses. Two arms, plus a clearer that is deliberately not an arm:
    **comment** rather than by editing the body.
 3. **The operator clears it** (`{verdict: null}`) — a delete, which is why it is not an arm.
 
+The hold's string names **what happened and nothing else** — `the goal assay could not act on this
+goal`, or `you …` for an operator's own verdict. The assayer's words and the time it decided are not
+folded into it: this is one reason among several on a row that already carries the whole `IssueAssay`,
+so a caller that wants the quote reads it there. Folding them in made the longest string the cockpit
+renders — a paragraph and a raw ISO timestamp inside a chip built to be scanned. The World panel puts
+the summary and a relative time in that chip's `title` instead.
+
 **There is no timer arm**, for `deliveryHold`'s reason: a refused goal waits on the world to *become*
 something else, which is an event, not a duration. A clock expiry would re-ask a question whose
 answer has not changed, at the price of an agent each time.

@@ -20,7 +20,7 @@ import { useState } from 'react';
 import type { AppState, Issue, Plan, PullRequest } from '../types.js';
 import { watchBucket, type WatchBucket } from '../worldBuckets.js';
 import { groupByFeature, groupProgress, type IssueGroup } from '../issueGroups.js';
-import { statusDot, refLink, refChip } from './util.js';
+import { statusDot, refLink, refChip, relTime } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { RaiseBugModal } from './RaiseBugModal.js';
@@ -63,7 +63,7 @@ function bugChips(bugFilings: AppState['bugFilings'], issueNumber: number, refUr
  * whole of what the verdict says, and its reason is a *sentence* — the longest
  * chip on the row, restating the chip beside it.
  */
-function pickupChip(pickup: Issue['pickup']) {
+function pickupChip(pickup: Issue['pickup'], detail?: string | null) {
   if (!pickup || pickup.status === 'done' || pickup.status === 'has_pr' || pickup.status === 'container') return null;
   if (pickup.status === 'eligible') {
     return (
@@ -79,7 +79,10 @@ function pickupChip(pickup: Issue['pickup']) {
   // purpose, waiting on a dismissal rather than on anything going wrong (#234).
   const calm = pickup.status === 'active' || pickup.status === 'delivered' || pickup.status === 'retained';
   return (
-    <span className={`chip small${calm ? '' : ' warn'}`} title={pickup.reasons.join(', ')}>
+    <span
+      className={`chip small${calm ? '' : ' warn'}`}
+      title={[pickup.reasons.join(', '), detail].filter(Boolean).join('\n\n')}
+    >
       {pickup.reasons[0] ?? pickup.status}
       {pickup.reasons.length > 1 ? ` +${pickup.reasons.length - 1}` : ''}
     </span>
@@ -481,7 +484,16 @@ export function WorldSummary({
           </span>
         )}
         {hierarchyChips(i, refUrls, placement)}
-        {showPickupChip && pickupChip(i.pickup)}
+        {/* The assayer's own words ride in the *title*, not the chip. The reason
+            string names what happened; what it said is a paragraph, and a
+            paragraph in a chip is the one that made this panel unreadable. */}
+        {showPickupChip &&
+          pickupChip(
+            i.pickup,
+            i.assay?.verdict === 'unclear'
+              ? `It said: "${i.assay.summary}"\n\nDecided ${relTime(i.assay.decidedAt)}.`
+              : null,
+          )}
         {planChip(
           (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`),
           onViewPlan,
