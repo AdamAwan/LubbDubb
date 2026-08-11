@@ -735,9 +735,10 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(58),
       },
     ],
-    // Work only a person can do. Three, so the panel shows each shape it has: a
+    // Work only a person can do. Four, so the panel shows each shape it has: a
     // plan step holding parts shut, a standalone ask from an agent that could not
-    // do it itself, and one already declined with the note that stopped it.
+    // do it itself, one already declined with the note that stopped it, and the
+    // harness's own close-out on the goal it delivered but cannot close.
     humanTasks: [
       {
         id: 'hum-1',
@@ -750,6 +751,7 @@ export function buildDemoState(): DemoSeed {
           'console credentials, and nobody should.',
         originRef: 'issue:212:part:cutover',
         partId: 'plan-212:cutover',
+        kind: 'ask',
         agentId: null,
         taskId: null,
         status: 'open',
@@ -766,6 +768,7 @@ export function buildDemoState(): DemoSeed {
           'sunlight. Screenshot attached to the PR.',
         originRef: 'pr:142',
         partId: null,
+        kind: 'ask',
         agentId: 'agent-a1',
         taskId: 'task-a1',
         status: 'open',
@@ -780,6 +783,7 @@ export function buildDemoState(): DemoSeed {
         detail: null,
         originRef: 'issue:205',
         partId: null,
+        kind: 'ask',
         agentId: 'agent-a0',
         taskId: 'task-a0',
         status: 'declined',
@@ -787,6 +791,29 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(72),
         updatedAt: ago(52),
         resolvedAt: ago(52),
+      },
+      {
+        // The harness's own, on the goal it delivered at #205 and cannot close.
+        // Nobody asked for it — no agent, no operator — which is what a
+        // `close_out` with a null `agentId` says, and it settles itself as soon as
+        // the tracker stops listing the item open.
+        id: 'hum-4',
+        title: 'Close issue #205 in the tracker',
+        detail:
+          'The assessor marked **Document the sentinel protocol in the README** delivered — ' +
+          '"PR #140 folded the checks and the docs landed with it."\n\n' +
+          'The item is still open in the tracker. Close it there and this settles itself on the ' +
+          'next pulse — or mark it done here, or decline it and say why.',
+        originRef: 'issue:205',
+        partId: null,
+        kind: 'close_out',
+        agentId: null,
+        taskId: null,
+        status: 'open',
+        resolution: null,
+        createdAt: ago(50),
+        updatedAt: ago(50),
+        resolvedAt: null,
       },
     ],
     agents: [

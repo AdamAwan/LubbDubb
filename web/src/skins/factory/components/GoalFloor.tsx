@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type JSX } from 'react';
-import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../../types.js';
+import type { HumanTask, Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../../types.js';
 import { AsyncButton } from '../../../components/AsyncButton.js';
 import { refChip, refLink } from '../../../components/util.js';
 import { ASSAY_EXPIRY } from '../../../components/WorldSummary.js';
@@ -73,6 +73,12 @@ interface GoalFloorProps {
   closedPrs: PullRequest[];
   tasks: Task[];
   upcoming: QueueItem[];
+  /**
+   * Every human task on the wire. The floor reads only the `close_out` on the
+   * goal it is drawing — the station after the launch — and the Bench above the
+   * line reads the same rows, so the two cannot disagree about what is owed.
+   */
+  humanTasks: HumanTask[];
   refUrls: Record<string, string>;
   /** Paused, or held on recovery: no cycle will run, so no belt may move. */
   stopped: boolean;
@@ -173,6 +179,7 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
     closedPrs: props.closedPrs,
     tasks: props.tasks,
     upcoming: props.upcoming,
+    humanTasks: props.humanTasks,
     recorded,
   });
   const { planId } = floor;

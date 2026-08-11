@@ -6,7 +6,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
-import type { Decision, Issue, Plan, PlanPart, PullRequest, QueueItem, Stack, WorldEvent } from '../web/src/types.js';
+import type {
+  Decision,
+  HumanTask,
+  Issue,
+  Plan,
+  PlanPart,
+  PullRequest,
+  QueueItem,
+  Stack,
+  WorldEvent,
+} from '../web/src/types.js';
 import type { StatusTone } from '../web/src/skins/factory/vocabulary.js';
 
 // Same reason as `cockpitSkins.test.ts`: Vite compiles the cockpit's JSX with the
@@ -115,6 +125,8 @@ function floorInput(over: {
   conclusion?: Issue['conclusion'];
   shortfall?: Issue['shortfall'];
   delivery?: Issue['delivery'];
+  state?: Issue['state'];
+  humanTasks?: HumanTask[];
 }) {
   const issue: Issue = {
     id: 'iss-9',
@@ -122,7 +134,7 @@ function floorInput(over: {
     title: 'A goal',
     body: '',
     labels: [],
-    state: 'open',
+    state: over.state ?? 'open',
     workItemState: over.workItemState,
     linkedPrNumber: over.linkedPrNumber ?? null,
     pickup: { eligible: false, status: over.pickup ?? 'planning', reasons: over.pickupReasons ?? [] },
@@ -141,6 +153,7 @@ function floorInput(over: {
     closedPrs: [],
     tasks: [],
     upcoming: [],
+    humanTasks: over.humanTasks ?? [],
     recorded: [],
   };
 }
@@ -1029,6 +1042,7 @@ test('a refused floor draws the override, and a workable one does not', () => {
         closedPrs: [],
         tasks: [],
         upcoming: [],
+        humanTasks: input.humanTasks,
         refUrls: {},
         stopped: false,
         onViewPlan: () => undefined,
@@ -1090,6 +1104,7 @@ test('the floor opens its plan whatever the plan is doing', () => {
         closedPrs: [],
         tasks: [],
         upcoming: [],
+        humanTasks: input.humanTasks,
         refUrls: {},
         stopped: false,
         onViewPlan: () => undefined,
@@ -1436,6 +1451,7 @@ test('the goal floor strip is the staked goals', () => {
         closedPrs: [],
         tasks: [],
         upcoming: [],
+        humanTasks: [],
         refUrls: {},
         stopped: false,
         watchLabel: 'lubbdubb-watch',
@@ -1459,6 +1475,97 @@ test('the goal floor strip is the staked goals', () => {
   const unwatched = render([open(1, [])]);
   assert.match(unwatched, /No goals have a claim staked/, 'nothing staked is a different fact from an empty world');
   assert.doesNotMatch(unwatched, /ore patch/, 'and it draws no strip at all');
+});
+
+/**
+ * The station after the launch, and the only one on the floor a person staffs.
+ *
+ * It is drawn from the `close_out` row and never from the ticket, which is the
+ * same discipline the satellite keeps against `conclusion`: the obligation has
+ * its own life, and the one thing no reading of the tracker can see is the
+ * operator declining to close it.
+ */
+test('the close-out is read off the row, not off the ticket', () => {
+  const delivered = {
+    pickup: 'delivered' as const,
+    delivery: { summary: 'it landed', by: 'assessor' as const, decidedAt: NOW },
+    parts: [planPart('a', [], 'merged', 1)],
+  };
+  const closeOut = (over: Partial<HumanTask> | null, extra: Parameters<typeof floorInput>[0] = {}) =>
+    buildGoalFloor(
+      floorInput({
+        ...delivered,
+        ...extra,
+        humanTasks: over
+          ? [
+              {
+                id: 'hum-1',
+                title: 'Close issue #9 in the tracker',
+                detail: null,
+                originRef: 'issue:9',
+                partId: null,
+                kind: 'close_out',
+                agentId: null,
+                taskId: null,
+                status: 'open',
+                resolution: null,
+                createdAt: NOW,
+                updatedAt: NOW,
+                resolvedAt: null,
+                ...over,
+              },
+            ]
+          : [],
+      }),
+    ).machines.find((m) => m.kind === 'closeout')!;
+
+  const waiting = closeOut({});
+  assert.equal(waiting.status.word, 'Waiting on you');
+  assert.equal(waiting.presence, 'built');
+  // The ask is "go there and close it", so the station carries the way there.
+  assert.equal(waiting.link?.ref, 'issue:9');
+
+  assert.equal(closeOut({ status: 'done', resolution: 'the tracker shows it closed' }).status.word, 'Closed');
+
+  // A decline is a settlement, not a failure: the machine is off rather than red,
+  // and the operator's note is a plate, verbatim.
+  const declined = buildGoalFloor(
+    floorInput({
+      ...delivered,
+      humanTasks: [
+        {
+          id: 'hum-1',
+          title: 'Close issue #9 in the tracker',
+          detail: null,
+          originRef: 'issue:9',
+          partId: null,
+          kind: 'close_out',
+          agentId: null,
+          taskId: null,
+          status: 'declined',
+          resolution: 'it stays open until the release goes out',
+          createdAt: NOW,
+          updatedAt: NOW,
+          resolvedAt: NOW,
+        },
+      ],
+    }),
+  );
+  const machine = declined.machines.find((m) => m.kind === 'closeout')!;
+  assert.equal(machine.status.word, 'Left open');
+  assert.equal(machine.status.tone, 'off');
+  assert.ok(
+    declined.plates.some((p) => p.text === 'it stays open until the release goes out'),
+    'the reason a ticket stays open is the operator’s own words, on a plate',
+  );
+
+  // No row at all: nothing is owed while the goal is in flight, and nothing is
+  // owed on a goal delivered against a ticket that was already closed.
+  assert.equal(
+    buildGoalFloor(floorInput({ humanTasks: [] })).machines.find((m) => m.kind === 'closeout')?.status.word,
+    'Unbuilt',
+  );
+  assert.equal(closeOut(null, { state: 'closed' }).status.word, 'Closed');
 });
 
 /**
@@ -1495,7 +1602,7 @@ test('the loop reaches an end, and the end is drawn', () => {
   );
   assert.deepEqual(
     delivered.machines.map((m) => m.kind),
-    ['patch', 'furnace', 'assembler', 'silo', 'satellite', 'manifest', 'signal', 'launch'],
+    ['patch', 'furnace', 'assembler', 'silo', 'satellite', 'manifest', 'signal', 'launch', 'closeout'],
   );
   assert.equal(delivered.machines.find((m) => m.kind === 'satellite')?.status.word, 'Verified');
   assert.equal(delivered.machines.find((m) => m.kind === 'launch')?.status.word, 'Away');
@@ -1601,7 +1708,7 @@ test('a delivered goal draws its check and its tail even while the plan arm owns
 
   assert.deepEqual(
     floor.machines.map((m) => m.kind),
-    ['patch', 'furnace', 'assembler', 'assembler', 'silo', 'satellite', 'manifest', 'signal', 'launch'],
+    ['patch', 'furnace', 'assembler', 'assembler', 'silo', 'satellite', 'manifest', 'signal', 'launch', 'closeout'],
     'the whole yes arm draws, not just the satellite',
   );
   assert.equal(floor.machines.find((m) => m.kind === 'launch')?.status.word, 'Away');

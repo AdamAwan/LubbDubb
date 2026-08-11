@@ -280,6 +280,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
         closedPrs={state.world.closedPullRequests ?? []}
         tasks={state.tasks}
         upcoming={state.upcoming?.items ?? []}
+        humanTasks={state.humanTasks ?? []}
         refUrls={state.refUrls}
         stopped={stopped}
         watchLabel={state.config.watchLabel}

@@ -1,16 +1,15 @@
 import { nanoid } from 'nanoid';
-import type { HumanTask, HumanTaskInput, HumanTaskStatus } from '../types.js';
+import type { HumanTask, HumanTaskInput, HumanTaskKind, HumanTaskStatus } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
- * `human_tasks` was a fresh `CREATE TABLE`, so it has nothing to migrate yet. The
- * entry exists anyway, empty: a table being new *once* does not keep it exempt,
- * and the next column added here has somewhere obvious to be declared rather than
- * being invisible on every database from before it existed.
+ * `human_tasks` was a fresh `CREATE TABLE`, and `kind` is the column that proved
+ * the entry was worth declaring empty: every row written before it existed is an
+ * `ask`, and the default is what says so on a database that predates the sweep.
  */
 export const HUMAN_TASK_COLUMNS: ColumnMigrations = {
-  human_tasks: {},
+  human_tasks: { kind: `TEXT NOT NULL DEFAULT 'ask'` },
 };
 
 /**
@@ -42,13 +41,17 @@ export class HumanTaskStore {
       taskId: string | null;
       originRef: string | null;
       partId?: string | null;
+      kind?: HumanTaskKind;
     },
   ): { task: HumanTask; created: boolean } {
     const ts = this.ctx.now();
-    // `IS` rather than `=` so a null matches a null (SQL equality doesn't).
+    const kind: HumanTaskKind = input.kind ?? 'ask';
+    // `IS` rather than `=` so a null matches a null (SQL equality doesn't). `kind`
+    // is in the key so an operator who types the sweep's own sentence at it
+    // refreshes their own row rather than the harness's.
     const existing = this.ctx.db
-      .prepare(`SELECT * FROM human_tasks WHERE agent_id IS ? AND origin_ref IS ? AND title=?`)
-      .get(input.agentId, input.originRef, input.title) as HumanTaskRow | undefined;
+      .prepare(`SELECT * FROM human_tasks WHERE agent_id IS ? AND origin_ref IS ? AND title=? AND kind=?`)
+      .get(input.agentId, input.originRef, input.title, kind) as HumanTaskRow | undefined;
     if (existing) {
       this.ctx.db
         .prepare(`UPDATE human_tasks SET detail=?, updated_at=? WHERE id=?`)
@@ -61,6 +64,7 @@ export class HumanTaskStore {
       detail: input.detail,
       originRef: input.originRef,
       partId: input.partId ?? null,
+      kind,
       agentId: input.agentId,
       taskId: input.taskId,
       status: 'open',
@@ -71,8 +75,8 @@ export class HumanTaskStore {
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO human_tasks (id, title, detail, origin_ref, part_id, agent_id, task_id, status, resolution, created_at, updated_at, resolved_at)
-         VALUES (@id, @title, @detail, @originRef, @partId, @agentId, @taskId, @status, @resolution, @createdAt, @updatedAt, @resolvedAt)`,
+        `INSERT INTO human_tasks (id, title, detail, origin_ref, part_id, kind, agent_id, task_id, status, resolution, created_at, updated_at, resolved_at)
+         VALUES (@id, @title, @detail, @originRef, @partId, @kind, @agentId, @taskId, @status, @resolution, @createdAt, @updatedAt, @resolvedAt)`,
       )
       .run(task);
     return { task, created: true };
@@ -109,6 +113,26 @@ export class HumanTaskStore {
   }
 
   /**
+   * Every task of one kind — what the close-out sweep reads to find the rows it
+   * filed on earlier pulses.
+   *
+   * Every status, for {@link listHumanTasksForParts}' reason, and here it is both
+   * directions at once: a **settled** row is what stops the sweep filing the same
+   * obligation a second time, and an **open** one whose delivery has since been
+   * cleared is what it has to retract. Unbounded in age, as `listDeliveries` is
+   * and for its reason — one row per goal ever delivered, and a count bound would
+   * hide the oldest standing obligation rather than the least important one.
+   *
+   * Reading the rows back is also why the sweep does not simply call
+   * `recordHumanTask` each pulse and lean on its dedup: that refreshes
+   * `updated_at`, and the panel it feeds is newest-first.
+   */
+  listHumanTasksOfKind(kind: HumanTaskKind): HumanTask[] {
+    const rows = this.ctx.db.prepare(`SELECT * FROM human_tasks WHERE kind=?`).all(kind) as HumanTaskRow[];
+    return rows.map(rowToHumanTask);
+  }
+
+  /**
    * Settle a human task: the person did it, or refused it.
    *
    * Compare-and-set in the write (`WHERE id=? AND status='open'`), the same
@@ -134,6 +158,7 @@ interface HumanTaskRow {
   detail: string | null;
   origin_ref: string | null;
   part_id: string | null;
+  kind: string;
   agent_id: string | null;
   task_id: string | null;
   status: string;
@@ -150,6 +175,7 @@ function rowToHumanTask(r: HumanTaskRow): HumanTask {
     detail: r.detail,
     originRef: r.origin_ref,
     partId: r.part_id,
+    kind: r.kind as HumanTaskKind,
     agentId: r.agent_id,
     taskId: r.task_id,
     status: r.status as HumanTaskStatus,

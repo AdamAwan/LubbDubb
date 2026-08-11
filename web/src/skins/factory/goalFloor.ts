@@ -1,9 +1,10 @@
-import type { Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../types.js';
+import type { HumanTask, Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../types.js';
 import { watchBucket } from '../../worldBuckets.js';
 import { scannersFor, type Scanner } from './scanners.js';
 import {
   assayStatus,
   assemblerStatus,
+  closeOutStatus,
   crateMachineStatus,
   furnaceStatus,
   launchStatus,
@@ -14,6 +15,7 @@ import {
   signalPostStatus,
   siloStatus,
   UNBUILT,
+  type CloseOutReading,
   type FloorStage,
   type MachinePresence,
   type MachineStatus,
@@ -405,6 +407,13 @@ interface GoalFloorInput {
    * they start disagreeing.
    */
   recorded: WorkNodeView[];
+  /**
+   * Every human task on the wire. The floor reads exactly one of them — the
+   * `close_out` on this goal — and reads it rather than re-deriving the state of
+   * the ticket, so the station and the Bench card above the line cannot disagree
+   * about whether the close is still owed.
+   */
+  humanTasks: HumanTask[];
 }
 
 const issueOrigin = (n: number): string => `issue:${n}`;
@@ -434,6 +443,23 @@ const LAUNCH_META: Record<LaunchReading, string> = {
   away: 'pickup held · reversible',
   returned: 'returned by the assessor',
   unbuilt: 'no goal check yet',
+};
+
+/** The close-out's name and line, one per reading — see {@link CloseOutReading}. */
+const CLOSE_OUT_NAMES: Record<CloseOutReading, string> = {
+  waiting: 'Close the ticket',
+  closed: 'Ticket closed',
+  declined: 'Ticket left open',
+  unbuilt: 'Nothing to close yet',
+};
+// The fallback line only, and it is why `closed` does not claim the tracker did
+// it: the settled row's own resolution is preferred, and this is what is left
+// when an operator marked it done from the panel without leaving a note.
+const CLOSE_OUT_META: Record<CloseOutReading, string> = {
+  waiting: 'only a person can do this · blocks nothing',
+  closed: 'nothing left to close',
+  declined: 'settled by you',
+  unbuilt: '—',
 };
 
 /**
@@ -841,6 +867,58 @@ export function buildGoalFloor(input: GoalFloorInput): GoalFloorModel {
     siloLabel: null,
   });
   edges.push({ from: tail, to: launchRef });
+
+  // -- the close-out: the one station a person staffs ---------------------
+  //
+  // Drawn from the `close_out` task and never from the ticket, for the reason the
+  // satellite is not read off `conclusion`: the obligation is a row with its own
+  // life, and a station that re-derived it would be a second opinion about a
+  // thing settled elsewhere — including the operator's decline, which no reading
+  // of the tracker can see. The one arm that does read the world is a delivered
+  // goal with **no** task at all: nothing was owed, because the item was never
+  // listed open after the launch.
+  const closeOutTask = input.humanTasks.find((t) => t.kind === 'close_out' && t.originRef === patchRef) ?? null;
+  const closeOut: CloseOutReading = closeOutTask
+    ? closeOutTask.status === 'open'
+      ? 'waiting'
+      : closeOutTask.status === 'done'
+        ? 'closed'
+        : 'declined'
+    : launch === 'away' && issue.state === 'closed'
+      ? 'closed'
+      : 'unbuilt';
+  const closeOutRef = `${patchRef}:closeout`;
+  machines.push({
+    ref: closeOutRef,
+    kind: 'closeout',
+    kindLabel: 'Close-out',
+    name: CLOSE_OUT_NAMES[closeOut],
+    meta: [closeOutTask?.resolution ?? CLOSE_OUT_META[closeOut]],
+    presence: closeOut === 'unbuilt' ? 'unbuilt' : 'built',
+    status: closeOutStatus(closeOut),
+    scanners: [],
+    prNumber: null,
+    // The way out is the ticket itself, the one machine that shares the patch's
+    // link: the ask is "go there and close it", so a station that named the item
+    // without offering the door would be a sentence with the verb missing.
+    link: closeOut === 'waiting' ? { ref: patchRef, label: 'ticket ↗' } : null,
+    fill: null,
+    siloLabel: null,
+  });
+  edges.push({ from: launchRef, to: closeOutRef });
+
+  // A decline is the operator's own account of why the item stays open, and it is
+  // the only thing on this station that is not a fact about the tracker — so it
+  // goes on a plate, verbatim, like every other reason.
+  if (closeOut === 'declined' && closeOutTask?.resolution) {
+    plates.push({
+      who: 'Close-out · declined',
+      tone: 'warn',
+      text: closeOutTask.resolution,
+      route: null,
+      assayIssue: null,
+    });
+  }
 
   // Whatever the harness itself says about why nothing is moving, quoted. Last,
   // so the specific machine plates above read first.

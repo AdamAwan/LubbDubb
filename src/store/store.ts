@@ -38,6 +38,7 @@ import type {
   FindingInput,
   FindingStatus,
   HumanTask,
+  HumanTaskKind,
   HumanTaskStatus,
   IssueRun,
   IssueConclusion,
@@ -286,6 +287,9 @@ export class Store {
   }
   listHumanTasksForParts(partIds: string[]): HumanTask[] {
     return this.humanTasks.listHumanTasksForParts(partIds);
+  }
+  listHumanTasksOfKind(kind: HumanTaskKind): HumanTask[] {
+    return this.humanTasks.listHumanTasksOfKind(kind);
   }
   settleHumanTask(id: string, status: Exclude<HumanTaskStatus, 'open'>, resolution: string | null): HumanTask | null {
     return this.humanTasks.settleHumanTask(id, status, resolution);

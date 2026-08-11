@@ -335,6 +335,7 @@ interface HumanTask {
   detail: string | null; // what to do and how to know it is done, markdown
   originRef: string | null; // the work it belongs to: "issue:12", "issue:12:part:schema", "pr:42"
   partId: string | null; // the plan part this task *is*, when a planner declared a step for a person
+  kind: 'ask' | 'close_out'; // who it is for the harness — see below
   agentId: string | null; // the requesting agent, from the credential; null when nobody individual asked
   taskId: string | null;
   status: 'open' | 'done' | 'declined';
@@ -345,9 +346,10 @@ interface HumanTask {
 }
 ```
 
-`human_tasks` is a fresh `CREATE TABLE`, and `src/store/humanTasks.ts` declares an empty
-`HUMAN_TASK_COLUMNS` anyway: a table being new **once** does not keep it exempt, and the next column
-added has somewhere obvious to be declared rather than being invisible on every older database.
+`human_tasks` was a fresh `CREATE TABLE`, and `src/store/humanTasks.ts` declared an empty
+`HUMAN_TASK_COLUMNS` anyway: a table being new **once** does not keep it exempt. `kind` is the column
+that collected on it — it is declared there with a `'ask'` default, so every row written before the
+close-out existed reads as what it is.
 → [14](14-persistence.md#migrations)
 
 ### It is not an escalation, and the difference is not a nuance
@@ -411,18 +413,61 @@ longer includes this step". Declining rather than deleting for the reason a dism
 in the list: the alternative is an open obligation pointing at a part no plan schedules, which
 nothing will ever settle.
 
-### The two arms that file one
+### The step after the launch: the close-out
+
+The harness delivers a goal; it does not close the item in the tracker. That is settled and stays
+settled — a close is _admin work anyone can do at any moment_, and promoting it to the harness's own
+verdict is what issue #234 exists to stop ([17](17-cockpit.md)). What was missing is the other half:
+nothing recorded that the close was still **owed**. The Signal post said "Update the ticket" and the
+run carried on regardless, which is a reminder rather than an obligation — nothing holds it, nothing
+settles it, and nothing says on Thursday that it never happened.
+
+`DeliveryCloseOutDesk` runs once a pulse ([04](04-harness-cycle.md)) and files a `close_out` task for
+every goal with a standing delivery whose tracker item is still open. It is **standalone** — no
+`part_id` — so it blocks nothing, and the rule above holds: only a plan-declared part ever holds work
+off the fleet.
+
+**Why this one may settle itself.** Every other human task is settled by a person clicking Done,
+because the harness cannot observe a console switch being flipped. This one names an item the harness
+already refetches every pulse, so leaving it to a click would ask the operator to tell the harness
+something it can see. That asymmetry is the whole of what `kind` discriminates — and it is a column
+rather than a title match, because recognising its own row by the sentence it wrote is parsing prose
+the harness composed.
+
+**"Closed" is read as "no longer in the open set", two ways**, because the providers disagree about
+what a closed issue looks like. Azure DevOps keeps reporting the work item with a closed state;
+GitHub's issues provider fetches open issues only, so a closed one stops appearing. Reading only the
+first leaves every GitHub task open forever; reading only the second never fires on Azure. Both mean
+the same thing about _this_ obligation — nothing is left for a person to close — and the resolution
+note says which was observed rather than claiming who closed it. The gone-arm is skipped entirely on
+an **empty** issue list: a provider whose snapshot failed returns its last good read, but one that is
+down on a first boot returns nothing at all, and settling every standing obligation off that is the
+one way this can be wrong at scale.
+
+The same reading is what stops it filing noise. A GitHub issue a merged `Closes #12` took with it is
+never in the open set, so nothing is ever owed for it.
+
+**Clearing the delivery retracts it.** An operator who deleted the row put the goal back into
+production, and an open obligation to close its ticket then points at work that is not finished. The
+task is settled `declined` with that as its note — declined rather than deleted, the settlement an
+amended plan already uses on the human part it dropped.
+
+Tests: `test/deliveryCloseOut.test.ts`.
+
+### The three arms that file one
 
 - **`request_human_task`**, the MCP tool: `{title, detail?}` and nothing that names work. Identity is
   structural, as for every write tool. It queues nothing and blocks nothing, and the response says so
   outright — an agent that believed filing this arranged something would sit waiting for it.
   → [11](11-mcp-tools.md#request_human_task)
+- **The close-out sweep**, the harness's own: `kind: 'close_out'`, a null `agentId` because nobody
+  individual asked, and the only arm that files without anyone typing anything. See above.
 - **`POST /api/human-tasks`**, the operator's own: the same row with no agent behind it, which is
   exactly what a null `agentId` means. There is no `requestedBy` column, so nothing can disagree with
   the ids beside it. Both arms validate through the same pure `validateHumanTask`
   (`src/mcp/humanTasks.ts`) — a one-line title is a property of the panel row, not of who typed it.
 
-A **repeat** (same agent, same origin, same title) refreshes the row without resetting status,
+A **repeat** (same agent, same origin, same title, same kind) refreshes the row without resetting status,
 `recordFinding`'s rule and for its reason. Better instructions overwrite thinner ones; a declined
 task asked for again stays declined.
 

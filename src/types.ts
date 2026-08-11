@@ -678,6 +678,22 @@ export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary' | 'where' | 
 export type HumanTaskStatus = 'open' | 'done' | 'declined';
 
 /**
+ * Who a human task is *for the harness*, which is a different question from who
+ * asked for it.
+ *
+ * `ask` is every task a person typed or an agent requested: the harness knows
+ * nothing about it beyond the words, and only a person can say it is done.
+ * `close_out` is one the harness files itself and can therefore also settle
+ * itself — the ticket it names is a thing it watches every pulse.
+ *
+ * A discriminator rather than a title match. The close-out sweep has to find its
+ * own row again on the next pulse, and the alternative is recognising it by the
+ * sentence it wrote — parsing prose the harness composed, which is the failure
+ * mode `signalPolarity` and the reason plates already refuse.
+ */
+export type HumanTaskKind = 'ask' | 'close_out';
+
+/**
  * A unit of work only a person can do: flipping a setting in a console nobody
  * gave the fleet an account for, plugging something in, looking at a rendered
  * screen and saying whether it is right.
@@ -721,6 +737,12 @@ export interface HumanTask {
    * blocks nothing — it is a visible obligation, not a gate.
    */
   partId: string | null;
+  /**
+   * What kind of obligation this is — see {@link HumanTaskKind}. `ask` for
+   * everything a person or an agent filed; `close_out` for the harness's own
+   * "the goal is delivered, close its ticket", which it files and settles.
+   */
+  kind: HumanTaskKind;
   /** The agent that asked for it, from its credential. Null when an operator filed it themselves. */
   agentId: string | null;
   taskId: string | null;
