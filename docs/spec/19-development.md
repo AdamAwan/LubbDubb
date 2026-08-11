@@ -21,9 +21,22 @@ cached, which changes only the scheduling and the reporting:
 - **A weighted pool, sized to the core count.** Each static stage counts as one job; `test` counts
   as `availableParallelism() - 1`, because node's test runner spawns its own worker pool and
   counting it as a single job oversubscribes the box badly enough to be slower than the chain.
-  Stages are declared slowest-first and admitted in that order, so the long poles (`knip`, then the
-  typecheckers) start while there is still room and the cheap stages fill in behind them. On a
-  single core the pool admits one at a time, i.e. the old behaviour.
+  That figure is measured, not taken from the docs — node 22.15 runs exactly seven test files at a
+  time on an eight-core box. Stages are declared slowest-first and admitted in that order, so the
+  long poles (`knip`, then the typecheckers) start while there is still room and the cheap stages
+  fill in behind them. On a single core the pool admits one at a time, i.e. the old behaviour.
+- **One run at a time, machine-wide**, arbitrated by `scripts/checkLock.ts`. The budget above is
+  only honest for a run that is alone: two of them each claimed all eight cores and took the load
+  average to 44, each waiting on work the other had queued. A second run prints
+  `check: already running (pid N) — waiting for it to finish` and starts when the first is done —
+  it waits rather than exiting, so a script that shells out to `npm run check` cannot silently skip
+  the gate.
+- **`CHECK_CORES` overrides the budget** for a machine that is not idle — a game client, a build in
+  another checkout. It sizes the stage pool only: node's test runner picks its own worker count and
+  no flag reachable through `npm run test` overrides it (`--test-concurrency` is rejected inside
+  `NODE_OPTIONS` and ignored as a trailing argument), so `CHECK_CORES=4` means the test stage runs
+  with nothing beside it, not with four workers. A value that is not a positive integer is reported
+  and ignored rather than clamped.
 - **Every stage runs even when one fails**, and each failure is reported. The chain stopped at the
   first, so a formatting slip hid a type error until the next run.
 - **Output is buffered per stage** and printed under its own heading, failures first, then a timing
@@ -36,6 +49,31 @@ cached, which changes only the scheduling and the reporting:
   least of the five because its analysis is whole-graph by nature. Caches are correctness-neutral
   and tested as such — each one catches an error introduced after a clean run. `rm -rf
 node_modules/.cache` forces cold.
+
+### The lock
+
+A lockfile in the OS temp dir (`lubbdubb-check.lock`), created with `O_EXCL` so the kernel picks the
+winner of a race that a read-then-write would let both runs win. It lives there rather than under
+`node_modules/.cache/` with the other check artefacts because what is being rationed is the
+machine's cores, not a checkout's caches — and because `.claude/worktrees/*` has no `node_modules`
+of its own, so a checkout-relative lock would hand every agent session a private lockfile and stop
+nothing.
+
+A lock that can wedge the gate is worse than the contention it fixes, so a lockfile is never fatal.
+Three things clear one:
+
+- **Release on the way out** — a normal or failed exit, `SIGINT`, or `SIGTERM`. The signal handlers
+  re-raise after releasing, so an interrupted check still exits with the status the shell expects.
+- **A liveness probe** on the recorded pid (`kill(pid, 0)`), for the `SIGKILL` that runs no handler.
+  `EPERM` counts as alive: the holder belongs to another user.
+- **An hour-long age ceiling**, for the case liveness gets wrong. A killed run's pid is eventually
+  reused by something unrelated, which would otherwise look like a holder forever.
+
+A lockfile that cannot be parsed names nobody and is discarded. A stale one is only unlinked if it
+still names the pid judged dead, so two waiters cannot have one delete the fresh lock the other just
+took. `test/checkLock.test.ts` covers each of these by spawning real processes — the failure is
+cross-process by construction and a single-process test would pass against something that is not a
+lock at all.
 
 The shape of the cost, which is why the above is worth having: the test suite is **startup-bound**,
 not work-bound. Roughly half its files finish in under half a second, and each worker pays tsx's
@@ -61,12 +99,12 @@ Failure modes that are not obvious:
   Class-member analysis is **name-based**, so a method reached only through a structural seam — an
   interface the class satisfies without declaring `implements` — reads as unused. Two honest ways
   out, and neither is an ignore list: declare the `implements` clause (`PtySession implements
-  AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@public` with a note
+AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@public` with a note
   naming the seam.
 
   **Reach for `implements` first**, including when the interface belongs to a consumer the class
   should not depend on backwards. An `import type` is erased at compile time, so it adds no runtime
-  module edge and cannot invert a layering: the question to ask is what the *value* graph already
+  module edge and cannot invert a layering: the question to ask is what the _value_ graph already
   does. `AgentManager` was tagged for eleven methods on that reasoning while the same file
   value-imported `assessmentOrigin`, `assayerOrigin` and `partConclusionOrigin` from `src/mcp/` —
   the edge was already there, and the tags bought nothing but the loss of a checked contract.
@@ -74,6 +112,7 @@ Failure modes that are not obvious:
   That leaves `@public` for the case where the interface genuinely cannot be named — it would close
   a real runtime cycle, or it lives outside the typecheck project. There are currently no instances
   in `src/`, which is the state to keep it in.
+
 - **Two typecheckers.** `typecheck` covers the server (`tsconfig.json`) and `typecheck:web` the cockpit
   (`web/tsconfig.json`). They are separate passes, so a change spanning `src/` and `web/` must satisfy
   both.
@@ -128,20 +167,20 @@ it to understand why a decision was made, and check the code before relying on a
 
 ## Scripts
 
-| Script                | Does                                                                          |
-| --------------------- | ------------------------------------------------------------------------------- |
-| `npm start`           | Builds the cockpit bundle, then runs the server via tsx.                      |
-| `npm run start:server`| The server alone, serving whatever `web/dist` already holds.                  |
-| `npm run dev`         | The server with `--watch`, no cockpit build (see below).                      |
-| `npm test`            | `node --import tsx --test test/**/*.test.ts`.                                 |
-| `npm run test:coverage` | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).           |
-| `npm run smoke`       | The real end-to-end run (see below).                                          |
-| `npm run build`       | `tsc -p tsconfig.json`.                                                       |
-| `npm run web:dev`     | Vite dev server for the cockpit.                                              |
-| `npm run web:build`   | Production bundle into `web/dist`.                                            |
-| `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.        |
-| `npm run audit`       | `npm audit --audit-level=high`.                                               |
-| `npm run check`       | The one gate: the six stages above, concurrently, via `scripts/check.ts`.      |
+| Script                   | Does                                                                      |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `npm start`              | Builds the cockpit bundle, then runs the server via tsx.                  |
+| `npm run start:server`   | The server alone, serving whatever `web/dist` already holds.              |
+| `npm run dev`            | The server with `--watch`, no cockpit build (see below).                  |
+| `npm test`               | `node --import tsx --test test/**/*.test.ts`.                             |
+| `npm run test:coverage`  | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).         |
+| `npm run smoke`          | The real end-to-end run (see below).                                      |
+| `npm run build`          | `tsc -p tsconfig.json`.                                                   |
+| `npm run web:dev`        | Vite dev server for the cockpit.                                          |
+| `npm run web:build`      | Production bundle into `web/dist`.                                        |
+| `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.          |
+| `npm run audit`          | `npm audit --audit-level=high`.                                           |
+| `npm run check`          | The one gate: the six stages above, concurrently, via `scripts/check.ts`. |
 
 **`npm start` builds the cockpit first, and that is not a convenience.** The server needs no
 build step — tsx runs it from source — but the SPA does, and `web/dist` is gitignored, so it is
@@ -165,7 +204,7 @@ the escape hatch for the case where the build must not run — a checkout instal
 - **ESM with explicit `.js` import extensions**, even from `.ts` sources:
   `import { Store } from './store/store.js';`. New files must follow this or module resolution breaks.
   `type: "module"`, TypeScript `nodenext`.
-- **Comments explain *why*, not *what*.** Match the existing terse, high-signal style; do not narrate
+- **Comments explain _why_, not _what_.** Match the existing terse, high-signal style; do not narrate
   the code.
 - **Typed `emit`/`on` overrides** on `EventEmitter` subclasses (see `AgentManager`, `Harness`,
   `ErrorLog`) — keep event payloads typed at the call site when you add events.
@@ -179,14 +218,14 @@ the escape hatch for the case where the build must not run — a checkout instal
 
 Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
 
-| Option           | Replaces                                                                       |
-| ---------------- | -------------------------------------------------------------------------------- |
-| `backend`        | `NodePtyBackend` → `FakePtyBackend` (`src/pty/fakeBackend.ts`). Drive it with `.last().emit(...)` / `.emitExit(...)`; inspect `.writes`. |
-| `streamSpawner`  | The real child process for the stream-JSON runtime.                            |
-| `sink`           | The outbound seam (defaults to the composite connector).                       |
-| `gitObserver`    | `GitCliObserver` → `FakeGitObserver`. Injecting one also turns the reconciler's `git fetch` off. |
-| `worktrees`      | `WorktreeManager` → `FakeWorktreeManager` (`src/worktree/fakeWorktreeManager.ts`). Records `ensure`/`remove` and hands back a real empty directory; touches no repository. |
-| `errorMirror`    | The stderr echo (tests silence it).                                            |
+| Option          | Replaces                                                                                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend`       | `NodePtyBackend` → `FakePtyBackend` (`src/pty/fakeBackend.ts`). Drive it with `.last().emit(...)` / `.emitExit(...)`; inspect `.writes`.                                   |
+| `streamSpawner` | The real child process for the stream-JSON runtime.                                                                                                                        |
+| `sink`          | The outbound seam (defaults to the composite connector).                                                                                                                   |
+| `gitObserver`   | `GitCliObserver` → `FakeGitObserver`. Injecting one also turns the reconciler's `git fetch` off.                                                                           |
+| `worktrees`     | `WorktreeManager` → `FakeWorktreeManager` (`src/worktree/fakeWorktreeManager.ts`). Records `ensure`/`remove` and hands back a real empty directory; touches no repository. |
+| `errorMirror`   | The stderr echo (tests silence it).                                                                                                                                        |
 
 Plus `dbPath: ':memory:'` for an in-memory database.
 
