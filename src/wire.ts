@@ -479,6 +479,7 @@ export type {
   Escalation,
   Finding,
   HumanTask,
+  IssueRelative,
   Job,
   JobAttachment,
   JobAttachmentInput,

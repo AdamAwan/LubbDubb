@@ -3,6 +3,7 @@ import { PLAN_FILE } from '../../plans/planDocument.js';
 import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';
 import { isPlanInDiscussion } from '../../plans/planDiscussion.js';
 import { currentPlanSummary } from '../../plans/parts.js';
+import { relatedWorkNote } from '../../issueRelations.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
@@ -66,8 +67,12 @@ export function issuePlan(s: StageContext): void {
         type: 'dispatch_code_agent',
         branch,
         title,
+        // Appended to whichever of the three prompts this planner got: the scope
+        // either side of the item — the feature's goal above it, the sibling
+        // stories beside it — is what a decomposition has to fit inside, and a
+        // planner that can't see it re-decomposes work someone already has.
         prompt:
-          discussing || replan
+          (discussing || replan
             ? s.templates.render(discussing ? 'discuss-plan' : 'issue-replan', {
                 number: issue.number,
                 title: issue.title,
@@ -85,7 +90,7 @@ export function issuePlan(s: StageContext): void {
                 body: issue.body,
                 branch,
                 planFile: PLAN_FILE,
-              }),
+              })) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

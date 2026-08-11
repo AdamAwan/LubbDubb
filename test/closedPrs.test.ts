@@ -300,6 +300,7 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
     listPolicyEvaluations: unused,
     listPullLabels: unused,
     listOpenWorkItems: unused,
+    getWorkItems: unused,
     listWorkItemUpdates: unused,
     createThreadReply: unused,
     createThread: unused,

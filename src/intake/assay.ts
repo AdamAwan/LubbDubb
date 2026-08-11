@@ -192,7 +192,14 @@ export function assayHold(assay: IssueAssay | null, issue: Issue, ctx: AssayHold
   if (expiringSignal(assay, ctx.signals ?? [])) return null;
 
   const by = assay.by === 'operator' ? 'you' : 'the goal assay';
-  return `${by} could not act on this goal — "${assay.summary}" (${assay.decidedAt})`;
+  // The verdict's own words and the time it was reached are **not** in here, and
+  // deliberately: this is one reason among several on a row that already carries
+  // `IssueAssay` in full, so a caller that wants the quote reads it there. Folding
+  // them in made the single longest string the cockpit renders — a paragraph and a
+  // raw ISO timestamp in a chip built to be scanned — which is the opposite of what
+  // a reason is for. Nothing is lost: the panel puts the summary and a relative
+  // time in the chip's title, and the ticket comment has the whole of it.
+  return `${by} could not act on this goal`;
 }
 
 /** The transition that ended a verdict's standing, or null while it still stands. */

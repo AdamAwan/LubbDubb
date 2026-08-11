@@ -101,8 +101,31 @@ A tracker issue or work item — the thing that becomes a PR.
 | `labelsAddedByViewer?`    | The subset the authenticated viewer added. `undefined` when authorship is not tracked. Read only when `issuePickupRequireOwnLabel` is on.  |
 | `state`                   | `open` \| `closed` — collapsed.                                                                                                            |
 | `workItemState?`          | The provider's **native** workflow state (e.g. Azure `System.State`: "New"/"Ready"/"In Review"). `undefined` for GitHub and the fake.      |
+| `issueType?`              | The provider's **native** item type (Azure `System.WorkItemType`: "Feature"/"User Story"/"Bug"). `undefined` for GitHub and the fake.      |
+| `parent?`                 | The item this hangs off, carrying **its description**. Tri-state — see below.                                                              |
+| `children?`               | The items hanging off this one. No bodies. `undefined` when hierarchy isn't tracked.                                                       |
+| `siblings?`               | The **other** children of `parent`. `undefined` when there is no parent or no hierarchy.                                                   |
 | `linkedPrNumber`          | The last PR that cross-referenced this issue. **Sticky** — it stays set after that PR merges, so no gate may treat it as "has an open PR". |
 | `url?`                    | Provider web URL.                                                                                                                          |
+
+### Relations
+
+`IssueRelative` is the summary a relation is carried as — `number`, `title`, `issueType`,
+`workItemState`, the `state` collapse, and a `body` **only on a parent**. It is deliberately not an
+`Issue`: only the item the harness was handed is ever dispatched against, and typing a relative as a
+full issue invites code to treat context as something to act on.
+
+`parent` has **three** states and all three are read:
+
+| Value       | Means                          | Read as                                                     |
+| ----------- | ------------------------------ | ----------------------------------------------------------- |
+| `undefined` | The tracker has no hierarchy.  | GitHub and the fake. Every relation-based rule is off.      |
+| `null`      | Tracked, and there is none.    | An **orphan** — reported, never invented (see [06](06-issue-pickup.md#hierarchy)). |
+| An object   | The parent, with its body.     | The feature's goal, appended to the prompts below.          |
+
+A parent the harness could not *read* — deleted, or in a project this identity cannot see — leaves
+`parent` `undefined`, not `null`. Reporting an unreadable link as a missing one would tell the orphan
+check the item belongs to no feature, which is a different and wrong thing to say.
 
 A **retained run**'s issue is one of these too, rebuilt from its stored snapshot rather than returned
 by a provider: `state` is `closed`, and the rest is the issue as it last stood while live. Nothing

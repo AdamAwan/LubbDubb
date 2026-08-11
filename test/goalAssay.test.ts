@@ -342,12 +342,21 @@ function pickupCtx(over: Partial<Parameters<typeof issuePickupStatus>[1]> = {}) 
   };
 }
 
-test('the chip reports the hold, in the words the operator reads', () => {
+/**
+ * The reason names *what happened*; the assayer's own words live on the
+ * `IssueAssay` row beside it, which every surface that quotes them already reads
+ * (the World panel's chip title, the Goal Floor's plate). They used to be folded
+ * into this string as well, which made it the longest thing the cockpit renders —
+ * a paragraph and an ISO timestamp inside a chip built to be scanned.
+ */
+test('the chip reports the hold, and leaves the assayer’s words to the row', () => {
   const status = issuePickupStatus(issue(), pickupCtx({ assays: [assay()] }));
   assert.equal(status.eligible, false);
   assert.equal(status.status, 'assay');
-  assert.match(status.reasons[0] ?? '', /could not act on this goal/);
-  assert.match(status.reasons[0] ?? '', /Better how\?/, 'the assayer’s own words, not a category');
+  assert.equal(status.reasons[0], 'the goal assay could not act on this goal');
+  assert.doesNotMatch(status.reasons[0] ?? '', /Better how\?/, 'the verdict’s prose is not a reason');
+  // Still one hover away, and from the record rather than from a rendered string.
+  assert.match(assay().summary, /Better how\?/);
 });
 
 test('the chip reports the pending case too, so a waiting issue is not an idle fleet', () => {

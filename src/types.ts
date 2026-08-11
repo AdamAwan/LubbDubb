@@ -152,8 +152,68 @@ export interface Issue {
    * state-based gate off for them.
    */
   workItemState?: string;
+  /**
+   * The provider's *native* item type — an Azure DevOps work item's
+   * `System.WorkItemType` ("Feature", "User Story", "Bug", "Task"). `undefined`
+   * for trackers with one kind of item (GitHub issues, the fake), which leaves
+   * every type-based gate off for them. The dispatcher reads it to refuse
+   * picking up a *container* type (see `src/issueRelations.ts`).
+   */
+  issueType?: string;
+  /**
+   * The item this one hangs off — an Azure DevOps hierarchy parent, typically the
+   * Feature a story or bug belongs to. Carries the parent's **description**,
+   * because that is where the overall goal of the feature is written and it is
+   * the context an agent planning one of its children needs.
+   *
+   * The three states are distinct and all three are read: `undefined` means the
+   * provider does not track hierarchy at all, `null` means it does and this item
+   * has no parent (an *orphan* — which the harness reports rather than invents a
+   * parent for), and an object is the parent itself.
+   */
+  parent?: IssueRelative | null;
+  /**
+   * The items hanging off this one — a Feature's stories. Empty for a leaf.
+   * `undefined` when the provider does not track hierarchy. Bodies are not
+   * carried: a child's own description is read when that child is worked, and
+   * carrying every one would put a whole feature's text on every snapshot.
+   */
+  children?: IssueRelative[];
+  /**
+   * The *other* children of {@link parent} — the sibling stories under the same
+   * feature. `undefined` when hierarchy isn't tracked or there is no parent;
+   * empty when this is the feature's only child. What makes a planning agent able
+   * to see the scope either side of the item it was handed.
+   */
+  siblings?: IssueRelative[];
   /** The PR opened to resolve this issue, once one exists. Null until linked. */
   linkedPrNumber: number | null;
+  url?: string;
+}
+
+/**
+ * One end of a tracker relationship — the parent, child or sibling of an
+ * {@link Issue}, as it is carried *on* that issue.
+ *
+ * Deliberately not an `Issue`: a relative is a summary, and typing it as the full
+ * item would invite code to treat a related item as something the harness can act
+ * on. Only the item the harness was handed is ever dispatched against; everything
+ * here is context.
+ */
+export interface IssueRelative {
+  number: number;
+  title: string;
+  /** `System.WorkItemType` — "Feature", "User Story", "Bug", … */
+  issueType: string;
+  /** The provider-native workflow state, unsummarised (the sibling list shows it). */
+  workItemState: string;
+  /** The open/closed collapse of {@link workItemState}, so readers need no state vocabulary. */
+  state: IssueState;
+  /**
+   * The item's description. Present on a **parent** only — the feature's goal —
+   * and omitted everywhere else on purpose (see {@link Issue.children}).
+   */
+  body?: string;
   url?: string;
 }
 

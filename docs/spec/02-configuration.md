@@ -139,6 +139,7 @@ knowing the policy.
 | `issueDefaultPriority`       | `number`                 | `2`                                                               | Weight for an issue with no matching priority label.                                                                    |
 | `issuePickupStates`          | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.      |
 | `issueInReviewState`         | `string` (optional)      | unset                                                             | The state an item is moved to once a PR is open for it. Takes effect only alongside `issuePickupStates`.                |
+| `issueContainerTypes`        | `string[]`               | `["Feature", "Epic"]`                                             | Item types that **hold** work rather than being work. Never picked up, planned or assayed. Matched case-insensitively; `[]` turns the gate off; items with no type bypass it. |
 
 ### Feature policies
 

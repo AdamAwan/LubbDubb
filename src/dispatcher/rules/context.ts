@@ -6,7 +6,16 @@ import type { PromptTemplates } from '../promptTemplates.js';
 import type { RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
-import type { Issue, IssueAssay, IssueConclusion, IssueShortfall, Plan, PullRequest, Task } from '../../types.js';
+import type {
+  Issue,
+  IssueAssay,
+  IssueConclusion,
+  IssueRelative,
+  IssueShortfall,
+  Plan,
+  PullRequest,
+  Task,
+} from '../../types.js';
 import type { PlanRouteVerdict } from '../../plans/planning.js';
 
 /**
@@ -112,6 +121,13 @@ export interface StageContext {
    * narrowed list (three deliberately do not — see their own bodies).
    */
   eligibleIssues: { issue: Issue; weight: number }[];
+  /**
+   * The open containers an item with no parent could belong to — the *suggestion*
+   * offered beside an orphan flag, derived once from the whole world (see
+   * `candidateParents`). Empty on a tracker with no hierarchy, which is what
+   * leaves the note off the GitHub path entirely.
+   */
+  parentCandidates: IssueRelative[];
   /**
    * Which arm of the plan funnel each eligible issue is on, keyed by issue
    * number. Shared by `issue-plan` and `issue-pickup` so the two can never

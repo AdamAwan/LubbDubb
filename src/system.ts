@@ -403,6 +403,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultPriority: config.issueDefaultPriority,
     pickupStates: config.issuePickupStates,
     inReviewState: config.issueInReviewState,
+    containerTypes: config.issueContainerTypes,
   };
   // Hoisted out of the RuleDispatcher's construction because the template book is
   // no longer only the dispatcher's: `POST /api/findings/:id/file` renders

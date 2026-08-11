@@ -204,6 +204,122 @@ export function buildDemoState(): DemoSeed {
         },
       ],
       issues: [
+        // A three-row slice of an Azure Boards tree, which is the one thing a
+        // GitHub-shaped fixture set cannot show: a container the harness refuses
+        // to work, a story that reads its feature's goal, and an orphan flagged
+        // but still worked. See docs/spec/06-issue-pickup.md#hierarchy.
+        demoIssue({
+          id: 'iss-812',
+          number: 812,
+          title: 'Self-serve checkout',
+          body: 'Customers can complete a purchase without contacting support. Success is a checkout that works on one page, keeps card details out of our logs, and degrades to the old flow if the payment provider is down.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          issueType: 'Feature',
+          workItemState: 'Active',
+          parent: null,
+          children: [
+            {
+              number: 843,
+              title: 'One-page checkout shell',
+              issueType: 'User Story',
+              workItemState: 'Closed',
+              state: 'closed',
+            },
+            {
+              number: 844,
+              title: 'Tokenise card entry',
+              issueType: 'User Story',
+              workItemState: 'Active',
+              state: 'open',
+            },
+            {
+              number: 845,
+              title: 'Validate the address form inline',
+              issueType: 'User Story',
+              workItemState: 'Active',
+              state: 'open',
+            },
+          ],
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'container',
+            reasons: ['Feature is a container — work its 3 child items (2 still open)'],
+          },
+        }),
+        demoIssue({
+          id: 'iss-845',
+          number: 845,
+          title: 'Validate the address form inline',
+          body: 'Validate the address fields as they are typed, against the same rules the payment provider applies.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          issueType: 'User Story',
+          workItemState: 'Active',
+          parent: {
+            number: 812,
+            title: 'Self-serve checkout',
+            issueType: 'Feature',
+            workItemState: 'Active',
+            state: 'open',
+            body: 'Customers can complete a purchase without contacting support. Success is a checkout that works on one page, keeps card details out of our logs, and degrades to the old flow if the payment provider is down.',
+          },
+          siblings: [
+            {
+              number: 843,
+              title: 'One-page checkout shell',
+              issueType: 'User Story',
+              workItemState: 'Closed',
+              state: 'closed',
+            },
+            {
+              number: 844,
+              title: 'Tokenise card entry',
+              issueType: 'User Story',
+              workItemState: 'Active',
+              state: 'open',
+            },
+          ],
+          linkedPrNumber: null,
+          pickup: { eligible: true, status: 'eligible', reasons: [] },
+        }),
+        demoIssue({
+          id: 'iss-844',
+          number: 844,
+          title: 'Tokenise card entry',
+          body: 'Card details go to the provider iframe and never touch our servers or logs.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          issueType: 'User Story',
+          workItemState: 'Active',
+          parent: {
+            number: 812,
+            title: 'Self-serve checkout',
+            issueType: 'Feature',
+            workItemState: 'Active',
+            state: 'open',
+            body: 'Customers can complete a purchase without contacting support.',
+          },
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'active', reasons: ['agent running'] },
+        }),
+        demoIssue({
+          id: 'iss-903',
+          number: 903,
+          title: 'Totals drift by a penny on multi-currency carts',
+          body: 'Rounding is applied per line rather than per order, so a mixed-currency cart is out by a penny.',
+          labels: ['bug', 'lubbdubb-watch'],
+          state: 'open',
+          issueType: 'Bug',
+          workItemState: 'Active',
+          // Flagged, not blocked: still eligible, and every agent put on it is
+          // told the parent is missing and offered the open features it may
+          // belong to.
+          parent: null,
+          linkedPrNumber: null,
+          pickup: { eligible: true, status: 'eligible', reasons: [] },
+        }),
         demoIssue({
           id: 'iss-208',
           number: 208,
@@ -286,12 +402,7 @@ export function buildDemoState(): DemoSeed {
           pickup: {
             eligible: false,
             status: 'assay',
-            reasons: [
-              'the goal assay could not act on this goal — "Nothing here names which ordering is wrong, ' +
-                'or what the right one would be." (' +
-                ago(52) +
-                ')',
-            ],
+            reasons: ['the goal assay could not act on this goal'],
           },
           assay: {
             verdict: 'unclear',

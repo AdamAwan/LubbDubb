@@ -87,6 +87,13 @@ when the plan row is back in `planning` — or `discuss-plan`, same origin and b
 when an active task already holds the origin, which is what stops a discussion ever getting a second
 planner. There is **no escalation arm**.
 
+Whichever of the three templates it renders, `relatedWorkNote` is **appended** to it: the parent
+feature's description, the sibling stories with their states, and the orphan flag with its candidate
+features (see [06](06-issue-pickup.md#hierarchy)). Reading the related items is the planning step
+that stops a decomposition re-cutting scope a sibling story already holds — a planner that cannot see
+either side of the item it was handed will happily plan work someone else owns. Empty on a tracker
+with no hierarchy, so the GitHub prompt is unchanged.
+
 ## The plan document
 
 `src/plans/planDocument.ts`. One schema, two transports.

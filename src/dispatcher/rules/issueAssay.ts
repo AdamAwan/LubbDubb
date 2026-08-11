@@ -1,6 +1,7 @@
 import { dispatchVerdict } from '../dispatchCooldown.js';
 import { assayBranch, assayOrigin, hasWorkStarted, isAssayed } from '../../intake/assay.js';
 import { issueOrigin } from '../../plans/planning.js';
+import { relatedWorkNote } from '../../issueRelations.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
@@ -68,12 +69,17 @@ export function issueAssay(s: StageContext): void {
         // sense against the repository as it stands.
         base: s.defaultBranch,
         title,
-        prompt: s.templates.render('issue-assay', {
-          number: issue.number,
-          title: issue.title,
-          body: issue.body,
-          branch,
-        }),
+        // The relations decide half of what this rule is asking. A goal that
+        // reads as vague on its own is often exactly right once its parent
+        // feature's description is in front of the assayer; an orphan is the
+        // other way round, and is a finding rather than a fault of the text.
+        prompt:
+          s.templates.render('issue-assay', {
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            branch,
+          }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
         originRef: origin,
         // The exact text the verdict will be fingerprinted against — see
         // `AgentManager.recordAssay`, which reads these two fields back off
