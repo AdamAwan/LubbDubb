@@ -25,9 +25,18 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
       summary: {
         type: 'string',
         description:
-          'What you found, and on what evidence — which pull requests delivered what, and whether the ' +
-          'harness watched them merge or assumed it. For more_work, precisely what is missing: the next ' +
-          'agent starts from this.',
+          'One line, no line breaks: the verdict and what decided it. This is the headline an operator ' +
+          'reads before anything else — the evidence belongs in `detail`, and a summary with a line break ' +
+          'in it is refused.',
+      },
+      detail: {
+        type: 'string',
+        description:
+          'The account behind the verdict: which pull requests delivered what, whether the harness watched ' +
+          'them merge or assumed it, and for more_work precisely what is missing — the next agent starts ' +
+          'from this. Markdown, rendered as the body of the card an operator reads, so use headings and ' +
+          'lists for structure and a fenced code block for output. Optional; write nothing if the headline ' +
+          'says it all.',
       },
       cause: {
         type: 'string',
@@ -54,7 +63,14 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
     // assess at all: an agent that did the work is refused rather than scoped
     // down, because judging your own delivery is not an assessment. The
     // plan-aware refusals happen there too — this layer cannot read a plan.
-    const result = deps.agents.recordAssessment(agent.id, parsed.verdict, parsed.summary, parsed.cause, parsed.part);
+    const result = deps.agents.recordAssessment(
+      agent.id,
+      parsed.verdict,
+      parsed.summary,
+      parsed.detail,
+      parsed.cause,
+      parsed.part,
+    );
     if (!result.ok) return toolError(result.error);
     return ok({
       assessed: true,

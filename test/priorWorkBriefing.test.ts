@@ -158,6 +158,7 @@ test('the prose behind each standing verdict is carried, with who cast it', () =
       cause: 'part',
       partSlug: 'schema',
       summary: 'the migration never landed',
+      detail: null,
       by: 'assessor',
       agentId: 'a3',
       taskId: 't3',

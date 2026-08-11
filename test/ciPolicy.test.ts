@@ -341,7 +341,11 @@ test('rule `pr-ci-failing`: an escalate-only failure asks a human once and dispa
     first.actions.some((a) => a.type === 'dispatch_code_agent'),
     false,
   );
-  assert.match(escalations[0]!.prompt, /infra-gate/);
+  // Which checks, in the body rather than the lede: the list has no bound, and a
+  // PR red on nine escalate-only checks would otherwise put all nine in the first
+  // sentence. The prompt says *that* they are all left alone; the body says which.
+  assert.match(String(escalations[0]!.context.detail ?? ''), /infra-gate/);
+  assert.match(escalations[0]!.prompt, /told the harness not to act on/);
 
   // Held by the open item it just created.
   const open = [{ context: { originRef: 'pr:7:ci' } } as Escalation];

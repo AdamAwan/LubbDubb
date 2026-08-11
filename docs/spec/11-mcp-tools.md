@@ -283,9 +283,21 @@ on the verdict rather than on the next pulse.
 
 ### `assess_issue`
 
-Arguments `{status: 'delivered'|'more_work', summary, cause?, part?}`. Rule `issue-assess`'s assessor casts its
+Arguments `{status: 'delivered'|'more_work', summary, detail?, cause?, part?}`. Rule `issue-assess`'s assessor casts its
 verdict here. Identity is structural as for every other write tool — no issue argument, the origin
 resolved from the credential.
+
+- **The verdict arrives in two fields, and `validateAssessment` refuses a blob.** `summary` is one
+  line, no newlines, ≤160 characters — the headline an operator reads first. `detail` is ≤2000
+  characters of markdown: the account, rendered as the body of the card. The 2000-character cap moved
+  off `summary` and onto `detail`; it did not disappear.
+
+  **Refusing the newline is the load-bearing part**, exactly as it is for `report_finding` (whose
+  shape this copies deliberately, so an operator learns one). An assessor handed a single string
+  writes its sections into it as inline capitals — `PRESENT: … MISSING: … REMAINING: …` — and what
+  reaches the operator is a paragraph with no seams. Refused here, it is a tool error the same agent
+  fixes inside its own turn instead of something a person reads hours later. `detail` is optional: an
+  assessment with nothing to add writes nothing, where a required field would be padded with "N/A".
 
 - **`assessmentOrigin` refuses every agent that is _doing_ the work**, which is `conclusionOrigin`'s
   discipline pointed the other way. There a part agent is refused because the plan speaks for the

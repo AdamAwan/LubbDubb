@@ -10,7 +10,7 @@ import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, PlanStore, PLAN_COLUMNS } from './plans.js';
-import { IssueVerdictStore } from './issueVerdicts.js';
+import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
@@ -125,6 +125,7 @@ export class Store {
       HUMAN_TASK_COLUMNS,
       PLAN_COLUMNS,
       JOB_COLUMNS,
+      ISSUE_VERDICT_COLUMNS,
     ]) {
       ensureColumns(this.db, columns);
     }

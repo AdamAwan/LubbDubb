@@ -220,7 +220,8 @@ CREATE TABLE IF NOT EXISTS issue_conclusions (
 -- mutually exclusive — writing either clears the other.
 CREATE TABLE IF NOT EXISTS issue_deliveries (
   origin_ref TEXT PRIMARY KEY,      -- "issue:12"
-  summary    TEXT NOT NULL,
+  summary    TEXT NOT NULL,         -- one line: the verdict and what decided it
+  detail     TEXT,                  -- the account behind it, markdown; null if there was none
   by         TEXT NOT NULL,         -- assessor | operator
   agent_id   TEXT,                  -- null for an operator verdict
   task_id    TEXT,
@@ -245,7 +246,8 @@ CREATE TABLE IF NOT EXISTS issue_shortfalls (
   origin_ref TEXT PRIMARY KEY,      -- "issue:12"
   cause      TEXT,                  -- plan | part | goal | null (nothing to route)
   part_slug  TEXT,                  -- the part that fell short; only for cause='part'
-  summary    TEXT NOT NULL,
+  summary    TEXT NOT NULL,         -- one line: the verdict and what decided it
+  detail     TEXT,                  -- the account behind it, markdown; null if there was none
   by         TEXT NOT NULL,         -- assessor | operator
   agent_id   TEXT,                  -- null for an operator verdict
   task_id    TEXT,

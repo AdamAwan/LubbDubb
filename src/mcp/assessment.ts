@@ -6,9 +6,15 @@
  * because they are not the same statement. `conclude_work` is the agent that did
  * the work saying whether it finished; this is a later agent, dispatched by rule
  * 3e with a checkout of the delivered state and the work graph in front of it,
- * saying whether the *issue* is finished. The summary is required and kept whole
+ * saying whether the *issue* is finished. The verdict is required and kept whole
  * for `validateConclusion`'s reason: a verdict that parks a ticket has to be
  * reviewable, and it is written once per issue rather than once a minute.
+ *
+ * It is kept in **two** fields, not one, for `report_finding`'s reason: an
+ * assessor handed a single string writes its sections into it as inline capitals,
+ * and what reaches the operator is a paragraph with no seams. `summary` is the
+ * headline and `detail` is the account, and the newline refusal below is what
+ * makes that a rule rather than a request.
  */
 
 import { SHORTFALL_CAUSES, SHORTFALL_CAUSE_HELP } from '../delivery/shortfall.js';
@@ -29,8 +35,16 @@ export const ASSESSMENT_VERDICT_HELP: Record<AssessmentVerdict, string> = {
     'wrong goal to a human',
 };
 
-/** Long enough to be prose, short of a pasted transcript. Matches the conclusion cap. */
-const MAX_ASSESSMENT_SUMMARY = 2000;
+/**
+ * One line, and short enough to be one: this is the sentence an operator reads on
+ * a card before deciding anything, so it is capped where a headline stops being a
+ * headline. Matches `report_finding`'s `summary`, deliberately — an operator who
+ * has learned the shape on one surface should not have to learn a second.
+ */
+const MAX_ASSESSMENT_SUMMARY = 160;
+
+/** Long enough to be prose, short of a pasted transcript. The old summary cap, moved. */
+const MAX_ASSESSMENT_DETAIL = 2000;
 
 /**
  * A validated assessment. `cause`/`part` are only ever set for `more_work` — a
@@ -42,6 +56,8 @@ const MAX_ASSESSMENT_SUMMARY = 2000;
 interface ValidAssessment {
   verdict: AssessmentVerdict;
   summary: string;
+  /** The evidence, as markdown. Null when the assessor had nothing to add. */
+  detail: string | null;
   cause: ShortfallCause | null;
   part: string | null;
 }
@@ -63,17 +79,37 @@ export function validateAssessment(
     return {
       ok: false,
       error:
-        'summary is required. Say what you found in the repository and which pull requests delivered it ' +
-        '(for delivered), or precisely what is missing (for more_work) — an operator decides what happens ' +
-        'to the ticket from this alone.',
+        'summary is required. One line saying whether the goal is reached and what decided it; the evidence ' +
+        'goes in `detail`. An operator decides what happens to the ticket from these two alone.',
+    };
+  }
+  // The load-bearing refusal. An assessor writing sections into one string is
+  // where the operator's wall of text comes from, and it reaches them hours
+  // later; here it is a tool error the same agent fixes inside its own turn.
+  if (/[\r\n]/.test(summary)) {
+    return {
+      ok: false,
+      error:
+        'summary is one line — what you found, in a sentence. Everything with a line break in it is evidence: ' +
+        'put it in `detail`, which takes markdown and is rendered as the body of the card an operator reads.',
     };
   }
   if (summary.length > MAX_ASSESSMENT_SUMMARY) {
     return {
       ok: false,
-      error: `summary is too long (${summary.length} chars, max ${MAX_ASSESSMENT_SUMMARY}). Summarise it.`,
+      error:
+        `summary is too long (${summary.length} chars, max ${MAX_ASSESSMENT_SUMMARY}) — it is the headline, ` +
+        `not the account. Keep the claim and move the rest to \`detail\`.`,
     };
   }
+  const detailText = typeof args.detail === 'string' ? args.detail.trim() : '';
+  if (detailText.length > MAX_ASSESSMENT_DETAIL) {
+    return {
+      ok: false,
+      error: `detail is too long (${detailText.length} chars, max ${MAX_ASSESSMENT_DETAIL}). Summarise it.`,
+    };
+  }
+  const detail = detailText || null;
 
   // A `delivered` verdict has nothing that fell short, so the two shortfall
   // fields are *refused* rather than ignored — an assessor that filled them in
@@ -88,7 +124,7 @@ export function validateAssessment(
           'say more_work if something is in fact missing.',
       };
     }
-    return { ok: true, verdict, summary, cause: null, part: null };
+    return { ok: true, verdict, summary, detail, cause: null, part: null };
   }
 
   const cause = args.cause;
@@ -121,6 +157,7 @@ export function validateAssessment(
     ok: true,
     verdict: verdict as AssessmentVerdict,
     summary,
+    detail,
     cause: (cause as ShortfallCause | undefined) ?? null,
     part: part || null,
   };

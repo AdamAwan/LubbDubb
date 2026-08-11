@@ -177,13 +177,18 @@ test('a pending shortfall holds the rule, so one question is asked once', () => 
 test('a plan-cause shortfall is proposed, not taken', async () => {
   const { actions } = await decide(ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [planRow()] }));
   const proposed = actions.find((a) => a.type === 'propose_shortfall') as
-    | { cause: string; planId: string; prompt: string; rule: string }
+    | { cause: string; planId: string; prompt: string; detail: string | null; rule: string }
     | undefined;
   assert.ok(proposed, 'both routable arms spend a fleet, so a human authorizes them');
   assert.equal(proposed!.cause, 'plan');
   assert.equal(proposed!.planId, 'plan_1');
   assert.equal(proposed!.rule, 'issue-shortfall');
-  assert.match(proposed!.prompt, /the CLI half is missing/, 'the assessor’s words reach the operator');
+  // The assessor's words still reach the operator — beside the prompt now, not
+  // inside it. Both directions asserted: carrying it in `detail` is only an
+  // improvement if the prompt stops carrying it too, or the operator reads it
+  // twice and the wall is back in the half that has no label.
+  assert.match(proposed!.detail ?? '', /the CLI half is missing/, 'the assessor’s words reach the operator');
+  assert.doesNotMatch(proposed!.prompt, /the CLI half is missing/, 'and are not also spliced into the prompt');
   assert.equal(
     actions.filter((a) => a.type.startsWith('dispatch_')).length,
     0,
@@ -512,6 +517,7 @@ function shortfallRow(over: Partial<IssueShortfall> = {}): IssueShortfall {
     cause: 'plan',
     partSlug: null,
     summary: 'the CLI half is missing',
+    detail: null,
     by: 'assessor',
     agentId: 'agent_1',
     taskId: 't1',
@@ -525,6 +531,7 @@ function deliveryRow() {
   return {
     originRef: 'issue:12',
     summary: 'all present',
+    detail: null,
     by: 'assessor' as const,
     agentId: null,
     taskId: null,

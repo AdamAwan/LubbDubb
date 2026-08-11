@@ -812,6 +812,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     verdict: AssessmentVerdict,
     summary: string,
+    detail: string | null = null,
     cause: ShortfallCause | null = null,
     part: string | null = null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string } {
@@ -823,6 +824,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         this.store.recordDelivery({
           originRef: origin.issueOrigin,
           summary,
+          detail,
           by: 'assessor',
           agentId,
           taskId: task.id,
@@ -876,6 +878,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         cause,
         partSlug: part,
         summary,
+        detail,
         by: 'assessor',
         agentId,
         taskId: task.id,

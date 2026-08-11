@@ -1,7 +1,7 @@
 import { askedAlready } from '../admission.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import { proposalHold } from '../../proposals/proposals.js';
-import { shortfallArm, shortfallRef } from '../../delivery/shortfall.js';
+import { quotedAssessment, shortfallArm, shortfallEscalationPrompt, shortfallRef } from '../../delivery/shortfall.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { planIssueNumber } from '../../plans/parts.js';
 import type { RawAction, StageContext } from './context.js';
@@ -56,15 +56,19 @@ export function issueShortfall(s: StageContext): void {
       s.raw.push({
         type: 'escalate_to_human',
         escalationType: 'resolve_ambiguity',
-        prompt:
-          `An assessment of issue #${issueNumber} ("${issue.title}") found that the work is done and the ` +
-          `goal is still not reached${shortfall.cause === 'goal' ? ', and that the issue itself is what is wrong' : ''}. ` +
-          `No agent has been dispatched and none will be: ${
-            shortfall.cause === 'goal'
-              ? 'a wrong or ambiguous goal is not something a planner or an agent can fix'
-              : 'there is no delivery plan here to re-plan or add a part to'
-          }. What the assessor found:\n\n"${shortfall.summary}"`,
-        context: { originRef: ref, issueNumber, taskTitle: issue.title },
+        prompt: shortfallEscalationPrompt(issueNumber, issue.title, shortfall.cause),
+        // The assessor's own words, carried as *quoted* text rather than spliced
+        // into the sentence above. Inlining it was how a 300-word write-up became
+        // one paragraph of the harness's prose — and the card can only label a
+        // block it can see the edges of. `summary` is the headline the assessor
+        // wrote; `detail` is its account, and either may be all there is.
+        context: {
+          originRef: ref,
+          issueNumber,
+          taskTitle: issue.title,
+          detail: quotedAssessment(shortfall.summary, shortfall.detail),
+          detailFrom: 'What the assessor found',
+        },
         rule: 'issue-shortfall',
         reason:
           `Issue #${issueNumber} was assessed as not delivered with cause "${shortfall.cause}", which routes to ` +
@@ -94,10 +98,10 @@ export function issueShortfall(s: StageContext): void {
       cause,
       partSlug: shortfall.partSlug,
       summary: shortfall.summary,
+      detail: quotedAssessment(shortfall.summary, shortfall.detail),
       prompt: s.templates.render('issue-shortfall', {
         number: issueNumber,
         title: issue.title,
-        summary: shortfall.summary,
         consequence:
           cause === 'plan'
             ? 'Accepting sends the plan back to a planner, which sees the current decomposition and this ' +

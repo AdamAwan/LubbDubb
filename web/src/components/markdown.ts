@@ -1,4 +1,5 @@
 import { createElement, Fragment, type ReactNode } from 'react';
+import { linkify } from './util.js';
 
 /**
  * A markdown subset, rendered to React nodes.
@@ -13,8 +14,15 @@ import { createElement, Fragment, type ReactNode } from 'react';
  *
  * Supported: ATX headings (#..###), unordered and ordered lists, fenced code,
  * blockquotes, paragraphs, and inline `code`, **strong** and *emphasis*.
+ *
+ * `refUrls` turns `#142` and `issue:12` in prose into links, exactly as
+ * {@link linkify} does for plain text. Passing it is what stops moving text *into*
+ * a markdown block from silently unlinking it — the failure mode when an
+ * escalation's body moved out of the linkified prompt and into `detail`. Code
+ * spans and fenced blocks are reached by neither, which is the point: a ref
+ * inside backticks is being shown to you, not offered to click.
  */
-export function renderMarkdown(source: string): ReactNode[] {
+export function renderMarkdown(source: string, refUrls: Record<string, string> = {}): ReactNode[] {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const out: ReactNode[] = [];
   let para: string[] = [];
@@ -23,7 +31,7 @@ export function renderMarkdown(source: string): ReactNode[] {
 
   const flushParagraph = () => {
     if (para.length === 0) return;
-    out.push(createElement('p', { key: k() }, ...inline(para.join(' '), k)));
+    out.push(createElement('p', { key: k() }, ...inline(para.join(' '), k, refUrls)));
     para = [];
   };
 
@@ -48,7 +56,7 @@ export function renderMarkdown(source: string): ReactNode[] {
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
     if (heading) {
       flushParagraph();
-      out.push(createElement(`h${heading[1]!.length}`, { key: k() }, ...inline(heading[2]!, k)));
+      out.push(createElement(`h${heading[1]!.length}`, { key: k() }, ...inline(heading[2]!, k, refUrls)));
       continue;
     }
 
@@ -60,7 +68,7 @@ export function renderMarkdown(source: string): ReactNode[] {
         i++;
       }
       i--;
-      out.push(createElement('blockquote', { key: k() }, ...inline(body.join(' '), k)));
+      out.push(createElement('blockquote', { key: k() }, ...inline(body.join(' '), k, refUrls)));
       continue;
     }
 
@@ -78,7 +86,7 @@ export function renderMarkdown(source: string): ReactNode[] {
         createElement(
           ordered ? 'ol' : 'ul',
           { key: k() },
-          ...items.map((item) => createElement('li', { key: k() }, ...inline(item, k))),
+          ...items.map((item) => createElement('li', { key: k() }, ...inline(item, k, refUrls))),
         ),
       );
       continue;
@@ -96,17 +104,28 @@ export function renderMarkdown(source: string): ReactNode[] {
  * overlap — `code` wins, because a backticked `**x**` is showing you the
  * asterisks, not asking for bold.
  */
-function inline(text: string, k: () => string): ReactNode[] {
+function inline(text: string, k: () => string, refUrls: Record<string, string>): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)/g;
+  // Only the runs *between* spans: what falls to `code` is being shown, and
+  // strong/em carry their own text through here again on the next pass down.
+  //
+  // An empty map short-circuits to the bare string rather than running `linkify`
+  // for nothing: it wraps every ref token it finds in a `<span>` whether or not a
+  // URL resolved, so a caller that passes no refs would silently gain markup it
+  // never had. Every existing caller is in exactly that position.
+  const prose = (slice: string) =>
+    out.push(
+      Object.keys(refUrls).length === 0 ? slice : createElement(Fragment, { key: k() }, linkify(slice, refUrls)),
+    );
   let last = 0;
   for (let m = re.exec(text); m !== null; m = re.exec(text)) {
-    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m.index > last) prose(text.slice(last, m.index));
     if (m[1]) out.push(createElement('code', { key: k() }, m[1].slice(1, -1)));
-    else if (m[2]) out.push(createElement('strong', { key: k() }, m[2].slice(2, -2)));
-    else if (m[3]) out.push(createElement('em', { key: k() }, m[3].slice(1, -1)));
+    else if (m[2]) out.push(createElement('strong', { key: k() }, ...inline(m[2].slice(2, -2), k, refUrls)));
+    else if (m[3]) out.push(createElement('em', { key: k() }, ...inline(m[3].slice(1, -1), k, refUrls)));
     last = m.index + m[0].length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) prose(text.slice(last));
   return out.length > 0 ? out : [createElement(Fragment, { key: k() })];
 }

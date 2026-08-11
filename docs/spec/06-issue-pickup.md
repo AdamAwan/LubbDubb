@@ -329,6 +329,15 @@ scanner), and both times the fix was to keep the two predicates apart rather tha
 shortfall type at all — as well as behaviourally, so a later polarity flag fails a test rather than
 quietly holding an issue this row exists to free.
 
+**Both polarities carry the verdict in two fields**, `summary` and `detail` — one line and an
+account. The split is made at the tool boundary, where `validateAssessment` refuses a newline in
+`summary` ([11](11-mcp-tools.md#assess_issue)), and it is what lets rule `issue-shortfall` put the
+assessor's words on a card as a labelled body instead of splicing them into its own sentence. `detail`
+is on **both** tables because an assessment lands in exactly one of them: on only the negative one it
+would be silently dropped by every `delivered` verdict. Rows written before the column existed hold
+their whole blob in `summary` and null in `detail`, and are not migrated — no rewrite guesses at where
+the seams were.
+
 A shortfall and a delivery are mutually exclusive, for the reason a delivery and a conclusion are. A
 shortfall and a **conclusion** are not: the conclusion is the working agent's own statement about its
 own run and the assessor must never overwrite it, so both rows stand and `resolveIssueConclusion`

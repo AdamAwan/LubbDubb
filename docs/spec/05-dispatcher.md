@@ -664,6 +664,30 @@ leaves an unmatched token untouched.
 
 `docs/prompt-templates/` holds ready-to-copy samples of the current defaults, one file per id.
 
+### What an escalation prompt may be
+
+**An escalation's `prompt` opens with a one-line lede, and never carries text the harness is quoting
+from an agent.** The cockpit reads the first paragraph as the card's headline and everything after it
+as the body ([17](17-cockpit.md)), so a prompt that opens with a paragraph opens with a wall.
+
+Quoted text goes beside the prompt instead, as `context.detail`, with `context.detailFrom` naming who
+wrote it. That is what rule `issue-shortfall` does with an assessment and rule `pr-ci-blocked` does
+with its list of escalate-only checks — both used to splice them into the sentence, and an assessment
+is up to two thousand characters. Templated, an operator override could bury it mid-paragraph again;
+carried beside the prompt, no override can reach it. The three templates that are an escalation's
+_whole_ prompt — `issue-pickup-escalation`, `plan-part-escalation`, `pr-concern-escalation` — render
+to a single line, asserted in `test/promptTemplates.test.ts`.
+
+`plan-approval` and `issue-shortfall` are deliberately multi-paragraph: what accepting and rejecting
+_do_ is the harness's own prose, it is not quoted from anyone, and the card renders it as the body
+under the headline. That is the split working, not an exception to it.
+
+**The refusal is not on the action schema, and that is deliberate.** `parseActions` _drops_ a rejected
+action into the audit log, so a length or newline check on `escalate_to_human.prompt` would make a
+rule that wrote a blob stop escalating altogether — trading an ugly card for a question that never
+reaches a person. The prompt builders are pure functions with unit tests instead
+(`shortfallEscalationPrompt` in `src/delivery/shortfall.ts`).
+
 `PromptTemplates.describe()` returns the whole book — id, doc, placeholders, the **effective** text
 and whether an override replaced it — which is what `GET /api/prompts` serves to the cockpit's
 Prompts panel ([16](16-http-api.md#get-apiprompts), [17](17-cockpit.md)). `overridden` is held on the

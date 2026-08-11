@@ -64,6 +64,7 @@ export interface AgentToolTarget {
     agentId: string,
     verdict: AssessmentVerdict,
     summary: string,
+    detail: string | null,
     cause: ShortfallCause | null,
     part: string | null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
