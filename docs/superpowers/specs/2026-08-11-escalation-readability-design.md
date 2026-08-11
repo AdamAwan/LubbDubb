@@ -166,8 +166,10 @@ asserts each produces a single-line lede.
 
 ## Documentation
 
-[13](../../spec/13-jobs-and-findings.md) owns the assessment shape and its validation rules.
+[11](../../spec/11-mcp-tools.md) carries the tool signature and its refusals.
+[06](../../spec/06-issue-pickup.md) owns the shortfall and delivery rows, so the two-field verdict is
+stated there — not [13](../../spec/13-jobs-and-findings.md), which owns findings and never covered
+assessments.
 [14](../../spec/14-persistence.md) records the two-column migration.
-[11](../../spec/11-mcp-tools.md) carries the tool signature.
 [17](../../spec/17-cockpit.md) describes the card.
 [05](../../spec/05-dispatcher.md) states the lede rule for escalation prompts.

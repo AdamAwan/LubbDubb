@@ -235,3 +235,42 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+/**
+ * The three templates that *are* an escalation's whole prompt render to one line.
+ *
+ * A prompt is what the operator reads first, and the card treats its first
+ * paragraph as the headline. These three carry nothing else — no consequence
+ * paragraph, no quoted agent text — so a line break in one is not structure being
+ * given back, it is a lede that grew into a body with no label on it.
+ *
+ * The multi-paragraph templates are deliberately absent: `plan-approval` and
+ * `issue-shortfall` write what accepting and rejecting *do* as their own
+ * paragraphs, which the card renders as the body under the headline. That is the
+ * split working, not a violation of it.
+ */
+test('an escalation-only template is a single-line lede', () => {
+  const t = defaultPromptTemplates();
+  const rendered = {
+    'issue-pickup-escalation': t.render('issue-pickup-escalation', { number: 12, title: 'T', attempts: 3 }),
+    'plan-part-escalation': t.render('plan-part-escalation', { number: 12, part: 'signer', attempts: 3 }),
+    'pr-concern-escalation': t.render('pr-concern-escalation', { number: 42, title: 'T', attempts: 3 }),
+  };
+  for (const [id, text] of Object.entries(rendered)) {
+    assert.doesNotMatch(text, /[\r\n]/, `${id} must render as one line`);
+    assert.ok(text.length > 0, `${id} rendered empty`);
+  }
+});
+
+test('the shortfall proposal no longer templates the assessor s own words', () => {
+  // The placeholder is gone on purpose: what the assessor wrote is carried beside
+  // the prompt as the escalation's `detail` and rendered as the card's labelled
+  // body. Templated, an operator override could bury it mid-paragraph again — and
+  // `loadPromptTemplates` only rejects placeholders it does not know, so an
+  // override written against the old shape would keep interpolating it.
+  const t = defaultPromptTemplates();
+  const text = t.render('issue-shortfall', { number: 12, title: 'T', consequence: 'Accepting replans it.' });
+  assert.doesNotMatch(text, /\{summary\}/);
+  assert.match(text, /Accepting replans it\./);
+  assert.equal(sampleTemplateFile('issue-shortfall').includes('{summary}'), false);
+});

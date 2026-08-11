@@ -183,13 +183,13 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     doc: "Put to a human when `planning.requireApproval` is on and a planner's verdict has landed — either arm, a decomposition or a single pull request (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What approving and rejecting *this* verdict do is appended by the rule rather than templated, so an override cannot lose it. Placeholders: {number} {title} {parts} (the pull requests the plan produces — 1 on a single verdict) {reason} {list}.",
   },
   'issue-shortfall': {
-    placeholders: ['number', 'title', 'summary', 'consequence'],
+    placeholders: ['number', 'title', 'consequence'],
     template:
       'An assessment of issue #{number} ("{title}") found that the work is finished and the goal is still not ' +
-      'reached. Nothing has been scheduled about it.\n\nWhat the assessor found:\n\n{summary}\n\n{consequence}\n\n' +
+      'reached. Nothing has been scheduled about it.\n\n{consequence}\n\n' +
       'Reject and nothing happens: the issue stays exactly where it is, and the assessment stays on record so you ' +
       'can see why. Say why you rejected it — the harness will not ask again until something changes on the issue.',
-    doc: 'Put to a human when an assessment says the goal was not reached and named something the harness can act on (rule `issue-shortfall`). A proposal, not a question: accepting performs the arm {consequence} describes. Placeholders: {number} {title} {summary} {consequence}.',
+    doc: "Put to a human when an assessment says the goal was not reached and named something the harness can act on (rule `issue-shortfall`). A proposal, not a question: accepting performs the arm {consequence} describes. What the assessor wrote is *not* templated — it is carried beside this as the escalation's `detail` and rendered as the body of the card, so an override cannot bury it in a paragraph. Placeholders: {number} {title} {consequence}.",
   },
   'plan-part-escalation': {
     placeholders: ['number', 'part', 'attempts'],

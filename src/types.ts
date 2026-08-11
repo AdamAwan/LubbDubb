@@ -911,8 +911,10 @@ export type DeliveryAuthor = 'assessor' | 'operator';
 export interface IssueDelivery {
   /** The issue, as `issue:<n>` — the same origin the conclusion and every gate keys on. */
   originRef: string;
-  /** What was delivered, and on what evidence. Required: a bare verdict is not reviewable. */
+  /** One line: what was delivered. Required — a bare verdict is not reviewable. */
   summary: string;
+  /** The account behind the headline, as markdown. Null when the assessor added none. */
+  detail: string | null;
   by: DeliveryAuthor;
   /** The assessing agent and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;
@@ -1104,8 +1106,10 @@ export interface IssueShortfall {
   cause: ShortfallCause | null;
   /** The part that fell short. Only ever set for `cause: 'part'`. */
   partSlug: string | null;
-  /** What is missing. Required: it becomes the next agent's starting point. */
+  /** One line: what is missing. Required — it becomes the next agent's starting point. */
   summary: string;
+  /** The evidence behind the headline, as markdown. Null when the assessor added none. */
+  detail: string | null;
   by: ShortfallAuthor;
   /** The assessing agent and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;

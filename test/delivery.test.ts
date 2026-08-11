@@ -15,6 +15,7 @@ function delivery(over: Partial<IssueDelivery> = {}): IssueDelivery {
   return {
     originRef: 'issue:12',
     summary: 'PR #40 merged and covers every acceptance criterion',
+    detail: null,
     by: 'assessor',
     agentId: 'a1',
     taskId: 't1',

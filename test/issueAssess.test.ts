@@ -305,6 +305,7 @@ test('a standing verdict is not re-assessed', async () => {
   const delivery: IssueDelivery = {
     originRef: 'issue:12',
     summary: 'PR #40 delivered it',
+    detail: null,
     by: 'assessor',
     agentId: null,
     taskId: null,
@@ -622,5 +623,59 @@ test('the route refuses a body it cannot act on', async () => {
   assert.equal(badNumber.statusCode, 400);
 
   await app.app.close();
+  system.store.close?.();
+});
+
+/**
+ * The account travels with the verdict, whichever way the verdict went.
+ *
+ * An assessment lands in `issue_deliveries` or in `issue_shortfalls` depending on
+ * its status, so a `detail` column on only one of them would be silently dropped
+ * by half of all assessments — and nothing would error. Both directions are
+ * asserted for exactly that reason; one of them passing proves nothing about the
+ * other.
+ */
+test('detail round-trips through the channel on both verdicts', async () => {
+  const system = build();
+  const detail = '## Missing\n\nThe stream runtime has no sentinels at all, and `docs/sentinels.md` says so nowhere.';
+
+  const shortfaller = spawnAgent(system, 'issue:12:assess');
+  const bad = await callTool(system, shortfaller, 'assess_issue', {
+    status: 'more_work',
+    summary: 'the sentinel docs cover the PTY runtime only',
+    detail,
+  });
+  assert.equal(bad.isError, false);
+  assert.equal(system.store.getShortfall('issue:12')?.detail, detail);
+
+  const deliverer = spawnAgent(system, 'issue:13:assess');
+  const good = await callTool(system, deliverer, 'assess_issue', {
+    status: 'delivered',
+    summary: 'both runtimes are documented and PR #41 merged',
+    detail,
+  });
+  assert.equal(good.isError, false);
+  assert.equal(system.store.getDelivery('issue:13')?.detail, detail);
+
+  // Absent stays absent rather than becoming an empty string: the card asks one
+  // question — is there a body? — and '' would answer it wrongly.
+  const quiet = spawnAgent(system, 'issue:14:assess');
+  await callTool(system, quiet, 'assess_issue', { status: 'delivered', summary: 'nothing to add' });
+  assert.equal(system.store.getDelivery('issue:14')?.detail, null);
+  system.store.close?.();
+});
+
+test('a blob summary is refused at the boundary, not filed and read later', async () => {
+  // The whole point of putting the refusal here: the assessor is still in its own
+  // turn and can re-file. An operator finding out hours later, on a card, cannot.
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12:assess');
+  const res = await callTool(system, agent, 'assess_issue', {
+    status: 'more_work',
+    summary: 'PRESENT: the PTY half is documented\nMISSING: the stream half entirely',
+  });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /one line/i);
+  assert.equal(system.store.getShortfall('issue:12'), null, 'a refused assessment writes nothing');
   system.store.close?.();
 });

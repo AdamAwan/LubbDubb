@@ -958,6 +958,11 @@ export function buildDemoState(): DemoSeed {
         context: {
           originRef: 'issue:231',
           planId: 'plan-231',
+          // Whose words these are, said rather than guessed at. A plan approval
+          // has no agent behind it and is not an assessment, so a card deriving
+          // the label from "no agent" would caption a planner's decomposition as
+          // an assessor's finding.
+          detailFrom: 'How the planner split it',
           // Markdown, so the demo shows the rendered path rather than the grey
           // block it used to be.
           detail:
@@ -1023,6 +1028,46 @@ export function buildDemoState(): DemoSeed {
         taskId: 'task-a2',
         response: null,
         createdAt: ago(2),
+        answeredAt: null,
+      },
+      // The harness asking, not an agent: a shortfall whose cause is the goal
+      // itself, which schedules nothing and so is a question rather than a
+      // proposal. Here because it is the *long* case — the assessor's write-up is
+      // the body of the card — and the card that has to stay readable is this one.
+      // Note the shape: a one-line prompt, and every word the assessor wrote in
+      // `detail`, quoted rather than spliced into the harness's sentence.
+      {
+        id: 'esc-4',
+        type: 'resolve_ambiguity',
+        status: 'open',
+        prompt:
+          'An assessment of issue #205 ("Document the sentinel protocol") found the work done and the goal ' +
+          'still not reached, and the issue itself to be what is wrong — no planner and no agent can fix a ' +
+          'goal, so nothing has been dispatched and nothing will be.',
+        context: {
+          taskTitle: 'Document the sentinel protocol',
+          originRef: 'issue:205:shortfall',
+          issueNumber: 205,
+          detailFrom: 'What the assessor found',
+          detail:
+            '**The README section landed; the protocol it documents is two protocols, and the issue names ' +
+            'neither.**\n\n' +
+            '## Present\n\n' +
+            'PR #143 added `docs/sentinels.md` and linked it from the README. It documents the `DONE` and ' +
+            '`WAITING` tokens, their exact spelling, and the scanner that strips SGR escapes out of them.\n\n' +
+            '## Missing\n\n' +
+            '- The stream runtime has no sentinels at all — it reads terminals off the result event — so ' +
+            'half the fleet is undocumented and the page does not say so.\n' +
+            '- `agentMode` is never mentioned, which is what decides which half a reader is in.\n\n' +
+            '## Why the goal, and not the plan\n\n' +
+            'Both parts delivered exactly the scope they declared. The issue asks to "document the sentinel ' +
+            'protocol", singular, and there are two; a planner handed this back would decompose the same ' +
+            'wrong question again. Someone has to say which protocol the docs are for.',
+        },
+        agentId: null,
+        taskId: null,
+        response: null,
+        createdAt: ago(4),
         answeredAt: null,
       },
     ],

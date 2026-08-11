@@ -148,6 +148,47 @@ export function shortfallArm(
 }
 
 /**
+ * The assessor's verdict as one block of quoted markdown, for the `detail` slot
+ * on the card that puts it to a human.
+ *
+ * **Quoted, not spliced.** An assessment is up to two thousand characters of
+ * someone else's prose; interpolating it into a sentence the dispatcher wrote is
+ * what turned the stamp desk's card into one unreadable paragraph, and it leaves
+ * the cockpit unable to label the block because it cannot see where it starts.
+ *
+ * The headline leads in bold and the account follows, so the two read as one
+ * passage rather than as a repeated sentence. A pre-split row — every assessment
+ * recorded before `detail` existed — has its whole blob in `summary` and yields
+ * just that: a tall block rather than a lie about its own structure.
+ */
+export function quotedAssessment(summary: string, detail: string | null): string {
+  return detail ? `**${summary}**\n\n${detail}` : summary;
+}
+
+/**
+ * Arm C's question, as one line.
+ *
+ * A lede and nothing else: what the assessment said, and that nothing is coming.
+ * Everything the assessor wrote rides in `detail` beside it — see
+ * {@link quotedAssessment} — so this stays a sentence an operator reads before
+ * deciding whether to read further, which is the whole job of the first line on a
+ * card. Pure, and tested for exactly that: a prompt builder that grew a paragraph
+ * would put the wall back with nothing to catch it.
+ */
+export function shortfallEscalationPrompt(issueNumber: number, title: string, cause: ShortfallCause | null): string {
+  const wrongGoal = cause === 'goal';
+  return (
+    `An assessment of issue #${issueNumber} ("${title}") found the work done and the goal still not reached` +
+    `${wrongGoal ? ', and the issue itself to be what is wrong' : ''} — ` +
+    `${
+      wrongGoal
+        ? 'no planner and no agent can fix a goal'
+        : 'and there is no delivery plan here to re-plan or add a part to'
+    }, so nothing has been dispatched and nothing will be.`
+  );
+}
+
+/**
  * The slug a follow-up part takes.
  *
  * Derived from the part that fell short rather than freshly named, so the graph

@@ -272,7 +272,15 @@ export class ActionExecutor {
           const esc = this.deps.escalations.create({
             type: 'approve_change',
             prompt: again ? `${again}\n\n${action.prompt}` : action.prompt,
-            context: { originRef: action.originRef, planId: action.planId },
+            // The assessor's write-up rides in `detail`, not in the prompt: the
+            // card renders it as its own labelled body, and a re-ask prepending
+            // to the prompt must not push it further from the buttons.
+            context: {
+              originRef: action.originRef,
+              planId: action.planId,
+              detail: action.detail,
+              detailFrom: 'What the assessor found',
+            },
           });
           const proposal = store.createProposal({
             kind: 'shortfall',

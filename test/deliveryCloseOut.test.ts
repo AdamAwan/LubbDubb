@@ -28,6 +28,7 @@ function delivery(number: number, over: Partial<IssueDelivery> = {}): IssueDeliv
   return {
     originRef: `issue:${number}`,
     summary: 'the docs landed with it',
+    detail: null,
     by: 'assessor',
     agentId: null,
     taskId: null,
@@ -104,6 +105,7 @@ test('a launch the assessor sent back owes nothing', () => {
         cause: 'part',
         partSlug: null,
         summary: 'the migration never ran',
+        detail: null,
         by: 'assessor',
         agentId: null,
         taskId: null,

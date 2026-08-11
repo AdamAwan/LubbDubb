@@ -174,6 +174,12 @@ const ActionSchema = z.discriminatedUnion('type', [
     partSlug: z.string().min(1).nullable().default(null),
     /** The assessor's own words: the replan's context, or the follow-up part's scope. */
     summary: z.string().min(1),
+    /**
+     * The assessor's verdict as quoted markdown, for the card's body. Carried
+     * beside `prompt` rather than inside it so the cockpit can label the block —
+     * and so an operator's prompt override cannot bury it in a paragraph.
+     */
+    detail: z.string().min(1).nullable().default(null),
     /** What the operator is shown: what fell short, and what accepting does. */
     prompt: z.string().min(1),
     ...base,

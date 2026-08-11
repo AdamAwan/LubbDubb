@@ -744,8 +744,31 @@ body {
 .esc-time {
   margin-left: auto;
 }
+/* The headline, and the measure every block of prose on this card is held to.
+   `ch` rather than a pixel width because it is a reading measure and not a
+   layout: the card is as wide as the panel it sits in — 1130px on the stamp
+   desk — and a line 150 characters long is one the eye loses its place in
+   returning from, whatever the type is doing.
+
+   `--text`, stated rather than inherited: the accent is this card's badge and
+   border, and a long body wearing it is unreadable however well it is set. */
 .escalation-prompt {
   margin: 6px 0;
+  max-width: 72ch;
+  color: var(--text);
+}
+/* The rest of the prompt: the same author, the same measure, and the paragraph
+   breaks it was written with — which the flat `<div>` above used to collapse. */
+.escalation-body {
+  margin: 6px 0;
+  max-width: 72ch;
+  font-size: 13px;
+}
+.escalation-body > :first-child {
+  margin-top: 0;
+}
+.escalation-body > :last-child {
+  margin-bottom: 0;
 }
 .btn.small {
   padding: 3px 9px;
@@ -781,15 +804,26 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
-/* The agent writing to a human, not terminal output: prose type, structure kept,
-   and its own fenced blocks left monospaced. Scrolls at the same height as
-   `.esc-output` so a long one cannot push the answer buttons off the card. */
+/* Someone writing to a human, not terminal output: prose type, structure kept,
+   and its own fenced blocks left monospaced.
+
+   Deliberately *not* height-capped, unlike `.esc-output` beside it. This is the
+   thing the card is about — an assessment, or an agent's background for the
+   question — and capping it put a scrollbar inside a scrollbar, which is what
+   makes long text unreadable even when the type is right. The panel scrolls
+   instead. Held to the same 72ch measure as the prompt above it. */
 .esc-detail {
-  margin: 6px 0 0;
-  max-height: 180px;
-  overflow: auto;
+  margin: 4px 0 0;
+  max-width: 72ch;
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+/* Names who wrote the block. Stands in for the `<summary>` this used to be
+   folded behind, so it is a caption and not a control — no pointer, no marker. */
+.esc-detail-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
 }
 .esc-detail > :first-child {
   margin-top: 0;

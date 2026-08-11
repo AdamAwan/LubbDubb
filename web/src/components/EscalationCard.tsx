@@ -82,6 +82,7 @@ export function EscalationCard({
   // Only meaningful if the agent moved on *after* asking; a stamp from an earlier
   // park would call a brand-new question stale.
   const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
+  const [headline, body] = splitPrompt(escalation.prompt);
 
   return (
     <div className="card escalation">
@@ -113,7 +114,12 @@ export function EscalationCard({
         {signal && <span className="chip small">{linkify(signal, refUrls)}</span>}
         <span className="muted small esc-time">{relTime(escalation.createdAt, now)}</span>
       </div>
-      <div className="escalation-prompt">{linkify(escalation.prompt, refUrls)}</div>
+      <div className="escalation-prompt">{linkify(headline, refUrls)}</div>
+      {/* The rest of the harness's own prose, paragraph breaks kept. They were
+          always in the string and the renderer was eating them — `plan-approval`
+          and a wedged plan both write what accepting and rejecting do as their own
+          paragraphs, and both arrived as one run-on sentence. */}
+      {body ? <div className="escalation-body">{renderMarkdown(body, refUrls)}</div> : null}
 
       {context.taskTitle ? <div className="muted small">re: {linkify(String(context.taskTitle), refUrls)}</div> : null}
 
@@ -125,13 +131,19 @@ export function EscalationCard({
       ) : null}
 
       {/* Markdown, unlike `recentOutput` above it: that is terminal output and
-          preformatted is what it *is*, while this is the agent writing to a human
-          and a `<pre>` flattens its structure into one grey block. */}
+          preformatted is what it *is*, while this is someone writing to a human
+          and a `<pre>` flattens its structure into one grey block.
+
+          Not a `<details>`, and not height-capped. This is the thing you opened
+          the panel to read — `Bench.tsx` makes the same call for its stations,
+          "a `<details>` you have to open first is a step between you and the job"
+          — and a 180px window onto a two-thousand-character assessment is the
+          wall it replaced, with a scrollbar. The card grows; the panel scrolls. */}
       {context.detail ? (
-        <details className="esc-context" open>
-          <summary className="muted small">Detail from the agent</summary>
-          <div className="esc-detail">{renderMarkdown(String(context.detail))}</div>
-        </details>
+        <div className="esc-context">
+          <div className="muted small esc-detail-label">{detailLabel(context, escalation.agentId)}</div>
+          <div className="esc-detail">{renderMarkdown(String(context.detail), refUrls)}</div>
+        </div>
       ) : null}
 
       {context.draft ? (
@@ -284,6 +296,45 @@ export function EscalationCard({
       ) : null}
     </div>
   );
+}
+
+/**
+ * A prompt's headline and its body: everything up to the first blank line, and
+ * everything after it.
+ *
+ * Split here rather than at the authoring end because the two halves are the same
+ * author's words. A rule writing "here is what happened" and then "here is what
+ * accepting does" is writing one message with two paragraphs, and asking every
+ * rule — and every operator override — to file the second half somewhere else
+ * would be a second contract to get wrong. What *does* move to a field of its own
+ * is text the harness is quoting from an agent, which is `context.detail`.
+ *
+ * A prompt with no blank line has no body, which is the common case and the one
+ * every already-short escalation is in.
+ */
+function splitPrompt(prompt: string): [headline: string, body: string] {
+  const at = prompt.search(/\r?\n\s*\r?\n/);
+  return at === -1 ? [prompt.trim(), ''] : [prompt.slice(0, at).trim(), prompt.slice(at).trim()];
+}
+
+/**
+ * Who wrote the block under the headline.
+ *
+ * **Declared by whoever quoted the text, never derived here.** Deriving it from
+ * `agentId` is the obvious move and it is wrong: the harness quotes an assessor
+ * on a shortfall and a planner on a decomposition, and both arrive with no agent
+ * behind them, so a rule reading "no agent, therefore an assessor" mislabels
+ * every plan approval — which is exactly what it did, until the golden markup
+ * caught it. Same discipline as a shortfall's `cause`: the party that knows says
+ * so, and nothing downstream has a second opinion.
+ *
+ * The fallback names only what is actually known — that an agent raised this, or
+ * nothing at all — rather than guessing at a role.
+ */
+function detailLabel(context: Record<string, unknown>, agentId: string | null | undefined): string {
+  const declared = context.detailFrom;
+  if (typeof declared === 'string' && declared.trim()) return declared.trim();
+  return agentId ? 'Detail from the agent' : 'Detail';
 }
 
 /**

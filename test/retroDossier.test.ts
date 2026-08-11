@@ -88,6 +88,7 @@ test('the verdicts on the goal are reported with their authors', () => {
     delivery: {
       originRef: 'issue:12',
       summary: 'every part merged',
+      detail: null,
       by: 'assessor',
       agentId: 'a1',
       taskId: 't1',

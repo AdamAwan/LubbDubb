@@ -179,6 +179,7 @@ function delivered(number = 12): IssueDelivery {
   return {
     originRef: `issue:${number}`,
     summary: 'every part merged',
+    detail: null,
     by: 'assessor',
     agentId: 'a1',
     taskId: 't1',

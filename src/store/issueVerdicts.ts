@@ -12,7 +12,20 @@ import type {
   ShortfallCause,
 } from '../types.js';
 import { VERDICT_EXCLUSIONS, VERDICT_TABLES, type VerdictKind } from './verdicts.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
+
+/**
+ * Both assessment verdicts carry the assessor's account beside its headline, so
+ * both tables gained `detail` together. A verdict lands in exactly one of them
+ * depending on which way it went, so a `detail` on only the negative table would
+ * be silently dropped by every `delivered` assessment — and silently is the whole
+ * failure.
+ */
+export const ISSUE_VERDICT_COLUMNS: ColumnMigrations = {
+  issue_deliveries: { detail: 'TEXT' },
+  issue_shortfalls: { detail: 'TEXT' },
+};
 
 /**
  * The four tables holding a standing verdict about an issue: `issue_conclusions`
@@ -145,6 +158,7 @@ export class IssueVerdictStore {
   recordDelivery(input: {
     originRef: string;
     summary: string;
+    detail?: string | null;
     by: DeliveryAuthor;
     agentId?: string | null;
     taskId?: string | null;
@@ -154,6 +168,7 @@ export class IssueVerdictStore {
     const row: IssueDelivery = {
       originRef: input.originRef,
       summary: input.summary,
+      detail: input.detail ?? null,
       by: input.by,
       agentId: input.agentId ?? null,
       taskId: input.taskId ?? null,
@@ -162,10 +177,10 @@ export class IssueVerdictStore {
     };
     return this.recordVerdict(
       'delivery',
-      `INSERT INTO issue_deliveries (origin_ref, summary, by, agent_id, task_id, decided_at, updated_at)
-       VALUES (@originRef, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
+      `INSERT INTO issue_deliveries (origin_ref, summary, detail, by, agent_id, task_id, decided_at, updated_at)
+       VALUES (@originRef, @summary, @detail, @by, @agentId, @taskId, @decidedAt, @updatedAt)
        ON CONFLICT(origin_ref) DO UPDATE SET
-         summary=excluded.summary, by=excluded.by, agent_id=excluded.agent_id,
+         summary=excluded.summary, detail=excluded.detail, by=excluded.by, agent_id=excluded.agent_id,
          task_id=excluded.task_id, updated_at=excluded.updated_at`,
       row,
     );
@@ -225,6 +240,7 @@ export class IssueVerdictStore {
     cause: ShortfallCause | null;
     partSlug?: string | null;
     summary: string;
+    detail?: string | null;
     by: ShortfallAuthor;
     agentId?: string | null;
     taskId?: string | null;
@@ -239,6 +255,7 @@ export class IssueVerdictStore {
       // behind pointing the arm resolver at a part nobody named.
       partSlug: input.cause === 'part' ? (input.partSlug ?? null) : null,
       summary: input.summary,
+      detail: input.detail ?? null,
       by: input.by,
       agentId: input.agentId ?? null,
       taskId: input.taskId ?? null,
@@ -247,10 +264,11 @@ export class IssueVerdictStore {
     };
     return this.recordVerdict(
       'shortfall',
-      `INSERT INTO issue_shortfalls (origin_ref, cause, part_slug, summary, by, agent_id, task_id, decided_at, updated_at)
-       VALUES (@originRef, @cause, @partSlug, @summary, @by, @agentId, @taskId, @decidedAt, @updatedAt)
+      `INSERT INTO issue_shortfalls (origin_ref, cause, part_slug, summary, detail, by, agent_id, task_id, decided_at, updated_at)
+       VALUES (@originRef, @cause, @partSlug, @summary, @detail, @by, @agentId, @taskId, @decidedAt, @updatedAt)
        ON CONFLICT(origin_ref) DO UPDATE SET
-         cause=excluded.cause, part_slug=excluded.part_slug, summary=excluded.summary, by=excluded.by,
+         cause=excluded.cause, part_slug=excluded.part_slug, summary=excluded.summary,
+         detail=excluded.detail, by=excluded.by,
          agent_id=excluded.agent_id, task_id=excluded.task_id, updated_at=excluded.updated_at`,
       row,
     );
@@ -390,6 +408,7 @@ interface IssueConclusionRow {
 interface IssueDeliveryRow {
   origin_ref: string;
   summary: string;
+  detail: string | null;
   by: string;
   agent_id: string | null;
   task_id: string | null;
@@ -401,6 +420,7 @@ interface IssueShortfallRow {
   cause: string | null;
   part_slug: string | null;
   summary: string;
+  detail: string | null;
   by: string;
   agent_id: string | null;
   task_id: string | null;
@@ -436,6 +456,9 @@ function rowToDelivery(r: IssueDeliveryRow): IssueDelivery {
   return {
     originRef: r.origin_ref,
     summary: r.summary,
+    // `?? null` rather than trusted: a row written before the column existed
+    // reads `undefined`, which would reach the wire as a missing key.
+    detail: r.detail ?? null,
     by: r.by as DeliveryAuthor,
     agentId: r.agent_id,
     taskId: r.task_id,
@@ -449,6 +472,7 @@ function rowToShortfall(r: IssueShortfallRow): IssueShortfall {
     cause: (r.cause as ShortfallCause | null) ?? null,
     partSlug: r.part_slug,
     summary: r.summary,
+    detail: r.detail ?? null,
     by: r.by as ShortfallAuthor,
     agentId: r.agent_id,
     taskId: r.task_id,

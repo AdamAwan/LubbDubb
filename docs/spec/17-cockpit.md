@@ -964,6 +964,34 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
   question left blank is sent as an explicit non-answer, so the agent knows not to wait on it. The
   card is shared, so the modal styles itself through the tokens alone and neither skin gains markup.
 
+  **How a card is laid out, and the one rule behind it: `prompt` is the harness speaking to you, and
+  `context.detail` is text the harness is _quoting_ from an agent.** Two mechanisms follow, doing two
+  different jobs, and neither subsumes the other.
+
+  - **The prompt splits at its first blank line.** The first paragraph is the headline; the rest is
+    the body, rendered as markdown. Both halves are the same author's words — a rule writing "here is
+    what happened" and then "here is what accepting does" is writing one message with two paragraphs
+    — so the split is the card's and not the author's. Asking every rule and every operator override
+    to file its second half somewhere else would be a second contract to get wrong. This is what gives
+    `plan-approval` and a wedged plan back the paragraphs a flat `<div>` used to collapse.
+  - **Quoted text lives in `context.detail`**, never spliced into the prompt. It is up to two
+    thousand characters of someone else's prose; interpolating it is what turned a shortfall card into
+    one unreadable paragraph, and it leaves the cockpit unable to label a block whose edges it cannot
+    see. `renderMarkdown` draws it, with `refUrls`, so a `#142` inside it stays a link — without that,
+    moving text out of the linkified prompt silently unlinks every ref in it.
+  - **`context.detailFrom` names who wrote that block, declared by whoever quoted it.** Never derived
+    from `agentId`: the harness quotes an assessor on a shortfall and a planner on a decomposition and
+    both arrive with no agent behind them, so "no agent, therefore an assessor" mislabels every plan
+    approval. Same discipline as a shortfall's `cause` — the party that knows says so. Absent, the
+    card falls back to what it actually knows and names no role.
+  - **The body is open and uncapped.** No `<details>`, no `max-height`. It is the thing you opened the
+    panel to read, and a 180px window onto a two-thousand-character assessment is the wall again with
+    a scrollbar — the argument the Bench already makes for its stations. The panel scrolls instead.
+    Every block of prose is held to a ~72ch measure, and the headline to `--text`: the card is as wide
+    as its panel, and a 150-character line is one the eye loses returning from, whatever the type is
+    doing. `recentOutput` and `draft` keep their `<pre>` and their 180px cap — they are evidence you
+    glance at, not the thing you are deciding.
+
 - **Your bench** (`HumanTaskPanel`, when any exist) — work only a person can do, with the open count
   in the heading. Each row carries the ask, its origin linked through `refUrls`, who is asking (an
   agent that hit something it could not do, a planner that declared the step, or you), the

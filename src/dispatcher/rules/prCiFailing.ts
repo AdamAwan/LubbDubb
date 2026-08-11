@@ -150,10 +150,18 @@ export function prCiFailing(s: StageContext): void {
           type: 'escalate_to_human',
           escalationType: 'resolve_ambiguity',
           prompt:
-            `CI is failing on PR #${pr.number} ("${pr.title}"), and every failing check is one you have told ` +
-            `the harness not to act on: ${names}. No agent has been dispatched. This needs someone who can ` +
-            `reach whoever owns those checks.`,
-          context: { originRef: ciOrigin, prNumber: pr.number, taskTitle: pr.title },
+            `CI is failing on PR #${pr.number} ("${pr.title}") only on checks you told the harness not to act ` +
+            `on, so nothing has been dispatched — this needs someone who can reach whoever owns them.`,
+          // The check names are a list of unbounded length, so they go in the body
+          // rather than mid-sentence: one escalating check reads fine inline and
+          // nine turn the lede into the wall this split exists to prevent.
+          context: {
+            originRef: ciOrigin,
+            prNumber: pr.number,
+            taskTitle: pr.title,
+            detail: ciVerdict.escalate.map((m) => `- \`${m.name}\``).join('\n'),
+            detailFrom: 'Failing, and configured to be left alone',
+          },
           rule: 'pr-ci-blocked',
           reason: `PR #${pr.number} is red only on checks configured to escalate (${names}).`,
         } satisfies RawAction);

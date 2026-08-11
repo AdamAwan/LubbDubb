@@ -204,6 +204,7 @@ test('isGoalComplete reads any of the four completion signals, but not more_work
         {
           originRef: 'issue:12',
           summary: '',
+          detail: null,
           by: 'assessor',
           agentId: null,
           taskId: null,
@@ -314,6 +315,7 @@ test('a standing verdict of more_work outranks every piece of evidence', () => {
           cause: 'plan',
           partSlug: null,
           summary: 'nothing was delivered — the fix is absent from the delivered state',
+          detail: null,
           by: 'assessor',
           agentId: null,
           taskId: null,
@@ -480,6 +482,7 @@ test('a retained run is written up after its ticket closed', async () => {
         {
           originRef: 'issue:12',
           summary: 'shipped',
+          detail: null,
           by: 'assessor',
           agentId: null,
           taskId: null,
