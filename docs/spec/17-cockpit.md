@@ -1475,7 +1475,43 @@ disagree with what the dispatcher does:
   with the full list in the `title`. `retained` does render, and calmly: the state chip says `closed`
   and nothing else on the row says the run is still being kept, which is the whole point of the
   status — and it is parked on purpose, waiting on a dismissal rather than on anything going wrong,
-  so it joins `active` and `delivered` in taking no warning colour.
+  so it joins `active` and `delivered` in taking no warning colour. `container` renders nothing
+  either, and for the oldest reason on the list: the hierarchy chip beside it already names the type
+  and the children, and the verdict's reason is a whole sentence restating them.
+
+## The work-item tree
+
+Azure Boards items hang in a tree and GitHub issues do not, so the World panel has a second axis
+beside the watch buckets — **what a thing is**, rather than whether the harness may touch it.
+`groupByFeature(visibleIssues, isContainer)` (`web/src/issueGroups.ts`) arranges the rows; it is pure,
+runs **after** the tab filter, and its `null` means "render the flat list", which is the answer for
+every GitHub and fake world. That refusal is what keeps the whole feature invisible on a tracker with
+no tree.
+
+Three kinds of group, and the distinction between the last two is the one that matters:
+
+| Kind        | Heading                        | Holds                                                                 |
+| ----------- | ------------------------------ | --------------------------------------------------------------------- |
+| `feature`   | `FEATURE #812 <title>`         | The workable items under it. **Never the feature itself.**            |
+| `untracked` | none — a plain, unindented list | Items whose provider reports no hierarchy (`parent === undefined`).   |
+| `orphans`   | `NO PARENT FEATURE`            | Items the tracker says have no parent (`parent === null`).            |
+
+**`undefined` is not `null`.** An item whose tracker has no tree is not an orphan, and filing one
+under "no parent feature" accuses a GitHub issue of missing something it never had. Untracked rows
+therefore keep today's rendering exactly — no heading, no indent, no rule — and are drawn first.
+
+**A feature is a heading, never a row.** Nothing is ever dispatched at one, so a row for it would sit
+in the list of workable items pretending otherwise — which is the separation grouping exists to make.
+Its own issue is still carried on the group (`featureIssue`), because it knows the child count that a
+relation summary read off a story does not.
+
+**A heading says both numbers when they differ** (`2 of 3 shown`): the rows beneath are narrowed by
+the watch tab, the feature's children are not, and a heading reporting only one is wrong in a way an
+operator cannot see. A feature the world does not hold reports only what is shown.
+
+**A grouped row drops the chip its position now carries.** `↳ Feature #812` is not drawn under that
+feature's own heading, and `no parent feature` is not drawn inside the parentless group — the same
+one-home-per-fact rule the `done`/`has_pr` chips follow.
 
 ## Demo mode
 

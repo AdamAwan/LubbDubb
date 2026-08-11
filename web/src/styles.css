@@ -947,6 +947,45 @@ body {
 .world-item.excluded {
   opacity: 0.55;
 }
+/* A feature and the work under it. The rule down the left is what makes the
+   group one object at a glance; the indent on its rows is what stops a heading
+   being mistaken for another item to act on. */
+.world-group {
+  margin: 8px 0 2px;
+}
+.world-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 2px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.world-group-kind {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.world-group-title {
+  color: var(--text);
+}
+/* The items with no feature are an exception, not a peer — said in the heading's
+   weight rather than with a colour, since nothing here is going wrong. */
+.world-group-head.orphaned {
+  border-bottom-style: dashed;
+}
+/* A headless group is the flat list: no rule, no indent, nothing claiming a
+   structure its tracker never reported. */
+.world-group.loose {
+  margin-top: 0;
+}
+.world-item.grouped {
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
 .world-toggle {
   margin-left: auto;
   padding: 1px 8px;

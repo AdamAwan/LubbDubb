@@ -19,6 +19,7 @@
 import { useState } from 'react';
 import type { AppState, Issue, Plan, PullRequest } from '../types.js';
 import { watchBucket, type WatchBucket } from '../worldBuckets.js';
+import { groupByFeature, groupProgress, type IssueGroup } from '../issueGroups.js';
 import { statusDot, refLink, refChip } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
@@ -86,6 +87,12 @@ function pickupChip(pickup: Issue['pickup']) {
 }
 
 /**
+ * Where a row is being drawn, which decides what it still has to say for itself.
+ * `flat` is an ungrouped list — every chip draws, as it always did.
+ */
+type RowPlacement = 'flat' | 'feature' | 'orphans';
+
+/**
  * Where the item sits in the tracker's tree: the feature above it, or the fact
  * that it has none.
  *
@@ -101,10 +108,13 @@ function pickupChip(pickup: Issue['pickup']) {
  * its verdict: `pickupChip` returns null for a container so the row does not carry
  * the same fact twice, the second time as a sentence.
  */
-function hierarchyChips(issue: Issue, refUrls: Record<string, string>) {
+function hierarchyChips(issue: Issue, refUrls: Record<string, string>, placement: RowPlacement) {
   const chips = [];
   const container = issue.pickup?.status === 'container';
-  if (issue.parent) {
+  // Under its own feature's heading, or in the parentless group, the row's
+  // position already says what these chips say. Drawing them anyway is the
+  // duplication grouping was meant to remove, one indent further in.
+  if (issue.parent && placement !== 'feature') {
     chips.push(
       <span
         key="parent"
@@ -114,7 +124,7 @@ function hierarchyChips(issue: Issue, refUrls: Record<string, string>) {
         ↳ {issue.parent.issueType} {refLink(`#${issue.parent.number}`, refUrls)}
       </span>,
     );
-  } else if (issue.parent === null && !container) {
+  } else if (issue.parent === null && !container && placement !== 'orphans') {
     chips.push(
       // Not `warn`. It is a standing property of the ticket, not something going
       // wrong now, and it sits on every loose item on the board — at warning
@@ -429,6 +439,11 @@ export function WorldSummary({
 
   const visiblePrs = showPullRequests ? pullRequests.filter((pr) => inTab(prBucket(pr.labels))) : [];
   const visibleIssues = issues.filter((i) => inTab(itemBucket(i.labels)));
+  // Arranged after the tab filter, never before it: the tab decides what is
+  // visible and this only decides how what remains is laid out. Null is a tracker
+  // with no hierarchy at all (GitHub, the fake), which renders the flat list
+  // exactly as it always did.
+  const issueGroups = groupByFeature(visibleIssues, (i) => i.pickup?.status === 'container');
   // "Recently closed" lives in the Watched tab alone: it exists so a PR you were
   // following doesn't silently vanish mid-session, which is a statement to someone
   // monitoring. Bucketing those rows by their own labels would scatter them.
@@ -442,6 +457,152 @@ export function WorldSummary({
   // A linked PR that isn't open is a closed one `linkedPrNumber` stayed pointing at
   // — read off the same list `openPrForIssue` is given, so the two can't disagree.
   const openPrNumbers = new Set(pullRequests.filter((pr) => !pr.merged).map((pr) => pr.number));
+
+  /** One key per group: the feature's number, or the kind for the two headless ones. */
+  const groupKey = (group: IssueGroup): string => (group.feature ? `feature-${group.feature.number}` : group.kind);
+
+  /**
+   * One issue row. Extracted from the list so the flat and grouped arrangements
+   * render the *same* row rather than two that drift — a row is a row wherever it
+   * is drawn, and the only difference a group makes is the indent it sits at.
+   */
+  const issueRow = (i: Issue, placement: RowPlacement) => {
+    const inGroup = placement !== 'flat';
+    const isIgnored = (i.labels ?? []).includes(ignoreLabel);
+    const watched = itemBucket(i.labels) === 'watched';
+    const resolved = i.state !== 'open' || i.linkedPrNumber !== null;
+    const linkLive = i.linkedPrNumber !== null && openPrNumbers.has(i.linkedPrNumber);
+    return (
+      <div key={i.id} className={`world-item${inGroup ? ' grouped' : ''}${isIgnored ? ' excluded' : ''}`}>
+        {refLink(`#${i.number}`, refUrls)} {i.title} <span className="chip small">{i.state}</span>
+        {isIgnored && showPickupChip && (
+          <span className="chip small" title={`Tagged "${ignoreLabel}" — the harness is leaving this issue alone`}>
+            ignored
+          </span>
+        )}
+        {hierarchyChips(i, refUrls, placement)}
+        {showPickupChip && pickupChip(i.pickup)}
+        {planChip(
+          (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`),
+          onViewPlan,
+        )}
+        {scratchpadChip(i, onViewScratchpad)}
+        {conclusionChip(i.conclusion)}
+        {shortfallChip(i.shortfall, i.number, state.proposals)}
+        {i.linkedPrNumber !== null && (
+          <span
+            className={`chip small${linkLive ? '' : ' stale'}`}
+            title={
+              linkLive
+                ? undefined
+                : // Never "merged" or "closed": the PR left the open list, and which
+                  // of the two that was is not something the harness observed.
+                  'That PR is no longer open — the link is the last one that ever referenced this issue'
+            }
+          >
+            → PR {refLink(`#${i.linkedPrNumber}`, refUrls)}
+            {!linkLive && ' (not open)'}
+          </span>
+        )}
+        {!resolved && (
+          <AsyncButton
+            className="ghost world-toggle"
+            onClick={() => onToggleIssueWatch(i.number, !watched)}
+            title={
+              watched
+                ? `Remove "${watchLabel}" so the harness leaves this issue alone`
+                : `Tag this issue "${watchLabel}" so the harness picks it up`
+            }
+          >
+            {watched ? 'ignore' : 'watch'}
+          </AsyncButton>
+        )}
+        {i.state === 'open' && (
+          <AsyncButton
+            className="ghost world-toggle"
+            onClick={() => onSetConclusion(i.number, i.conclusion?.verdict === 'done' ? null : 'done')}
+            title={
+              i.conclusion?.verdict === 'done'
+                ? 'Withdraw "finished" — the issue goes back to whatever its agent or plan says'
+                : 'Mark this issue finished, so the harness schedules nothing more for it'
+            }
+          >
+            {i.conclusion?.verdict === 'done' ? 'unfinish' : 'finished'}
+          </AsyncButton>
+        )}
+        {i.state === 'open' && i.conclusion?.verdict !== 'more_work' && (
+          <AsyncButton
+            className="ghost world-toggle"
+            onClick={() => onSetConclusion(i.number, 'more_work')}
+            title="Say there is work left here, so the harness picks it up again once no PR is open"
+          >
+            more work
+          </AsyncButton>
+        )}
+        {/* The bugs already raised from this row, and the way to raise another.
+                Deliberately *not* gated on `i.state === 'open'` like the two verdict
+                buttons above: "the harness closed this and it does not work" is the
+                case the control exists for. Gated instead on there being a tracker
+                to file into, off the same flag the finding and work-item filing
+                buttons read. */}
+        {bugChips(state.bugFilings, i.number, refUrls)}
+        {state.config.canFileTickets && (
+          <button
+            className="btn ghost world-toggle"
+            onClick={() => setRaisingBug(i)}
+            title="Report that this does not work as you expect — an agent files it as a bug linked to this item, and this item's own state is left alone"
+          >
+            raise issue
+          </button>
+        )}
+        {/* Only a refusal gets an override. A `workable` verdict blocks
+                nothing, so a button on one would offer to change a reading that
+                changes no behaviour — and clearing is a *third* option rather
+                than the same toggle's other end, because `null` is not
+                `workable`: it is the store's one representation of "nobody has
+                decided", which is also what a crashed assayer leaves behind.
+                The assayer's own words are quoted into the title and never
+                rewritten here. */}
+        {i.state === 'open' && i.assay?.verdict === 'unclear' && (
+          <>
+            <AsyncButton
+              className="ghost world-toggle"
+              onClick={() => onSetAssay(i.number, 'workable')}
+              title={`The assay refused this goal: "${i.assay.summary}"\n\nWork it anyway — the harness stops holding pickup and runs a cycle now. ${ASSAY_EXPIRY}`}
+            >
+              work anyway
+            </AsyncButton>
+            <AsyncButton
+              className="ghost world-toggle"
+              onClick={() => onSetAssay(i.number, null)}
+              title={`Clear the verdict, so nobody has decided and an assayer may judge the goal again — not the same as calling it workable. ${ASSAY_EXPIRY}`}
+            >
+              clear assay
+            </AsyncButton>
+            {/* What the harness said on the ticket about this refusal, which
+                    is the half of it the operator could not see (#171). It sits
+                    beside the overrides and not among them: the two buttons
+                    change the verdict, this only opens what was already said —
+                    and it draws only when the provider resolved a URL, so an
+                    unwritten comment and an unresolvable one are both silent. */}
+            {refChip(i.assay.commentRef, 'comment ↗', refUrls, {
+              title: 'The comment the harness is keeping on this ticket, asking for what it needs',
+            })}
+          </>
+        )}
+        {/* Last, because it is the one block in this row rather than a chip.
+                Drawn here at all because a code blueprint carrying a screenshot
+                becomes a *ticket*: the queue card the image was attached to is
+                gone by the time the funnel runs, and this row is where the goal
+                now lives (issue #249). */}
+        <AttachmentStrip
+          targetRef={`issue:${i.number}`}
+          attachments={state.attachments}
+          attachmentUrls={state.attachmentUrls}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="world">
@@ -540,142 +701,49 @@ export function WorldSummary({
           <b>{visibleIssues.length}</b>
         </div>
       )}
-      {visibleIssues.map((i) => {
-        const isIgnored = (i.labels ?? []).includes(ignoreLabel);
-        const watched = itemBucket(i.labels) === 'watched';
-        const resolved = i.state !== 'open' || i.linkedPrNumber !== null;
-        const linkLive = i.linkedPrNumber !== null && openPrNumbers.has(i.linkedPrNumber);
-        return (
-          <div key={i.id} className={`world-item${isIgnored ? ' excluded' : ''}`}>
-            {refLink(`#${i.number}`, refUrls)} {i.title} <span className="chip small">{i.state}</span>
-            {isIgnored && showPickupChip && (
-              <span className="chip small" title={`Tagged "${ignoreLabel}" — the harness is leaving this issue alone`}>
-                ignored
-              </span>
-            )}
-            {hierarchyChips(i, refUrls)}
-            {showPickupChip && pickupChip(i.pickup)}
-            {planChip(
-              (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`),
-              onViewPlan,
-            )}
-            {scratchpadChip(i, onViewScratchpad)}
-            {conclusionChip(i.conclusion)}
-            {shortfallChip(i.shortfall, i.number, state.proposals)}
-            {i.linkedPrNumber !== null && (
-              <span
-                className={`chip small${linkLive ? '' : ' stale'}`}
-                title={
-                  linkLive
-                    ? undefined
-                    : // Never "merged" or "closed": the PR left the open list, and which
-                      // of the two that was is not something the harness observed.
-                      'That PR is no longer open — the link is the last one that ever referenced this issue'
-                }
-              >
-                → PR {refLink(`#${i.linkedPrNumber}`, refUrls)}
-                {!linkLive && ' (not open)'}
-              </span>
-            )}
-            {!resolved && (
-              <AsyncButton
-                className="ghost world-toggle"
-                onClick={() => onToggleIssueWatch(i.number, !watched)}
-                title={
-                  watched
-                    ? `Remove "${watchLabel}" so the harness leaves this issue alone`
-                    : `Tag this issue "${watchLabel}" so the harness picks it up`
-                }
-              >
-                {watched ? 'ignore' : 'watch'}
-              </AsyncButton>
-            )}
-            {i.state === 'open' && (
-              <AsyncButton
-                className="ghost world-toggle"
-                onClick={() => onSetConclusion(i.number, i.conclusion?.verdict === 'done' ? null : 'done')}
-                title={
-                  i.conclusion?.verdict === 'done'
-                    ? 'Withdraw "finished" — the issue goes back to whatever its agent or plan says'
-                    : 'Mark this issue finished, so the harness schedules nothing more for it'
-                }
-              >
-                {i.conclusion?.verdict === 'done' ? 'unfinish' : 'finished'}
-              </AsyncButton>
-            )}
-            {i.state === 'open' && i.conclusion?.verdict !== 'more_work' && (
-              <AsyncButton
-                className="ghost world-toggle"
-                onClick={() => onSetConclusion(i.number, 'more_work')}
-                title="Say there is work left here, so the harness picks it up again once no PR is open"
-              >
-                more work
-              </AsyncButton>
-            )}
-            {/* The bugs already raised from this row, and the way to raise another.
-                Deliberately *not* gated on `i.state === 'open'` like the two verdict
-                buttons above: "the harness closed this and it does not work" is the
-                case the control exists for. Gated instead on there being a tracker
-                to file into, off the same flag the finding and work-item filing
-                buttons read. */}
-            {bugChips(state.bugFilings, i.number, refUrls)}
-            {state.config.canFileTickets && (
-              <button
-                className="btn ghost world-toggle"
-                onClick={() => setRaisingBug(i)}
-                title="Report that this does not work as you expect — an agent files it as a bug linked to this item, and this item's own state is left alone"
-              >
-                raise issue
-              </button>
-            )}
-            {/* Only a refusal gets an override. A `workable` verdict blocks
-                nothing, so a button on one would offer to change a reading that
-                changes no behaviour — and clearing is a *third* option rather
-                than the same toggle's other end, because `null` is not
-                `workable`: it is the store's one representation of "nobody has
-                decided", which is also what a crashed assayer leaves behind.
-                The assayer's own words are quoted into the title and never
-                rewritten here. */}
-            {i.state === 'open' && i.assay?.verdict === 'unclear' && (
-              <>
-                <AsyncButton
-                  className="ghost world-toggle"
-                  onClick={() => onSetAssay(i.number, 'workable')}
-                  title={`The assay refused this goal: "${i.assay.summary}"\n\nWork it anyway — the harness stops holding pickup and runs a cycle now. ${ASSAY_EXPIRY}`}
-                >
-                  work anyway
-                </AsyncButton>
-                <AsyncButton
-                  className="ghost world-toggle"
-                  onClick={() => onSetAssay(i.number, null)}
-                  title={`Clear the verdict, so nobody has decided and an assayer may judge the goal again — not the same as calling it workable. ${ASSAY_EXPIRY}`}
-                >
-                  clear assay
-                </AsyncButton>
-                {/* What the harness said on the ticket about this refusal, which
-                    is the half of it the operator could not see (#171). It sits
-                    beside the overrides and not among them: the two buttons
-                    change the verdict, this only opens what was already said —
-                    and it draws only when the provider resolved a URL, so an
-                    unwritten comment and an unresolvable one are both silent. */}
-                {refChip(i.assay.commentRef, 'comment ↗', refUrls, {
-                  title: 'The comment the harness is keeping on this ticket, asking for what it needs',
-                })}
-              </>
-            )}
-            {/* Last, because it is the one block in this row rather than a chip.
-                Drawn here at all because a code blueprint carrying a screenshot
-                becomes a *ticket*: the queue card the image was attached to is
-                gone by the time the funnel runs, and this row is where the goal
-                now lives (issue #249). */}
-            <AttachmentStrip
-              targetRef={`issue:${i.number}`}
-              attachments={state.attachments}
-              attachmentUrls={state.attachmentUrls}
-            />
-          </div>
-        );
-      })}
+      {issueGroups === null
+        ? visibleIssues.map((i) => issueRow(i, 'flat'))
+        : issueGroups.map((group) => {
+            const { shown, children } = groupProgress(group);
+            const head = group.feature;
+            // The heading *is* the separation an operator asked the tree for: a
+            // feature names the work under it and is never itself a row in the
+            // list of things that can be worked. `untracked` has no heading at
+            // all — its provider never claimed a tree, so drawing one would
+            // invent a category for it.
+            return (
+              <div key={groupKey(group)} className={`world-group${group.kind === 'feature' ? '' : ' loose'}`}>
+                {head && (
+                  <div className="world-group-head">
+                    <span className="world-group-kind">{head.issueType || 'Feature'}</span>
+                    {refLink(`#${head.number}`, refUrls)} <span className="world-group-title">{head.title}</span>
+                    <span
+                      className="chip small"
+                      title={
+                        group.featureIssue?.children
+                          ?.map((c) => `${c.issueType} #${c.number} "${c.title}" (${c.workItemState})`)
+                          .join('\n') ?? 'Nothing is ever dispatched at a feature — the items under it are the work'
+                      }
+                    >
+                      {children !== null && children !== shown ? `${shown} of ${children} shown` : `${shown} here`}
+                    </span>
+                  </div>
+                )}
+                {group.kind === 'orphans' && (
+                  <div className="world-group-head orphaned">
+                    <span className="world-group-kind">No parent feature</span>
+                    <span
+                      className="chip small"
+                      title="These belong under a feature and have none. Agents working them are told to flag it and suggest where they belong — the harness never re-parents a work item itself."
+                    >
+                      {shown} item{shown === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                )}
+                {group.issues.map((i) => issueRow(i, group.kind === 'untracked' ? 'flat' : group.kind))}
+              </div>
+            );
+          })}
       {/* One modal for the whole list, keyed off which row was clicked — the
           pattern `PlanModal` uses, where several surfaces open one dialog. */}
       {raisingBug && (

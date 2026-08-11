@@ -38,6 +38,7 @@ export type {
   Finding,
   HumanTask,
   Issue,
+  IssueRelative,
   Job,
   JobAttachment,
   JobAttachmentInput,
