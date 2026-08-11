@@ -54,7 +54,7 @@ test('an error result opens an error block', () => {
     renderBlocks([{ type: 'tool_result', is_error: true, content: 'command not found' }]);
   const opens = all(rendered).ops.filter((o) => o.kind === 'open');
   assert.equal(opens.length, 2, 'an error stands on its own rather than folding away');
-  assert.equal(opens[1].error, true);
+  assert.equal(opens[1]?.error, true);
 });
 
 test('parallel calls yield standalone blocks rather than mispaired ones', () => {
@@ -69,11 +69,12 @@ test('parallel calls yield standalone blocks rather than mispaired ones', () => 
     ]);
   const opens = all(rendered).ops.filter((o) => o.kind === 'open');
   assert.equal(opens.length, 4, 'two calls and two results, each its own block');
-  assert.match(opens[0].text ?? '', /a\.ts/);
-  assert.match(opens[1].text ?? '', /b\.ts/);
-  assert.match(opens[2].text ?? '', /↳ result/);
-  assert.match(opens[3].text ?? '', /↳ result/);
-  assert.ok(!(opens[1].text ?? '').includes('· '), 'a result is never folded into the wrong call');
+  const summaries = opens.map((o) => o.text ?? '');
+  assert.match(summaries[0] ?? '', /a\.ts/);
+  assert.match(summaries[1] ?? '', /b\.ts/);
+  assert.match(summaries[2] ?? '', /↳ result/);
+  assert.match(summaries[3] ?? '', /↳ result/);
+  assert.ok(!(summaries[1] ?? '').includes('· '), 'a result is never folded into the wrong call');
 });
 
 test('prose after a result leaves the block', () => {
@@ -100,7 +101,7 @@ test('a chunk boundary mid-marker does not half-parse a block', () => {
   const second = feedBlocks(rendered.slice(cut), first.state);
   const opens = [...first.ops, ...second.ops].filter((o) => o.kind === 'open');
   assert.equal(opens.length, 1, 'exactly one block despite the split');
-  assert.match(plain(opens[0].text ?? ''), /⚙ Bash ls/);
+  assert.match(plain(opens[0]?.text ?? ''), /⚙ Bash ls/);
 });
 
 test('an unterminated trailing line is reported as tail, not swallowed', () => {

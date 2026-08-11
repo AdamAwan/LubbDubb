@@ -14,7 +14,8 @@
  * split across two deltas must not half-parse, and handed back as `tail` so text still
  * being typed is shown rather than withheld.
  */
-export interface BlockOp {
+/** Named for the signatures below; the drawer reads ops structurally, so it stays unexported. */
+interface BlockOp {
   /** `open` starts a block; `text` appends into whatever is current; `close` returns to the pane. */
   kind: 'open' | 'text' | 'close';
   /** The summary line for `open`, or the run to append for `text` — ANSI intact either way. */
@@ -46,6 +47,15 @@ const TOOL = /^⚙ /;
 const RESULT = /^ {2}↳ (result|error)\b/;
 /** A result body line is indented by two spaces — the renderer indents even blank ones. */
 const BODY = /^ {2}/;
+
+/** The most recent block opened in this chunk, if it was opened in this chunk at all. */
+function lastOpen(ops: BlockOp[]): BlockOp | undefined {
+  for (let i = ops.length - 1; i >= 0; i -= 1) {
+    const op = ops[i];
+    if (op?.kind === 'open') return op;
+  }
+  return undefined;
+}
 
 /**
  * Split `chunk` into block operations, resuming from `state`. Returns the operations,
@@ -83,7 +93,7 @@ export function feedBlocks(chunk: string, state: BlockState): { ops: BlockOp[]; 
       if (!error && unresolved === 1 && inBlock) {
         // The result of the call directly above: fold it in, moving its line count onto
         // the summary, which is the one line an operator sees while it stays collapsed.
-        const summary = ops.findLast((o) => o.kind === 'open');
+        const summary = lastOpen(ops);
         const suffix = line.slice(line.indexOf('↳')).replace(/^↳\s*(result|error)/, '');
         // The `open` may belong to an earlier chunk and be gone; the count is cosmetic.
         if (summary && suffix.replace(SGR, '').trim()) summary.text = `${summary.text ?? ''}${suffix}`;
