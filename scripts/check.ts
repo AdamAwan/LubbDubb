@@ -7,7 +7,7 @@
  * commands, the same flags, and a non-zero exit if any of them fails — CI runs them
  * as separate steps and stays the source of truth.
  *
- * Two deliberate differences from the chain it replaces:
+ * Three deliberate differences from the chain it replaces:
  *
  * - **Every stage runs even when one fails.** An `&&` chain stops at the first
  *   failure, so a formatting slip hid a type error until the next run. Fixing all
@@ -15,9 +15,22 @@
  * - **Output is buffered per stage, not interleaved.** Six concurrent writers to one
  *   terminal is unreadable, so a stage's output is held and printed under its own
  *   heading — failures first, then the timing summary.
+ * - **One run at a time, machine-wide.** The pool budgets every core, which is only
+ *   true of a run that is alone: two of them turned an 8-core box into a load average
+ *   of 44, each waiting on work the other had queued. A second run therefore waits on
+ *   `scripts/checkLock.ts` rather than racing — it still verifies, just later, so a
+ *   script that shells out to `npm run check` cannot silently skip the gate.
+ *
+ * The budget itself is `CHECK_CORES` or the machine. It sizes *this* pool only: node's
+ * test runner picks its own worker count, which no flag reachable from `npm run test`
+ * can override, so `CHECK_CORES=4` means the test stage runs with nothing beside it
+ * rather than with four workers.
  */
 import { spawn } from 'node:child_process';
-import { availableParallelism } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { acquireCheckLock, resolveCoreBudget } from './checkLock.js';
 
 interface Stage {
   readonly name: string;
@@ -39,10 +52,24 @@ interface Result {
   readonly output: string;
 }
 
-const CORES = availableParallelism();
+const CORES = resolveCoreBudget(process.env, availableParallelism());
 
-/** Node's test runner default; mirrored here so the weight matches what it spawns. */
-const TEST_WORKERS = Math.max(1, CORES - 1);
+/**
+ * Node's test runner default, mirrored so the weight matches what it spawns — and
+ * measured rather than taken from the docs: node 22.15 runs exactly
+ * `availableParallelism() - 1` test files at once. It is the machine's count, not
+ * `CORES`, because lowering the budget does not lower what node spawns.
+ */
+const TEST_WORKERS = Math.max(1, availableParallelism() - 1);
+
+/**
+ * In the OS temp dir, not under `node_modules/.cache/` where the other check artefacts
+ * live, because the thing being rationed is the machine's cores and not a checkout's
+ * caches. Worktrees are the case that decides it: `.claude/worktrees/*` has no
+ * `node_modules` of its own, so a checkout-relative lock would put every agent session
+ * on a lockfile of its own — the exact pile-up this exists to stop.
+ */
+const LOCK_PATH = join(tmpdir(), 'lubbdubb-check.lock');
 
 /**
  * Declared slowest-first, which is the schedule and not just documentation: the
@@ -117,13 +144,23 @@ async function runAll(stages: readonly Stage[]): Promise<Result[]> {
 const label = (r: Result): string => `${r.stage.name} (${(r.ms / 1000).toFixed(1)}s)`;
 
 async function main(): Promise<void> {
+  const lock = await acquireCheckLock({
+    path: LOCK_PATH,
+    onWait: (holder) => process.stderr.write(`check: already running (pid ${holder.pid}) — waiting for it to finish\n`),
+  });
   const started = Date.now();
   process.stderr.write(`check: ${STAGES.length} stages, ${CORES} cores\n`);
 
-  const results = await runAll(STAGES);
-  const failed = results.filter((r) => !r.ok);
+  try {
+    report(await runAll(STAGES), started);
+  } finally {
+    lock.release();
+  }
+}
 
-  // Failures first, each under its own heading — the reason output is buffered.
+/** Failures first, each under its own heading — the reason output is buffered. */
+function report(results: readonly Result[], started: number): void {
+  const failed = results.filter((r) => !r.ok);
   for (const r of failed) {
     process.stdout.write(`\n${'─'.repeat(64)}\n✗ ${r.stage.name}\n${'─'.repeat(64)}\n`);
     process.stdout.write(r.output.trimEnd() + '\n');
