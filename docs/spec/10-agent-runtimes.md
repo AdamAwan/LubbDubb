@@ -167,8 +167,14 @@ The raw event stream is never dumped. Each message's content blocks go through t
 - assistant text passes through with sentinels stripped;
 - a `tool_use` becomes a labelled line with a one-line input summary (capped at 140 chars);
 - a `tool_result` (which arrives as a `user` event) is sanitised — ANSI and control characters removed
-  — and truncated to `MAX_RESULT_LINES` (12) with a `+N more lines` marker;
+  — and truncated to `MAX_RESULT_LINES` (200) with a `+N more lines` marker;
 - a `human` block renders injected/human messages.
+
+A result's label is `↳ result` (or `↳ error`) followed by a dim `· N lines` suffix giving the
+**pre-truncation** total, omitted when the result is a single line. The cockpit folds that suffix into
+the collapsed summary of the tool call ([17](17-cockpit.md)), and the server is the only side that
+still knows what was cut. The cap can be this high because the drawer hides result bodies by default:
+a collapsed block is only worth opening if the whole result is inside it.
 
 Labels carry SGR colour, which the cockpit's drawer renders through the pure parser in
 `web/src/components/ansi.ts`. `stripAnsi` is applied by the `Hub` before the compact fleet-card tail,
