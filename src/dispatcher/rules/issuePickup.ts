@@ -46,7 +46,7 @@ export function issuePickup(s: StageContext): void {
             title: issue.title,
             body: issue.body,
             branch,
-          }) + relatedWorkNote(issue, s.pickup.containerTypes),
+          }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

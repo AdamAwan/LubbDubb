@@ -90,7 +90,7 @@ export function issuePlan(s: StageContext): void {
                 body: issue.body,
                 branch,
                 planFile: PLAN_FILE,
-              })) + relatedWorkNote(issue, s.pickup.containerTypes),
+              })) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

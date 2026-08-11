@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  candidateParents,
   containerPickupReason,
   isContainerIssue,
   isOrphanIssue,
@@ -179,6 +180,69 @@ test('an orphan is told so, and told not to invent a parent', () => {
   const note = relatedWorkNote(issue({ issueType: 'Bug', parent: null }), DEFAULT_CONTAINER_TYPES);
   assert.match(note, /no parent feature/);
   assert.match(note, /Do not invent a parent/);
+});
+
+test('an orphan is offered the open features it might belong to, as a suggestion only', () => {
+  const candidates = [
+    relative({ number: 12, title: 'Checkout revamp', issueType: 'Feature' }),
+    relative({ number: 20, title: 'Billing', issueType: 'Feature' }),
+  ];
+  const note = relatedWorkNote(issue({ issueType: 'Bug', parent: null }), DEFAULT_CONTAINER_TYPES, candidates);
+  assert.match(note, /Open features it might belong to:/);
+  assert.match(note, /- Feature #12 "Checkout revamp"/);
+  assert.match(note, /- Feature #20 "Billing"/);
+  // The harness reads the hierarchy and never writes it.
+  assert.match(note, /do not link, re-parent or edit any work item yourself/);
+});
+
+/** The suggestion is the orphan's alone — beside a parented item it invites re-filing. */
+test('an item that already has a parent is offered no candidates', () => {
+  const note = relatedWorkNote(
+    issue({ issueType: 'Bug', parent: relative({ number: 12, issueType: 'Feature' }) }),
+    DEFAULT_CONTAINER_TYPES,
+    [relative({ number: 20, issueType: 'Feature' })],
+  );
+  assert.doesNotMatch(note, /might belong to/);
+});
+
+test('candidateParents collects containers in the world and the parents of other items', () => {
+  const world = [
+    issue({ number: 12, title: 'Checkout revamp', issueType: 'Feature', workItemState: 'Active', children: [] }),
+    issue({ number: 30, issueType: 'Bug', parent: relative({ number: 20, title: 'Billing', issueType: 'Feature' }) }),
+    issue({ number: 31, issueType: 'Bug', parent: null }),
+  ];
+  assert.deepEqual(
+    candidateParents(world, DEFAULT_CONTAINER_TYPES).map((c) => c.number),
+    [12, 20],
+  );
+});
+
+test('candidateParents drops closed features and de-duplicates', () => {
+  const shared = relative({ number: 20, issueType: 'Feature' });
+  const world = [
+    issue({ number: 13, issueType: 'Feature', state: 'closed' }),
+    issue({ number: 30, issueType: 'Bug', parent: shared }),
+    issue({ number: 31, issueType: 'Bug', parent: shared }),
+    issue({
+      number: 32,
+      issueType: 'Bug',
+      parent: relative({ number: 21, issueType: 'Feature', state: 'closed', workItemState: 'Closed' }),
+    }),
+  ];
+  assert.deepEqual(
+    candidateParents(world, DEFAULT_CONTAINER_TYPES).map((c) => c.number),
+    [20],
+  );
+});
+
+/** A flat tracker offers nothing, so the orphan branch never draws on the GitHub path. */
+test('candidateParents is empty for a world with no hierarchy', () => {
+  assert.deepEqual(candidateParents([issue({ number: 1 }), issue({ number: 2 })], DEFAULT_CONTAINER_TYPES), []);
+});
+
+test('a candidate feature never carries its description into the list', () => {
+  const world = [issue({ number: 30, issueType: 'Bug', parent: relative({ number: 20, body: 'long goal text' }) })];
+  assert.equal(candidateParents(world, DEFAULT_CONTAINER_TYPES)[0]?.body, undefined);
 });
 
 test('a long parent description is truncated rather than shipped whole', () => {

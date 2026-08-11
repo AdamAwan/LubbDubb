@@ -272,6 +272,7 @@ type PickupStatus =
   | 'has_pr'
   | 'active'
   | 'ignored'
+  | 'container'
   | 'unwatched'
   | 'planning'
   | 'delivered'
@@ -302,6 +303,10 @@ const PATCH_WORDS: Record<PickupStatus, MachineStatus> = {
   escalated: { word: 'Needs you', tone: 'bad' },
   blocked: { word: 'No power', tone: 'off' },
   ignored: { word: 'Left alone', tone: 'off' },
+  // Not a patch at all — a seam the patches under it are cut from. Nothing is
+  // wrong with it and nothing will ever be mined here, so it reads as neither
+  // idle nor refused.
+  container: { word: 'Whole seam', tone: 'off' },
   unwatched: { word: 'No claim staked', tone: 'off' },
 };
 

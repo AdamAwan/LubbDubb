@@ -52,6 +52,7 @@ Assembled once in `src/system.ts` from config and handed to whichever dispatcher
 | `priorityLabels`  | `issuePriorityLabels`        | Label → weight.                                                     |
 | `defaultPriority` | `issueDefaultPriority`       | Weight when no label matches.                                       |
 | `pickupStates`    | `issuePickupStates`          | Allowed provider-native workflow states.                            |
+| `containerTypes`  | `issueContainerTypes`        | Item types that are never worked. Unset falls back to the default pair; `[]` is off. |
 | `inReviewState`   | `issueInReviewState`         | The state rule `work-item-in-review` parks an item in.              |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
@@ -64,10 +65,14 @@ policy alone, and it collects _every_ blocking reason rather than short-circuiti
 explain an untouched item:
 
 1. **Ignore** — `ignored ("<label>")`. Wins over everything else.
-2. **State gate** — only when `pickupStates` is non-empty **and** the issue carries a
+2. **Type gate** — an item whose `issueType` is in `containerTypes` reports
+   `<Type> is a container — work its N child items`. Asked before the state gate because it is the
+   more fundamental refusal: a container in a pickup state is still a container, and no tag or state
+   makes one workable. Items with no `issueType` bypass it entirely.
+3. **State gate** — only when `pickupStates` is non-empty **and** the issue carries a
    `workItemState`. Items with no native state bypass it entirely. A state matching `inReviewState`
    reports `in review`; any other non-listed state reports `state "<x>" not in pickup states`.
-3. **Watch gate** — the issue must carry `watchLabel`. With `requireOwnLabel` on, the check reads
+4. **Watch gate** — the issue must carry `watchLabel`. With `requireOwnLabel` on, the check reads
    `labelsAddedByViewer`, and an item tagged by someone else reports
    `watch label "<x>" not added by you` rather than `no watch label "<x>"`, so the operator knows
    which knob to turn. A provider that does not populate authorship leaves the field unset, so the
@@ -78,6 +83,53 @@ deliberately **not** the state gate. It is what plan parts inherit: the tag is e
 parent issue. Re-applying the state gate there would be wrong, because rule `work-item-in-review` parks a decomposed item
 in the review state for the life of its plan, which would stop the remaining parts ever being
 scheduled.
+
+## Hierarchy
+
+Azure DevOps work items hang in a tree; GitHub issues do not. `src/issueRelations.ts` holds the whole
+of what that tree means to the harness — pure over an issue plus policy, so the dispatcher's gate,
+the cockpit's chip and the note an agent reads can never form different opinions about one item.
+
+Two rules of the tree change what may be *done* with an item rather than merely describing it.
+
+**A container is never worked.** A Feature is a statement of intent its stories deliver; putting an
+agent on one asks it to implement a decomposition that already exists beside it in the tracker. The
+refusal is total — no watch tag, no workflow state and no operator control makes a container
+workable, which is why its verdict is `container` and not `unwatched`. The chip has its own arm for
+exactly that reason: `unwatched` would send an operator to the one control that cannot help.
+
+**A leaf is meant to have a parent.** A story, bug or tech-debt item under no feature is an item
+whose *why* is recorded nowhere. `isOrphanIssue` is true only when all three of these hold — the
+provider tracks hierarchy (`parent === null`, never `undefined`), the item is not itself a container,
+and its type is one teams put under a feature (so a Task under a story is not nagged about a parent
+it never wanted).
+
+An orphan is **flagged, not blocked**. It is picked up, planned and worked exactly as any other item;
+what changes is that every agent dispatched at it is told the parent is missing, told not to invent
+one or widen the work to an inferred goal, and offered the open containers it might belong to —
+`candidateParents`, derived from the whole world, since a Feature is usually visible only as some
+other item's parent. Naming the likely feature is a **suggestion for a human**: the harness reads the
+tracker's hierarchy and never writes it, so nothing here links, re-parents or edits a work item.
+
+### What the agents are told
+
+`relatedWorkNote(issue, containerTypes, candidates)` is **appended** to the rendered prompt of rules
+`issue-assay`, `issue-plan` (and its replan/discuss arms) and `issue-pickup` — never interpolated.
+Appending is the rule every added instruction follows (see
+[05](05-dispatcher.md#prompt-templates)): templates are operator-overridable and `loadPromptTemplates`
+rejects only *unknown* placeholders, so a `{related}` token would be dropped silently by exactly the
+deployments that customised most, losing the feature's goal on the installs most likely to have one.
+
+It carries, in this order and only when there is something to say:
+
+- the **parent** and its description — the overall goal the item serves, bounded at 4 000 characters;
+- the **siblings** with their states, named as other people's scope, so a planner can see where this
+  item's edges are rather than re-decomposing work someone already holds;
+- the **children**, for a container;
+- the **orphan** flag and its candidate features.
+
+An issue with no relations produces the empty string, so nothing is appended at all and the GitHub
+path is byte-for-byte what it was.
 
 ## Priority
 
@@ -116,6 +168,7 @@ chip.
 | `has_pr`    | An open PR resolves it; the PR rules own it now.                       |
 | `active`    | A task on this origin is queued / running / waiting on you.            |
 | `ignored`   | Carries the explicit ignore tag.                                       |
+| `container` | A Feature/Epic — its children are the work, never it.                  |
 | `unwatched` | Not opted in, or parked by the state gate.                             |
 | `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                   |
 | `escalated` | Attempt cap spent; parked on a human.                                  |

@@ -8,6 +8,7 @@ import { type CiPolicy } from '../ci/ciPolicy.js';
 import { DISPATCH_PIPELINE, type RuleConditions, type StageRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { deliveryHold } from '../delivery/delivery.js';
+import { candidateParents } from '../issueRelations.js';
 import { assayHold, type AssayPolicy } from '../intake/assay.js';
 import { type RetrospectivePolicy } from '../retro/retro.js';
 import { type AssessmentPolicy } from '../delivery/assessment.js';
@@ -419,6 +420,10 @@ export class RuleDispatcher implements Dispatcher {
       deliveryParked,
       assayParked,
       eligibleIssues,
+      // Derived from the whole world rather than the eligible subset: a feature an
+      // orphan could hang off is a feature whether or not it is workable itself,
+      // and most are visible only as some other item's parent.
+      parentCandidates: candidateParents(ctx.world.issues, this.pickup.containerTypes),
       routes,
       // Written by `issue-assay` / `issue-assess`, read by the stages the pipeline
       // runs after them. See {@link StageContext} — the ordering is load-bearing.

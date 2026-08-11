@@ -71,13 +71,73 @@ function pickupChip(pickup: Issue['pickup']) {
   // already says who decided and what they saw, so it needs no colour to be read.
   // A retained run joins them: the ticket closed and the run is being kept on
   // purpose, waiting on a dismissal rather than on anything going wrong (#234).
-  const calm = pickup.status === 'active' || pickup.status === 'delivered' || pickup.status === 'retained';
+  // A container joins them: a Feature the harness will never work is the tracker
+  // being used correctly, not a condition to warn about.
+  const calm =
+    pickup.status === 'active' ||
+    pickup.status === 'delivered' ||
+    pickup.status === 'retained' ||
+    pickup.status === 'container';
   return (
     <span className={`chip small${calm ? '' : ' warn'}`} title={pickup.reasons.join(', ')}>
       {pickup.reasons[0] ?? pickup.status}
       {pickup.reasons.length > 1 ? ` +${pickup.reasons.length - 1}` : ''}
     </span>
   );
+}
+
+/**
+ * Where the item sits in the tracker's tree: the feature above it, or the fact
+ * that it has none.
+ *
+ * Three states, and they are the three `parent` has. A tracker with no hierarchy
+ * (`undefined` — every GitHub issue) draws nothing at all, so the panel is
+ * unchanged for it. A parent draws as a link to the feature. `null` draws the
+ * orphan flag, which is the one an operator can act on: a story under no feature
+ * is a story whose goal is written down nowhere, and the agents working it are
+ * being told to say so.
+ *
+ * A container draws its children count instead of a parent — for a Feature, what
+ * matters is how much hangs off it, since that is the work the harness will
+ * actually pick up.
+ */
+function hierarchyChips(issue: Issue, refUrls: Record<string, string>) {
+  const chips = [];
+  if (issue.parent) {
+    chips.push(
+      <span
+        key="parent"
+        className="chip small"
+        title={`This ${issue.issueType ?? 'item'} belongs to ${issue.parent.issueType} #${issue.parent.number} — "${issue.parent.title}" (${issue.parent.workItemState}). Its description is the goal agents working this item are given.`}
+      >
+        ↳ {issue.parent.issueType} {refLink(`#${issue.parent.number}`, refUrls)}
+      </span>,
+    );
+  } else if (issue.parent === null && issue.pickup?.status !== 'container') {
+    chips.push(
+      <span
+        key="orphan"
+        className="chip small warn"
+        title="No parent feature, so the wider goal this serves is recorded nowhere. Agents working it are told to flag it and suggest which open feature it belongs to — the harness never re-parents a work item itself."
+      >
+        no parent feature
+      </span>,
+    );
+  }
+  if (issue.children && issue.children.length > 0) {
+    const open = issue.children.filter((c) => c.state === 'open').length;
+    chips.push(
+      <span
+        key="children"
+        className="chip small"
+        title={issue.children.map((c) => `${c.issueType} #${c.number} "${c.title}" (${c.workItemState})`).join('\n')}
+      >
+        {issue.children.length} child{issue.children.length === 1 ? '' : 'ren'}
+        {open > 0 ? `, ${open} open` : ''}
+      </span>,
+    );
+  }
+  return chips.length === 0 ? null : chips;
 }
 
 /**
@@ -477,6 +537,7 @@ export function WorldSummary({
                 ignored
               </span>
             )}
+            {hierarchyChips(i, refUrls)}
             {showPickupChip && pickupChip(i.pickup)}
             {planChip(
               (state.plans ?? []).find((p) => p.originRef === `issue:${i.number}`),

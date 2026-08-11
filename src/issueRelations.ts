@@ -100,6 +100,49 @@ export function isOrphanIssue(issue: Issue, containerTypes: readonly string[] | 
 /** How much of a parent's description rides into a prompt before it is cut. */
 const PARENT_BODY_LIMIT = 4000;
 
+/**
+ * How many candidate parents an orphan's note offers. A list long enough to be a
+ * menu stops being a suggestion — and the agent's job is to name the best fit or
+ * say none of them are it, not to work through a board.
+ */
+const CANDIDATE_LIMIT = 12;
+
+/**
+ * The containers an orphan could plausibly belong to — every open Feature/Epic
+ * the harness can see, from two places, because neither alone is the board:
+ *
+ * - the **containers in the world** itself, and
+ * - the **parents of other items**, which is where most of them come from: the
+ *   provider's item list is narrowed by tag/assignee, so a Feature is usually
+ *   visible only as something else's parent.
+ *
+ * Deduplicated by number, open only — a closed feature is not somewhere to put
+ * new work — and in id order so the same board produces the same list twice
+ * running. Pure over the world, so the suggestion an agent is offered and the one
+ * the cockpit could show are the same list.
+ */
+export function candidateParents(issues: readonly Issue[], containerTypes?: readonly string[]): IssueRelative[] {
+  const byNumber = new Map<number, IssueRelative>();
+  for (const issue of issues) {
+    if (isContainerIssue(issue, containerTypes) && issue.state === 'open') {
+      byNumber.set(issue.number, {
+        number: issue.number,
+        title: issue.title,
+        issueType: issue.issueType ?? '',
+        workItemState: issue.workItemState ?? '',
+        state: issue.state,
+      });
+    }
+    const parent = issue.parent;
+    // A parent is a container by position rather than by type — whatever the
+    // process template calls it, something already hangs off it.
+    if (parent && parent.state === 'open' && !byNumber.has(parent.number)) {
+      byNumber.set(parent.number, { ...parent, body: undefined });
+    }
+  }
+  return [...byNumber.values()].sort((a, b) => a.number - b.number).slice(0, CANDIDATE_LIMIT);
+}
+
 /** One relative as a single line: `Bug #14 "Totals drift" (Active)`. */
 function relativeLine(rel: IssueRelative): string {
   return `${rel.issueType} #${rel.number} "${rel.title}" (${rel.workItemState})`;
@@ -119,7 +162,11 @@ function relativeLine(rel: IssueRelative): string {
  * simply present and unremarkable produces the parent block and nothing else — so
  * nothing is appended at all and the GitHub path is byte-for-byte what it was.
  */
-export function relatedWorkNote(issue: Issue, containerTypes?: readonly string[]): string {
+export function relatedWorkNote(
+  issue: Issue,
+  containerTypes?: readonly string[],
+  candidates: readonly IssueRelative[] = [],
+): string {
   const lines: string[] = [];
 
   if (issue.parent) {
@@ -143,6 +190,19 @@ export function relatedWorkNote(issue: Issue, containerTypes?: readonly string[]
         `wider goal it serves is not recorded. Do not invent a parent or widen the work to a goal you inferred — ` +
         `work what this item says, and note the missing parent in your write-up.`,
     );
+    // The suggestion, not the link: the harness reads the tracker's hierarchy and
+    // never writes it, so what an agent can do about an orphan is name the feature
+    // a human should hang it off. Offered only for an orphan — a suggestion beside
+    // an item that already has a parent is an invitation to re-file work.
+    const open = candidates.filter((c) => c.number !== issue.number);
+    if (open.length > 0) {
+      lines.push(
+        `Open features it might belong to:\n${open.map((c) => `- ${relativeLine(c)}`).join('\n')}\n\n` +
+          `Say which one it most likely belongs to, or that none of them fit — whichever you can support from ` +
+          `this item's own text. That is a suggestion for a human to act on: do not link, re-parent or edit any ` +
+          `work item yourself.`,
+      );
+    }
   }
 
   const siblings = issue.siblings ?? [];

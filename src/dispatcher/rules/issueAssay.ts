@@ -79,7 +79,7 @@ export function issueAssay(s: StageContext): void {
             title: issue.title,
             body: issue.body,
             branch,
-          }) + relatedWorkNote(issue, s.pickup.containerTypes),
+          }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
         originRef: origin,
         // The exact text the verdict will be fingerprinted against — see
         // `AgentManager.recordAssay`, which reads these two fields back off

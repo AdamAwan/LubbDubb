@@ -203,7 +203,20 @@ Behaviour worth knowing:
 - **Work-item tags map onto `Issue.labels`**, so the provider-agnostic pickup and priority gates work
   unchanged. `System.Tags` writes are read-modify-write.
 - **`System.State` is preserved on `Issue.workItemState`** (while `Issue.state` collapses to
-  open/closed), which is what drives the two state-based dispatcher knobs.
+  open/closed), which is what drives the two state-based dispatcher knobs. `System.WorkItemType`
+  rides alongside on `Issue.issueType` and drives the container gate.
+- **The hierarchy is read and hydrated, never written.** `Hierarchy-Reverse`/`-Forward` relations
+  give the parent and child *ids*; the ids are then read back as items through the batched
+  `getWorkItems`, because the item list is narrowed by tag/assignee so a parent Feature is usually not
+  in it — and a bare id is not context an agent can use. Two batched reads per snapshot at most: the
+  parents and children first, then the parents' **other** children, which is where siblings come from
+  and which nothing in the first round names. A board with no hierarchy costs no request at all.
+  `errorPolicy: 'omit'` keeps one unreadable id from faulting a batch, and an id that comes back
+  unread is dropped rather than rendered as a number — but an unreadable *parent* leaves
+  `Issue.parent` `undefined`, never `null`, so it cannot be mistaken for an orphan
+  ([03](03-world-model.md#relations)). A hydration failure is recorded through `errors` and then
+  dropped: the issues still ship without relations, because losing the annotation is cheaper than
+  losing the world.
 - **Closed PRs** use `queryTimeRangeType=closed` + `minTime` with `status=all`: one request covering
   completions and abandonments, re-filtered client-side because the range is boundary-inclusive and an
   older API version may ignore the parameters.
