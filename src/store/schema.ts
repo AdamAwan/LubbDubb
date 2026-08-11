@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS human_tasks (
   detail      TEXT,                 -- what to do and how to know it is done, markdown
   origin_ref  TEXT,                 -- the work it belongs to ("issue:12", "issue:12:part:schema")
   part_id     TEXT,                 -- the plan part this task *is*, when a planner declared one
+  kind        TEXT NOT NULL DEFAULT 'ask', -- ask | close_out (the harness's own, which it also settles)
   agent_id    TEXT,                 -- the requesting agent, or null when an operator filed it
   task_id     TEXT,
   status      TEXT NOT NULL,        -- open | done | declined
@@ -579,6 +580,7 @@ CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
+CREATE INDEX IF NOT EXISTS idx_human_tasks_kind_origin ON human_tasks(kind, origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_ref ON proposals(ref);

@@ -16,6 +16,7 @@ import { retainedRunIssues, runsToRecord } from './floor/runs.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
+import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
@@ -49,6 +50,12 @@ interface HarnessDeps {
   assays?: AssayDesk;
   /** Keeps open pull requests on the naming convention. Absent = no renaming. */
   naming?: PrNamingDesk;
+  /**
+   * Files the "close the ticket" obligation on a delivered goal, and settles it
+   * when the tracker stops listing the item open. Absent = no close-out (tests
+   * that do not care). It writes `human_tasks` rows and decides no dispatch.
+   */
+  closeOuts?: DeliveryCloseOutDesk;
   /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
   branchReaps?: BranchReapDesk;
   /**
@@ -182,6 +189,11 @@ export class Harness extends EventEmitter {
       // items; it decides no dispatch, and it deliberately does not rebuild the
       // stack model to do it (see `src/stacks/landing.ts`).
       this.deps.landings?.settle(world);
+      // The step after the launch: a delivered goal whose ticket is still open owes
+      // a person one close, and the tracker is where that is observed. Beside the
+      // other bookkeeping rather than in the dispatcher, because it is not a
+      // dispatch — nothing here staffs anything, and no rule reads what it writes.
+      this.deps.closeOuts?.run(world);
       // Record what the world and the store now say happened, after the reconciler
       // so part→PR observations are fresh, and before `decide` so stage 2 can read
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after

@@ -506,22 +506,24 @@ Two of the three desks carry a rule of their own:
 `TheLine` draws the **dispatcher** — bays, belt, headroom gate, subject: agents. The Goal Floor draws
 the **work**: one ticket's whole production line, in the order
 [`docs/workflow.md`](../workflow.md) describes it. Ticket → is there enough here to act on → plan →
-do the work → checks → merge → is the goal achieved → report → update the ticket → done. Every node
-below corresponds to a stage of that document, which is what the floor is checked against.
+do the work → checks → merge → is the goal achieved → report → update the ticket → launch → close the
+ticket. Every node below corresponds to a stage of that document, which is what the floor is checked
+against.
 
-| Factory              | Harness                                            |
-| -------------------- | -------------------------------------------------- |
-| Ore patch            | A ticket, and the strip that picks which floor     |
-| Assay drill          | The goal assay, rule `issue-assay`                 |
-| Furnace              | The planner, rule `issue-plan`                     |
-| Splitter / merger    | Where the plan's edge list branches and rejoins    |
-| Assembly machine     | A plan part, carrying the pull request it produced |
-| Scanners on the belt | CI checks, classified — plus human review          |
-| Silo                 | The goal, filling with settled parts               |
-| Satellite            | The assessment, rule `issue-assess`                |
-| Manifest             | Report what was done — `issue.conclusion.note`     |
-| Signal post          | Update the ticket — state and status comment       |
-| Launch               | `delivered`, or a launch that failed verification  |
+| Factory              | Harness                                             |
+| -------------------- | --------------------------------------------------- |
+| Ore patch            | A ticket, and the strip that picks which floor      |
+| Assay drill          | The goal assay, rule `issue-assay`                  |
+| Furnace              | The planner, rule `issue-plan`                      |
+| Splitter / merger    | Where the plan's edge list branches and rejoins     |
+| Assembly machine     | A plan part, carrying the pull request it produced  |
+| Scanners on the belt | CI checks, classified — plus human review           |
+| Silo                 | The goal, filling with settled parts                |
+| Satellite            | The assessment, rule `issue-assess`                 |
+| Manifest             | Report what was done — `issue.conclusion.note`      |
+| Signal post          | Update the ticket — state and status comment        |
+| Launch               | `delivered`, or a launch that failed verification   |
+| Close-out            | The `close_out` human task: go and close the ticket |
 
 Seven properties, and they are what to preserve:
 
@@ -654,6 +656,18 @@ route: an omitted station says "not reached" in a shape indistinguishable from t
 there, which is how the contradiction went unnoticed. The Launch therefore has **three** readings, not
 two: `away`, `returned`, and `unbuilt`. A shortfall still returns before the Manifest, which is the
 one arm that draws nothing.
+
+**The close-out is read off the row, never off the ticket.** The station after the Launch is the one
+a _person_ staffs, and it draws the `close_out` human task
+([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)) — the same rows the Bench
+above the line draws, so the two cannot disagree about what is owed. It is not re-derived from
+`issue.state` for the reason the satellite is not read off `conclusion`: the obligation has its own
+life, and the one thing no reading of the tracker can see is the operator **declining** to close it.
+Four readings — `waiting`, `closed`, `declined`, `unbuilt` — and `declined` is toned `off` rather than
+red, because a settlement is an answer and a red machine at the end of a delivered line would say
+something went wrong on a floor where nothing did. The one arm that does read the world is a
+delivered goal with no task at all: nothing was owed, because the item was never listed open after the
+launch. The station borrows the Bench's lamp, which is already the mark for work the fleet cannot do.
 
 **It replaced the tech tree rather than joining it.** The tree's one unique claim — depth is how many
 merges must land before a part can start — survives intact as the floor's column, and `stateOf` /

@@ -32,6 +32,7 @@ import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { PrNamingDesk } from './prNamingDesk.js';
+import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
@@ -464,6 +465,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       })
     : undefined;
 
+  // The step after the launch, and the one station on the floor a person staffs:
+  // a delivered goal whose ticket is still open owes a close. Store-only — it
+  // files and settles a `human_tasks` row and touches no sink, because closing
+  // the item is precisely the part the harness is not doing.
+  const closeOuts = new DeliveryCloseOutDesk(store);
+
   const graph = new WorkGraphRecorder({ store, errors });
 
   const harness = new Harness({
@@ -474,6 +481,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     plans,
     assays,
     naming,
+    closeOuts,
     branchReaps,
     graph,
     landings,

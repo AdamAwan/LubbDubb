@@ -57,7 +57,8 @@ flowchart TD
         W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline"]
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
         REC --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
-        NAME --> GRAPH["record the work graph — after the reconciler, before decide"]
+        NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
+        CLOSE --> GRAPH["record the work graph — after the reconciler, before decide"]
         GRAPH --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
         READ --> ANN["announce the assay's question on the ticket · record issue runs"]
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
@@ -79,28 +80,33 @@ flowchart TD
    `world:events`. See below.
 4. **Reconcile plans** — `plans.reconcile(world)`. This runs **before** `decide`, so a part it moves
    to `ready` is dispatchable in the same cycle. Safe because every fold is idempotent.
-5. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
+5. **File and settle close-outs** — `closeOuts.run(world)`. A goal with a standing delivery whose
+   tracker item is still open owes a person one close, and that obligation is a `close_out` human
+   task ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). The pass files one,
+   and settles a standing one the moment the tracker stops listing the item open. It writes
+   `human_tasks` rows and nothing else — no dispatch, no sink, and no rule reads what it writes.
+6. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
    node observations and upserts them (see [14](14-persistence.md#work-graph)). Positioned here for
    both neighbours: **after** the reconciler, so the part→PR observations it just made are the ones
    recorded, and **before** `decide`, which is where a later stage would read the graph from. A failure
    is recorded through `errors.record` and never fails the cycle — nothing reads the graph for a
    decision, so it must not be able to break the pulse.
-6. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
+7. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
    and the most recent 200 decisions.
-7. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
+8. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
    **by reference** from `RuntimeControl` (never a copy taken at wiring time).
-8. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
-9. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
-10. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
+9. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
+10. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
+11. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
     and the world's `takenAt`. Null before the first cycle, since the plan is a per-pulse projection
     rather than a persisted queue. The operator priority overrides (issue #128) are then reconciled:
     `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
     active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
     lingers forever.
-11. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
+12. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
-12. **`executor.execute(cycleId, plan)`**.
-13. **Emit `cycle:end`** with the report.
+13. **`executor.execute(cycleId, plan)`**.
+14. **Emit `cycle:end`** with the report.
 
 ## Failure handling
 

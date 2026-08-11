@@ -235,7 +235,8 @@ export type FloorStage =
   | 'satellite'
   | 'manifest'
   | 'signal'
-  | 'launch';
+  | 'launch'
+  | 'closeout';
 
 const STAGE_ICONS: Record<FloorStage, IconName> = {
   patch: 'patch',
@@ -248,6 +249,9 @@ const STAGE_ICONS: Record<FloorStage, IconName> = {
   manifest: 'doc',
   signal: 'signal',
   launch: 'rocket',
+  // The Bench's lamp, borrowed on purpose: it is already the mark for a station a
+  // person staffs, and this is the one machine on the floor the fleet cannot run.
+  closeout: 'lamp',
 };
 
 /** Which machine draws a stage. One mapping, so the strip and the floor agree. */
@@ -538,6 +542,28 @@ const LAUNCH_WORDS: Record<LaunchReading, MachineStatus> = {
 
 export function launchStatus(reading: LaunchReading): MachineStatus {
   return LAUNCH_WORDS[reading];
+}
+
+/**
+ * The step after the launch: the ticket the harness delivered against and cannot
+ * close.
+ *
+ * Four readings, and `declined` is a settlement rather than a failure — the
+ * operator said the item stays open, which is an answer. It is toned `off` for
+ * that reason: a red machine at the end of a delivered line would read as
+ * something having gone wrong on a floor where nothing did.
+ */
+export type CloseOutReading = 'waiting' | 'closed' | 'declined' | 'unbuilt';
+
+const CLOSE_OUT_WORDS: Record<CloseOutReading, MachineStatus> = {
+  waiting: { word: 'Waiting on you', tone: 'warn' },
+  closed: { word: 'Closed', tone: 'ok' },
+  declined: { word: 'Left open', tone: 'off' },
+  unbuilt: UNBUILT,
+};
+
+export function closeOutStatus(reading: CloseOutReading): MachineStatus {
+  return CLOSE_OUT_WORDS[reading];
 }
 
 /**

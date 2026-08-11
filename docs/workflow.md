@@ -221,5 +221,9 @@ rule that holds on it is the same rule that holds on any red check nobody here c
 - **Update the ticket.** State moves and status comments are written. There is no step that folds a
   run's outcome into quality-pillar commentary — the "WAF pillars" line in the original sketch of
   this flow is not a thing the harness does.
+- **Close the ticket.** The harness never closes it. A delivered goal whose item is still open files
+  a `close_out` human task instead — a standing obligation with a person's name on it, which settles
+  itself once the tracker stops listing the item open
+  ([13](spec/13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
 
 Nothing in this document describes a stage the harness has no mechanism for.
