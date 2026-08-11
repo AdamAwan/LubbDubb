@@ -32,13 +32,24 @@ untouched, the socket is untouched, and both agent runtimes keep producing the s
 produce now. The change is that the block markers `renderToolUse` and `renderToolResult` already
 emit stop being decoration and become a contract.
 
-The marker tokens move into `src/wire.ts` as exported constants, imported by both
-`src/agents/streamTranscript.ts` (which writes them) and the new client parser (which reads them).
-`test/wireContract.test.ts` already forbids anything under `web/src/` from naming any other server
-module, so `wire.ts` is the only place a shared constant can live — and a single definition read by
-both sides is the point. Two independent views of the same bytes is the failure the PTY sentinel
-scanner exists to prevent (`src/pty/sentinelScanner.ts`); a marker written by one regex and matched
-by another would reintroduce it in a new place.
+The markers stay owned by `src/agents/streamTranscript.ts`, which writes them, and the client parser
+carries its own matcher. They are held together by a **round-trip test**: `test/transcriptBlocks.test.ts`
+feeds real `renderBlocks` output into the parser and asserts the blocks that come out, so a change to
+either side fails rather than silently desynchronising the other.
+
+Sharing a constant through `src/wire.ts` was considered and is not available: `test/wireContract.test.ts`
+asserts that module is declaration-only, because the cockpit type-imports it and anything surviving
+erasure would become server code in the SPA bundle. The round-trip is the stronger guarantee regardless —
+it checks the two sides agree about the bytes, not merely about a string literal. Two independent views of
+the same bytes is the failure the PTY sentinel scanner exists to prevent (`src/pty/sentinelScanner.ts`);
+an assertion over real rendered output is what keeps it from recurring here.
+
+## The result line count
+
+`renderToolResult` labels a result with its **pre-truncation** line count — `↳ result · 214 lines` — since
+the server is the only side that knows the total. The client lifts that suffix into the collapsed summary
+rather than counting anything itself, and the raw transcript becomes more informative for anyone reading
+it outside the cockpit.
 
 ## The drawer
 
@@ -54,8 +65,7 @@ a half-parsed block.
 appending into whichever container is currently open. ANSI styling is unaffected: `parseAnsi` still
 runs over each text run, and its carried `AnsiStyle` threads alongside the block state.
 
-A tool block is a `<details>` element. Its `<summary>` is the existing dim one-liner plus the line
-count of the result; its body is the result text, styled as today.
+A tool block is a `<details>` element. Its `<summary>` is the existing dim one-liner plus the result's line-count suffix; its body is the result text, styled as today.
 
 ## Pairing a result with its call
 
@@ -96,8 +106,8 @@ renders today. This is a property of the runtime, not a gap in the design.
 - `test/transcriptBlocks.test.ts` — the new pure assembler: a call with a result, an error result,
   a chunk boundary splitting a marker line mid-way, parallel calls producing standalone result
   blocks, and prose interleaved between blocks.
-- `test/streamTranscript.test.ts` — extended to assert the rendered output uses the shared marker
-  constants, so a change to one side fails rather than silently desynchronising the other.
+- `test/streamTranscript.test.ts` — extended for the line-count suffix on a result label and the
+  raised cap.
 - `test/ansi.test.ts` — unchanged; styling is orthogonal.
 
 ## Specs to update in the same change
