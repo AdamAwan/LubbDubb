@@ -102,6 +102,18 @@ export interface CockpitActions {
   setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
 
   /**
+   * Raise a bug against a story: the operator ran it and it does not do what they
+   * expect — the one fact about a goal no agent on it can derive.
+   *
+   * Unlike every other mutation on a story here, this files into the **tracker**
+   * rather than writing the harness's own record, and it leaves the story's
+   * verdict exactly where it found it: the bug is its own work item and carries
+   * the work. `summary` is the operator's report and is required; a desk agent
+   * writes it up, so the wording of the ticket is not decided here.
+   */
+  raiseBug(issueNumber: number, summary: string, title?: string): Promise<void>;
+
+  /**
    * End the harness's run at a goal (issues #203, #234). A run is retained on the
    * floor — no pulse, poll or ticket close drops it — so the operator can still
    * open its report; this is the one thing that ends it, it persists, and since

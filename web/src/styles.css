@@ -2184,6 +2184,39 @@ body {
   min-width: 160px;
   flex: 1;
 }
+/* Raise-a-bug modal. It reuses `.plan-modal`'s frame, `.pm-note` for the one-line
+   title field and `.launch-error` for a failed post; only the report box and its
+   labels are its own, because nothing else in the cockpit asks for a paragraph of
+   the operator's own prose. */
+.rb-intro {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 10px 0 12px;
+}
+.rb-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.rb-hint {
+  color: var(--muted);
+  font-weight: 400;
+}
+.rb-text {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  padding: 7px 9px;
+  resize: vertical;
+  width: 100%;
+}
 .pm-doc {
   font-size: 13px;
   line-height: 1.5;

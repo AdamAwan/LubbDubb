@@ -16,6 +16,7 @@ import type {
   ShortfallCause,
   Task,
   WorkItemFiling,
+  BugFiling,
 } from '../../types.js';
 import type { ActionSink } from '../../sink/actionSink.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
@@ -43,14 +44,16 @@ export interface AgentToolTarget {
     agentId: string,
     ticketRef: string,
   ):
-    | { ok: true; finding: Finding; filing?: undefined }
+    | { ok: true; finding: Finding; filing?: undefined; bug?: undefined }
     | {
         ok: true;
         filing: WorkItemFiling;
         finding?: undefined;
+        bug?: undefined;
         /** How many of the operator's images moved from the filing job onto the ticket (issue #249). */
         attachments: number;
       }
+    | { ok: true; bug: BugFiling; finding?: undefined; filing?: undefined }
     | { ok: false; error: string };
   recordConclusion(
     agentId: string,

@@ -1,4 +1,4 @@
-import type { AppState, JobAttachmentInput, RecoveryVerdict, StackLanding } from './types.js';
+import type { AppState, BugFiling, JobAttachmentInput, RecoveryVerdict, StackLanding } from './types.js';
 // The fetched-on-open routes, as whole payloads rather than shapes re-typed at
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
@@ -199,6 +199,12 @@ const realApi = {
   // have; `null` clears it, which is a delete and not a synonym for `workable`.
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/assay`, { verdict }),
+  // Raise a bug against a story: the operator ran it and it does not do what they
+  // expect. Unlike its neighbours this files into the *tracker* rather than writing
+  // the harness's own record, and it leaves the story's verdict where it found it —
+  // the bug is its own work item and carries the work.
+  raiseBug: (issueNumber: number, summary: string, title?: string) =>
+    post<{ ok: true; filing: BugFiling }>(`/api/issues/${issueNumber}/bug`, { summary, title }),
   // End the harness's run at a goal (issues #203, #234). A run is retained on the
   // floor so its report stays reachable; this is the one thing that ends it, it
   // persists across a restart, and it stops the dispatcher acting on the goal.

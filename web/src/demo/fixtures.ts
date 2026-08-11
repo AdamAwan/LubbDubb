@@ -656,6 +656,9 @@ export function buildDemoState(): DemoSeed {
         ],
       },
     ],
+    // Empty for the same reason `canFileTickets` is false: the demo has no tracker
+    // to raise a bug into, so a row here would be a link to nothing.
+    bugFilings: [],
     // What agents noticed outside their own tasks — one of each kind, which is
     // the whole vocabulary (`report_finding`).
     findings: [

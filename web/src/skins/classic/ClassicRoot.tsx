@@ -258,6 +258,7 @@ export function ClassicRoot({ view, actions }: SkinProps) {
             onToggleExclude={(prNumber, excluded) => actions.setPrExcluded(prNumber, excluded)}
             onToggleIssueWatch={(issueNumber, watched) => actions.setIssueWatched(issueNumber, watched)}
             onSetConclusion={(issueNumber, verdict) => actions.setIssueConclusion(issueNumber, verdict)}
+            onRaiseBug={(issueNumber, summary, title) => actions.raiseBug(issueNumber, summary, title)}
             onSetAssay={(issueNumber, verdict) => actions.setIssueAssay(issueNumber, verdict)}
             onViewPlan={(id) => actions.viewPlan(id)}
             onViewScratchpad={(issueRef) => actions.viewScratchpad(issueRef)}

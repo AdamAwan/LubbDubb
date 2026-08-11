@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueConclusionOrigin } from '../../issueConclusion.js';
+import { bugTicketFields, bugTrackerCoordinates } from '../../bugFiling.js';
 import { goalFingerprint } from '../../intake/assay.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
 import { watchLabelsFor } from '../../watchLabels.js';
@@ -14,7 +15,15 @@ import type { RouteContext } from './context.js';
  * Each of the five verdict routes writes the *harness's* record and never the
  * tracker: concluding an issue in the harness's own view is what stops the
  * re-pickup, while the tracker transition to a done state stays a human act.
+ *
+ * `/bug` is the exception that proves it. Raising a bug is not a verdict about
+ * this issue at all — it is new work, filed into the tracker by a desk agent, and
+ * it leaves the story's own record exactly where it found it.
  */
+
+/** Long enough for a repro with steps; short of pasting a log file in. */
+const MAX_BUG_SUMMARY = 4000;
+
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, connector, harness, config } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
@@ -239,6 +248,67 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
       hub.broadcast({ type: 'dirty' });
       return { ok: true };
+    }),
+  );
+
+  // Raise a bug against a story: the operator ran the thing and it does not do what
+  // they expect. The one route on this surface that files into the **tracker**
+  // rather than writing the harness's own record — and the only one carrying a fact
+  // no agent can derive, since none of them ran the feature.
+  //
+  // The story's verdict is deliberately untouched. The bug is its own work item and
+  // carries the work, which is also the only arrangement where the fleet is handed
+  // the operator's actual words as the goal — a `more_work` verdict here would give
+  // the next agent the weaker of the two briefs (see src/bugFiling.ts).
+  //
+  // `summary` is required where every other body on this surface takes an optional
+  // one: elsewhere the operator has the row in front of them and the default says
+  // who decided, but here their report *is* the feature, and an empty one asks for
+  // nothing.
+  const RaiseBugBody = z.object({
+    summary: z
+      .string({ required_error: 'summary is required', invalid_type_error: 'summary must be a string' })
+      .trim()
+      .min(1, 'summary is required — say what is wrong')
+      .max(MAX_BUG_SUMMARY, `summary is too long (max ${MAX_BUG_SUMMARY} characters)`),
+    title: optionalText('title'),
+  });
+  app.post(
+    '/api/issues/:number/bug',
+    checked({ params: IssueNumberParams }, async ({ params, req, reply }) => {
+      const { number: issueNumber } = params;
+      // The assay route's check, for its reason: an override on an issue the harness
+      // has never seen would be a silent no-op dressed as an action.
+      const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
+      if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
+      // A desk agent runs in a scratch dir with no remote to infer the target from;
+      // without coordinates there is nowhere to file. The cockpit hides the button
+      // in this case, so reaching here means a direct call.
+      const tracker = bugTrackerCoordinates(config, issueNumber);
+      if (!tracker)
+        return reply
+          .code(409)
+          .send({ error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)' });
+
+      // The body last, after every 404/409 the store answers — the order both other
+      // filing routes use, and `checked` applied by hand is what keeps the refusal
+      // path one.
+      return checked({ body: RaiseBugBody }, async ({ body }) => {
+        const derived = bugTicketFields(issue, body.summary, tracker);
+        const title = body.title ?? derived.title;
+        // Rendered from the operator's template book, not built here: how a bug should
+        // be worded is exactly the sort of house style an override exists for.
+        const prompt = system.prompts.render('raise-bug', derived.vars);
+        // Desk, not code: filing touches no repository. The operator's report rides in
+        // this prompt and is not stored again — see src/store/bugFilings.ts.
+        const job = store.createJob({ title, prompt, kind: 'desk' });
+        // Job first, then the filing row — a failed create leaves nothing behind.
+        const filing = store.createBugFiling({ jobId: job.id, originRef: issueConclusionOrigin(issueNumber) });
+        hub.broadcast({ type: 'world:changed' });
+        // The operator's report should reach the fleet now, not on the next heartbeat.
+        const report = await harness.runCycle('manual');
+        return { ok: true, filing, job, report };
+      })(req, reply);
     }),
   );
 }

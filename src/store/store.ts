@@ -21,6 +21,7 @@ import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
 import { GraphStore } from './graph.js';
+import { BugFilingStore } from './bugFilings.js';
 import { adoptFloorCompletions, FloorStore } from './floor.js';
 import type {
   Agent,
@@ -61,6 +62,7 @@ import type {
   WorkNode,
   WorkNodeObservation,
   WorkItemFiling,
+  BugFiling,
   WorldEvent,
   WorldEventInput,
   WorldSnapshot,
@@ -104,6 +106,7 @@ export class Store {
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
   private readonly graph: GraphStore;
+  private readonly bugFilings: BugFilingStore;
   private readonly floor: FloorStore;
 
   constructor(dbPath: string, clock: Clock = systemClock) {
@@ -151,6 +154,7 @@ export class Store {
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
     this.graph = new GraphStore(ctx);
+    this.bugFilings = new BugFilingStore(ctx);
     this.floor = new FloorStore(ctx);
   }
 
@@ -635,6 +639,21 @@ export class Store {
   }
   listWorkItemIgnores(): string[] {
     return this.graph.listWorkItemIgnores();
+  }
+
+  // -- Bugs raised against a story ------------------------------------------
+
+  createBugFiling(input: Parameters<BugFilingStore['createBugFiling']>[0]): BugFiling {
+    return this.bugFilings.createBugFiling(input);
+  }
+  listBugFilings(): BugFiling[] {
+    return this.bugFilings.listBugFilings();
+  }
+  findBugFilingByJobId(jobId: string): BugFiling | null {
+    return this.bugFilings.findBugFilingByJobId(jobId);
+  }
+  linkBugFiling(jobId: string, ticketRef: string): BugFiling | null {
+    return this.bugFilings.linkBugFiling(jobId, ticketRef);
   }
 
   // -- Runs at a goal -------------------------------------------------------

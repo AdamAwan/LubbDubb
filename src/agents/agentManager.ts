@@ -24,22 +24,26 @@ import type {
   ShortfallCause,
   Task,
   WorkItemFiling,
+  BugFiling,
 } from '../types.js';
 
 /**
- * What `link_ticket` settled. A filing job is created for a finding *or* for a
- * work item, never both, so the arms are exclusive — kept as a union rather than
- * two nullable fields so a caller cannot read the one that was not filled.
+ * What `link_ticket` settled. A filing job is created for a finding, for a work
+ * item, *or* for a bug an operator raised — never more than one, so the arms are
+ * exclusive — kept as a union rather than three nullable fields so a caller
+ * cannot read the ones that were not filled.
  */
 type LinkTicketResult =
-  | { ok: true; finding: Finding; filing?: undefined }
+  | { ok: true; finding: Finding; filing?: undefined; bug?: undefined }
   | {
       ok: true;
       filing: WorkItemFiling;
       finding?: undefined;
+      bug?: undefined;
       /** How many of the operator's images moved from the filing job onto the ticket (issue #249). */
       attachments: number;
     }
+  | { ok: true; bug: BugFiling; finding?: undefined; filing?: undefined }
   | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
@@ -525,14 +529,36 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       // disambiguate — the credential resolves to a finding, a work-item filing, or
       // neither, and neither is the whole access check.
       const filing = jobId && !finding ? this.store.findWorkItemFilingByJobId(jobId) : null;
-      if (!finding && !filing) {
+      const bug = jobId && !finding && !filing ? this.store.findBugFilingByJobId(jobId) : null;
+      if (!finding && !filing && !bug) {
         return {
           ok: false,
           error:
-            `link_ticket is only for a job dispatched to file a finding as a ticket, or to file a work ` +
-            `item for unrecorded work. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
-            `created from neither.`,
+            `link_ticket is only for a job dispatched to file a finding as a ticket, to file a work ` +
+            `item for unrecorded work, or to raise a bug an operator reported. This task's origin is ` +
+            `${task.originRef ?? '(none)'}, which was created from none of them.`,
         };
+      }
+
+      if (bug) {
+        // The same check the work-item arm makes, for its reason: a bug is an issue
+        // in both trackers the harness reads, and a `pr:` ref here would be a link
+        // the cockpit draws as a work item and the tracker knows as something else.
+        if (!ticketRef.startsWith('issue:')) {
+          return {
+            ok: false,
+            error: `A bug must be an issue ref like "issue:314"; got "${ticketRef}".`,
+          };
+        }
+        // Idempotence in the write, as in both arms below.
+        const linked = this.store.linkBugFiling(bug.jobId, ticketRef);
+        if (!linked) {
+          return {
+            ok: false,
+            error: `the bug raised on ${bug.originRef} is ${bug.status}, not awaiting a ticket — nothing to link.`,
+          };
+        }
+        return { ok: true, bug: linked };
       }
 
       if (filing) {

@@ -318,6 +318,32 @@ it, so it expires on the next edit exactly as an agent's does; an issue absent f
 a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
 no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict.
 
+### `POST /api/issues/:number/bug`
+
+Body `{summary: string, title?: string}`. The operator ran the thing and it does not do what they
+expect — **raise a bug**. The one route on this surface that files into the _tracker_ rather than
+writing the harness's own record, and the only one carrying a fact no agent can derive, since none of
+them ran the feature.
+
+- **The story's verdict is untouched.** The bug is its own work item and carries the work; the story
+  keeps whatever it had. That split is what puts the operator's actual words in front of the fleet as
+  the goal — a `more_work` written here instead would re-open the story with a brief carrying none of
+  them (see [06](06-issue-pickup.md)).
+- **`summary` is required**, where every other body on this surface takes an optional one. Elsewhere
+  the operator has the row in front of them and a default says who decided; here their report _is_ the
+  feature, so an empty one asks for nothing. Trimmed, capped at 4000 characters, **400** outside that.
+- **Refusals in order:** **404** when the issue is absent from the last world snapshot (the `assay`
+  route's check, for its reason), then **409** when no tracker is configured to file into, then the
+  body's 400. The cockpit hides the button off the same `canFileTickets` flag, so a 409 means a direct
+  call.
+- **It queues a desk job and nothing more.** The `raise-bug` template is rendered with the report
+  verbatim and the tracker coordinates, a `desk` job is created, an `issue_bug_filings` row opens at
+  `filing`, and a manual cycle runs so the report reaches the fleet now rather than on the next
+  heartbeat. The bug exists only once that job's agent has created it and called `link_ticket`
+  ([11](11-mcp-tools.md#link_ticket)).
+- **Repeatable.** The filing row is keyed on the job, so a story can carry several bugs — it can be
+  wrong in more than one way, and each is its own bug ([14](14-persistence.md)).
+
 ### `POST /api/issues/:number/dismiss-run`
 
 End the harness's run at a goal (issues #203, #234). A run is otherwise retained — minted while the

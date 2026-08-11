@@ -23,7 +23,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                                           |
 | `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                 |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                                        |
-| `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding or a filed work item.                                                                                                                                                      |
+| `link_ticket`        | Report the tracker item a filing agent created, closing the loop on a filed finding, a filed work item, or a bug an operator raised.                                                                                                                           |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                              |
 | `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                                               |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                                        |
@@ -218,28 +218,31 @@ one reports back what it created. What can be filed all resolves the same way an
 once — a finding an agent reported (see [13](13-jobs-and-findings.md)), or a **work item** for work the
 harness did that nothing external accounted for (see
 [14](14-persistence.md#work-item-filings)), or a **blueprint** the operator injected as a code job,
-which files a watched ticket to enter the planning funnel (see [13](13-jobs-and-findings.md)). The last
-two share the work-item-filing arm: a blueprint's filing is keyed on the desk job's own ref, since it
-files _for_ no prior work node.
+which files a watched ticket to enter the planning funnel (see [13](13-jobs-and-findings.md)), or a
+**bug** the operator raised against a story from the cockpit (see
+[16](16-http-api.md#post-apiissuesnumberbug)). The blueprint shares the work-item-filing arm: its
+filing is keyed on the desk job's own ref, since it files _for_ no prior work node. The bug is its own
+arm and its own table, because it is keyed on the job rather than on a target and a story may carry
+several.
 
 - **It is what completes the filing.** The route leaves the finding `filing`; this call is the only
   thing that moves it to `filed` and gives the cockpit a ticket to link. An agent that never calls it
   leaves a visible unfinished filing rather than a silent one, which is the point of the two statuses.
 - **The target comes from the credential, never an argument.** `agent → task → its `job:<id>` origin
-→ the finding, or the work-item filing, that job was created for`. A job is created for at most one of
-  the two, so there is nothing to disambiguate; and there is no id to point at somebody else's, so an
-  agent on any other kind of task resolves to neither and is told so. Same discipline as
-  `report_finding`, and here it is the whole access check.
+→ the finding, the work-item filing, or the bug filing that job was created for`. A job is created for
+  at most one of the three, so there is nothing to disambiguate; and there is no id to point at
+  somebody else's, so an agent on any other kind of task resolves to none of them and is told so. Same
+  discipline as `report_finding`, and here it is the whole access check.
 - **`ref` is the same closed vocabulary**, parsed by the same `parseFindingRef`: `issue:314`,
   suffix-tolerant, and a **bare number refused** for the same reason — nothing here says whether `314`
   is an issue or a PR, and a ticket link pointing at the wrong one is worse than none.
-- **A work item must be an `issue:` ref**, unlike a finding's ticket. Both trackers the harness reads
+- **A work item or a bug must be an `issue:` ref**, unlike a finding's ticket. Both trackers the harness reads
   make a work item an issue — a GitHub issue, an Azure work item — and the fold stands a placeholder
   node up under that ref when the world never lists the ticket, so accepting a `pr:` ref would mean
   guessing a node kind. The case is removed rather than answered.
-- **Idempotence is in the write.** `linkFindingTicket` updates `WHERE id=? AND status='filing'` and
-  `linkWorkItemFiling` updates `WHERE job_id=? AND status='filing'`, so a second call links nothing and
-  is reported as an error rather than overwriting the first item.
+- **Idempotence is in the write.** `linkFindingTicket` updates `WHERE id=? AND status='filing'`, and
+  `linkWorkItemFiling` and `linkBugFiling` update `WHERE job_id=? AND status='filing'`, so a second
+  call links nothing and is reported as an error rather than overwriting the first item.
 
 It routes through `AgentManager.linkTicket`, which emits the `finding` event on the finding arm so the
 cockpit repaints on the link rather than on the next pulse. The work-item arm emits none: the Work

@@ -26,6 +26,7 @@ export type {
   AgentAskQuestion,
   AgentFile,
   AgentFlag,
+  BugFiling,
   CiPolicyDescription,
   CiRuleDescription,
   CockpitDecision,

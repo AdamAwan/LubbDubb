@@ -55,6 +55,7 @@ import type {
   AgentFile,
   AgentFlag,
   AssayAuthor,
+  BugFiling,
   ConclusionAuthor,
   Decision,
   DeliveryAuthor,
@@ -358,6 +359,14 @@ export interface CockpitState {
   /** What agents noticed outside their own tasks, newest first. */
   findings: Finding[];
   /**
+   * Bugs the operator raised from a story row, oldest first — `filing` while the
+   * desk agent writes one, `filed` with a ref once it exists.
+   *
+   * Several per story is normal: a story can be wrong in more than one way, and
+   * each is its own bug. The row groups them by `originRef`.
+   */
+  bugFilings: BugFiling[];
+  /**
    * Work only a person can do, newest first — open ones and a settled tail.
    *
    * Beside `findings` rather than inside `escalations`, because it is not an
@@ -464,6 +473,7 @@ export type {
   AgentAskQuestion,
   AgentFile,
   AgentFlag,
+  BugFiling,
   Decision,
   ErrorLogEntry,
   Escalation,

@@ -314,6 +314,31 @@ of those is "deal with this later".
 
 Tests: `test/findingTickets.test.ts`.
 
+### The third filing kind — a bug the operator raised
+
+`POST /api/issues/:number/bug` ([16](16-http-api.md#post-apiissuesnumberbug)) is the same machinery
+with a different author. A finding is an agent's testimony and a work-item filing is the harness
+accounting for its own work; this one is the **operator's** — they ran the thing and it does not do
+what they expect, which is the one fact about a goal no agent on it can derive, since none of them ran
+it. Everything the two arms above establish holds: explicit tracker coordinates, a desk job, an
+overridable template (`raise-bug`), two statuses, and `link_ticket` closing the loop from the
+credential.
+
+Three things differ, each for a reason worth keeping:
+
+- **The row is keyed on the job, not on a target** (`issue_bug_filings`, [14](14-persistence.md)), so
+  a story can carry several bugs. A story can be wrong in more than one way and each is its own bug;
+  refusing the second would be a rule nobody asked for, and it is why this is a table of its own
+  rather than a fourth use of `work_item_filings`.
+- **The operator's report is required and rides only in the prompt.** It is not stored a second time:
+  the job's prompt carries it verbatim and is durable, and two records of one sentence are free to
+  drift.
+- **It decides nothing about the story it came from.** No verdict is written, no state moves. The bug
+  carries the work, which is also the only arrangement in which the fleet is handed the operator's
+  own words as the goal.
+
+Tests: `test/raiseBug.test.ts`.
+
 ### Dismissal — `POST /api/findings/:id/dismiss`
 
 The finding stays in the list, muted, rather than being deleted: "we looked at this" is information.

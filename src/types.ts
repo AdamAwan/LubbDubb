@@ -432,6 +432,28 @@ export interface WorkItemFiling {
   updatedAt: string;
 }
 
+/**
+ * A bug the operator raised against a story from the cockpit, and what became of
+ * it. Shares {@link WorkItemFilingStatus} because it is the same asynchrony: the
+ * click queues a desk job, and the bug exists only once that job's agent created
+ * it and called `link_ticket`.
+ *
+ * Keyed on {@link BugFiling.jobId} rather than on the story, so one story can
+ * carry several bugs over its life — see `src/store/bugFilings.ts` for why that
+ * differs from {@link WorkItemFiling}.
+ */
+export interface BugFiling {
+  /** The desk job doing the filing — how `link_ticket` finds its way back here. */
+  jobId: string;
+  /** The story it was raised from (`issue:12`). */
+  originRef: string;
+  status: WorkItemFilingStatus;
+  /** The bug it was filed as (`issue:314`), once the agent reports it. */
+  ticketRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** One node as observed this pulse. Timestamps are the store's to stamp. */
 export interface WorkNodeObservation {
   ref: string;
