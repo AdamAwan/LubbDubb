@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { azureRefUrl } from '../src/integrations/azure/refUrl.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from '../src/server/refUrls.js';
 
@@ -46,6 +47,63 @@ test('githubRefUrl: non-source-control origin refs are not links', () => {
   assert.equal(githubRefUrl(O, R, 'epic:e1:groom'), null);
   assert.equal(githubRefUrl(O, R, ''), null);
   assert.equal(githubRefUrl(O, R, '   '), null);
+});
+
+// --------------------------------------------------------------------------
+// azureRefUrl — the same mapping for Azure DevOps (pure)
+// --------------------------------------------------------------------------
+
+const AZ = (ref: string) => azureRefUrl('org', 'proj', 'repo', ref);
+const PROJ = 'https://dev.azure.com/org/proj';
+const REPO = `${PROJ}/_git/repo`;
+
+test('azureRefUrl: pr origin refs resolve to the PR page', () => {
+  assert.equal(AZ('pr:42'), `${REPO}/pullrequest/42`);
+  assert.equal(AZ('pr:42:ci'), `${REPO}/pullrequest/42`);
+  assert.equal(AZ('pr:42:comment:c_abc'), `${REPO}/pullrequest/42`);
+});
+
+test('azureRefUrl: work-item refs, suffixed or not, resolve to the work item', () => {
+  assert.equal(AZ('issue:13'), `${PROJ}/_workitems/edit/13`);
+  assert.equal(AZ('issue:13:plan'), `${PROJ}/_workitems/edit/13`);
+  assert.equal(AZ('issue:13:part:schema'), `${PROJ}/_workitems/edit/13`);
+});
+
+test('azureRefUrl: a comment ref selects that discussion on the work item', () => {
+  assert.equal(AZ('issue:13:comment:9001'), `${PROJ}/_workitems/edit/13?discussionId=9001`);
+  // A non-numeric id can't address an Azure discussion, so land on the item itself
+  // rather than build a selector that selects nothing.
+  assert.equal(AZ('issue:13:comment:comment_1'), `${PROJ}/_workitems/edit/13`);
+});
+
+test('azureRefUrl: a commit ref resolves to the commit page', () => {
+  assert.equal(AZ('commit:deadbeef'), `${REPO}/commit/deadbeef`);
+});
+
+test('azureRefUrl: a branch name resolves through the repo version selector', () => {
+  assert.equal(AZ('issue/13'), `${REPO}?version=GBissue%2F13`);
+  assert.equal(AZ('feat/widget'), `${REPO}?version=GBfeat%2Fwidget`);
+});
+
+test('azureRefUrl: a bare number is not a link, because the id spaces are disjoint', () => {
+  // Unlike GitHub, `42` names a work item *and* a PR, and neither page redirects to
+  // the other. `buildRefUrls` keys `#42` off the world's own urls, so nothing is
+  // lost by refusing to guess here — and a wrong link is worse than plain text.
+  assert.equal(AZ('#42'), null);
+  assert.equal(AZ('42'), null);
+});
+
+test('azureRefUrl: non-source-control origin refs are not links', () => {
+  assert.equal(AZ('epic:e1:groom'), null);
+  assert.equal(AZ(''), null);
+  assert.equal(AZ('   '), null);
+});
+
+test('azureRefUrl: organization/project/repository are url-encoded', () => {
+  assert.equal(
+    azureRefUrl('my org', 'my proj', 'my repo', 'pr:1'),
+    'https://dev.azure.com/my%20org/my%20proj/_git/my%20repo/pullrequest/1',
+  );
 });
 
 // --------------------------------------------------------------------------

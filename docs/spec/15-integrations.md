@@ -215,8 +215,25 @@ Behaviour worth knowing:
 ## Reference links
 
 **URL construction lives in the provider, never in `web/`.** The GitHub providers implement
-`RefResolvable`, backed by the pure `githubRefUrl`. `CompositeConnector.resolveRefUrl` routes to the
-first resolver.
+`RefResolvable`, backed by the pure `githubRefUrl`; the Azure providers implement it too, backed by
+the pure `azureRefUrl`. `CompositeConnector.resolveRefUrl` routes to the first resolver.
+
+**A real provider that is not `RefResolvable` renders every ref as plain text, silently** — an
+unresolvable ref is *meant* to be omitted (that is the `fake` provider's correct behaviour), so
+there is nothing to see but missing links. Both integrations of a provider implement it, and both
+answer every ref shape, because the composite routes to the first resolvable integration rather
+than to the one whose capability matches the ref.
+
+`azureRefUrl` differs from `githubRefUrl` in two places, both forced by Azure:
+
+- **Work items live under the project (`_workitems/edit/<n>`), PRs and branches under a repository
+  inside it (`_git/<repo>`)** — so one function spans two bases. A branch is the repo's version
+  selector, `?version=GB<branch>`; a comment ref is `?discussionId=<id>` on the work item, falling
+  through to the plain item page for a non-numeric id.
+- **A bare or `#`-prefixed number resolves to `null`.** Azure work items and PRs are disjoint id
+  spaces and neither page redirects to the other, so unlike GitHub there is no guess that is right
+  more often than wrong. Nothing is lost: `buildRefUrls` keys `#42` off the world's own item URLs
+  before the resolver is asked.
 
 The server builds a `ref → URL` map (`buildRefUrls`, `src/server/refUrls.ts`) into the `/api/state`
 snapshot as `refUrls`, and the cockpit looks refs up there (`linkify` / `refLink` in
