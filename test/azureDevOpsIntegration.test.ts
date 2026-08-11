@@ -49,6 +49,8 @@ interface Script {
   policyEvals?: Record<number, AzPolicyEvaluation[]>;
   labels?: Record<number, string[]>;
   workItems?: AzWorkItem[];
+  /** Items reachable only by id — the parents, children and siblings of the listed ones. */
+  relatedWorkItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems';
   createdPullNumber?: number;
@@ -63,6 +65,8 @@ interface Recorded {
   tagQueries: Array<string | undefined>;
   assignedToQueries: Array<string | undefined>;
   updateQueries: number[];
+  /** Each `getWorkItems` batch, in order — the relation-hydration round trips. */
+  itemReads: number[][];
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
   stateSets: Array<{ id: number; state: string }>;
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
@@ -82,6 +86,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     tagQueries: [],
     assignedToQueries: [],
     updateQueries: [],
+    itemReads: [],
     labelSets: [],
     stateSets: [],
     tagSets: [],
@@ -132,6 +137,12 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.assignedToQueries.push(assignedTo);
       if (script.throwOn === 'listOpenWorkItems') throw new Error('boom');
       return script.workItems ?? [];
+    },
+    async getWorkItems(ids) {
+      recorded.itemReads.push([...ids]);
+      const pool = [...(script.workItems ?? []), ...(script.relatedWorkItems ?? [])];
+      // Mirrors `errorPolicy: 'omit'`: an id the pool doesn't hold is simply absent.
+      return ids.map((id) => pool.find((w) => w.id === id)).filter((w): w is AzWorkItem => w !== undefined);
     },
     async listWorkItemUpdates(id) {
       recorded.updateQueries.push(id);
@@ -815,8 +826,11 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
     title: 'Bug',
     body: 'b',
     state: 'Active',
+    workItemType: 'Bug',
     tags: ['bug'],
     relationUrls: [],
+    parentId: null,
+    childIds: [],
     url: 'https://dev.azure.com/o/p/_workitems/edit/101',
     ...over,
   };

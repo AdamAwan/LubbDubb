@@ -11,6 +11,7 @@ import type {
   WorldEvent,
 } from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
+import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { assayHold, assayOrigin, hasWorkStarted, isAssayed, type AssayPolicy } from '../intake/assay.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import {
@@ -73,6 +74,14 @@ export interface IssuePickupPolicy {
    * transition (the default). Needs a provider that can write the state back.
    */
   inReviewState?: string;
+  /**
+   * Provider-native item types that hold other work rather than being work — e.g.
+   * `["Feature", "Epic"]` for Azure DevOps. An item of one of these types is never
+   * picked up: its children are the work. Issues with no `issueType` (GitHub, the
+   * fake) skip the gate entirely, so it is a no-op for flat trackers. Unset falls
+   * back to `DEFAULT_CONTAINER_TYPES`; an explicit `[]` turns the gate off.
+   */
+  containerTypes?: string[];
 }
 
 /** The branch rule `issue-pickup` puts an issue's agent on — and how a PR is matched back to its issue. */
@@ -126,6 +135,13 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
   // regardless of state or watch tag (mirrors the PR exclusion tag).
   const ignored = issueIgnoreReason(issue, policy);
   if (ignored) reasons.push(ignored);
+  // The type gate (Azure work items): a Feature/Epic is a statement of intent its
+  // children deliver, so an agent is never put on one — no watch tag or workflow
+  // state makes a container workable. Asked before the state gate because it is
+  // the more fundamental refusal: a container in a pickup state is still a
+  // container. Items with no `issueType` bypass it, so flat trackers are unaffected.
+  const container = containerPickupReason(issue, policy.containerTypes);
+  if (container) reasons.push(container);
   // State gate (Azure work items): only pick up items in an allowed workflow state
   // — e.g. "Ready"/"Doing", not "In Review". Items with no tracked state (GitHub,
   // fake) bypass this entirely, so it's a no-op unless the provider populates it.
@@ -182,6 +198,7 @@ type IssuePickupStatusKind =
   | 'has_pr' // resolved into a PR; the PR rules own it now
   | 'active' // an agent/task is on it right now
   | 'ignored' // carries the ignore tag — the operator said leave it alone
+  | 'container' // a Feature/Epic — its children are the work, never it
   | 'unwatched' // not opted in (no watch tag) or parked by a state gate
   | 'planning' // in the plan funnel — a verdict is owed, or it split into parts
   | 'delivered' // assessed as delivered — parked until the world or the operator says otherwise
@@ -374,7 +391,11 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     // Explicit ignore vs "just not opted in" — so the cockpit can mark the two
     // apart the way it marks an ignored PR (the ignore tag always wins above).
     const ignored = ctx.policy.ignoreLabel !== undefined && issue.labels.includes(ctx.policy.ignoreLabel);
-    return { eligible: false, status: ignored ? 'ignored' : 'unwatched', reasons: intrinsic.reasons };
+    // A container is neither: it is not the operator declining the item and not an
+    // item waiting to be opted in — tagging it changes nothing, and a chip saying
+    // "unwatched" would send an operator to the one control that cannot help.
+    const status = ignored ? 'ignored' : isContainerIssue(issue, ctx.policy.containerTypes) ? 'container' : 'unwatched';
+    return { eligible: false, status, reasons: intrinsic.reasons };
   }
 
   // The content gate (issue #158), asked *after* the intrinsic policy gates and

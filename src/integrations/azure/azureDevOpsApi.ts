@@ -50,6 +50,18 @@ export interface AzureDevOpsApi {
    */
   listOpenWorkItems(tag?: string, assignedTo?: string): Promise<AzWorkItem[]>;
   /**
+   * Read specific work items by id — how the *related* items are hydrated. The
+   * open-item list is narrowed by tag/assignee, so an item's parent Feature is
+   * usually not in it, and the relationship is only worth carrying if the thing
+   * it points at can be read.
+   *
+   * Batched by the caller and capped by Azure at 200 ids per request, so a
+   * snapshot's whole hierarchy costs a bounded number of calls rather than one per
+   * item. Returns only the items that exist: a deleted or unreadable id is
+   * dropped, never faulted, because one stale link must not cost the snapshot.
+   */
+  getWorkItems(ids: number[]): Promise<AzWorkItem[]>;
+  /**
    * Revision history for a work item, narrowed to the System.Tags value before/after
    * each revision and who made it — the "who added this tag" signal for the ownership
    * gate. Fetched only when that gate is on, and only for items carrying the gate tag.
@@ -202,10 +214,20 @@ export interface AzWorkItem {
   body: string;
   /** System.State — New | Active | Resolved | Closed | Done | Removed | ... */
   state: string;
+  /** System.WorkItemType — Feature | Epic | User Story | Bug | Task | ... */
+  workItemType: string;
   /** System.Tags, split into a list. */
   tags: string[];
   /** ArtifactLink relation urls (e.g. `vstfs:///Git/PullRequestId/{project}%2F{repo}%2F{id}`). */
   relationUrls: string[];
+  /**
+   * The id this item hangs off, from its `System.LinkTypes.Hierarchy-Reverse`
+   * relation — the Feature a story or bug belongs to. Null when it has none.
+   * Azure permits at most one parent, so this is a single id rather than a list.
+   */
+  parentId: number | null;
+  /** The ids hanging off this item (`…Hierarchy-Forward`) — a Feature's stories. */
+  childIds: number[];
   /** Web URL to the work item. */
   url: string;
 }

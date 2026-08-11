@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
+import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
 import { DEFAULT_ASSESSMENT, type AssessmentPolicy } from './delivery/assessment.js';
 import { DEFAULT_ASSAY, type AssayPolicy } from './intake/assay.js';
@@ -115,6 +116,17 @@ export interface Config {
    * transition.
    */
   issueInReviewState?: string;
+  /**
+   * Provider-native item types that *hold* work rather than being work — Azure
+   * DevOps Features and Epics. An item of one of these types is never picked up,
+   * planned or assayed: its children are the work, and an agent put on the
+   * container would implement a decomposition that already exists beside it in the
+   * tracker. Meaningful only for providers that report an item type (Azure);
+   * GitHub issues carry none and are unaffected. Defaults to
+   * `["Feature", "Epic"]`; set `[]` to turn the gate off, or list your own process
+   * template's names (matched case-insensitively).
+   */
+  issueContainerTypes: string[];
   /**
    * The planning funnel for multi-PR issues. **On by default**: every watched open
    * issue gets a planning agent before any implementation work, and its verdict —
@@ -448,6 +460,7 @@ const DEFAULTS: Config = {
   issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
+  issueContainerTypes: [...DEFAULT_CONTAINER_TYPES],
   // Each policy's own module owns the operator default; the dispatcher's fallback
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,

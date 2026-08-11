@@ -1,5 +1,6 @@
 import { supersededReason } from '../admission.js';
 import { issueBranch } from '../issuePickup.js';
+import { relatedWorkNote } from '../../issueRelations.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
 /**
@@ -39,12 +40,13 @@ export function issuePickup(s: StageContext): void {
         type: 'dispatch_code_agent',
         branch,
         title: `Resolve issue #${issue.number}`,
-        prompt: s.templates.render('issue-pickup', {
-          number: issue.number,
-          title: issue.title,
-          body: issue.body,
-          branch,
-        }),
+        prompt:
+          s.templates.render('issue-pickup', {
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            branch,
+          }) + relatedWorkNote(issue, s.pickup.containerTypes),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

@@ -1,6 +1,6 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { IssueCommentInput, IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
-import type { Issue, IssueState } from '../../types.js';
+import type { Issue, IssueRelative, IssueState } from '../../types.js';
 import type {
   Capability,
   Integration,
@@ -10,7 +10,7 @@ import type {
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
-import type { AzureDevOpsApi, AzWorkItemUpdate } from './azureDevOpsApi.js';
+import type { AzureDevOpsApi, AzWorkItem, AzWorkItemUpdate } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
 
 interface AzureWorkItemsOpts {
@@ -66,6 +66,7 @@ export class AzureDevOpsWorkItemsIntegration
       const { api, workItemTag, assignedTo, ownershipTag } = this.opts;
       const raw = await api.listOpenWorkItems(workItemTag, assignedTo);
       const viewer = ownershipTag ? await api.viewerUniqueName() : null;
+      const hierarchy = await this.hydrateHierarchy(raw);
       const issues = await Promise.all(
         raw.map(async (w): Promise<Issue> => {
           // Only pay the per-item revision fetch when the ownership gate is on and
@@ -82,6 +83,8 @@ export class AzureDevOpsWorkItemsIntegration
             labels: w.tags,
             ...(labelsAddedByViewer ? { labelsAddedByViewer } : {}),
             state: normalizeState(w.state),
+            issueType: w.workItemType,
+            ...hierarchy(w),
             // Preserve the raw System.State alongside the open/closed collapse so the
             // dispatcher's state-based pickup gate and "in review" back-off can see it.
             workItemState: w.state,
@@ -99,6 +102,82 @@ export class AzureDevOpsWorkItemsIntegration
       });
       return { issues: this.lastGood };
     }
+  }
+
+  /**
+   * Resolve the hierarchy around the snapshot's work items — the parent Feature,
+   * the children, and the siblings under the same parent — into the relation
+   * fields of {@link Issue}.
+   *
+   * Two batched reads at most, whatever the size of the board. The first fetches
+   * every id the snapshot's own items point at (parents and children); the second
+   * fetches the *other* children of those parents, which is where siblings come
+   * from and which nothing in the first round names. Both are skipped entirely
+   * when there is nothing to fetch, so a flat board costs no request at all.
+   *
+   * The listed items are narrowed by tag/assignee, so a parent Feature is almost
+   * never among them — reading the relations off the item without hydrating them
+   * would leave an id and no title, which is not context an agent can use.
+   *
+   * A failure here is recorded and then **dropped**: the returned mapper yields no
+   * relation fields, which reads downstream as "this provider doesn't track
+   * hierarchy" — the same shape GitHub has. Losing the hierarchy costs the note
+   * appended to a prompt; faulting would cost the whole snapshot, and the world is
+   * worth more than the annotation.
+   */
+  private async hydrateHierarchy(raw: AzWorkItem[]): Promise<(w: AzWorkItem) => Partial<Issue>> {
+    const none = (): Partial<Issue> => ({});
+    try {
+      const listed = new Map(raw.map((w) => [w.id, w]));
+      const known = new Map(listed);
+      const wanted = new Set<number>();
+      for (const w of raw) {
+        if (w.parentId !== null) wanted.add(w.parentId);
+        for (const id of w.childIds) wanted.add(id);
+      }
+      for (const w of await this.fetch([...wanted], known)) known.set(w.id, w);
+
+      // Round two: a parent's *other* children. Only nameable once the parents
+      // themselves have been read, which is why this cannot fold into round one.
+      const siblings = new Set<number>();
+      for (const w of raw) {
+        const parent = w.parentId === null ? undefined : known.get(w.parentId);
+        for (const id of parent?.childIds ?? []) if (id !== w.id) siblings.add(id);
+      }
+      for (const w of await this.fetch([...siblings], known)) known.set(w.id, w);
+
+      return (w: AzWorkItem): Partial<Issue> => {
+        const parent = w.parentId === null ? null : (known.get(w.parentId) ?? null);
+        // An unreadable parent is *unknown*, not absent: reporting `null` here
+        // would tell the orphan check this item belongs to no feature, which is a
+        // different — and wrong — thing to say about a link we simply couldn't read.
+        if (w.parentId !== null && parent === null) return { children: relatives(w.childIds, known) };
+        return {
+          parent: parent === null ? null : relative(parent, { withBody: true }),
+          children: relatives(w.childIds, known),
+          ...(parent === null
+            ? {}
+            : {
+                siblings: relatives(
+                  parent.childIds.filter((id) => id !== w.id),
+                  known,
+                ),
+              }),
+        };
+      };
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `${this.id} relation hydration failed: ${(err as Error).message}`,
+      });
+      return none;
+    }
+  }
+
+  /** Read the ids not already in hand. Nothing to fetch costs no request. */
+  private async fetch(ids: number[], known: Map<number, AzWorkItem>): Promise<AzWorkItem[]> {
+    const missing = ids.filter((id) => !known.has(id));
+    return missing.length === 0 ? [] : this.opts.api.getWorkItems(missing);
   }
 
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
@@ -126,6 +205,40 @@ export class AzureDevOpsWorkItemsIntegration
     await this.opts.api.setWorkItemTag(input.number, input.label, input.present);
     return { ok: true };
   }
+}
+
+/**
+ * One work item as the summary carried on another — a parent, child or sibling.
+ *
+ * The body rides only on a parent (`withBody`), because a Feature's description is
+ * the goal its children serve and is the one piece of related text an agent needs;
+ * carrying every sibling's description would put a whole feature's worth of text
+ * on every issue in the snapshot for no reader.
+ */
+function relative(w: AzWorkItem, opts: { withBody: boolean } = { withBody: false }): IssueRelative {
+  return {
+    number: w.id,
+    title: w.title,
+    issueType: w.workItemType,
+    workItemState: w.state,
+    state: normalizeState(w.state),
+    ...(opts.withBody ? { body: w.body } : {}),
+    url: w.url,
+  };
+}
+
+/**
+ * The relatives for a list of ids, in id order. Ids that were not read — deleted,
+ * or in a project this identity cannot see — are **dropped** rather than rendered
+ * as a bare number: a relation the harness cannot describe is not context.
+ */
+function relatives(ids: number[], known: Map<number, AzWorkItem>): IssueRelative[] {
+  const out: IssueRelative[] = [];
+  for (const id of ids) {
+    const w = known.get(id);
+    if (w) out.push(relative(w));
+  }
+  return out;
 }
 
 /** Split Azure's semicolon-delimited System.Tags string into a trimmed, non-empty list. */

@@ -484,16 +484,25 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       { method: 'POST', body: JSON.stringify({ query: wiql }) },
     );
     const ids = (query.workItems ?? []).map((w) => w.id);
-    if (ids.length === 0) return [];
+    return this.getWorkItems(ids);
+  }
 
-    // Batch reads are capped at 200 ids by Azure; chunk to stay under it.
+  /**
+   * The batch read, shared by the open-item list and relation hydration. Azure
+   * caps a batch at 200 ids, and `errorPolicy: 'omit'` is what keeps one dead id
+   * — a deleted parent, an item in a project this identity cannot read — from
+   * faulting the whole request and, through it, the snapshot.
+   */
+  async getWorkItems(ids: number[]): Promise<AzWorkItem[]> {
+    if (ids.length === 0) return [];
     const items: AzWorkItem[] = [];
     for (const chunk of chunkIds(ids, 200)) {
       const batch = await this.request<{ value: RawWorkItem[] }>(
         this.withApiVersion(`${this.orgUrl}/_apis/wit/workitemsbatch`),
-        { method: 'POST', body: JSON.stringify({ ids: chunk, $expand: 'Relations' }) },
+        { method: 'POST', body: JSON.stringify({ ids: chunk, $expand: 'Relations', errorPolicy: 'omit' }) },
       );
-      for (const w of batch.value) items.push(this.mapWorkItem(w));
+      // An omitted id comes back as a null-ish entry rather than being absent.
+      for (const w of batch.value) if (w && typeof w.id === 'number') items.push(this.mapWorkItem(w));
     }
     return items;
   }
@@ -524,9 +533,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         .split(';')
         .map((t) => t.trim())
         .filter((t) => t !== ''),
+      workItemType: String(fields['System.WorkItemType'] ?? ''),
       relationUrls: (w.relations ?? [])
         .filter((r) => r.rel === 'ArtifactLink' && typeof r.url === 'string')
         .map((r) => r.url as string),
+      parentId: hierarchyIds(w.relations, 'System.LinkTypes.Hierarchy-Reverse')[0] ?? null,
+      childIds: hierarchyIds(w.relations, 'System.LinkTypes.Hierarchy-Forward'),
       url: `${this.projectUrl}/_workitems/edit/${w.id}`,
     };
   }
@@ -721,6 +733,25 @@ export function buildOpenWorkItemQuery(tag?: string, assignedTo?: string): strin
   // AssignedTo matches the identity's uniqueName/UPN exactly; same single-quote escape.
   if (assignedTo) clauses.push(`[System.AssignedTo] = '${assignedTo.replace(/'/g, "''")}'`);
   return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(' AND ')} ORDER BY [System.Id] ASC`;
+}
+
+/**
+ * The work-item ids on one side of the hierarchy, read out of a work item's
+ * relations. A hierarchy relation's `url` is the related item's REST address —
+ * `…/_apis/wit/workItems/42` — so the trailing segment is the id.
+ *
+ * Pure, and exported for its own test: this is the one place the harness converts
+ * an Azure URL into a work-item number, and a silently-unparsed url would present
+ * as a tracker with no hierarchy at all rather than as an error.
+ */
+export function hierarchyIds(relations: RawWorkItem['relations'], rel: string): number[] {
+  const ids: number[] = [];
+  for (const r of relations ?? []) {
+    if (r.rel !== rel || typeof r.url !== 'string') continue;
+    const match = /\/workItems\/(\d+)(?:[?#].*)?$/i.exec(r.url);
+    if (match) ids.push(Number(match[1]));
+  }
+  return ids;
 }
 
 function chunkIds(ids: number[], size: number): number[][] {
