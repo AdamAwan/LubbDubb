@@ -56,9 +56,14 @@ function bugChips(bugFilings: AppState['bugFilings'], issueNumber: number, refUr
  * doing with the item, or the first reason it's leaving it alone — full reasons
  * in the title. `done`/`has_pr` stay silent: the state chip and the "→ PR" chip
  * already say it. No verdict (older server) renders nothing.
+ *
+ * `container` is silent for that same reason and joined the list the moment it
+ * had one: `hierarchyChips` draws the item's type and its children, which is the
+ * whole of what the verdict says, and its reason is a *sentence* — the longest
+ * chip on the row, restating the chip beside it.
  */
 function pickupChip(pickup: Issue['pickup']) {
-  if (!pickup || pickup.status === 'done' || pickup.status === 'has_pr') return null;
+  if (!pickup || pickup.status === 'done' || pickup.status === 'has_pr' || pickup.status === 'container') return null;
   if (pickup.status === 'eligible') {
     return (
       <span className="chip small" title="Would be picked up next cycle">
@@ -71,13 +76,7 @@ function pickupChip(pickup: Issue['pickup']) {
   // already says who decided and what they saw, so it needs no colour to be read.
   // A retained run joins them: the ticket closed and the run is being kept on
   // purpose, waiting on a dismissal rather than on anything going wrong (#234).
-  // A container joins them: a Feature the harness will never work is the tracker
-  // being used correctly, not a condition to warn about.
-  const calm =
-    pickup.status === 'active' ||
-    pickup.status === 'delivered' ||
-    pickup.status === 'retained' ||
-    pickup.status === 'container';
+  const calm = pickup.status === 'active' || pickup.status === 'delivered' || pickup.status === 'retained';
   return (
     <span className={`chip small${calm ? '' : ' warn'}`} title={pickup.reasons.join(', ')}>
       {pickup.reasons[0] ?? pickup.status}
@@ -97,12 +96,14 @@ function pickupChip(pickup: Issue['pickup']) {
  * is a story whose goal is written down nowhere, and the agents working it are
  * being told to say so.
  *
- * A container draws its children count instead of a parent — for a Feature, what
- * matters is how much hangs off it, since that is the work the harness will
- * actually pick up.
+ * A container draws one chip instead — its type and how much hangs off it, which
+ * is the work the harness will actually pick up. That chip is also the *whole* of
+ * its verdict: `pickupChip` returns null for a container so the row does not carry
+ * the same fact twice, the second time as a sentence.
  */
 function hierarchyChips(issue: Issue, refUrls: Record<string, string>) {
   const chips = [];
+  const container = issue.pickup?.status === 'container';
   if (issue.parent) {
     chips.push(
       <span
@@ -113,26 +114,41 @@ function hierarchyChips(issue: Issue, refUrls: Record<string, string>) {
         ↳ {issue.parent.issueType} {refLink(`#${issue.parent.number}`, refUrls)}
       </span>,
     );
-  } else if (issue.parent === null && issue.pickup?.status !== 'container') {
+  } else if (issue.parent === null && !container) {
     chips.push(
+      // Not `warn`. It is a standing property of the ticket, not something going
+      // wrong now, and it sits on every loose item on the board — at warning
+      // weight it would out-shout the CI failure two rows down, permanently.
       <span
         key="orphan"
-        className="chip small warn"
+        className="chip small"
         title="No parent feature, so the wider goal this serves is recorded nowhere. Agents working it are told to flag it and suggest which open feature it belongs to — the harness never re-parents a work item itself."
       >
         no parent feature
       </span>,
     );
   }
-  if (issue.children && issue.children.length > 0) {
-    const open = issue.children.filter((c) => c.state === 'open').length;
+  // One chip carries the whole of a container's story — what it is, how much
+  // hangs off it, and (in the title) why nothing is dispatched at it. `pickupChip`
+  // stays silent for one precisely so this is not said twice, once in a sentence.
+  if (container || (issue.children && issue.children.length > 0)) {
+    const children = issue.children ?? [];
+    const open = children.filter((c) => c.state === 'open').length;
+    const count =
+      children.length === 0 ? 'no children' : `${children.length} child${children.length === 1 ? '' : 'ren'}`;
     chips.push(
       <span
         key="children"
         className="chip small"
-        title={issue.children.map((c) => `${c.issueType} #${c.number} "${c.title}" (${c.workItemState})`).join('\n')}
+        title={[
+          ...(container ? [issue.pickup?.reasons[0] ?? '', ''] : []),
+          ...children.map((c) => `${c.issueType} #${c.number} "${c.title}" (${c.workItemState})`),
+        ]
+          .join('\n')
+          .trim()}
       >
-        {issue.children.length} child{issue.children.length === 1 ? '' : 'ren'}
+        {container ? `${issue.issueType} · ` : ''}
+        {count}
         {open > 0 ? `, ${open} open` : ''}
       </span>,
     );
