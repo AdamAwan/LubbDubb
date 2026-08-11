@@ -189,6 +189,22 @@ export function partSettled(part: PlanPart): boolean {
 }
 
 /**
+ * Is this part work a person does by hand rather than work an agent is dispatched
+ * for? The one predicate that says so, asked by rule `plan-part` (which produces
+ * no candidate for one), by the reconciler (which neither folds a PR onto one nor
+ * stalls it), and by `partOutcomeNote` (which has no prompt to append to).
+ *
+ * It reads the *declaration*, not the backing `human_tasks` row, deliberately:
+ * a part with no agent, no branch and no PR must be recognisable as such from the
+ * part alone, including on the paths that never load the task — otherwise a human
+ * part whose row failed to write would quietly be dispatched to an agent, which is
+ * the one outcome the whole feature exists to prevent.
+ */
+export function partIsHuman(part: PlanPart): boolean {
+  return part.expectedKind === 'human';
+}
+
+/**
  * What a part produced, or null while it is still in flight.
  *
  * `code` is **derived from `merged`, never stored**: a part that merged a pull
@@ -352,7 +368,11 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
     const stacks = p.dependsOn.length === 0 ? '' : `, stacks on ${p.dependsOn.map((d) => `"${d}"`).join(' + ')}`;
     // Only when it says something: every other part is expected to produce code,
     // and saying so on each line would bury the two that don't.
-    const expects = p.expectedKind && p.expectedKind !== 'code' ? `, planned as a ${p.expectedKind}` : '';
+    const expects = partIsHuman(p)
+      ? ', a step for a person'
+      : p.expectedKind && p.expectedKind !== 'code'
+        ? `, planned as a ${p.expectedKind}`
+        : '';
     return `- "${p.slug}": ${p.title} [${p.status}, ${where}${stacks}${expects}] — ${p.scope}`;
   });
   const why = plan.reason ? `\nIt was split because: ${plan.reason}` : '';
@@ -412,7 +432,9 @@ function describe(parts: PlanPart[], empty: string): string {
  * the tool list, where a tool belongs.
  */
 export function partOutcomeNote(part: PlanPart): string {
-  if (!part.expectedKind || part.expectedKind === 'code') return '';
+  // A human part never reaches an agent — `partIsHuman` keeps it out of the
+  // candidate list entirely — so there is no prompt for this to be appended to.
+  if (!part.expectedKind || part.expectedKind === 'code' || partIsHuman(part)) return '';
   const what =
     part.expectedKind === 'report'
       ? 'a write-up, a measurement or a document — not a change to the code'

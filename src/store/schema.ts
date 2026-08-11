@@ -162,6 +162,34 @@ CREATE TABLE IF NOT EXISTS findings (
   updated_at TEXT NOT NULL
 );
 
+-- Work only a person can do (the request_human_task tool, or an operator filing
+-- one from the cockpit). Not an escalation: nothing is blocked on an open socket,
+-- no agent is parked, and the row outlives every agent and every restart.
+--
+-- part_id is the only way one of these ever holds work off the fleet, and that is
+-- deliberate: a plan part declared expected_kind='human' is backed by exactly one
+-- of these rows, and the part is the scheduling node that depends_on and the
+-- reconciler's readiness pass already understand. A standalone human task blocks
+-- nothing at all.
+--
+-- agent_id/task_id/origin_ref come from the caller's credential, never from an
+-- argument; all three are null for an operator-filed task, which is how the two
+-- arms are told apart without a requested_by column that could disagree with them.
+CREATE TABLE IF NOT EXISTS human_tasks (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,        -- the ask, one line (validation refuses a newline)
+  detail      TEXT,                 -- what to do and how to know it is done, markdown
+  origin_ref  TEXT,                 -- the work it belongs to ("issue:12", "issue:12:part:schema")
+  part_id     TEXT,                 -- the plan part this task *is*, when a planner declared one
+  agent_id    TEXT,                 -- the requesting agent, or null when an operator filed it
+  task_id     TEXT,
+  status      TEXT NOT NULL,        -- open | done | declined
+  resolution  TEXT,                 -- the operator's note; required on declined
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  resolved_at TEXT
+);
+
 -- Whether an issue is finished, as declared by the agent that worked it (the
 -- conclude_work tool) or toggled by an operator. Keyed on the issue origin, not
 -- on an agent: a conclusion belongs to the issue and outlives every agent that
@@ -549,6 +577,8 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_ref);
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
+CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
 CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_ref ON proposals(ref);

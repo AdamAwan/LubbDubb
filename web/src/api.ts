@@ -233,6 +233,11 @@ const realApi = {
   // back, so the work waits its turn there rather than on the fleet.
   fileFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/file`),
   dismissFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/dismiss`),
+  // Work only a person can do. `done` settles it and concludes any plan step it
+  // backs, which releases whatever was waiting; `decline` settles it the other way
+  // and deliberately does not conclude the step, so nothing downstream starts.
+  completeHumanTask: (id: string) => post<{ ok: true }>(`/api/human-tasks/${id}/done`),
+  declineHumanTask: (id: string, note: string) => post<{ ok: true }>(`/api/human-tasks/${id}/decline`, { note }),
   // Decide what happens to work the last run left orphaned. Until every one of
   // these is answered the harness runs no cycles, so this is the one call that can
   // un-stick a cockpit whose fleet looks frozen. Keyed on the **task**: an orphan

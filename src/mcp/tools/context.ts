@@ -6,6 +6,8 @@ import type {
   AgentAsk,
   Finding,
   FindingInput,
+  HumanTask,
+  HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
   PartOutcomeKind,
@@ -32,6 +34,10 @@ import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
   recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string };
+  requestHumanTask(
+    agentId: string,
+    input: HumanTaskInput,
+  ): { ok: true; task: HumanTask } | { ok: false; error: string };
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string };
   linkTicket(
     agentId: string,

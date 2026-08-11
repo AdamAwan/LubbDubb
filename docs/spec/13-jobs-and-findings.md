@@ -1,7 +1,9 @@
-# 13 — Jobs and findings
+# 13 — Jobs, findings and human tasks
 
-Two operator-facing queues. A **job** is work the operator asked for. A **finding** is a claim an agent
-filed, which becomes work only when an operator says so.
+Three operator-facing queues, split by **who acts on them**. A **job** is work the operator asked
+for, done by an agent. A **finding** is a claim an agent filed, which becomes work only when an
+operator says so. A **human task** is work only a person can do, and the operator is the one who does
+it.
 
 ## Jobs
 
@@ -59,7 +61,7 @@ then the funnel_; this is the prompt arm wired to that convergence.
 - **A desk job, not a code one**, for `finding-ticket`'s reason: filing touches no repository, so a
   worktree and a branch would be pure cost. It renders the overridable `blueprint-ticket` template
   (`src/dispatcher/promptTemplates.ts`), whose pure fields come from `blueprintTicketFields(request,
-  tracker, watchLabel)` (`src/blueprintTicket.ts`) — the operator's prompt carried verbatim, the
+tracker, watchLabel)` (`src/blueprintTicket.ts`) — the operator's prompt carried verbatim, the
   tracker coordinates, and the label instruction.
 - **The ticket must be `-watch`-tagged, unlike a finding-filed one.** A finding's ticket lands in the
   backlog unwatched on purpose (it is deferred, not scheduled); a blueprint's ticket is the work the
@@ -190,11 +192,11 @@ claim, the identifier and the stack trace at the same weight, which is a wall to
 skim than the PR comment it replaced. The structure was never in the text, so no renderer could put it
 there; only naming the parts can.
 
-| field     | required | holds                                                                     |
-| --------- | -------- | ------------------------------------------------------------------------- |
-| `summary` | yes      | the claim, one line, ≤160 characters                                      |
-| `where`   | no       | what locates it — file and line, package, service, endpoint               |
-| `detail`  | no       | the evidence — error, repro, reasoning — as markdown                      |
+| field     | required | holds                                                       |
+| --------- | -------- | ----------------------------------------------------------- |
+| `summary` | yes      | the claim, one line, ≤160 characters                        |
+| `where`   | no       | what locates it — file and line, package, service, endpoint |
+| `detail`  | no       | the evidence — error, repro, reasoning — as markdown        |
 
 Everything past `summary` is **optional on purpose**. A required field an agent has nothing for comes
 back as "N/A", and a list of those is worse than a blob. `where` is free text rather than a closed
@@ -318,3 +320,122 @@ The finding stays in the list, muted, rather than being deleted: "we looked at t
 409 when absent or already resolved.
 
 Tests: the `report_finding` block in `test/mcpChannel.test.ts`.
+
+## Human tasks
+
+Every unit of work the harness spawned was dispatched to an agent. Work only a **person** can do —
+flipping a setting in a console nobody gave the fleet an account for, plugging in hardware, looking
+at a rendered screen and saying whether it is right, signing off that a goal is actually met — had no
+representation at all. An agent that hit one could only escalate, which is a different shape.
+
+```ts
+interface HumanTask {
+  id;
+  title; // the ask, one line — validation refuses a newline
+  detail: string | null; // what to do and how to know it is done, markdown
+  originRef: string | null; // the work it belongs to: "issue:12", "issue:12:part:schema", "pr:42"
+  partId: string | null; // the plan part this task *is*, when a planner declared a step for a person
+  agentId: string | null; // the requesting agent, from the credential; null when nobody individual asked
+  taskId: string | null;
+  status: 'open' | 'done' | 'declined';
+  resolution: string | null; // the operator's note — required on `declined`
+  createdAt;
+  updatedAt;
+  resolvedAt: string | null;
+}
+```
+
+`human_tasks` is a fresh `CREATE TABLE`, and `src/store/humanTasks.ts` declares an empty
+`HUMAN_TASK_COLUMNS` anyway: a table being new **once** does not keep it exempt, and the next column
+added has somewhere obvious to be declared rather than being invisible on every older database.
+→ [14](14-persistence.md#migrations)
+
+### It is not an escalation, and the difference is not a nuance
+
+Both put something in front of a human, and that is the whole of what they share. They were kept
+apart because every other property differs, and because a mechanism that answered to both would have
+to be honest about neither.
+
+|                             | Escalation                                       | Human task                            |
+| --------------------------- | ------------------------------------------------ | ------------------------------------- |
+| What it is                  | a question                                       | a unit of work                        |
+| Who is blocked              | one running agent, holding a slot and a worktree | nobody, unless a plan part names it   |
+| How it settles              | typing an answer into the parked session         | doing the thing, then marking it done |
+| Outlives its agent          | no — it dies with the session                    | yes, and a restart                    |
+| Can other work depend on it | no                                               | yes, through a plan part              |
+| Costs, while open           | a fleet slot and a checkout                      | nothing                               |
+
+An agent that needs an **answer** to carry on escalates: it parks, and one reply unparks it. An agent
+that needs a person to **do something** — which may take until Tuesday — requests a human task and
+gets on with, or concludes, whatever it can. Holding a slot and a worktree open for a day waiting on
+a console change is the cost that makes the two worth telling apart at all.
+
+It is also why a human task is **not** drawn in the "Needs you" inbox. Filing the two together would
+put a thing that costs ten seconds beside a thing that costs an afternoon, under one heading that
+could only be honest about one of them. → [17](17-cockpit.md)
+
+### How it blocks work: through a plan part, and only there
+
+The one thing a human task can hold off the fleet is a plan part it backs, and no new scheduling
+machinery was added for it. A planner declares `expectedKind: 'human'` on a part
+([08](08-planning.md#a-step-for-a-person)); ingestion backs that part with a `human_tasks` row keyed
+on `part_id`; and from there the existing graph does the work:
+
+- Rule `plan-part` produces **no candidate** for a human part — `partIsHuman` filters it out before
+  anything else looks at it. → [05](05-dispatcher.md#the-rules-in-evaluation-order)
+- A human part has no branch, so `dependencySatisfied` is false for anything that named it until it is
+  `partSettled`. **Dependents stay `pending` with no new code at all.**
+- Marking it **done** settles the part `concluded` with `outcomeKind: 'human'`, so `partSettled` is
+  true and readiness releases the dependents on the next pulse.
+- **Declining** it leaves the part `blocked` rather than concluded — see below.
+
+**A standalone human task blocks nothing.** It is a visible obligation, not a gate. That line is what
+keeps the capability an agent gains to "ask a person" rather than "stop the fleet": the blocking half
+only ever arrives through a plan, and a plan is already gated by `planning.requireApproval`, on by
+default.
+
+### Declining is a settlement, not a failure
+
+`declined` carries a required note, and the note is the point: a planner shown only "declined" has no
+reason to decide differently to the way it just decided.
+
+**The backing part is deliberately not concluded.** Concluding it would make `partSettled` answer
+true, and every dependent waiting on the thing that was refused would be released to an agent — a
+plan completing on work nobody did. So the part stops where it is, `PlanReconciler` writes it
+`blocked` with its own account of why, its dependents stay `pending`, and the two ways out are the
+ones already on the panel: **Replan**, or **abandon the decomposition**. No escalation is filed for
+the decline itself — the operator is the one who declined, and the buttons are in front of them.
+
+An amendment that drops a human part settles its open task `declined` too, with "an amended plan no
+longer includes this step". Declining rather than deleting for the reason a dismissed finding stays
+in the list: the alternative is an open obligation pointing at a part no plan schedules, which
+nothing will ever settle.
+
+### The two arms that file one
+
+- **`request_human_task`**, the MCP tool: `{title, detail?}` and nothing that names work. Identity is
+  structural, as for every write tool. It queues nothing and blocks nothing, and the response says so
+  outright — an agent that believed filing this arranged something would sit waiting for it.
+  → [11](11-mcp-tools.md#request_human_task)
+- **`POST /api/human-tasks`**, the operator's own: the same row with no agent behind it, which is
+  exactly what a null `agentId` means. There is no `requestedBy` column, so nothing can disagree with
+  the ids beside it. Both arms validate through the same pure `validateHumanTask`
+  (`src/mcp/humanTasks.ts`) — a one-line title is a property of the panel row, not of who typed it.
+
+A **repeat** (same agent, same origin, same title) refreshes the row without resetting status,
+`recordFinding`'s rule and for its reason. Better instructions overwrite thinner ones; a declined
+task asked for again stays declined.
+
+### Settling — `POST /api/human-tasks/:id/done` and `/decline`
+
+Both are compare-and-set against `open` in the write, the discipline `decideProposal` and
+`link_ticket` already use: a second click settles nothing and cannot overwrite the first verdict with
+the second. A `done` on a task backing a part settles the task **first** and the part second — a
+failed part write then leaves a settled task an operator can see, where the other order would leave a
+concluded part nothing accounts for.
+
+Settled tasks stay in the list rather than being deleted, for the reason a dismissed finding does: a
+row that vanished on being settled would take the operator's own note with it, and on a decline that
+note is the whole account of why the work below it stopped.
+
+Tests: `test/humanTasks.test.ts`.

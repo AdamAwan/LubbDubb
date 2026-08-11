@@ -939,6 +939,7 @@
   /* The pictures and the lists that read downward stay whole across both
      tracks; the two logs are the detail that reads fine in a half-width
      column. */
+  [data-fx='bench'],
   .fx-line-wrap,
   [data-fx='inspection'],
   [data-fx='bots'],
@@ -963,6 +964,12 @@
      across a goal's whole span — a patch belt cut to half the width scrolls
      inside itself, which is the reading this floor exists to give you at a
      glance. */
+  /* The bench spans with them, and for the same kind of reason rather than a
+     pictorial one: it is a list of instructions read left-to-right across the top
+     of the floor, and it sits above the line because a person's step comes before
+     anything the line does by itself. Halving it would put the work you are the
+     blocker for in a column beside the work you are not. */
+  [data-fx='bench'],
   .fx-line-wrap,
   [data-fx='goal-floor'],
   [data-fx='yard'] {
@@ -1082,6 +1089,141 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 9px;
+}
+
+/* ============================ the bench ============================ */
+
+/* Work a person does by hand, at the top of the floor. Each task is a *station*
+   — a machine with a lamp, a plate and a caption — because everything else here
+   is one, and a list of text lines pasted into a factory card reads as a form
+   somebody left on the shop floor. Two tracks from 1100px: a bench is a row of
+   stations you walk along, not a column you scroll. */
+.fx-bench {
+  display: grid;
+  gap: 10px;
+}
+@media (min-width: 1100px) {
+  .fx-bench {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Amber down the edge while it waits on you — never red, which on this floor
+   means one thing only: an agent parked on a question. A declined station keeps
+   its edge (the work behind it is still stopped) and greys everything else;
+   a done one recedes entirely. */
+.fx-station {
+  padding: 10px 12px 11px;
+  border-left: 3px solid var(--amber);
+  display: grid;
+  gap: 7px;
+  align-content: start;
+}
+.fx-station.declined {
+  border-left-color: var(--grey);
+}
+.fx-station.done {
+  border-left-color: var(--green);
+  opacity: 0.62;
+}
+.fx-station-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fx-station-top > .fx-ic {
+  color: var(--amber);
+  flex: 0 0 auto;
+}
+.fx-station.declined .fx-station-top > .fx-ic,
+.fx-station.done .fx-station-top > .fx-ic {
+  color: var(--grey);
+}
+/* The instruction is the heading — it is what you are being asked to do, so it
+   carries the weight the machine's name carries on every other station. */
+.fx-station-job {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fx-station-top > .fx-ref {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* The caption under a machine: what it is doing, and what it is holding. The
+   floor's own fact — a step nobody is waiting on and one stopping three parts
+   look identical on a list and must not here. */
+.fx-station-state {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fx-station-state b {
+  color: var(--amber);
+  font-weight: 600;
+}
+.fx-station.declined .fx-station-state b {
+  color: var(--grey);
+}
+.fx-station.done .fx-station-state b {
+  color: var(--green);
+}
+
+/* The job sheet clamped to the bench: open, not folded behind a summary. You are
+   standing here to do the thing, and the instructions are the thing. */
+.fx-station-brief {
+  background: var(--panel);
+  border-left: 2px solid var(--border-lo);
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 190px;
+  overflow-y: auto;
+}
+.fx-station-brief > :first-child {
+  margin-top: 0;
+}
+.fx-station-brief > :last-child {
+  margin-bottom: 0;
+}
+.fx-station-brief code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.fx-station-who {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grey);
+  margin-right: auto;
+  align-self: center;
+}
+/* The decline note sits under the row and takes its whole width — it is the one
+   thing here you type, and a box wedged between two buttons reads as optional. */
+.fx-station .human-task-decline {
+  flex: 1 0 100%;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.fx-station .human-task-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border-lo);
+  resize: vertical;
 }
 
 /* ============================ event log ============================ */

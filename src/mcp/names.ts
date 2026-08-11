@@ -27,6 +27,7 @@ export const MCP_TOOL_NAMES = [
   'escalate',
   'world_read',
   'report_finding',
+  'request_human_task',
   'note_progress',
   'request_permission',
   'link_ticket',

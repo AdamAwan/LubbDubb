@@ -521,6 +521,28 @@ class DemoServer {
     return { ok: true };
   }
 
+  /** Settle a human task (demo mirror of POST /api/human-tasks/:id/done). */
+  async completeHumanTask(id: string): Promise<{ ok: true }> {
+    return this.settleHumanTask(id, 'done', null);
+  }
+
+  /** Decline one, with the note the route requires (POST /api/human-tasks/:id/decline). */
+  async declineHumanTask(id: string, note: string): Promise<{ ok: true }> {
+    return this.settleHumanTask(id, 'declined', note);
+  }
+
+  private settleHumanTask(id: string, status: 'done' | 'declined', note: string | null): { ok: true } {
+    const task = (this.state.humanTasks ?? []).find((t) => t.id === id);
+    if (task && task.status === 'open') {
+      task.status = status;
+      task.resolution = note;
+      task.updatedAt = new Date().toISOString();
+      task.resolvedAt = task.updatedAt;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   /**
    * Accept a proposed act — the demo mirror of `POST /api/proposals/:id/accept`,
    * and the one thing the demo has to show faithfully: the accept *performs the
@@ -1152,6 +1174,8 @@ export const demoApi = {
   promoteFinding: (id: string) => getServer().promoteFinding(id),
   fileFinding: (id: string) => getServer().fileFinding(id),
   dismissFinding: (id: string) => getServer().dismissFinding(id),
+  completeHumanTask: (id: string) => getServer().completeHumanTask(id),
+  declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
   // The demo has no previous run to have crashed, so there is never anything to

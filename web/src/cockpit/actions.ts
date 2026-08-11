@@ -75,6 +75,9 @@ export interface CockpitActions {
   fileFinding(id: string): Promise<void>;
   dismissFinding(id: string): Promise<void>;
 
+  completeHumanTask(id: string): Promise<void>;
+  declineHumanTask(id: string, note: string): Promise<void>;
+
   setPrExcluded(prNumber: number, excluded: boolean): Promise<void>;
   /**
    * Authorize landing a whole chain of stacked pull requests, or call that off.

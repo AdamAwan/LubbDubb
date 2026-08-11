@@ -7,6 +7,7 @@ import {
   partBase,
   partBranch,
   partDepth,
+  partIsHuman,
   partOrigin,
   partOutcomeNote,
   planIssueNumber,
@@ -57,6 +58,13 @@ export function planPart(s: StageContext): void {
     const inFlight = parts.filter((p) => s.activeOrigins.has(partOrigin(issueNumber, p.slug))).length;
     let room = s.planning.maxConcurrentPartsPerIssue - inFlight;
     const ready = parts
+      // A human step is filtered out before anything else looks at it: no
+      // candidate, so no cooldown arithmetic, no attempt cap, no slot, and nothing
+      // for the headroom cut to hold. It is not "queued and held" the way `capped`
+      // and `unapproved` are, because those two say *the fleet will get to this*,
+      // and this one never will — it is waiting on a person, and the panel that
+      // shows it to them is where it is visible.
+      .filter((p) => !partIsHuman(p))
       .filter((p) => p.status === 'ready' && !s.activeOrigins.has(partOrigin(issueNumber, p.slug)))
       .map((part) => ({ part, depth: partDepth(part, index) }))
       .sort((a, b) => a.depth - b.depth || a.part.seq - b.part.seq);

@@ -123,8 +123,8 @@ Red means exactly one thing on that floor: an agent parked on a question only yo
 
 `FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
 it sits are separate edits. Placement is **one CSS grid**: every panel is a direct child of
-`.fx-grid`, in the order it reads — the line, then Parts Inspection and Bots in the Field side by
-side, then the goal floor, the yard, the shift log and signals. Production is not a panel at all: it
+`.fx-grid`, in the order it reads — **the Bench**, then the line, then Parts Inspection and Bots in
+the Field side by side, then the goal floor, the yard, the shift log and signals. Production is not a panel at all: it
 is the **Output** gauge in the status bar, and the graph opens from it.
 
 **Inspection and Bots share a row from 1500px up, half the width each.** The parts on the rack and
@@ -145,11 +145,11 @@ gauge rather than a column.
 
 There is **one DOM for every width**; the arrangement is chosen in CSS alone:
 
-| width    | arrangement                                                                                                                                |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| < 940    | one column                                                                                                                                 |
-| 940–1499 | two columns; everything but the shift log and signals spans both                                                                           |
-| ≥ 1500   | four columns — the line, the goal floor and the yard span all four; Inspection and Bots take two each, and so do the shift log and signals |
+| width    | arrangement                                                                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| < 940    | one column                                                                                                                                            |
+| 940–1499 | two columns; everything but the shift log and signals spans both                                                                                      |
+| ≥ 1500   | four columns — the Bench, the line, the goal floor and the yard span all four; Inspection and Bots take two each, and so do the shift log and signals |
 
 **The breakpoints are therefore stated once.** Matching them in React as well — rendering a
 different tree per width — buys nothing and costs a resize listener, a re-render on every drag, and
@@ -175,6 +175,51 @@ Four consequences to preserve:
   ~500px-tall chart that ate the first screen. Spans are what stop that, which is why widening the
   old centred ribbon without also tiling it made the skin worse rather than better. The graph is no
   longer on the floor at all (below), but the constraint is the line's too.
+- **The Bench is the first tile, above the line.** Work a person does by hand comes ahead of
+  everything the line does by itself, and it is the one panel on this floor whose contents are the
+  operator's own to do rather than the fleet's. It spans every track at both multi-column
+  arrangements, for the goal floor's reason rather than a pictorial one: it is a list of instructions
+  read across the top of the floor, and halving it would put the work you are the blocker for in a
+  column beside the work you are not. It is drawn **only when something is on it** — a panel with
+  nothing in it is not a panel — so a floor with an empty bench has no `bench` tile at all, which
+  `test/factorySkin.test.ts` asserts from both sides along with the reading order.
+
+  It is a **panel and not a desk**. The three desks are counts in the status bar you open when you
+  want them, which is right for things read as "how many"; this is a list you work through, and a
+  plan step on it is holding assemblers shut somewhere below.
+
+  **The bench is drawn by this skin** (`components/Bench.tsx`), not by the shared
+  `HumanTaskPanel`. That is the one place the skinned/shared split lands differently from findings
+  and recovery, and the reason is what the split is actually for: those two are _flows_ with refusal
+  rules, and this is a _list of machines_. Everything else on this floor is a machine with a lamp, a
+  plate and a caption; Classic's cards dropped into a factory card read as a form somebody left on
+  the shop floor. So each task is a **station** — `fx-station`, an `fx-sunk` plate with an amber
+  edge, a `Lamp`, the instruction as its heading and the origin and age on the right — laid out two
+  to a row from 1100px, because a bench is a row of stations you walk along rather than a column you
+  scroll.
+
+  What the skin does **not** redraw is the pair of buttons and the rule between them:
+  `HumanTaskActions` is shared, embedded here with `buttonClass="fx-btn"`, exactly as `BotCard`
+  embeds the wired `EscalationCard` and for the same stated reason — the refusal that a decline needs
+  a note has one implementation whichever skin you are looking at. `ConfirmButton`'s `className` seam
+  is the precedent for the prop.
+
+  Three things the station says that the classic card cannot:
+
+  - **It has a lamp**, because it is a machine: `warn` while it waits on you, `off` once done,
+    `ghost` for one you declined — drawn but not built, which is what a declined step is. **Never
+    `bad`**: red on this floor means one thing, an agent parked on a question only you can answer,
+    and a task nobody is blocked on must not borrow it.
+  - **What it is holding.** A plan step counts the live siblings that named its slug and says "3
+    parts cannot start until this is done" — derived in the skin off `planParts`, a read-only view
+    like every other reading here. It is the fact only the floor has the parts to state, and the
+    difference between a chore and the reason the line is short. A standalone ask draws no count
+    rather than a zero, because it genuinely holds nothing.
+  - **The instructions are open, not folded away.** Classic collapses them behind a `<details>`
+    because its column is a list you scan; the bench is a thing you stand at and work from, and a
+    disclosure you have to open first is a step between you and the job. The sheet is capped and
+    scrolls inside itself rather than pushing the line off the screen.
+
 - **Recovery is outside `.fx-grid` entirely**, above it, because while it is up no pulse runs and
   every other surface is stale for the same reason. It is a banner, so it needs no `grid-column` to
   span — it is a block at every width.
@@ -433,10 +478,10 @@ argument for each is in its module's header, and the reason for the shape is wor
   belongs on the floor, but not at the cost of the text needed to act on it. Both are absent
   entirely when the subscriber limits were never captured; there is no denominator on an API key.
 - **The shift log gives the subject its own column** (`EventLog`). `Tick · Action · Ref · Detail ·
-  Rule · Outcome · By`. `linkify` still runs over Detail, so a sentence naming `#142` gets its link
+Rule · Outcome · By`. `linkify` still runs over Detail, so a sentence naming `#142` gets its link
   where it stands — but a detail is prose, and half the harness's own details name their subject in
   some other shape ("dispatched agent for …", "replanning …") or not at all. Ref draws
-  `decision.subjectRef`, the server's answer to what the row is *about*, through `refLink`: the
+  `decision.subjectRef`, the server's answer to what the row is _about_, through `refLink`: the
   colon form is the harness's own vocabulary and is worth reading whether or not it resolves, so an
   unresolvable ref stays on screen as text rather than vanishing. A row about nothing external draws
   a dash — see [16](16-http-api.md#refurls) for why the derivation is the server's.
@@ -639,7 +684,7 @@ of the node, so a machine claiming two ways out would draw one over the other. T
 rather than trusting it.
 
 **Two machines carry one.** The signal post's `notice ↗` above, and the **ore patch**'s `ticket ↗` —
-the one machine on the floor that *is* a ticket. Both are captioned rather than printed for the same
+the one machine on the floor that _is_ a ticket. Both are captioned rather than printed for the same
 reason: the ref is already on the meta line under the name (`issue:12 · In Progress`), so the corner
 has room for a word and not for the ref again. Both go through `refChip`, so a provider that builds no
 URLs draws neither caption rather than a caption over nothing.
@@ -904,6 +949,31 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
   then qualifying it costs nothing. One **Send answers** posts the whole array to `/answer`; a
   question left blank is sent as an explicit non-answer, so the agent knows not to wait on it. The
   card is shared, so the modal styles itself through the tokens alone and neither skin gains markup.
+
+- **Your bench** (`HumanTaskPanel`, when any exist) — work only a person can do, with the open count
+  in the heading. Each row carries the ask, its origin linked through `refUrls`, who is asking (an
+  agent that hit something it could not do, a planner that declared the step, or you), the
+  instructions collapsed as markdown, and **Done** / **Decline**.
+
+  It sits directly under "Needs you" and above everything the fleet owns, because it is the other
+  list of things only you can settle — and it is deliberately **not inside** "Needs you". An
+  escalation is a question holding one agent open on a socket, answered by typing back into its
+  session; these outlive every agent and a restart, and other work can be made to wait on them.
+  Filing the two together would put a thing that costs ten seconds beside a thing that costs an
+  afternoon, under one heading that could only be honest about one of them.
+  → [13](13-jobs-and-findings.md#it-is-not-an-escalation-and-the-difference-is-not-a-nuance)
+
+  **Two buttons, because there are two truthful answers.** Done settles it, and where the task backs
+  a plan step it concludes that part, releasing every sibling that named it. Decline takes a
+  **required** note and settles it the other way: the step is not concluded, so nothing waiting on it
+  starts — the plan stops visibly with your words on the jammed machine's plate, and Replan or
+  Abandon are the ways out. The note box is what the button is disabled on rather than a 400 after
+  the fact, which would be the same rule stated twice in the wrong place.
+
+  A `plan step` chip marks the rows that are holding assemblers shut, before anything else on the
+  line: it is the difference between "please do this" and "nothing below this can start until you
+  do". Settled tasks stay in a short tail with their note, for the reason a dismissed finding does.
+
 - **Plans** (`PlanPanel`, rendered only when plans exist) — each plan's parts drawn as a stack, joined
   to `upcoming` **by origin** (`issue:<n>:part:<slug>`) so the dispatch cut is visible, with a
   **Replan** button. A plan `awaiting_approval` says so on the card and states that nothing below is
@@ -1249,20 +1319,20 @@ anything the provider can't map, is simply omitted and renders plain.
 Four surfaces were once left as plain text on the grounds that their medium could not host a
 practical link. Each reason was about the medium and each had an answer, so all four now link:
 
-| Surface                    | The medium's answer                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Line** belt crates       | Ordinary HTML — the crate always printed its origin, so `refLink` keeps the token as the label                        |
-| **Line** SVG bay HUD       | A `foreignObject` (the Goal Floor's PR-chip wrapper), inside a `<g>` that stops the click reaching the bay's own handler |
+| Surface                    | The medium's answer                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Line** belt crates       | Ordinary HTML — the crate always printed its origin, so `refLink` keeps the token as the label                               |
+| **Line** SVG bay HUD       | A `foreignObject` (the Goal Floor's PR-chip wrapper), inside a `<g>` that stops the click reaching the bay's own handler     |
 | Goal Floor **patch strip** | Tab and link are **siblings** in `.fx-gf-patch-slot`, never nested — an `<a>` in a `<button>` is invalid interactive content |
-| **Bots in the Field** name | `refChip` on `.fx-job`, so the heading an operator reaches for is the way in; only the name, never `Asking you` / `Idle` |
+| **Bots in the Field** name | `refChip` on `.fx-job`, so the heading an operator reaches for is the way in; only the name, never `Asking you` / `Idle`     |
 
 The Goal Floor's ore-patch **machine** carries one too — `ticket ↗`, through `Machine.link`, the same
 captioned route the signal post's status comment uses and for the same reason: the meta line under it
 already prints `issue:<n>`, so the corner has room for a word rather than a ref.
 
 The bay HUD is the one that needs the wrapper: the whole bay is a `role="button"` that opens the
-transcript, so without `stopPropagation` on click *and* keydown the ref would open the drawer as well
-as the tracker. The Goal Floor's SVG `<text>` meta lines stay plain — only what is a *reference* is
+transcript, so without `stopPropagation` on click _and_ keydown the ref would open the drawer as well
+as the tracker. The Goal Floor's SVG `<text>` meta lines stay plain — only what is a _reference_ is
 wrapped.
 
 ### What the harness has said on a ticket
@@ -1289,7 +1359,7 @@ rules, and the split between the first two is the whole of it:
   agent-authored text is escaped rather than interpreted and there is no sanitiser in the path to get
   wrong. Used by the plan and retro modals, a finding's `detail`, and an escalation's `detail`.
 - **Captured output stays `<pre>`.** An escalation's `recentOutput` and a draft reply are what the
-  process emitted, and preformatted is what they *are*. Markdown-rendering them would reflow columns
+  process emitted, and preformatted is what they _are_. Markdown-rendering them would reflow columns
   that mean something.
 - **A field the operator scans is drawn as one line.** A finding's `summary` is validated to be one
   ([13](13-jobs-and-findings.md#the-three-text-fields)) and clamped to two in CSS regardless, because

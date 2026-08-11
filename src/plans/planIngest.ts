@@ -2,7 +2,18 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planPartInputs } from './planDocument.js';
-import { amendedPlanStatus, partHasWork, partsToRetire, singleOverruled } from './parts.js';
+import {
+  amendedPlanStatus,
+  partHasWork,
+  partIsHuman,
+  partOrigin,
+  partsToRetire,
+  planIssueNumber,
+  singleOverruled,
+} from './parts.js';
+
+/** What a human task says when the plan that asked for it stopped asking. */
+const RETIRED_PART_RESOLUTION = 'An amended plan no longer includes this step.';
 
 /** What an ingestion did, so either caller can report it in its own idiom. */
 interface PlanIngestResult {
@@ -76,7 +87,34 @@ export function ingestPlanDocument(
     document: doc.document ?? null,
   });
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
-  if (declared.length > 0) store.upsertPlanParts(plan.id, declared);
+  // A retired part's ask is withdrawn with it. Declined rather than deleted or a
+  // third terminal of its own: "this is not going to be done, and here is why" is
+  // exactly what declining means, and the alternative — an open task pointing at a
+  // part no plan schedules — is an obligation on the operator that nothing will
+  // ever settle.
+  for (const task of store.listHumanTasksForParts(retire.map((p) => p.id))) {
+    if (task.status === 'open') store.settleHumanTask(task.id, 'declined', RETIRED_PART_RESOLUTION);
+  }
+  const written = declared.length > 0 ? store.upsertPlanParts(plan.id, declared) : [];
+  // Back each declared human step with a `human_tasks` row. `recordHumanTask`
+  // refreshes on a repeat rather than inserting, so a replan that re-declares the
+  // same step does not file the ask twice — and one that re-declares a step the
+  // operator already settled leaves that settlement standing, which is the same
+  // discipline `upsertPlanParts` applies to a part's own progress.
+  const issueNumber = planIssueNumber(originRef);
+  for (const part of written.filter(partIsHuman)) {
+    store.recordHumanTask({
+      title: part.title,
+      detail: part.acceptance ?? part.scope,
+      // The part's own origin, so the panel row links to the work it belongs to
+      // through the same `refUrls` fold as everything else. Null on the one path
+      // that has no issue behind it, which no planner reaches.
+      originRef: issueNumber === null ? null : partOrigin(issueNumber, part.slug),
+      partId: part.id,
+      agentId: null,
+      taskId: null,
+    });
+  }
 
   // An amended plan is what *ends* a discussion — the agent has said its piece and
   // submitted. Cleared here rather than in the route so it holds for both

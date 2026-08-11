@@ -75,6 +75,10 @@ export function buildStateSnapshot(
   // item that is *not* in the current world — a closed duplicate, say — so its
   // ref has to be resolved directly rather than looked up off the snapshot.
   const findings = store.listFindings();
+  // Work only a person can do. Read here rather than only in the panel for
+  // findings' reason: each row's `originRef` names the work it belongs to, and the
+  // panel links it through the same ref map as everything else.
+  const humanTasks = store.listHumanTasks();
   // Acts put to a human. Read here for the same reason as findings: a proposal's
   // ref (`pr:42:merge`) names the item its card links to, so it feeds the link
   // map below as well as the cards themselves.
@@ -208,6 +212,7 @@ export function buildStateSnapshot(
     refs: [
       ...findings.map((f) => f.ref),
       ...findings.map((f) => f.ticketRef),
+      ...humanTasks.map((t) => t.originRef),
       ...proposals.map((p) => p.ref),
       // The comments the harness maintains on a ticket without being asked — the
       // plan's status comment and the assay's refusal (#171). Read off the values
@@ -425,6 +430,10 @@ export function buildStateSnapshot(
     // Operator-facing only: nothing in the dispatcher reads them, and one becomes
     // work only through `POST /api/findings/:id/promote`.
     findings,
+    // Open ones and a settled tail alike, exactly as `findings` ships: "we asked
+    // and it was declined" is information, and a row that vanished on being
+    // settled would take the operator's own note with it.
+    humanTasks,
     escalations: store.listEscalations(),
     // Acts a human was asked to authorize (issue #109). The cockpit joins these
     // to their escalation so a decision-bearing item gets accept/reject rather

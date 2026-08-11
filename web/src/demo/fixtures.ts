@@ -516,6 +516,45 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(90),
         updatedAt: ago(6),
       }),
+      // The step a person owns, and the part waiting behind it. Two rows rather
+      // than one because the *point* of a human step is what it holds up: a
+      // `cutover` nobody is waiting on and one stopping a verification look
+      // identical on a list, and the floor's bench exists to tell them apart.
+      demoPart({
+        id: 'plan-212:cutover',
+        planId: 'plan-212',
+        slug: 'cutover',
+        seq: 4,
+        title: 'Point the staging database at the new schema',
+        scope: 'the RDS console — no agent has an account for it',
+        dependsOn: ['writes'],
+        expectedKind: 'human',
+        rationale: 'Nobody gave the fleet console credentials, and nobody should.',
+        acceptance: 'Staging reads and writes against the new tables.',
+        branch: null,
+        prNumber: null,
+        status: 'ready',
+        taskId: null,
+        createdAt: ago(90),
+        updatedAt: ago(6),
+      }),
+      demoPart({
+        id: 'plan-212:soak',
+        planId: 'plan-212',
+        slug: 'soak',
+        seq: 5,
+        title: 'Assert on a staging soak run',
+        scope: 'test/soak/',
+        dependsOn: ['cutover'],
+        rationale: 'The only part that can prove the cutover worked, and it cannot start before it has.',
+        acceptance: 'A soak run over the new schema passes against staging.',
+        branch: null,
+        prNumber: null,
+        status: 'pending',
+        taskId: null,
+        createdAt: ago(90),
+        updatedAt: ago(6),
+      }),
       // plan-231's three parts — all `ready`, none dispatched, because the plan
       // itself is still awaiting approval (rule `plan-part` queues them `unapproved`).
       demoPart({
@@ -694,6 +733,60 @@ export function buildDemoState(): DemoSeed {
         ticketRef: 'issue:214',
         createdAt: ago(64),
         updatedAt: ago(58),
+      },
+    ],
+    // Work only a person can do. Three, so the panel shows each shape it has: a
+    // plan step holding parts shut, a standalone ask from an agent that could not
+    // do it itself, and one already declined with the note that stopped it.
+    humanTasks: [
+      {
+        id: 'hum-1',
+        title: 'Point the staging database at the new schema',
+        detail:
+          'RDS console → `lubbdubb-staging` → Parameter groups.\n\n' +
+          '- Switch `search_path` to the new schema\n' +
+          '- Restart the instance, then check the app comes back clean\n\n' +
+          'Done when staging reads and writes against the new tables. Nobody gave the fleet ' +
+          'console credentials, and nobody should.',
+        originRef: 'issue:212:part:cutover',
+        partId: 'plan-212:cutover',
+        agentId: null,
+        taskId: null,
+        status: 'open',
+        resolution: null,
+        createdAt: ago(18),
+        updatedAt: ago(18),
+        resolvedAt: null,
+      },
+      {
+        id: 'hum-2',
+        title: 'Confirm the new empty state reads correctly on a real phone',
+        detail:
+          'I can render it and diff the DOM, but not judge whether the copy lands at 375px in ' +
+          'sunlight. Screenshot attached to the PR.',
+        originRef: 'pr:142',
+        partId: null,
+        agentId: 'agent-a1',
+        taskId: 'task-a1',
+        status: 'open',
+        resolution: null,
+        createdAt: ago(40),
+        updatedAt: ago(40),
+        resolvedAt: null,
+      },
+      {
+        id: 'hum-3',
+        title: 'Rotate the CI deploy key',
+        detail: null,
+        originRef: 'issue:205',
+        partId: null,
+        agentId: 'agent-a0',
+        taskId: 'task-a0',
+        status: 'declined',
+        resolution: 'Not until the migration lands — rotating now breaks the release branch mid-flight.',
+        createdAt: ago(72),
+        updatedAt: ago(52),
+        resolvedAt: ago(52),
       },
     ],
     agents: [

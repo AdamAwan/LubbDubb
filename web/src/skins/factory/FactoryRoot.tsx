@@ -8,6 +8,7 @@ import { SpriteSheet, Icon } from './components/Sprite.js';
 import { StatusBar } from './components/StatusBar.js';
 import { BlueprintDesk, FaultLog, FindingsDesk, Slip, StampDesk } from './components/Desks.js';
 import { TheLine } from './components/TheLine.js';
+import { Bench } from './components/Bench.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
 import { Inspection } from './components/Inspection.js';
@@ -86,6 +87,41 @@ export function FactoryRoot({ view, actions }: SkinProps) {
       refUrls={state.refUrls}
       onDecide={(taskId, verdict) => actions.decideRecovery(taskId, verdict)}
     />
+  );
+
+  // The Bench, and it sits **above the line**: work a person does by hand, ahead
+  // of everything the line does by itself. First in the grid and spanning every
+  // track, drawn only when there is something on it — the floor's rule that a
+  // panel with nothing in it is not a panel.
+  //
+  // It is not a desk. The three desks are counts in the status bar you open when
+  // you want them, which is right for things read as "how many"; this is a list of
+  // instructions you work through, and a plan step on it is holding assemblers
+  // shut somewhere below.
+  //
+  // `Bench` is this skin's own drawing — everything else here is a machine with a
+  // lamp and a plate, and Classic's cards dropped into a factory card read as a
+  // form left on the shop floor. What it does *not* redraw is the pair of buttons
+  // and the rule between them: `HumanTaskActions` is shared, the same split
+  // `BotCard` keeps by embedding the wired escalation card.
+  const bench = (state.humanTasks?.length ?? 0) > 0 && (
+    <section className="fx-card fx-bev" data-fx="bench">
+      <div className="fx-head">
+        <div>
+          <Icon name="inserter" />
+          <h2>The Bench</h2>
+        </div>
+        <p className="fx-note">by hand{view.openHumanTaskCount > 0 && ` · ${view.openHumanTaskCount} waiting`}</p>
+      </div>
+      <Bench
+        tasks={state.humanTasks ?? []}
+        parts={state.planParts ?? []}
+        now={now}
+        refUrls={state.refUrls}
+        onDone={(id) => actions.completeHumanTask(id)}
+        onDecline={(id, note) => actions.declineHumanTask(id, note)}
+      />
+    </section>
   );
 
   const line = (
@@ -357,6 +393,7 @@ export function FactoryRoot({ view, actions }: SkinProps) {
           a count in the status bar, because that is how it is read; Production
           left the same way and its graph opens from its gauge. */}
           <div className="fx-grid">
+            {bench}
             {line}
             {inspection}
             {bots}

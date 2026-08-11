@@ -35,6 +35,7 @@ export type {
   Escalation,
   FileOverlap,
   Finding,
+  HumanTask,
   Issue,
   Job,
   JobAttachment,

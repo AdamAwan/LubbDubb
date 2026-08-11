@@ -29,6 +29,8 @@ export interface CockpitView {
   openEscalations: Escalation[];
   /** Findings nobody has ruled on — a finding never becomes work on its own. */
   openFindingCount: number;
+  /** Human tasks nobody has settled — work waiting on the operator themselves. */
+  openHumanTaskCount: number;
   /** Overlaps still in flight, the only ones an operator can still act on. */
   liveOverlapCount: number;
 
@@ -138,6 +140,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     past,
     openEscalations,
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,
+    openHumanTaskCount: (state.humanTasks ?? []).filter((t) => t.status === 'open').length,
     liveOverlapCount: (state.overlaps ?? []).filter((o) => o.live).length,
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,

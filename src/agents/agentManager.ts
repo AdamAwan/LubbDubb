@@ -14,6 +14,8 @@ import type {
   AgentUsage,
   Finding,
   FindingInput,
+  HumanTask,
+  HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
   PartOutcomeKind,
@@ -185,6 +187,8 @@ interface AgentManagerEvents {
   flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
   /** The agent filed something outside its own task (already persisted). `created` is false for a verbatim repeat. */
   finding: [{ agentId: string; taskId: string; finding: Finding; created: boolean }];
+  /** The agent asked for work only a person can do (already persisted). `created` is false for a repeat. */
+  humanTask: [{ agentId: string; taskId: string; humanTask: HumanTask; created: boolean }];
   /** The agent said what it is working on (already persisted onto its row, replacing the previous note). */
   progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
   /** The agent said whether its issue is finished (already persisted against the issue origin). */
@@ -470,6 +474,32 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const { finding, created } = this.store.recordFinding(agentId, task.id, task.originRef, input);
       this.emit('finding', { agentId, taskId: task.id, finding, created });
       return { ok: true, finding };
+    });
+  }
+
+  /**
+   * Ask for work only a person can do (the `request_human_task` tool). Routed
+   * through the manager for {@link recordFinding}'s reason: the cockpit should
+   * hear about it the moment it is filed, and the `humanTask` event is what
+   * carries it.
+   *
+   * Not requiring a live session is deliberate here too, and for a sharper reason
+   * than a finding's: the commonest moment to realise a person is needed is the
+   * moment an agent is giving up on doing something itself.
+   */
+  requestHumanTask(
+    agentId: string,
+    input: HumanTaskInput,
+  ): { ok: true; task: HumanTask } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ task }) => {
+      const { task: humanTask, created } = this.store.recordHumanTask({
+        ...input,
+        agentId,
+        taskId: task.id,
+        originRef: task.originRef,
+      });
+      this.emit('humanTask', { agentId, taskId: task.id, humanTask, created });
+      return { ok: true, task: humanTask };
     });
   }
 
