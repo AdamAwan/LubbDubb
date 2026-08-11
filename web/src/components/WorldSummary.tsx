@@ -1,17 +1,16 @@
 /*
- * Shared, not skin-owned — the one panel that moved back across the line when a
- * second skin arrived.
+ * Shared, not drawn by the floor.
  *
  * It looks like drawing, and most of it is; but the watch/ignore toggles, the
  * conclusion verdict and the assay override are operator controls with refusal
- * rules behind them, and those are what the shared/skinned split is drawn on. A
- * skin that reimplemented this would sooner or later ship a world view missing a
- * toggle, and flipping skins would silently take a capability away. Tinting it
- * through the tokens is the cost of not having that happen.
+ * rules behind them, and those are what the shared/drawn split is made on. A
+ * second implementation would sooner or later ship a world view missing a toggle,
+ * and the capability would be gone with no error to say so. Tinting it through
+ * the tokens is the cost of not having that happen.
  *
  * The assay override is the sharpest case of that, which is why it lives here
  * and not only on the Goal Floor: an `unclear` verdict is the one intake reading
- * that *blocks* dispatch, so a skin without the override is a cockpit you cannot
+ * that *blocks* dispatch, so a cockpit without the override is one you cannot
  * un-block an issue from. The floor's refused-assay plate is a second entry
  * point through the same action — `PlanModal`'s pattern, where three surfaces
  * reach one `viewPlan`.
@@ -384,9 +383,9 @@ export function WorldSummary({
 }: {
   state: AppState;
   /**
-   * Whether pull requests are listed here. A skin that draws them in full elsewhere
-   * passes `false` so one subject is drawn in one place; Classic, which has no other
-   * PR surface, leaves the default and is unchanged.
+   * Whether pull requests are listed here. A caller that draws them in full
+   * elsewhere passes `false` so one subject is drawn in one place; the floor does,
+   * on the inspection rack.
    *
    * It gates the counts and the recently-closed list as well as the rows — tab counts
    * that included PRs nobody could see would not match what the tab shows.

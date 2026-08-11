@@ -62,8 +62,8 @@ function readToken(): string {
     // from this page load still works; only persistence is lost.
     //
     // This also catches the no-browser case: `location` is simply undefined when
-    // the cockpit is imported under node, which is how the skin tests render a
-    // skin to static markup. There is no token to find there and nothing will be
+    // the cockpit is imported under node, which is how `test/factoryFloor.test.ts`
+    // renders the floor to static markup. There is no token to find there, nothing will be
     // fetched, so an empty one is the right answer rather than a crash at import.
     return typeof location === 'undefined' ? '' : (/[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1] ?? '');
   }
@@ -380,7 +380,7 @@ function connectRealWs(onEvent: (ev: unknown) => void, onStatus?: (connected: bo
 //
 // The `typeof` guard is for node, not the browser: under `tsx` there is no
 // `import.meta.env` at all, so the bare access threw at import — which put the
-// whole cockpit out of reach of a test, and so out of reach of the skin tests
+// whole cockpit out of reach of a test, and so out of reach of the floor tests
 // that render it to static markup.
 //
 // If you change the shape of this expression, check both build directions, and

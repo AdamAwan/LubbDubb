@@ -1,62 +1,64 @@
 /*
  * The token layer is the styling contract for *shared* components — the drawer,
  * the escalation card, recovery — which have one implementation and must look
- * native in every skin. A skin may write whatever CSS it likes for its own
- * markup; what it may not do is restyle a shared component except through these.
- *
- * So: shared components style themselves only through tokens; skins define the
- * tokens. Everything below is Classic's set, and every value is what it was
- * before the tokens existed — the indirection resolves identically, which is why
- * the golden-markup test in `test/cockpitSkins.test.ts` is a fair check.
+ * native beside the floor's own markup. A shared component styles itself only
+ * through these; `factory/factory.css` writes whatever CSS it likes for `.fx`
+ * and touches no shared class.
  */
-:root,
-:root[data-skin='classic'] {
-  --bg: #0b0e14;
-  --panel: #131722;
-  --panel-2: #1a2030;
-  --border: #232a3b;
-  --text: #d6deeb;
-  --muted: #7b88a1;
-  --accent: #ff5c7c;
-  --blue: #4aa3ff;
-  --green: #37d67a;
-  --amber: #ffb020;
-  --red: #ff5c5c;
-  --grey: #6b7688;
+:root {
+  /* Cool grey-slate, sampled from a factory game's own UI. The orange accent is
+     meant to be the only warm thing in the frame, so the ground stays cool: on a
+     warm one it competed with the floor rather than sitting on it. */
+  --bg: #191b1c;
+  --panel: #313436;
+  --panel-2: #292c2e;
+  --border: #3d4144;
+  --text: #e9e7e1;
+  /* One step lighter than the sampled value: a cooler ground is darker in
+     perceived value, and the warm grey carried straight over landed at 4.44
+     against `--panel` — under AA, where it had been over it. */
+  --muted: #9e9e99;
+  --accent: #ff9c1a;
+  --blue: #5b9ec9;
+  --green: #6fbf5a;
+  --amber: #f2c14e;
+  --red: #d9483b;
+  --grey: #6a6d6f;
 
   /* Tints of the semantic colours above, previously written as literals at each
-     use site. Named so a skin can move them together with the hue they belong to. */
-  --amber-line: #4d3a12;
-  --amber-fill: #1e1809;
-  --red-line: #4d1e1e;
-  --accent-fill: #3a1420;
-  --blue-line: #1c3a5c;
-  --blue-line-2: #234a6e;
-  --blue-fill: #14243a;
-  --green-fill: #10241a;
-  --amber-fill-2: #241d0c;
-  --red-fill: #241010;
-  --on-light: #04121f;
-  --on-warm: #1a0606;
-  --well: #05070c;
+     use site. Named so they move together with the hue they belong to. */
+  --amber-line: #5a4413;
+  --amber-fill: #241d0c;
+  --amber-fill-2: #2b220e;
+  --red-line: #5a231d;
+  --red-fill: #2a1512;
+  --accent-fill: #33230d;
+  --blue-line: #2a4a5e;
+  --blue-line-2: #37607a;
+  --blue-fill: #17242c;
+  --green-fill: #16240f;
+  /* Ink on a light or warm fill: the floor colour, not near-black — a machine
+     panel's lettering is the panel's own shadow, not ink from somewhere else. */
+  --on-light: #1c1b1a;
+  --on-warm: #1c1b1a;
+  --well: #16181a;
 
-  /* Radius. The one non-colour token that genuinely blocks a treatment: a
-     square-cornered skin is unreachable by palette alone. */
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 10px;
-  --r-pill: 999px;
+  /* Square. Nothing on a factory floor is rounded. */
+  --r-sm: 0;
+  --r-md: 0;
+  --r-lg: 0;
+  --r-pill: 0;
 
-  /* A skin with a display face points --font-display somewhere else; Classic has
-     none, so it resolves to the UI face and nothing changes. */
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-display: var(--font-ui);
+  --font-ui: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
+  /* Condensed, mechanical, and already on the machine in both directions:
+     Bahnschrift ships with Windows, DIN Alternate with macOS. Bundling a webfont
+     to say the same thing would cost a data URI and a licence audit. */
+  --font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
 
-  /* Two border colours so a skin can bevel — light top/left, dark bottom/right.
-     Classic points both at --border, so its panels stay flat. */
-  --border-hi: var(--border);
-  --border-lo: var(--border);
+  /* Extruded, not flat: 1px light top/left, 1px dark bottom/right. */
+  --border-hi: #474b4e;
+  --border-lo: #0f1112;
 }
 
 * {
@@ -66,9 +68,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  /* Through the token, not repeated as a literal: a skin that points --font-ui
-     somewhere else must move the page with it, or its own panels change face
-     while everything around them does not. */
+  /* Through the token, not repeated as a literal: re-pointing --font-ui must move
+     the page with it, or the floor's panels change face while the shared
+     components around them do not. */
   font: 14px/1.5 var(--font-ui);
 }
 .loading {
@@ -93,55 +95,6 @@ body {
   border-radius: var(--r-sm);
   padding: 1px 5px;
 }
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.brand {
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: 0.3px;
-}
-.pulse-mark {
-  color: var(--accent);
-  animation: beat 1.4s ease-in-out infinite;
-  display: inline-block;
-}
-@keyframes beat {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  15% {
-    transform: scale(1.25);
-  }
-  30% {
-    transform: scale(1);
-  }
-  45% {
-    transform: scale(1.15);
-  }
-}
-.tagline {
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 12px;
-  margin-left: 10px;
-}
-.topbar-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .chip {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -323,7 +276,7 @@ body {
   padding: 6px 10px;
 }
 
-/* Launch-a-job panel: sits between the inject bar and the vitals strip. */
+/* Launch-a-job panel, opened from the blueprint desk. */
 .launch {
   display: flex;
   flex-direction: column;
@@ -498,35 +451,6 @@ body {
 .attachment-thumb a:hover img {
   border-color: var(--blue);
 }
-
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-  padding: 16px 20px;
-  align-items: start;
-}
-@media (max-width: 1000px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
-.col {
-  min-width: 0;
-}
-.col h2 {
-  font-size: 15px;
-  margin: 4px 0 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.col h3 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin: 18px 0 8px;
-}
 .muted {
   color: var(--muted);
 }
@@ -555,10 +479,6 @@ body {
   font-size: 12px;
   color: var(--muted);
 }
-.count.urgent {
-  background: var(--accent-fill);
-  color: var(--accent);
-}
 .empty {
   color: var(--muted);
   font-style: italic;
@@ -586,34 +506,6 @@ body {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-}
-.card-title {
-  font-weight: 600;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.card-meta {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-top: 8px;
-  font-size: 12px;
-}
-.card-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
-}
-.waiting-reason {
-  margin-top: 8px;
-  padding: 8px;
-  background: var(--amber-fill);
-  border: 1px solid var(--amber-line);
-  border-radius: 7px;
-  color: var(--amber);
-  font-size: 13px;
 }
 
 /* Flagged artifacts (design docs, reports, links) an agent surfaced mid-run. */
@@ -1008,56 +900,6 @@ body {
   cursor: pointer;
 }
 
-.auditlog {
-  max-height: 75vh;
-  overflow-y: auto;
-}
-.audit {
-  border-left: 2px solid var(--border);
-  padding: 6px 10px;
-  margin-bottom: 6px;
-  font-size: 12px;
-}
-.audit.executed {
-  border-color: var(--green);
-}
-.audit.deferred,
-.audit.skipped {
-  border-color: var(--amber);
-}
-.audit.rejected {
-  border-color: var(--red);
-}
-.audit-type {
-  font-family: var(--font-mono);
-  margin-left: 8px;
-  color: var(--text);
-}
-.audit-detail {
-  color: var(--muted);
-  margin-top: 2px;
-}
-.audit.error-entry {
-  border-color: var(--red);
-}
-.error-detail summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 11px;
-  margin-top: 2px;
-}
-.error-detail pre {
-  margin: 4px 0 0;
-  padding: 6px 8px;
-  background: var(--panel-2);
-  border-radius: var(--r-sm);
-  font-size: 11px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 180px;
-  overflow-y: auto;
-}
-
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -1216,105 +1058,6 @@ body {
   opacity: 0.85;
 }
 
-/* ── Heartbeat countdown ─────────────────────────────────────────────── */
-.heartbeat {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: 4px;
-}
-.heartbeat-track {
-  width: 84px;
-  height: 6px;
-  background: var(--panel-2);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-.heartbeat-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--blue));
-  border-radius: var(--r-md);
-  transition: width 0.9s linear;
-}
-.heartbeat-label {
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-/* ── Vitals strip ────────────────────────────────────────────────────── */
-.vitals {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
-  padding: 14px 20px 4px;
-}
-@media (max-width: 1000px) {
-  .vitals {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-@media (max-width: 560px) {
-  .vitals {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-.vital {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  position: relative;
-  overflow: hidden;
-}
-.vital::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--border);
-}
-.vital.ok::before {
-  background: var(--green);
-}
-.vital.warn::before {
-  background: var(--amber);
-}
-.vital.urgent::before {
-  background: var(--accent);
-}
-.vital-value {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-}
-.vital.urgent .vital-value {
-  color: var(--accent);
-}
-.vital.warn .vital-value {
-  color: var(--amber);
-}
-.vital.ok .vital-value {
-  color: var(--green);
-}
-.vital-label {
-  font-size: 11px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* ── Agent card extras ───────────────────────────────────────────────── */
-.mono-time {
-  font-family: var(--font-mono);
-  margin-left: auto;
-}
 .spinner {
   width: 8px;
   height: 8px;
@@ -1331,288 +1074,13 @@ body {
     transform: rotate(360deg);
   }
 }
-/* What the agent says it is doing (note_progress). Prose, not terminal output —
-   so it reads in the body font, above the monospaced tail beneath it. */
-.progress-note {
-  margin-top: 8px;
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  font-size: 12.5px;
-  color: var(--text);
-  border-left: 2px solid var(--blue);
-  padding-left: 8px;
-}
-.progress-note-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.progress-note-age {
-  margin-left: auto;
-  flex: none;
-  color: var(--muted);
-  font-size: 11px;
-}
-.last-line {
-  margin-top: 8px;
-  padding: 6px 8px;
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  color: #8fa0bf;
-  font-size: 11.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .card.agent.running {
   box-shadow:
     0 0 0 1px var(--blue-line),
     0 0 22px -14px var(--blue);
 }
-
-/* ── Empty-state panels ──────────────────────────────────────────────── */
-.empty-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
-  padding: 24px 16px;
-  background: var(--panel);
-  border: 1px dashed var(--border);
-  border-radius: var(--r-lg);
-  color: var(--muted);
-}
-.empty-panel p {
-  margin: 0;
-  font-size: 13px;
-}
-.empty-mark {
-  font-size: 26px;
-  color: var(--accent);
-  animation: beat 1.6s ease-in-out infinite;
-}
-.empty-panel.calm .empty-mark {
-  color: var(--green);
-  animation: none;
-}
-
-/* ── Decision-log filters + richer entries ───────────────────────────── */
-.log-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-.filter-chip {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11.5px;
-  cursor: pointer;
-  text-transform: capitalize;
-}
-.filter-chip:hover {
-  border-color: var(--blue);
-}
-.filter-chip.active {
-  color: var(--text);
-  border-color: var(--blue);
-  background: var(--blue-fill);
-}
-.filter-chip.executed.active {
-  border-color: var(--green);
-  background: var(--green-fill);
-}
-.filter-chip.deferred.active,
-.filter-chip.skipped.active {
-  border-color: var(--amber);
-  background: var(--amber-fill-2);
-}
-.filter-chip.rejected.active {
-  border-color: var(--red);
-  background: var(--red-fill);
-}
-.filter-count {
-  opacity: 0.7;
-  font-variant-numeric: tabular-nums;
-}
-.audit {
-  background: var(--panel);
-  border-radius: 8px;
-  border-left: 2px solid var(--border);
-  padding: 8px 10px;
-  margin-bottom: 7px;
-  font-size: 12px;
-}
-.audit-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.audit-time {
-  margin-left: auto;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.audit-reason {
-  color: var(--text);
-  margin-top: 5px;
-  font-style: italic;
-  opacity: 0.85;
-}
-/* Decision rows expand on click to show the dispatcher rule that produced them. */
-.audit.clickable {
-  cursor: pointer;
-}
-.audit-chevron {
-  color: var(--muted);
-  font-size: 10px;
-  transition: transform 0.15s ease;
-}
-.audit-chevron.open {
-  transform: rotate(90deg);
-}
-.audit-rule {
-  margin-top: 6px;
-  padding: 7px 9px;
-  border-radius: var(--r-md);
-  background: rgba(127, 127, 127, 0.08);
-  font-style: normal;
-}
-.audit-rule-head {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  margin-bottom: 3px;
-}
-.audit-rule-number {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--blue);
-  white-space: nowrap;
-}
-.audit-rule-name {
-  font-weight: 600;
-}
-.audit-rule-desc {
-  opacity: 0.85;
-}
-
-/* Decision log and Activity feed share the third column; cap each so both fit. */
-.auditlog {
-  max-height: 46vh;
-}
-.feed-heading {
-  margin-top: 24px;
-}
-
-/* Activity feed — world change history. Per-category accent, reusing the palette. */
-.audit.activity {
-  font-style: normal;
-}
-.audit.activity .audit-reason {
-  font-style: normal;
-  opacity: 1;
-}
-.audit.activity.prs {
-  border-color: var(--blue);
-}
-.audit.activity.issues {
-  border-color: var(--accent);
-}
-.badge.prs {
-  color: var(--blue);
-}
 .badge.issues {
   color: var(--accent);
-}
-.filter-chip.prs.active {
-  border-color: var(--blue);
-  background: var(--blue-fill);
-}
-.filter-chip.issues.active {
-  border-color: var(--accent);
-  background: var(--accent-fill);
-}
-
-/* "Up next" queue — the dispatcher's ranked pickup plan with the headroom cut. */
-.upnext {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 8px 12px 10px;
-  font-size: 13px;
-}
-.upnext-asof {
-  color: var(--muted);
-  font-size: 11px;
-  margin-bottom: 4px;
-}
-.upnext-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  flex-wrap: wrap;
-}
-.upnext-item.waiting,
-.upnext-item.cooldown,
-.upnext-item.capped {
-  opacity: 0.65;
-}
-.upnext-title {
-  min-width: 0;
-  flex: 1;
-}
-/* Re-order controls (issue #128): pushed to the right of each queued row. */
-.upnext-reorder {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: auto;
-}
-.reorder-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 9px;
-  line-height: 1;
-  padding: 2px 4px;
-}
-.reorder-btn:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--muted);
-}
-.reorder-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-/* The cut-line: everything below waits for a free agent slot. */
-.upnext-cut {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0 2px;
-  color: var(--amber);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-.upnext-cut::before,
-.upnext-cut::after {
-  content: '';
-  flex: 1;
-  border-top: 1px dashed var(--amber);
-  opacity: 0.6;
 }
 
 /* Findings — what agents noticed outside their own tasks, awaiting an operator. */
@@ -1695,36 +1163,6 @@ body {
   gap: 6px;
   margin-left: auto;
 }
-
-/* Plan panel — the multi-PR graph per issue, parts drawn as a stack. */
-.plans {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.plan-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 8px 12px 6px;
-  font-size: 13px;
-}
-.plan-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.plan-title {
-  font-weight: 600;
-  min-width: 0;
-}
-.plan-reason,
-.plan-foot {
-  color: var(--muted);
-  font-size: 11px;
-  margin: 3px 0;
-}
 .plan-part {
   display: flex;
   align-items: center;
@@ -1741,63 +1179,6 @@ body {
 }
 .plan-part.blocked {
   border-left-color: var(--accent);
-}
-.plan-mark {
-  color: var(--muted);
-  width: 12px;
-  text-align: center;
-}
-.plan-part-title {
-  min-width: 0;
-}
-.plan-slug {
-  color: var(--muted);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  margin-left: auto;
-}
-
-/* File overlaps — paths two concurrently-running agents both wrote (issue #113). */
-.overlaps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.overlap-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 8px 12px;
-  font-size: 13px;
-  opacity: 0.7;
-}
-.overlap-card.live {
-  opacity: 1;
-}
-.overlap-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.overlap-path {
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-.overlap-writers {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 12px;
-}
-.overlap-writers li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 
 /* -- Crash recovery ------------------------------------------------------- */
@@ -1881,41 +1262,16 @@ body {
   background: rgba(240, 173, 78, 0.15);
   color: var(--amber);
 }
-/* A countdown that will not fire reads as a healthy harness doing nothing. */
-.heartbeat.held .heartbeat-fill {
-  background: var(--amber);
-}
-.heartbeat.held .heartbeat-label {
-  color: var(--amber);
-}
-
-/* Skin picker. Shared rather than skin-owned, so a half-built skin is never the
-   one you cannot escape from. Hidden entirely while only one skin is registered. */
-.skin-picker select {
-  font: inherit;
-  color: var(--muted);
-  cursor: pointer;
-}
-/* The cog that opens the settings modal, which is where the picker above now
-   lives. Skin-embedded for the picker's own reason: it is the way back to it. */
+/* The cog that opens the settings modal. */
 .settings-cog {
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
 }
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
 
 /* ── Work graph ──────────────────────────────────────────────────────────
-   Shell-level rather than skin-owned: the graph is the one surface that
-   outlives the world snapshot, so it is drawn the same under every skin and
-   styled only through the tokens above. */
+   Shell-level rather than drawn by the floor: the graph is the one surface that
+   outlives the world snapshot, so it is styled only through the tokens above. */
 .work-panel {
   padding: 0 16px 24px;
 }
@@ -1935,8 +1291,8 @@ body {
   border-bottom: 1px solid var(--border);
 }
 /* A `.btn`, so the UA's own button chrome never shows through: it defaults to a
-   light face, and every token here puts light ink on it — the row went unreadable
-   under both skins. `.btn.ghost` supplies the transparent background; the rest
+   light face, and every token here puts light ink on it — the row went unreadable.
+   `.btn.ghost` supplies the transparent background; the rest
    below is the row shape, which the base button is not. */
 .work-root-head {
   display: flex;
@@ -2424,9 +1780,9 @@ body {
 }
 
 /*
- * Settings modal — the running config, and the skin picker that used to sit in
- * each skin's chrome. Reuses the plan modal's backdrop and head (`.pm-*`): it is
- * the same kind of object, a document to read rather than a stream to watch.
+ * Settings modal — the running config, the CI policy and the prompt book. Reuses
+ * the plan modal's backdrop and head (`.pm-*`): it is the same kind of object, a
+ * document to read rather than a stream to watch.
  */
 .settings-backdrop {
   position: fixed;
@@ -2575,76 +1931,14 @@ body {
   word-break: break-word;
 }
 
-/* Stacks. Tokens only, so the treatment follows whatever skin is active — the
-   shared-component contract in this file's header. The rung column carries a
+/* Stacks. Tokens only — the shared-component contract in this file's header.
+   The rung column carries a
    left rule rather than a per-rung border, so a stack reads as one run of work
    and not as a list that happens to be adjacent. */
 .stacks {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.stack-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 8px 12px 10px;
-  font-size: 13px;
-}
-.stack-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-.stack-title {
-  font-weight: 600;
-  min-width: 0;
-}
-.stack-ref {
-  margin-left: auto;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-.stack-rungs {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border-left: 2px solid var(--border);
-  padding-left: 10px;
-  margin-left: 4px;
-}
-.stack-rung {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 5px 8px;
-}
-/* The one that merges next, and the only one the merge rule can act on. */
-.stack-rung.bottom {
-  border-color: var(--green);
-}
-.stack-pos {
-  color: var(--muted);
-  font-size: 11px;
-  min-width: 1ch;
-}
-.stack-rung-title {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  min-width: 0;
-}
-.stack-base {
-  margin-left: auto;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 /*

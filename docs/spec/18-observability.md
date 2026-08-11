@@ -21,7 +21,7 @@ Four durable records answer four different questions, plus one live tail and one
 `ErrorRecorder` is the narrow `{record}` seam handed to consumers, so they stay decoupled from the
 emitter and tests can pass a plain capture object.
 
-The log is the one record an operator can **clear** (`POST /api/errors/clear`, the factory skin's
+The log is the one record an operator can **clear** (`POST /api/errors/clear`, the cockpit's
 Faults head): it is a list read and cleared rather than a record anything decides on — nothing in the
 harness reads `error_events` back — so the only thing a clear can lose is a row nobody had read. The
 other three tables have no such button, because every one of them is read back by something. Clearing

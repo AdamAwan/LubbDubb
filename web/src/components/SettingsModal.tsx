@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
-import { SkinPicker } from '../skins/SkinPicker.js';
 import type { RunningConfigGroup } from '../types.js';
 import { CiPolicyTab } from './CiPolicyTab.js';
 import { PromptsTab } from './PromptsTab.js';
 
 /**
- * Settings: what this harness is running on, and how the cockpit looks.
+ * Settings: what this harness is running on.
  *
  * **Three tabs since #244.** Everything an operator configures now answers to
  * one cog: the resolved config, the CI policy that decides what a red PR gets,
@@ -27,10 +26,6 @@ import { PromptsTab } from './PromptsTab.js';
  * answer to "when does this take effect" is "at the next restart". Changing a
  * value stays an edit to `lubbdubb.config.json` and a restart.
  *
- * The skin picker lives here rather than in each skin's chrome so there is one
- * place an operator looks for a preference, and the cog that opens this is what
- * each skin now embeds — so the picker is still reachable from every skin, which
- * is the property that stops a half-built skin being one you cannot escape.
  */
 export function SettingsModal({
   control,
@@ -119,11 +114,6 @@ export function SettingsModal({
         )}
 
         <div hidden={tab !== 'settings'} role="tabpanel">
-          <div className="settings-section">
-            <span className="pm-section-label">Appearance</span>
-            <SkinPicker />
-          </div>
-
           <div className="settings-section">
             <span className="pm-section-label">Live controls</span>
             {/* The two values the frozen config below would otherwise lie about:

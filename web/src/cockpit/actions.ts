@@ -3,12 +3,13 @@ import type { RecoveryVerdict, WorkNodeView } from '../types.js';
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
  *
- * This exists so that **no skin imports `api.js`**. A skin that reached the network
- * directly could grow a capability the other skins lack, and the difference would
- * only show up as a button that exists in one theme — so the surface is enumerated
- * here once, and `test/cockpitSkins.test.ts` asserts structurally that `skins/`
- * never imports the client. Selection is on here too: which drawer is open is
- * cockpit state, not skin state, or closing the drawer would lose the subscription.
+ * This exists so that **nothing under `factory/` imports `api.js`**. Drawing code
+ * that reached the network directly could grow a capability with no refusal rule
+ * behind it, and it would show up only as a button nobody wrote a rule for — so
+ * the surface is enumerated here once, and `test/factoryFloor.test.ts` asserts
+ * structurally that `factory/` never imports the client. Selection is on here too:
+ * which drawer is open is cockpit state, not floor state, or closing the drawer
+ * would lose the subscription.
  */
 export interface CockpitActions {
   refresh(): Promise<void>;
@@ -42,29 +43,29 @@ export interface CockpitActions {
   abandonPlan(planId: string): Promise<void>;
   /**
    * Which plan's modal is open. UI state, on the seam for the same reason
-   * `select` is: a skin cannot own it (the modal is shared and the triggers are
-   * skin-side), and a skin may not reach `api.js` to open it another way.
+   * `select` is: the floor cannot own it (the modal is shared and the triggers are
+   * floor-side), and the floor may not reach `api.js` to open it another way.
    */
   viewPlan(planId: string | null): void;
   /**
    * Which goal's retrospective is open, as an `issue:<n>` ref. On the seam for
    * `viewPlan`'s reason: the modal is shared and reaches `api.js`, while the
-   * control that opens it is embedded by whichever skin draws the station.
+   * control that opens it is embedded by the station that draws the goal.
    */
   viewRetro(issueRef: string | null): void;
   /**
    * Which goal's shared scratchpad is open, as an `issue:<n>` ref. On the seam for
    * `viewRetro`'s reason exactly: the modal is shared and fetches its trail from
-   * `api.js`, while the controls that open it are embedded by whichever skin draws
-   * the goal — and two skins reaching one action is what stops the notepad
-   * becoming readable in one theme only.
+   * `api.js`, while the controls that open it are embedded by the surfaces that
+   * draw the goal — and several of them reaching one action is what stops the
+   * notepad becoming readable from one place only.
    */
   viewScratchpad(issueRef: string | null): void;
   /**
-   * Open or close the settings modal — the running config and the skin picker.
-   * On the seam for `viewPlan`'s reason: the modal is shared and hangs off the
-   * shell (it reaches `/api/config`, which a skin may not do), while the cog that
-   * opens it is embedded by each skin wherever that skin puts its chrome.
+   * Open or close the settings modal — the running config, the CI policy and the
+   * prompt book. On the seam for `viewPlan`'s reason: the modal is shared and hangs
+   * off the shell (it reaches `/api/config`, which `factory/` may not do), while
+   * the cog that opens it sits in the status bar.
    */
   openSettings(open: boolean): void;
   discussPlan(planId: string): Promise<void>;
@@ -82,16 +83,17 @@ export interface CockpitActions {
   /**
    * Authorize landing a whole chain of stacked pull requests, or call that off.
    *
-   * On the seam rather than in the skin for every mutation's reason: a skin may
-   * not import `api.js`. `landing: false` is the revoke — the standing intent is
+   * On the seam rather than in the drawing code for every mutation's reason:
+   * `factory/` may not import `api.js`. `landing: false` is the revoke — the standing intent is
    * settled, not un-set, so the record of what was authorized survives.
    */
   setStackLanding(ref: string, landing: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**
-   * Override the goal assay's verdict (#158). On the seam rather than in a skin
-   * for the reason every mutation is: a skin may not import `api.js`, and an
+   * Override the goal assay's verdict (#158). On the seam rather than in the
+   * drawing code for the reason every mutation is: `factory/` may not import
+   * `api.js`, and an
    * `unclear` verdict is the one intake reading that *blocks* dispatch — so
    * without this the only escape hatch is editing the ticket.
    *
@@ -117,8 +119,8 @@ export interface CockpitActions {
    * End the harness's run at a goal (issues #203, #234). A run is retained on the
    * floor — no pulse, poll or ticket close drops it — so the operator can still
    * open its report; this is the one thing that ends it, it persists, and since
-   * #234 it also stops the dispatcher. On the seam for every mutation's reason: a
-   * skin may not reach `api.js`.
+   * #234 it also stops the dispatcher. On the seam for every mutation's reason:
+   * `factory/` may not reach `api.js`.
    */
   dismissRun(issueNumber: number): Promise<void>;
 
@@ -126,7 +128,7 @@ export interface CockpitActions {
    * One work item's durable subtree (`GET /api/work/:ref`), fetched on demand.
    *
    * A read rather than a mutation, and on this seam for the same reason every
-   * mutation is: a skin may not import `api.js`, so without it the Goal Floor
+   * mutation is: `factory/` may not import `api.js`, so without it the Goal Floor
    * could not reach the record at all. It is deliberately **not** a snapshot key
    * — the graph never forgets, so shipping the forest on every poll would be the
    * wrong shape, which is why `/api/work` is its own route.

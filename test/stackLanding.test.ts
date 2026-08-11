@@ -325,7 +325,7 @@ test('a second click supersedes the first rather than racing it', () => {
 // ---------------------------------------------------------------------------
 
 (globalThis as { React?: typeof React }).React = React;
-const { Inspection } = await import('../web/src/skins/factory/components/Inspection.js');
+const { Inspection } = await import('../web/src/factory/components/Inspection.js');
 
 const STACK = {
   ref: 'stack:1',

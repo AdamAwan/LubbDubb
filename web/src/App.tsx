@@ -1,6 +1,6 @@
 import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
-import { readStoredSkinId, resolveSkin } from './skins/registry.js';
+import { FactoryRoot } from './factory/FactoryRoot.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
@@ -36,20 +36,20 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
 }
 
 /**
- * The cockpit shell, and deliberately nothing more: acquire state, pick a skin,
- * hand the skin a finished view-model. Everything that decides what the operator
- * sees lives in `skins/`; everything that decides what is true lives in
- * `cockpit/` and `view/`.
+ * The cockpit shell, and deliberately nothing more: acquire state, hand the floor
+ * a finished view-model. Everything that decides what the operator sees lives in
+ * `factory/`; everything that decides what is true lives in `cockpit/` and
+ * `view/`.
  *
- * The two screens below stay here rather than moving into a skin because neither
- * has a view-model to draw — a skin cannot render a cockpit whose state never
- * arrived, and a locked-out cockpit must look the same however it was themed.
+ * The two screens below stay here rather than moving onto the floor because
+ * neither has a view-model to draw — the floor cannot render a cockpit whose
+ * state never arrived.
  *
  * The work graph hangs off the shell for the same class of reason. It is not in
  * the view-model at all — it has its own routes, fetched on open rather than on
- * every poll — so a skin drawing it would have to reach `api.js` directly, which
- * is exactly what the skin seam forbids (and `test/cockpitSkins.test.ts` asserts).
- * Below the skin, so it is the same record whichever theme is on.
+ * every poll — so drawing it below `FactoryRoot` would mean reaching `api.js`
+ * from `factory/`, which is exactly what the seam forbids (and
+ * `test/factoryFloor.test.ts` asserts).
  *
  * The prompt book sits beside it on the same argument, reached from the other
  * direction: it is fetched rather than polled because it is read once at boot and
@@ -62,10 +62,8 @@ export function App() {
   if (status.kind === 'denied') return <LockedOut error={status.error} />;
   if (status.kind === 'loading') return <div className="loading">Connecting to the cockpit…</div>;
 
-  const { Root } = resolveSkin(readStoredSkinId());
-
   // The modal hangs off the shell for the same reason `WorkTreePanel` does — it is
-  // shared, and the skin seam forbids a skin reaching `api.js` to open it another way.
+  // shared, and the seam forbids `factory/` reaching `api.js` to open it another way.
   const state = status.view.state;
   const viewedPlan = (state.plans ?? []).find((p) => p.id === status.view.viewingPlan) ?? null;
   const planModal = viewedPlan ? (
@@ -95,7 +93,7 @@ export function App() {
 
   return (
     <>
-      <Root view={status.view} actions={status.actions} />
+      <FactoryRoot view={status.view} actions={status.actions} />
       {planModal}
       {status.view.viewingRetro && (
         <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />

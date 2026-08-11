@@ -7,7 +7,7 @@ import { relTime } from './util.js';
 
 /**
  * The blueprint plate: a blue sheet with a white grid, drawn inline rather than
- * added to a skin's sprite sheet because this panel is shared and a skin's sprites
+ * added to the floor's sprite sheet because this panel is shared and those sprites
  * are not. It is the one glyph in the cockpit that is *not* `currentColor` — a
  * blueprint is blue the way a warning is amber, so the colour is the noun.
  */
