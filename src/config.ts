@@ -592,7 +592,48 @@ function refuseRemovedKeys(fromFile: object, filePath: string): void {
   }
 }
 
-export function loadConfig(overrides: Partial<Config> = {}): Config {
+/**
+ * Deep-merge one config layer over another, the way {@link loadConfig} merges a
+ * layer over {@link DEFAULTS}: the nested policy blocks merge field by field,
+ * everything else is last-writer-wins.
+ *
+ * Only {@link loadDeploymentConfig} needs this — it has three layers (file, env,
+ * explicit) to fold into the one `overrides` argument `loadConfig` takes, and a
+ * shallow fold would let an explicit `{planning: {enabled: true}}` drop the
+ * `planning` fields the operator's file set.
+ */
+function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Config> {
+  const merged: Partial<Config> = { ...lower, ...upper };
+  if (lower.autoSend ?? upper.autoSend)
+    merged.autoSend = { ...DEFAULTS.autoSend, ...lower.autoSend, ...upper.autoSend };
+  if (lower.integrations ?? upper.integrations)
+    merged.integrations = { ...DEFAULTS.integrations, ...lower.integrations, ...upper.integrations };
+  if (lower.planning ?? upper.planning)
+    merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
+  if (lower.assessment ?? upper.assessment)
+    merged.assessment = { ...DEFAULTS.assessment, ...lower.assessment, ...upper.assessment };
+  if (lower.assay ?? upper.assay) merged.assay = { ...DEFAULTS.assay, ...lower.assay, ...upper.assay };
+  if (lower.retrospective ?? upper.retrospective)
+    merged.retrospective = { ...DEFAULTS.retrospective, ...lower.retrospective, ...upper.retrospective };
+  if (lower.mcp ?? upper.mcp) merged.mcp = { ...DEFAULTS.mcp, ...lower.mcp, ...upper.mcp };
+  if (lower.auth ?? upper.auth) merged.auth = { ...DEFAULTS.auth, ...lower.auth, ...upper.auth };
+  return merged;
+}
+
+/**
+ * The config a *deployment* runs on: {@link loadConfig} plus the two ambient
+ * layers — a `lubbdubb.config.json` in the launch directory and the handful of
+ * env overrides — folded in underneath the explicit ones.
+ *
+ * **This, not `loadConfig`, is what a process entry point calls.** The ambient
+ * layers live here rather than in `loadConfig` because they make the config a
+ * function of the machine it loads on: the test suite runs in a working copy of
+ * this repo, so an operator's own `lubbdubb.config.json` sitting next to it would
+ * merge into every test that builds a config — silently, and differently on every
+ * developer's machine. A test wants defaults plus what it wrote; only a
+ * deployment wants the environment.
+ */
+export function loadDeploymentConfig(overrides: Partial<Config> = {}): Config {
   const filePath = resolve(process.cwd(), 'lubbdubb.config.json');
   let fromFile: Partial<Config> = {};
   if (existsSync(filePath)) {
@@ -610,38 +651,47 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   if (process.env.LUBBDUBB_HOST) fromEnv.host = process.env.LUBBDUBB_HOST;
   if (process.env.LUBBDUBB_DB) fromEnv.dbPath = process.env.LUBBDUBB_DB;
   if (process.env.LUBBDUBB_REPO_ROOT) fromEnv.repoRoot = process.env.LUBBDUBB_REPO_ROOT;
-  const merged = { ...DEFAULTS, ...fromFile, ...fromEnv, ...overrides };
+  return loadConfig(mergeLayers(mergeLayers(fromFile, fromEnv), overrides));
+}
+
+/**
+ * Defaults, the caller's overrides, path resolution and validation — and nothing
+ * ambient. Reads no file and no env var, so the same arguments give the same
+ * config on any machine; {@link loadDeploymentConfig} is the entry point that
+ * adds the operator's file and environment on top.
+ */
+export function loadConfig(overrides: Partial<Config> = {}): Config {
+  const merged = { ...DEFAULTS, ...overrides };
 
   resolveRootPaths(merged);
 
-  // autoSend is a nested object: deep-merge it so a config file (or override)
-  // can set just one field (e.g. only `enabled`) without dropping the defaults
-  // for the rest.
-  merged.autoSend = { ...DEFAULTS.autoSend, ...fromFile.autoSend, ...overrides.autoSend };
+  // autoSend is a nested object: deep-merge it so an override can set just one
+  // field (e.g. only `enabled`) without dropping the defaults for the rest.
+  merged.autoSend = { ...DEFAULTS.autoSend, ...overrides.autoSend };
 
-  // integrations is a nested per-capability map: deep-merge it too, so a config
-  // file (or override) can swap just one capability's provider without having to
-  // re-list the defaults for the others.
-  merged.integrations = { ...DEFAULTS.integrations, ...fromFile.integrations, ...overrides.integrations };
+  // integrations is a nested per-capability map: deep-merge it too, so an
+  // override can swap just one capability's provider without having to re-list
+  // the defaults for the others.
+  merged.integrations = { ...DEFAULTS.integrations, ...overrides.integrations };
 
   // planning is nested too — deep-merge so `{"enabled": true}` alone keeps the
   // default part-concurrency cap instead of leaving it undefined.
-  merged.planning = { ...DEFAULTS.planning, ...fromFile.planning, ...overrides.planning };
-  merged.assessment = { ...DEFAULTS.assessment, ...fromFile.assessment, ...overrides.assessment };
-  merged.assay = { ...DEFAULTS.assay, ...fromFile.assay, ...overrides.assay };
-  merged.retrospective = { ...DEFAULTS.retrospective, ...fromFile.retrospective, ...overrides.retrospective };
+  merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
+  merged.assessment = { ...DEFAULTS.assessment, ...overrides.assessment };
+  merged.assay = { ...DEFAULTS.assay, ...overrides.assay };
+  merged.retrospective = { ...DEFAULTS.retrospective, ...overrides.retrospective };
 
   // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
   // than an accidental off.
-  merged.mcp = { ...DEFAULTS.mcp, ...fromFile.mcp, ...overrides.mcp };
+  merged.mcp = { ...DEFAULTS.mcp, ...overrides.mcp };
 
   // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.
-  merged.auth = { ...DEFAULTS.auth, ...fromFile.auth, ...overrides.auth };
+  merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
 
   // The CI check rules are an ordered list, so this is a replace and not a merge:
   // there is no sensible way to deep-merge two orderings, and a caller that sets
   // `ci` means the list it wrote.
-  merged.ci = { checks: overrides.ci?.checks ?? fromFile.ci?.checks ?? DEFAULTS.ci.checks };
+  merged.ci = { checks: overrides.ci?.checks ?? DEFAULTS.ci.checks };
   validateCiPolicy(merged.ci);
 
   // A typo'd policy kind would otherwise be silently ignored, and the operator
