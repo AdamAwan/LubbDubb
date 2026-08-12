@@ -1,7 +1,23 @@
 # 02 — Configuration
 
-All configuration lives in `src/config.ts` as the `Config` interface, its `DEFAULTS`, and
-`loadConfig()`. There is no other configuration mechanism.
+All configuration lives in `src/config.ts` as the `Config` interface, its `DEFAULTS`, and two
+loaders. There is no other configuration mechanism.
+
+## Two loaders
+
+- **`loadConfig(overrides)`** — `DEFAULTS` + the caller's overrides, then path resolution and
+  validation. It reads **no file and no environment variable**, so the same arguments give the same
+  config on any machine. This is what tests and embedders call.
+- **`loadDeploymentConfig(overrides)`** — the two ambient layers (`lubbdubb.config.json` and the env
+  overrides) folded in underneath the explicit ones, then `loadConfig`. This is what a process entry
+  point calls; `src/server/main.ts` is the only one.
+
+The split exists because the ambient layers make the config a function of the machine it loads on.
+The suite runs in a working copy of this repo, so an operator's own `lubbdubb.config.json` sitting
+beside it would otherwise merge into every test that builds a config — silently, and differently on
+each developer's machine. A test wants defaults plus what it wrote; only a deployment wants the
+environment. `scripts/smoke.ts` builds a hermetic scenario against a throwaway repo, so it calls
+`loadConfig` too.
 
 ## Precedence
 
@@ -12,12 +28,15 @@ Values are merged in this order, later winning:
    file path and the parse error
 3. Environment overrides: `PORT` → `port`, `LUBBDUBB_HOST` → `host`, `LUBBDUBB_DB` → `dbPath`,
    `LUBBDUBB_REPO_ROOT` → `repoRoot`
-4. Explicit `overrides` passed to `loadConfig(overrides)` (tests, embedding)
+4. Explicit `overrides` passed to the loader (tests, embedding)
+
+Layers 2 and 3 exist only under `loadDeploymentConfig`; `loadConfig` sees 1 and 4.
 
 Eight keys are **deep-merged** rather than replaced, so a config file can set one field of them
 without dropping the rest: `autoSend`, `integrations`, `planning`, `assessment`, `assay`,
-`retrospective`, `mcp`, `auth`. Everything else — including `issuePriorityLabels` and `ci.checks` —
-is replaced wholesale.
+`retrospective`, `mcp`, `auth`. The deep merge holds _between_ layers as well — an explicit
+`{planning: {enabled: true}}` keeps the other `planning` fields the operator's file set. Everything
+else — including `issuePriorityLabels` and `ci.checks` — is replaced wholesale.
 
 `loadConfig` **throws** for one combination: a `host` that is reachable off this machine together
 with `auth.enabled: false`. Each half alone is a supported deliberate choice; together they expose an

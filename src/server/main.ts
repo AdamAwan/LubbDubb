@@ -1,4 +1,4 @@
-import { loadConfig } from '../config.js';
+import { loadDeploymentConfig } from '../config.js';
 import { buildSystem } from '../system.js';
 import { buildApp } from './app.js';
 
@@ -9,7 +9,7 @@ import { buildApp } from './app.js';
  * the harness reacts to whatever the world looks like on startup.
  */
 async function main(): Promise<void> {
-  const config = loadConfig();
+  const config = loadDeploymentConfig();
   const system = buildSystem(config);
 
   // Before crash detection, so an agent the operator restores relaunches already

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, loadDeploymentConfig } from '../src/config.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
   const cfg = loadConfig();
@@ -84,9 +84,11 @@ test('PORT and LUBBDUBB_DB env vars are honored', () => {
   try {
     process.env.PORT = '9999';
     process.env.LUBBDUBB_DB = '/tmp/some.sqlite';
-    const cfg = loadConfig();
+    const cfg = loadDeploymentConfig();
     assert.equal(cfg.port, 9999);
     assert.equal(cfg.dbPath, '/tmp/some.sqlite');
+    assert.equal(loadConfig().port, 4300, 'loadConfig reads no env var');
+    assert.equal(loadConfig().dbPath, '.lubbdubb/lubbdubb.sqlite');
   } finally {
     if (prevPort === undefined) delete process.env.PORT;
     else process.env.PORT = prevPort;
@@ -99,7 +101,7 @@ test('an explicit override beats an env var for the same key', () => {
   const prev = process.env.PORT;
   try {
     process.env.PORT = '9999';
-    const cfg = loadConfig({ port: 1234 });
+    const cfg = loadDeploymentConfig({ port: 1234 });
     assert.equal(cfg.port, 1234);
   } finally {
     if (prev === undefined) delete process.env.PORT;
@@ -116,7 +118,7 @@ test('LUBBDUBB_REPO_ROOT env var overrides repoRoot', () => {
   const prev = process.env.LUBBDUBB_REPO_ROOT;
   try {
     process.env.LUBBDUBB_REPO_ROOT = '/srv/some-repo';
-    const cfg = loadConfig();
+    const cfg = loadDeploymentConfig();
     assert.equal(cfg.repoRoot, '/srv/some-repo');
   } finally {
     if (prev === undefined) delete process.env.LUBBDUBB_REPO_ROOT;
@@ -134,7 +136,7 @@ test('an explicit repoRoot override beats the env var', () => {
   const prev = process.env.LUBBDUBB_REPO_ROOT;
   try {
     process.env.LUBBDUBB_REPO_ROOT = '/srv/from-env';
-    const cfg = loadConfig({ repoRoot: '/srv/from-override' });
+    const cfg = loadDeploymentConfig({ repoRoot: '/srv/from-override' });
     assert.equal(cfg.repoRoot, '/srv/from-override');
   } finally {
     if (prev === undefined) delete process.env.LUBBDUBB_REPO_ROOT;
@@ -195,7 +197,7 @@ test('a config file naming a removed key is refused, with the key named', async 
   ] as const) {
     writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ [key]: value }), 'utf8');
     assert.throws(
-      () => loadConfig(),
+      () => loadDeploymentConfig(),
       (err: Error) => err.message.includes(key) && err.message.includes('no longer exists'),
       `${key} must be refused by name`,
     );
@@ -203,5 +205,61 @@ test('a config file naming a removed key is refused, with the key named', async 
 
   // The check is per key, not a blanket refusal of an unfamiliar file.
   writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ maxConcurrentAgents: 9 }), 'utf8');
-  assert.equal(loadConfig().maxConcurrentAgents, 9);
+  assert.equal(loadDeploymentConfig().maxConcurrentAgents, 9);
+});
+
+/**
+ * The isolation the split exists for. The suite runs in a working copy of this
+ * repo, so an operator's own `lubbdubb.config.json` sitting beside it would
+ * otherwise merge into every test that builds a config — silently, and
+ * differently on each machine.
+ */
+test('loadConfig ignores a config file in the launch directory; loadDeploymentConfig reads it', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  t.after(() => {
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({ maxConcurrentAgents: 42, planning: { enabled: false } }),
+    'utf8',
+  );
+
+  const pure = loadConfig();
+  assert.equal(pure.maxConcurrentAgents, 3, 'the file is not a layer loadConfig knows about');
+  assert.equal(pure.planning.enabled, true);
+
+  const deployed = loadDeploymentConfig();
+  assert.equal(deployed.maxConcurrentAgents, 42);
+  assert.equal(deployed.planning.enabled, false);
+  assert.equal(deployed.planning.gitFetchIntervalMs, 60_000, 'a nested block from the file still deep-merges');
+});
+
+/**
+ * Three layers fold into the one argument `loadConfig` takes, so the fold has to
+ * preserve the deep merge: an explicit `{planning: {…}}` must not drop the
+ * `planning` fields the operator's file set.
+ */
+test('an explicit nested override deep-merges over the config file, not replacing it', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  t.after(() => {
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({ planning: { enabled: false, maxConcurrentPartsPerIssue: 7 } }),
+    'utf8',
+  );
+
+  const cfg = loadDeploymentConfig({ planning: { enabled: true } as never });
+  assert.equal(cfg.planning.enabled, true, 'the explicit layer wins the field it sets');
+  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 7, "the file's other fields survive");
 });

@@ -85,6 +85,11 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   checkout the suite is running in** — yours — and nothing deletes it. Use the real manager only
   when git behaviour _is_ the subject, pointed at a throwaway repo from `test/support/gitRepo.ts`.
   → [19](docs/spec/19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)
+- **A test builds its config with `loadConfig`, never `loadDeploymentConfig`.** Only the latter reads
+  `lubbdubb.config.json` and the env overrides — which is the whole distinction: the suite runs in a
+  working copy of this repo, so a test on the deployment loader picks up whatever config the
+  operator runs the app with, and passes or fails by machine.
+  → [02](docs/spec/02-configuration.md#two-loaders)
 - **Tests build a whole `System`** via `buildSystem(config, opts)` with fakes injected (`backend`,
   `streamSpawner`, `sink`, `gitObserver`, `worktrees`, `errorMirror`) and `dbPath: ':memory:'`.
   Prefer that seam. Put new tests in `test/*.test.ts`; do not edit unrelated test files.
