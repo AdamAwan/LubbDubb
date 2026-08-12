@@ -1453,6 +1453,9 @@ export function buildDemoState(): DemoSeed {
       // one where the parts visibly do not add to the whole.
       unattributedCostUsd: 0.86,
     },
+    // The Yield gauge's reading. Not every run finishes in the demo either: a
+    // floor that has never lost one is a floor whose gauge nobody would click.
+    runOutcomes: { settled: 24, live: 3, completed: 20, lost: 3, stopped: 1, completionRate: 20 / 24 },
   };
 
   const transcripts: Record<string, string> = {

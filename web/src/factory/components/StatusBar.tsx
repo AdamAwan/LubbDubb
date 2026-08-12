@@ -7,6 +7,7 @@ import { UsageChip } from '../../components/UsageChip.js';
 import { SettingsButton } from '../../components/SettingsButton.js';
 import { powerReading } from '../power.js';
 import type { ProductionReading } from '../production.js';
+import type { RunTally } from '../../types.js';
 import type { FactoryModal } from './Modal.js';
 import { ProductionSpark } from './Production.js';
 import { Icon, type IconName } from './Sprite.js';
@@ -129,6 +130,58 @@ function ProdRead({ reading, onOpen }: { reading: ProductionReading; onOpen: () 
       <span className="fx-val">
         {merges.toFixed(1)}
         <small>/h</small>
+      </span>
+      <Chev />
+    </button>
+  );
+}
+
+/**
+ * How much of the floor's work survived to the end of it.
+ *
+ * The one gauge here whose *good* direction is up, and it borrows Power's meter
+ * rather than Output's spark deliberately: this is a fraction of a whole, and a
+ * spark would draw it as a rate.
+ *
+ * **Amber at worst, never red.** A low yield is a reading about work already
+ * over — nobody is parked, nothing is blocked on the operator — and red on this
+ * floor means exactly one thing, which is Alerts. It is the fault log's tone for
+ * the fault log's reason.
+ *
+ * The reading comes off the snapshot (`runOutcomes`), folded by the same function
+ * the panel behind it opens with, so clicking through cannot change the number.
+ * Nothing is drawn before the first run settles: a rate over no runs is not 100%,
+ * and a gauge reading perfect on an idle floor is the one lie this bar must not
+ * tell.
+ */
+function YieldRead({ tally, onOpen }: { tally: RunTally; onOpen: () => void }): JSX.Element | null {
+  if (tally.completionRate === null) return null;
+  const pct = Math.round(tally.completionRate * 100);
+  // Faults, not stops: an operator who killed a run has not made the floor
+  // unreliable, and the gauge must not tell them they have.
+  const low = pct < 90;
+  const title =
+    `${tally.completed} of ${tally.settled} runs finished` +
+    (tally.lost > 0 ? `, ${tally.lost} failed or crashed` : '') +
+    (tally.stopped > 0 ? `, ${tally.stopped} stopped` : '') +
+    ' — open the yield breakdown';
+
+  return (
+    <button
+      type="button"
+      className={`fx-read fx-act ${low ? '' : 'quiet'}`}
+      onClick={onOpen}
+      title={title}
+      aria-label={title}
+    >
+      <Icon name="flask" className="sm" />
+      <span className="fx-lbl">Yield</span>
+      <span className="fx-meter fx-sunk" role="img" aria-label={`${pct} percent of settled runs finished`}>
+        <i style={{ width: `${pct}%` }} />
+      </span>
+      <span className={`fx-val ${low ? 'warn' : ''}`}>
+        {pct}
+        <small>%</small>
       </span>
       <Chev />
     </button>
@@ -278,7 +331,7 @@ function PowerRead({
 }
 
 /**
- * The control-room strip: scan, power, bots, output, and the six ways in.
+ * The control-room strip: scan, power, bots, output, and the seven ways in.
  *
  * Alerts, Faults and Blueprints used to be three panels standing in a permanent
  * left-hand rail, and all three are read as a *number* far more often than as
@@ -373,6 +426,12 @@ export function StatusBar({
           Output is what the effort came to — and before the desks, which are
           all things waiting on you rather than readings of the floor. */}
       <ProdRead reading={production} onOpen={() => onOpen('production')} />
+
+      {/* Output's other half, and it sits here because the two are one subject:
+          Output is how much came off the line, Yield is how much of it was any
+          good. A floor can be busy and losing a third of its runs, and until this
+          gauge existed the bar drew only the busy half. */}
+      <YieldRead tally={state.runOutcomes} onOpen={() => actions.openReliability(true)} />
 
       {/* Alerts is red and the other three never are: on this floor red means one
           thing, an agent parked on a question only you can answer. A fault blocks

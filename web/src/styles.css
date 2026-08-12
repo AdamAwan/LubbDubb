@@ -2087,10 +2087,17 @@ body {
 }
 /* ============================ the spend panel ============================
 
-   The breakdown behind the Power gauge (`components/SpendModal.tsx`). It is
-   shell-side rather than floor-side because it fetches, so its styles are here
-   rather than in `factory.css` — the seam is the same one that puts the
-   retrospective and the settings modal in this file.
+   The chrome the two reading panels share — the spend breakdown behind the Power
+   gauge (`components/SpendModal.tsx`) and the reliability breakdown behind the
+   Yield gauge (`components/ReliabilityModal.tsx`). Both are shell-side rather
+   than floor-side because they fetch, so their styles are here rather than in
+   `factory.css` — the seam is the same one that puts the retrospective and the
+   settings modal in this file.
+
+   The classes below are named for what they are (`.read-modal`, `.sp-well`)
+   rather than for the first panel that wanted them, because two panels now do.
+   What is specific to one — the phase palette, the outcome palette — is scoped
+   under that panel's own root class further down.
 
    Three conventions hold it together and all three are load-bearing.
 
@@ -2106,7 +2113,7 @@ body {
    **Sunk faces, not raised ones.** Every box in this panel is a reading and none
    of them is a control, which is the distinction `.sp-well` carries everywhere. */
 
-.spend-backdrop {
+.read-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -2120,7 +2127,7 @@ body {
 /* Wider than the settings modal, and that is the panel's whole argument: two
    charts side by side and a seven-column table are what an operator came for,
    and either would be a scroll at 760px. */
-.spend-modal {
+.read-modal {
   width: min(1180px, 96vw);
   background: var(--panel);
   border: 1px solid var(--border);
@@ -2396,4 +2403,57 @@ body {
 }
 .sp-method .dim {
   color: var(--grey);
+}
+
+/* ========================== reliability ==========================
+
+   The breakdown behind the Yield gauge (`components/ReliabilityModal.tsx`). It
+   borrows the whole of the spend panel's chrome — `.read-modal`, `.sp-tiles`,
+   `.sp-tbl`, `.sp-well`, `.sp-graph` — and adds exactly one thing: a palette for
+   how a run *ended*.
+
+   **Outcome colour is a variable, not a value**, for the phase palette's reason.
+   The two palettes are deliberately different in kind: a phase is a category and
+   its colours only have to read apart, while an outcome is a *verdict* and its
+   colours carry the floor's alarm vocabulary — green finished, red failed. Grey
+   is doing real work here: a killed run is not a fault, and colouring it like one
+   would make every steered fleet look broken. */
+
+.rl {
+  display: grid;
+  gap: 4px;
+  --rl-done: var(--green);
+  --rl-failed: var(--red);
+  /* A crash is a failure the harness only found out about at boot, so it is a
+     shade of the same alarm rather than a colour of its own. */
+  --rl-crashed: #a83a30;
+  --rl-killed: var(--grey);
+  --rl-interrupted: var(--amber);
+  /* The CI graph's two, named for the verdict rather than for an outcome: these
+     colour a pipeline's answer, not an agent's ending. */
+  --rl-green: var(--green);
+  --rl-red: var(--red);
+}
+
+/* The completion bar inside a phase row. Narrower than the spend panel's goal
+   bar and always full width, because this one is a *ratio* and not a share of
+   the fleet — a phase with three runs and a phase with three hundred are both
+   asking the same question of their own bar. */
+.rl-rate {
+  display: inline-flex;
+  width: 100%;
+  height: 9px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.rl-rate .sg {
+  display: block;
+  height: 100%;
+}
+/* Said in the alarm colour, because it is the one cell in these tables that is
+   about *now* rather than about the window. */
+.rl-still {
+  color: var(--red);
+  font-weight: 600;
 }

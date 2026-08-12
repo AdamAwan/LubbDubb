@@ -15,7 +15,10 @@ import type {
   JobSchedule,
   OpenPullRequest,
   CiPolicyDescription,
+  CiSubject,
   PromptTemplateView,
+  ReliabilityInsights,
+  RunOutcome,
   RunningConfigGroup,
   Proposal,
   SpendGoal,
@@ -1358,6 +1361,171 @@ const DEMO_RUNS: {
 /** The trend: a fortnight of daily totals, busiest at the near end. */
 const DEMO_DAYS = [0.4, 0, 1.1, 2.3, 1.8, 0, 0.9, 3.4, 2.2, 1.6, 0.7, 2.9, 4.1, 5.3];
 
+/**
+ * The reliability breakdown, authored to the same totals the snapshot's Yield
+ * gauge reads (`fixtures.ts`).
+ *
+ * The two agreeing is not decoration: the whole claim the real panel makes is
+ * that the gauge and the reading behind it come from one fold, and a demo where
+ * clicking through changes the number would teach an operator the opposite. So
+ * the phase rows below sum to 24 settled, 20 finished, and they are checked in
+ * `test/demoReliability.test.ts` rather than trusted.
+ */
+const DEMO_PHASE_HEALTH: {
+  phase: SpendPhase;
+  settled: number;
+  lost: number;
+  stopped: number;
+  lostCostUsd: number;
+  medianMs: number;
+}[] = [
+  { phase: 'build', settled: 8, lost: 2, stopped: 0, lostCostUsd: 2.4, medianMs: 26 * 60_000 },
+  { phase: 'deliberation', settled: 6, lost: 0, stopped: 0, lostCostUsd: 0, medianMs: 4 * 60_000 },
+  { phase: 'landing', settled: 6, lost: 1, stopped: 0, lostCostUsd: 0.7, medianMs: 9 * 60_000 },
+  { phase: 'evidence', settled: 3, lost: 0, stopped: 1, lostCostUsd: 0, medianMs: 6 * 60_000 },
+  { phase: 'job', settled: 1, lost: 0, stopped: 0, lostCostUsd: 0, medianMs: 12 * 60_000 },
+];
+
+/** How each ending divides the 24, and what it cost. Sums to the phase rows above. */
+const DEMO_OUTCOMES: { outcome: RunOutcome; runs: number; costUsd: number }[] = [
+  { outcome: 'done', runs: 20, costUsd: 18.4 },
+  { outcome: 'failed', runs: 2, costUsd: 2.4 },
+  { outcome: 'crashed', runs: 1, costUsd: 0.7 },
+  { outcome: 'killed', runs: 1, costUsd: 0.31 },
+];
+
+const OUTCOME_COPY: Record<RunOutcome, { label: string; blurb: string }> = {
+  done: { label: 'Finished', blurb: 'The agent ran to its own end' },
+  failed: { label: 'Failed', blurb: 'The process exited non-zero — the harness did not stop it' },
+  crashed: { label: 'Crashed', blurb: 'Found dead at boot: the server went down with the agent still out' },
+  killed: { label: 'Killed', blurb: 'An operator stopped it, or the harness reclaimed its slot' },
+  interrupted: { label: 'Interrupted', blurb: 'Cut short mid-run and left recoverable' },
+};
+
+/** A fortnight of CI verdicts, red and green, busiest at the near end. */
+const DEMO_CI_DAYS: [number, number][] = [
+  [0, 2],
+  [1, 3],
+  [0, 0],
+  [2, 4],
+  [1, 2],
+  [0, 3],
+  [2, 1],
+  [3, 5],
+  [1, 4],
+  [0, 2],
+  [2, 3],
+  [1, 1],
+  [2, 2],
+  [2, 2],
+];
+
+/** The pull requests CI kept sending back. One is still red, which is the state worth drawing. */
+const DEMO_FLAKY: CiSubject[] = [
+  { ref: 'pr:144', prNumber: 144, reds: 6, greens: 5, redMs: 4.2 * 3_600_000, stillRed: true },
+  { ref: 'pr:212', prNumber: 212, reds: 4, greens: 4, redMs: 1.6 * 3_600_000, stillRed: false },
+  { ref: 'pr:205', prNumber: 205, reds: 3, greens: 3, redMs: 52 * 60_000, stillRed: false },
+  { ref: 'pr:198', prNumber: 198, reds: 3, greens: 2, redMs: 2.1 * 3_600_000, stillRed: true },
+  { ref: 'pr:151', prNumber: 151, reds: 1, greens: 1, redMs: 14 * 60_000, stillRed: false },
+];
+
+/** Origins the harness went round more than once — the reading no card shows. */
+const DEMO_REPEATS: {
+  originRef: string;
+  title: string;
+  runs: number;
+  lost: number;
+  costUsd: number;
+  hoursAgo: number;
+}[] = [
+  { originRef: 'pr:144:ci', title: 'Fix the failing checks on #144', runs: 4, lost: 1, costUsd: 3.9, hoursAgo: 2 },
+  { originRef: 'issue:212:part:schema', title: 'Land the schema part', runs: 3, lost: 1, costUsd: 5.2, hoursAgo: 6 },
+  { originRef: 'issue:205', title: 'Retry the pickup on #205', runs: 2, lost: 0, costUsd: 4.1, hoursAgo: 19 },
+];
+
+function buildDemoReliability(): ReliabilityInsights {
+  const now = Date.now();
+  const day = 24 * 3_600_000;
+  const start = now - DEMO_CI_DAYS.length * day;
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+
+  const byPhase = DEMO_PHASE_HEALTH.map((row) => ({
+    phase: row.phase,
+    label: PHASE_COPY[row.phase].label,
+    settled: row.settled,
+    completed: row.settled - row.lost - row.stopped,
+    lost: row.lost,
+    stopped: row.stopped,
+    completionRate: (row.settled - row.lost - row.stopped) / row.settled,
+    lostCostUsd: row.lostCostUsd,
+    medianMs: row.medianMs,
+  }));
+  const tally = byPhase.reduce(
+    (a, p) => ({
+      settled: a.settled + p.settled,
+      completed: a.completed + p.completed,
+      lost: a.lost + p.lost,
+      stopped: a.stopped + p.stopped,
+    }),
+    { settled: 0, completed: 0, lost: 0, stopped: 0 },
+  );
+  const reds = DEMO_CI_DAYS.reduce((a, [red]) => a + red, 0);
+  const greens = DEMO_CI_DAYS.reduce((a, [, green]) => a + green, 0);
+
+  return {
+    generatedAt: new Date(now).toISOString(),
+    windowDays: DEMO_CI_DAYS.length,
+    runs: {
+      ...tally,
+      live: 3,
+      completionRate: tally.completed / tally.settled,
+      costUsd: round(DEMO_OUTCOMES.reduce((a, o) => a + o.costUsd, 0)),
+      lostCostUsd: round(DEMO_PHASE_HEALTH.reduce((a, p) => a + p.lostCostUsd, 0)),
+      // Two PTY runs, so the panel's "counted in every rate and in no dollar"
+      // caveat is on screen rather than being a branch nobody sees.
+      unmeasuredRuns: 2,
+      byOutcome: DEMO_OUTCOMES.map((o) => ({ ...o, ...OUTCOME_COPY[o.outcome] })),
+      byPhase,
+      repeats: DEMO_REPEATS.map(({ hoursAgo, ...r }) => ({
+        ...r,
+        lastAt: new Date(now - hoursAgo * 3_600_000).toISOString(),
+      })),
+      repeatedOrigins: DEMO_REPEATS.length,
+      timeline: {
+        bucketMs: day,
+        startsAt: new Date(start).toISOString(),
+        buckets: DEMO_CI_DAYS.map(([red], i) => ({
+          startsAt: new Date(start + i * day).toISOString(),
+          settled: red + 1,
+          lost: red > 1 ? 1 : 0,
+        })),
+      },
+    },
+    ci: {
+      reds,
+      greens,
+      redRate: reds / (reds + greens),
+      prsAffected: DEMO_FLAKY.length,
+      prsObserved: 9,
+      recoveries: 14,
+      medianToGreenMs: 22 * 60_000,
+      slowestToGreenMs: 5 * 3_600_000,
+      unrecovered: DEMO_FLAKY.filter((f) => f.stillRed).length,
+      flakiest: DEMO_FLAKY,
+      landingCostUsd: 6.4,
+      timeline: {
+        bucketMs: day,
+        startsAt: new Date(start).toISOString(),
+        buckets: DEMO_CI_DAYS.map(([red, green], i) => ({
+          startsAt: new Date(start + i * day).toISOString(),
+          red,
+          green,
+        })),
+      },
+    },
+  };
+}
+
 function buildDemoSpend(): SpendInsights {
   const now = Date.now();
   const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
@@ -1477,6 +1645,10 @@ export const demoApi = {
   // agent the store holds; the demo's world is built fresh in the browser each
   // load, so a fixture is the only honest way to show the panel at all.
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
+  // The reliability breakdown, authored for the spend panel's reason exactly: the
+  // demo's world is built fresh in the browser each load, so there are no settled
+  // agents and no CI history to fold.
+  getReliability: () => Promise.resolve({ insights: buildDemoReliability() }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals

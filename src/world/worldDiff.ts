@@ -1,5 +1,5 @@
 import { prState } from '../prHealth.js';
-import type { Issue, PullRequest, WorldEventInput, WorldSnapshot } from '../types.js';
+import type { CiStatus, Issue, PullRequest, WorldEvent, WorldEventInput, WorldSnapshot } from '../types.js';
 
 /**
  * Derive the observed state transitions between two consecutive world
@@ -19,6 +19,33 @@ import type { Issue, PullRequest, WorldEventInput, WorldSnapshot } from '../type
  * as an *appearance* in `closedPullRequests` instead, which is a fact the provider
  * actually reports.
  */
+/**
+ * What a `pr_ci` row says, written and read in one place.
+ *
+ * A world event stores a kind, a ref and a *sentence*, so the status a CI
+ * transition carried survives only inside that sentence — and CI health over time
+ * is a fold over exactly those statuses. One matcher serves both directions for
+ * the PTY sentinel's reason: two views of the same bytes is the failure that has
+ * already been made once here. A reader that re-derived this format for itself
+ * would read zero failures, silently, the first time the wording changed.
+ */
+const CI_SUMMARY = /^PR #\d+ CI (passing|failing|pending|unknown)$/;
+
+function ciSummary(number: number, status: CiStatus): string {
+  return `PR #${number} CI ${status}`;
+}
+
+/**
+ * The status a recorded transition announced, or null when the row is not one —
+ * a different kind, or a `pr_ci` row from before this format (there is none, but
+ * a parse that cannot fail is a parse that lies).
+ */
+export function ciStatusOf(event: Pick<WorldEvent, 'kind' | 'summary'>): CiStatus | null {
+  if (event.kind !== 'pr_ci') return null;
+  const status = CI_SUMMARY.exec(event.summary)?.[1];
+  return status === undefined ? null : (status as CiStatus);
+}
+
 export function diffWorlds(prev: WorldSnapshot, next: WorldSnapshot): WorldEventInput[] {
   const events: WorldEventInput[] = [];
 
@@ -30,7 +57,7 @@ export function diffWorlds(prev: WorldSnapshot, next: WorldSnapshot): WorldEvent
       continue;
     }
     if (before.ciStatus !== pr.ciStatus) {
-      events.push({ kind: 'pr_ci', ref: prRef(pr), summary: `PR #${pr.number} CI ${pr.ciStatus}` });
+      events.push({ kind: 'pr_ci', ref: prRef(pr), summary: ciSummary(pr.number, pr.ciStatus) });
     }
     if (!before.approved && pr.approved) {
       events.push({ kind: 'pr_approved', ref: prRef(pr), summary: `PR #${pr.number} approved` });

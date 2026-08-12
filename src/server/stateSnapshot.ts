@@ -17,6 +17,7 @@ import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { rollUpIssueSpend } from '../issueSpend.js';
+import { tallyRunOutcomes } from '../reliabilityInsights.js';
 import { retainedRunIssues } from '../floor/runs.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
@@ -485,6 +486,9 @@ export function buildStateSnapshot(
     // the id up here to expand a decision into "which rule fired, and why".
     dispatchRules: DISPATCH_RULES,
     usage: buildUsage(system, spend.unattributedCostUsd),
+    // The Yield gauge's reading, from the same `agents` rows the fleet list ships
+    // and the same fold `/api/reliability` opens with.
+    runOutcomes: tallyRunOutcomes(agents),
   };
 }
 

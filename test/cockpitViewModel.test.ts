@@ -44,6 +44,7 @@ function build(state: AppState, over: Partial<Parameters<typeof buildViewModel>[
     viewingScratchpad: null,
     settingsOpen: false,
     spendOpen: false,
+    reliabilityOpen: false,
     ...over,
   });
 }

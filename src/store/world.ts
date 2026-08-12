@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { WorldEvent, WorldEventInput, WorldSnapshot } from '../types.js';
+import type { WorldEvent, WorldEventInput, WorldEventKind, WorldSnapshot } from '../types.js';
 import type { StoreContext } from './context.js';
 
 /**
@@ -53,6 +53,26 @@ export class WorldStore {
          ORDER BY created_at DESC, rowid DESC`,
       )
       .all(since, ...refs) as WorldEventRow[];
+    return rows.map(rowToWorldEvent);
+  }
+
+  /**
+   * Every event of these kinds since `since`, **oldest first**.
+   *
+   * The ascending order is the difference from its two neighbours and it is the
+   * point: this read serves a fold over each ref's transitions in the order they
+   * happened — a pull request is red *until* the next green, and a span read
+   * backwards is a span read wrong. Bounded by kind as well as time because the
+   * caller wants one conversation out of a feed that carries eight.
+   */
+  listWorldEventsOfKindsSince(since: string, kinds: readonly WorldEventKind[]): WorldEvent[] {
+    if (kinds.length === 0) return [];
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM world_events WHERE created_at > ? AND kind IN (${kinds.map(() => '?').join(',')})
+         ORDER BY created_at ASC, rowid ASC`,
+      )
+      .all(since, ...kinds) as WorldEventRow[];
     return rows.map(rowToWorldEvent);
   }
 

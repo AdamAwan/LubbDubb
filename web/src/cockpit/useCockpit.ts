@@ -34,6 +34,7 @@ export function useCockpit(): CockpitStatus {
   const [viewingScratchpad, setViewingScratchpad] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState(false);
+  const [reliabilityOpen, setReliabilityOpen] = useState(false);
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
   // Last output line per agent, fed by compact `agent:tail` frames — used for
@@ -170,6 +171,7 @@ export function useCockpit(): CockpitStatus {
       viewScratchpad: (issueRef) => setViewingScratchpad(issueRef),
       openSettings: (open) => setSettingsOpen(open),
       openSpend: (open) => setSpendOpen(open),
+      openReliability: (open) => setReliabilityOpen(open),
       discussPlan: (planId) => then(api.discussPlan(planId)),
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -215,6 +217,7 @@ export function useCockpit(): CockpitStatus {
       viewingScratchpad,
       settingsOpen,
       spendOpen,
+      reliabilityOpen,
     }),
   };
 }

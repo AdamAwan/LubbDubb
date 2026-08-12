@@ -82,6 +82,8 @@ export interface CockpitView {
   settingsOpen: boolean;
   /** Whether the spend breakdown is open. */
   spendOpen: boolean;
+  /** Whether the reliability breakdown is open. */
+  reliabilityOpen: boolean;
 }
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
@@ -106,6 +108,8 @@ interface ViewInputs {
   settingsOpen: boolean;
   /** Whether the spend breakdown is open. */
   spendOpen: boolean;
+  /** Whether the reliability breakdown is open. */
+  reliabilityOpen: boolean;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -169,5 +173,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingScratchpad: input.viewingScratchpad,
     settingsOpen: input.settingsOpen,
     spendOpen: input.spendOpen,
+    reliabilityOpen: input.reliabilityOpen,
   };
 }
