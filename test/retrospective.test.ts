@@ -311,6 +311,46 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
   store.close();
 });
 
+test('the dossier’s proposals stop at the goal’s ref boundary, not its prefix', async () => {
+  // `issue:1` is a prefix of `issue:19`, so a bare `startsWith` hands issue 1's
+  // retrospective agent issue 19's record as if it were its own — silently, and on
+  // every repository with more than nine goals.
+  const system = build();
+  const { store } = system;
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
+  system.connector.inject({ kind: 'new_issue', number: 19, title: 'Somebody else’s goal' });
+
+  store.createProposal({
+    kind: 'plan',
+    ref: 'issue:1:plan:plan',
+    action: { type: 'propose_plan', reason: 'test', originRef: 'issue:1', planId: 'plan_one' },
+    escalationId: null,
+  });
+  store.createProposal({
+    kind: 'plan',
+    ref: 'issue:19:plan:plan',
+    action: { type: 'propose_plan', reason: 'test', originRef: 'issue:19', planId: 'plan_nineteen' },
+    escalationId: null,
+  });
+
+  store.recordDelivery({
+    originRef: 'issue:1',
+    summary: 'PR #41 delivered it',
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+  });
+
+  await system.harness.runCycle('manual');
+
+  const retroTask = store.listTasks().find((t) => t.originRef === 'issue:1:retro');
+  assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
+  assert.match(retroTask.prompt, /Proposal \(plan, pending\) on issue:1:plan:plan/);
+  assert.doesNotMatch(retroTask.prompt, /issue:19/);
+
+  store.close();
+});
+
 // -- what the cockpit is served ----------------------------------------------
 
 test('the snapshot ships the reading and the document is fetched on demand', async () => {
