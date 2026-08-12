@@ -47,6 +47,16 @@ export interface GoalPageView {
   decisions: CockpitDecision[];
 }
 
+/**
+ * Whether `candidate` names this goal or something under it (`issue:1:part:x`),
+ * not merely a ref that shares its digits as a prefix — `startsWith` alone
+ * matches `issue:14` against `issue:1`, pulling another goal's agents and
+ * decisions onto this page.
+ */
+function belongsToGoal(candidate: string | null | undefined, ref: string): boolean {
+  return candidate === ref || (candidate?.startsWith(`${ref}:`) ?? false);
+}
+
 const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
   merged: 'merged',
   concluded: 'merged',
@@ -96,8 +106,8 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     parts,
     openPullRequests: state.world.pullRequests.filter((pr) => partPrs.has(pr.number)),
     closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => partPrs.has(pr.number)),
-    agents: state.agents.filter((a) => state.tasks.find((t) => t.id === a.taskId)?.originRef?.startsWith(ref)),
-    decisions: state.decisions.filter((d) => d.subjectRef?.startsWith(ref)),
+    agents: state.agents.filter((a) => belongsToGoal(state.tasks.find((t) => t.id === a.taskId)?.originRef, ref)),
+    decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
   };
 }
 

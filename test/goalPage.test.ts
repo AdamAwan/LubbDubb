@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Plan, PlanPart } from '../web/src/types.js';
+import type { Agent, CockpitDecision, Plan, PlanPart, Task } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
 import { buildGoalPage, buildGoalTrack } from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
@@ -47,6 +47,62 @@ function plan(originRef: string): Plan {
     statusCommentRef: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+function task(over: Partial<Task>): Task {
+  return {
+    id: 't:x',
+    kind: 'code',
+    title: 'work',
+    prompt: '',
+    branch: null,
+    originRef: null,
+    originTitle: null,
+    originSummary: null,
+    dispatchReason: null,
+    status: 'running',
+    agentId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function agent(over: Partial<Agent>): Agent {
+  return {
+    id: 'a:x',
+    taskId: 't:x',
+    status: 'running',
+    cwd: '/work',
+    pid: 1,
+    waitingReason: null,
+    sessionId: null,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    endedAt: null,
+    costUsd: null,
+    inputTokens: null,
+    outputTokens: null,
+    numTurns: null,
+    note: null,
+    notedAt: null,
+    resumedAt: null,
+    ...over,
+  };
+}
+
+function decision(over: Partial<CockpitDecision>): CockpitDecision {
+  return {
+    id: 'd:x',
+    cycleId: 'c:1',
+    action: { type: 'no_op', reason: 'nothing to do' },
+    outcome: 'executed',
+    detail: '',
+    rule: null,
+    admission: null,
+    subjectRef: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over,
   };
 }
 
@@ -116,4 +172,31 @@ test('the activity list is this goal’s decisions, read off subjectRef', () => 
   for (const d of page?.decisions ?? []) {
     assert.ok(d.subjectRef?.startsWith(`issue:${issue.number}`));
   }
+});
+
+test('a goal whose number is a prefix of another does not inherit that goal’s agents or decisions', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  // Shares `ref` as a string prefix without being this goal or a part of it —
+  // exactly what `startsWith(ref)` alone would wrongly admit.
+  const otherRef = `issue:${issue.number}9`;
+
+  const otherTask = task({ id: 't:other', originRef: `${otherRef}:part:x` });
+  const otherAgent = agent({ id: 'a:other', taskId: otherTask.id });
+  const otherDecision = decision({ id: 'd:other', subjectRef: `${otherRef}:part:x` });
+
+  const page = buildGoalPage(
+    {
+      ...state,
+      tasks: [...state.tasks, otherTask],
+      agents: [...state.agents, otherAgent],
+      decisions: [...state.decisions, otherDecision],
+    },
+    ref,
+    [],
+  );
+
+  assert.ok(!page?.agents.some((a) => a.id === otherAgent.id));
+  assert.ok(!page?.decisions.some((d) => d.id === otherDecision.id));
 });
