@@ -9,6 +9,10 @@ Four durable records answer four different questions, plus one live tail and one
 | Error log     | What failed?                          | `error_events`                    | Errors       |
 | Usage         | What did it cost?                     | `usage_events` + the `agents` row | Usage chip   |
 
+Cost is asked two ways off that one record: **when** it was spent (the rolling account windows) and
+**what it was spent on** (per goal). The second is derived rather than stored — see
+[Per-goal spend](#per-goal-spend).
+
 ## The error log
 
 **`src/errorLog.ts` is the one error-recording path.** Anything that catches a failure calls
@@ -108,6 +112,44 @@ Two mode-specific sources that must not be conflated.
 `windows.sevenDayCostUsd` are plain `SUM`s over `usage_events` (available in every mode, because they
 are self-computed), and `rateLimits` is the freshest status-line reading or `null`. The cockpit chip
 prefers the real limits and falls back to cost.
+
+## Per-goal spend
+
+`rollUpIssueSpend` (`src/issueSpend.ts`) answers what a **ticket** cost — the unit an operator
+budgets in, and the one thing the tracker names. It is pure, computed each snapshot from three lists
+`buildStateSnapshot` already holds (`agents`, `tasks`, and the work graph), and ships as
+`Issue.spend` on every enriched issue — live issues and retained runs alike, through the same
+`enrichIssue` path.
+
+**Derived, never stored.** No table, no migration, no reconciliation: cost is already durable on the
+`agents` row, the origin is durable on the `tasks` row, and the lineage between them is durable in
+`work_nodes`. A `issue_costs` table would be a fourth copy of a number the other three already
+determine, and the one thing it could add — drift.
+
+An agent knows only the origin it was dispatched against, and that is rarely the issue. Two ways an
+origin reaches a goal, and everything else is the remainder:
+
+- **By name** — the whole `issue:<n>` subtree. Deliberately the whole subtree rather than the roles
+  `issueOriginRole` classifies: a planner that cost $4 and routed the goal to `single` spent that
+  money on the goal, whatever it did or did not build. Deliberation is spend.
+- **By lineage** — everything else, by walking `parentRef` up the durable work graph. `pr:41`'s
+  parent is the part or issue that produced it; a job's is the issue that adopted it. Sub-refs
+  (`pr:41:ci`, `pr:41:comments`, `pr:41:mergeable`) are reduced to `pr:41` first, since only the bare
+  PR is ever a node. The graph is read rather than the world because it **never forgets**: a goal's
+  total must not fall when its pull requests age out of `closedPrWindowMs`.
+
+**The remainder is shipped, not swallowed.** Spend reaching no goal — an operator's job the graph
+never linked, an agent dispatched against no origin — lands in `usage.unattributedCostUsd` rather
+than being dropped. That is what makes the per-goal figures readable as a _partition_ of fleet spend:
+a new origin shape that lands nowhere shows up as a growing remainder instead of as goals that
+quietly under-report. Nothing in the harness reads any of this; it is an operator reading, like the
+error log.
+
+**Null is not zero.** PTY mode reports no usage at all ([above](#usage-accounting)), so an agent that
+measured nothing contributes no row and no agent count, and a goal worked entirely in PTY mode has
+`spend: null`. The cockpit draws nothing there rather than `$0.00`, which would describe an unmeasured
+goal as a free one. `costUsd` is a **running** total: it climbs while agents work and stops when the
+last one ends.
 
 ## The live tail
 

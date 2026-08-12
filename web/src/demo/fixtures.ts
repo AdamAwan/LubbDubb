@@ -15,7 +15,10 @@ interface DemoSeed {
  * rather than loosening the contract: the server folds all six for every issue,
  * so a fixture omitting them was a demo world the real cockpit could not receive.
  */
-type IssueSeed = Omit<Issue, 'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall'> &
+type IssueSeed = Omit<
+  Issue,
+  'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'spend'
+> &
   Partial<Issue>;
 
 function demoIssue(seed: IssueSeed): Issue {
@@ -26,7 +29,23 @@ function demoIssue(seed: IssueSeed): Issue {
     assay: null,
     retrospective: null,
     scratchpad: null,
+    // Null rather than a zero: a goal nothing measured and a goal that cost
+    // nothing are different facts, and the demo must not model the one the
+    // cockpit is built to keep apart. Fixtures that have been worked set it.
+    spend: null,
     ...seed,
+  };
+}
+
+/** A worked goal's spend, in the shape the roll-up ships it. */
+function demoSpend(issueNumber: number, costUsd: number, agents: number): Issue['spend'] {
+  return {
+    originRef: `issue:${issueNumber}`,
+    issueNumber,
+    costUsd,
+    inputTokens: Math.round(costUsd * 180_000),
+    outputTokens: Math.round(costUsd * 9_000),
+    agents,
   };
 }
 
@@ -363,6 +382,10 @@ export function buildDemoState(): DemoSeed {
           // the write-up above was written from, and the demo's one readable pad.
           // The count and the age only; the trail is fetched on open.
           scratchpad: { entries: 4, updatedAt: new Date(Date.now() - 4_200_000).toISOString() },
+          // A finished goal, so its total has stopped moving: the write-up above
+          // says two agents were spent on a red base that was never ours, and this
+          // is what that cost.
+          spend: demoSpend(205, 6.14, 4),
         }),
         demoIssue({
           id: 'iss-212',
@@ -375,6 +398,10 @@ export function buildDemoState(): DemoSeed {
           // A plan, not a PR: the chip reports plan progress rather than whichever
           // part happened to open a pull request last.
           pickup: { eligible: false, status: 'planning', reasons: ['1/3 parts merged'] },
+          // Still running, and the figure with it: a decomposed goal's spend is the
+          // planner plus every part, which is exactly what one number per goal is
+          // for — no card anywhere else adds those up.
+          spend: demoSpend(212, 18.42, 7),
         }),
         demoIssue({
           id: 'iss-210',
@@ -1398,6 +1425,10 @@ export function buildDemoState(): DemoSeed {
         sevenDay: { usedPercentage: 30, resetsAt: ahead(3 * 24 * 60) },
         capturedAt: ago(1),
       },
+      // The remainder no goal's card shows — an operator's job the graph never
+      // linked to a ticket. Non-zero on purpose: the honest demo of a partition is
+      // one where the parts visibly do not add to the whole.
+      unattributedCostUsd: 0.86,
     },
   };
 

@@ -1336,6 +1336,29 @@ export interface AgentUsage {
   numTurns: number | null;
 }
 
+/**
+ * What one goal has cost so far: every agent the harness put on the issue, summed.
+ *
+ * The unit is the **issue**, because that is the unit the operator budgets in and
+ * the one thing the tracker names. Everything downstream of it — the planner, the
+ * assay, each part, and the pull requests those parts opened — is spend on that
+ * goal, so it rolls up rather than being counted as work of its own.
+ *
+ * A running figure, never a final one: `costUsd` is summed from the cumulative
+ * report on each `agents` row, so it climbs while an agent is still working and
+ * stops when the last one ends.
+ */
+export interface IssueSpend {
+  /** `issue:<n>` — the same key every other per-issue record is stored under. */
+  originRef: string;
+  issueNumber: number;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** How many agent runs the totals are over. Never 0 — no agents, no row. */
+  agents: number;
+}
+
 /** One subscriber rate-limit window (5h or weekly) as Claude Code reports it. */
 export interface RateLimitWindow {
   usedPercentage: number;

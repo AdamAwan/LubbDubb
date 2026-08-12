@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type JSX } from 'react';
 import type { HumanTask, Issue, Plan, PlanPart, PullRequest, QueueItem, Task, WorkNodeView } from '../../types.js';
 import { AsyncButton } from '../../components/AsyncButton.js';
-import { refChip, refLink } from '../../components/util.js';
+import { fmtTokens, fmtUsd, refChip, refLink } from '../../components/util.js';
 import { ASSAY_EXPIRY } from '../../components/WorldSummary.js';
 import {
   buildGoalFloor,
@@ -276,6 +276,23 @@ export function GoalFloor(props: GoalFloorProps): JSX.Element {
             >
               Replan
             </AsyncButton>
+          </span>
+        </div>
+      )}
+
+      {/* What this goal has cost, on the one panel that draws a goal whole. Every
+          other reading of spend in the cockpit is per *agent* — a figure on a card
+          that disappears with the run — and no card anywhere added a planner, four
+          parts and three CI agents into the one number an operator budgets in.
+          Drawn only where something was measured: absent is "no runtime reported
+          usage" (every PTY agent), which is not the same fact as zero. */}
+      {current.spend && (
+        <div className="fx-gf-plan fx-sunk">
+          <span className="fx-gf-who">Spend</span>
+          <span title="Every agent under this goal — its assay, its planner, its parts, and the agents its pull requests pulled in. A running total while any of them is still working.">
+            {fmtUsd(current.spend.costUsd)} · {current.spend.agents} agent run
+            {current.spend.agents === 1 ? '' : 's'} · {fmtTokens(current.spend.inputTokens)}→
+            {fmtTokens(current.spend.outputTokens)} tok
           </span>
         </div>
       )}
