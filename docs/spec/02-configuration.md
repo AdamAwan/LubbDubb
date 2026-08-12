@@ -179,12 +179,37 @@ knowing the policy.
 | `integrations.sourceControl`                  | `'fake' \| 'github' \| 'azure'` | `'fake'`  | Who supplies pull requests.                          |
 | `integrations.issues`                         | `'fake' \| 'github' \| 'azure'` | `'fake'`  | Who supplies issues / work items.                    |
 | `github.owner`, `github.repo`                 | `string`                        | unset     | Required when any capability uses `github`.          |
+| `github.defaultAssignee`                      | `string` (optional)             | unset     | Login that issues the harness **files** are assigned to. |
 | `github.filters.prAuthor`                     | `string` (optional)             | unset     | Only surface PRs opened by this login.               |
 | `azureDevOps.organization/project/repository` | `string`                        | unset     | Required when any capability uses `azure`.           |
+| `azureDevOps.defaultAssignee`                 | `string` (optional)             | `filters.workItemAssignedTo` | UPN that work items the harness **files** are assigned to. |
 | `azureDevOps.filters.prAuthor`                | `string` (optional)             | unset     | Only surface PRs opened by this UPN.                 |
 | `azureDevOps.filters.workItemTag`             | `string` (optional)             | unset     | Only surface work items carrying this tag.           |
 | `azureDevOps.filters.workItemAssignedTo`      | `string` (optional)             | unset     | Only surface work items assigned to this UPN.        |
 | `azureDevOps.policyChecks`                    | kind → mode map (optional)      | see below | Which branch-policy kinds become CI checks, and how. |
+
+### `defaultAssignee`
+
+Who a ticket **the harness files** belongs to. It applies to the four filing arms
+([13](13-jobs-and-findings.md)) — a deferred finding, unrecorded work, a blueprint, a bug the
+operator raised — and to nothing the harness merely reads: it is not a filter, and it never narrows
+pickup.
+
+It reaches the filing agent inside the tracker coordinates rather than as a prompt placeholder
+(`ticketAssignment`, `src/ticketAssignment.ts`), which is what keeps it working under an operator's
+prompt override: `{tracker}` is already rendered by all four templates, while a new `{assignee}`
+token would be dropped silently by every override written before it. Concretely, the create command
+in the coordinates grows `--assignee <login>` / `--assigned-to "<upn>"`, followed by a paragraph
+saying the flag is not optional, applies only to an item the agent **creates** (linking an existing
+one leaves its assignee alone), and must not cost the ticket if the tracker refuses the identity.
+
+Configured per provider because a GitHub login and an Azure UPN are different identities, and read
+off the provider **serving issues** — the same selection the coordinates themselves are built from.
+Azure falls back to `filters.workItemAssignedTo`: where that filter is set, the harness surfaces only
+items assigned to that identity, so an item filed to anyone else is invisible to the harness that
+filed it. GitHub has no equivalent to fall back to — `filters.prAuthor` names the account the harness
+_acts as_, not the operator. Unset, the coordinates read exactly as they did before and items are
+filed unassigned.
 
 ### `azureDevOps.policyChecks`
 

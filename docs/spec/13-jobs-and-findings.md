@@ -297,6 +297,14 @@ of those is "deal with this later".
   from and nowhere else. It returns null for `fake`, or for a provider selected without its config;
   the route then 409s and the snapshot ships `config.canFileTickets: false` so the cockpit hides the
   button rather than offering a click that cannot work. One predicate, both surfaces.
+- **And the one other thing an agent cannot infer: who it is for.** `github.defaultAssignee` /
+  `azureDevOps.defaultAssignee` ([02](02-configuration.md#defaultassignee)) ride in on the same
+  string — the create command gains `--assignee` / `--assigned-to`, and a paragraph says the flag is
+  not optional, covers only the item the agent creates, and must not cost the ticket if the tracker
+  refuses the identity. In the coordinates rather than a placeholder of its own, so an operator's
+  prompt override that predates the key still assigns; unset, the coordinates are unchanged and the
+  item is filed unassigned. One pure function (`ticketAssignment`, `src/ticketAssignment.ts`), so all
+  four filing arms assign identically.
 - **A desk job, not a code one.** Filing touches no repository, so cutting a worktree and a branch
   would be pure cost. The consequence is that a desk agent runs in a scratch directory with no git
   remote for `gh` to read the repo off — which is precisely why the coordinates are explicit.

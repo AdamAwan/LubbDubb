@@ -386,6 +386,13 @@ export interface GitHubConfig {
   owner: string;
   /** Repository name. */
   repo: string;
+  /**
+   * Login that issues **the harness files** are assigned to — the operator who
+   * asked for them. Rides in the tracker coordinates every filing prompt renders
+   * (`src/ticketAssignment.ts`); unset means filed unassigned, which is in
+   * nobody's queue. Not a filter: it never narrows what is picked up.
+   */
+  defaultAssignee?: string;
   /** Optional filters narrowing what the harness picks up. */
   filters?: {
     /** Only surface PRs opened by this login. Unset = all open PRs. */
@@ -400,6 +407,13 @@ export interface AzureDevOpsConfig {
   project: string;
   /** Git repository name within the project. */
   repository: string;
+  /**
+   * uniqueName (UPN) that work items **the harness files** are assigned to.
+   * Defaults to `filters.workItemAssignedTo` when unset: where that filter is
+   * set, an item filed to anyone else is not surfaced by the harness that filed
+   * it. → `src/ticketAssignment.ts`.
+   */
+  defaultAssignee?: string;
   /** Optional filters narrowing what the harness picks up. */
   filters?: {
     /** Only surface PRs opened by this uniqueName (UPN). Unset = all active PRs. */

@@ -70,18 +70,20 @@
   "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' and 'azure' (real). Capabilities: sourceControl (pull requests), issues (issues / work items).",
   "integrations": { "sourceControl": "fake", "issues": "fake" },
 
-  "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
+  "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). defaultAssignee is the login that issues the harness FILES (a deferred finding, unrecorded work, a blueprint, a raised bug) are assigned to — not a filter, it narrows nothing; unset files them unassigned. Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
   "github": {
     "owner": "acme",
     "repo": "app",
+    "defaultAssignee": "you",
     "filters": { "prAuthor": "lubbdubb-bot" }
   },
 
-  "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag, filters.workItemAssignedTo narrows work items to one assignee by uniqueName/UPN. When both workItemTag and workItemAssignedTo are set they AND (an item must match both). Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
+  "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag, filters.workItemAssignedTo narrows work items to one assignee by uniqueName/UPN. When both workItemTag and workItemAssignedTo are set they AND (an item must match both). defaultAssignee is the UPN that work items the harness FILES are assigned to — it narrows nothing, and defaults to filters.workItemAssignedTo, since where that filter is set an item filed to anyone else is invisible to the harness that filed it. Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
   "azureDevOps": {
     "organization": "acme",
     "project": "app",
     "repository": "app",
+    "defaultAssignee": "you@acme.com",
     "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent", "workItemAssignedTo": "bot@acme.com" },
 
     "// policyChecks": "Which Azure BRANCH-POLICY kinds become CI checks, and how. Kinds: build, status, comments, workItems, reviewers, mergeStrategy, other. Modes: 'check' (an ordinary CiCheck — visible, routable by a ci.checks rule, dispatchable), 'advisory' (visible and structurally unable to dispatch or escalate), 'off' (not emitted). Unset kinds take the defaults: build + status are 'check', comments is 'advisory' (rule pr-review-comment already models threads at higher fidelity), everything else 'off'. An unknown kind or mode throws at load. Nothing here can reach the aggregate ciStatus, so widening it can never make a PR read as unable to merge. The example promotes work-item linking so an agent fixes it — paired with the ci.checks guidance below.",

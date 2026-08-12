@@ -1,4 +1,5 @@
 import type { Config } from './config.js';
+import { ticketAssignment } from './ticketAssignment.js';
 
 /**
  * Raising a **bug** against a story the harness already worked.
@@ -49,17 +50,23 @@ const MAX_TITLE = 80;
  * issues, and it is the closest thing GitHub has to a related link. Null only for
  * the `fake` provider and an unconfigured one, where there is no tracker at all;
  * the cockpit hides the button rather than offering one that fails.
+ *
+ * The assignee rides along on the same argument the coordinates themselves do —
+ * a desk agent cannot infer who raised the bug. → `src/ticketAssignment.ts`.
  */
 export function bugTrackerCoordinates(config: Config, storyNumber: number): string | null {
   const provider = config.integrations.issues;
+  const assignment = ticketAssignment(config);
+  const assign = assignment?.flag ?? '';
+  const note = assignment ? `\n\n${assignment.note}` : '';
   if (provider === 'github' && config.github) {
     const slug = `${config.github.owner}/${config.github.repo}`;
     return (
       `the GitHub repository ${slug}. Create it with:\n\n` +
-      `  gh issue create -R ${slug} --label bug --title "<title>" --body "<body>"\n\n` +
+      `  gh issue create -R ${slug} --label bug --title "<title>" --body "<body>"${assign}\n\n` +
       `Name issue #${storyNumber} in the body (write it as "#${storyNumber}") — that cross-reference ` +
       `is what links the two, and GitHub shows it on both. If the repository has no "bug" label, ` +
-      `drop the --label flag rather than creating one.`
+      `drop the --label flag rather than creating one.${note}`
     );
   }
   if (provider === 'azure' && config.azureDevOps) {
@@ -68,10 +75,10 @@ export function bugTrackerCoordinates(config: Config, storyNumber: number): stri
     return (
       `the Azure DevOps project "${project}" in organization "${organization}". Create it with:\n\n` +
       `  az boards work-item create --org ${org} --project "${project}" ` +
-      `--type Bug --title "<title>" --description "<body>"\n\n` +
+      `--type Bug --title "<title>" --description "<body>"${assign}\n\n` +
       `Then link it back to story #${storyNumber}, using the id the create command returned:\n\n` +
       `  az boards work-item relation add --org ${org} --id <new bug id> ` +
-      `--relation-type related --target-id ${storyNumber}`
+      `--relation-type related --target-id ${storyNumber}${note}`
     );
   }
   return null;
