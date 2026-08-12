@@ -1,6 +1,13 @@
 import type { RecoveryVerdict, WorkNodeView } from '../types.js';
 
 /**
+ * Which full-surface panel is in front. One value rather than a boolean each: a
+ * boolean per panel admits far more states than there are, and two panels in
+ * front at once is not something this layout can draw.
+ */
+export type ConsolePanel = 'findings' | 'faults' | 'output' | 'launch' | null;
+
+/**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
  *
  * This exists so that **nothing under `factory/` imports `api.js`**. Drawing code
@@ -82,6 +89,12 @@ export interface CockpitActions {
    * funnel read for cost and for outcome.
    */
   openReliability(open: boolean): void;
+  /** Open a goal's page, or return to the overview with null. */
+  selectGoal(ref: string | null): void;
+  /** Bring a full-surface panel in front, or dismiss it with null. */
+  openPanel(panel: ConsolePanel): void;
+  /** Open the backlog view in place of the overview, or return to it. */
+  openBacklog(open: boolean): void;
   discussPlan(planId: string): Promise<void>;
   endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;

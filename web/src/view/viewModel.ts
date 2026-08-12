@@ -1,4 +1,9 @@
 import type { AppState, Agent, Task, AgentFlag, AgentFile, OrphanedWork, Escalation, Proposal } from '../types.js';
+import { buildNeedsYou } from './needsYou.js';
+import type { NeedRow } from './needsYou.js';
+import { buildGoalPage } from './goalPage.js';
+import type { GoalPageView } from './goalPage.js';
+import type { ConsolePanel } from '../cockpit/actions.js';
 
 /**
  * Everything the floor draws, derived once per render and handed over as plain data.
@@ -33,6 +38,17 @@ export interface CockpitView {
   openHumanTaskCount: number;
   /** Overlaps still in flight, the only ones an operator can still act on. */
   liveOverlapCount: number;
+
+  /** Every blocking item, merged and ordered — the queue rail's whole contents. */
+  needsYou: NeedRow[];
+  /** The goal whose page is open, as `issue:<n>`, or null for the overview. */
+  selectedGoal: string | null;
+  /** That goal's page, or null when none is selected or the ref is not in the world. */
+  goalPage: GoalPageView | null;
+  /** Which full-surface panel is in front, or null. */
+  consolePanel: ConsolePanel;
+  /** Whether the backlog view is open instead of the overview. */
+  backlogOpen: boolean;
 
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -110,6 +126,12 @@ interface ViewInputs {
   spendOpen: boolean;
   /** Whether the reliability breakdown is open. */
   reliabilityOpen: boolean;
+  /** The goal whose page is open, as `issue:<n>`. */
+  selectedGoal: string | null;
+  /** Which full-surface panel is in front. */
+  consolePanel: ConsolePanel;
+  /** Whether the backlog view is open instead of the overview. */
+  backlogOpen: boolean;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -137,6 +159,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
   const interval = state.config.heartbeatIntervalMs;
   const sincePulse = now - input.lastPulseAt;
 
+  const needsYou = buildNeedsYou(state);
+
   return {
     state,
     now,
@@ -150,6 +174,12 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,
     openHumanTaskCount: (state.humanTasks ?? []).filter((t) => t.status === 'open').length,
     liveOverlapCount: (state.overlaps ?? []).filter((o) => o.live).length,
+
+    needsYou,
+    selectedGoal: input.selectedGoal,
+    goalPage: input.selectedGoal ? buildGoalPage(state, input.selectedGoal, needsYou) : null,
+    consolePanel: input.consolePanel,
+    backlogOpen: input.backlogOpen,
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,

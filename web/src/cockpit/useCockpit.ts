@@ -4,7 +4,7 @@ import type { WsClient } from '../api.js';
 import type { AppState } from '../types.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
-import type { CockpitActions } from './actions.js';
+import type { CockpitActions, ConsolePanel } from './actions.js';
 
 /**
  * How long a refetch waits so a burst of live signals collapses into one request.
@@ -35,6 +35,9 @@ export function useCockpit(): CockpitStatus {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState(false);
   const [reliabilityOpen, setReliabilityOpen] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
+  const [consolePanel, setConsolePanel] = useState<ConsolePanel>(null);
+  const [backlogOpen, setBacklogOpen] = useState(false);
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
   // Last output line per agent, fed by compact `agent:tail` frames — used for
@@ -172,6 +175,9 @@ export function useCockpit(): CockpitStatus {
       openSettings: (open) => setSettingsOpen(open),
       openSpend: (open) => setSpendOpen(open),
       openReliability: (open) => setReliabilityOpen(open),
+      selectGoal: (ref) => setSelectedGoal(ref),
+      openPanel: (panel) => setConsolePanel(panel),
+      openBacklog: (open) => setBacklogOpen(open),
       discussPlan: (planId) => then(api.discussPlan(planId)),
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -218,6 +224,9 @@ export function useCockpit(): CockpitStatus {
       settingsOpen,
       spendOpen,
       reliabilityOpen,
+      selectedGoal,
+      consolePanel,
+      backlogOpen,
     }),
   };
 }

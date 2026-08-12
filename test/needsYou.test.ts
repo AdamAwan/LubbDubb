@@ -182,3 +182,61 @@ test('within a group the row holding more work sorts first', () => {
   assert.equal(rows[0]?.holding, 2);
   assert.equal(rows[1]?.holding, 0);
 });
+
+test('the view model exposes the queue and the selected goal together', async () => {
+  const { buildViewModel } = await import('../web/src/view/viewModel.js');
+  const state = buildDemoState();
+  const ref = `issue:${state.world.issues[0]!.number}`;
+
+  const view = buildViewModel({
+    state,
+    now: Date.now(),
+    connected: true,
+    demo: true,
+    selected: null,
+    liveOutput: new Map(),
+    tails: new Map(),
+    lastPulseAt: Date.now(),
+    viewingPlan: null,
+    viewingRetro: null,
+    viewingScratchpad: null,
+    settingsOpen: false,
+    spendOpen: false,
+    reliabilityOpen: false,
+    selectedGoal: ref,
+    consolePanel: null,
+    backlogOpen: false,
+  });
+
+  assert.equal(view.selectedGoal, ref);
+  assert.equal(view.goalPage?.issue.number, state.world.issues[0]!.number);
+  assert.deepEqual(view.needsYou, view.goalPage ? view.needsYou : []);
+  assert.ok(Array.isArray(view.needsYou));
+});
+
+test('no selected goal means no goal page', async () => {
+  const { buildViewModel } = await import('../web/src/view/viewModel.js');
+  const state = buildDemoState();
+
+  const view = buildViewModel({
+    state,
+    now: Date.now(),
+    connected: true,
+    demo: true,
+    selected: null,
+    liveOutput: new Map(),
+    tails: new Map(),
+    lastPulseAt: Date.now(),
+    viewingPlan: null,
+    viewingRetro: null,
+    viewingScratchpad: null,
+    settingsOpen: false,
+    spendOpen: false,
+    reliabilityOpen: false,
+    selectedGoal: null,
+    consolePanel: null,
+    backlogOpen: false,
+  });
+
+  assert.equal(view.goalPage, null);
+});

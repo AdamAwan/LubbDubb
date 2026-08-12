@@ -206,6 +206,9 @@ function render(
       settingsOpen: false,
       spendOpen: false,
       reliabilityOpen: false,
+      selectedGoal: null,
+      consolePanel: null,
+      backlogOpen: false,
     });
     return renderToStaticMarkup(createElement(FactoryRoot, { view, actions: INERT }));
   } finally {
@@ -245,6 +248,9 @@ function renderDesk(
       settingsOpen: false,
       spendOpen: false,
       reliabilityOpen: false,
+      selectedGoal: null,
+      consolePanel: null,
+      backlogOpen: false,
     });
     return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));
   } finally {

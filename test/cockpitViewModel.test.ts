@@ -45,6 +45,9 @@ function build(state: AppState, over: Partial<Parameters<typeof buildViewModel>[
     settingsOpen: false,
     spendOpen: false,
     reliabilityOpen: false,
+    selectedGoal: null,
+    consolePanel: null,
+    backlogOpen: false,
     ...over,
   });
 }
@@ -125,8 +128,8 @@ test('only open escalations and findings count toward the nudges', () => {
   const view = build(
     stateWith({
       escalations: [
-        { id: 'e1', status: 'open' },
-        { id: 'e2', status: 'answered' },
+        { id: 'e1', status: 'open', context: {} },
+        { id: 'e2', status: 'answered', context: {} },
       ] as never,
       findings: [{ status: 'open' }, { status: 'dismissed' }, { status: 'open' }] as never,
       overlaps: [{ live: true }, { live: false }] as never,
@@ -149,9 +152,9 @@ test('an open question joins to the agent that asked it', () => {
     stateWith({
       agents: [AGENT({ id: 'a1', status: 'running' }), AGENT({ id: 'a2', status: 'waiting' })],
       escalations: [
-        { id: 'e1', status: 'open', agentId: 'a1' },
-        { id: 'e2', status: 'answered', agentId: 'a2' },
-        { id: 'e3', status: 'open', agentId: null },
+        { id: 'e1', status: 'open', agentId: 'a1', context: {}, createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'e2', status: 'answered', agentId: 'a2', context: {}, createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'e3', status: 'open', agentId: null, context: {}, createdAt: '2026-01-01T00:00:00.000Z' },
       ] as never,
     }),
   );
