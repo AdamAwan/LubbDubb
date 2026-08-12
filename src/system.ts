@@ -34,6 +34,7 @@ import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/serv
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
+import { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
@@ -472,6 +473,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // the item is precisely the part the harness is not doing.
   const closeOuts = new DeliveryCloseOutDesk(store);
 
+  // Where a recurrence becomes a queued job. Store-only, like the close-out desk:
+  // it writes the same `jobs` row the launch route writes and leaves every
+  // question about what happens to it to rule `manual-job`.
+  const schedules = new ScheduleDesk({ store, errors });
+
   const graph = new WorkGraphRecorder({ store, errors });
 
   const harness = new Harness({
@@ -484,6 +490,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     naming,
     closeOuts,
     branchReaps,
+    schedules,
     graph,
     landings,
     // Holds the pulse while a previous run's agents await a verdict.

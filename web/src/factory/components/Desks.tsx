@@ -6,6 +6,7 @@ import { EscalationCard } from '../../components/EscalationCard.js';
 import { FindingsPanel } from '../../components/FindingsPanel.js';
 import { InjectPanel } from '../../components/InjectPanel.js';
 import { LaunchPanel } from '../../components/LaunchPanel.js';
+import { SchedulePanel } from '../../components/SchedulePanel.js';
 import { refLink, relTime } from '../../components/util.js';
 import { clip } from '../vocabulary.js';
 import { Icon } from './Sprite.js';
@@ -125,7 +126,12 @@ export function FaultLog({ view, actions }: FloorProps): JSX.Element {
 }
 
 /**
- * The blueprint desk: stamp a job, and see what is queued behind it.
+ * The blueprint desk: stamp a job, put one on a clock, and see what is queued
+ * behind them.
+ *
+ * The schedule panel sits under the composer rather than on a desk of its own
+ * because it is the same act with a `when` attached: a firing writes the identical
+ * job the composer writes, into the identical queue drawn below both of them.
  *
  * Injection is a *demo* control — it fakes a world change, which is only ever
  * something the static Pages build needs. A real run against a fake provider is
@@ -142,6 +148,7 @@ export function BlueprintDesk({ view, actions }: FloorProps): JSX.Element {
         attachmentUrls={view.state.attachmentUrls}
         onChanged={actions.refresh}
       />
+      <SchedulePanel schedules={view.state.schedules} onChanged={actions.refresh} />
       {view.demo && <InjectPanel onInjected={actions.refresh} world={view.state.world} />}
     </>
   );

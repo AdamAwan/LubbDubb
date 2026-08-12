@@ -21,3 +21,23 @@ import type { Job } from './types.js';
 export function jobBranch(job: Job): string | null {
   return job.kind === 'code' ? (job.branch ?? `job/${job.id}`) : null;
 }
+
+/**
+ * A concise title from a free-form prompt: its first non-empty line, capped at 80
+ * characters with an ellipsis.
+ *
+ * Here rather than in the launch route because two surfaces derive one now — a
+ * blueprint (`POST /api/jobs`) and a recurrence (`POST /api/schedules`) — and the
+ * title is what the operator reads in the queue, the fleet card and the decision
+ * log alike. Two copies would drift in the one place a drift is visible: the same
+ * prompt showing up under two different names depending on which door it came
+ * through.
+ */
+export function deriveJobTitle(prompt: string): string {
+  const firstLine =
+    prompt
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) ?? 'Operator job';
+  return firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine;
+}

@@ -398,6 +398,50 @@ export interface Job {
 }
 
 /**
+ * A recurring blueprint: a prompt the operator wants run on a cron schedule, and
+ * how far through that recurrence the harness has got.
+ *
+ * It is **intent, not work**. What a firing produces is an ordinary {@link Job},
+ * queued exactly as a hand-launched one is and dispatched by the same rule — so a
+ * schedule adds a way for work to arrive and no new way for it to be run. That is
+ * what keeps a recurrence inside every gate the fleet already has: the cap, the
+ * pause flag, the Up next queue and the cooldowns all see a job and neither know
+ * nor care that a clock queued it.
+ */
+export interface JobSchedule {
+  id: string;
+  /** The title each firing's job carries. Derived from the prompt when the operator omits one. */
+  title: string;
+  /** The prompt each firing's job carries, verbatim. */
+  prompt: string;
+  /** Whether firings run as a code agent (in a worktree) or a desk agent (scratch dir). */
+  kind: TaskKind;
+  /**
+   * The five-field cron expression, read in the **harness process's local
+   * timezone** — see `src/schedules/cron.ts` for what that means on the two days
+   * a year it is not the same as any other clock.
+   */
+  cron: string;
+  /** Off means the recurrence stands but nothing fires; `nextRunAt` is null while it is. */
+  enabled: boolean;
+  /**
+   * When the next firing is due. Null while the schedule is disabled, and null for
+   * an expression that matches no future minute at all (`0 0 30 2 *`), which is
+   * how a schedule that can never fire says so instead of being asked every pulse.
+   */
+  nextRunAt: string | null;
+  /** When it last fired — including a firing the operator asked for by hand. */
+  lastFiredAt: string | null;
+  /**
+   * The job the last firing created, which is also how the next pulse asks whether
+   * that firing is still going on. Null until it has fired once.
+   */
+  lastJobId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * An image an operator attached to a blueprint, as it arrives on the wire
  * (issue #249). `data` is base64 of the raw file — no data-URL prefix.
  *

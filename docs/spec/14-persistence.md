@@ -141,6 +141,7 @@ introduced.
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `tasks`              | Units of work materialised at dispatch.                                                                                                                                                                                                                                                                                                                                       | —                                                                                                                                         |
 | `jobs`               | Operator-queued prompts awaiting a slot.                                                                                                                                                                                                                                                                                                                                      | —                                                                                                                                         |
+| `job_schedules`      | Recurring blueprints: the prompt an operator wants queued on a cron schedule, and how far through that recurrence the harness has got. Intent, not work — a firing writes an ordinary `jobs` row, so nothing downstream of the queue knows a clock queued it. `next_run_at` is the whole of the scheduling state, recomputed from the clock at each firing rather than from the slot that fired. | — |
 | `job_attachments`    | Images an operator attached to a blueprint (#249): what they are and where the file is. Bytes live on disk under `attachmentRoot`, never in the database.                                                                                                                                                                                                                     | `UNIQUE (target_ref, idx)`                                                                                                                |
 | `priority_overrides` | Operator "Up next" re-ordering, keyed on candidate origin.                                                                                                                                                                                                                                                                                                                    | `origin` is `PRIMARY KEY`                                                                                                                 |
 | `agents`             | One row per launched agent, including usage and the progress note.                                                                                                                                                                                                                                                                                                            | —                                                                                                                                         |
@@ -172,7 +173,7 @@ introduced.
 | `error_events`       | Recorded failures — the Errors panel's backing store.                                                                                                                                                                                                                                                                                                                         | —                                                                                                                                         |
 
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
-`tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
+`tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `job_schedules(enabled, next_run_at)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`,
 `decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`,
 `work_nodes(parent_ref)`, `work_item_filings(job_id)`, `issue_bug_filings(origin_ref)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
 attempts are the `tasks` rows carrying its origin, so no separate attempts table exists — `tasks` only
@@ -229,6 +230,25 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
   days later, and the retrospective after it, can still refer back to the screenshot the goal started
   as. The **only** deletion is a blueprint cancelled before it ran, which nothing downstream can want;
   a later retention sweep would be taking something this spec says is kept.
+
+### Job schedules
+
+`createJobSchedule(input)` (enabled on creation — an operator who wrote one means it to run),
+`getJobSchedule(id)`, `listJobSchedules()` (oldest first, **all** of them),
+`updateJobSchedule(id, patch)`, `recordJobScheduleRun(id, {firedAt, jobId, nextRunAt})`,
+`deleteJobSchedule(id)`.
+
+- **The store holds _when_, never _whether_.** No query here asks the clock: `next_run_at` is written
+  by whoever computed it — the route on a create or an edit, the desk on a firing — and read back as
+  a plain string. The one place that knows what a cron expression means is `src/schedules/cron.ts`,
+  so this table cannot form a second opinion about it.
+- **Disabled rows are listed too.** A paused schedule is a standing intention the operator can see
+  and switch back on, and it is skipped by the pass reading `enabled` rather than by never being
+  handed it — the same shape a dismissed finding stays in its list.
+- **A firing is one write.** `recordJobScheduleRun` sets `last_fired_at`, `last_job_id` and
+  `next_run_at` together, because they are one event: a row saying it fired but not what it produced
+  is exactly the row the next pulse's in-flight check cannot use. It is also why
+  `updateJobSchedule` cannot write those two — one writer, so an edit never half-records a run.
 
 ### Priority overrides
 

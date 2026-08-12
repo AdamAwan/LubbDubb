@@ -6,6 +6,7 @@ import { systemClock, type Clock, type StoreContext } from './context.js';
 import { ensureColumns } from './migrate.js';
 import { TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
+import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
@@ -47,6 +48,7 @@ import type {
   IssueShortfall,
   Job,
   JobAttachment,
+  JobSchedule,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -91,6 +93,7 @@ export class Store {
   private readonly db: Database.Database;
   private readonly tasksStore: TaskStore;
   private readonly jobs: JobStore;
+  private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
   private readonly findings: FindingStore;
   private readonly humanTasks: HumanTaskStore;
@@ -125,6 +128,7 @@ export class Store {
       HUMAN_TASK_COLUMNS,
       PLAN_COLUMNS,
       JOB_COLUMNS,
+      JOB_SCHEDULE_COLUMNS,
       ISSUE_VERDICT_COLUMNS,
     ]) {
       ensureColumns(this.db, columns);
@@ -140,6 +144,7 @@ export class Store {
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
+    this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.findings = new FindingStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
@@ -235,6 +240,27 @@ export class Store {
   }
   deleteAttachments(targetRef: string): void {
     this.jobs.deleteAttachments(targetRef);
+  }
+
+  // -- Job schedules (recurring blueprints) ---------------------------------
+
+  createJobSchedule(input: Parameters<JobScheduleStore['createJobSchedule']>[0]): JobSchedule {
+    return this.schedules.createJobSchedule(input);
+  }
+  getJobSchedule(id: string): JobSchedule | null {
+    return this.schedules.getJobSchedule(id);
+  }
+  listJobSchedules(): JobSchedule[] {
+    return this.schedules.listJobSchedules();
+  }
+  updateJobSchedule(id: string, patch: Parameters<JobScheduleStore['updateJobSchedule']>[1]): JobSchedule | null {
+    return this.schedules.updateJobSchedule(id, patch);
+  }
+  recordJobScheduleRun(id: string, run: Parameters<JobScheduleStore['recordJobScheduleRun']>[1]): void {
+    this.schedules.recordJobScheduleRun(id, run);
+  }
+  deleteJobSchedule(id: string): boolean {
+    return this.schedules.deleteJobSchedule(id);
   }
 
   // -- Priority overrides (operator "Up next" re-ordering, issue #128) -------

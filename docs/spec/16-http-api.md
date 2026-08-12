@@ -28,6 +28,7 @@ is about.
 | `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                 |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                    |
 | `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                       |
+| `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                          |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                               |
 | `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                              |
@@ -555,6 +556,44 @@ and `manual-job` items stay first regardless — so this is safe to run inline. 
 dropped with it — rows first, then the files — the one deletion in the attachment story, since nothing
 downstream can want a blueprint that never ran.
 
+### Schedules
+
+Recurring blueprints — the prompt an operator wants queued on a clock. See
+[13](13-jobs-and-findings.md#schedules). **Nothing here dispatches**: a firing writes the same `jobs`
+row `POST /api/jobs` writes, which rule `manual-job` then drains under the cap and the pause flag
+like any other, so these four routes add a way for work to arrive and no way for it to be run.
+
+#### `POST /api/schedules`
+
+Body `{cron, prompt, title?, kind?}`. **400** on a missing/empty `cron` or `prompt`, a bad `kind`, or
+an expression the parser refuses — and the refusal is the **parser's own sentence**, naming the field
+and what that field accepts, because it is read by whoever just mistyped it and a second wording here
+would be a worse one written further from the syntax. The title falls back to the prompt's first line
+through `deriveJobTitle`, the same derivation the launch route uses. Created **enabled**, with
+`nextRunAt` computed from the clock. No cycle is run: the first firing is due at a time that is by
+construction still in the future. Returns `{ ok: true, schedule }`.
+
+#### `POST /api/schedules/:id`
+
+Every field optional (`{cron?, prompt?, title?, kind?, enabled?}`), so the pause toggle and a
+reworded prompt are one route. **404** when absent, **400** on a refused expression — checked before
+anything is written. `nextRunAt` is **recomputed from now** when the cron changed or the enabled flag
+moved, and cleared when it is paused; an edit that only rewords leaves the recurrence exactly where
+it was. Returns `{ ok: true, schedule }`.
+
+#### `POST /api/schedules/:id/run`
+
+Fire one now. **404** when absent. It ignores both gates the pulse applies on the operator's behalf —
+a paused schedule still runs, and a previous firing still in flight does not hold it — because those
+exist to stop agents stacking up unattended, which a click is not. It does **not** move `nextRunAt`:
+running early is not a change of cadence. Broadcasts `world:changed` and runs a cycle, the launch
+route's reason. Returns `{ ok: true, job, report }`.
+
+#### `DELETE /api/schedules/:id`
+
+**404** when absent. The jobs it queued are untouched — they are its history, and they are ordinary
+jobs whether or not the intention behind them still stands. Returns `{ ok: true }`.
+
 ### `POST /api/findings/:id/promote`
 
 404 when absent, 409 when not `open`, 400 on a bad `kind`. Body may override `title`, `prompt` and
@@ -798,6 +837,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
 | `tasks`                         | Every task.                                                                                                                                                                                                                   |
 | `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                  |
+| `schedules`                     | Recurring blueprints, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                            |
 | `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                       |
 | `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                      |
 | `files`                         | Every file every agent wrote.                                                                                                                                                                                                 |

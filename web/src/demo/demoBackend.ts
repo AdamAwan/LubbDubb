@@ -12,6 +12,7 @@ import type {
   Decision,
   Issue,
   Job,
+  JobSchedule,
   OpenPullRequest,
   CiPolicyDescription,
   PromptTemplateView,
@@ -860,6 +861,75 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * The four schedule routes, mirrored (POST /api/schedules and friends).
+   *
+   * The demo has no clock driving the pulse, so **nothing here ever fires on its
+   * own** — writing a recurrence, editing it and deleting it are real, and "run
+   * now" queues the job exactly as the launch composer does. That is the honest
+   * demo of the feature rather than a fake one: what a schedule *does* is queue a
+   * job, and the queue is right there.
+   *
+   * `next_run_at` is not computed either, for the reason the prompt book ships
+   * empty: the cron parser is server code and the web bundle imports none, so a
+   * second implementation here would be a copy free to disagree with the one that
+   * actually schedules anything.
+   */
+  async createSchedule(input: { cron: string; prompt: string; title?: string; kind?: string }): Promise<{ ok: true }> {
+    const prompt = input.prompt.trim();
+    const nowIso = new Date().toISOString();
+    const schedule: JobSchedule = {
+      id: this.id('sch'),
+      title: (input.title && input.title.trim()) || prompt.split('\n')[0]!.slice(0, 80) || 'Operator job',
+      prompt,
+      kind: input.kind === 'desk' ? 'desk' : 'code',
+      cron: input.cron.trim(),
+      enabled: true,
+      nextRunAt: null,
+      lastFiredAt: null,
+      lastJobId: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    this.state.schedules = [...this.state.schedules, schedule];
+    this.dirty();
+    return { ok: true };
+  }
+
+  async updateSchedule(
+    id: string,
+    patch: { cron?: string; prompt?: string; title?: string; kind?: string; enabled?: boolean },
+  ): Promise<{ ok: true }> {
+    const schedule = this.state.schedules.find((s) => s.id === id);
+    if (schedule) {
+      if (patch.cron !== undefined) schedule.cron = patch.cron.trim();
+      if (patch.prompt !== undefined) schedule.prompt = patch.prompt;
+      if (patch.title !== undefined) schedule.title = patch.title;
+      if (patch.kind !== undefined) schedule.kind = patch.kind === 'desk' ? 'desk' : 'code';
+      if (patch.enabled !== undefined) schedule.enabled = patch.enabled;
+      schedule.updatedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /** Fire one by hand — the same queue-and-try-to-dispatch the launch composer does. */
+  async runSchedule(id: string): Promise<{ ok: true }> {
+    const schedule = this.state.schedules.find((s) => s.id === id);
+    if (!schedule) return { ok: true };
+    await this.launchJob({ prompt: schedule.prompt, title: schedule.title, kind: schedule.kind });
+    schedule.lastFiredAt = new Date().toISOString();
+    schedule.lastJobId = this.state.jobs[0]?.id ?? null;
+    this.dirty();
+    return { ok: true };
+  }
+
+  async deleteSchedule(id: string): Promise<{ ok: true }> {
+    this.state.schedules = this.state.schedules.filter((s) => s.id !== id);
+    this.dirty();
+    return { ok: true };
+  }
+
   /** Drop a still-queued job (demo mirror of POST /api/jobs/:id/cancel). */
   async cancelJob(id: string): Promise<{ ok: true }> {
     const job = this.state.jobs.find((j) => j.id === id);
@@ -1193,6 +1263,14 @@ export const demoApi = {
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),
+  createSchedule: (schedule: { cron: string; prompt: string; title?: string; kind?: string }) =>
+    getServer().createSchedule(schedule),
+  updateSchedule: (
+    id: string,
+    patch: { cron?: string; prompt?: string; title?: string; kind?: string; enabled?: boolean },
+  ) => getServer().updateSchedule(id, patch),
+  runSchedule: (id: string) => getServer().runSchedule(id),
+  deleteSchedule: (id: string) => getServer().deleteSchedule(id),
   promoteFinding: (id: string) => getServer().promoteFinding(id),
   fileFinding: (id: string) => getServer().fileFinding(id),
   dismissFinding: (id: string) => getServer().dismissFinding(id),

@@ -749,6 +749,25 @@ export function buildDemoState(): DemoSeed {
       }),
     ],
     jobs: [],
+    // One recurrence, so the desk's schedule list is not an empty box in the demo.
+    // Its `nextRunAt` is null for the reason the demo backend never fires one: the
+    // cron parser is server code, and a copy of it here would be free to disagree
+    // with the only implementation that schedules anything.
+    schedules: [
+      {
+        id: 'sch-1',
+        title: 'Sweep the dependency updates',
+        prompt: 'Check for outdated dependencies, upgrade the safe ones and open a PR with the changelog links.',
+        kind: 'code',
+        cron: '0 9 * * 1',
+        enabled: true,
+        nextRunAt: null,
+        lastFiredAt: new Date(Date.now() - 3 * 24 * 3_600_000).toISOString(),
+        lastJobId: null,
+        createdAt: new Date(Date.now() - 21 * 24 * 3_600_000).toISOString(),
+        updatedAt: new Date(Date.now() - 3 * 24 * 3_600_000).toISOString(),
+      },
+    ],
     // Every list `/api/state` always ships, empty here because the demo has no
     // story for them: an orphan-free boot, no goal retained past its issue, and
     // no agent that surfaced an artifact or wrote a file. Present rather than

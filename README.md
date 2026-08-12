@@ -133,7 +133,10 @@ reused across restarts.
 
 Then: use **Inject event** to simulate the world moving (a CI failure, a review comment) and watch the
 harness react; click an agent to see its live transcript and type into it; answer items in **Needs
-you**; use **New job** to launch an ad-hoc prompt. The **Decision log** shows what was decided each
+you**; use **New job** to launch an ad-hoc prompt, or **New schedule** to have one queued on a cron
+expression (`0 9 * * 1-5` — weekdays at nine, read in the harness's own timezone). A schedule queues
+the same job the composer does, so it waits for a free slot like everything else. The **Decision log**
+shows what was decided each
 cycle and which rule produced it; **Activity** shows how the world itself changed.
 
 ### Pointing it at real work

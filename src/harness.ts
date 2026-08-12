@@ -18,6 +18,7 @@ import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
+import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 import type { UpcomingPlan } from './wire.js';
@@ -58,6 +59,12 @@ interface HarnessDeps {
   closeOuts?: DeliveryCloseOutDesk;
   /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
   branchReaps?: BranchReapDesk;
+  /**
+   * Queues the job behind every recurrence that has come due. Absent = no
+   * schedules (tests that do not care). It writes `jobs` rows through the same
+   * store call the launch route uses and decides no dispatch.
+   */
+  schedules?: ScheduleDesk;
   /**
    * Reconciles the operator's standing stack-landing authorizations with the
    * world. Absent = no landings (tests that do not care).
@@ -194,6 +201,14 @@ export class Harness extends EventEmitter {
       // other bookkeeping rather than in the dispatcher, because it is not a
       // dispatch — nothing here staffs anything, and no rule reads what it writes.
       this.deps.closeOuts?.run(world);
+      // The operator's standing "every weekday at 09:00": a recurrence that has
+      // come due queues its job here, a few lines above the `listQueuedJobs` the
+      // dispatcher decides from — so a firing is dispatched on the pulse it fires
+      // rather than waiting for the next one. Beside the other bookkeeping and not
+      // in the dispatcher for `closeOuts`' reason: it staffs nothing and no rule
+      // reads what it writes. What it queues is an ordinary job, so the cap, the
+      // pause flag and rule `manual-job` see exactly what a hand-launched one is.
+      this.deps.schedules?.run();
       // Record what the world and the store now say happened, after the reconciler
       // so part→PR observations are fresh, and before `decide` so stage 2 can read
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after

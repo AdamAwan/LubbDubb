@@ -33,7 +33,7 @@ What keeps that from swallowing the cockpit's rules is the split on **behaviour 
 
 - **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold
   semantics: `AgentDrawer`, `EscalationCard`, `RecoveryPanel`, `InjectPanel`, `LaunchPanel`,
-  `FindingsPanel`, `WorldSummary`, the buttons, and the leaf helpers. The escalation 409 rules and
+  `FindingsPanel`, `SchedulePanel`, `WorldSummary`, the buttons, and the leaf helpers. The escalation 409 rules and
   the recovery verdicts get exactly one implementation, and the floor embeds them and tints them
   through the tokens.
 - **Drawn** (`web/src/factory/`) — anything that draws over data it was handed: the belt, the bays,
@@ -494,7 +494,10 @@ Rule · Outcome · By`. `linkify` still runs over Detail, so a sentence naming `
 
 Two of the three desks carry a rule of their own:
 
-- **`BlueprintDesk`** is the `LaunchPanel` plus the `InjectPanel`, which hangs off **`view.demo`** —
+- **`BlueprintDesk`** is the `LaunchPanel`, the `SchedulePanel` and the `InjectPanel`. The schedule
+  panel sits under the composer rather than on a desk of its own because it is the same act with a
+  `when` attached: a firing writes the identical job the composer writes, into the identical queue
+  drawn below both of them. The `InjectPanel` hangs off **`view.demo`** —
   the static Pages build. Injection fakes a world change, which is only ever something the demo
   needs: a real run against a fake provider is still a real run, and a panel that lies to the harness
   there is a way to lie to yourself about what it is reacting to. The empty-floor line reads from the
@@ -873,6 +876,25 @@ active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse n
   last progress note, and the question it was parked on if it was parked on one. A `never started` card
   says outright that no work was done and that the item is what is holding its origin and branch shut,
   since that is the fact behind an otherwise unexplained idle fleet.
+- **`SchedulePanel`** — put a blueprint on a clock: a cron expression, a prompt, code/desk, and the
+  list of every recurrence with its next run, its last run, and pause / run now / delete. The button
+  is `+ New schedule` behind a clock face, drawn inline for `LaunchPanel`'s reason — but in
+  `currentColor`, because a recurrence is not a *kind* of thing the way a blueprint is; it is the
+  same blueprint on a timer.
+
+  - **The expression is typed, and four common ones are buttons.** Reading `0 9 * * 1-5` and writing
+    it are different asks, and only one of them is the operator's actual intention.
+  - **A refused expression is shown in the server's own words** under the composer, exactly as a
+    refused attachment is: the cron parser names the field and what that field accepts, and a second
+    wording in the browser would be a worse one written further from the syntax. The form is kept for
+    a retry — a rejected expression is usually one character away from a good one.
+  - **A paused recurrence is dimmed, not hidden or moved.** It is a standing intention the operator
+    wrote, and the reason to keep drawing it is that this panel is the only surface anywhere that
+    says it exists.
+  - **Two times, in two registers.** `relTime` clamps a future instant to "0s ago", so the next run
+    is rendered by the panel's own `untilTime` ("in 3h") beside the last run's "ran 2d ago". They are
+    the two things a standing intention is judged on, and the panel is the only place either is
+    legible — everything downstream sees a job, not a schedule. → [13](13-jobs-and-findings.md#schedules)
 - **`InjectPanel`** — rendered **only** under `view.demo`, and it calls `injectDemoEvent` rather than
   anything on the `api` seam: there is no server route behind it. See
   [Demo mode](#demo-mode) for why the harness ships no injection surface at all.
@@ -1522,6 +1544,14 @@ server-side demo either: the harness has no `/api/inject` route, no `config.inje
 inject panel of its own. Injection lives entirely in the browser fake, reached through
 `injectDemoEvent` in `web/src/api.ts`, which folds on the same `VITE_DEMO` constant `api` does so the
 demo module stays out of the production bundle.
+
+**Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
+and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
+composer does — which is the honest demo of the feature, since what a schedule *does* is queue a job
+and the queue is on the same desk. What is missing is the clock: nothing in the browser drives a pulse,
+and `nextRunAt` is left null rather than computed, for the reason `getPrompts` ships an empty book —
+the cron parser is server code, and a second implementation here would be a copy free to disagree with
+the only one that schedules anything.
 
 That is the bar for anything under `web/src/demo/`: it earns its place by being something the Pages
 build reaches. What that does **not** license is trimming the constant-answering arms of `demoApi`

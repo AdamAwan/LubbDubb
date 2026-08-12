@@ -419,6 +419,11 @@ export function buildStateSnapshot(
     // Operator-launched jobs (newest first) — the cockpit shows the queued
     // ones and their place in line, plus recently-dispatched/cancelled history.
     jobs: store.listJobs(),
+    // The recurrences behind some of them: what to queue and when, oldest first.
+    // Shipped whole rather than as "the ones due soon", because the panel's job is
+    // to let an operator see a standing intention they wrote weeks ago — including
+    // a disabled one, which is invisible everywhere else in the harness.
+    schedules: store.listJobSchedules(),
     agents,
     // Artifacts agents surfaced mid-run (design docs, reports, links). The
     // cockpit groups these by agentId onto the fleet card / drawer.
