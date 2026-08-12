@@ -267,6 +267,14 @@
   text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
+/* Zero rows still draws the rail — a note here, not an absent surface, is
+   what keeps "quiet" distinguishable from "broken". */
+.cn-rail-empty {
+  padding: 16px 13px;
+  margin: 0;
+  color: var(--cn-fg-faint);
+  font-size: 12px;
+}
 
 /* ---------- situation ---------- */
 .cn-sit {

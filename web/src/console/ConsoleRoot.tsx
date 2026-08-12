@@ -1,6 +1,7 @@
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { TopBar } from './TopBar.js';
+import { QueueRail } from './QueueRail.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 
 /**
@@ -49,10 +50,11 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       <TopBar view={view} actions={actions} />
       {recovery}
       <div className="cn-body">
-        {/* Filled in Tasks 5–8: the queue rail and the situation area (overview,
-            goal page, backlog). Empty here on purpose — this task is placement
-            only. */}
-        <aside className="cn-rail" />
+        {/* The situation area (overview, goal page, backlog) fills in Tasks 6–8;
+            empty here on purpose. */}
+        <aside className="cn-rail">
+          <QueueRail view={view} actions={actions} />
+        </aside>
         <main className="cn-sit" />
       </div>
     </div>

@@ -82,3 +82,45 @@ test('the recovery banner sits outside the situation area', () => {
   assert.ok(banner !== -1, 'a held harness must draw its banner');
   assert.ok(banner < sit, 'the banner belongs above the situation area, not inside it');
 });
+
+test('the rail carries every blocking kind in one list', () => {
+  const html = render(view());
+  const v = view();
+  assert.ok(v.needsYou.length > 0, 'the demo fixtures must carry at least one ask');
+  for (const row of v.needsYou) assert.ok(html.includes(row.title), `the rail dropped ${row.kind}`);
+});
+
+test('a row states what it is holding, and a row holding nothing draws no count', () => {
+  const rows = [
+    {
+      id: 'a',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'Holds two',
+      goalRef: 'issue:1',
+      agentId: 'a1',
+      holding: 2,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'b',
+      kind: 'bench',
+      group: 'yours',
+      title: 'Holds nothing',
+      goalRef: 'issue:1',
+      agentId: null,
+      holding: 0,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ] as CockpitView['needsYou'];
+
+  const html = render(view({ needsYou: rows }));
+  assert.ok(html.includes('holding 2 parts'));
+  assert.ok(!html.includes('holding 0'), 'a zero is not a reading — draw no count');
+});
+
+test('an empty queue collapses the rail rather than removing it', () => {
+  const html = render(view({ needsYou: [] }));
+  assert.ok(html.includes('cn-rail'), 'a surface that vanishes when quiet reads as one that broke');
+  assert.ok(html.includes('cn-rail-empty'));
+});
