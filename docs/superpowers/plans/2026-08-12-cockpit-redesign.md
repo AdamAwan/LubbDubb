@@ -116,7 +116,7 @@ function orphan(over: Partial<OrphanedWork> = {}): OrphanedWork {
 
 /** A snapshot with the four lists this suite varies replaced, and nothing cast. */
 function stateWith(over: Partial<AppState>): AppState {
-  return { ...buildDemoState(), ...over };
+  return { ...buildDemoState().state, ...over };
 }
 
 test('partHolding counts live direct dependents and ignores retired ones', () => {
@@ -171,7 +171,7 @@ test('a permission request is its own kind, not a plain escalation', () => {
 });
 
 test('within a group the row holding more work sorts first', () => {
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   const parts = [
     part({ id: 'p:a', slug: 'a' }),
     part({ id: 'p:b', slug: 'b', dependsOn: ['a'] }),
@@ -411,7 +411,7 @@ function plan(originRef: string): Plan {
 }
 
 test('an unknown goal ref yields null rather than an empty page', () => {
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   assert.equal(buildGoalPage(state, 'issue:99999', []), null);
 });
 
@@ -423,7 +423,7 @@ test('parts group by status, and a retired part is on no page at all', () => {
     part({ id: 'p:4', slug: 'four', status: 'pending' }),
     part({ id: 'p:5', slug: 'five', status: 'retired' }),
   ];
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   const issue = state.world.issues[0];
   const page = buildGoalPage(
     { ...state, planParts: parts, plans: [plan(`issue:${issue.number}`)] },
@@ -444,7 +444,7 @@ test('the track folds the same groups the page draws, so the two cannot disagree
     part({ id: 'p:3', slug: 'three', status: 'dispatched' }),
     part({ id: 'p:4', slug: 'four', status: 'blocked' }),
   ];
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   const issue = state.world.issues[0];
   const page = buildGoalPage(
     { ...state, planParts: parts, plans: [plan(`issue:${issue.number}`)] },
@@ -458,7 +458,7 @@ test('the track folds the same groups the page draws, so the two cannot disagree
 });
 
 test('only this goal’s asks reach its page', () => {
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   const issue = state.world.issues[0];
   const needs = buildNeedsYou(state);
   const page = buildGoalPage(state, `issue:${issue.number}`, needs);
@@ -467,7 +467,7 @@ test('only this goal’s asks reach its page', () => {
 });
 
 test('the activity list is this goal’s decisions, read off subjectRef', () => {
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   const issue = state.world.issues[0];
   const page = buildGoalPage(state, `issue:${issue.number}`, []);
 
@@ -655,7 +655,7 @@ Append to `test/needsYou.test.ts`:
 ```ts
 test('the view model exposes the queue and the selected goal together', async () => {
   const { buildViewModel } = await import('../web/src/view/viewModel.js');
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   const ref = `issue:${state.world.issues[0].number}`;
 
   const view = buildViewModel({
@@ -674,7 +674,7 @@ test('the view model exposes the queue and the selected goal together', async ()
 
 test('no selected goal means no goal page', async () => {
   const { buildViewModel } = await import('../web/src/view/viewModel.js');
-  const state = buildDemoState();
+  const state = buildDemoState().state;
 
   const view = buildViewModel({
     state, now: Date.now(), connected: true, demo: true, selected: null,
@@ -837,7 +837,7 @@ const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
-  const state = buildDemoState();
+  const state = buildDemoState().state;
   return {
     ...buildViewModel({
       state, now: Date.now(), connected: true, demo: true, selected: null,
@@ -1132,8 +1132,8 @@ Append to `test/console.test.ts`:
 ```ts
 function goalView(): CockpitView {
   const v = view();
-  const ref = v.needsYou.find((n) => n.goalRef)?.goalRef ?? `issue:${buildDemoState().world.issues[0].number}`;
-  const state = buildDemoState();
+  const ref = v.needsYou.find((n) => n.goalRef)?.goalRef ?? `issue:${buildDemoState().state.world.issues[0].number}`;
+  const state = buildDemoState().state;
   return {
     ...buildViewModel({
       state, now: Date.now(), connected: true, demo: true, selected: null,
