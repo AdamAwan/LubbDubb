@@ -299,6 +299,9 @@ export class Store {
   settleHumanTask(id: string, status: Exclude<HumanTaskStatus, 'open'>, resolution: string | null): HumanTask | null {
     return this.humanTasks.settleHumanTask(id, status, resolution);
   }
+  dismissHumanTask(id: string): HumanTask | null {
+    return this.humanTasks.dismissHumanTask(id);
+  }
 
   // -- Plans (the multi-PR issue funnel) -----------------------------------
 

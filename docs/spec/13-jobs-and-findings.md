@@ -376,13 +376,15 @@ interface HumanTask {
   createdAt;
   updatedAt;
   resolvedAt: string | null;
+  dismissedAt: string | null; // when the operator cleared the settled row off the bench
 }
 ```
 
 `human_tasks` was a fresh `CREATE TABLE`, and `src/store/humanTasks.ts` declared an empty
-`HUMAN_TASK_COLUMNS` anyway: a table being new **once** does not keep it exempt. `kind` is the column
-that collected on it — it is declared there with a `'ask'` default, so every row written before the
-close-out existed reads as what it is.
+`HUMAN_TASK_COLUMNS` anyway: a table being new **once** does not keep it exempt. `kind` and
+`dismissed_at` are the columns that collected on it — `kind` with a `'ask'` default, so every row
+written before the close-out existed reads as what it is, and `dismissed_at` nullable with none,
+because null is already true of every row from before there was a way to dismiss one.
 → [14](14-persistence.md#migrations)
 
 ### It is not an escalation, and the difference is not a nuance
@@ -516,4 +518,28 @@ Settled tasks stay in the list rather than being deleted, for the reason a dismi
 row that vanished on being settled would take the operator's own note with it, and on a decline that
 note is the whole account of why the work below it stopped.
 
-Tests: `test/humanTasks.test.ts`.
+### Getting it off the bench — `POST /api/human-tasks/:id/dismiss`
+
+A settled row is a record, and a record you cannot put down is a permanent fixture. The close-out
+sweep files _and settles_ its own rows without anyone touching them, so on a repo delivering steadily
+the bench fills from underneath with the account of work nobody did — and until this existed there
+was nothing an operator could do about it.
+
+**It is not a third verdict, and `dismissed_at` is not a fourth `HumanTaskStatus`.** What a person is
+owed and whether they have finished reading about it are two questions, and one column cannot answer
+both: the reconciler asking whether a part was declined must not have to learn a value that says
+nothing about the part. So the dismissal takes no note, concludes no part, runs no cycle and leaves
+the status and the resolution exactly where they were.
+
+**Only a settled row can be dismissed** — 409 otherwise — and that guard is what keeps it from
+becoming a quiet way to make an obligation go away. An open task has two answers and hiding it is
+neither. Compare-and-set on both halves (`status<>'open' AND dismissed_at IS NULL`), so a second
+click dismisses nothing.
+
+**The row is updated, never deleted**, and here that is load-bearing rather than sentimental: the
+close-out sweep recognises its own row by finding it again, so a delete has it file the same
+obligation on the next pulse and the button reads as one that does nothing. The snapshot keeps
+shipping the row — the goal floor's close-out station reads it, including a decline no reading of the
+tracker can see — and it is the **bench** that stops drawing it. → [17](17-cockpit.md)
+
+Tests: `test/humanTasks.test.ts`, and the sweep's side in `test/deliveryCloseOut.test.ts`.

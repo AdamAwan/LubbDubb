@@ -711,6 +711,37 @@ test('the bench is drawn only when a person is actually waited on', () => {
 });
 
 /**
+ * The way off the bench. The close-out sweep settles its own rows without anyone
+ * touching them, so the settled tail fills with work nobody did and stays there —
+ * which is the whole reason a settled station carries **Dismiss**, and why the
+ * emptiness test above has to be asked against the *drawn* list rather than the
+ * shipped one. A bench whose every row has been dismissed is an empty panel, and
+ * an empty panel is not a panel.
+ */
+test('a dismissed task is off the bench, and a bench of nothing but those is no panel at all', () => {
+  const settled = render((s) => {
+    for (const task of s.humanTasks ?? []) {
+      task.status = 'done';
+      task.resolution = 'the tracker no longer lists it open';
+      task.resolvedAt = new Date().toISOString();
+    }
+  });
+  const bench = settled.slice(settled.indexOf('data-fx="bench"'), settled.indexOf('class="fx-line'));
+  // Settled and undismissed: the record is drawn, and every one of them offers
+  // the way to put it down. An open station never does — it has two answers.
+  assert.match(bench, /Dismiss/, 'a settled station carries the way off the bench');
+
+  const cleared = render((s) => {
+    for (const task of s.humanTasks ?? []) {
+      task.status = 'done';
+      task.resolvedAt = new Date().toISOString();
+      task.dismissedAt = new Date().toISOString();
+    }
+  });
+  assert.doesNotMatch(cleared, /data-fx="bench"/, 'nothing is left on it, so the tile is not drawn');
+});
+
+/**
  * Ended shifts are the desks' argument one panel down: the count is worth having
  * in the head, the cards are history, and history above the bots that are out now
  * makes the panel read as longer than the fleet is. So the floor draws the count
@@ -1533,6 +1564,7 @@ test('the close-out is read off the row, not off the ticket', () => {
                 createdAt: NOW,
                 updatedAt: NOW,
                 resolvedAt: null,
+                dismissedAt: null,
                 ...over,
               },
             ]
@@ -1568,6 +1600,7 @@ test('the close-out is read off the row, not off the ticket', () => {
           createdAt: NOW,
           updatedAt: NOW,
           resolvedAt: NOW,
+          dismissedAt: null,
         },
       ],
     }),

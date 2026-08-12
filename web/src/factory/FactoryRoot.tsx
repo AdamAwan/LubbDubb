@@ -8,7 +8,7 @@ import { SpriteSheet, Icon } from './components/Sprite.js';
 import { StatusBar } from './components/StatusBar.js';
 import { BlueprintDesk, FaultLog, FindingsDesk, Slip, StampDesk } from './components/Desks.js';
 import { TheLine } from './components/TheLine.js';
-import { Bench } from './components/Bench.js';
+import { Bench, benchTasks } from './components/Bench.js';
 import { BotCard } from './components/BotCard.js';
 import { EventLog } from './components/EventLog.js';
 import { Inspection } from './components/Inspection.js';
@@ -104,7 +104,12 @@ export function FactoryRoot({ view, actions }: FloorProps) {
   // form left on the shop floor. What it does *not* redraw is the pair of buttons
   // and the rule between them: `HumanTaskActions` is shared, the same split
   // `BotCard` keeps by embedding the wired escalation card.
-  const bench = (state.humanTasks?.length ?? 0) > 0 && (
+  //
+  // `benchTasks` decides what is on it, and the guard reads the same array the
+  // panel draws: a bench whose every row has been dismissed is an empty panel,
+  // and an empty panel is not a panel.
+  const benched = benchTasks(state.humanTasks ?? []);
+  const bench = benched.length > 0 && (
     <section className="fx-card fx-bev" data-fx="bench">
       <div className="fx-head">
         <div>
@@ -114,12 +119,13 @@ export function FactoryRoot({ view, actions }: FloorProps) {
         <p className="fx-note">by hand{view.openHumanTaskCount > 0 && ` · ${view.openHumanTaskCount} waiting`}</p>
       </div>
       <Bench
-        tasks={state.humanTasks ?? []}
+        tasks={benched}
         parts={state.planParts ?? []}
         now={now}
         refUrls={state.refUrls}
         onDone={(id) => actions.completeHumanTask(id)}
         onDecline={(id, note) => actions.declineHumanTask(id, note)}
+        onDismiss={(id) => actions.dismissHumanTask(id)}
       />
     </section>
   );

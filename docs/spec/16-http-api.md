@@ -600,6 +600,17 @@ deliberately not concluded** — that would release every dependent waiting on t
 refused. The next pulse's reconciler blocks it with its own account of why; see
 [08](08-planning.md#a-step-for-a-person). Returns `{ ok: true, humanTask, report }`.
 
+### `POST /api/human-tasks/:id/dismiss`
+
+No body. Clears a **settled** row off the bench: it is not a third verdict, so it takes no note,
+concludes no part and runs no cycle — the status and the resolution are left exactly where they were.
+**409 when the task is absent, still open, or already dismissed** — compare-and-set on both halves,
+and the open arm is the guard that keeps this from being a quiet way to make an obligation go away.
+The row is updated rather than deleted (the close-out sweep finds its own row by looking for it, so a
+delete re-files the same obligation next pulse) and the snapshot keeps shipping it; the bench is what
+stops drawing it. Broadcasts `dirty`, `dismissFinding`'s reason — nothing in the world moved. Returns
+`{ ok: true, humanTask }`. → [13](13-jobs-and-findings.md#getting-it-off-the-bench--post-apihuman-tasksiddismiss)
+
 ### `POST /api/plans/:id/replan`
 
 404 when the plan is unknown. Flips the plan to `planning`, **withdraws any pending plan proposal**

@@ -7,9 +7,13 @@ import type { StoreContext } from './context.js';
  * `human_tasks` was a fresh `CREATE TABLE`, and `kind` is the column that proved
  * the entry was worth declaring empty: every row written before it existed is an
  * `ask`, and the default is what says so on a database that predates the sweep.
+ *
+ * `dismissed_at` is nullable with no default, and null is already the right
+ * answer for every row from before it existed: nobody had cleared anything off
+ * the bench, because there was no way to.
  */
 export const HUMAN_TASK_COLUMNS: ColumnMigrations = {
-  human_tasks: { kind: `TEXT NOT NULL DEFAULT 'ask'` },
+  human_tasks: { kind: `TEXT NOT NULL DEFAULT 'ask'`, dismissed_at: `TEXT` },
 };
 
 /**
@@ -33,7 +37,9 @@ export class HumanTaskStore {
    * rather than inserting, exactly as `recordFinding` does and for its reason: an
    * agent that asks for the same thing on every turn must not fill the operator's
    * list. The status is deliberately *not* reset — a declined task asked for
-   * again stays declined, which is what declining it meant.
+   * again stays declined, which is what declining it meant — and neither is
+   * `dismissed_at`, for the same reason: an answered row does not come back onto
+   * the bench because the asker repeated itself.
    */
   recordHumanTask(
     input: HumanTaskInput & {
@@ -72,11 +78,12 @@ export class HumanTaskStore {
       createdAt: ts,
       updatedAt: ts,
       resolvedAt: null,
+      dismissedAt: null,
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO human_tasks (id, title, detail, origin_ref, part_id, kind, agent_id, task_id, status, resolution, created_at, updated_at, resolved_at)
-         VALUES (@id, @title, @detail, @originRef, @partId, @kind, @agentId, @taskId, @status, @resolution, @createdAt, @updatedAt, @resolvedAt)`,
+        `INSERT INTO human_tasks (id, title, detail, origin_ref, part_id, kind, agent_id, task_id, status, resolution, created_at, updated_at, resolved_at, dismissed_at)
+         VALUES (@id, @title, @detail, @originRef, @partId, @kind, @agentId, @taskId, @status, @resolution, @createdAt, @updatedAt, @resolvedAt, @dismissedAt)`,
       )
       .run(task);
     return { task, created: true };
@@ -150,6 +157,34 @@ export class HumanTaskStore {
     if (result.changes === 0) return null;
     return this.getHumanTask(id);
   }
+
+  /**
+   * Clear a settled task off the bench: the operator has read the record and is
+   * done with it.
+   *
+   * **Only a settled row**, which is the guard that makes this safe rather than a
+   * second way to make work disappear — an open obligation has two answers, and
+   * neither of them is "hide it". Compare-and-set on both halves
+   * (`status<>'open' AND dismissed_at IS NULL`), {@link settleHumanTask}'s
+   * discipline, so a second click dismisses nothing and cannot restamp the time.
+   * Returns null when there was no undismissed settled task, which the route
+   * turns into a 409.
+   *
+   * The row is updated, never deleted. The close-out sweep recognises its own
+   * settled row by finding it again, and a delete would have it file the same
+   * obligation on the next pulse — the same reason a dismissed finding stays in
+   * the list.
+   */
+  dismissHumanTask(id: string): HumanTask | null {
+    const ts = this.ctx.now();
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE human_tasks SET dismissed_at=?, updated_at=? WHERE id=? AND status<>'open' AND dismissed_at IS NULL`,
+      )
+      .run(ts, ts, id);
+    if (result.changes === 0) return null;
+    return this.getHumanTask(id);
+  }
 }
 
 interface HumanTaskRow {
@@ -166,6 +201,7 @@ interface HumanTaskRow {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  dismissed_at: string | null;
 }
 
 function rowToHumanTask(r: HumanTaskRow): HumanTask {
@@ -183,5 +219,6 @@ function rowToHumanTask(r: HumanTaskRow): HumanTask {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     resolvedAt: r.resolved_at,
+    dismissedAt: r.dismissed_at,
   };
 }

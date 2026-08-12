@@ -210,6 +210,22 @@ Four consequences to preserve:
     disclosure you have to open first is a step between you and the job. The sheet is capped and
     scrolls inside itself rather than pushing the line off the screen.
 
+  **A settled station carries a third button, Dismiss**, and it is the floor's own rather than a
+  third arm of `HumanTaskActions`: the shared component is the *pair* with the refusal rule between
+  them, and a dismissal decides nothing. It is what stops the settled tail becoming a permanent
+  fixture — the close-out sweep files and settles its own rows without anyone touching them, so the
+  account of work nobody did accumulates under the work you have. Only a settled station has one; an
+  open task has two answers and hiding it is neither.
+  → [13](13-jobs-and-findings.md#getting-it-off-the-bench--post-apihuman-tasksiddismiss)
+
+  **`benchTasks` decides what is on the bench, and the tile's guard reads the same array the panel
+  draws.** Open first, then at most four settled, dismissed ones on neither. The floor asks that
+  question twice — a panel with nothing in it is not a panel — and deriving the visibility from the
+  raw `humanTasks` instead is exactly how a bench of four dismissed rows draws as an empty panel.
+  `test/factoryFloor.test.ts` asserts both sides. The rows themselves keep arriving in the snapshot:
+  the goal floor's close-out station reads one, so filtering them off the wire would silently turn a
+  dismissed decline into "nothing was owed".
+
 - **Recovery is outside `.fx-grid` entirely**, above it, because while it is up no pulse runs and
   every other surface is stale for the same reason. It is a banner, so it needs no `grid-column` to
   span — it is a block at every width.
@@ -978,7 +994,8 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
 
   A `plan step` chip marks the rows that are holding assemblers shut, before anything else on the
   line: it is the difference between "please do this" and "nothing below this can start until you
-  do". Settled tasks stay in a short tail with their note, for the reason a dismissed finding does.
+  do". Settled tasks stay in a short tail with their note, for the reason a dismissed finding does —
+  until you **Dismiss** one, which is the way off the bench and decides nothing about the work.
 
 - **Plans** (`PlanPanel`, rendered only when plans exist) — each plan's parts drawn as a stack, joined
   to `upcoming` **by origin** (`issue:<n>:part:<slug>`) so the dispatch cut is visible, with a

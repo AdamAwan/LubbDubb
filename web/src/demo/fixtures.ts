@@ -873,6 +873,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(18),
         updatedAt: ago(18),
         resolvedAt: null,
+        dismissedAt: null,
       },
       {
         id: 'hum-2',
@@ -890,6 +891,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(40),
         updatedAt: ago(40),
         resolvedAt: null,
+        dismissedAt: null,
       },
       {
         id: 'hum-3',
@@ -905,6 +907,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(72),
         updatedAt: ago(52),
         resolvedAt: ago(52),
+        dismissedAt: null,
       },
       {
         // The harness's own, on the goal it delivered at #205 and cannot close.
@@ -928,6 +931,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(50),
         updatedAt: ago(50),
         resolvedAt: null,
+        dismissedAt: null,
       },
     ],
     agents: [

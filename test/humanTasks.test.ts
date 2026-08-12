@@ -429,3 +429,52 @@ test('an operator files and settles one through the routes, and the snapshot shi
 
   assert.equal((await app.inject({ method: 'POST', url: '/api/human-tasks/nope/done' })).statusCode, 409);
 });
+
+/**
+ * The way a settled row leaves the bench.
+ *
+ * The close-out sweep files and settles its own rows without anyone touching
+ * them, so on a busy repo the record of work nobody did accumulates under the
+ * work you have — and until there was a dismissal there was nothing to do about
+ * it. What makes it safe is that it is **not a verdict**: an open obligation
+ * cannot be dismissed, so this can never be a quiet way to make work go away, and
+ * the settled row it hides keeps its status and its note.
+ */
+test('a settled task is dismissed off the bench; an open one cannot be, and nothing else moves', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/human-tasks',
+    payload: { title: 'Plug the card reader into the test rig' },
+  });
+  const { humanTask } = created.json() as { humanTask: { id: string } };
+
+  // The guard that makes the button safe: an obligation nobody has answered has
+  // two answers, and hiding it is neither.
+  const early = await app.inject({ method: 'POST', url: `/api/human-tasks/${humanTask.id}/dismiss` });
+  assert.equal(early.statusCode, 409);
+  assert.equal(system.store.getHumanTask(humanTask.id)!.dismissedAt, null);
+
+  await app.inject({ method: 'POST', url: `/api/human-tasks/${humanTask.id}/done`, payload: { note: 'Plugged in.' } });
+  const dismissed = await app.inject({ method: 'POST', url: `/api/human-tasks/${humanTask.id}/dismiss` });
+  assert.equal(dismissed.statusCode, 200);
+
+  const row = system.store.getHumanTask(humanTask.id)!;
+  assert.ok(row.dismissedAt);
+  // It answered nothing, so the verdict and the operator's own note are exactly
+  // where they were — the row is kept, and the bench is what stops drawing it.
+  assert.equal(row.status, 'done');
+  assert.equal(row.resolution, 'Plugged in.');
+  const state = await app.inject({ method: 'GET', url: '/api/state' });
+  assert.equal((state.json() as { humanTasks: unknown[] }).humanTasks.length, 1);
+
+  // Compare-and-set on both halves, as every other verdict on this row is: a
+  // second click dismisses nothing and cannot restamp the time.
+  const again = await app.inject({ method: 'POST', url: `/api/human-tasks/${humanTask.id}/dismiss` });
+  assert.equal(again.statusCode, 409);
+  assert.equal(system.store.getHumanTask(humanTask.id)!.dismissedAt, row.dismissedAt);
+
+  assert.equal((await app.inject({ method: 'POST', url: '/api/human-tasks/nope/dismiss' })).statusCode, 409);
+});

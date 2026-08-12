@@ -66,6 +66,7 @@ function task(over: Partial<HumanTask> = {}): HumanTask {
     createdAt: '2026-08-11T10:00:00.000Z',
     updatedAt: '2026-08-11T10:00:00.000Z',
     resolvedAt: null,
+    dismissedAt: null,
     ...over,
   };
 }
@@ -131,6 +132,21 @@ test('a settled row is never re-filed — a decline stays declined', () => {
     });
     assert.deepEqual(steps, [], `${status} is a settlement, and the sweep does not re-open it`);
   }
+});
+
+test("a dismissed row is still the sweep's row — clearing the bench does not re-raise the ask", () => {
+  // The operator took the settled record off the bench while the item is still
+  // listed open, which is the one shape a delete would have got wrong: the sweep
+  // finds its own row by looking for it, so a deleted one comes straight back and
+  // the dismissal reads as a button that does nothing.
+  const steps = pass({
+    issues: [issue(12)],
+    deliveries: [delivery(12)],
+    existing: [
+      task({ status: 'done', resolvedAt: '2026-08-11T11:00:00.000Z', dismissedAt: '2026-08-11T12:00:00.000Z' }),
+    ],
+  });
+  assert.deepEqual(steps, []);
 });
 
 // -- settling -----------------------------------------------------------------

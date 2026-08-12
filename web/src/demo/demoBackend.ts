@@ -531,6 +531,19 @@ class DemoServer {
     return this.settleHumanTask(id, 'declined', note);
   }
 
+  /** Clear a settled one off the bench (POST /api/human-tasks/:id/dismiss). */
+  async dismissHumanTask(id: string): Promise<{ ok: true }> {
+    const task = (this.state.humanTasks ?? []).find((t) => t.id === id);
+    // Settled only, and once — the route's own guard, so the demo cannot show a
+    // button the real cockpit refuses.
+    if (task && task.status !== 'open' && !task.dismissedAt) {
+      task.dismissedAt = new Date().toISOString();
+      task.updatedAt = task.dismissedAt;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   private settleHumanTask(id: string, status: 'done' | 'declined', note: string | null): { ok: true } {
     const task = (this.state.humanTasks ?? []).find((t) => t.id === id);
     if (task && task.status === 'open') {
@@ -1179,6 +1192,7 @@ export const demoApi = {
   dismissFinding: (id: string) => getServer().dismissFinding(id),
   completeHumanTask: (id: string) => getServer().completeHumanTask(id),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
+  dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
   // The demo has no previous run to have crashed, so there is never anything to
