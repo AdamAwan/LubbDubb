@@ -650,6 +650,12 @@ Assembled in `ActionExecutor.materializeTask` for the branch gate's reason — e
 through it — and keyed on the exact retro origin, so a finished goal's audit trail never lands in
 front of an agent dispatched to fix CI.
 
+Every row it gathers is selected by one predicate, `mine`: the ref **equals** `issue:<n>` or starts
+with `issue:<n>:`. The boundary is the point. A bare `startsWith('issue:1')` also matches
+`issue:19:plan:plan`, so on any repository with more than nine goals the dossier quietly attributes
+another goal's record to this one — the failure is invisible because the dossier is prose and reads
+perfectly well either way.
+
 The agent submits with `retro_submit`; the summary is required, the document is trimmed rather than
 refused, and the write upserts on the issue so a revision is one row. Nothing is posted to the
 tracker and nothing is scheduled from what it says.

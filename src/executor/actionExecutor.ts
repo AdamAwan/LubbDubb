@@ -786,7 +786,7 @@ function retroBriefing(originRef: string | null | undefined, store: Store): stri
       .filter((d) => mine(actionOrigin(d.action)))
       .reverse(),
     escalations: store.listEscalations().filter((e) => (e.taskId ? taskIds.has(e.taskId) : false)),
-    proposals: store.listProposals().filter((p) => p.ref.startsWith(`issue:${issueNumber}`)),
+    proposals: store.listProposals().filter((p) => mine(p.ref)),
     findings: store.listFindings().filter((f) => mine(f.originRef)),
     agentCount: agents.length,
     delivery: store.getDelivery(issueOriginRef),
