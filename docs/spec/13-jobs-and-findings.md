@@ -144,6 +144,144 @@ it is a live agent, so kill it instead. The route 409s when the job is absent or
 `jobs` was a fresh `CREATE TABLE`, but `origin_ref` post-dates it, so it has a `JOB_COLUMNS` entry
 ([14](14-persistence.md#migrations)). Tests: `test/jobQueue.test.ts`.
 
+## Schedules
+
+A **schedule** is a job the operator wants queued on a clock rather than by hand: "sweep the
+dependencies every Monday at 09:00", "review the open pull requests every night". It is the same
+prompt, the same composer, the same queue — with a `when` attached.
+
+```ts
+interface JobSchedule {
+  id;
+  title; // what each firing's job is called; derived from the prompt when omitted
+  prompt; // what each firing's job says, verbatim
+  kind: 'code' | 'desk';
+  cron: string; // five fields, read in the harness process's local timezone
+  enabled: boolean;
+  nextRunAt: string | null; // null while disabled, and for an expression that never matches again
+  lastFiredAt: string | null;
+  lastJobId: string | null; // the job the last firing created
+  createdAt;
+  updatedAt;
+}
+```
+
+### It queues, and that is all it does
+
+**A firing writes an ordinary `jobs` row.** Rule `manual-job` drains it exactly as it drains one the
+operator launched from the composer: under the same cap, the same pause flag, the same Up next queue
+and the same branch invariant. So a schedule adds a way for work to **arrive** and no way for it to
+be **run** — every gate that stands between a queued job and an agent is untouched, and none of them
+knows or cares that a clock queued this one.
+
+That is the whole containment argument, and it is why there is no config key, no per-schedule
+concurrency limit and no "scheduled" flag anywhere downstream. A recurrence that could dispatch
+around the cap would be the capability escalation `findings` is careful not to be
+([above](#it-queues-nothing)); one that queues is just an operator who is asleep.
+
+### The expression
+
+Five fields — `minute hour day-of-month month day-of-week` — each a star, a number, an `a-b` range, a
+`/n` step on either, or a comma-separated list of those. `src/schedules/cron.ts` parses and steps
+them, and it is the only thing in the harness that knows what an expression means.
+
+- **Written rather than depended on.** The syntax is fixed by forty years of crontab and is a hundred
+  lines to implement; a dependency would be a supply-chain surface and a version to carry for
+  something no upstream is going to change.
+- **Names (`MON`), `@daily` aliases and a seconds field are refused**, not half-supported. An
+  expression that parses to something other than what its author reads is worse than one that will
+  not parse at all, so every refusal is one sentence naming the field and what that field accepts —
+  handed back verbatim by the route and printed under the input by the cockpit.
+- **Fields are read in the harness process's local timezone.** That is what an operator means by
+  "weekdays at 09:00": the machine the fleet runs on is the one they are sitting at. The two days a
+  year it differs from any other clock behave the way their own crontab does, because the search
+  steps a real `Date` rather than doing arithmetic on epoch milliseconds.
+- **Vixie's day rule holds**: with _both_ day fields restricted the match is their union, so
+  `0 9 1 * 1` means "the 1st, and every Monday". It is the one part of the syntax that surprises
+  everybody, and the surprise is silent, so it is stated in the parser, the spec and a test.
+- **An expression matching no future minute** (`0 0 30 2 *`) resolves to a null `nextRunAt` rather
+  than being re-asked every pulse forever.
+
+### Firing — the `ScheduleDesk`, once a pulse
+
+`schedules.run()` sits with the other bookkeeping passes in `Harness.runCycle`
+([04](04-harness-cycle.md#ordering)), a few lines **above** the `listQueuedJobs` the dispatcher
+decides from — so a firing is dispatched on the pulse it fires rather than waiting for the next one.
+Every decision is in the pure `schedulePass` (`src/schedules/schedule.ts`); the desk is the store
+round trip around it, the shape `DeliveryCloseOutDesk` already has.
+
+Three properties, all of them about a harness that was **not running** when a slot came round — which
+is the normal case for a laptop, not an edge case:
+
+- **A missed window fires once, not once per slot.** `nextRunAt` is recomputed from **now**, never
+  from the slot that fired. A nightly schedule on a machine that was off for a week queues one job
+  when it comes back; firing seven agents for the seven mornings nobody was there is a bill, not a
+  catch-up.
+- **A schedule never has two of its own jobs in flight.** If the job the last firing created is still
+  queued, or the task it became is still active, the schedule is **rolled forward** to its next slot
+  without firing. Rolled forward rather than deferred, so a 3am job does not arrive at 11am because
+  last night's overran — the cadence the operator asked for is the one they get. The predicate is
+  `listStandingJobs`' reasoning asked of one job: `dispatched` is terminal for a job, so the task it
+  became is the only thing that says whether the work is still going on.
+- **At most one firing per schedule per pulse**, which falls out of taking the next slot after `now`
+  rather than draining every slot before it.
+
+A failing schedule fails only itself: each firing is recorded through `errors.record` and the loop
+carries on, because the alternative is one bad row taking the pulse that would have fixed it.
+
+**The granularity is the pulse, not the minute.** `heartbeatIntervalMs` defaults to five minutes, so a
+`0 9 * * *` schedule fires at the first pulse at or after 09:00 — never before it, and by default up
+to five minutes after. A recurrence is a "some time this morning" instrument, and an operator who
+needs the minute lowers the heartbeat. A **paused fleet** is the same shape from the other side: the
+firing still queues, headroom is zero so nothing spawns, and the in-flight rule then holds every later
+slot behind it — so a week of pause is one job waiting, not two thousand.
+
+### What a firing does _not_ carry
+
+- **No branch.** Each firing takes the derived `job/<id>` of its own job, so two firings can never
+  share a worktree — the failure `WorktreeManager.ensure` makes silent. A fixed branch on a
+  recurrence is that collision waiting for the first job that runs long.
+- **Nothing interpolated into the prompt** — not the schedule's name, not the time, not "this is a
+  scheduled run". An operator's prompt is theirs, and a harness sentence prepended to it is a
+  sentence they did not write being read by an agent they cannot see. What connects the two is
+  recorded instead: the schedule keeps `lastJobId`, and the job's own `job:<id>` origin is what
+  everything downstream is keyed on.
+- **No ticket, unlike a code blueprint from `POST /api/jobs`.** That route's convergence
+  ([above](#blueprints-become-tickets--post-apijobs-the-code-arm)) is for a one-off intention
+  entering the funnel. A recurrence is a standing one, and filing a fresh ticket every Monday would
+  fill the tracker with copies of one sentence for the assay and the planner to judge identically
+  each time. A firing is dispatched as the job it is.
+
+### The four routes
+
+`POST /api/schedules` writes one, `POST /api/schedules/:id` edits it (every field optional, so the
+pause toggle and a reworded prompt are one call), `POST /api/schedules/:id/run` fires it now, and
+`DELETE /api/schedules/:id` ends it. See [16](16-http-api.md#schedules).
+
+Two decisions worth keeping:
+
+- **The next slot is recomputed from now whenever the recurrence itself changed**, and cleared when
+  it is paused. A schedule moved from 09:00 to 21:00 that kept yesterday's `nextRunAt` would fire at
+  the old time once more, which is the edit visibly not taking; and a resume that fired instantly off
+  a slot long past is not what a toggle means.
+- **"Run now" ignores both gates the pulse applies on the operator's behalf** — a paused schedule
+  still runs, and a previous firing still in flight does not hold it — because those exist to stop
+  agents stacking up unattended, which a click is not. It deliberately does **not** move `nextRunAt`:
+  running early is not a change of cadence.
+
+### Deleted, not tombstoned
+
+Unlike a dismissed finding or a settled human task, a schedule is **deleted**. Those carry somebody's
+judgement about a piece of work and a row that vanished would take the note with it; this carries an
+intention that has ended, and there is no verdict to lose. Its history survives anyway — every job it
+ever queued is still in `jobs`, with the agents and decisions that came of them.
+
+`job_schedules` was a fresh `CREATE TABLE`, and `src/store/schedules.ts` declares an empty
+`JOB_SCHEDULE_COLUMNS` anyway, for `human_tasks`' reason: a table being new **once** does not keep it
+exempt. → [14](14-persistence.md#migrations)
+
+Tests: `test/jobSchedules.test.ts`.
+
 ## Findings
 
 An agent that discovers something **outside its own task** had nowhere to put it. "This issue

@@ -41,7 +41,7 @@ coalesced return does not: no cycle ran.
 
 ## Ordering
 
-`runCycle` performs exactly this sequence. The order is load-bearing at four points, noted below.
+`runCycle` performs exactly this sequence. The order is load-bearing at five points, noted below.
 
 ```mermaid
 flowchart TD
@@ -58,7 +58,8 @@ flowchart TD
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
         REC --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
         NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
-        CLOSE --> GRAPH["record the work graph — after the reconciler, before decide"]
+        CLOSE --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
+        SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
         GRAPH --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
         READ --> ANN["announce the assay's question on the ticket · record issue runs"]
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
@@ -85,28 +86,35 @@ flowchart TD
    task ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). The pass files one,
    and settles a standing one the moment the tracker stops listing the item open. It writes
    `human_tasks` rows and nothing else — no dispatch, no sink, and no rule reads what it writes.
-6. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
+6. **Fire due schedules** — `schedules.run()`. A recurrence whose slot has come round queues a `jobs`
+   row ([13](13-jobs-and-findings.md#schedules)). Positioned **above** step 8's `listQueuedJobs`, which
+   is what makes a firing dispatch on the pulse it fires rather than the next one; and beside the other
+   bookkeeping rather than in the dispatcher for `closeOuts`' reason — it staffs nothing, and what it
+   writes is an ordinary job that rule `manual-job` drains under the same cap and pause flag as one the
+   operator launched by hand. A schedule that throws is recorded through `errors.record` and the rest
+   still fire.
+7. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
    node observations and upserts them (see [14](14-persistence.md#work-graph)). Positioned here for
    both neighbours: **after** the reconciler, so the part→PR observations it just made are the ones
    recorded, and **before** `decide`, which is where a later stage would read the graph from. A failure
    is recorded through `errors.record` and never fails the cycle — nothing reads the graph for a
    decision, so it must not be able to break the pulse.
-7. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
+8. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
    and the most recent 200 decisions.
-8. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
+9. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
    **by reference** from `RuntimeControl` (never a copy taken at wiring time).
-9. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
-10. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
-11. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
+10. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
+11. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
+12. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
     and the world's `takenAt`. Null before the first cycle, since the plan is a per-pulse projection
     rather than a persisted queue. The operator priority overrides (issue #128) are then reconciled:
     `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
     active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
     lingers forever.
-12. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
+13. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
-13. **`executor.execute(cycleId, plan)`**.
-14. **Emit `cycle:end`** with the report.
+14. **`executor.execute(cycleId, plan)`**.
+15. **Emit `cycle:end`** with the report.
 
 ## Failure handling
 

@@ -232,6 +232,20 @@ const realApi = {
     attachments?: JobAttachmentInput[];
   }) => post<{ ok: true }>('/api/jobs', job),
   cancelJob: (id: string) => post<{ ok: true }>(`/api/jobs/${id}/cancel`),
+  // Recurrences. A schedule queues the same job the composer above does, so
+  // everything these four calls can cause is a job in the queue — which is why
+  // they carry no dispatch controls of their own.
+  createSchedule: (schedule: { cron: string; prompt: string; title?: string; kind?: string }) =>
+    post<{ ok: true }>('/api/schedules', schedule),
+  updateSchedule: (
+    id: string,
+    patch: { cron?: string; prompt?: string; title?: string; kind?: string; enabled?: boolean },
+  ) => post<{ ok: true }>(`/api/schedules/${id}`, patch),
+  // Fire one now, without waiting for its slot and without moving it: an operator
+  // testing what they just wrote should not have to wait until Monday to see it.
+  runSchedule: (id: string) => post<{ ok: true }>(`/api/schedules/${id}/run`),
+  deleteSchedule: (id: string) =>
+    authFetch(`/api/schedules/${id}`, { method: 'DELETE' }).then((r) => json<{ ok: true }>(r)),
   // A finding becomes work only here: the operator's click is the gate, because
   // an agent that could queue jobs could put agents on the fleet.
   promoteFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/promote`),

@@ -70,6 +70,7 @@ import type {
   Issue as WorldIssue,
   Job,
   JobAttachment,
+  JobSchedule,
   Plan,
   PlanPart,
   Proposal,
@@ -350,6 +351,12 @@ export interface CockpitState {
   tasks: Task[];
   /** Operator-launched jobs, newest first — the queue and its recent history. */
   jobs: Job[];
+  /**
+   * Recurring blueprints, oldest first — every one the operator has written,
+   * enabled or not. What a firing produces is an ordinary entry in {@link jobs},
+   * so the queue above is where a recurrence becomes visible as work.
+   */
+  schedules: JobSchedule[];
   agents: Agent[];
   /** Artifacts agents surfaced mid-run, grouped by agentId in the UI. */
   flags: AgentFlag[];
@@ -501,6 +508,7 @@ export type {
   Job,
   JobAttachment,
   JobAttachmentInput,
+  JobSchedule,
   Plan,
   PlanPart,
   Proposal,

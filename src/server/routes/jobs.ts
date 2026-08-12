@@ -4,6 +4,7 @@ import { trackerCoordinates } from '../../mcp/findings.js';
 import { blueprintTicketFields } from '../../blueprintTicket.js';
 import { watchLabelsFor } from '../../watchLabels.js';
 import { ATTACHMENT_BODY_LIMIT, AttachmentsField, prepareAttachments } from '../../jobs/attachments.js';
+import { deriveJobTitle } from '../../jobs.js';
 import { checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -133,7 +134,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           });
       }
       // Fall back to a title derived from the prompt's first line when none is given.
-      const title = providedTitle ?? deriveTitle(prompt);
+      const title = providedTitle ?? deriveJobTitle(prompt);
       const job = store.createJob({ title, prompt, kind, branch });
       attach(job.id);
       hub.broadcast({ type: 'world:changed' });
@@ -183,14 +184,4 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, job };
     }),
   );
-}
-
-/** A concise task/job title from a free-form prompt: its first non-empty line, capped. */
-function deriveTitle(prompt: string): string {
-  const firstLine =
-    prompt
-      .split('\n')
-      .map((l) => l.trim())
-      .find((l) => l.length > 0) ?? 'Operator job';
-  return firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine;
 }

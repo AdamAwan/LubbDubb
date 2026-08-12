@@ -42,6 +42,7 @@ export type {
   Job,
   JobAttachment,
   JobAttachmentInput,
+  JobSchedule,
   OpenPullRequest,
   OrphanedWork,
   Plan,
