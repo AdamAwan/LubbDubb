@@ -113,6 +113,29 @@ Two mode-specific sources that must not be conflated.
 are self-computed), and `rateLimits` is the freshest status-line reading or `null`. The cockpit chip
 prefers the real limits and falls back to cost.
 
+### Dollars are net of cache, tokens are gross
+
+The two halves of a usage report are **not** two views of one measurement, and every figure derived
+from them inherits the difference.
+
+- **`costUsd` is the provider's own price.** It is `total_cost_usd` off the `result` event, which
+  already prices a cache read at a fraction of a fresh input token and a cache write at a premium.
+  Nothing in the harness re-derives a price from tokens, and nothing should: the rate card is the
+  provider's and it changes without us.
+- **`inputTokens` folds `cache_creation_input_tokens` and `cache_read_input_tokens` into input**
+  (`resultUsage`, `src/agents/streamJsonSession.ts`). With caching on, bare `input_tokens` is a tiny
+  residue and would wildly under-report what a turn actually consumed, so the sum is the honest
+  reading of _volume_ — and it is deliberately not a reading of _price_.
+
+The consequence is that **cost ÷ tokens is not a rate card**: the discount lands in the numerator and
+never in the denominator, so a fleet with warm caches reads as far cheaper per million tokens than
+any published price. That ratio is worth showing — it is the only measure the harness holds of how
+much cache the fleet is getting — but it has to be labelled as such, which is what the Spend panel's
+note does ([17](17-cockpit.md#spend)).
+
+`usage_events` rows carry the same net-of-cache dollars, so the rolling windows and the daily trend
+inherit this without further comment.
+
 ## Per-goal spend
 
 `rollUpIssueSpend` (`src/issueSpend.ts`) answers what a **ticket** cost — the unit an operator
@@ -150,6 +173,45 @@ measured nothing contributes no row and no agent count, and a goal worked entire
 `spend: null`. The cockpit draws nothing there rather than `$0.00`, which would describe an unmeasured
 goal as a free one. `costUsd` is a **running** total: it climbs while agents work and stops when the
 last one ends.
+
+## The spend breakdown
+
+`buildSpendInsights` (`src/spendInsights.ts`) answers the question a cost figure raises and cannot
+hold: **where did it go**. It is served by `GET /api/spend` ([16](16-http-api.md#the-fetched-routes))
+and drawn by the Spend panel ([17](17-cockpit.md#spend)). Three splits of one pot of money, plus the
+coverage caveat:
+
+- **By phase** — `deliberation` (`:plan`, `:assay`), `build` (the pickup root and every `:part:`),
+  `landing` (`pr:*`), `evidence` (`:assess`, `:retro`), `job` (`job:*`) and `other`. A partition:
+  they sum to the fleet total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather
+  than a second one, so **a new origin suffix is classified in exactly one place** — an unrecognised
+  suffix surfaces as `other` rather than being folded into whichever neighbour looked closest.
+- **By goal** — `rollUpIssueSpend`'s own per-issue totals, ranked, with the phase split inside each
+  row and `unattributedCostUsd` as the last row rather than a footnote.
+- **Over time** — 14 rolling 24-hour buckets over `usage_events`. Rolling rather than calendar days
+  for the same reason the 5h/7d windows are: a calendar day needs a timezone the harness has no
+  opinion about.
+
+**One attribution, not two.** The goal totals are the roll-up's, taken whole, and the phase split
+rides on the `attribution` map it returns rather than on a second walk of the work graph. The panel
+and the goal card state the same goal's cost inches apart in the cockpit, and a second lineage walk
+would be a second opinion about which goal a pull request belongs to — free to disagree, silently, on
+exactly the origin shapes the two readings classify differently. That is the sharp edge here: **a
+change to how spend finds its goal belongs in `rollUpIssueSpend` and nowhere else.**
+
+**Derived, never stored,** for per-goal spend's reason exactly. **Fetched, never polled**, for the
+work graph's: it reads every agent the harness has ever run, and `/api/state` comes round every
+couple of seconds for every open cockpit. What the *indicators* need is already on the snapshot.
+
+**`landing` is separate from `build`** although both are work on the same code, because the two fail
+differently and an operator acts on the difference: build is what a goal cost to write, landing is
+what it cost to get through. A goal whose landing dwarfs its build is a flaky pipeline, not an
+expensive goal.
+
+**Unmeasured runs are counted, once.** A run that reported nothing appears in no figure on the panel
+— the same silence the roll-up keeps — and `totals.unmeasuredRuns` is shipped beside the totals so
+the panel can say how much of the fleet it is speaking for. Without it, a fleet run entirely in PTY
+mode draws a complete-looking breakdown of nothing.
 
 ## The live tail
 

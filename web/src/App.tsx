@@ -6,6 +6,7 @@ import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { WorkTreePanel } from './components/WorkTreePanel.js';
 import { SettingsModal } from './components/SettingsModal.js';
+import { SpendModal } from './components/SpendModal.js';
 
 /**
  * What the cockpit shows when the harness refuses its credential. Worth a screen
@@ -104,6 +105,7 @@ export function App() {
       {status.view.settingsOpen && (
         <SettingsModal control={state.control} onClose={() => status.actions.openSettings(false)} />
       )}
+      {status.view.spendOpen && <SpendModal onClose={() => status.actions.openSpend(false)} />}
       <section className="work-panel">
         <h2>Work</h2>
         <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />

@@ -61,6 +61,7 @@ import type {
   StackLanding,
   StackLandingStatus,
   Task,
+  UsageEvent,
   WorkNode,
   WorkNodeObservation,
   WorkItemFiling,
@@ -477,6 +478,9 @@ export class Store {
   }
   sumUsageCostSince(sinceIso: string): number {
     return this.agents.sumUsageCostSince(sinceIso);
+  }
+  listUsageEventsSince(sinceIso: string): UsageEvent[] {
+    return this.agents.listUsageEventsSince(sinceIso);
   }
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
     return this.agents.listAgentsByStatus(...statuses);

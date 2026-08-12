@@ -68,6 +68,13 @@ export interface CockpitActions {
    * the cog that opens it sits in the status bar.
    */
   openSettings(open: boolean): void;
+  /**
+   * Open or close the spend breakdown — where the money on the Power gauge went.
+   * On the seam for `openSettings`' reason exactly: the panel reaches `/api/spend`,
+   * which `factory/` may not do, while the gauge that opens it sits in the status
+   * bar and *is* the reading it explains.
+   */
+  openSpend(open: boolean): void;
   discussPlan(planId: string): Promise<void>;
   endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;

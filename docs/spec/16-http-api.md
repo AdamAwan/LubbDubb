@@ -29,6 +29,7 @@ is about.
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                    |
 | `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                       |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                          |
+| `routes/spend.ts`       | `/api/spend` — the breakdown behind the cost indicators                                     |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                               |
 | `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                              |
@@ -385,6 +386,25 @@ on `/api/state`, which is polled continuously — a document per issue would be 
 by every open cockpit; the snapshot carries the summary and `hasDocument`, which is all the Manifest
 station needs to draw itself. Returns `{ retrospective }`, and `null` rather than a 404 for a goal
 nobody wrote up: "no retrospective" is an ordinary answer here, not a missing resource.
+
+### `GET /api/spend`
+
+The breakdown behind the cost indicators: the same money split by phase, by goal and over a
+fortnight, plus the coverage caveat. Returns `{ insights }` — see
+[18](18-observability.md#the-spend-breakdown) for what each split means and why the phases are a
+partition.
+
+Fetched on open for `/api/work`'s reason: it reads **every agent the harness has ever run** and every
+dated cost delta of the last fourteen days, where `/api/state` comes round every couple of seconds for
+every open cockpit. What the indicators themselves need — the rolling windows, and each goal's own
+total — is already on the snapshot and costs nothing.
+
+Derived on the server rather than in the browser, and not only because the timeline needs the store.
+The per-goal totals are `rollUpIssueSpend`'s own, taken whole: the panel and the goal card state the
+same figure inches apart in the cockpit, so a cockpit-side re-derivation would be a second opinion
+about which goal a pull request's money belongs to. Read-only, and it takes no parameters — the
+windows it reports are the same two `buildUsage` puts on the snapshot, asked the same way, so the
+panel and the chip it opens from cannot disagree.
 
 ### `GET /api/scratchpads/:ref`
 

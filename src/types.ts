@@ -1398,6 +1398,22 @@ export interface AgentUsage {
 }
 
 /**
+ * One timestamped cost delta — the row `recordAgentUsage` appends beside the
+ * cumulative figure it folds onto the agent.
+ *
+ * The deltas are what make cost answerable as a question about *time*: an agent
+ * row says what a run came to and never when the money went, so a rolling window
+ * or a trend can only be read off these. `sumUsageCostSince` is the total over a
+ * window; this is the same rows, unaggregated, for a reader that needs the shape
+ * rather than the sum.
+ */
+export interface UsageEvent {
+  agentId: string;
+  costUsd: number;
+  at: string;
+}
+
+/**
  * What one goal has cost so far: every agent the harness put on the issue, summed.
  *
  * The unit is the **issue**, because that is the unit the operator budgets in and

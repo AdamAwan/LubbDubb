@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { Agent, AgentFile, AgentFileInput, AgentFlag, AgentFlagInput, AgentUsage } from '../types.js';
+import type { Agent, AgentFile, AgentFileInput, AgentFlag, AgentFlagInput, AgentUsage, UsageEvent } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -151,6 +151,21 @@ export class AgentStore {
       .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events WHERE at >= ?`)
       .get(sinceIso) as { total: number };
     return row.total;
+  }
+
+  /**
+   * The same rows {@link sumUsageCostSince} totals, oldest first and unaggregated
+   * — for the reader that needs *when* rather than *how much*.
+   *
+   * Bucketing is left to the caller rather than done in SQL: the windows a reader
+   * wants are its own business, and a `strftime` grouping here would fix one
+   * shape of answer in the store and force the next one to be a second query.
+   */
+  listUsageEventsSince(sinceIso: string): UsageEvent[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT agent_id, cost_usd, at FROM usage_events WHERE at >= ? ORDER BY at`)
+      .all(sinceIso) as { agent_id: string; cost_usd: number; at: string }[];
+    return rows.map((r) => ({ agentId: r.agent_id, costUsd: r.cost_usd, at: r.at }));
   }
 
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {

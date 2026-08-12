@@ -80,6 +80,8 @@ export interface CockpitView {
   viewingScratchpad: string | null;
   /** Whether the settings modal is open. */
   settingsOpen: boolean;
+  /** Whether the spend breakdown is open. */
+  spendOpen: boolean;
 }
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
@@ -102,6 +104,8 @@ interface ViewInputs {
   viewingScratchpad: string | null;
   /** Whether the settings modal is open. */
   settingsOpen: boolean;
+  /** Whether the spend breakdown is open. */
+  spendOpen: boolean;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -164,5 +168,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingRetro: input.viewingRetro,
     viewingScratchpad: input.viewingScratchpad,
     settingsOpen: input.settingsOpen,
+    spendOpen: input.spendOpen,
   };
 }
