@@ -78,6 +78,8 @@ export interface CockpitActions {
 
   completeHumanTask(id: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;
+  /** Clear a settled task off the bench. Settled only — it answers nothing. */
+  dismissHumanTask(id: string): Promise<void>;
 
   setPrExcluded(prNumber: number, excluded: boolean): Promise<void>;
   /**

@@ -188,7 +188,8 @@ CREATE TABLE IF NOT EXISTS human_tasks (
   resolution  TEXT,                 -- the operator's note; required on declined
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
-  resolved_at TEXT
+  resolved_at TEXT,
+  dismissed_at TEXT       -- when the operator cleared the settled row off the bench; never set while open
 );
 
 -- Whether an issue is finished, as declared by the agent that worked it (the

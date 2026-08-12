@@ -5,7 +5,8 @@ import { checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
- * Work only a person can do: filing one, and the two ways it settles.
+ * Work only a person can do: filing one, the two ways it settles, and clearing
+ * the settled record off the bench.
  *
  * **No promotion route, unlike findings.** A finding is inert until an operator
  * turns it into an agent, so it needs a click to become work; a human task *is*
@@ -81,6 +82,23 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       const report = task.partId ? await harness.runCycle('manual') : null;
       return { ok: true, humanTask: task, report };
+    }),
+  );
+
+  // Dismissed: the operator has read the settled record and wants it off the
+  // bench. Not a third verdict — it says nothing about the work, only about the
+  // row — so it takes no note, concludes no part and runs no cycle. **Settled
+  // only**, which is what keeps it from being a way to make an obligation go
+  // away: an open task has two answers, and hiding it is neither. Broadcasts
+  // `dirty` rather than `world:changed`, `dismissFinding`'s reason — nothing in
+  // the world moved, the cockpit just has a row fewer to draw.
+  app.post(
+    '/api/human-tasks/:id/dismiss',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const task = store.dismissHumanTask(params.id);
+      if (!task) return reply.code(409).send({ error: 'human task not found, still open, or already dismissed' });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, humanTask: task };
     }),
   );
 }

@@ -769,6 +769,10 @@ export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary' | 'where' | 
  * *no, and here is why*, which is a fact the plan, the next agent and a later
  * replan all need. A task nobody will ever do that says nothing about why is the
  * shape this repo refuses everywhere else.
+ *
+ * Clearing a settled row off the bench is {@link HumanTask.dismissedAt}, not a
+ * value here: what a person is owed and whether they have finished reading about
+ * it are two questions, and one column cannot answer both.
  */
 export type HumanTaskStatus = 'open' | 'done' | 'declined';
 
@@ -847,6 +851,19 @@ export interface HumanTask {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
+  /**
+   * When the operator cleared a **settled** row off the bench, or null while it is
+   * still on it.
+   *
+   * Deliberately not a fourth {@link HumanTaskStatus}: a status is the verdict on
+   * the work, and "I have read the record of it" is not a third answer to that
+   * question — the reconciler asking whether a part was declined must not have to
+   * learn a value that says nothing about the part. Only a settled row can carry
+   * one, so a dismissal can never lose an obligation; the row itself is kept for
+   * the reason a dismissed finding is, and because the close-out sweep finds its
+   * own settled row again by looking for it.
+   */
+  dismissedAt: string | null;
 }
 
 /** A human task as requested, before the store assigns identity and status. */

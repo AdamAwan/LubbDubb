@@ -244,6 +244,9 @@ const realApi = {
   // and deliberately does not conclude the step, so nothing downstream starts.
   completeHumanTask: (id: string) => post<{ ok: true }>(`/api/human-tasks/${id}/done`),
   declineHumanTask: (id: string, note: string) => post<{ ok: true }>(`/api/human-tasks/${id}/decline`, { note }),
+  // Off the bench. Settled rows only — it says nothing about the work, so it is
+  // not a third verdict and settles nothing.
+  dismissHumanTask: (id: string) => post<{ ok: true }>(`/api/human-tasks/${id}/dismiss`),
   // Decide what happens to work the last run left orphaned. Until every one of
   // these is answered the harness runs no cycles, so this is the one call that can
   // un-stick a cockpit whose fleet looks frozen. Keyed on the **task**: an orphan

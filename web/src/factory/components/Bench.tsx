@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { HumanTask, PlanPart } from '../../types.js';
+import { AsyncButton } from '../../components/AsyncButton.js';
 import { HumanTaskActions } from '../../components/HumanTaskActions.js';
 import { renderMarkdown } from '../../components/markdown.js';
 import { refChip, relTime } from '../../components/util.js';
@@ -33,6 +34,14 @@ import { clip } from '../vocabulary.js';
  *   fold them behind a `<details>`; the bench is a thing you stand at and work
  *   from, and a disclosure you have to open first is a step between you and the
  *   job.
+ *
+ * A settled station carries a third button, **Dismiss**, and it is drawn here
+ * rather than in `HumanTaskActions` because it is not one of the two answers:
+ * the shared component is the pair with the refusal rule between them, and a
+ * dismissal decides nothing. It is what stops the tail becoming a permanent
+ * fixture — the close-out sweep settles its own rows without anyone touching
+ * them, so on a busy repo the record of work nobody did accumulates under the
+ * work you have.
  */
 export function Bench({
   tasks,
@@ -41,7 +50,9 @@ export function Bench({
   refUrls,
   onDone,
   onDecline,
+  onDismiss,
 }: {
+  /** Exactly what to draw, in order — see {@link benchTasks}, which decides. */
   tasks: HumanTask[];
   /** Every plan part, so a step can count what it is holding up. */
   parts: PlanPart[];
@@ -49,14 +60,11 @@ export function Bench({
   refUrls: Record<string, string>;
   onDone: (id: string) => Promise<unknown> | unknown;
   onDecline: (id: string, note: string) => Promise<unknown> | unknown;
+  onDismiss: (id: string) => Promise<unknown> | unknown;
 }): JSX.Element {
-  // Open first — they are the ones that want doing — then a short settled tail,
-  // which is the record of what was asked and how it went.
-  const open = tasks.filter((t) => t.status === 'open');
-  const settled = tasks.filter((t) => t.status !== 'open').slice(0, 4);
   return (
     <div className="fx-bench">
-      {[...open, ...settled].map((task) => (
+      {tasks.map((task) => (
         <Station
           key={task.id}
           task={task}
@@ -65,10 +73,30 @@ export function Bench({
           refUrls={refUrls}
           onDone={onDone}
           onDecline={onDecline}
+          onDismiss={onDismiss}
         />
       ))}
     </div>
   );
+}
+
+/**
+ * Which tasks are on the bench, in the order they stand there.
+ *
+ * Open first — they are the ones that want doing — then a short settled tail,
+ * which is the record of what was asked and how it went. A **dismissed** row is
+ * on neither: the operator has read it and said so, and the row is kept only
+ * because the store needs it, not because the bench does.
+ *
+ * It is a function rather than a filter inside the component because the floor
+ * asks the same question twice — the bench is drawn only when something is on
+ * it, and "something" has to mean the same thing as what gets drawn. Deriving
+ * the tile's visibility from the raw list is how a bench of four dismissed rows
+ * would draw as an empty panel.
+ */
+export function benchTasks(tasks: HumanTask[]): HumanTask[] {
+  const live = tasks.filter((t) => !t.dismissedAt);
+  return [...live.filter((t) => t.status === 'open'), ...live.filter((t) => t.status !== 'open').slice(0, 4)];
 }
 
 /**
@@ -93,6 +121,7 @@ function Station({
   refUrls,
   onDone,
   onDecline,
+  onDismiss,
 }: {
   task: HumanTask;
   holding: number;
@@ -100,6 +129,7 @@ function Station({
   refUrls: Record<string, string>;
   onDone: (id: string) => Promise<unknown> | unknown;
   onDecline: (id: string, note: string) => Promise<unknown> | unknown;
+  onDismiss: (id: string) => Promise<unknown> | unknown;
 }): JSX.Element {
   const isOpen = task.status === 'open';
   const tone = isOpen ? 'warn' : task.status === 'declined' ? 'ghost' : 'off';
@@ -157,6 +187,15 @@ function Station({
           {task.agentId ? 'a bot asked for this' : task.partId ? 'a blueprint called for a person' : 'you filed this'}
         </span>
         {isOpen && <HumanTaskActions task={task} buttonClass="fx-btn" onDone={onDone} onDecline={onDecline} />}
+        {/* The way off the bench, and the only one: a settled row is a record, and
+            a record you cannot put down is a permanent fixture. It answers
+            nothing — the verdict above it is unchanged and stays in the store —
+            so it is a plain button rather than a third arm of the shared pair. */}
+        {!isOpen && (
+          <AsyncButton className="fx-btn" onClick={() => onDismiss(task.id)} title="Clear this record off the bench">
+            Dismiss
+          </AsyncButton>
+        )}
       </div>
     </article>
   );
