@@ -68,9 +68,9 @@ export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
   }, []);
 
   return (
-    <div className="spend-backdrop" onClick={onClose}>
+    <div className="read-backdrop" onClick={onClose}>
       <div
-        className="spend-modal"
+        className="read-modal"
         role="dialog"
         aria-modal="true"
         aria-label="Spend"

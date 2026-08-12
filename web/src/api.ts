@@ -8,6 +8,7 @@ import type {
   RetrospectivePayload,
   RunningConfigPayload,
   ScratchpadPayload,
+  ReliabilityPayload,
   SpendPayload,
   WorkRootsPayload,
   WorkSubtreePayload,
@@ -135,6 +136,11 @@ const realApi = {
   // and each goal's own total — and this is the reading behind them: every agent
   // the harness has run, split by phase, by goal and over a fortnight.
   getSpend: () => authFetch('/api/spend').then((r) => json<SpendPayload>(r)),
+  // What the spending bought, fetched when the Yield panel opens. Same stance as
+  // the spend breakdown and for the same reason: the *gauge* is derived from the
+  // agent rows already on the snapshot, and this is every run the harness has
+  // settled plus a fortnight of CI transitions behind it.
+  getReliability: () => authFetch('/api/reliability').then((r) => json<ReliabilityPayload>(r)),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
   getPrompts: () => authFetch('/api/prompts').then((r) => json<PromptsPayload>(r)),

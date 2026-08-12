@@ -13,6 +13,10 @@ Cost is asked two ways off that one record: **when** it was spent (the rolling a
 **what it was spent on** (per goal). The second is derived rather than stored — see
 [Per-goal spend](#per-goal-spend).
 
+Two operator readings are folded out of those records rather than kept beside them: the
+[spend breakdown](#the-spend-breakdown), which asks where the money went, and the
+[reliability breakdown](#the-reliability-breakdown), which asks what it bought. Neither has a table.
+
 ## The error log
 
 **`src/errorLog.ts` is the one error-recording path.** Anything that catches a failure calls
@@ -212,6 +216,65 @@ expensive goal.
 — the same silence the roll-up keeps — and `totals.unmeasuredRuns` is shipped beside the totals so
 the panel can say how much of the fleet it is speaking for. Without it, a fleet run entirely in PTY
 mode draws a complete-looking breakdown of nothing.
+
+## The reliability breakdown
+
+`buildReliabilityInsights` (`src/reliabilityInsights.ts`) answers the question the spend breakdown
+stops one short of: the money bought *something*, and **did it work**. It is served by
+`GET /api/reliability` ([16](16-http-api.md#the-fetched-routes)) and drawn by the Yield panel
+([17](17-cockpit.md#yield)). Two halves, and they are the two halves of one funnel:
+
+- **Run outcomes**, all-time. Every agent the harness has settled, split by how it ended (`done`,
+  `failed`, `crashed`, `killed`, `interrupted`) and by the **spend panel's own phases** — the same
+  `phaseOf` classifier, imported rather than re-written, so a row here and a row there are about the
+  same set of runs. Plus what the faults cost, the median run length per phase, and the origins the
+  harness went round more than once.
+- **CI health**, over 14 rolling days. Transitions into failing and into passing, the red rate over
+  them, how long a pull request stays red, which pull requests went red repeatedly, and what the
+  `landing` phase cost inside the same window.
+
+**The two windows differ on purpose.** A completion rate is a property of the harness and wants every
+run it has ever done behind it. A red rate is a property of a pipeline _as it stands_, and folding in
+a suite that was fixed a month ago describes a repository that no longer exists. `windowDays` is
+shipped so the panel states the window rather than assuming it.
+
+**Faults and stops are different counts.** `killed` and `interrupted` are an operator's decision, and
+a fleet someone steers is not an unreliable one — only `failed` and `crashed` count against
+`completionRate`. Stopped runs still carry their cost, because money spent on a run someone stopped
+is money spent.
+
+**Live runs are in no rate.** An unfinished run has no outcome, so `settled` is the denominator
+everywhere and `live` is reported beside it. A rate that folded live runs in would fall every time
+the fleet got busy.
+
+**A red is a CI verdict, not a pull request.** One pull request that failed nine times is nine reds;
+`prsAffected`/`prsObserved` is the other reading and both are shipped. `pending` and `unknown` are not
+verdicts and count as neither — crucially, a rerun passing through `pending` on its way back to green
+does **not** end the red span, or every retry would read as an instant recovery. A red with no green
+after it is still red *now*, so its span runs to the read rather than to its last event: otherwise the
+pull request nobody has fixed shows the least red time on the board.
+
+**Two classifiers, both borrowed.** Phases come from `spendInsights.phaseOf` and CI statuses from
+`worldDiff.ciStatusOf`; neither is re-derived here. `ciStatusOf` is the sharp edge — `world_events`
+stores a kind, a ref and a *sentence*, so the status a transition carried survives only inside that
+sentence. **The matcher that writes it and the matcher that reads it are the same regexp in the same
+module**, for the PTY sentinel's reason: a reader that re-derived the format for itself would report
+zero failures, silently, the first time the wording changed.
+
+**The gauge and the panel fold once.** `tallyRunOutcomes` is exported and called twice — by
+`buildStateSnapshot`, which puts `runOutcomes` on `/api/state` for the Yield gauge to draw, and by
+this module, which spreads it as the panel's headline counts. A panel opened from a gauge must begin
+by agreeing with it, and agreement by construction is the only kind that holds. The gauge draws
+**nothing** until the first run settles: a rate over no runs is not 100%.
+
+**Derived, never stored,** and **fetched, never polled**, for the spend breakdown's reasons exactly.
+Everything it folds — the `agents` rows, `usage_events`, and the `pr_ci` rows of `world_events` — is
+already durable, already dated, and pruned by nothing.
+
+**The CI read is ordered, and the order is load-bearing.** `listWorldEventsOfKindsSince` returns
+**oldest first**, unlike its two neighbours in `WorldStore`, because the fold pairs each failing with
+the *next* passing. A descending read pairs every red with the green that preceded it and reports the
+flakiest pipeline in the repository as recovering instantly.
 
 ## The live tail
 

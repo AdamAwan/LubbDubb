@@ -230,7 +230,7 @@ Four consequences to preserve:
   every other surface is stale for the same reason. It is a banner, so it needs no `grid-column` to
   span — it is a block at every width.
 
-#### The six ways in
+#### The seven ways in
 
 Alerts, faults and blueprints stood in the act rail, and each is read as a **number** far more often
 than as contents. So the number is a gauge in the status bar and the panel opens from it as a
@@ -281,20 +281,33 @@ never removes a gauge. A fleet whose spend reads as nothing is precisely when an
 looking for why, and [Spend](#spend) is the only surface that answers *unmeasured* rather than
 *free*.
 
+**Yield is the seventh, and it is Output's other half.** Output says how much came off the line;
+Yield says how much of it was any good, and a floor can be busy while losing a third of its runs. It
+sits beside Output for that reason — the two are one subject a gauge apart — and it wears Power's
+meter rather than Output's spark, because a completion rate is a fraction of a whole and a spark
+would draw it as a rate. It is the second way in whose face can be **absent**: nothing is drawn until
+the first run settles, since a rate over no runs is not 100%, and a gauge reading perfect on an idle
+floor is the one lie this bar must not tell. Its reading comes off the snapshot (`runOutcomes`) and
+is folded by the same function the panel behind it opens with, so clicking through cannot change the
+number ([18](18-observability.md#the-reliability-breakdown)).
+
 Five rules hold them:
 
 - **A gauge that acts must look like it does.** An `onClick` on a plain `.fx-read` is invisible —
   indistinguishable from a neighbour that does not respond, which is exactly how it was first
   reported when `Power` was inert and someone tried it. A gauge that does something is `.fx-act`: a
   real `<button>` with a raised face, a hover lift and a pointer. Icons are distinct per gauge
-  (`alert`, `gear`, `chest`, `blueprint`, `lamp`, `battery`) so six adjacent buttons stay legible.
-  **The chevron is the narrower word** — it says _there is a panel behind this_ — so all six carry
+  (`alert`, `gear`, `chest`, `blueprint`, `lamp`, `battery`, `flask`) so seven adjacent buttons stay
+  legible. **The chevron is the narrower word** — it says _there is a panel behind this_ — so all seven carry
   one and `Scan`, which runs a pulse rather than opening anything, does not (`.fx-run`).
   `test/factoryFloor.test.ts` counts the ways in by chevron for that reason.
 - **Only Alerts is ever red**, and that is the floor's existing rule rather than a new one: red means
   an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
   finding is something a bot noticed on its way past rather than something it is stuck on (amber),
-  and a queued blueprint is waiting on a slot, not on you (neither).
+  and a queued blueprint is waiting on a slot, not on you (neither). **A poor yield is amber too**,
+  and that is the rule doing real work rather than a formality: a fleet losing a third of its runs
+  reads as the most alarming thing on the bar, and it is still a reading about work already over
+  with nobody parked on it.
 - **A gauge counts what a click resolves.** Findings counts findings at `open` and nothing
   else: promoted, filed and dismissed are done, `filing` is decided (an agent is creating the
   ticket), and **overlaps are excluded** — an overlap is diagnostic, with no button on it anywhere,
@@ -475,7 +488,7 @@ argument for each is in its module's header, and the reason for the shape is wor
   under-reports is worse than no rate. It is the one panel an operator _consults_ rather than
   watches, and it is **not on the floor**: it draws at two sizes off one set of plotting functions —
   the **spark** on the status bar's Output gauge (two series, gauge weight; see
-  [the six ways in](#the-six-ways-in)) and the **full graph** — axes, deltas, spend, the
+  [the seven ways in](#the-seven-ways-in)) and the **full graph** — axes, deltas, spend, the
   truncation caveat — behind the click, in the floor's `Modal`. Two components drawing the same
   series independently would be two things to keep in step for no gain; the only difference between
   them is the rectangle they plot into, how heavy the strokes are in it, and whether the axes are
@@ -526,7 +539,7 @@ Two of the three desks carry a rule of their own:
 
 #### Spend
 
-`components/Spend.tsx`, opened from the [Power gauge](#the-six-ways-in), drawing the payload
+`components/Spend.tsx`, opened from the [Power gauge](#the-seven-ways-in), drawing the payload
 `GET /api/spend` returns ([18](18-observability.md#the-spend-breakdown)). It is the answer to the
 question every cost figure in the cockpit raises and none of them can hold.
 
@@ -566,6 +579,47 @@ writes folded into input — so the tile's dollars-per-million-input-tokens is a
 cache the fleet is getting and never a rate card
 ([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
 runs, which appear in no figure above it.
+
+#### Yield
+
+`web/src/components/ReliabilityModal.tsx`, opened from the [Yield gauge](#the-seven-ways-in), drawing
+the payload `GET /api/reliability` returns ([18](18-observability.md#the-reliability-breakdown)). It
+is [Spend](#spend)'s twin and is built as one deliberately — the same chrome, the same tables, the
+same phase vocabulary — because the two answer halves of one question: where the money went, and what
+it bought.
+
+**Fetched on open, three states**, for Spend's reason with the sign flipped: a fetch that failed must
+not render as a fleet that never fails. 100% is a real answer here, so it cannot also be the failure
+mode. A fleet with runs still out and none settled gets its own sentence rather than a table of
+zeroes — **not yet is not perfect**.
+
+**Nothing here is derived in the browser**, again for `PrAttention`'s reason. What the cockpit owns is
+presentation: the outcome **colours**, which live in the stylesheet as `--rl-<outcome>` beside the
+phase palette. The two palettes differ in kind on purpose — a phase is a category whose colours only
+have to read apart, while an outcome is a _verdict_ and carries the floor's alarm vocabulary. Grey is
+doing real work in it: a killed run is not a fault, and colouring it like one would make every
+steered fleet look broken.
+
+Four pictures:
+
+- **Four tiles** — runs finished, money lost to faults, the CI red rate, and the median time back to
+  green. The first restates exactly what the gauge just said, for the reason Spend's windows do. The
+  other two are the rates' _prices_: a rate with no cost beside it is a statistic, and the question an
+  operator opened this on was whether to do something about it.
+- **How runs ended** — one stacked bar over every settled run, and a legend that is also the table.
+  The blurb under each ending is shipped with the figures rather than held here, as the phase copy is.
+- **CI verdicts** — 14 rolling daily buckets, red **stacked on** green rather than two series, because
+  the reading is a ratio and two lines make that a comparison instead of a glance. Bars for the spend
+  trend's reason.
+- **By phase**, then the two rankings — the reddest pull requests and the origins that ran more than
+  once. Both are capped and **say so**. The repeats table is a ranking and never a count of mistakes:
+  a part agent that lands and then answers review comments legitimately runs twice, and what earns it
+  a table is that the expensive kind of repetition is invisible everywhere else — a goal whose card
+  shows one number quietly went round four times.
+
+**The method note states the two things a reader would otherwise discover by disbelieving the panel:**
+the two halves are measured over different windows, and a red is a CI verdict rather than a pull
+request. It also names the unmeasured runs, which count in every rate above it and in no dollar.
 
 #### The Goal Floor
 

@@ -205,6 +205,7 @@ function render(
       viewingScratchpad: null,
       settingsOpen: false,
       spendOpen: false,
+      reliabilityOpen: false,
     });
     return renderToStaticMarkup(createElement(FactoryRoot, { view, actions: INERT }));
   } finally {
@@ -243,6 +244,7 @@ function renderDesk(
       viewingScratchpad: null,
       settingsOpen: false,
       spendOpen: false,
+      reliabilityOpen: false,
     });
     return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));
   } finally {
@@ -574,8 +576,8 @@ test('every desk has a way in from the status bar', () => {
   // a panel behind this".
   assert.equal(
     (quiet.match(/class="fx-chev"/g) ?? []).length,
-    6,
-    'all six ways in must survive their counts being zero',
+    7,
+    'all seven ways in must survive their counts being zero',
   );
   // Output's is the reading most likely to be zero — a floor that has merged
   // nothing in six hours is exactly when the graph is worth opening, since it

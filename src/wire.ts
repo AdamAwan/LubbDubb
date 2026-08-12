@@ -48,6 +48,7 @@ import type { PrAttention } from './prAttention.js';
 import type { PrHealth } from './prHealth.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
+import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { Stack } from './stacks/stack.js';
 import type {
@@ -414,6 +415,14 @@ export interface CockpitState {
   errors: ErrorLogEntry[];
   usage: CockpitUsage;
   /**
+   * How the fleet's runs have ended, all-time. Six counts rather than the whole
+   * reliability breakdown, for `usage`'s reason exactly: this is what the Yield
+   * gauge needs to *draw*, and the reading behind it rides on `/api/reliability`,
+   * which walks a fortnight of CI transitions as well. Both come from
+   * `tallyRunOutcomes`, so the gauge and the panel cannot disagree.
+   */
+  runOutcomes: RunTally;
+  /**
    * External reference → web URL, built entirely by the source-control provider
    * (never string-built in the cockpit). Missing key ⇒ render as plain text.
    */
@@ -463,6 +472,14 @@ export interface ScratchpadPayload {
  */
 export interface SpendPayload {
   insights: SpendInsights;
+}
+
+/**
+ * `/api/reliability` — what the spending bought: run outcomes all-time, and CI
+ * health over the last fortnight. Fetched on open for `SpendPayload`'s reason.
+ */
+export interface ReliabilityPayload {
+  insights: ReliabilityInsights;
 }
 
 /**
@@ -538,5 +555,16 @@ export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js'
 export type { FileOverlap } from './fileOverlap.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
 export type { RunningConfigGroup } from './server/runningConfig.js';
+export type {
+  CiHealth,
+  CiSubject,
+  ReliabilityInsights,
+  RunHealth,
+  RunOutcome,
+  RunOutcomeTotal,
+  RunPhaseHealth,
+  RunRepeat,
+  RunTally,
+} from './reliabilityInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
 export type { Stack, StackRung } from './stacks/stack.js';

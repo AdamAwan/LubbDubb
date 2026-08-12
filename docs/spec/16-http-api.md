@@ -31,6 +31,7 @@ is about.
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                          |
 | `routes/spend.ts`       | `/api/spend` — the breakdown behind the cost indicators                                     |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
+| `routes/reliability.ts` | `/api/reliability` — run outcomes and CI health, the reading beside the spend one            |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                               |
 | `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                              |
 
@@ -405,6 +406,22 @@ same figure inches apart in the cockpit, so a cockpit-side re-derivation would b
 about which goal a pull request's money belongs to. Read-only, and it takes no parameters — the
 windows it reports are the same two `buildUsage` puts on the snapshot, asked the same way, so the
 panel and the chip it opens from cannot disagree.
+
+### `GET /api/reliability`
+
+What the spending bought: run outcomes all-time and CI health over the last fortnight. Returns
+`{ insights }` — see [18](18-observability.md#the-reliability-breakdown) for what each half means,
+why the two windows differ, and why `killed` is not counted as a failure.
+
+Fetched on open for `/api/spend`'s reason and at the same cost: it walks every agent the harness has
+ever run, plus a fortnight of `pr_ci` transitions. What the **Yield gauge** needs to draw is already
+on the snapshot as `runOutcomes`, folded by the same `tallyRunOutcomes` this route opens with, so the
+gauge and the panel cannot disagree.
+
+Both windows are resolved in the handler rather than inside the fold, so the `since` a row is
+selected by and the `since` it is bucketed into are one value: a store read wider than the buckets
+drops rows silently at the fold, and a narrower one draws an empty first day that was never empty.
+Read-only, and it takes no parameters.
 
 ### `GET /api/scratchpads/:ref`
 

@@ -208,7 +208,7 @@ interface SpendInsightsInput {
  * at all: a new suffix should show up in the panel as a row an operator can ask
  * about, not be quietly folded into whichever neighbour looked closest.
  */
-function phaseOf(originRef: string | null): SpendPhase {
+export function phaseOf(originRef: string | null): SpendPhase {
   if (originRef === null) return 'other';
   if (originRef.startsWith('pr:')) return 'landing';
   if (originRef.startsWith('job:')) return 'job';
@@ -224,6 +224,15 @@ function phaseOf(originRef: string | null): SpendPhase {
     default:
       return 'other';
   }
+}
+
+/**
+ * A phase in the operator's words. Exported so a second panel naming these phases
+ * names them identically: `landing` means `pr:*` here, in the legend, and anywhere
+ * else the vocabulary is borrowed.
+ */
+export function phaseLabel(phase: SpendPhase): string {
+  return PHASE_COPY[phase].label;
 }
 
 /** A zeroed phase record — the shape every `byPhase` starts from, so every key is present. */

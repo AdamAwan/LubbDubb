@@ -75,6 +75,13 @@ export interface CockpitActions {
    * bar and *is* the reading it explains.
    */
   openSpend(open: boolean): void;
+  /**
+   * Open or close the reliability breakdown — whether the work the Yield gauge
+   * counts actually finished, and whether CI went green. On the seam for
+   * `openSpend`'s reason exactly, and beside it: the two panels are the same
+   * funnel read for cost and for outcome.
+   */
+  openReliability(open: boolean): void;
   discussPlan(planId: string): Promise<void>;
   endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;

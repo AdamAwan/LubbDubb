@@ -68,6 +68,7 @@ import type {
   BugFiling,
   WorldEvent,
   WorldEventInput,
+  WorldEventKind,
   WorldSnapshot,
 } from '../types.js';
 
@@ -613,6 +614,9 @@ export class Store {
   }
   listWorldEventsSince(since: string, refs: string[]): WorldEvent[] {
     return this.world.listWorldEventsSince(since, refs);
+  }
+  listWorldEventsOfKindsSince(since: string, kinds: readonly WorldEventKind[]): WorldEvent[] {
+    return this.world.listWorldEventsOfKindsSince(since, kinds);
   }
   getWorldBaseline(): WorldSnapshot | null {
     return this.world.getWorldBaseline();

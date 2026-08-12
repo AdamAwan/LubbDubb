@@ -6,6 +6,7 @@ import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { WorkTreePanel } from './components/WorkTreePanel.js';
 import { SettingsModal } from './components/SettingsModal.js';
+import { ReliabilityModal } from './components/ReliabilityModal.js';
 import { SpendModal } from './components/SpendModal.js';
 
 /**
@@ -106,6 +107,7 @@ export function App() {
         <SettingsModal control={state.control} onClose={() => status.actions.openSettings(false)} />
       )}
       {status.view.spendOpen && <SpendModal onClose={() => status.actions.openSpend(false)} />}
+      {status.view.reliabilityOpen && <ReliabilityModal onClose={() => status.actions.openReliability(false)} />}
       <section className="work-panel">
         <h2>Work</h2>
         <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />
