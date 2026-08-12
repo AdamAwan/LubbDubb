@@ -47,6 +47,16 @@ const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
 const render = (v: CockpitView) => renderToStaticMarkup(createElement(ConsoleRoot, { view: v, actions }));
 
+/** `renderToStaticMarkup` escapes text nodes, so an assertion on fixture prose must decode first. */
+function decode(html: string): string {
+  return html
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
 test('nothing under console/ imports the api module', () => {
   const dir = new URL('../web/src/console/', import.meta.url).pathname;
   const walk = (d: string): string[] =>
@@ -87,7 +97,8 @@ test('the rail carries every blocking kind in one list', () => {
   const html = render(view());
   const v = view();
   assert.ok(v.needsYou.length > 0, 'the demo fixtures must carry at least one ask');
-  for (const row of v.needsYou) assert.ok(html.includes(row.title), `the rail dropped ${row.kind}`);
+  const decoded = decode(html);
+  for (const row of v.needsYou) assert.ok(decoded.includes(row.title), `the rail dropped ${row.kind}`);
 });
 
 test('a row states what it is holding, and a row holding nothing draws no count', () => {
