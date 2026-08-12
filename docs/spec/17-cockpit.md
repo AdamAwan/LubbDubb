@@ -230,7 +230,7 @@ Four consequences to preserve:
   every other surface is stale for the same reason. It is a banner, so it needs no `grid-column` to
   span — it is a block at every width.
 
-#### The five ways in
+#### The six ways in
 
 Alerts, faults and blueprints stood in the act rail, and each is read as a **number** far more often
 than as contents. So the number is a gauge in the status bar and the panel opens from it as a
@@ -269,16 +269,28 @@ in a 64-unit box a third colour is a smudge, the bar already speaks for escalati
 its own four inches to the right, and what is left — a filled ground of dispatches with a merge line
 over it — is exactly the comparison the churn ratio is a number for.
 
+**Power is the sixth, and the only one that was already in the bar.** It is the floor's cost
+indicator, and a cost indicator raises exactly one question it cannot hold — *where did it go*. So the
+gauge gained a way in rather than the bar gaining a seventh gauge for the same subject: a reading and
+the reading behind it are one subject a click apart, which is the rule the section below states. The
+face is unchanged — the 5h meter and the accumulator bank when the status-line capture has seen the
+subscriber windows, the shared cost chip when it has not — and only the frame is now `.fx-act` with a
+chevron. It is the one way in whose face can be **empty**: `UsageChip` draws nothing at all until
+something has been reported, and the way in survives that deliberately, for the reason a zero count
+never removes a gauge. A fleet whose spend reads as nothing is precisely when an operator goes
+looking for why, and [Spend](#spend) is the only surface that answers *unmeasured* rather than
+*free*.
+
 Five rules hold them:
 
-- **A gauge that acts must look like it does.** `Power` is an inert reading, so an `onClick` on a
-  plain `.fx-read` is invisible — indistinguishable from a neighbour that does not respond, which is
-  exactly how it was first reported. A gauge that does something is `.fx-act`: a real `<button>` with
-  a raised face, a hover lift and a pointer. Icons are distinct per gauge (`alert`, `gear`, `chest`,
-  `blueprint`, `lamp`) so five adjacent buttons stay legible. **The chevron is the narrower word** —
-  it says _there is a panel behind this_ — so all five carry one and `Scan`, which runs a pulse
-  rather than opening anything, does not (`.fx-run`). `test/factoryFloor.test.ts` counts the ways in
-  by chevron for that reason.
+- **A gauge that acts must look like it does.** An `onClick` on a plain `.fx-read` is invisible —
+  indistinguishable from a neighbour that does not respond, which is exactly how it was first
+  reported when `Power` was inert and someone tried it. A gauge that does something is `.fx-act`: a
+  real `<button>` with a raised face, a hover lift and a pointer. Icons are distinct per gauge
+  (`alert`, `gear`, `chest`, `blueprint`, `lamp`, `battery`) so six adjacent buttons stay legible.
+  **The chevron is the narrower word** — it says _there is a panel behind this_ — so all six carry
+  one and `Scan`, which runs a pulse rather than opening anything, does not (`.fx-run`).
+  `test/factoryFloor.test.ts` counts the ways in by chevron for that reason.
 - **Only Alerts is ever red**, and that is the floor's existing rule rather than a new one: red means
   an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
   finding is something a bot noticed on its way past rather than something it is stuck on (amber),
@@ -293,7 +305,9 @@ Five rules hold them:
 - **A zero count mutes a gauge; it never removes it.** Faults is the only way to the fault log, which
   carries the two-step `clear` — a control that must not become unreachable because the log happens
   to be empty — and a gauge that vanished would reflow the bar every time its number left zero.
-  `test/factoryFloor.test.ts` asserts all four survive a zero, counting the ways in by chevron.
+  `test/factoryFloor.test.ts` asserts they survive a zero, counting the ways in by chevron. Power
+  extends this from a muted count to an **absent reading**: no usage reported at all still draws the
+  gauge and its way in.
 - **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
   listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
   answering still happens on the shared `EscalationCard`, which owns the refusal rules.
@@ -461,7 +475,7 @@ argument for each is in its module's header, and the reason for the shape is wor
   under-reports is worse than no rate. It is the one panel an operator _consults_ rather than
   watches, and it is **not on the floor**: it draws at two sizes off one set of plotting functions —
   the **spark** on the status bar's Output gauge (two series, gauge weight; see
-  [the five ways in](#the-five-ways-in)) and the **full graph** — axes, deltas, spend, the
+  [the six ways in](#the-six-ways-in)) and the **full graph** — axes, deltas, spend, the
   truncation caveat — behind the click, in the floor's `Modal`. Two components drawing the same
   series independently would be two things to keep in step for no gain; the only difference between
   them is the rectangle they plot into, how heavy the strokes are in it, and whether the axes are
@@ -509,6 +523,49 @@ Two of the three desks carry a rule of their own:
   one. It sits _above_ the log rather than in the modal head beside `Close`: one misclick between
   "leave" and "delete the only copy" is too few. The log draws forty rows, not the eight a rail had
   room for — eight was a crop for a column, and this is the surface you went looking for.
+
+#### Spend
+
+`components/Spend.tsx`, opened from the [Power gauge](#the-six-ways-in), drawing the payload
+`GET /api/spend` returns ([18](18-observability.md#the-spend-breakdown)). It is the answer to the
+question every cost figure in the cockpit raises and none of them can hold.
+
+**Fetched on open, three states, and the third is the point.** Loading, the breakdown, and a
+_failure_ — because a fetch that failed must not render as a fleet that has spent nothing. `$0.00`
+is a real answer here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the
+failure mode. The all-zero case gets its own sentence rather than a table of zeroes: **unmeasured is
+not free**, and a panel of `$0.00` rows says the wrong one of those.
+
+**Nothing here is derived in the browser.** The server ships the splits, for the reason `PrAttention`
+and `StackLandingView` are shipped: a cockpit-side re-derivation of which goal a pull request's money
+belongs to would be a second opinion about a decision made elsewhere, drawn inches from the first.
+What the cockpit owns is presentation — the phase **colours**, which live in the stylesheet as
+`--sp-<phase>` so the component names a phase and the sheet decides what that looks like.
+
+Four pictures, in the order the questions arrive:
+
+- **Four tiles** — all-time, the 5h and 7d windows, and the token split. The windows restate exactly
+  what the gauge the operator just clicked says, and are there for that reason rather than their own:
+  a panel opened from a chip must begin by agreeing with it.
+- **Where it went** — one stacked bar over the whole fleet, and a legend that is also the table
+  (cost, share, runs, average per run). The blurb under each phase name is the phase's definition,
+  shipped with the figures rather than held here, because it is a claim about what the harness did
+  and not about how to draw it.
+- **The trend** — 14 rolling daily buckets as **bars, not lines**: these are totals over a period and
+  not samples of a rate, and a line between two days implies money moved smoothly between them, which
+  is exactly what a fleet that ran for one afternoon did not do.
+- **By goal**, then **the costliest runs**. Each goal row's bar is drawn at the width of its share of
+  the fleet and split by phase inside, so it carries two readings at once: how much of the budget this
+  goal was, and what inside it the money went on. The runs table is capped and **says so** — a
+  silently truncated table reads as a complete one.
+
+**The method note is part of the panel, not a footnote**, and it sits level with the figures it
+qualifies rather than three screens below them. It states the one thing the numbers cannot: dollars
+are the provider's own, already net of cache pricing, while tokens are gross with cache reads and
+writes folded into input — so the tile's dollars-per-million-input-tokens is a measure of how much
+cache the fleet is getting and never a rate card
+([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
+runs, which appear in no figure above it.
 
 #### The Goal Floor
 

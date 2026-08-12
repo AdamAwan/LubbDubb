@@ -53,6 +53,18 @@ interface SpendRollup {
   byIssue: Map<string, IssueSpend>;
   /** Spend that reached no issue. Never folded into a goal, never dropped. */
   unattributedCostUsd: number;
+  /**
+   * Which goal each *measured* agent's spend was folded into, `null` for the ones
+   * that reached none. Agent id → issue number; an agent that reported no usage
+   * at all is absent, because it was never counted here either.
+   *
+   * Shipped as a by-product rather than recomputed downstream, and that is the
+   * whole point of it: `buildSpendInsights` splits the same money a second way
+   * (by phase), and a second walk of the lineage would be a second opinion about
+   * which goal a pull request belongs to — free to disagree with the figure on the
+   * card, silently, on exactly the origins the two readings classify differently.
+   */
+  attribution: Map<string, number | null>;
 }
 
 /** `issue:12`, `issue:12:plan`, `issue:12:part:auth` — the whole subtree is one goal's spend. */
@@ -73,6 +85,7 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
   const originOfTask = new Map(input.tasks.map((t) => [t.id, t.originRef]));
   const parentOf = new Map(input.nodes.map((n) => [n.ref, n.parentRef]));
   const byIssue = new Map<string, IssueSpend>();
+  const attribution = new Map<string, number | null>();
   let unattributedCostUsd = 0;
 
   for (const agent of input.agents) {
@@ -83,8 +96,9 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
     if (agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null) continue;
     const cost = agent.costUsd ?? 0;
     const issueNumber = issueBehind(originOfTask.get(agent.taskId) ?? null, parentOf);
+    attribution.set(agent.id, issueNumber);
     if (issueNumber === null) {
-      unattributedCostUsd = round(unattributedCostUsd + cost);
+      unattributedCostUsd = roundUsd(unattributedCostUsd + cost);
       continue;
     }
     const ref = issueOrigin(issueNumber);
@@ -96,13 +110,13 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
       outputTokens: 0,
       agents: 0,
     };
-    spend.costUsd = round(spend.costUsd + cost);
+    spend.costUsd = roundUsd(spend.costUsd + cost);
     spend.inputTokens += agent.inputTokens ?? 0;
     spend.outputTokens += agent.outputTokens ?? 0;
     spend.agents += 1;
     byIssue.set(ref, spend);
   }
-  return { byIssue, unattributedCostUsd };
+  return { byIssue, unattributedCostUsd, attribution };
 }
 
 /** The goal an origin's spend belongs to: by name if it can be, by lineage otherwise. */
@@ -121,7 +135,12 @@ function issueBehind(originRef: string | null, parentOf: ReadonlyMap<string, str
  * this a handful of additions ships `0.30000000000000004` to the cockpit, which is
  * not wrong so much as unreadable — and rounding at the *sum* rather than at the
  * render keeps every reader of the wire agreeing on one figure.
+ *
+ * Exported because {@link rollUpIssueSpend} is not the only thing that adds these
+ * up: `buildSpendInsights` sums the same money by phase and by day, and two
+ * roundings of one currency is two answers to "what did this cost" that agree
+ * until they don't.
  */
-function round(n: number): number {
+export function roundUsd(n: number): number {
   return Math.round(n * 1e6) / 1e6;
 }

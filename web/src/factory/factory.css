@@ -2112,3 +2112,10 @@
 .fx-part.ghost {
   opacity: 0.5;
 }
+
+/* Power wears the pressable face now that it opens the spend breakdown. The meter
+   and the bank inside it keep their own chrome — only the frame changed, and the
+   chip inside must not swallow the button's own click. */
+.fx-power .chip {
+  pointer-events: none;
+}

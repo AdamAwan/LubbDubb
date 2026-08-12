@@ -204,6 +204,7 @@ function render(
       viewingRetro: null,
       viewingScratchpad: null,
       settingsOpen: false,
+      spendOpen: false,
     });
     return renderToStaticMarkup(createElement(FactoryRoot, { view, actions: INERT }));
   } finally {
@@ -241,6 +242,7 @@ function renderDesk(
       viewingRetro: null,
       viewingScratchpad: null,
       settingsOpen: false,
+      spendOpen: false,
     });
     return renderToStaticMarkup(createElement(Desk, { view, actions: INERT }));
   } finally {
@@ -541,7 +543,7 @@ test('injection is a demo control, and the demo build is the whole of it', () =>
  */
 test('every desk has a way in from the status bar', () => {
   const markup = render();
-  for (const label of ['Alerts', 'Faults', 'Findings', 'Queued', 'Output']) {
+  for (const label of ['Alerts', 'Faults', 'Findings', 'Queued', 'Output', 'Power']) {
     assert.match(
       markup,
       new RegExp(`<button[^>]*class="fx-read fx-act[^"]*"[^>]*>(?:(?!</button>).)*${label}`, 's'),
@@ -572,8 +574,8 @@ test('every desk has a way in from the status bar', () => {
   // a panel behind this".
   assert.equal(
     (quiet.match(/class="fx-chev"/g) ?? []).length,
-    5,
-    'all five ways in must survive their counts being zero',
+    6,
+    'all six ways in must survive their counts being zero',
   );
   // Output's is the reading most likely to be zero — a floor that has merged
   // nothing in six hours is exactly when the graph is worth opening, since it
@@ -583,6 +585,15 @@ test('every desk has a way in from the status bar', () => {
     /class="fx-read fx-act fx-prod-read quiet"/,
     'a floor with no merges must mute the Output gauge, not remove the way to the graph',
   );
+  // Power is the sixth and the only one that was a plain reading before it opened
+  // anything: the breakdown behind a cost gauge is that gauge's own subject, so it
+  // gained a way in rather than the panel gaining a gauge of its own.
+  assert.match(
+    quiet,
+    /<button[^>]*class="fx-read fx-act fx-power"/,
+    'the Power gauge must be the way into the spend breakdown',
+  );
+  assert.doesNotMatch(markup, /data-fx="spend"/, 'the spend breakdown must not also be a panel');
 });
 
 /** The number on a gauge's face, read off the markup rather than off the state. */

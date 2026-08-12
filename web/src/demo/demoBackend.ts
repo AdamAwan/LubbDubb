@@ -18,6 +18,10 @@ import type {
   PromptTemplateView,
   RunningConfigGroup,
   Proposal,
+  SpendGoal,
+  SpendInsights,
+  SpendPhase,
+  SpendRun,
   Task,
   UnrecordedWorkView,
   WorkNodeView,
@@ -1196,6 +1200,261 @@ const DEMO_SCRATCHPAD = [
   },
 ];
 
+/**
+ * The demo's spend breakdown.
+ *
+ * Authored rather than derived, for the reason every fixture in this file is: the
+ * real figure comes from `buildSpendInsights` walking the store, and the web
+ * bundle imports no server code. What is *not* authored is any of the arithmetic —
+ * the phase totals, the fleet totals and the run count are all summed from the
+ * seeds below, because a hand-typed set of totals that disagrees with its own
+ * rows is a demo of a bug.
+ *
+ * The two goals the world fixture already prices — 205 at $6.14 over 4 runs and
+ * 212 at $18.42 over 7 — carry those exact figures here. A panel contradicting the
+ * card three inches behind it is the one thing this screen must not do.
+ */
+const DEMO_GOAL_SEEDS: {
+  issueNumber: number;
+  title: string | null;
+  agents: number;
+  hoursAgo: number;
+  byPhase: Partial<Record<SpendPhase, number>>;
+}[] = [
+  {
+    issueNumber: 212,
+    title: 'Route every store read through the interface',
+    agents: 7,
+    hoursAgo: 2,
+    byPhase: { deliberation: 3.4, build: 9.8, landing: 3.9, evidence: 1.32 },
+  },
+  {
+    issueNumber: 205,
+    title: 'Document the sentinel protocol in the README',
+    agents: 4,
+    hoursAgo: 1,
+    byPhase: { deliberation: 1.6, build: 3.24, landing: 0.5, evidence: 0.8 },
+  },
+  {
+    issueNumber: 903,
+    title: 'Totals drift by a penny on multi-currency carts',
+    agents: 3,
+    hoursAgo: 26,
+    byPhase: { deliberation: 0.6, build: 1.44, landing: 1.04, evidence: 0.2 },
+  },
+  {
+    issueNumber: 208,
+    title: null,
+    agents: 2,
+    hoursAgo: 74,
+    byPhase: { deliberation: 0.3, build: 0.62, evidence: 0.5 },
+  },
+];
+
+/** Spend that reached no goal: an operator's job, and one agent dispatched against nothing. */
+const DEMO_LOOSE: { phase: SpendPhase; costUsd: number }[] = [
+  { phase: 'job', costUsd: 0.96 },
+  { phase: 'other', costUsd: 0.7 },
+];
+
+/** The demo world's token ratio, shared with `demoSpend` in the fixtures. */
+const demoTokens = (costUsd: number) => ({
+  inputTokens: Math.round(costUsd * 180_000),
+  outputTokens: Math.round(costUsd * 9_000),
+});
+
+const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
+  deliberation: { label: 'Deliberation', blurb: 'Planning and assaying — deciding what the work is' },
+  build: { label: 'Build', blurb: 'The pickup and every part — where a branch is cut and a PR is written' },
+  landing: { label: 'Landing', blurb: 'Getting a pull request through its checks and its review' },
+  evidence: { label: 'Evidence', blurb: 'Assessing what shipped, and writing the run up' },
+  job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
+  other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
+};
+
+const DEMO_RUNS: {
+  agentId: string;
+  title: string;
+  originRef: string;
+  phase: SpendPhase;
+  costUsd: number;
+  turns: number;
+  hoursAgo: number;
+}[] = [
+  {
+    agentId: 'agent-d1',
+    title: 'Route store reads through the interface',
+    originRef: 'issue:212:part:reads',
+    phase: 'build',
+    costUsd: 4.12,
+    turns: 61,
+    hoursAgo: 3,
+  },
+  {
+    agentId: 'agent-d2',
+    title: 'Plan the store refactor',
+    originRef: 'issue:212:plan',
+    phase: 'deliberation',
+    costUsd: 2.7,
+    turns: 24,
+    hoursAgo: 19,
+  },
+  {
+    agentId: 'agent-d3',
+    title: 'Route store writes through the interface',
+    originRef: 'issue:212:part:writes',
+    phase: 'build',
+    costUsd: 2.44,
+    turns: 38,
+    hoursAgo: 2,
+  },
+  {
+    agentId: 'agent-d4',
+    title: 'Fix the failing checks on #143',
+    originRef: 'pr:143:ci',
+    phase: 'landing',
+    costUsd: 2.2,
+    turns: 31,
+    hoursAgo: 4,
+  },
+  {
+    agentId: 'agent-d5',
+    title: 'Document the sentinel protocol',
+    originRef: 'issue:205:part:docs',
+    phase: 'build',
+    costUsd: 1.86,
+    turns: 27,
+    hoursAgo: 1,
+  },
+  {
+    agentId: 'agent-d6',
+    title: 'Answer the review on #144',
+    originRef: 'pr:144:comments',
+    phase: 'landing',
+    costUsd: 1.7,
+    turns: 22,
+    hoursAgo: 5,
+  },
+  {
+    agentId: 'agent-d7',
+    title: 'Assess what shipped for #212',
+    originRef: 'issue:212:assess',
+    phase: 'evidence',
+    costUsd: 1.32,
+    turns: 14,
+    hoursAgo: 2,
+  },
+  {
+    agentId: 'agent-d8',
+    title: 'Sweep the changelog',
+    originRef: 'job:demo-1',
+    phase: 'job',
+    costUsd: 0.96,
+    turns: 11,
+    hoursAgo: 30,
+  },
+];
+
+/** The trend: a fortnight of daily totals, busiest at the near end. */
+const DEMO_DAYS = [0.4, 0, 1.1, 2.3, 1.8, 0, 0.9, 3.4, 2.2, 1.6, 0.7, 2.9, 4.1, 5.3];
+
+function buildDemoSpend(): SpendInsights {
+  const now = Date.now();
+  const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  const zero = (): Record<SpendPhase, number> => ({
+    deliberation: 0,
+    build: 0,
+    landing: 0,
+    evidence: 0,
+    job: 0,
+    other: 0,
+  });
+
+  const goals: SpendGoal[] = DEMO_GOAL_SEEDS.map((seed) => {
+    const byPhase = { ...zero(), ...seed.byPhase };
+    const costUsd = round(Object.values(byPhase).reduce((a, b) => a + b, 0));
+    return {
+      originRef: `issue:${seed.issueNumber}`,
+      issueNumber: seed.issueNumber,
+      title: seed.title,
+      costUsd,
+      ...demoTokens(costUsd),
+      agents: seed.agents,
+      byPhase,
+      lastAt: iso(seed.hoursAgo),
+    };
+  }).sort((a, b) => b.costUsd - a.costUsd);
+
+  // Every phase's money and every phase's run count, summed from the rows above
+  // rather than typed out beside them.
+  const phaseCost = zero();
+  const phaseRuns = zero();
+  for (const goal of goals) {
+    for (const [phase, cost] of Object.entries(goal.byPhase) as [SpendPhase, number][]) {
+      phaseCost[phase] = round(phaseCost[phase] + cost);
+      if (cost > 0) phaseRuns[phase] += 1;
+    }
+  }
+  for (const loose of DEMO_LOOSE) {
+    phaseCost[loose.phase] = round(phaseCost[loose.phase] + loose.costUsd);
+    phaseRuns[loose.phase] += 1;
+  }
+
+  const order: SpendPhase[] = ['deliberation', 'build', 'landing', 'evidence', 'job', 'other'];
+  const phases = order
+    .filter((phase) => phaseRuns[phase] > 0)
+    .map((phase) => ({
+      phase,
+      ...PHASE_COPY[phase],
+      costUsd: phaseCost[phase],
+      ...demoTokens(phaseCost[phase]),
+      runs: phaseRuns[phase],
+    }));
+
+  const costUsd = round(phases.reduce((a, p) => a + p.costUsd, 0));
+  const measuredRuns = goals.reduce((a, g) => a + g.agents, 0) + DEMO_LOOSE.length;
+  const runs: SpendRun[] = DEMO_RUNS.map((r) => ({
+    agentId: r.agentId,
+    originRef: r.originRef,
+    title: r.title,
+    phase: r.phase,
+    issueNumber: Number(/^issue:(\d+)/.exec(r.originRef)?.[1] ?? NaN) || null,
+    costUsd: r.costUsd,
+    ...demoTokens(r.costUsd),
+    numTurns: r.turns,
+    startedAt: iso(r.hoursAgo + 1),
+    endedAt: iso(r.hoursAgo),
+  }));
+
+  return {
+    generatedAt: new Date(now).toISOString(),
+    totals: {
+      costUsd,
+      ...demoTokens(costUsd),
+      turns: 268,
+      measuredRuns,
+      // Two PTY runs, so the panel's "unmeasured, not free" caveat is on screen
+      // where it belongs rather than being a branch nobody sees.
+      unmeasuredRuns: 2,
+    },
+    windows: { fiveHourCostUsd: 4.28, sevenDayCostUsd: 20.2 },
+    phases,
+    goals,
+    unattributedCostUsd: round(DEMO_LOOSE.reduce((a, l) => a + l.costUsd, 0)),
+    runs,
+    rankedFrom: measuredRuns,
+    timeline: {
+      bucketMs: 86_400_000,
+      startsAt: new Date(now - DEMO_DAYS.length * 86_400_000).toISOString(),
+      buckets: DEMO_DAYS.map((cost, i) => ({
+        startsAt: new Date(now - (DEMO_DAYS.length - i) * 86_400_000).toISOString(),
+        costUsd: cost,
+      })),
+    },
+  };
+}
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
@@ -1214,6 +1473,10 @@ export const demoApi = {
   // is what the real route says for a pad nobody has written to — and no way in
   // is drawn for one, since the snapshot's reading is what the control keys on.
   getScratchpad: (ref: string) => Promise.resolve({ padRef: ref, entries: ref === 'issue:205' ? DEMO_SCRATCHPAD : [] }),
+  // The spend breakdown, authored above. The real route derives it from every
+  // agent the store holds; the demo's world is built fresh in the browser each
+  // load, so a fixture is the only honest way to show the panel at all.
+  getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals

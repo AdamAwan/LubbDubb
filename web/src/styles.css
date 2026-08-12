@@ -2085,3 +2085,315 @@ body {
 .qn-foot .btn {
   margin-left: auto;
 }
+/* ============================ the spend panel ============================
+
+   The breakdown behind the Power gauge (`components/SpendModal.tsx`). It is
+   shell-side rather than floor-side because it fetches, so its styles are here
+   rather than in `factory.css` — the seam is the same one that puts the
+   retrospective and the settings modal in this file.
+
+   Three conventions hold it together and all three are load-bearing.
+
+   **Phase colour is a variable, not a value.** The component names a phase
+   (`var(--sp-landing)`) and this block decides what that looks like. Six are
+   needed and the palette has five that read apart at swatch size, so `--sp-job`
+   is the one new hue — deliberately outside the alarm colours, because a job is
+   not a warning.
+
+   **Tables here are read down a column, so every numeric cell is tabular.** A
+   ranked table whose figures do not line up is a list.
+
+   **Sunk faces, not raised ones.** Every box in this panel is a reading and none
+   of them is a control, which is the distinction `.sp-well` carries everywhere. */
+
+.spend-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 28px 16px;
+  overflow-y: auto;
+  z-index: 50;
+}
+/* Wider than the settings modal, and that is the panel's whole argument: two
+   charts side by side and a seven-column table are what an operator came for,
+   and either would be a scroll at 760px. */
+.spend-modal {
+  width: min(1180px, 96vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 14px 16px 16px;
+  font-size: 13px;
+  color: var(--text);
+}
+/* The head's one-line gloss, pushed to the right of the title and away from the
+   close button — the same placement the floor's own panels give theirs. */
+.sp-note {
+  margin-left: auto;
+  margin-right: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--grey);
+}
+/* This panel's section caption. Its own rule rather than the floor's `.fx-sub`,
+   which lives in the other stylesheet and belongs to the floor's type scale. */
+.sp-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--grey);
+  margin: 12px 0 6px;
+}
+/* This panel's sunk face: every box in it is a reading, never a control. Its own
+   rule rather than the floor's `.fx-sunk`, for `.sp-sub`'s reason — that class
+   belongs to the other stylesheet and to the floor's bevel vocabulary. */
+.sp-well {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+/* The axis labels inside this panel's SVGs. */
+.sp-axis {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--grey);
+  letter-spacing: 0.04em;
+}
+/* ============================ spend ============================
+
+   The breakdown behind the Power gauge. Two conventions hold it together and
+   both are load-bearing.
+
+   **Phase colour is a variable, not a value.** The panel's components name a
+   phase (`var(--sp-landing)`) and this block decides what that looks like, which
+   keeps the palette in the stylesheet where the rest of the floor's is. Six are
+   needed and the floor's palette has five that read apart at swatch size, so
+   `--sp-job` is the one new hue — deliberately outside the floor's alarm colours,
+   because a job is not a warning.
+
+   **Tables here are read down a column, so every numeric cell is tabular.** A
+   ranked table whose figures do not line up is a list. */
+
+.sp {
+  display: grid;
+  gap: 4px;
+  --sp-deliberation: var(--blue);
+  --sp-build: var(--green);
+  --sp-landing: var(--accent);
+  --sp-evidence: var(--amber);
+  --sp-job: #9b7fc4;
+  --sp-other: var(--grey);
+}
+
+/* --- the headline figures --- */
+
+.sp-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 8px;
+}
+.sp-tile {
+  padding: 9px 11px;
+  display: grid;
+  gap: 2px;
+}
+.sp-tile .lb {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+.sp-tile .vl {
+  font-family: var(--font-display);
+  font-size: 23px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.sp-tile .vl small {
+  color: var(--grey);
+  font-size: 15px;
+  margin: 0 2px;
+}
+.sp-tile .sb {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the two panels: phases, and the trend --- */
+
+.sp-cols {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.sp-col {
+  flex: 1 1 420px;
+  min-width: 300px;
+}
+.sp-col .sp-sub {
+  margin-top: 6px;
+}
+
+/* The whole fleet's spend as one bar. Sunk, because it is a reading and not a
+   control, and the segments meet with no gap: this is a partition, and a gutter
+   between slices would draw money that went nowhere. */
+.sp-bar {
+  display: flex;
+  height: 22px;
+  padding: 3px;
+  overflow: hidden;
+}
+.sp-bar .sg {
+  height: 100%;
+  min-width: 1px;
+}
+
+.sp-graph {
+  padding: 8px;
+}
+.sp-graph svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* --- the tables --- */
+
+.sp-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.sp-tbl th {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--grey);
+  font-weight: 400;
+  text-align: left;
+  padding: 0 8px 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sp-tbl td {
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--border-lo);
+  color: var(--muted);
+  vertical-align: top;
+}
+.sp-tbl tr:last-of-type td {
+  border-bottom: 0;
+}
+.sp-tbl .n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* Gutter on the *left*, because these columns are right-aligned: padding on the
+     trailing edge of a right-aligned cell pushes the figure off its own axis,
+     while two neighbouring numbers with no gutter between them read as one. */
+  padding-left: 18px;
+  padding-right: 0;
+}
+.sp-tbl td.b {
+  color: var(--text);
+  font-weight: 600;
+}
+.sp-tbl .sw {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  vertical-align: -1px;
+}
+.sp-tbl .nm {
+  color: var(--text);
+}
+.sp-tbl .ph {
+  text-transform: capitalize;
+}
+/* The sentence under a row's name. It is the phase's definition and the reason
+   the legend is also the table — a colour with no gloss is a colour to look up. */
+.sp-tbl .bl {
+  display: block;
+  margin-left: 17px;
+  font-size: 9.5px;
+  color: var(--grey);
+  line-height: 1.45;
+}
+.sp-tbl .bl.mono {
+  margin-left: 0;
+  letter-spacing: 0.04em;
+}
+.sp-tbl.wide .bl {
+  margin-left: 0;
+}
+.sp-tbl .bar {
+  width: 34%;
+  min-width: 120px;
+  padding-left: 18px;
+}
+/* The remainder row. Dimmed and last, because it is the figure that keeps the
+   rows above it honest rather than one of them. */
+.sp-tbl tr.rest td {
+  color: var(--grey);
+  border-top: 1px solid var(--border);
+}
+.sp-gone {
+  color: var(--grey);
+  font-style: italic;
+}
+
+/* One goal's phase split, drawn at the width of its share of the fleet — so the
+   row's bar carries two readings at once: how much of the budget this goal was,
+   and what inside it the money went on. */
+.sp-gbar {
+  display: flex;
+  height: 11px;
+  min-width: 2px;
+}
+.sp-gbar .sg {
+  height: 100%;
+  min-width: 1px;
+}
+
+/* --- what the numbers are --- */
+
+.sp-method {
+  margin-top: 10px;
+  padding: 9px 12px 12px;
+}
+.sp-method .sp-sub {
+  margin-top: 2px;
+}
+.sp-method p {
+  margin: 0 0 7px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.sp-method p:last-of-type {
+  margin-bottom: 0;
+}
+.sp-method b {
+  color: var(--text);
+  font-weight: 600;
+}
+.sp-method .mono {
+  color: var(--text);
+}
+.sp-method .dim {
+  color: var(--grey);
+}

@@ -48,6 +48,7 @@ import type { PrAttention } from './prAttention.js';
 import type { PrHealth } from './prHealth.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
+import type { SpendInsights } from './spendInsights.js';
 import type { Stack } from './stacks/stack.js';
 import type {
   AccountRateLimits,
@@ -456,6 +457,15 @@ export interface ScratchpadPayload {
 }
 
 /**
+ * `/api/spend` — the breakdown behind the cost indicators: the same money split
+ * by phase, by goal and over time. Fetched on open for the work graph's reason —
+ * it reads every agent the harness has ever run.
+ */
+export interface SpendPayload {
+  insights: SpendInsights;
+}
+
+/**
  * `/api/prompts` — the rule dispatcher's prompt book. Fetched on open for the
  * opposite reason to the work graph: it is read once at boot, so polling it would
  * be paying for a constant.
@@ -528,4 +538,5 @@ export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js'
 export type { FileOverlap } from './fileOverlap.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
 export type { RunningConfigGroup } from './server/runningConfig.js';
+export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
 export type { Stack, StackRung } from './stacks/stack.js';

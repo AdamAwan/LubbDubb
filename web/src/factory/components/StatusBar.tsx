@@ -209,7 +209,76 @@ function Accumulators({ cells }: { cells: number[] }): JSX.Element {
 }
 
 /**
- * The control-room strip: scan, power, bots, output, and the five ways in.
+ * Power, and the way to the breakdown behind it.
+ *
+ * This gauge is the floor's cost indicator, and a cost indicator raises exactly
+ * one question it cannot answer: *where did it go*. So the gauge opens the Spend
+ * panel rather than a sixth gauge being added beside it for the same subject —
+ * "one subject stated once" is this bar's rule, and a Power reading and a spend
+ * breakdown are one subject a click apart.
+ *
+ * Two faces, one button. The meter is drawn when the PTY status-line capture has
+ * seen the subscriber windows; otherwise there is no denominator to fill and the
+ * shared cost chip states the rolling totals instead of a meter inventing one.
+ * The chip renders nothing at all when neither has been reported — and the way in
+ * survives that, for the reason a zero count never removes a gauge: a fleet whose
+ * spend reads as nothing is precisely when an operator goes looking for why, and
+ * the panel is the only place that says "unmeasured" rather than "free".
+ */
+function PowerRead({
+  power,
+  usage,
+  now,
+  onOpen,
+}: {
+  power: ReturnType<typeof powerReading>;
+  usage: CockpitView['state']['usage'];
+  now: number;
+  onOpen: () => void;
+}): JSX.Element {
+  const title =
+    power.satisfaction === null
+      ? 'What the fleet has spent — open the breakdown by phase, by goal and over time'
+      : `${power.satisfaction}% of the 5-hour model window left — open the spend breakdown`;
+  return (
+    <button type="button" className="fx-read fx-act fx-power" onClick={onOpen} title={title} aria-label={title}>
+      <Icon name="battery" className="sm" />
+      <span className="fx-lbl">Power</span>
+      {power.satisfaction !== null ? (
+        <>
+          <span
+            className={`fx-meter fx-sunk ${power.brownout ? 'low' : ''}`}
+            role="img"
+            aria-label={`Satisfaction: ${power.satisfaction} percent of the 5-hour model window remaining`}
+          >
+            <i style={{ width: `${power.satisfaction}%` }} />
+          </span>
+          <span className="fx-val">
+            {power.satisfaction}
+            <small>%</small>
+          </span>
+          {/* The bank keeps its cells and loses its caption: the cells *are* the
+              reading, and the percentage they spell out is a hover away in a bar
+              where width is the scarce thing. */}
+          {power.bank !== null && (
+            <span
+              className="fx-bank"
+              title={`Accumulator bank: ${power.bank}% of the 7-day window left · $${power.sevenDayCostUsd.toFixed(2)} spent`}
+            >
+              <Accumulators cells={power.cells} />
+            </span>
+          )}
+        </>
+      ) : (
+        <UsageChip usage={usage} now={now} />
+      )}
+      <Chev />
+    </button>
+  );
+}
+
+/**
+ * The control-room strip: scan, power, bots, output, and the six ways in.
  *
  * Alerts, Faults and Blueprints used to be three panels standing in a permanent
  * left-hand rail, and all three are read as a *number* far more often than as
@@ -218,7 +287,9 @@ function Accumulators({ cells }: { cells: number[] }): JSX.Element {
  * the floor read the same way — `Off-Blueprint` there, renamed to the harness's
  * own word for it, which is also short enough not to wrap the bar. Output is the
  * fifth and the only one whose face is a picture, because its subject is a rate:
- * see `ProdRead`.
+ * see `ProdRead`. Power is the sixth and the only one that was already here — it
+ * gained a way in rather than a panel gaining a gauge, because the breakdown
+ * behind a cost reading is that reading's own subject: see `PowerRead`.
  *
  * Every gauge is one subject stated once, which is what the bar had stopped
  * being: the fleet was a Bots reading *and* a `2/3` inside the cap control a few
@@ -285,36 +356,7 @@ export function StatusBar({
 
       <ScanRead view={view} onScan={() => actions.pulse()} />
 
-      {power.satisfaction !== null ? (
-        <Read>
-          <Icon name="battery" className="sm" />
-          <span className="fx-lbl">Power</span>
-          <span
-            className={`fx-meter fx-sunk ${power.brownout ? 'low' : ''}`}
-            role="img"
-            aria-label={`Satisfaction: ${power.satisfaction} percent of the 5-hour model window remaining`}
-          >
-            <i style={{ width: `${power.satisfaction}%` }} />
-          </span>
-          <span className="fx-val">
-            {power.satisfaction}
-            <small>%</small>
-          </span>
-          {/* The bank keeps its cells and loses its caption: the cells *are* the
-              reading, and the percentage they spell out is a hover away in a bar
-              where width is the scarce thing. */}
-          {power.bank !== null && (
-            <span
-              className="fx-bank"
-              title={`Accumulator bank: ${power.bank}% of the 7-day window left · $${power.sevenDayCostUsd.toFixed(2)} spent`}
-            >
-              <Accumulators cells={power.cells} />
-            </span>
-          )}
-        </Read>
-      ) : (
-        <UsageChip usage={state.usage} now={view.now} />
-      )}
+      <PowerRead power={power} usage={state.usage} now={view.now} onOpen={() => actions.openSpend(true)} />
 
       {/* The gauge and the control are one thing. `FleetControl` already draws
           `live/cap`, so a Bots reading beside it was the same number twice —

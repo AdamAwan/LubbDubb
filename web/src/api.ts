@@ -8,6 +8,7 @@ import type {
   RetrospectivePayload,
   RunningConfigPayload,
   ScratchpadPayload,
+  SpendPayload,
   WorkRootsPayload,
   WorkSubtreePayload,
 } from '../../src/wire.js';
@@ -129,6 +130,11 @@ const realApi = {
   // server resolves a subtree ref to its issue, so any origin on the goal works.
   getScratchpad: (ref: string) =>
     authFetch(`/api/scratchpads/${encodeURIComponent(ref)}`).then((r) => json<ScratchpadPayload>(r)),
+  // The breakdown behind the cost indicators, fetched when the Spend panel opens.
+  // The snapshot already carries what the *indicators* need — the rolling windows
+  // and each goal's own total — and this is the reading behind them: every agent
+  // the harness has run, split by phase, by goal and over a fortnight.
+  getSpend: () => authFetch('/api/spend').then((r) => json<SpendPayload>(r)),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
   getPrompts: () => authFetch('/api/prompts').then((r) => json<PromptsPayload>(r)),
