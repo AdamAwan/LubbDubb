@@ -49,12 +49,14 @@ const render = (v: CockpitView) => renderToStaticMarkup(createElement(ConsoleRoo
 
 /** `renderToStaticMarkup` escapes text nodes, so an assertion on fixture prose must decode first. */
 function decode(html: string): string {
+  // &amp; must decode last — decoding it first would turn a literal `&amp;lt;`
+  // into `<`, which is a different string than the page actually renders.
   return html
     .replace(/&#x27;/g, "'")
     .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }
 
 test('nothing under console/ imports the api module', () => {
@@ -91,6 +93,13 @@ test('the recovery banner sits outside the situation area', () => {
   const sit = html.indexOf('cn-sit');
   assert.ok(banner !== -1, 'a held harness must draw its banner');
   assert.ok(banner < sit, 'the banner belongs above the situation area, not inside it');
+});
+
+test('decode reverses text-node escaping, and only in that order', () => {
+  // &amp; last: decoding it first would turn a literal `&amp;lt;` into `<`,
+  // which is not what the page rendered.
+  assert.equal(decode('&amp;lt;'), '&lt;');
+  assert.equal(decode('&#x27;'), "'");
 });
 
 test('the rail carries every blocking kind in one list', () => {
@@ -134,4 +143,142 @@ test('an empty queue collapses the rail rather than removing it', () => {
   const html = render(view({ needsYou: [] }));
   assert.ok(html.includes('cn-rail'), 'a surface that vanishes when quiet reads as one that broke');
   assert.ok(html.includes('cn-rail-empty'));
+});
+
+test('a group with no rows draws no heading; a group with rows draws its own', () => {
+  const blockingOnly = [
+    {
+      id: 'a',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'Only blocking',
+      goalRef: 'issue:1',
+      agentId: 'a1',
+      holding: 1,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ] as CockpitView['needsYou'];
+  const bothGroups = [
+    ...blockingOnly,
+    {
+      id: 'b',
+      kind: 'bench',
+      group: 'yours',
+      title: 'Yours too',
+      goalRef: 'issue:1',
+      agentId: null,
+      holding: 0,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ] as CockpitView['needsYou'];
+
+  const onlyHtml = render(view({ needsYou: blockingOnly }));
+  assert.ok(onlyHtml.includes('Blocking'), 'the non-empty group must draw its heading');
+  assert.ok(!onlyHtml.includes('Yours to do'), 'an empty group must draw no heading');
+
+  const bothHtml = render(view({ needsYou: bothGroups }));
+  assert.ok(bothHtml.includes('Blocking'));
+  assert.ok(bothHtml.includes('Yours to do'), 'both groups present must draw both headings');
+});
+
+test('the rail renders array order within a group, never a re-sort', () => {
+  // Deliberately out of canonical order: a `yours` row before `blocking`, and
+  // the lower-holding blocking row before the higher-holding one — the rail
+  // must not undo either choice.
+  const rows = [
+    {
+      id: 'yours-1',
+      kind: 'bench',
+      group: 'yours',
+      title: 'Yours first in the array',
+      goalRef: 'issue:1',
+      agentId: null,
+      holding: 0,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'blocking-low',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'Blocking low holder',
+      goalRef: 'issue:2',
+      agentId: 'a1',
+      holding: 1,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'blocking-high',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'Blocking high holder',
+      goalRef: 'issue:3',
+      agentId: 'a2',
+      holding: 5,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ] as CockpitView['needsYou'];
+
+  const html = render(view({ needsYou: rows }));
+  const yoursPos = html.indexOf('Yours first in the array');
+  const lowPos = html.indexOf('Blocking low holder');
+  const highPos = html.indexOf('Blocking high holder');
+
+  assert.ok(yoursPos !== -1 && lowPos !== -1 && highPos !== -1, 'every row must still render');
+  // Within the blocking group, array order (low before high) is preserved —
+  // a re-sort by holding would put the high-holder first.
+  assert.ok(lowPos < highPos, 'the blocking group must keep array order, not re-sort by holding');
+});
+
+test('a row with a goalRef is a button; the recovery hold (no goalRef) is not', () => {
+  const rows = [
+    {
+      id: 'clickable',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'Opens a goal',
+      goalRef: 'issue:9',
+      agentId: 'a1',
+      holding: 1,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'recovery',
+      kind: 'recovery',
+      group: 'blocking',
+      title: 'Answered on the banner above',
+      goalRef: null,
+      agentId: null,
+      holding: 0,
+      raisedAt: '',
+    },
+  ] as CockpitView['needsYou'];
+
+  const html = render(view({ needsYou: rows }));
+
+  // The row wrapper is the element opening `class="cn-q "` or `class="cn-q
+  // cn-urgent"` — the trailing space after `cn-q` rules out `cn-qin`/`cn-qkind`,
+  // which are unrelated inner elements that happen to share the `cn-q` prefix.
+  const rowWrapper = (title: string): string => {
+    const titlePos = html.indexOf(title);
+    assert.ok(titlePos !== -1, `row "${title}" must render`);
+    const before = html.slice(0, titlePos);
+    // Attribute order differs between the two tags (`<button type="button"
+    // class="…">` vs `<div class="…">`), so match the whole opening tag and
+    // check its attributes rather than assuming `class` comes first.
+    const matches = [...before.matchAll(/<(button|div)\b([^>]*)>/g)].filter(([, , attrs]) =>
+      /class="cn-q (?:cn-urgent)?"/.test(attrs ?? ''),
+    );
+    const last = matches.at(-1);
+    assert.ok(last, `no cn-q wrapper found before "${title}"`);
+    const tag = last[1];
+    assert.ok(tag, `unmatched capture group for "${title}"`);
+    return tag;
+  };
+
+  assert.equal(rowWrapper('Opens a goal'), 'button', 'a row with a goalRef is a button');
+  assert.equal(
+    rowWrapper('Answered on the banner above'),
+    'div',
+    'the recovery row has no goalRef and must not be wrapped in a button',
+  );
 });
