@@ -485,9 +485,11 @@ Its own route rather than another group on `/api/config` because it is a _deriva
 reading. `ci.checks` is already on that payload — as a raw JSON leaf, because `flatten` treats an
 array as one. What the array does not say is everything that matters: each rule ships its
 **effective** `onFailure` (`rule.onFailure ?? 'ignore'`) with `inherited` marking the ones that got it
-by omission, and `unmatched` states the constant `classifyCiFailures` applies to a check no rule
-claims — `dispatch`. Both are decided in [07](07-pull-requests.md) and neither is visible by reading
-the config file, which is what made a mis-scoped glob invisible until a PR behaved oddly.
+by omission, its **effective** `states` (`ruleStates(rule)`, i.e. `['failing']` when the rule names
+none) with `statesInherited` doing the same job, and `unmatched` states the constant
+`classifyCiFailures` applies to a failing check no rule claims — `dispatch`. All are decided in
+[07](07-pull-requests.md) and none is visible by reading the config file, which is what made a
+mis-scoped glob invisible until a PR behaved oddly.
 
 `policyKinds` is the Azure branch-policy kind → effective mode map read back through
 `policyCheckMode`, each entry marked default-or-chosen. **Null when `integrations.sourceControl` is

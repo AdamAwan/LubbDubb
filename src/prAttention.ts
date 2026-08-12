@@ -44,7 +44,7 @@
  * the property rather than trusting the import graph to keep it.
  */
 
-import { ciNeedsHuman, classifyCiFailures, type CiPolicy } from './ci/ciPolicy.js';
+import { ciNeedsHuman, classifyCiFailures, classifyWatchedChecks, type CiPolicy } from './ci/ciPolicy.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatcher/dispatchCooldown.js';
 import {
   basePrOf,
@@ -312,20 +312,34 @@ interface CiReading {
   mutedOnly: boolean;
   /** Whether rule `pr-ci-failing` would dispatch — the gate the CI concern now rides on. */
   actionable: boolean;
+  /**
+   * Checks a `ci.checks` rule watches in a non-failing state and would dispatch
+   * for — rule `pr-ci-gate`'s set. Read whether or not anything is failing: a
+   * waiting gate is the case where the PR is *not* red and an agent is coming
+   * anyway, which is precisely the reading the `elsewhere` tail used to get wrong
+   * ("CI is still running", forever).
+   */
+  watched: string[];
 }
 
 function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
-  const none: CiReading = { heldByPolicy: [], muted: [], mutedOnly: false, actionable: false };
+  const none: CiReading = { heldByPolicy: [], muted: [], mutedOnly: false, actionable: false, watched: [] };
+  // An inherited failure is nobody's business here for the reason rule
+  // `pr-ci-failing` and rule `pr-ci-gate` both skip it: the fix belongs to the PR
+  // underneath, and the `elsewhere` arm names it.
+  if (inheritedCiFailure(pr, ctx.openPrs) !== null) return none;
+  const watched = classifyWatchedChecks(pr.ciChecks, ctx.ci).watched.map((m) => m.name);
   // The same gate rule `pr-ci-failing` rides, read from the same predicate: the lens telling an
   // operator a PR is nobody's turn while an agent is being dispatched for it is
   // the drift this whole file exists to avoid.
-  if (!ciNeedsAttention(pr) || inheritedCiFailure(pr, ctx.openPrs) !== null) return none;
+  if (!ciNeedsAttention(pr)) return { ...none, watched };
   const verdict = classifyCiFailures(pr.ciChecks, ctx.ci);
-  if (verdict.actionable) return { ...none, actionable: true };
+  if (verdict.actionable) return { ...none, watched, actionable: true };
   const muted = verdict.ignored.map((m) => m.name);
   return {
     heldByPolicy: ciNeedsHuman(verdict) ? verdict.escalate.map((m) => m.name) : [],
     muted,
+    watched,
     // `actionable` is false and nothing escalates, so every failure the provider
     // reported is muted. Guarded on the list being non-empty: a provider reporting
     // no per-check detail yields `actionable: true` and never reaches here, but a
@@ -349,6 +363,12 @@ function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): Pr
   // it — the fix belongs to the PR underneath, and the `elsewhere` arm says so.
   if (ci.actionable) {
     concerns.push({ origin: `pr:${pr.number}:ci`, label: 'CI is failing' });
+  }
+  // Rule `pr-ci-gate`'s concern, in its pipeline position: below a red build,
+  // above the base. Its own origin, because the rule's cooldown is keyed on one —
+  // a lens quoting the CI origin here would report the wrong attempt cap.
+  if (ci.watched.length > 0) {
+    concerns.push({ origin: `pr:${pr.number}:ci-gate`, label: `${ci.watched.join(', ')} waiting on an action` });
   }
   if (needsBaseUpdate(pr)) {
     const base = pr.baseBranch ?? ctx.defaultBranch;

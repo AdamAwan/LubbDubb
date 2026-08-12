@@ -183,9 +183,10 @@ interface RawPolicyEvaluation {
     /**
      * Policy-type-specific settings. A build-validation policy names itself with
      * `displayName`; a status policy is identified by its `statusGenre`/
-     * `statusName` pair, which is what shows on the PR.
+     * `statusName` pair, and separately carries `defaultDisplayName`, the label
+     * Azure renders for it on the pull request page.
      */
-    settings?: { displayName?: string; statusName?: string; statusGenre?: string };
+    settings?: { displayName?: string; statusName?: string; statusGenre?: string; defaultDisplayName?: string };
   };
 }
 
@@ -204,6 +205,27 @@ export function policyDisplayName(e: RawPolicyEvaluation): string {
   if (s?.statusName) return s.statusGenre ? `${s.statusGenre}/${s.statusName}` : s.statusName;
   if (e.context?.buildDefinitionName) return e.context.buildDefinitionName;
   return e.configuration?.type?.displayName ?? '';
+}
+
+/**
+ * The *other* names this policy answers to, so a `ci.checks` glob written against
+ * any of them claims the check.
+ *
+ * A status policy has two names and they are not the same string: the harness
+ * keys it by `statusGenre/statusName` (`pr-agent-review/reviewed`), while the
+ * label on the pull request page comes from `settings.defaultDisplayName`
+ * (`PR-Agent-Reviewed`). An operator writing a rule copies what they can see, so
+ * before this the obvious glob matched nothing, silently — the same failure mode
+ * as the nameless build policies above.
+ *
+ * An *alias*, not a replacement: {@link policyDisplayName} still decides the
+ * check's name, so nothing an existing rule matched stops matching and no
+ * cockpit row is renamed under an operator who was reading it.
+ */
+export function policyDisplayAliases(e: RawPolicyEvaluation): string[] {
+  const primary = policyDisplayName(e);
+  const alias = e.configuration?.settings?.defaultDisplayName;
+  return alias && alias !== primary ? [alias] : [];
 }
 
 /** Extra attempts after the first for a *transient* failure (sign-in HTML, 429, 5xx, network). */
@@ -460,6 +482,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return data.value.map((e) => ({
       typeId: e.configuration?.type?.id ?? '',
       displayName: policyDisplayName(e),
+      displayAliases: policyDisplayAliases(e),
       typeName: e.configuration?.type?.displayName ?? '',
       buildDefinitionName: e.context?.buildDefinitionName,
       status: e.status ?? null,

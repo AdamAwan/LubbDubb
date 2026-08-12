@@ -5,7 +5,7 @@ import {
   type PolicyCheckMode,
   type PolicyKind,
 } from '../integrations/azure/policyKinds.js';
-import type { CiFailureAction } from './ciPolicy.js';
+import { ruleStates, type CiFailureAction, type CiWatchState } from './ciPolicy.js';
 
 /**
  * The effective CI policy, described for an operator reading it back — the
@@ -13,9 +13,10 @@ import type { CiFailureAction } from './ciPolicy.js';
  *
  * `/api/config` already ships `ci.checks`, but as a raw JSON leaf: it shows the
  * array, not what the array *means*. Two of the three things worth knowing are
- * not in the array at all. A rule with no `onFailure` **ignores** the check, and
- * a check matching **no rule** **dispatches** — both load-bearing, both decided
- * in {@link classifyCiFailures}, and neither visible by reading the file.
+ * not in the array at all. A rule with no `onFailure` **ignores** the check, a
+ * rule with no `states` watches only a **failing** one, and a check matching **no
+ * rule** **dispatches** — all load-bearing, all decided in
+ * {@link classifyCiFailures}, and none visible by reading the file.
  *
  * Derived **here rather than in the browser** for the reason `runningConfig.ts`
  * states: the web bundle imports no server code, so a cockpit-side derivation
@@ -29,7 +30,16 @@ import type { CiFailureAction } from './ciPolicy.js';
 export interface CiRuleDescription {
   /** The glob, verbatim — `*` any run of characters, `?` one, matched case-insensitively. */
   match: string;
-  /** What a matching failure does. `rule.onFailure ?? 'ignore'`, never the raw field. */
+  /**
+   * Which check states this rule claims. `ruleStates(rule)`, never the raw field —
+   * a rule that names none watches `failing` alone, and the array is the only
+   * place an operator can see that a rule watching `pending` has *stopped*
+   * claiming the same check when it goes red.
+   */
+  states: CiWatchState[];
+  /** True when `states` was omitted and the `['failing']` above is the inherited default. */
+  statesInherited: boolean;
+  /** What a matching check does. `rule.onFailure ?? 'ignore'`, never the raw field. */
   onFailure: CiFailureAction;
   /** True when `onFailure` was omitted and the `ignore` above is the inherited default. */
   inherited: boolean;
@@ -72,6 +82,8 @@ export function describeCiPolicy(config: Config): CiPolicyDescription {
   return {
     rules: config.ci.checks.map((rule) => ({
       match: rule.match,
+      states: [...ruleStates(rule)],
+      statesInherited: rule.states === undefined,
       onFailure: rule.onFailure ?? 'ignore',
       inherited: rule.onFailure === undefined,
       guidance: rule.guidance ?? null,

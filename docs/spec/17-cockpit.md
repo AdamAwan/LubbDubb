@@ -733,12 +733,15 @@ the shell in `App.tsx` and the floor-side cog only flips `settingsOpen` through
 
 #### The CI policy tab
 
-The ordered `ci.checks` rules as the running server has them: the glob, the **effective** `onFailure`,
-its `guidance` and `urgent` flag, numbered so "first match wins" is readable. A rule that omitted
-`onFailure` is drawn as `ignore` and said to have **inherited** it — an operator reading the config
-file sees an absent field and has no way to know the omission means "leave it alone" rather than
-"fall through to the default". Below the table, the routing a check matching **no rule** takes:
-`dispatch`. Under Azure, the branch-policy kinds and the mode each is surfaced under follow, marked
+The ordered `ci.checks` rules as the running server has them: the glob, the **effective** `states`, the
+**effective** `onFailure`, its `guidance` and `urgent` flag, numbered so "first match wins" is
+readable. A rule that omitted `onFailure` is drawn as `ignore` and said to have **inherited** it — an
+operator reading the config file sees an absent field and has no way to know the omission means "leave
+it alone" rather than "fall through to the default". `states` is marked the same way, and a rule that
+watches `pending` without `failing` says so explicitly: a failure of that check falls through to a
+later rule, which is the one consequence of `states` an operator would not predict from the file.
+Below the table, the routing a failing check matching **no rule** takes: `dispatch` — and the note
+that a check in any other state matching no rule does nothing, since watching one is opt-in per rule. Under Azure, the branch-policy kinds and the mode each is surfaced under follow, marked
 default-or-chosen.
 
 An empty policy is a full answer rather than a blank tab: no rules means every failing check takes the
