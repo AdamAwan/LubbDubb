@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
+import { productionReading } from '../view/production.js';
 
 /**
  * One reading: a label and a value, optionally a button that opens something.
@@ -80,6 +81,15 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
  * Settings does too. None reaches `api.js` — every one of these is a method on
  * `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is
  * already on that seam.
+ *
+ * Output reads `productionReading` from `../view/production.js` — the same
+ * derivation the production graph itself is built on — rather than a
+ * differently-shaped count of the same events: a gauge and the panel it opens
+ * must agree from the first paint, and only sharing the one function keeps
+ * that true by construction. That module used to live under `factory/`; it
+ * moved to `view/` (a pure, React-free derivation, same as `viewModel.ts` and
+ * `goalPage.ts`) precisely so a consumer outside the Factory Floor could use
+ * it without reaching into a presentation directory that is going away.
  */
 export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { state } = view;
@@ -99,11 +109,20 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
     );
   }
 
-  const merges = state.worldEvents.filter((e) => e.kind === 'pr_merged').length;
   const yieldPct =
     state.runOutcomes.completionRate === null ? null : Math.round(state.runOutcomes.completionRate * 100);
   const spendUsd = state.usage.windows.fiveHourCostUsd;
   const faultCount = state.errors.length;
+  // Same derivation the production graph itself is built on (`actions.openPanel('output')`
+  // opens it) — a gauge and the panel it opens must start out agreeing, so this is
+  // the windowed rate, not a different-shaped count of the same events.
+  const production = productionReading({
+    decisions: state.decisions,
+    worldEvents: state.worldEvents,
+    fiveHourCostUsd: state.usage.windows.fiveHourCostUsd,
+    now: view.now,
+  });
+  const mergesPerHour = production.series.find((s) => s.key === 'merges')?.perHour ?? 0;
 
   return (
     <div className="cn-bar">
@@ -138,10 +157,10 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
         />
         <Read
           label="Output"
-          value={`${merges}`}
-          quiet={merges === 0}
+          value={`${mergesPerHour.toFixed(1)}/h`}
+          quiet={mergesPerHour === 0}
           onOpen={() => actions.openPanel('output')}
-          title="Pull requests merged — open the output panel"
+          title={`${mergesPerHour.toFixed(1)} merges an hour over the last ${Math.round(production.windowMs / 3_600_000)}h — open the output panel`}
         />
         <Read
           label="Findings"

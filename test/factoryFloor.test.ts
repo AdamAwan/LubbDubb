@@ -62,7 +62,7 @@ const { conditionGlyph, ladderFor, loadedCount, mergeGates, prCourt, rackCount, 
   '../web/src/factory/inspection.js'
 );
 const { Inspection } = await import('../web/src/factory/components/Inspection.js');
-const { axisScale, beltTier, productionReading } = await import('../web/src/factory/production.js');
+const { axisScale, beltTier, productionReading } = await import('../web/src/view/production.js');
 const { accumulatorCells } = await import('../web/src/factory/power.js');
 
 const INERT = new Proxy({} as CockpitActions, { get: () => () => Promise.resolve() });

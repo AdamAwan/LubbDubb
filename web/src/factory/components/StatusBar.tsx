@@ -6,7 +6,7 @@ import { FleetControl } from '../../components/FleetControl.js';
 import { UsageChip } from '../../components/UsageChip.js';
 import { SettingsButton } from '../../components/SettingsButton.js';
 import { powerReading } from '../power.js';
-import type { ProductionReading } from '../production.js';
+import type { ProductionReading } from '../../view/production.js';
 import type { RunTally } from '../../types.js';
 import type { FactoryModal } from './Modal.js';
 import { ProductionSpark } from './Production.js';

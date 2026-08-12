@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { axisScale, type ProductionReading, type ProductionSeries, type SeriesKey } from '../production.js';
+import { axisScale, type ProductionReading, type ProductionSeries, type SeriesKey } from '../../view/production.js';
 
 /**
  * The production graph.

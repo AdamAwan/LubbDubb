@@ -2,7 +2,7 @@ import type { CSSProperties, JSX } from 'react';
 import type { Agent, QueueItem, Task } from '../../types.js';
 import { elapsed, refLink } from '../../components/util.js';
 import { Icon, Lamp, LampMark } from './Sprite.js';
-import { beltTier } from '../production.js';
+import { beltTier } from '../../view/production.js';
 import {
   bayMachineStatus,
   botState,

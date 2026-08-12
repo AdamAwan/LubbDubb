@@ -18,7 +18,7 @@ import { Signals } from './components/Signals.js';
 import { GoalFloor } from './components/GoalFloor.js';
 import { rackCount, rackEntries } from './inspection.js';
 import { powerReading } from './power.js';
-import { productionReading } from './production.js';
+import { productionReading } from '../view/production.js';
 
 /**
  * The cockpit as a production line.
