@@ -34,6 +34,7 @@
  */
 
 import type { Config } from '../config.js';
+import { ticketAssignment } from '../ticketAssignment.js';
 import type { Finding, FindingInput, FindingKind } from '../types.js';
 
 /**
@@ -198,13 +199,22 @@ export function findingJobRequest(finding: Finding): { title: string; prompt: st
  * Null for the `fake` provider (and for a provider whose config is absent):
  * there is no tracker to file into, and the cockpit hides the button rather than
  * offering one that fails.
+ *
+ * The **assignee** travels with the coordinates for the same reason the tracker
+ * does — a desk agent cannot infer who asked for the work either. See
+ * {@link file://../ticketAssignment.ts}; unconfigured, this string reads exactly
+ * as it did before.
  */
 export function trackerCoordinates(config: Config): string | null {
   const provider = config.integrations.issues;
+  const assignment = ticketAssignment(config);
+  const assign = assignment?.flag ?? '';
+  const note = assignment ? `\n\n${assignment.note}` : '';
   if (provider === 'github' && config.github) {
     const slug = `${config.github.owner}/${config.github.repo}`;
     return (
-      `the GitHub repository ${slug}. Create it with: ` + `gh issue create -R ${slug} --title "<title>" --body "<body>"`
+      `the GitHub repository ${slug}. Create it with: ` +
+      `gh issue create -R ${slug} --title "<title>" --body "<body>"${assign}${note}`
     );
   }
   if (provider === 'azure' && config.azureDevOps) {
@@ -212,7 +222,7 @@ export function trackerCoordinates(config: Config): string | null {
     return (
       `the Azure DevOps project "${project}" in organization "${organization}". Create it with: ` +
       `az boards work-item create --org https://dev.azure.com/${organization} --project "${project}" ` +
-      `--type Task --title "<title>" --description "<body>"`
+      `--type Task --title "<title>" --description "<body>"${assign}${note}`
     );
   }
   return null;
