@@ -793,7 +793,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `canFileTickets`.                                                                                                                                  |
 | `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
 | `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
-| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay` and `completion` per issue.                                                                             |
+| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                    |
 | `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
 | `tasks`                         | Every task.                                                                                                                                                                                                                   |
@@ -813,7 +813,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `errors`                        | The last 100 recorded failures.                                                                                                                                                                                               |
 | `refUrls`                       | The `ref → URL` map.                                                                                                                                                                                                          |
 | `dispatchRules`                 | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                              |
-| `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits}`.                                                                                                                                                                  |
+| `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits, unattributedCostUsd}`.                                                                                                                                             |
 
 Eight consistency points:
 
@@ -872,6 +872,14 @@ Eight consistency points:
 
 `usage.windows` are summed from `usage_events` (all modes, self-computed); `usage.rateLimits` is the
 freshest PTY status-line payload, or `null`, in which case the cockpit chip falls back to cost.
+
+`issue.spend` is the same money asked per **goal** rather than per window — `rollUpIssueSpend` over
+`agents`, `tasks` and the work graph, so a pull request's CI agents and a plan's parts are charged to
+the ticket they came out of. It is `null` where nothing was measured (every PTY agent), which is not
+the same reading as zero. `usage.unattributedCostUsd` is its remainder — spend that reached no goal —
+shipped so the per-goal figures read as a partition of fleet spend rather than an unbounded subset of
+it. Neither is stored: cost is durable on the `agents` row, the origin on the `tasks` row, and the
+lineage in `work_nodes`. → [18](18-observability.md#per-goal-spend)
 
 ## The WebSocket
 

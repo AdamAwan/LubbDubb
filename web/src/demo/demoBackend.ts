@@ -92,7 +92,10 @@ function injectedPr(pr: Omit<OpenPullRequest, 'attention' | 'ciVerdict'>): OpenP
 
 /** An injected issue, with the verdicts nothing has yet cast about its goal. */
 function injectedIssue(
-  issue: Omit<Issue, 'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'pickup'>,
+  issue: Omit<
+    Issue,
+    'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'pickup' | 'spend'
+  >,
 ): Issue {
   return {
     ...issue,
@@ -103,6 +106,9 @@ function injectedIssue(
     assay: null,
     retrospective: null,
     scratchpad: null,
+    // A goal injected this second has had no agent on it, so nothing has been
+    // measured — which is null, not zero. See `demoIssue`.
+    spend: null,
   };
 }
 

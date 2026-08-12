@@ -16,6 +16,7 @@ import { prHealth } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
+import { rollUpIssueSpend } from '../issueSpend.js';
 import { retainedRunIssues } from '../floor/runs.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
@@ -64,6 +65,11 @@ export function buildStateSnapshot(
     issues: [],
   };
   const tasks = store.listTasks();
+  // Read once and shared three ways: the fleet list the cockpit draws, the
+  // overlap join below, and the per-goal spend roll-up — the last of which is a
+  // sum over exactly these rows, so a second read could ship a card whose total
+  // disagreed with the agents printed beside it.
+  const agents = store.listAgents();
   const control = runtimeControl.snapshot();
   // Hoisted (not inlined into the returned object) because the artifact-URL map
   // below is derived from the same list.
@@ -253,6 +259,10 @@ export function buildStateSnapshot(
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
+  // What every goal has cost, from the same `agents` rows the fleet list ships.
+  // The work graph is read (not the world) because it never forgets a merged pull
+  // request: a goal's total must not fall when its PRs age out of `closedPrs`.
+  const spend = rollUpIssueSpend({ agents, tasks, nodes: store.listWorkNodes() });
   // The per-issue enrichment, hoisted so a live world issue and a retained
   // completion synthesized below go through one path — the reasons the pickup and
   // conclusion verdicts are computed here rather than in the browser apply to both,
@@ -298,6 +308,11 @@ export function buildStateSnapshot(
             dismissed: run.dismissedAt !== null,
           }
         : undefined,
+      // What this goal has cost so far — every agent under it, including the ones
+      // dispatched against its parts and its pull requests. Null is "no runtime
+      // ever reported usage for this goal", which PTY mode makes the normal case;
+      // it is not zero, and the cockpit draws nothing rather than "$0.00".
+      spend: spend.byIssue.get(origin) ?? null,
     };
   };
   return {
@@ -404,7 +419,7 @@ export function buildStateSnapshot(
     // Operator-launched jobs (newest first) — the cockpit shows the queued
     // ones and their place in line, plus recently-dispatched/cancelled history.
     jobs: store.listJobs(),
-    agents: store.listAgents(),
+    agents,
     // Artifacts agents surfaced mid-run (design docs, reports, links). The
     // cockpit groups these by agentId onto the fleet card / drawer.
     flags,
@@ -432,7 +447,7 @@ export function buildStateSnapshot(
     // for every world-driven rule — but none of them can see what an agent does
     // once it is running. This is that blind spot, read off rows we already have
     // rather than off an advisory claim an agent has to remember to make.
-    overlaps: detectFileOverlaps({ files, agents: store.listAgents(), tasks }),
+    overlaps: detectFileOverlaps({ files, agents, tasks }),
     // Things agents noticed outside their own tasks (the `report_finding` tool).
     // Operator-facing only: nothing in the dispatcher reads them, and one becomes
     // work only through `POST /api/findings/:id/promote`.
@@ -464,7 +479,7 @@ export function buildStateSnapshot(
     // The rule book, as data: decision rows carry a rule id; the cockpit looks
     // the id up here to expand a decision into "which rule fired, and why".
     dispatchRules: DISPATCH_RULES,
-    usage: buildUsage(system),
+    usage: buildUsage(system, spend.unattributedCostUsd),
   };
 }
 
@@ -575,8 +590,13 @@ function assayVerdictOf(assay: IssueAssay | undefined) {
  * windows summed from stream-mode turn reports (all modes, self-computed), plus
  * the real subscriber 5h/weekly limits when the PTY status-line capture has
  * seen any (Pro/Max only — null otherwise, and the UI degrades to cost).
+ *
+ * `unattributedCostUsd` is the other half of the per-goal figures on each issue:
+ * the spend that reached no goal at all. It is shipped rather than kept server-side
+ * because it is what makes the per-issue totals readable as a partition of the
+ * fleet's spend instead of an unbounded subset of it.
  */
-function buildUsage(system: System) {
+function buildUsage(system: System, unattributedCostUsd: number) {
   const now = Date.now();
   const iso = (msAgo: number): string => new Date(now - msAgo).toISOString();
   return {
@@ -585,5 +605,6 @@ function buildUsage(system: System) {
       sevenDayCostUsd: system.store.sumUsageCostSince(iso(7 * 24 * 60 * 60 * 1000)),
     },
     rateLimits: system.rateLimits?.readLatest() ?? null,
+    unattributedCostUsd,
   };
 }

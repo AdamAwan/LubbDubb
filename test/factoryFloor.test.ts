@@ -165,6 +165,7 @@ function floorInput(over: {
     delivery: over.delivery ?? null,
     retrospective: null,
     scratchpad: null,
+    spend: null,
   };
   return {
     issue,
@@ -1393,6 +1394,7 @@ test('the floor draws the goals we have a claim staked to', () => {
     delivery: null,
     retrospective: null,
     scratchpad: null,
+    spend: null,
   });
   const GATE = { watchLabel: 'lubbdubb-watch', ignoreLabel: 'lubbdubb-ignore' };
   const numbers = (issues: Issue[]): number[] => floorGoals(issues, GATE).map((i) => i.number);
@@ -1445,6 +1447,7 @@ test('a completed goal is retained on the floor until dismissed (#203)', () => {
     delivery: null,
     retrospective: null,
     scratchpad: null,
+    spend: null,
     ...over,
   });
   const GATE = { watchLabel: 'lubbdubb-watch', ignoreLabel: 'lubbdubb-ignore' };

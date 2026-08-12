@@ -635,6 +635,14 @@ way onto the strip beside claimed and in-flight: a **retained run**, drawn until
 of its checks is load-bearing — in-flight is tested first, so a dismissed goal that re-enters
 production is drawn as live work.
 
+**The floor is where a goal's spend is stated, because it is the only panel that draws one whole.**
+Every other reading of cost in the cockpit is per *agent* — a figure on a card that leaves with the
+run — so nothing added a planner, four parts and three CI agents into the one number an operator
+budgets in. The Spend row does (`Issue.spend`, [18](18-observability.md#per-goal-spend)): one total,
+the agent count it is over, and the token split. It hangs off the goal **having been measured**, never
+off the floor's state — the lesson `planId` and `retroRef` learned — and a goal with no measurement
+draws no row at all rather than a `$0.00` one.
+
 **Dismissal is the terminal act, and since #234 it is a gate as well as the card** (`POST
 /api/issues/:n/dismiss-run` → `Store.dismissIssueRun`). This reverses #203's stated invariant that
 dismissal is _never_ a gate, deliberately and for the reason the retention exists at all: a run that
@@ -1011,9 +1019,10 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
   collided. Each row shows the path, its writers with their origins and branches, and marks the
   `sameWorktree` case.
 - **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
-  toggle; issues with their state, linked PR, pickup chip, **plan chip**, conclusion chip and
-  **shortfall** chip, a watch toggle, the conclusion toggles, the **assay override** and **raise
-  issue**; and a **Recently closed** section marking each PR merged vs closed-unmerged.
+  toggle; issues with their state, linked PR, pickup chip, **plan chip**, conclusion chip,
+  **shortfall** chip and **spend chip**, a watch toggle, the conclusion toggles, the **assay
+  override** and **raise issue**; and a **Recently closed** section marking each PR merged vs
+  closed-unmerged.
 
   **`raise issue`** is the one control on the row that files into the tracker rather than writing a
   verdict about the item (`POST /api/issues/:number/bug`, [16](16-http-api.md)). It opens
@@ -1050,6 +1059,13 @@ for the world to change — chosen from `view.demo`, the same predicate the pane
   fell short, which is the whole of what makes the verdict routable and the one thing an operator has
   to see before being asked to authorize a replan. A shortfall with no cause draws nothing — the
   conclusion chip beside it already reads `work left`, and one home per fact.
+
+  The spend chip is one figure — what the goal has cost — with the agent count and the token split in
+  its title, because the count is what makes the figure legible ($18 over seven agents is a decomposed
+  goal working; $18 over one is an agent in trouble) and is the second question, not the first. It
+  draws **only where something was measured**: `spend: null` renders nothing rather than `$0.00`,
+  which would describe a goal three PTY agents had worked as a free one
+  ([18](18-observability.md#per-goal-spend)).
 
   Rows are filed under three tabs — **Watched** / **Unwatched** / **Ignored** — by the pure
   `watchBucket` (`web/src/worldBuckets.ts`) over each item's labels, with the server's precedence

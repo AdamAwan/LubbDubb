@@ -66,6 +66,7 @@ import type {
   HumanTask,
   IssueConclusionVerdict,
   IssueRunOutcome,
+  IssueSpend,
   Issue as WorldIssue,
   Job,
   JobAttachment,
@@ -188,6 +189,15 @@ export interface Issue extends WorldIssue {
    * dispatcher as well as for the card.
    */
   run?: { startedAt: string; completedAt: string | null; outcome: IssueRunOutcome | null; dismissed: boolean };
+  /**
+   * What this goal has cost so far, over every agent under it — its planner, its
+   * assay, its parts, and the agents its pull requests pulled in (`rollUpIssueSpend`).
+   *
+   * **Null is "nothing was ever measured", not zero.** PTY agents report no usage
+   * at all, so a goal worked entirely in that mode has no spend row; drawing it as
+   * `$0.00` would report a free goal where the truth is an unmeasured one.
+   */
+  spend: IssueSpend | null;
 }
 
 /** The world as `/api/state` ships it: the baseline, with both lists enriched. */
@@ -278,6 +288,14 @@ export interface CockpitUsage {
   windows: { fiveHourCostUsd: number; sevenDayCostUsd: number };
   /** Pro/Max only, via the PTY status-line capture. Null => the UI falls back to cost. */
   rateLimits: AccountRateLimits | null;
+  /**
+   * Spend that belongs to no goal — an operator's job the graph never linked to an
+   * issue, or an agent dispatched against no origin at all. The counterpart to
+   * {@link Issue.spend}: with it, the per-goal figures read as a partition of what
+   * the fleet has spent; without it, they read as complete while a remainder no
+   * card shows grows behind them.
+   */
+  unattributedCostUsd: number;
 }
 
 /**

@@ -19,7 +19,7 @@ import { useState } from 'react';
 import type { AppState, Issue, Plan, PullRequest } from '../types.js';
 import { watchBucket, type WatchBucket } from '../worldBuckets.js';
 import { groupByFeature, groupProgress, type IssueGroup } from '../issueGroups.js';
-import { statusDot, refLink, refChip, relTime } from './util.js';
+import { statusDot, refLink, refChip, relTime, fmtTokens, fmtUsd } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { RaiseBugModal } from './RaiseBugModal.js';
@@ -218,6 +218,30 @@ function scratchpadChip(issue: Issue, onViewScratchpad: (issueRef: string) => vo
     >
       notepad · {pad.entries}
     </button>
+  );
+}
+
+/**
+ * The per-goal spend chip: what this ticket has cost so far.
+ *
+ * Drawn only where there is a measurement. **Absent is "nothing reported", never
+ * "nothing spent"** — PTY agents report no usage at all, so a `$0.00` here would
+ * quietly describe a goal three agents had worked as free. That is the same
+ * reading the server's `null` carries, kept rather than flattened.
+ *
+ * One number on the chip and the breakdown in the title: the count is what makes
+ * the figure legible ($18 over seven agents is a decomposed goal working; $18 over
+ * one is an agent in trouble), but it is the second question, not the first.
+ */
+function spendChip(spend: Issue['spend']) {
+  if (!spend) return null;
+  return (
+    <span
+      className="chip small"
+      title={`Spent on this goal across ${spend.agents} agent run${spend.agents === 1 ? '' : 's'} — its planner, its parts, and the agents its pull requests pulled in. ${fmtTokens(spend.inputTokens)}→${fmtTokens(spend.outputTokens)} tokens. A running total while any of them is still working.`}
+    >
+      {fmtUsd(spend.costUsd)}
+    </span>
   );
 }
 
@@ -498,6 +522,7 @@ export function WorldSummary({
           onViewPlan,
         )}
         {scratchpadChip(i, onViewScratchpad)}
+        {spendChip(i.spend)}
         {conclusionChip(i.conclusion)}
         {shortfallChip(i.shortfall, i.number, state.proposals)}
         {i.linkedPrNumber !== null && (
