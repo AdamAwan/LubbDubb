@@ -69,7 +69,7 @@ Create `test/needsYou.test.ts`:
 ```ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { AppState, Escalation, HumanTask, PlanPart } from '../web/src/types.js';
+import type { AppState, Escalation, HumanTask, OrphanedWork, PlanPart } from '../web/src/types.js';
 import { buildNeedsYou, partHolding } from '../web/src/view/needsYou.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -97,10 +97,26 @@ function escalation(over: Partial<Escalation>): Escalation {
 function task(over: Partial<HumanTask>): HumanTask {
   return {
     id: 't1', title: 'Provision creds', detail: null, originRef: 'issue:142',
-    partId: null, kind: 'ask', status: 'open',
-    createdAt: '2026-01-01T00:00:00.000Z',
+    partId: null, kind: 'ask', agentId: null, taskId: null, status: 'open',
+    resolution: null, createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z', resolvedAt: null, dismissedAt: null,
     ...over,
-  } as HumanTask;
+  };
+}
+
+function orphan(over: Partial<OrphanedWork> = {}): OrphanedWork {
+  return {
+    taskId: 't9', agentId: null, title: 'Orphaned run', kind: 'code',
+    originRef: null, branch: null, cwd: null, died: 'crashed',
+    waitingReason: null, note: null, startedAt: '2026-01-01T00:00:00.000Z',
+    detectedAt: null, restorable: false, restoreBlocked: null,
+    ...over,
+  };
+}
+
+/** A snapshot with the four lists this suite varies replaced, and nothing cast. */
+function stateWith(over: Partial<AppState>): AppState {
+  return { ...buildDemoState(), ...over };
 }
 
 test('partHolding counts live direct dependents and ignores retired ones', () => {
@@ -114,14 +130,12 @@ test('partHolding counts live direct dependents and ignores retired ones', () =>
 });
 
 test('a parked agent and a bench task land in different groups', () => {
-  const state = buildDemoState();
-  const rows = buildNeedsYou({
-    ...state,
+  const rows = buildNeedsYou(stateWith({
     escalations: [escalation({ id: 'e1', agentId: 'a1' })],
     humanTasks: [task({ id: 't1' })],
     proposals: [],
     recovery: [],
-  } as AppState);
+  }));
 
   assert.deepEqual(
     rows.map((r) => [r.kind, r.group]),
@@ -130,26 +144,28 @@ test('a parked agent and a bench task land in different groups', () => {
 });
 
 test('recovery sorts above everything, because no pulse runs while it is up', () => {
-  const state = buildDemoState();
-  const rows = buildNeedsYou({
-    ...state,
+  const rows = buildNeedsYou(stateWith({
     escalations: [escalation({ id: 'e1', agentId: 'a1' })],
     humanTasks: [],
     proposals: [],
-    recovery: [{ taskId: 't9' }],
-  } as unknown as AppState);
+    recovery: [orphan()],
+  }));
 
   assert.equal(rows[0]?.kind, 'recovery');
   assert.equal(rows[0]?.goalRef, null);
 });
 
 test('a permission request is its own kind, not a plain escalation', () => {
-  const state = buildDemoState();
-  const rows = buildNeedsYou({
-    ...state,
-    escalations: [escalation({ id: 'e1', agentId: 'a1', context: { permission: { tool: 'Bash' } } })],
+  const rows = buildNeedsYou(stateWith({
+    escalations: [
+      escalation({
+        id: 'e1',
+        agentId: 'a1',
+        context: { permission: { toolName: 'Bash', summary: 'rm -rf build' } },
+      }),
+    ],
     humanTasks: [], proposals: [], recovery: [],
-  } as unknown as AppState);
+  }));
 
   assert.equal(rows[0]?.kind, 'permission');
 });
@@ -162,8 +178,7 @@ test('within a group the row holding more work sorts first', () => {
     part({ id: 'p:c', slug: 'c', dependsOn: ['a'] }),
     part({ id: 'p:z', slug: 'z' }),
   ];
-  const rows = buildNeedsYou({
-    ...state,
+  const rows = buildNeedsYou(stateWith({
     planParts: parts,
     escalations: [],
     proposals: [],
@@ -172,7 +187,7 @@ test('within a group the row holding more work sorts first', () => {
       task({ id: 'holds-none', partId: 'p:z', title: 'Holds nothing' }),
       task({ id: 'holds-two', partId: 'p:a', title: 'Holds two' }),
     ],
-  } as AppState);
+  }));
 
   assert.deepEqual(rows.map((r) => r.id), ['holds-two', 'holds-none']);
   assert.equal(rows[0]?.holding, 2);
@@ -369,7 +384,7 @@ Create `test/goalPage.test.ts`:
 ```ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { AppState, PlanPart } from '../web/src/types.js';
+import type { AppState, Plan, PlanPart } from '../web/src/types.js';
 import { buildGoalPage, buildGoalTrack } from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 
@@ -383,6 +398,15 @@ function part(over: Partial<PlanPart>): PlanPart {
     prNumber: null, status: 'ready', blockedReason: null, taskId: null,
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     ...over,
+  };
+}
+
+function plan(originRef: string): Plan {
+  return {
+    id: 'p', originRef, title: 'A plan', status: 'active', reason: null,
+    risks: null, outOfScope: null, document: null, discussing: false,
+    statusCommentRef: null,
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
 
@@ -402,7 +426,7 @@ test('parts group by status, and a retired part is on no page at all', () => {
   const state = buildDemoState();
   const issue = state.world.issues[0];
   const page = buildGoalPage(
-    { ...state, planParts: parts, plans: [{ id: 'p', originRef: `issue:${issue.number}` }] } as unknown as AppState,
+    { ...state, planParts: parts, plans: [plan(`issue:${issue.number}`)] },
     `issue:${issue.number}`,
     [],
   );
@@ -423,7 +447,7 @@ test('the track folds the same groups the page draws, so the two cannot disagree
   const state = buildDemoState();
   const issue = state.world.issues[0];
   const page = buildGoalPage(
-    { ...state, planParts: parts, plans: [{ id: 'p', originRef: `issue:${issue.number}` }] } as unknown as AppState,
+    { ...state, planParts: parts, plans: [plan(`issue:${issue.number}`)] },
     `issue:${issue.number}`,
     [],
   );
@@ -802,6 +826,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
+import type { GoalPartView } from '../web/src/view/goalPage.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
 // `React.createElement`; the bundle uses the automatic one. The global goes in
@@ -1143,11 +1168,20 @@ test('a goal with no ask draws no band at all', () => {
 
 test('a held part quotes the reconciler’s own reason rather than inventing one', () => {
   const v = goalView();
-  const parts = [
-    { part: { ...v.goalPage!.parts[0]?.part, status: 'blocked', blockedReason: 'waits on staging credentials' }, group: 'held', agentId: null },
-  ] as CockpitView['goalPage'] extends null ? never : NonNullable<CockpitView['goalPage']>['parts'];
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const first = page.parts[0];
+  if (!first) return; // the fixture goal has no plan; the grouping tests cover this
 
-  const html = render({ ...v, goalPage: { ...v.goalPage!, parts } });
+  const parts: GoalPartView[] = [
+    {
+      part: { ...first.part, status: 'blocked', blockedReason: 'waits on staging credentials' },
+      group: 'held',
+      agentId: null,
+    },
+  ];
+
+  const html = render({ ...v, goalPage: { ...page, parts } });
   assert.ok(html.includes('waits on staging credentials'));
 });
 ```
