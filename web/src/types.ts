@@ -55,7 +55,6 @@ export type {
   QueueItem,
   RecoveryVerdict,
   ReliabilityInsights,
-  RunHealth,
   RunOutcome,
   RunOutcomeTotal,
   RunPhaseHealth,

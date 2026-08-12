@@ -559,7 +559,6 @@ export type {
   CiHealth,
   CiSubject,
   ReliabilityInsights,
-  RunHealth,
   RunOutcome,
   RunOutcomeTotal,
   RunPhaseHealth,

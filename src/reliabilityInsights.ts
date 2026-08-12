@@ -161,7 +161,11 @@ export interface RunTally {
   completionRate: number | null;
 }
 
-export interface RunHealth extends RunTally {
+/**
+ * Not exported: the cockpit reaches it as `ReliabilityInsights['runs']`, and an
+ * export nothing names by name is what `knip` is set to `error` to catch.
+ */
+interface RunHealth extends RunTally {
   /** Every settled run's cost, so the waste has a whole to be a share of. */
   costUsd: number;
   lostCostUsd: number;
