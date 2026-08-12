@@ -36,6 +36,19 @@ export interface CiCheck {
    */
   blocking?: boolean;
   /**
+   * Other names the provider shows for this same check. A `ci.checks` glob
+   * matches an alias exactly as it matches {@link name}, so an operator can write
+   * the rule against whichever name they can actually see.
+   *
+   * Azure's status policies are the case it exists for: the harness keys one by
+   * its `statusGenre/statusName` pair (`pr-agent-review/reviewed`), which is *not*
+   * the label the pull request page shows for it (`settings.defaultDisplayName`,
+   * e.g. `PR-Agent-Reviewed`). {@link name} stays the primary — it is what the
+   * cockpit renders and what a briefing names — so nothing an existing glob
+   * matched stops matching.
+   */
+  aliases?: string[];
+  /**
    * Reported for visibility only: `classifyCiFailures` never classifies it and
    * `ciNeedsAttention` never counts it, so it cannot dispatch an agent, escalate,
    * or be muted by a `ci.checks` rule.

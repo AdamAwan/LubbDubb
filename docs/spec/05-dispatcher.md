@@ -77,6 +77,7 @@ unconditional.
 | `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                           |
 | `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.     |
 | `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                             |
+| `pr-ci-gate`               | Check waiting on an action           | —                | A `ci.checks` rule watches a check in a non-failing state (`states`) and the check is in it — a blocking gate sitting `pending`. Own origin `pr:<n>:ci-gate`. |
 | `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base or conflicts with it.                                                                                                               |
 | `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                |
 | `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                              |
@@ -94,20 +95,57 @@ unconditional.
 `workItemStates` is the one condition that is not a feature flag: it is true when the operator has
 configured **both** `issueInReviewState` and a non-empty `issuePickupStates`.
 
-The four PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than five,
+The five PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than six,
 because at most one agent works a branch and the fold that picks the top concern has to see them
 together. Their relative urgency is still their pipeline order — `concernUrgency` looks up the index.
 The pass is registered in `STAGES` under `pr-ci-failing` and stays there whatever the order inside the
-group: the five are contiguous, so nothing runs between them and the pass contributes at the same
+group: the six are contiguous, so nothing runs between them and the pass contributes at the same
 point in the walk whichever id carries it. Moving the registration to track "the first of them" would
 be a second copy of the ordering.
 
-**A review outranks CI, and CI outranks the base.** A review is the one PR signal that can invalidate
-the diff rather than report something wrong around it — a reviewer asking for a different approach
-means the code the CI failure is about, and the hunks the conflict is in, are both about to be
-rewritten. An agent sent at CI or at a conflict first does work the next push discards, and in the
-base case resolves the same conflict twice, since the rewrite re-conflicts the branch. Both still get
-their agent; they get it against the diff the review settled on.
+**A review outranks CI, CI outranks a waiting gate, and the gate outranks the base.** A review is the
+one PR signal that can invalidate the diff rather than report something wrong around it — a reviewer
+asking for a different approach means the code the CI failure is about, and the hunks the conflict is
+in, are both about to be rewritten. An agent sent at CI or at a conflict first does work the next push
+discards, and in the base case resolves the same conflict twice, since the rewrite re-conflicts the
+branch. A failing check outranks a waiting one because it is a thing that broke rather than a thing
+that has not happened yet, and a gate run against a red branch may have to be run again once it is
+green. All of them still get their agent; they get it against the diff the review settled on.
+
+#### `pr-ci-gate`: a check that waits rather than fails
+
+An Azure `status` branch policy can be blocking, enabled, and `queued` indefinitely — the harness's
+`checkStatusOf` maps it to `pending`, and nothing else in the system reads a pending check. The PR is
+not red, so `ciNeedsAttention` is false and `pr-ci-failing` never fires; `prAttentionStatus` falls
+through to "CI is still running" and stays there. The PR is stuck on a command a human has to run, and
+before `states` there was no way to say so. Three choices carry this rule:
+
+- **Its own origin, `pr:<n>:ci-gate`.** Sharing `pr:<n>:ci` with the real CI concern would put one
+  cooldown budget across two unrelated problems: a red build spending its three attempts would leave
+  the gate permanently capped without a single agent ever having been sent at it, and the
+  `cooldown-escalate` raised at the cap would name whichever of the two the fold happened to pick. It
+  would also break notify de-dup, which is keyed on the origin — a gate signal reaching an agent
+  already on the branch is not the CI signal that origin already delivered. The cost is a PR that can
+  carry two CI-ish concerns competing for one branch agent, and that cost is already paid: concerns
+  fold per PR, the top one wins, the rest are re-raised next pulse. There is no equivalent machinery
+  for un-conflating a shared attempt cap.
+- **The re-dispatch loop ends at the attempt cap.** A watched-pending check may still be pending after
+  the agent runs — clearing it is not the agent's to do, and the world has not changed, so the concern
+  is raised again. Nothing about the gate self-clears, so the **only** thing that bounds it is the
+  origin's own cap: three attempts, then `cooldown-escalate` hands it to a human on `pr:<n>:ci-gate`.
+  That is why the origin split matters twice over — the escalation names the gate, and the gate's
+  attempts are not spent by a build. Pinned by `test/ciPolicy.test.ts`.
+- **Stacks: the same guard as CI, and no more.** The concern is suppressed when `inheritedCiFailure`
+  attributes the PR's failure to a rung below it, so a PR whose real problem is the red base does not
+  also collect an agent for its gate. It is _not_ suppressed merely for being stacked: a status policy
+  is evaluated per pull request, so each rung of an otherwise-healthy stack genuinely has its own gate
+  to clear, and suppressing those would park the whole stack on the bottom one.
+
+The prompt is `pr-ci-gate`, written for a gate rather than a red build — `pr-ci-fix` tells an agent to
+investigate a failure, which here is an instruction to go looking for a bug that does not exist. The
+waiting check names and the rule's `guidance` are **appended** to the rendered template, never
+interpolated: an operator override that predates this feature would silently drop a new `{token}`, and
+the check names are the half the agent cannot act without.
 
 ### Where a rule's body lives
 
@@ -272,7 +310,7 @@ Candidates are appended as the pipeline is walked, so **the pipeline order _is_ 
 is no second list to keep in step with it. What each stage contributes:
 
 1. **Queued jobs** (`manual-job`), oldest first — a manual request takes the next free slot.
-2. **PR concerns** (`pr-review-comment` / `pr-ci-failing` / `pr-base-update`), ranked **cross-PR** by
+2. **PR concerns** (`pr-review-comment` / `pr-ci-failing` / `pr-ci-gate` / `pr-base-update`), ranked **cross-PR** by
    concern class then by PR number. World order is arbitrary and must not decide who wins scarce
    headroom. Only the single most urgent concern per PR becomes a candidate, and "most urgent" is
    their pipeline order. An operator-flagged `urgent` CI check sorts its PR ahead of all of them, and

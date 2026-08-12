@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   ciFailureNote,
   ciNeedsHuman,
+  ciWatchNote,
   classifyCiFailures,
+  classifyWatchedChecks,
   matchesCheckGlob,
   validateCiPolicy,
   type CiPolicy,
@@ -252,6 +254,151 @@ test('ciFailureNote: a blocking failure says nothing about blocking', () => {
 });
 
 // --------------------------------------------------------------------------
+// Watched states (`states`) — the gate that sits pending forever
+// --------------------------------------------------------------------------
+
+test('classifyWatchedChecks: a pending check is watched by nobody until a rule says so', () => {
+  const pending = checks(['pr-agent-review/reviewed', 'pending']);
+  // The default is `['failing']`, so every rule written before `states` existed —
+  // and `match: '*'` itself — leaves a pending check exactly where it was.
+  assert.deepEqual(classifyWatchedChecks(pending, policy()).watched, []);
+  assert.deepEqual(classifyWatchedChecks(pending, policy({ match: '*', onFailure: 'dispatch' })).watched, []);
+});
+
+test('classifyWatchedChecks: a rule watching pending claims it, and the failing verdict is untouched', () => {
+  const pending = checks(['pr-agent-review/reviewed', 'pending']);
+  const ci = policy({
+    match: 'pr-agent-review*',
+    states: ['pending'],
+    onFailure: 'dispatch',
+    guidance: 'Run `/pr-agent-review` on this branch.',
+  });
+
+  const watched = classifyWatchedChecks(pending, ci);
+  assert.deepEqual(
+    watched.watched.map((m) => m.name),
+    ['pr-agent-review/reviewed'],
+  );
+  // The failing classification is the merge-facing answer and must not have
+  // moved: nothing is failing here, so it stays the empty, actionable verdict a
+  // PR with no red checks has always produced.
+  assert.deepEqual(classifyCiFailures(pending, ci), {
+    actionable: true,
+    dispatch: [],
+    escalate: [],
+    ignored: [],
+    urgent: false,
+  });
+});
+
+test('classifyWatchedChecks: `states` scopes the whole rule, so the same check failing falls through', () => {
+  // The rule watches `pending` only. When the check goes red it claims nothing,
+  // and the red one takes the unmatched routing — dispatch, with the generic
+  // CI-fix prompt. That is the point of scoping rather than extending: one check
+  // can have a gate rule and a failure rule, and they say different things.
+  const ci = policy({ match: 'pr-agent-review*', states: ['pending'], onFailure: 'dispatch' });
+  const failing = classifyCiFailures(checks(['pr-agent-review/reviewed', 'failing']), ci);
+  assert.equal(failing.actionable, true);
+  assert.deepEqual(
+    failing.dispatch.map((m) => ({ name: m.name, claimed: m.rule !== null })),
+    [{ name: 'pr-agent-review/reviewed', claimed: false }],
+  );
+});
+
+test('classifyWatchedChecks: a rule listing both states claims the check in either', () => {
+  const ci = policy({ match: 'gate', states: ['failing', 'pending'], onFailure: 'dispatch' });
+  assert.equal(classifyWatchedChecks(checks(['gate', 'pending']), ci).watched.length, 1);
+  assert.equal(classifyCiFailures(checks(['gate', 'failing']), ci).dispatch.length, 1);
+});
+
+test('classifyWatchedChecks: an advisory pending check is never claimed, not even by `*`', () => {
+  const v = classifyWatchedChecks(
+    [{ name: 'Comment requirements', status: 'pending', advisory: true }],
+    policy({ match: '*', states: ['pending'], onFailure: 'dispatch' }),
+  );
+  assert.deepEqual(v.watched, []);
+});
+
+test('classifyWatchedChecks: a passing check is watched by nothing, whatever the rules say', () => {
+  // `states` cannot name `passing` (validation refuses it), so the only thing
+  // that could claim one is a bug in the walk. Asserted rather than assumed.
+  const v = classifyWatchedChecks(
+    checks(['gate', 'passing']),
+    policy({ match: '*', states: ['failing', 'pending'], onFailure: 'dispatch' }),
+  );
+  assert.deepEqual(v.watched, []);
+});
+
+test('classifyWatchedChecks: first match wins, so an earlier rule shadows a broad watch', () => {
+  const v = classifyWatchedChecks(
+    checks(['gate-a', 'pending'], ['gate-b', 'pending']),
+    policy(
+      // Claims `gate-a` in the pending state and does nothing with it — the
+      // operator's way of exempting one check from the glob below.
+      { match: 'gate-a', states: ['failing', 'pending'], onFailure: 'ignore' },
+      { match: 'gate-*', states: ['pending'], onFailure: 'dispatch' },
+    ),
+  );
+  assert.deepEqual(
+    v.watched.map((m) => m.name),
+    ['gate-b'],
+  );
+});
+
+test('classifyWatchedChecks: a glob matches an alias the provider reports', () => {
+  // The Azure status-policy case: the harness keys the check by
+  // `statusGenre/statusName`, but the label on the PR page — the string an
+  // operator copies into their config — is `defaultDisplayName`.
+  const v = classifyWatchedChecks(
+    [{ name: 'pr-agent-review/reviewed', status: 'pending', aliases: ['PR-Agent-Reviewed'] }],
+    policy({ match: 'PR-Agent-Review*', states: ['pending'], onFailure: 'dispatch' }),
+  );
+  assert.deepEqual(
+    v.watched.map((m) => m.name),
+    ['pr-agent-review/reviewed'],
+    'matched by the visible label, but still named by the key the harness stores',
+  );
+  // And the same alias works on the failing side, through the one shared matcher.
+  const failing = classifyCiFailures(
+    [{ name: 'pr-agent-review/reviewed', status: 'failing', aliases: ['PR-Agent-Reviewed'] }],
+    policy({ match: 'PR-Agent-Reviewed', onFailure: 'ignore' }),
+  );
+  assert.deepEqual(
+    failing.ignored.map((m) => m.name),
+    ['pr-agent-review/reviewed'],
+  );
+});
+
+test('classifyWatchedChecks: urgent rides on a watched check, as it does on a failing one', () => {
+  const v = classifyWatchedChecks(
+    checks(['gate', 'pending']),
+    policy({ match: 'gate', states: ['pending'], onFailure: 'dispatch', urgent: true }),
+  );
+  assert.equal(v.urgent, true);
+});
+
+test('ciWatchNote: names each waiting check, its guidance, and whether it holds the merge', () => {
+  const v = classifyWatchedChecks(
+    [
+      { name: 'pr-agent-review/reviewed', status: 'pending', blocking: true },
+      { name: 'optional-scan', status: 'pending', blocking: false },
+    ],
+    policy(
+      { match: 'pr-agent-review*', states: ['pending'], onFailure: 'dispatch', guidance: 'Run `/pr-agent-review`.' },
+      { match: 'optional-*', states: ['pending'], onFailure: 'dispatch' },
+    ),
+  );
+  const note = ciWatchNote(v);
+  assert.match(note, /pr-agent-review\/reviewed: Run `\/pr-agent-review`\./);
+  // A check with no guidance is still named — the agent cannot act on a gate it
+  // cannot see.
+  assert.match(note, /- optional-scan$/m);
+  assert.match(note, /do not block the merge — optional-scan/);
+  // Nothing watched, nothing appended.
+  assert.equal(ciWatchNote(classifyWatchedChecks(checks(['gate', 'pending']), policy())), '');
+});
+
+// --------------------------------------------------------------------------
 // Config validation — the load-time refusals
 // --------------------------------------------------------------------------
 
@@ -280,6 +427,32 @@ test('validateCiPolicy: a bad match or onFailure fails at load', () => {
   );
 });
 
+test('validateCiPolicy: a states list that could never fire is refused at load', () => {
+  // Empty: claims nothing.
+  assert.throws(() => validateCiPolicy(policy({ match: 'gate', states: [], onFailure: 'dispatch' })), /at least one/);
+  // A typo, and the near-miss that is a real state but not a watchable one.
+  assert.throws(
+    () => validateCiPolicy(policy({ match: 'gate', states: ['queued' as never], onFailure: 'dispatch' })),
+    /not one of failing \| pending/,
+  );
+  assert.throws(
+    () => validateCiPolicy(policy({ match: 'gate', states: ['passing' as never], onFailure: 'dispatch' })),
+    /asks nothing of anyone/,
+  );
+  // Watching only a non-failing state with anything but `dispatch` is a rule that
+  // does nothing: nothing in the harness acts on a check that is not failing, so
+  // `ignore` is already the behaviour and `escalate` has no arm to run in.
+  assert.throws(() => validateCiPolicy(policy({ match: 'gate', states: ['pending'] })), /could never fire/);
+  assert.throws(
+    () => validateCiPolicy(policy({ match: 'gate', states: ['pending'], onFailure: 'escalate' })),
+    /could never fire/,
+  );
+  // The legal shapes pass: the gate rule itself, and a rule that still covers
+  // failing, where `ignore` means something.
+  validateCiPolicy(policy({ match: 'gate', states: ['pending'], onFailure: 'dispatch', guidance: 'Run it.' }));
+  validateCiPolicy(policy({ match: 'gate', states: ['failing', 'pending'], onFailure: 'ignore' }));
+});
+
 test('loadConfig: the ci block defaults to empty, round-trips, and is validated at load', () => {
   assert.deepEqual(loadConfig().ci, { checks: [] });
 
@@ -288,6 +461,10 @@ test('loadConfig: the ci block defaults to empty, round-trips, and is validated 
 
   // The refusal is at load, not at the first red PR days later.
   assert.throws(() => loadConfig({ ci: { checks: [{ match: 'lint', guidance: 'x' }] } }), /guidance/);
+
+  const gate = [{ match: 'pr-agent-review*', states: ['pending' as const], onFailure: 'dispatch' as const }];
+  assert.deepEqual(loadConfig({ ci: { checks: gate } }).ci.checks, gate);
+  assert.throws(() => loadConfig({ ci: { checks: [{ match: 'gate', states: ['pending' as never] }] } }), /never fire/);
 });
 
 // --------------------------------------------------------------------------
@@ -425,6 +602,148 @@ test('rule `pr-ci-failing`: a stacked PR whose base is red is still suppressed, 
   const result = await decide([base, child], policy({ match: 'lint', onFailure: 'dispatch' }));
   const origins = result.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => a.originRef);
   assert.deepEqual(origins, ['pr:1:ci']);
+});
+
+// --------------------------------------------------------------------------
+// Rule `pr-ci-gate` — the check that waits rather than fails
+// --------------------------------------------------------------------------
+
+/** The NXG case: a blocking Azure status policy sitting `queued` on a green PR. */
+const GATE = { match: 'pr-agent-review*', states: ['pending' as const], onFailure: 'dispatch' as const };
+const gatePr = (over: Partial<PullRequest> = {}) =>
+  pr(31676, {
+    ciStatus: 'pending',
+    ciChecks: [{ name: 'pr-agent-review/reviewed', status: 'pending', blocking: true }],
+    ...over,
+  });
+
+test('rule `pr-ci-gate`: a watched pending check dispatches, on its own origin', async () => {
+  const result = await decide([gatePr()], policy({ ...GATE, guidance: 'Run `/pr-agent-review` on this branch.' }));
+  const dispatched = result.actions.filter((a) => a.type === 'dispatch_code_agent');
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0]!.rule, 'pr-ci-gate');
+  // Not `pr:31676:ci`: a stalled gate and a broken build are different problems
+  // and must not share one attempt budget.
+  assert.equal(dispatched[0]!.originRef, 'pr:31676:ci-gate');
+  // The gate prompt, not the red-build one — and the guidance appended after it.
+  assert.match(dispatched[0]!.prompt, /waiting, not failing/);
+  assert.doesNotMatch(dispatched[0]!.prompt, /Investigate the failure/);
+  assert.match(dispatched[0]!.prompt, /pr-agent-review\/reviewed: Run `\/pr-agent-review` on this branch\./);
+});
+
+test('rule `pr-ci-gate`: nothing fires without the rule, which is every config that predates it', async () => {
+  const result = await decide([gatePr()], policy({ match: 'pr-agent-review*', onFailure: 'dispatch' }));
+  assert.equal(
+    result.actions.some((a) => a.type === 'dispatch_code_agent' || a.type === 'escalate_to_human'),
+    false,
+    'a rule left on the default `states: ["failing"]` does not see a pending check',
+  );
+});
+
+test('rule `pr-ci-gate`: a red build on the same PR outranks the gate for the one agent', async () => {
+  const both = gatePr({
+    ciStatus: 'failing',
+    ciChecks: [
+      { name: 'pr-agent-review/reviewed', status: 'pending', blocking: true },
+      { name: 'Build-dotnet', status: 'failing', blocking: true },
+    ],
+  });
+  const result = await decide([both], policy(GATE));
+  const dispatched = result.actions.filter((a) => a.type === 'dispatch_code_agent');
+  // One agent works a branch, and a thing that broke outranks a thing that has
+  // not happened yet. The gate is not lost — it is re-raised every pulse, and
+  // wins the branch once the build is fixed.
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0]!.originRef, 'pr:31676:ci');
+  assert.equal(dispatched[0]!.rule, 'pr-ci-failing');
+});
+
+test('rule `pr-ci-gate`: suppressed on a stack rung whose base is the one that is red', async () => {
+  // The rung's real problem is the red PR underneath it. Putting an agent on its
+  // gate as well is the multiplication `inheritedCiFailure` exists to stop.
+  const base = pr(1, { branch: 'feature/1', ciStatus: 'failing', ciChecks: checks(['Build-dotnet', 'failing']) });
+  const child = pr(2, {
+    branch: 'feature/2',
+    baseBranch: 'feature/1',
+    ciStatus: 'failing',
+    ciChecks: [
+      { name: 'Build-dotnet', status: 'failing', blocking: true },
+      { name: 'pr-agent-review/reviewed', status: 'pending', blocking: true },
+    ],
+  });
+  const origins = (await decide([base, child], policy(GATE))).actions
+    .filter((a) => a.type === 'dispatch_code_agent')
+    .map((a) => a.originRef);
+  assert.deepEqual(origins, ['pr:1:ci']);
+});
+
+test('rule `pr-ci-gate`: each rung of a healthy stack keeps its own gate', async () => {
+  // A status policy is evaluated per pull request, so a stack with no red build
+  // genuinely has one gate per rung and each needs the command run against it.
+  const bottom = gatePr({ number: 1, id: 'pr_1', branch: 'feature/1' });
+  const top = gatePr({ number: 2, id: 'pr_2', branch: 'feature/2', baseBranch: 'feature/1' });
+  const origins = (await decide([bottom, top], policy(GATE))).actions
+    .filter((a) => a.type === 'dispatch_code_agent')
+    .map((a) => a.originRef);
+  assert.deepEqual(origins, ['pr:1:ci-gate', 'pr:2:ci-gate']);
+});
+
+test('rule `pr-ci-gate`: the attempt cap ends the loop a still-pending gate would otherwise run', async () => {
+  // The re-dispatch hazard this rule has and the CI rule does not: an agent can
+  // run `/pr-agent-review` correctly and the check can *still* be queued next
+  // pulse, because clearing it is not the agent's to do. Nothing about the world
+  // changes, so the concern is raised again — and the origin's own attempt cap is
+  // what stops that being forever.
+  const attempt = (createdAt: string): Decision =>
+    ({
+      outcome: 'executed',
+      action: { type: 'dispatch_code_agent', originRef: 'pr:31676:ci-gate' },
+      createdAt,
+    }) as unknown as Decision;
+  const spent = [
+    attempt('2026-07-28T09:00:00.000Z'),
+    attempt('2026-07-28T10:00:00.000Z'),
+    attempt('2026-07-28T11:00:00.000Z'),
+  ];
+
+  const result = await decide([gatePr()], policy(GATE), { recentDecisions: spent });
+  assert.equal(
+    result.actions.some((a) => a.type === 'dispatch_code_agent'),
+    false,
+    'the fourth attempt is not made',
+  );
+  const escalations = result.actions.filter((a) => a.type === 'escalate_to_human');
+  assert.equal(escalations.length, 1);
+  assert.equal(escalations[0]!.admission, 'cooldown-escalate');
+  assert.equal(escalations[0]!.context.originRef, 'pr:31676:ci-gate');
+
+  // And the budget is genuinely the gate's own: three spent attempts at the gate
+  // leave a red build on the same PR free to dispatch, which is the whole reason
+  // the two do not share an origin.
+  const red = gatePr({
+    ciStatus: 'failing',
+    ciChecks: [{ name: 'Build-dotnet', status: 'failing', blocking: true }],
+  });
+  const other = await decide([red], policy(GATE), { recentDecisions: spent });
+  assert.equal(other.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => a.originRef)[0], 'pr:31676:ci');
+});
+
+test('rule `pr-ci-gate`: a waiting check never stops rule `pr-merge-ready` merging', async () => {
+  // The invariant `aggregatePolicyCiStatus` is frozen for. A non-blocking policy
+  // that is still queued leaves the PR green, approved and completable by Azure —
+  // so the harness must complete it too, gate rule or no gate rule.
+  const mergeable = pr(31676, {
+    ciStatus: 'passing',
+    approved: true,
+    mergeable: true,
+    mergeableState: 'clean',
+    ciChecks: [{ name: 'pr-agent-review/reviewed', status: 'pending', blocking: false }],
+  });
+  const result = await decide([mergeable], policy(GATE));
+  assert.equal(
+    result.actions.some((a) => a.type === 'merge_pr' && a.prNumber === 31676),
+    true,
+  );
 });
 
 // --------------------------------------------------------------------------
@@ -597,15 +916,59 @@ test('describeCiPolicy: an omitted onFailure is reported as the inherited ignore
 
   assert.deepEqual(described.rules, [
     // The value `classifyCiFailures` acts on, not the absent field the file shows.
-    { match: 'deploy-*', onFailure: 'ignore', inherited: true, guidance: null, urgent: false },
-    { match: 'lint', onFailure: 'dispatch', inherited: false, guidance: 'run npm run format', urgent: true },
-    { match: 'flaky-*', onFailure: 'escalate', inherited: false, guidance: null, urgent: false },
+    {
+      match: 'deploy-*',
+      states: ['failing'],
+      statesInherited: true,
+      onFailure: 'ignore',
+      inherited: true,
+      guidance: null,
+      urgent: false,
+    },
+    {
+      match: 'lint',
+      states: ['failing'],
+      statesInherited: true,
+      onFailure: 'dispatch',
+      inherited: false,
+      guidance: 'run npm run format',
+      urgent: true,
+    },
+    {
+      match: 'flaky-*',
+      states: ['failing'],
+      statesInherited: true,
+      onFailure: 'escalate',
+      inherited: false,
+      guidance: null,
+      urgent: false,
+    },
   ]);
   // Order is the policy's own — first match wins, and the tab numbers them.
   assert.deepEqual(
     described.rules.map((r) => r.match),
     ['deploy-*', 'lint', 'flaky-*'],
   );
+});
+
+test('describeCiPolicy: the states a rule watches are reported, default and explicit alike', () => {
+  const described = describeCiPolicy(
+    loadConfig({
+      ci: {
+        checks: [
+          { match: 'pr-agent-review*', states: ['pending'], onFailure: 'dispatch', guidance: 'Run it.' },
+          { match: 'lint', onFailure: 'dispatch' },
+        ],
+      },
+    }),
+  );
+  // The gate rule's own states, and the fact that they were written rather than
+  // inherited — which is what tells an operator a red `pr-agent-review` check is
+  // *not* claimed by this rule.
+  assert.deepEqual(described.rules[0]?.states, ['pending']);
+  assert.equal(described.rules[0]?.statesInherited, false);
+  assert.deepEqual(described.rules[1]?.states, ['failing']);
+  assert.equal(described.rules[1]?.statesInherited, true);
 });
 
 test('describeCiPolicy: policy kinds are Azure-only, and a partial map merges over the defaults', () => {

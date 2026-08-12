@@ -342,6 +342,10 @@ export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
  * stopped being a state an evaluation can be in. The clause it replaces existed
  * because a nameless check cannot be matched by a glob and emitting one would let
  * a single empty pattern claim several unrelated checks at once.
+ *
+ * A policy with *two* names carries the second as an alias, which a `ci.checks`
+ * glob matches as readily as the name — the status policy's case, where the label
+ * on the pull request page is not the key the check is stored under.
  */
 export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCheckModes): CiCheck[] {
   const checks: CiCheck[] = [];
@@ -352,6 +356,9 @@ export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCh
     const status = checkStatusOf(e.status);
     if (!status) continue;
     const check: CiCheck = { name: e.displayName, status, blocking: e.isBlocking };
+    // Only when the provider reported one: an empty array on every other check
+    // would be a field that reads as meaningful and never is.
+    if (e.displayAliases && e.displayAliases.length > 0) check.aliases = [...e.displayAliases];
     if (mode === 'advisory') check.advisory = true;
     checks.push(check);
   }

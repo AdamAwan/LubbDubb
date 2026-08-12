@@ -188,6 +188,14 @@ export interface AzPolicyEvaluation {
    */
   displayName: string;
   /**
+   * Other names the same policy answers to, carried onto `CiCheck.aliases` so a
+   * `ci.checks` glob claims the check whichever of them the operator wrote. A
+   * status policy's `settings.defaultDisplayName` is the case: the label Azure
+   * shows on the pull request page, which is not the `statusGenre/statusName` key
+   * {@link displayName} resolves to (see `policyDisplayAliases`).
+   */
+  displayAliases?: string[];
+  /**
    * The policy *type*'s own display name ("Build", "Comment requirements",
    * "Work item linking"). Carried because it classifies the evaluation for the
    * operator and is the last-resort name for a policy whose settings carry none.

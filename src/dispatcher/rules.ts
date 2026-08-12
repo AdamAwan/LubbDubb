@@ -91,7 +91,7 @@ const RULES = [
       'A job the operator queued from the cockpit is drained before any world-driven rule, claiming the next free slot first — so a manual request takes priority, and simply waits in the queue when the fleet is at capacity.',
   },
 
-  // ---- PR concerns. Three of these collect concerns for one branch; the -----
+  // ---- PR concerns. Four of these collect concerns for one branch; the ------
   // order they appear in here *is* the urgency order the fold reads.
   {
     id: 'pr-review-comment',
@@ -113,6 +113,13 @@ const RULES = [
     name: 'CI blocked elsewhere',
     description:
       'Every failing check on this PR is one the operator configured as somebody else’s to fix, and at least one asked to be escalated rather than ignored. No agent is dispatched — a human is asked once, since nothing an agent can do would turn the PR green.',
+  },
+  {
+    id: 'pr-ci-gate',
+    kind: 'rule',
+    name: 'Check waiting on an action',
+    description:
+      'A blocking check the operator configured with `states: ["pending"]` is sitting queued rather than running — an Azure status policy waiting on a command somebody has to issue. Nothing is red, so no other rule looks at it and the PR would wait forever. One code agent is sent to do what the rule’s guidance names, on its own origin `pr:<n>:ci-gate`: the cooldown budget for a stalled gate is not the budget for a broken build, and a gate the agent cannot clear escalates on its own attempt cap. Ranked below a red build — a failing check is a thing that broke, a waiting one is a thing that has not happened yet.',
   },
   {
     id: 'pr-base-update',

@@ -38,9 +38,9 @@ export function CiPolicyTab() {
   return (
     <>
       <p className="muted settings-hint">
-        What rule <code>pr-ci-failing</code> does about <em>which</em> check went red. Ordered — the first rule whose
-        glob matches a failing check wins. Read-only: edit <code>ci.checks</code> in <code>lubbdubb.config.json</code>{' '}
-        and restart to change one.
+        What the harness does about <em>which</em> check, and in <em>which state</em>. Ordered — the first rule whose
+        glob matches the check <em>and</em> whose states include the state it is in wins. Read-only: edit{' '}
+        <code>ci.checks</code> in <code>lubbdubb.config.json</code> and restart to change one.
       </p>
 
       {policy.rules.length === 0 ? (
@@ -54,6 +54,10 @@ export function CiPolicyTab() {
             <tr>
               <th>#</th>
               <th>Check name matches</th>
+              <th>In state</th>
+              {/* Still labelled by the config key, `onFailure`, rather than by what it
+                  now means ("on match"): the column an operator is looking for is the
+                  one named after the field they type. */}
               <th>On failure</th>
             </tr>
           </thead>
@@ -68,6 +72,8 @@ export function CiPolicyTab() {
       <p className="muted ci-unmatched">
         A failing check that matches <strong>no rule above</strong>: <ActionChip action={policy.unmatched} />. That is
         deliberate — a CI job added next week is fixed by the harness rather than silently parking every red PR forever.
+        A check in any <em>other</em> state that matches no rule does nothing at all: watching one is opt-in, per rule,
+        through <code>states</code>.
       </p>
 
       {policy.policyKinds && (
@@ -98,6 +104,23 @@ function CiRuleRow({ index, rule }: { index: number; rule: CiRuleDescription }) 
       <td className="ci-order">{index + 1}</td>
       <td className="settings-value">
         <code>{rule.match}</code>
+      </td>
+      <td className="settings-value">
+        {rule.states.map((state) => (
+          <span key={state} className={`chip small ${state === 'pending' ? 'warn' : ''}`}>
+            {state}
+          </span>
+        ))}
+        {/* The same reason `inherited` is shipped: a rule that names no states
+            watches failing alone, and one that names `pending` has *stopped*
+            claiming the check when it goes red — neither is legible from the file. */}
+        {rule.statesInherited ? (
+          <span className="muted"> — inherited; the rule sets no states</span>
+        ) : (
+          !rule.states.includes('failing') && (
+            <span className="muted"> — a failure of this check falls through to a later rule</span>
+          )
+        )}
       </td>
       <td className="settings-value">
         <ActionChip action={rule.onFailure} />

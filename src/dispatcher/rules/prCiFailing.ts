@@ -2,7 +2,15 @@ import type { DispatchContext } from '../dispatcher.js';
 import { ciNeedsAttention, inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../../prHealth.js';
 import type { Agent, PullRequest } from '../../types.js';
 import { askedAlready } from '../admission.js';
-import { ciFailureNote, ciNeedsHuman, classifyCiFailures, type CiVerdict } from '../../ci/ciPolicy.js';
+import {
+  ciFailureNote,
+  ciNeedsHuman,
+  ciWatchNote,
+  classifyCiFailures,
+  classifyWatchedChecks,
+  type CiVerdict,
+  type CiWatchVerdict,
+} from '../../ci/ciPolicy.js';
 import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
 import { DISPATCH_PIPELINE, type DispatchRuleId } from '../rules.js';
 import {
@@ -21,16 +29,16 @@ import { isActive, type RawAction, type StageContext } from './context.js';
  * collected here and ranked across PRs below — world order is arbitrary, so it
  * must not decide who wins scarce headroom.
  *
- * **One pass covering five rules**, registered in `STAGES` under `pr-ci-failing`,
- * which is why `pr-review-comment`, `pr-ci-blocked`, `pr-base-update` and
- * `pr-merge-ready` have no stage of their own. They are not independent: the
- * four concern rules feed one per-PR list whose *top* entry alone becomes a
- * dispatch, because one agent works a branch. Their relative urgency is their
- * order in {@link DISPATCH_PIPELINE} — see {@link concernUrgency}, which reads
- * it rather than restating it.
+ * **One pass covering six rules**, registered in `STAGES` under `pr-ci-failing`,
+ * which is why `pr-review-comment`, `pr-ci-blocked`, `pr-ci-gate`,
+ * `pr-base-update` and `pr-merge-ready` have no stage of their own. They are not
+ * independent: the four concern rules feed one per-PR list whose *top* entry
+ * alone becomes a dispatch, because one agent works a branch. Their relative
+ * urgency is their order in {@link DISPATCH_PIPELINE} — see
+ * {@link concernUrgency}, which reads it rather than restating it.
  *
  * The registration is under `pr-ci-failing` rather than under whichever of the
- * five the pipeline currently puts first, and that is deliberate: the five are
+ * six the pipeline currently puts first, and that is deliberate: they are
  * contiguous, so nothing else runs between them and the pass contributes its
  * candidates at the same point in the walk whichever id carries it. Chasing the
  * first id through this map on every reorder would be a second copy of the
@@ -166,6 +174,43 @@ export function prCiFailing(s: StageContext): void {
           reason: `PR #${pr.number} is red only on checks configured to escalate (${names}).`,
         } satisfies RawAction);
       }
+    }
+    // A check the operator asked to watch in a state that is not failing: the
+    // blocking gate sitting `queued` until somebody runs the thing that releases
+    // it. Nothing else in the harness looks at a pending check, which is why the
+    // PR would otherwise wait forever reading "CI still running".
+    //
+    // Behind the same inherited-failure guard as the CI concern, and no further.
+    // A rung whose real problem is the red base below it must not also collect an
+    // agent for its gate — that is the multiplication `inheritedCiFailure` exists
+    // to stop. But a status policy is evaluated per pull request, so each rung of
+    // an otherwise-healthy stack genuinely has its own gate to clear, and
+    // suppressing those would leave the whole stack stuck on the bottom one.
+    const gateVerdict = classifyWatchedChecks(pr.ciChecks, s.ci);
+    if (gateVerdict.watched.length > 0 && inheritedFailure === null) {
+      const waiting = gateVerdict.watched.map((m) => m.name).join(', ');
+      concerns.push({
+        rule: 'pr-ci-gate',
+        // **Its own origin, not `pr:<n>:ci`.** Sharing would put one cooldown
+        // budget across two unrelated problems: a red build spending its attempts
+        // would leave the gate permanently capped without a single agent ever
+        // having been sent at it, and the escalation raised at the cap would name
+        // whichever of the two the concern fold happened to pick. It also keeps
+        // notify de-dup honest — a gate signal reaching an agent already on the
+        // branch is not the CI signal that origin already delivered.
+        origin: `pr:${pr.number}:ci-gate`,
+        title: `Clear the waiting check on PR #${pr.number}`,
+        // Appended, never interpolated — `pr-ci-gate` is operator-overridable and
+        // the check names are the half an agent cannot act without.
+        prompt:
+          s.templates.render('pr-ci-gate', { number: pr.number, title: pr.title, branch: pr.branch }) +
+          ciWatchNote(gateVerdict),
+        dispatchReason: gateDispatchReason(pr.number, gateVerdict),
+        note: `A check on PR #${pr.number} is waiting on an action — ${waiting}.${ciWatchNote(gateVerdict)}`,
+        originTitle: pr.title,
+        originSummary: `PR #${pr.number} on branch ${pr.branch} · waiting on ${waiting}`,
+        urgent: gateVerdict.urgent,
+      });
     }
     if (needsBaseUpdate(pr)) {
       const base = pr.baseBranch ?? s.defaultBranch;
@@ -421,6 +466,16 @@ function ciDispatchReason(prNumber: number, verdict: CiVerdict): string {
   const names = verdict.dispatch.map((m) => m.name);
   if (names.length === 0) return `PR #${prNumber} has failing CI and no agent is on it.`;
   return `PR #${prNumber} has failing CI (${names.join(', ')}) and no agent is on it.`;
+}
+
+/**
+ * Name the waiting checks in the audit line, so the decision log distinguishes
+ * this from the red-build dispatch it sits next to — the two are one word apart
+ * in the cockpit and a month later only the check name says which happened.
+ */
+function gateDispatchReason(prNumber: number, verdict: CiWatchVerdict): string {
+  const names = verdict.watched.map((m) => m.name).join(', ');
+  return `PR #${prNumber} has a check waiting on an action (${names}) and no agent is on it.`;
 }
 
 /**
