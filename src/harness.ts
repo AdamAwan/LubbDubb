@@ -349,6 +349,10 @@ export class Harness extends EventEmitter {
         standingJobs,
         plans,
         planParts,
+        // How anyone checks each goal was met. Rule `validate-check` reads only
+        // whether a check was handed to the fleet and whether anybody has
+        // recorded a reading against it — never what it says.
+        validationChecks: store.listAllValidationChecks(),
         conclusions,
         deliveries,
         deliverySignals,

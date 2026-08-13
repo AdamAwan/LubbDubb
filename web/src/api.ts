@@ -243,12 +243,14 @@ const realApi = {
       | { kind: 'result'; result: 'passed' | 'failed'; note: string }
       | { kind: 'defer'; reason: string }
       | { kind: 'waive'; reason: string }
-      | { kind: 'reset' },
+      | { kind: 'reset' }
+      | { kind: 'handover'; to: 'fleet' | 'human' },
   ) => {
     const base = `/api/plans/${planId}/validation/${encodeURIComponent(checkId)}`;
     if (act.kind === 'result') return post<{ ok: true }>(`${base}/result`, { result: act.result, note: act.note });
     if (act.kind === 'defer') return post<{ ok: true }>(`${base}/defer`, { reason: act.reason });
     if (act.kind === 'waive') return post<{ ok: true }>(`${base}/waive`, { reason: act.reason });
+    if (act.kind === 'handover') return post<{ ok: true }>(`${base}/handover`, { to: act.to });
     return post<{ ok: true }>(`${base}/reset`);
   },
   // Collapse a released decomposition back to one pull request. 409s unless the

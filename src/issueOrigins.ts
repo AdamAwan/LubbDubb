@@ -51,6 +51,18 @@ const WORK_SUFFIX_PREFIXES = ['part:'];
 const EVIDENCE_SUFFIXES = ['assess', 'retro'];
 
 /**
+ * The evidence origins that name something *within* the issue, so they are
+ * prefixes rather than whole suffixes — today only `validate:<checkId>`, one
+ * origin per validation check the operator handed to the fleet.
+ *
+ * Evidence rather than work for {@link EVIDENCE_SUFFIXES}' reason and rather
+ * more strictly: rule `validate-check` fires only for a goal already parked as
+ * delivered, so a task on one of these cannot exist unless work was done and
+ * finished. It builds nothing and opens no pull request.
+ */
+const EVIDENCE_SUFFIX_PREFIXES = ['validate:'];
+
+/**
  * Classify a task's origin against an issue.
  *
  * An **unrecognised** suffix is deliberately its own answer, and callers must decide
@@ -70,6 +82,7 @@ export function issueOriginRole(issueNumber: number, originRef: string | null): 
   const suffix = originRef.slice(prefix.length);
   if (WORK_SUFFIX_PREFIXES.some((p) => suffix.startsWith(p))) return 'work';
   if (EVIDENCE_SUFFIXES.includes(suffix)) return 'evidence';
+  if (EVIDENCE_SUFFIX_PREFIXES.some((p) => suffix.startsWith(p))) return 'evidence';
   if (DELIBERATION_SUFFIXES.includes(suffix)) return 'deliberation';
   return 'unrecognised';
 }

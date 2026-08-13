@@ -66,6 +66,8 @@ function demoCheck(
     covers: [],
     fleetCandidate: false,
     candidateWhy: null,
+    actor: 'human',
+    handbackNote: null,
     state: 'unrun',
     resultNote: null,
     resultBy: null,
@@ -1007,6 +1009,46 @@ export function buildDemoState(): DemoSeed {
         covers: ['signer'],
         fleetCandidate: true,
         candidateWhy: 'a plain HTTP request against a running harness; needs no login and no browser',
+      }),
+      // The two ends of a hand-over, both in the demo because neither is
+      // reachable by clicking around: one check is with the fleet right now and
+      // one came back. Between them they draw every marker the section has for
+      // who runs a check.
+      demoCheck({
+        id: 'expired-capability-refused',
+        createdAt: ago(12),
+        updatedAt: ago(1),
+        letter: 'D',
+        seq: 4,
+        title: 'An expired capability is refused',
+        do: 'Mint a capability with a one-second lifetime, wait, and request the artifact.',
+        expect: 'A 403 naming expiry, and the artifact is not served.',
+        covers: ['signer'],
+        fleetCandidate: true,
+        candidateWhy: 'clock arithmetic and one request; nothing interactive',
+        actor: 'fleet',
+        state: 'passed',
+        // Attributed, and that is the point of drawing it at all: "an agent says
+        // this passed" is a weaker fact than "I ran it and it passed", and the
+        // section must never let the second be read off the first.
+        resultNote: 'Minted a 1s capability, slept 2s, requested it: 403 "capability expired". Artifact not served.',
+        resultBy: 'agent',
+        resultAt: ago(1),
+      }),
+      demoCheck({
+        id: 'chip-renders-on-mobile',
+        createdAt: ago(12),
+        updatedAt: ago(1),
+        letter: 'E',
+        seq: 5,
+        title: 'The chip is reachable on a narrow viewport',
+        do: 'Open a goal at 380px wide and tap the artifact chip.',
+        expect: 'The chip is hittable and the file opens.',
+        covers: ['route'],
+        // The answer that is neither a pass nor a failure, and the reason there
+        // are three: this agent found nothing out about the goal, so recording
+        // `failed` would have flagged it for something that is not about the code.
+        handbackNote: 'An agent could not run this check: it needs a browser at a set viewport, and I have none.',
       }),
     ],
     validationResources: [],

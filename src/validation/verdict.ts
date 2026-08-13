@@ -57,8 +57,23 @@ export function outstandingChecks(checks: readonly ValidationCheck[]): string[] 
     .filter((c) => c.state !== 'passed' && c.state !== 'waived')
     .map((c) => {
       const why = c.resultNote === null ? '' : ` — ${c.resultNote}`;
-      return `${c.letter}. **${c.title}** — ${c.state}${why}${amendmentCost(c)}`;
+      return `${c.letter}. **${c.title}** — ${c.state}${why}${amendmentCost(c)}${whoOwesIt(c)}`;
     });
+}
+
+/**
+ * Whether this check is waiting on the fleet or has come back from it, said on
+ * the same line for {@link amendmentCost}'s reason: this is read by somebody
+ * about to close a goal, and a bare `unrun` is the same word for "nobody has
+ * got to it", "an agent is about to" and "an agent tried and could not".
+ *
+ * The hand-back is the sharper of the two, and it is why the note is quoted
+ * rather than summarised: it is usually the one sentence that says what a person
+ * would have to do that an agent could not.
+ */
+function whoOwesIt(check: ValidationCheck): string {
+  if (check.handbackNote !== null) return ` (the fleet handed this back — ${check.handbackNote})`;
+  return check.actor === 'fleet' ? ' (handed to the fleet)' : '';
 }
 
 /**

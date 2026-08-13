@@ -10,7 +10,7 @@ import { join } from 'node:path';
  * whole harness already keys per-goal records on, so nothing has to be told which
  * goal a file belongs to.
  */
-function validationGoalDir(root: string, originRef: string): string {
+export function validationGoalDir(root: string, originRef: string): string {
   // `issue:284` → `issue-284`. Every separator a ref can carry is folded, so a
   // ref shape added later cannot produce a nested path out of one segment.
   return join(root, originRef.replace(/[^A-Za-z0-9._-]+/g, '-'));

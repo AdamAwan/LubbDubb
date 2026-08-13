@@ -13,6 +13,7 @@ import type {
   Proposal,
   PullRequest,
   Task,
+  ValidationCheck,
   WorldEvent,
   WorldSnapshot,
 } from '../types.js';
@@ -73,6 +74,15 @@ export interface DispatchContext {
    * that became ready during the pulse is dispatchable in the same pulse.
    */
   planParts?: PlanPart[];
+  /**
+   * Every plan's validation checks — how anyone checks the *goal* was met. Rule
+   * `validate-check` is the only reader, and it reads exactly two things off a
+   * check: that the operator handed it to the fleet, and that nobody has
+   * recorded a reading against it. What a check *says* changes no dispatch, for
+   * `retrospectiveOrigins`' reason one line up. Absent/empty means nothing has
+   * been handed over, which is every deployment until somebody does.
+   */
+  validationChecks?: ValidationCheck[];
   /**
    * Operator "Up next" priority overrides (issue #128), keyed on candidate
    * origin. Applied ahead of the natural cross-rule ranking but behind rule `manual-job`

@@ -336,6 +336,11 @@ is no second list to keep in step with it. What each stage contributes:
    it is waiting on a person, and the cockpit's bench is where it is visible.
    → [13](13-jobs-and-findings.md#human-tasks)
 8. **Issue pickups** (`issue-pickup`), ordered by label-encoded priority then issue number.
+9. **Handed-over validation checks** (`validate-check`), last of everything. Validation's standing
+   promise is that it blocks nothing, so a check must never take the final slot from a blocked part
+   or a red build — that would make the one feature that gates nothing the reason something else did
+   not run. Below the cut it queues as `waiting` like anything else, which is how a hand-over that
+   the fleet has no room for stays visible instead of looking like a button that did nothing.
 
 A superseded candidate is **queued, not dropped** — with the superseding rule named in its `reason`,
 and attributed to the rule that proposed it rather than to whatever held it.
@@ -660,6 +665,38 @@ The agent submits with `retro_submit`; the summary is required, the document is 
 refused, and the write upserts on the issue so a revision is one row. Nothing is posted to the
 tracker and nothing is scheduled from what it says.
 
+## `validate-check` — running a handed-over check
+
+`validation.enabled` (**on by default**) puts a code agent on one validation check the operator
+handed to the fleet. Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
+half is:
+
+- A **code** agent — a check runs things — on branch `validate/issue/<n>/<checkId>`, origin
+  `issue:<n>:validate:<checkId>`, based on `defaultBranch`. Its own branch namespace for
+  `assess/issue/<n>`'s hard reason, and the check id on both so two handed-over checks get two
+  worktrees rather than fighting over one.
+- **One origin per check, never one per goal.** The origin carries the cooldown and the attempt cap,
+  so a shared one would let a check that can never be run spend the attempts of the four beside it —
+  `pr-ci-gate`'s split against `pr-ci`, argument for argument.
+- Fires only for a goal **parked as delivered**, a **retained run included** (`issue-retro`'s
+  reason — it runs after the work is over, which is when a delivering PR has closed the ticket). A
+  check is executed against the delivered goal; run mid-flight it reports a failure about something
+  that does not exist yet.
+- **The hand-over is the whole gate.** `fleetCandidate` is the planner's nomination and dispatches
+  nothing: whether an agent _can_ run a check depends on what logins and browsers this deployment
+  has, which a planner reading the repository cannot know. `actor` is written by one route and one
+  operator.
+- **Fails open and silent**, `issue-retro`'s rule: a crashed or capped agent leaves the check `unrun`
+  and still flagged, with no escalation. The flag is already the ask.
+
+The check's own procedure, expectation and resource names are **appended** to the rendered
+`validation-check` prompt rather than interpolated — the half the agent cannot act without, and an
+override that predates the rule would silently drop a new `{token}`.
+
+The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `handback` —
+returns the check to the operator without recording a reading. See
+[20](20-validation.md#the-hand-over) for why there are three answers rather than two.
+
 ## `pr-merge-ready` — the merge gate
 
 A PR is merge-ready when **all** of:
@@ -694,7 +731,7 @@ list, and a doc string.
 
 Ids: `issue-plan`, `issue-replan`, `discuss-plan`, `plan-part`, `plan-approval`, `issue-shortfall`,
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-assay`,
-`issue-retro`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`, `pr-review-comment`,
+`issue-retro`, `validation-check`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`, `pr-review-comment`,
 `pr-concern-escalation`, `finding-ticket`, `work-item-ticket`. The last two are route-driven rather than
 dispatcher-driven — they are here because _how a ticket should be worded_ is the operator's opinion,
 which is what the book exists to make overridable.

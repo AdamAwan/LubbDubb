@@ -103,7 +103,8 @@ export function PlanModal({
       | { kind: 'result'; result: 'passed' | 'failed'; note: string }
       | { kind: 'defer'; reason: string }
       | { kind: 'waive'; reason: string }
-      | { kind: 'reset' },
+      | { kind: 'reset' }
+      | { kind: 'handover'; to: 'fleet' | 'human' },
   ) => Promise<unknown> | unknown;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
@@ -378,6 +379,7 @@ export function PlanModal({
                   onDefer={(checkId, reason) => onValidation(plan.id, checkId, { kind: 'defer', reason })}
                   onWaive={(checkId, reason) => onValidation(plan.id, checkId, { kind: 'waive', reason })}
                   onReset={(checkId) => onValidation(plan.id, checkId, { kind: 'reset' })}
+                  onHandover={(checkId, to) => onValidation(plan.id, checkId, { kind: 'handover', to })}
                 />
               </section>
 

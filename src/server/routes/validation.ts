@@ -107,6 +107,44 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
+  /**
+   * Hand a check to the fleet, or take it back. **The only writer of `actor`**,
+   * and an operator route on purpose: whether an agent can run a check is a
+   * property of the deployment — what logins it has, whether anything can drive
+   * a browser — which the planner writing the check cannot know and the agent
+   * running it cannot decide for itself. `fleetCandidate` is the planner's
+   * argument for pressing this; it is not this.
+   */
+  const HandoverBody = z.object({
+    to: z.enum(['fleet', 'human'], {
+      required_error: 'to must be "fleet" or "human"',
+      invalid_type_error: 'to must be "fleet" or "human"',
+    }),
+  });
+  app.post(
+    '/api/plans/:id/validation/:checkId/handover',
+    checked({ params: CheckParams, body: HandoverBody }, async ({ params, body, reply }) => {
+      const current = store.getValidationCheck(params.id, params.checkId);
+      if (!current) return reply.code(409).send({ error: 'no such check on this plan, or its plan has withdrawn it' });
+      // Refused rather than silently doing nothing, which is what handing over a
+      // settled check would amount to: the rule only ever dispatches an `unrun`
+      // one, so this would otherwise look like it took and never move. Refusing
+      // also protects the reading — an agent re-running a check behind the person
+      // who settled it would overwrite their answer with its own.
+      if (body.to === 'fleet' && current.state !== 'unrun') {
+        return reply.code(400).send({
+          error: `this check reads ${current.state}; reset it first if you want the fleet to run it again`,
+        });
+      }
+      const next = store.setValidationActor(params.id, params.checkId, body.to);
+      if (!next) return reply.code(409).send({ error: 'no such check on this plan, or its plan has withdrawn it' });
+      // No cycle: the rule picks it up on the next pulse like any other world
+      // fact, and a pulse per hand-over is this module's standing refusal.
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, check: next };
+    }),
+  );
+
   // Back to `unrun` — the undo for every one of the four above, and the only way
   // out of a waiver or a deferral. One route rather than an inverse per verb
   // because there is one thing to say: whatever was recorded about this check no

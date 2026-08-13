@@ -40,6 +40,7 @@ export const MCP_TOOL_NAMES = [
   'retro_submit',
   'open_pr',
   'validation_amend',
+  'validation_report',
 ] as const;
 
 /**

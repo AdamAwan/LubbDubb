@@ -211,6 +211,7 @@ test('every origin the harness dispatches under an issue is classified deliberat
         'issue:12:part:schema',
         'issue:12:assess',
         'issue:12:retro',
+        'issue:12:validate:merged-branch-gone',
         'issue:12:plan',
         'issue:12:assay',
         'issue:12:something-added-later',
@@ -223,6 +224,11 @@ test('every origin the harness dispatches under an issue is classified deliberat
       'issue:12:part:schema': 'work',
       'issue:12:assess': 'evidence',
       'issue:12:retro': 'evidence',
+      // A handed-over validation check. Evidence rather than work, and more
+      // strictly than the two above it: `validate-check` fires only for a goal
+      // already parked as delivered, so a task on one cannot exist unless work
+      // was done and finished.
+      'issue:12:validate:merged-branch-gone': 'evidence',
       'issue:12:plan': 'deliberation',
       'issue:12:assay': 'deliberation',
       'issue:12:something-added-later': 'unrecognised',

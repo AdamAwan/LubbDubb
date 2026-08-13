@@ -37,6 +37,8 @@ One row per check, keyed on `(plan, id)` — `src/store/validation.ts`.
 | `uses`           | Resource **names**, not paths.                                                                      |
 | `covers`         | Part slugs this check exercises. Optional, any number.                                              |
 | `fleetCandidate` | The planner's nomination that an agent could run this, with `candidateWhy`. **Dispatches nothing.** |
+| `actor`          | `human` or `fleet` — who is expected to run it. **The operator's decision and only theirs.**        |
+| `handbackNote`   | Why the fleet gave it back. Null until it does, and cleared by the next reading.                    |
 | `state`          | Below.                                                                                              |
 
 ### States
@@ -50,7 +52,9 @@ so a check cannot render "passed — the test environment is rebuilt on Thursday
 recorded on the row rather than appended to a table for `note_progress`'s reason — the audit trail
 already exists in the record beside it, and exactly one current reading is what anything asks for.
 
-**A result is declared, never derived.** Nothing infers a pass from a green build, a merged pull
+**A result is declared, never derived** — by whoever declares it. A dispatched agent is held to the
+same rule and told so in as many words, because it is the caller most able to break it: it can see a
+green build and a merged PR, and neither is the check. Nothing infers a pass from a green build, a merged pull
 request or an absence of errors — the refusal `conclude_part` makes about `code`, for the same
 reason: a positive terminal inferred from incidental evidence is a check nobody ran, recorded as one
 that passed.
@@ -116,14 +120,20 @@ much as a decomposed one.
 
 ### Who runs a check
 
-**Nobody but a person, today.** Every check is the operator's, and the planner cannot say otherwise.
-`fleetCandidate` is a nomination — it draws a chip and dispatches nothing.
+**A person, unless a person says otherwise.** `actor` is `human` on every check that has ever been
+written, and exactly one thing sets it to `fleet`: an operator pressing a button. The planner cannot,
+an amendment cannot, and an agent cannot.
 
 The reason is not caution about agents, it is what the planner can know. The fleet runs in `stream`
 mode: no terminal, no browser, no interactive login, and no account on whatever environment this
 deployment tests against. A planner reading the repository can know none of that, and a wrong guess
-is a check sitting dispatched against a login the fleet does not have. So the nomination is
-information for the person deciding, and the deciding stays with them.
+is a check sitting dispatched against a login the fleet does not have. So `fleetCandidate` stays a
+**nomination** — it draws a chip, carries `candidateWhy` as its argument, and dispatches nothing —
+and the deciding stays with the person who has the information.
+
+The hand-over is what that person does with the nomination, and it is offered on **every** unrun
+check rather than only on a nominated one: an operator who knows their own deployment does not need
+the planner's permission to use it.
 
 ### `covers`, and what one optional field buys
 
@@ -173,12 +183,12 @@ stale check that fails reads as a broken goal.
 
 Two writers fold a change onto the rows, and the difference between them is load-bearing:
 
-|          | `ingestValidation` (a plan document)        | `amendValidation` (`validation_amend`)      |
-| -------- | -------------------------------------------- | --------------------------------------------- |
-| Speaks for | The **whole** check set                    | Only the checks it names                      |
-| Omission | A withdrawal                                 | Nothing at all                                |
-| Written by | The planner, through `plan_submit` or `plan.json` | Any agent working the goal              |
-| Withdrawal | By silence                                 | Said out loud, with a reason                  |
+|            | `ingestValidation` (a plan document)              | `amendValidation` (`validation_amend`) |
+| ---------- | ------------------------------------------------- | -------------------------------------- |
+| Speaks for | The **whole** check set                           | Only the checks it names               |
+| Omission   | A withdrawal                                      | Nothing at all                         |
+| Written by | The planner, through `plan_submit` or `plan.json` | Any agent working the goal             |
+| Withdrawal | By silence                                        | Said out loud, with a reason           |
 
 Collapsing them would mean an agent sending a correct two-check correction silently supersedes the
 other six — a validation plan an agent can delete by being terse. That is why `validation_amend` is a
@@ -246,13 +256,13 @@ the half that makes correctability safe: a check quietly rewritten under an oper
 it is worse than one that cannot change at all, because they would go on believing they had checked
 something the plan no longer asks for.
 
-| Case                             | `amendedAt` | `revision` |
-| -------------------------------- | ----------- | ---------- |
-| A plan's **first** check set     | unset       | null       |
-| Added by an amendment            | set         | null       |
-| Reworded, check was `unrun`      | set         | `state: null` |
-| Reworded over a recorded reading | set         | the wording and the withdrawn reading |
-| Re-declared word for word        | carried, never cleared | carried |
+| Case                             | `amendedAt`            | `revision`                            |
+| -------------------------------- | ---------------------- | ------------------------------------- |
+| A plan's **first** check set     | unset                  | null                                  |
+| Added by an amendment            | set                    | null                                  |
+| Reworded, check was `unrun`      | set                    | `state: null`                         |
+| Reworded over a recorded reading | set                    | the wording and the withdrawn reading |
+| Re-declared word for word        | carried, never cleared | carried                               |
 
 A plan's opening declaration bands nothing: every check in it is new, and banding all of them would
 fire the one signal that means "this is not the check you read" on a plan nobody has read yet. A
@@ -271,6 +281,98 @@ the check `_(amended after it was passed — needs running again)_`. Both only w
 actually withdrawn — an amendment to a check nobody ran took nothing away. Without them a check
 somebody passed and an amendment then rewrote renders as a plain `unrun`, indistinguishable from one
 they never got to, which is the single most misleading line either could carry.
+
+## The hand-over
+
+The operator hands one check to the fleet; the harness runs it and reports back, or gives it up and
+says why. `POST …/handover` writes `actor`, rule `validate-check` dispatches, `validation_report`
+answers.
+
+### `validate-check`
+
+`src/dispatcher/rules/validateCheck.ts`, a `DISPATCH_PIPELINE` entry and a `STAGES` module like any
+other rule ([05](05-dispatcher.md#the-rule-book)). A **code** agent — a check runs things — on branch
+`validate/issue/<n>/<checkId>`, origin `issue:<n>:validate:<checkId>`, based on `defaultBranch`. The
+branch namespace is `assess/issue/<n>`'s: git stores refs as files, so nothing bare is ever cut, and
+the check id is on both the branch and the origin so two handed-over checks get two worktrees.
+
+Four conditions, and each is somebody's decision rather than the harness's:
+
+- The issue passes the watch gate.
+- **The goal is parked as delivered.** A check is executed against the delivered goal; run mid-flight
+  it reports a failure about something that does not exist yet — a finding about the calendar rather
+  than about the code. A **retained run** counts, `issue-retro`'s reason exactly: this is a rule that
+  runs after the work is over, which is when a delivering PR has already closed the ticket.
+- `actor` is `fleet`.
+- `state` is `unrun`. A settled check carries somebody's answer, and re-running one behind the person
+  who settled it would overwrite their reading with an agent's.
+
+**One origin per check, not one per goal.** The origin is what the cooldown and the three-attempt cap
+are keyed on, so a shared one would let a check that can never be run spend the attempts of the four
+beside it — `pr-ci-gate`'s split against `pr-ci`, argument for argument.
+
+**It is last of every rule**, below one-shot pickup, and that is load-bearing rather than tidy.
+Validation's standing promise is that it blocks nothing; a rule that could take the final slot from a
+blocked part or a red build would make the one feature that gates nothing the reason something else
+did not run. Ranked last, a handed-over check gets the headroom nothing else wanted and queues as
+`waiting` when there is none.
+
+**It fails open and silent**, `issue-retro`'s rule and more cheaply: a crashed or capped agent leaves
+the check exactly as it was, `unrun` and still flagged, with no escalation. The flag is already the
+ask — a second inbox item would put the same question to the same person twice.
+
+### `validation_report`
+
+`src/validation/report.ts` (pure) and `src/mcp/tools/validationReport.ts`. Takes a `result` and a
+required `note`. **The check is not an argument**: it is on the origin, one check per dispatch, so
+which check a report concerns is decided by what the agent was sent to do.
+
+The origin fence is the **narrow** kind, and deliberately unlike `validation_amend`'s. An amendment
+is a note about how a goal gets tested and the agent best placed to write one is whoever is looking
+at the code; a result is a reading, cast about a procedure somebody was asked to carry out, and it is
+the one thing on the row an operator will later act on without repeating the work. So only the agent
+dispatched for that check may report, and every other caller is refused **by name** and pointed at
+`validation_amend`. The refusal matters most for the caller it is most tempting for — the agent that
+just built the thing, which has every reason to believe the goal works and no way to have run a check
+nobody sent it to run.
+
+| `result`   | Writes                                              | Because                                                    |
+| ---------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| `passed`   | The reading, `resultBy: 'agent'`                    | Attributed, and drawn wherever the reading is — see below. |
+| `failed`   | The reading, `resultBy: 'agent'`                    | A real finding about the goal, and worth having.           |
+| `handback` | `actor` back to `human`, the reason, **no reading** | The third answer, and the reason there are three.          |
+
+**Why there is a third answer.** An agent that could not reach the environment has learned nothing
+about the goal. With only `passed` and `failed` available its options are a lie and silence, and both
+are worse than the truth: `failed` flags the goal for a reason that has nothing to do with the code,
+and silence leaves an `unrun` check with no account of itself. A hand-back leaves the state exactly
+as it was and carries the agent's reason to the operator, where it is usually the one sentence saying
+what a person can do that an agent could not. The next dispatch is handed that reason too, so a
+re-hand-over does not rediscover the same wall and spend an attempt saying so.
+
+**`resultBy` is drawn wherever the reading is** — the cockpit row, and `_(recorded by an agent)_` on
+the ticket comment. "An agent says this passed" and "I ran it and it passed" are different facts, and
+the whole feature exists to stop the second being assumed from evidence that only supports the first.
+The ticket says it only for the agent: a validation checklist already means a person checked it, and
+the exception is what a reader deciding how much a tick is worth is entitled to know.
+
+### What withdraws a hand-over
+
+**Exactly what withdraws the result**, and that is one rule rather than two. A reworded check loses
+its reading _and_ its `actor`; one re-declared word for word keeps both. Both were decisions an
+operator made about wording that no longer exists — a check reworded to say "log into the test
+environment" and still assigned to the fleet would be run by an agent nobody handed it to — and the
+amendment band is already in front of the operator saying what changed, which is where the decision
+to hand it over again belongs.
+
+A hand-back is cleared by the next reading, on the band's terms and for the band's reason: it says
+why the last dispatch came to nothing, and somebody who has since recorded a reading has moved past
+it. Handing the check over again clears it too, since leaving the old reason beside a check now in
+flight would describe the wrong attempt.
+
+Off the cockpit, `outstandingChecks` says which of the two a check is in — `(handed to the fleet)` or
+`(the fleet handed this back — …)`. Without them both render as a bare `unrun`, which is the same
+word for "nobody has got to it", "an agent is about to" and "an agent tried and could not".
 
 ## Deferral and waiving
 
@@ -335,12 +437,19 @@ be no way out that costs nothing to say.
 ([16](16-http-api.md)). Every handler is wrapped in `checked(schemas, handler)`; a refusal is a
 returned value, never a throw.
 
-| Route                                            | Does                                     |
-| ------------------------------------------------ | ---------------------------------------- |
-| `POST /api/plans/:id/validation/:checkId/result` | `{result: passed｜failed, note}`.        |
-| `POST /api/plans/:id/validation/:checkId/defer`  | `{reason, until?}`.                      |
-| `POST /api/plans/:id/validation/:checkId/waive`  | `{reason}`.                              |
-| `POST /api/plans/:id/validation/:checkId/reset`  | Back to `unrun`; the undo for all three. |
+| Route                                              | Does                                               |
+| -------------------------------------------------- | -------------------------------------------------- |
+| `POST /api/plans/:id/validation/:checkId/result`   | `{result: passed｜failed, note}`.                  |
+| `POST /api/plans/:id/validation/:checkId/defer`    | `{reason, until?}`.                                |
+| `POST /api/plans/:id/validation/:checkId/waive`    | `{reason}`.                                        |
+| `POST /api/plans/:id/validation/:checkId/reset`    | Back to `unrun`; the undo for all three.           |
+| `POST /api/plans/:id/validation/:checkId/handover` | `{to: fleet｜human}` — the only writer of `actor`. |
+
+Handing a **settled** check to the fleet is refused with a 400 pointing at `reset`, rather than
+accepted and silently doing nothing: the rule only ever runs an `unrun` check, so it would otherwise
+look like it took and then never move — and refusing also protects the reading, since an agent
+re-running a check behind the person who settled it would overwrite their answer. Taking one back is
+always allowed; it stops something from happening.
 
 `:checkId` is the check's id, never its letter — the letter is what a person types, the id is what
 the store is keyed on. A check whose plan has superseded it answers **409**, not 404: the commonest
@@ -355,7 +464,8 @@ saying nothing.
 delegated to under the same method names ([14](14-persistence.md#shape)).
 
 - **`validation_checks`** — `plan_id`, `id`, `letter`, `seq`, `title`, `check_do`, `check_expect`,
-  `uses`, `covers`, `fleet_candidate`, `candidate_why`, `state`, `result_note`, `result_by`,
+  `uses`, `covers`, `fleet_candidate`, `candidate_why`, `actor`, `handback_note`, `state`,
+  `result_note`, `result_by`,
   `result_at`, `defer_until`, `superseded_reason`, `created_at`, `updated_at`. `check_do` rather than
   `do` because DO is a SQLite keyword; `check_expect` follows it so the pair reads as a pair.
   `revision` is JSON — the wording an amendment replaced and the reading it withdrew, kept as one
@@ -366,8 +476,15 @@ Both tables shipped as fresh `CREATE TABLE`s and both declared an **empty `Colum
 anyway**, on the argument that a table being new once does not keep it exempt. The band collected
 that debt one change later: `revision`, `amended_at` and `amend_note` have real entries, and without
 them every database from before `validation_amend` would have read `undefined` for all three and
-silently drawn no band at all ([14](14-persistence.md#migrations)). `issue_runs` gained
-`dismiss_note` the same way.
+silently drawn no band at all ([14](14-persistence.md#migrations)). `actor` and `handback_note`
+arrived the change after that and fail the same way, more quietly still: a column whose absence
+reads as `human` is one whose absence is invisible, and the hand-over control would simply never
+take. `issue_runs` gained `dismiss_note` the same way.
+
+`result_by` needed no migration — the column existed and only gained a value it may hold. `rowToCheck`
+narrows it, `checkStateOf`'s sharp edge: a reading attributed to something this does not recognise
+reads as attributed to nobody, and `actor` narrows the same way, to `human`, because an unreadable
+column becoming a hand-over would dispatch an agent nobody asked for.
 
 ## The cockpit
 
@@ -386,11 +503,16 @@ assay and the conclusion, inside neither.
 
 `test/validation.test.ts` (the schema's refusals, letters, and what an amendment may do to a check
 somebody has run), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
-notes, and that a flagged goal still blocks nothing), and `test/validationAmend.test.ts` (the
+notes, and that a flagged goal still blocks nothing), `test/validationAmend.test.ts` (the
 tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
-the band).
+the band), and `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in
+the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over).
 
 The verdict tests assert **both** directions, `planApproval.test.ts`'s discipline: a verdict that
 counts `deferred` as clear and one that does not are one edit apart, and only one of them is honest.
 The amendment tests do the same with the rewording rule, which has the same shape: a check whose
-wording changed loses the result, and one re-declared word for word keeps it.
+wording changed loses the result, and one re-declared word for word keeps it. The hand-over tests
+assert three pairs on the same principle — a nominated check that nobody handed over dispatches
+nothing while a handed-over check that nobody nominated dispatches; a hand-back writes no reading
+where a result writes one; a rewording withdraws the hand-over where a word-for-word re-declaration
+keeps it.

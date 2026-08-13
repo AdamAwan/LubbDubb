@@ -15,6 +15,7 @@ import type {
   Plan,
   PullRequest,
   Task,
+  ValidationCheck,
 } from '../../types.js';
 import type { PlanRouteVerdict } from '../../plans/planning.js';
 
@@ -134,6 +135,12 @@ export interface StageContext {
    * disagree. With planning disabled every issue routes to `single`.
    */
   routes: Map<number, PlanRouteVerdict>;
+  /**
+   * Every plan's validation checks, keyed by plan id — read by `validate-check`
+   * and nothing else. Empty with validation off, which is also what the rule's
+   * `enabled` condition switches it out on.
+   */
+  validationChecks: Map<string, ValidationCheck[]>;
   /** Issues `issue-assay` claimed this cycle. Written by it, read after it — see the class doc. */
   assaying: Set<number>;
   /** Issues `issue-assess` claimed this cycle. Written by it, read after it — see the class doc. */
@@ -155,6 +162,13 @@ export interface StageContext {
   ci: CiPolicy;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
+  /**
+   * Where a goal's validation resources live, so `validate-check` can tell an
+   * agent which directory to look in. A bare string on the same terms as
+   * {@link StageContext.defaultBranch}: the dispatcher only ever *phrases* it,
+   * and nothing here reads the filesystem.
+   */
+  validationRoot: string;
   /**
    * The two work-item rules' config, narrowed to non-null once so each reads it
    * off a value the type system already knows is present. Null when the operator
