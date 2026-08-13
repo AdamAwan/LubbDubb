@@ -452,6 +452,50 @@ test('a held part quotes the reconciler’s own reason rather than inventing one
   assert.ok(html.includes('waits on staging credentials'));
 });
 
+test('a plan with no live parts draws what it proposed rather than only saying so', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const seed = page.parts[0]?.part ?? v.state.planParts?.[0];
+  assert.ok(seed, 'the fixtures must carry a part to retire');
+
+  const html = render({
+    ...v,
+    goalPage: {
+      ...page,
+      parts: [],
+      retiredParts: [{ ...seed, status: 'retired', title: 'split the store in two' }],
+    },
+  });
+
+  // The sentence alone left the operator told about a plan they could not read.
+  assert.ok(decode(html).includes('The plan has no live parts'));
+  assert.ok(decode(html).includes('split the store in two'));
+  assert.ok(html.includes('cn-retired'));
+});
+
+test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+
+  const html = render({
+    ...v,
+    goalPage: { ...page, issue: { ...page.issue, body: '<div>Login is broken.<br>Twice.</div>' } },
+  });
+
+  assert.ok(html.includes('Login is broken.'));
+  assert.ok(!html.includes('&lt;div&gt;'), 'the tags are structure, not text to print');
+});
+
+test('a backlog row is a way into the goal it names', () => {
+  // One way into a goal, from every surface that lists one — the queue row, the
+  // overview row and this. It is the name rather than the whole row, because a
+  // backlog row carries controls of its own and a button cannot hold them.
+  const html = render(view({ tab: 'backlog' }));
+  assert.ok(html.includes('cn-grow cn-goal-row'));
+});
+
 test('a goal with no measured spend draws no spend row rather than $0.00', () => {
   const v = goalView();
   const page = v.goalPage;

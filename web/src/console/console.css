@@ -461,6 +461,16 @@
 .cn-part.cn-waiting {
   opacity: 0.55;
 }
+/* What the plan proposed and no longer schedules. Struck through rather than
+   merely dimmed: "not started" and "never will be" are different claims, and
+   dimming alone says the first. */
+.cn-part.cn-retired {
+  opacity: 0.5;
+  border-style: dashed;
+}
+.cn-part.cn-retired b {
+  text-decoration: line-through;
+}
 .cn-part .cn-why {
   color: #ff8f8f;
 }
@@ -731,6 +741,12 @@ button.cn-row {
 .cn-row .cn-grow {
   min-width: 0;
   flex: 1;
+}
+/* A row whose *name* is the way in, for a row that also carries controls of its
+   own — the whole row cannot be a button without nesting them inside it. */
+button.cn-grow {
+  padding: 0;
+  text-align: left;
 }
 .cn-name {
   display: block;

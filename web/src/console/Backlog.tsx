@@ -3,7 +3,6 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { refLink } from '../components/util.js';
 import { watchBucket } from '../worldBuckets.js';
 
 /**
@@ -154,6 +153,13 @@ function Group({
  * One item: what it is, what the harness is doing about it in the harness's own
  * words, and the one control that changes that.
  *
+ * **The name opens the goal's page**, through the same `selectGoal` a queue row
+ * and an overview row call — one way into a goal, from everywhere that lists one.
+ * It is the name rather than the whole row, which is how the overview does it,
+ * because a backlog row carries controls of its own and a button cannot hold
+ * them. That is also why the number is drawn plainly here instead of through
+ * `refLink`: a link inside a button is a second destination for one click.
+ *
  * The gate labels are dropped from the chips. Which group a row is filed under
  * already states its watch state, and the toggle beside it states it again — a
  * third copy on the row is the noise that made the World panel unreadable.
@@ -169,7 +175,7 @@ function Row({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const { config, refUrls } = view.state;
+  const { config } = view.state;
   const assay = issue.assay;
   // The assayer's sentence, quoted whole. It is the only account of why this goal
   // is held, so a paraphrase here would be the only account there is, and wrong.
@@ -182,16 +188,21 @@ function Row({
   return (
     <div className={`cn-row ${group === 'ignored' ? 'cn-spent' : ''}`}>
       {group === 'intake' && <i className="cn-lamp cn-wait" />}
-      <span className="cn-grow">
+      <button
+        type="button"
+        className="cn-grow cn-goal-row"
+        onClick={() => actions.selectGoal(`issue:${issue.number}`)}
+        title="Open this goal — its plan, its ticket, its pull requests and anything it is asking you"
+      >
         <b className="cn-name">
-          {refLink(`#${issue.number}`, refUrls)} {issue.title}
+          #{issue.number} {issue.title}
         </b>
         <span className={`cn-sub cn-wrap ${group === 'intake' ? 'cn-held' : ''}`}>
           {issue.issueType !== undefined && `${issue.issueType} · `}
           {issue.workItemState ?? issue.state}
           {detail !== null && ` · ${detail}`}
         </span>
-      </span>
+      </button>
       {labels.map((label) => (
         <i className="cn-lbl" key={label}>
           {label}

@@ -238,8 +238,10 @@ Order on the page, top to bottom:
    sometimes furniture stops being read as a demand — and `test/console.test.ts` asserts that from both
    sides.
 3. **The plan**, left to right in dispatch order.
-4. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against.
-5. **Pull requests for this goal**, with the court chip and the CI ladder.
+4. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against, drawn
+   through `renderRichText` because the body is the _tracker's_ prose and Azure DevOps writes it as
+   HTML ([Tracker-authored prose](#tracker-authored-prose)).
+5. **Pull requests for this goal**, open and closed, with the court chip and the CI ladder.
 
 At ≥1500px a right-hand column carries **On this goal** (who is working it now), **Spend** and **The
 tail**. Below that, the two stacks are one column.
@@ -281,7 +283,15 @@ claim something is waiting while offering no way to answer it.
 Four groups — **Merged**, **Now**, **Held**, **Not started** — folded by `PartGroup` off `status`
 alone. Four rather than eight statuses because the page is read as a sequence, and `ready` versus
 `pending` is a distinction the queue's own reason states better than a column heading can. `retired`
-folds to nothing and is not drawn.
+folds to no group at all.
+
+**Retired parts are carried on `retiredParts` and drawn in a column beside the four**, struck through
+and dashed. They are held off `parts` rather than made a fifth group because every count on the page and
+the overview's segment track are reads of `parts`, and what a plan _proposed_ is not what the goal is
+made of. Drawn all the same: a plan reaches "no live parts" — the single-PR arm
+([08](08-planning.md#shape-is-the-parts)) — precisely by having proposed a decomposition that was then
+retired, so the sentence on its own left the operator told about a plan they could not read. The empty
+line says which case it is: no plan drawn at all, or a plan whose parts are below it.
 
 **A held part quotes the reconciler's `blockedReason` verbatim.** It is the one status nothing else in
 the world explains — a blocked part has no branch, no PR and no agent to read — so a paraphrase here
@@ -292,6 +302,20 @@ The overview's segment track is folded by `buildGoalTrack` off **the page's own 
 merely not started.
 
 ### The pull requests and the tail
+
+**Which pull requests are this goal's is three questions, not one** (`ownsPr` in `goalPage.ts`): a part
+row naming the number, the branch convention (`issue/<n>`, and `issue/<n>/<slug>` for a part whose row
+has not caught up), or `linkedPrNumber` for a PR the provider linked itself. The part rows alone are not
+enough, and that was the bug: a goal delivered **whole** has no parts at all, so the card drew nothing
+for exactly the goals that are finished. The branch shape is restated in the cockpit rather than
+imported — it is a string shape rather than a verdict, and the wire boundary
+([16](16-http-api.md#the-state-snapshot)) admits only `src/wire.ts` — and `test/goalPage.test.ts` pins
+the pair, including the prefix trap (`issue/1` versus `issue/19`).
+
+Open and closed are both drawn, closed dimmed with `merged` / `closed` on the chip. A merged PR leaves
+the open list, and a goal whose work has landed would otherwise draw an empty card
+([03](03-world-model.md)); the closed list is retention-windowed, so what it holds is what the harness
+still remembers.
 
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
@@ -384,6 +408,13 @@ goal nobody is going to work.
 twice, with two toggles, and the second would be a different answer to the same question. Closed items
 are left out altogether — a closed ticket is neither watchable nor ignorable. Each group draws 25 rows
 and then states the remainder; a group with nothing in it is muted, never removed.
+
+**A row's name opens the goal's page**, through the same `selectGoal` a queue row and an overview row
+call: one way into a goal, from every surface that lists one. It is the **name** rather than the whole
+row, unlike the overview's, because a backlog row carries controls of its own and a button cannot hold
+them — which is also why the number is drawn plainly rather than through `refLink`, a link inside a
+button being a second destination for one click. The tracker's own page is a click further on, from the
+goal page's `Open ticket ↗`.
 
 **The row quotes and never parses.** The intake group prints the assayer's own sentence
 (`Assay: unclear — "…"`); every other group prints `pickup.reasons[0]`. The watch and ignore labels are
@@ -909,14 +940,33 @@ rules, and the split between the first two is the whole of it:
   `dangerouslySetInnerHTML`. It does **not** render links: a URL in a write-up appears as literal text.
   The same precedent as `ansi.ts` being hand-written rather than pulling in a library, and for a
   sharper reason here: agent-authored text meets a renderer that never interprets HTML, so there is no
-  injection surface to reason about at all. Used by the goal page's ticket and bench detail, the plan
-  and retro modals, a finding's `detail`, and an escalation's `detail`.
+  injection surface to reason about at all. Used by the goal page's bench detail, the plan and retro
+  modals, a finding's `detail`, and an escalation's `detail` — everything on the page an agent wrote.
+  The ticket body is the exception, and the section below says why.
 - **Captured output stays `<pre>`.** An escalation's `recentOutput` and a draft reply are what the
   process emitted, and preformatted is what they _are_. Markdown-rendering them would reflow columns
   that mean something.
 - **A field the operator scans is drawn as one line.** A finding's `summary` is validated to be one
   ([13](13-jobs-and-findings.md#the-three-text-fields)) and clamped to two in CSS regardless, because
   rows filed before that validation existed hold an entire report in it.
+
+### Tracker-authored prose
+
+The **ticket body is not agent-authored**, and it is the one field on the page that isn't. Azure DevOps
+stores `System.Description` as HTML — `<div>`, `<p>`, `<br>`, `<li>` — and GitHub stores markdown, and
+the wire carries one `body` that never says which. Markdown-rendering an Azure body printed the tags as
+text, which is what `renderRichText` (`web/src/components/richText.ts`) exists for: it sniffs for a
+**structural** tag and hands the source to the renderer that understands it, so prose merely _mentioning_
+`<script>` or `<T>` still goes to `renderMarkdown` unchanged.
+
+`renderMarkdown` stays exactly as it is — its no-HTML rule is the whole safety argument for text an
+agent wrote — and the HTML path earns the same guarantee by construction rather than by sanitising:
+React elements only, an allow-list of tags (an unknown one unwraps to its children, so it costs a
+wrapper and never the text), `<script>` and `<style>` dropped with their contents, **no attribute
+carried over** but a scheme-checked `href`, and no `dangerouslySetInnerHTML` anywhere in the path. An
+unclosed tag closes at the end rather than swallowing the rest of the ticket, and an inline `<img>`
+becomes a link — a tracker attachment needs credentials the cockpit does not have, so it would draw as a
+broken frame. `test/richText.test.ts` pins all of it.
 
 ### How an escalation card is laid out
 
@@ -1034,7 +1084,7 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Five files, split on what they can see:
+Seven files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
@@ -1044,6 +1094,8 @@ Five files, split on what they can see:
 - `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
 - `test/insightExport.test.ts` — the [exports](#exporting-a-reading): the CSV quoting, the sections and
   their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
+- `test/markdown.test.ts` and `test/richText.test.ts` — the two prose renderers, and the line between
+  them: agent-authored markdown never interprets HTML, tracker-authored HTML is drawn as structure.
 
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
 `Date.now()` and the rendered relative times would drift between runs otherwise.
@@ -1054,11 +1106,12 @@ renders where being wrong would be worse than being absent: the rail carrying ev
 list, its array order surviving the grouping, the holding count agreeing with its noun, an empty queue
 muting rather than removing the rail, a group with no rows drawing no heading, a row with a goal being a
 button and the recovery hold not, the ask drawn above the plan, a goal with no ask drawing no band, the
-goal page answering through the shared card, a held part quoting the reconciler, a goal with no measured
-spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the backlog's four
-groups and its disabled container toggle, the fault log keeping its clear at zero, a panel's two ways
-out, the demo gate on injection, the precedence between a goal and whichever tab the nav is on, all three
-tabs appearing in the nav (a destination added to `ConsoleTab` and forgotten there is a view nothing
-can reach), the work graph drawn by its own tab and no other, the recovery banner outside the
-situation area, a dropped socket drawing nothing at all, and the shell rendering the drawer the
-console only asks for — and no longer the work graph.
+goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
+what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
+no measured spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the
+backlog's four groups, its rows being ways into their goals and its disabled container toggle, the fault
+log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence
+between a goal and whichever tab the nav is on, all three tabs appearing in the nav (a destination added
+to `ConsoleTab` and forgotten there is a view nothing can reach), the work graph drawn by its own tab
+and no other, the recovery banner outside the situation area, a dropped socket drawing nothing at all,
+and the shell rendering the drawer the console only asks for — and no longer the work graph.
