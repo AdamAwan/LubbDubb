@@ -139,6 +139,7 @@ class DemoServer {
   private chatterTimer: ReturnType<typeof setInterval> | null = null;
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
+  private deskBeats = 0;
   private seq = 1000;
 
   private id(prefix: string): string {
@@ -1168,6 +1169,7 @@ class DemoServer {
       this.beatTimer = setInterval(() => {
         // A pulse is what observes the world, so the stamp moves with the beat.
         this.state.worldObservedAt = new Date().toISOString();
+        this.tickDesktopClaim();
         this.emit({ type: 'cycle:end', cycleId: this.id('cycle'), rationale: 'heartbeat' });
       }, beat);
     }
@@ -1178,6 +1180,34 @@ class DemoServer {
     if (this.beatTimer) clearInterval(this.beatTimer);
     this.chatterTimer = null;
     this.beatTimer = null;
+  }
+
+  /**
+   * The desktop claim ending by itself — the whole point of drawing it as an
+   * in-flight entry rather than a control.
+   *
+   * Of the three endings a claim has, this is the one a demo can show: the
+   * reading lands, so the run is over. The other two need a terminal to be
+   * closed and an hour of wall clock to pass. Nobody presses anything: two beats
+   * in, the check carries a `desktop` reading, the claim clears, and the entry
+   * leaves the fleet list on its own.
+   */
+  private tickDesktopClaim(): void {
+    const held = (this.state.validationChecks ?? []).find((c) => c.claimedBy !== null);
+    if (!held) return;
+    this.deskBeats++;
+    if (this.deskBeats < 2) return;
+    held.state = 'passed';
+    held.resultNote =
+      'Copied the artifact URL, flipped one character of the signature and requested it: 403, and the file was not served.';
+    held.resultBy = 'desktop';
+    held.resultAt = new Date().toISOString();
+    held.claimedBy = null;
+    held.claimedAt = null;
+    held.updatedAt = held.resultAt;
+    // No world event and no decision: the world did not move and the harness did
+    // not act. That is the fact this whole entry exists to draw.
+    this.dirty();
   }
 
   // Stream a line of progress into every running agent so the fleet looks alive.

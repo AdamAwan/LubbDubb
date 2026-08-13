@@ -28,6 +28,12 @@ export interface CockpitView {
   crashed: OrphanedWork[];
   /** Agents with a live process behind them. */
   live: Agent[];
+  /**
+   * Checks a desktop session is running at somebody's keyboard. In flight, and
+   * deliberately *not* in {@link live}: these consume no fleet capacity, so
+   * nothing that counts a slot may reach them. See {@link DeskRun}.
+   */
+  deskRuns: DeskRun[];
   /** Terminal agents, newest first as the server ordered them. */
   past: Agent[];
   /** Inbox items still awaiting an answer. */
@@ -104,6 +110,62 @@ export interface CockpitView {
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
 
+/**
+ * A validation check the operator's own Claude Code is running right now, drawn
+ * in the fleet list beside the dispatched agents.
+ *
+ * **Synthesised from the claim on the check, not read off an agent row.** Nobody
+ * dispatched it: there is no task, no branch, no worktree, no transcript and no
+ * spend, so a row in `agents` would be a fiction — and one that every counter of
+ * live agents would then have to be taught to filter back out, including the
+ * next counter somebody adds.
+ *
+ * Drawn under `view.demo` alone for now, `InjectPanel`'s reason inverted: the
+ * snapshot carries `claimedBy` but no reading of whether the claim is still
+ * *live*, and `claimIsLive` is the single definition of that. Off `claimedBy`
+ * alone, a claim whose session died would stand in the fleet list forever — at
+ * the same instant it stops blocking `validate-check`, which is precisely the
+ * disagreement the one definition exists to prevent.
+ */
+export interface DeskRun {
+  /** The check's stable id — the row's key, and what the claim is keyed on. */
+  checkId: string;
+  /** The human-typeable handle, `A`, `B`, `C`… */
+  letter: string;
+  title: string;
+  /** The goal it validates, as `issue:<n>`. */
+  originRef: string;
+  /** Who holds it, hostname and all: `desktop (studio)`. */
+  label: string;
+  /** When the claim was taken — the only elapsed time this entry has. */
+  claimedAt: string;
+}
+
+/**
+ * Every live claim, joined through the plan to the goal it is a check of.
+ *
+ * A check whose plan the snapshot does not carry is left out rather than drawn
+ * against its plan id: the entry's whole subject is *which goal somebody is
+ * checking*, and a row that cannot say is not worth a slot in the fleet list.
+ */
+function buildDeskRuns(state: AppState): DeskRun[] {
+  const originByPlan = new Map((state.plans ?? []).map((p) => [p.id, p.originRef]));
+  return (state.validationChecks ?? []).flatMap((check) => {
+    const originRef = originByPlan.get(check.planId);
+    if (check.claimedBy === null || check.claimedAt === null || originRef === undefined) return [];
+    return [
+      {
+        checkId: check.id,
+        letter: check.letter,
+        title: check.title,
+        originRef,
+        label: check.claimedBy,
+        claimedAt: check.claimedAt,
+      },
+    ];
+  });
+}
+
 interface ViewInputs {
   state: AppState;
   now: number;
@@ -169,6 +231,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
 
     crashed,
     live,
+    deskRuns: input.demo ? buildDeskRuns(state) : [],
     past,
     openEscalations,
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,

@@ -443,6 +443,8 @@ vanishes when quiet is indistinguishable from one that broke.
   operator, the two disagree in exactly that case, and the ask wins. **Ended shifts are behind a
   disclosure in the card's own head**, not a second card: they are the same rows read for a different
   question, and the count stays in the header at zero, muted, so the way in does not move.
+  Under **`view.demo` alone** the card also draws a **keyboard entry** per live desktop claim — see
+  [the keyboard entry](#the-keyboard-entry).
 - **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already
@@ -468,6 +470,36 @@ vanishes when quiet is indistinguishable from one that broke.
   comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
   first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
   again.
+
+### The keyboard entry
+
+A validation check a desktop session is holding is **in flight**, and the Fleet card draws it beside
+the dispatched agents — that card is where an operator looks to find out what is happening, and a
+person at their own keyboard running a check is part of the answer. `buildViewModel` synthesises it
+from the claim (`DeskRun`), joined through the plan to the goal; it never becomes an `Agent`. Nobody
+dispatched it, so there is no task, no branch, no worktree, no transcript and no spend — a row in
+`agents` would be a fiction, and one every counter of live agents would then have to be taught to
+filter back out, including the next counter somebody adds.
+
+**It takes no fleet slot.** `view.live` excludes it, so the cap readout and the header's `N out` are
+untouched; the entry is stated beside that count as `· 1 at a keyboard` rather than added to it.
+
+Four differences from an agent row are drawn rather than left to be inferred, because the check
+cannot be killed, injected into or opened as a transcript: the row is a **`div`, not a button**, so it
+offers no way in at all; its lamp is **hollow and violet**, where an agent's is filled and wears a
+status tone; it carries **no cost column**, since a `$0.00` would read as "cheap" rather than "not
+ours to count"; and its left edge is **dashed**, the same grammar as the lamp. A card wearing an
+agent's affordances with none of them working is worse than one that never offered them. The hover
+carries the two facts a glance cannot: that it takes no slot, and that it ends by itself — when the
+reading lands, when the session closes, or when the claim ages out.
+
+**Drawn under `view.demo` alone**, `InjectPanel`'s gate for the opposite reason. The snapshot carries
+`claimedBy` but no reading of whether the claim is still _live_, and `claimIsLive`
+([20](20-validation.md#the-claim)) is the single definition of that; off `claimedBy` alone a claim
+whose session died would stand in the fleet list forever, at the same instant it stops blocking
+`validate-check`. The demo backend holds its own clock, so it reports the claim two beats after load
+and the entry leaves with nobody having pressed anything — which is the ending the entry exists to
+draw.
 
 ## The backlog
 

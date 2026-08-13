@@ -1,5 +1,5 @@
 import { useState, type JSX } from 'react';
-import type { CockpitView } from '../view/viewModel.js';
+import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Agent, Issue, QueueItem, WorldEvent } from '../types.js';
 import { buildGoalPage, buildGoalTrack, type GoalTrack } from '../view/goalPage.js';
@@ -49,11 +49,19 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
 function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [showEnded, setShowEnded] = useState(false);
   const ended = view.past;
+  const desk = view.deskRuns;
 
   return (
     <section className="cn-card cn-span2">
       <h3>
-        Fleet <i className="cn-n">{view.live.length} out</i>
+        Fleet{' '}
+        <i className="cn-n">
+          {view.live.length} out
+          {/* Stated beside the count rather than added to it: nobody dispatched
+              these and they take no slot, so "out" would be the wrong word and
+              a bigger number would be the wrong reading. */}
+          {desk.length > 0 && ` · ${desk.length} at a keyboard`}
+        </i>
         <button
           type="button"
           className={`cn-more ${ended.length === 0 ? 'cn-quiet' : ''}`}
@@ -64,9 +72,15 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
         </button>
       </h3>
       <div className="cn-rows">
-        {view.live.length === 0 && <p className="cn-empty">Nobody is out.</p>}
+        {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
         {view.live.map((agent) => (
           <AgentRow key={agent.id} agent={agent} view={view} actions={actions} />
+        ))}
+        {/* Below the dispatched agents, because that is the order the harness
+            answers "what is happening" in: what it sent out, then what it did
+            not send. */}
+        {desk.map((run) => (
+          <DeskRow key={`${run.originRef}|${run.checkId}`} run={run} view={view} />
         ))}
         {showEnded &&
           (ended.length === 0 ? (
@@ -107,6 +121,48 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
       </span>
       {agent.costUsd !== null && <span className="cn-num">{fmtUsd(agent.costUsd)}</span>}
     </button>
+  );
+}
+
+/**
+ * A validation check somebody is running at their own keyboard.
+ *
+ * It is in flight and it is not an agent, and every difference between the two
+ * is drawn rather than left to be inferred:
+ *
+ * - **A `div`, not a button.** There is no transcript to open, nothing to kill
+ *   and nothing to inject into — so the row offers no way in at all. A card
+ *   wearing an agent's affordances with none of them working is worse than one
+ *   that never offered them.
+ * - **A hollow lamp**, where an agent's is filled. The harness is not running
+ *   this and cannot report on it; what it knows is that somebody said they were.
+ * - **No cost column.** Nothing here is billed to the fleet, and a `$0.00` would
+ *   read as "cheap" rather than "not ours to count".
+ * - **A dashed edge**, the same grammar the lamp uses: this entry was not cut
+ *   from a dispatch.
+ *
+ * The hover carries the two things a glance cannot: that it takes no slot, and
+ * that it ends on its own.
+ */
+function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Element {
+  return (
+    <div
+      className="cn-row cn-desk"
+      title={
+        `${run.label} is running check ${run.letter} of ${goalLabel(run.originRef)} — claimed ${relTime(run.claimedAt, view.now)}. ` +
+        'Nobody dispatched it: it takes no fleet slot, and it ends when the reading lands, ' +
+        'when the session closes, or when the claim ages out.'
+      }
+    >
+      <i className="cn-lamp cn-desk-lamp" />
+      <span className="cn-grow">
+        <b className="cn-name">{run.title}</b>
+        <span className="cn-sub">
+          {goalLabel(run.originRef)} · check {run.letter} · {run.label} · {elapsed(run.claimedAt, null, view.now)}
+        </span>
+      </span>
+      <i className="cn-chip cn-desk-chip">at a keyboard</i>
+    </div>
   );
 }
 

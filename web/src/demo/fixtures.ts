@@ -1013,12 +1013,14 @@ export function buildDemoState(): DemoSeed {
         covers: ['signer'],
         fleetCandidate: true,
         candidateWhy: 'a plain HTTP request against a running harness; needs no login and no browser',
-        // Claimed right now by a desktop session. In the demo because the chip is
-        // otherwise unreachable by clicking — nothing in the cockpit takes a
-        // claim, and the one thing an operator needs to be able to read off this
-        // row is that the fleet is not going to touch it while this stands.
+        // Claimed right now by a desktop session, nine minutes in. In the demo
+        // because the claim is otherwise unreachable by clicking — nothing in the
+        // cockpit takes one — and because it is the whole of what the fleet
+        // list's keyboard entry is drawn from: one person, one check, no
+        // dispatch. The demo backend reports it two beats after load, which is
+        // how the entry leaves again without anybody pressing anything.
         claimedBy: 'desktop (studio)',
-        claimedAt: ago(0.2),
+        claimedAt: ago(9),
       }),
       // The two ends of a hand-over, both in the demo because neither is
       // reachable by clicking around: one check is with the fleet right now and
