@@ -4,6 +4,7 @@ import type { AppState, BugFiling, JobAttachmentInput, RecoveryVerdict, StackLan
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
   CiPolicyPayload,
+  PlanHistory,
   PromptsPayload,
   RetrospectivePayload,
   RunningConfigPayload,
@@ -222,6 +223,15 @@ const realApi = {
   // persists across a restart, and it stops the dispatcher acting on the goal.
   dismissRun: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
+  // A plan's revisions and the last amendment as a diff, fetched when the sheet is
+  // opened. Not polled, for the retrospective's reason: every revision carries a
+  // write-up, so a replanned plan would put several of them into each poll.
+  getPlanHistory: (planId: string) => authFetch(`/api/plans/${planId}/history`).then((r) => json<PlanHistory>(r)),
+  // A reviewer's confirmation that one acceptance criterion holds. Keyed on the
+  // criterion's text, which is what the server stores — an index would move under a
+  // re-worded list and carry the tick onto something nobody looked at.
+  setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
+    post<{ ok: true }>(`/api/plans/${planId}/acceptance`, { slug, criterion, met }),
   // Collapse a released decomposition back to one pull request. 409s unless the
   // plan is `active` with nothing started — the server owns that rule.
   abandonPlan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/abandon`),

@@ -174,3 +174,17 @@ export function optionalText(field: string): z.ZodType<string | undefined> {
  * differently.
  */
 export const TicketTitleBody = z.object({ title: optionalText('title') });
+
+/**
+ * One acceptance criterion of one plan part, ticked or un-ticked.
+ *
+ * The criterion is identified by its **text**, which is how the confirmation is
+ * stored — an index would move under a re-worded list and carry a tick onto a
+ * criterion nobody looked at. Refusing a text no criterion carries is the route's
+ * job, not the schema's: it is a fact about the part, and this is a request shape.
+ */
+export const AcceptanceBody = z.object({
+  slug: z.string().min(1, 'slug is required'),
+  criterion: z.string().min(1, 'criterion is required'),
+  met: requiredBoolean('met must be true or false'),
+});

@@ -87,6 +87,11 @@ export function App() {
           status.view.taskFor(a)?.originRef === `${viewedPlan.originRef}:plan` &&
           (a.status === 'running' || a.status === 'waiting'),
       )}
+      // What the goal has cost so far, for the approval bar. Read off the enriched
+      // issue rather than summed here: it is `rollUpIssueSpend`'s own figure, and a
+      // second sum could print a total that disagreed with the goal page's.
+      spend={state.world.issues.find((i) => `issue:${i.number}` === viewedPlan.originRef)?.spend ?? null}
+      planning={state.planning}
       now={status.view.now}
       refUrls={state.refUrls}
       onClose={() => status.actions.viewPlan(null)}
@@ -97,6 +102,7 @@ export function App() {
       onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}
       onOpenAgent={(id) => status.actions.select(id)}
       onRespond={(id, text) => status.actions.respondAgent(id, text)}
+      onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
     />
   ) : null;
 

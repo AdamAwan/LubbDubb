@@ -156,7 +156,7 @@ one field asked all three answered whichever the planner reached for.** `reason`
 justification — why _this shape_, one PR or these parts — and it is what the approval card, the
 provider status comment and `currentPlanSummary` have always quoted. Nothing asked what was broken or
 what would be done about it, so a planner supplied a diagnosis only when it happened to feel like one,
-and the plan modal led with a paragraph about splitting on an issue whose reader wanted the fix. The
+and the plan sheet led with a paragraph about splitting on an issue whose reader wanted the fix. The
 prompts now ask for all three by name and say what each is not.
 
 `diagnosis` is legitimately absent on work that is not a defect — there is no root cause of a feature —
@@ -172,7 +172,7 @@ write-up 404s at exactly the moment the plan is ready to approve. Storing it on 
 outlive the planner, outlive a restart, and stay joined to the row it describes.
 
 **`document` is expected, not merely permitted.** The `issue-plan` / `issue-replan` (and `discuss-plan`
-— below) templates ask for it, and a plan without one renders "no write-up" in the plan modal rather
+— below) templates ask for it, and a plan without one renders "no write-up" in the plan sheet rather
 than hiding the tab — a hidden tab would read as "this planner had nothing to add", indistinguishable
 from "this planner ignored the instruction". An over-long `document` is **trimmed and stored, with the
 trim reported**, never refused: refusing would reject the whole plan submission over its prose, the
@@ -249,6 +249,8 @@ answer the agent) records the error alone.
 | `planProgress(parts)`                                    | `{settled, total}` over live parts.                                                                         |
 | `partHasWork(part)`                                      | `dispatched` \| `in_review` \| `partSettled`.                                                               |
 | `partOutcomeNote(part)`                                  | What a non-code part is told, appended to its rendered prompt. Empty for a code or unstated part.           |
+| `partDeclarationNote(part)`                              | The part's `touches` and `acceptance`, appended to its prompt — an agent judged on a criterion is shown it. |
+| `acceptanceCriteria(part)`                               | `acceptance` as the checklist the sheet draws, each criterion's tick folded in.                             |
 | `partsToRetire(existing, declared)`                      | Which parts an amendment retires.                                                                           |
 | `amendedPlanStatus(verdict, surviving, requireApproval)` | The status an ingested or amended plan resolves to.                                                         |
 | `currentPlanSummary(plan, parts)`                        | The current plan rendered for a replanning agent — slug, status, PR/branch, dependency, scope.              |
@@ -345,7 +347,7 @@ readiness then decides when the ask becomes actionable, exactly as it does for a
 `blocked`, with `declinedStepReason` on the row. **Not `concluded`**: concluding it would make
 `partSettled` answer true and release every dependent waiting on the thing that was refused — a plan
 completing on work nobody did. The dependents stay `pending`, the goal page draws the part under
-**Held** with the reason on it, and the ways out are the two on the plan modal — Replan, or
+**Held** with the reason on it, and the ways out are the two on the plan sheet — Replan, or
 [abandon the decomposition](#when-the-collision-arrives-after-approval). Nothing escalates: the
 operator is the one who declined, and both buttons are in front of them.
 
@@ -559,6 +561,41 @@ Two consequences elsewhere:
   would otherwise leave that announcement standing.
 - `QueueItem.status` gained **`unapproved`**, for the reason `capped` exists.
 
+## Scope drift
+
+`src/plans/scopeDrift.ts`, pure. `planScopeDrift(issueNumber, parts, tasks, files)` returns, per part,
+the paths its agents wrote that its `touches` did not declare.
+
+The plan has always carried the claim and nothing has ever compared it to anything, which made a
+decomposition a promise rather than a check: two parts declared to own disjoint directories could
+quietly both edit the same file, and the only surface that would ever say so is `detectFileOverlaps`,
+which needs them to be **concurrent** to notice. This needs nothing but a merged part and its writes.
+
+- **It reports and blocks nothing.** Writing outside a declared scope is often right — a type has to
+  move, an import has to be updated. What is wrong is doing it invisibly.
+- **A declaration is a prefix**, tested on a path segment, so `src/store/` covers `src/store/plans.ts`
+  and not a sibling directory whose name merely starts the same way. Prefix rather than glob because that is the form the prompt asks for, and
+  a glob dialect would be a syntax the planner has to get right for the check to mean anything.
+- **It reads every agent a part had**, joined by part origin rather than by `part.taskId` — that holds
+  only the last dispatch, and a part that stalled and was re-dispatched has writes from both on its
+  branch.
+- **A part that declared no `touches` is absent from the result**, not empty: it has not been
+  contradicted by anything, and a `0 outside scope` badge would read as a check that had passed.
+
+## Acceptance, ticked
+
+`acceptanceCriteria(part)` splits `acceptance` on lines, strips list markers and folds in
+`plan_parts.acceptance_met`. `POST /api/plans/:id/acceptance` writes a tick.
+
+**The tick is a reviewer's, never the harness's.** Nothing derives whether a criterion holds — the
+same refusal `conclude_part` makes, for the same reason: inferring a positive terminal from incidental
+evidence is what the harness declines everywhere. What this adds is only that the criteria are in
+front of the merged pull request instead of in a plan nobody reopens.
+
+**Keyed on the criterion's text, not its index**, so a re-worded criterion loses its tick. That is the
+behaviour worth having: an amendment that changes what "done" means has withdrawn the thing that was
+confirmed. An index would silently carry it onto a criterion nobody looked at.
+
 ## Reconciliation
 
 `src/plans/planReconciler.ts` runs each pulse, next to `worldDiff` and **before** `decide`. The store
@@ -689,6 +726,19 @@ it is one comment rather than a stream, it is mechanical bookkeeping rather than
 is why it is **not** auto-send gated. A failure to write it is recorded and the pulse continues —
 progress reporting never takes the pulse down with it.
 
+**It carries the planner's reasoning as well as its progress.** The diagnosis, the approach, what was
+rejected, how anyone will know it worked, the citations and the write-up are the product of an agent
+that read the whole repository, and until #206 they reached the cockpit and stopped there — someone
+looking at the issue on the tracker got a progress table and no reasoning at all, on work a plan had
+been approved for. They are folded into `<details>` after the part rows, because the progress list is
+what a reader of the thread comes back to several times and the reasoning is what they read once.
+
+Two fields are deliberately **not** carried: `risks` and `openQuestions`. Both are caveats *on the
+verdict*, addressed to whoever is deciding whether the work happens — and by the time anything is
+written here that decision is made, because nothing is written while a plan is `awaiting_approval`.
+That gate is also what keeps this honest: what lands on the tracker is a commitment the operator has
+made, the pulse after they make it.
+
 It is also the one act the plan path performs against the world without asking anyone, so the operator
 has to be able to read it: `/api/state` ships `plan.statusCommentRef` as a **canonical comment ref**
 (see [15](15-integrations.md#comment-refs)) rather than the store's provider id, resolved through
@@ -725,7 +775,7 @@ Clearing `discussing` is not optional when a replan is requested mid-conversatio
 picks the template rule `issue-plan` renders from `planning`, so leaving it set would render `discuss-plan` on
 the next dispatch instead of the `issue-replan` this call actually asked for — the two routes would
 disagree about what plain `planning` means. The route is **not** gated on `discussing` — it is
-callable throughout, and the cockpit's plan modal gives a running discussion its own footer — so
+callable throughout, and the cockpit's plan sheet gives a running discussion its own footer — so
 clearing the flag has to be the route's own job rather than a caller's.
 
 The withdrawal is not optional under `requireApproval`: a pending verdict holds rule `plan-approval` off the plan,
@@ -799,7 +849,7 @@ satisfied; then finish.
 
 **The conversation needs no new transport.** The agent parks with `escalate`; replies go through
 `POST /api/agents/:id/respond`, which works on any live agent and drives another turn on the default
-stream runtime; the transcript comes from `GET /api/agents/:id/transcript`. The plan modal's discussion
+stream runtime; the transcript comes from `GET /api/agents/:id/transcript`. The plan sheet's discussion
 pane is those two calls plus a link to the real drawer for tool calls.
 
 **Three endings:**
@@ -831,8 +881,24 @@ pane is those two calls plus a link to the real drawer for tool calls.
 **The cost, stated:** a discussion holds a fleet slot and a worktree for as long as you take to reply.
 Nothing reclaims it on a timer, and adding one would end a conversation mid-thought.
 
+## What the prompts spend their words on
+
+`issue-plan` used to spend roughly two thirds of its length on JSON shape and split mechanics. It does
+not need to: `plan_submit` validates on the spot and hands back its own reason, so the schema block
+can be terse and a rejection is cheaper than a paragraph explaining how to avoid one. What that buys
+is room for the part that actually moves plan quality — a worked example of a diagnosis against a
+restated ticket, what makes an `alternatives` worth reading, and the instruction to cite what was
+read.
+
+The same rebalance applies to `issue-replan` and `discuss-plan`, which copied the schema block. Two
+things are said only in the amendment prompts: that the whole narrative is **replaced rather than
+merged** (an amendment that omits `alternatives` leaves the previous one standing, reading as though
+the old reasoning still applies), and that the amendment is shown to the operator **as a diff** — so
+the write-up should open with what changed the planner's mind, which is the one thing the diff cannot
+show.
+
 ## Tests
 
 `test/issuePlan.test.ts`, `test/planIngestion.test.ts`, `test/planPart.test.ts`,
 `test/planApproval.test.ts`, `test/planReconcile.test.ts`, `test/planDiscussion.test.ts`,
-`test/stackedPrs.test.ts`, `test/closedPrs.test.ts`.
+`test/planNarrative.test.ts`, `test/stackedPrs.test.ts`, `test/closedPrs.test.ts`.

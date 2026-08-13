@@ -935,7 +935,7 @@ half-parse — and rendered separately so streaming text is still shown while it
 The drawer also shows the artifact chips, the **files changed** list from `files`, and offers respond,
 interrupt and kill.
 
-## The plan modal
+## The plan sheet
 
 `PlanModal` (`web/src/components/`) is the whole decomposition, on demand — the record of what was
 agreed, not just the question that was asked. Before it, a plan was legible only while it was a pending
@@ -943,46 +943,120 @@ proposal: the approval card rendered a template string and vanished on the click
 say "show me the plan for #231" at any time, once or after it was answered.
 
 **It is shell-owned**, opened through `viewPlan(planId: string | null)` on `CockpitActions` — the same
-seam `select(agentId)` uses, and for the same reason: one implementation of the modal, reachable from
-whichever surface mentions the plan.
+seam `select(agentId)` uses, and for the same reason: one implementation, reachable from whichever
+surface mentions the plan.
 
-**Two tabs**, because the decision view has to stay short enough to hold in your head:
+**One scroll with an anchor rail**, not tabs. It was two tabs, and a tab is a thing a reader has to
+know to click: the write-up sat behind one, so the most considered thing a planner wrote was the part
+least likely to be read. The rail jumps to Verdict / The shape / Parts / Caveats / Write-up, and
+scrolling reaches all of them anyway. The head, the rail and the decision bar are fixed and the middle
+scrolls between them, because a plan is read *while* deciding and the verdict buttons must not scroll
+away from the part being read.
 
-- **Plan** — the answer, then the work, then the caveats. **What's wrong** (`diagnosis`) and **What
-  we'll do** (`approach`) lead; every part follows in dispatch order with its scope, `rationale` (why
-  its own PR), `acceptance` (done when), the stack edge spelled out as a sentence rather than the terse
-  `on <slug>` chip, its status, its PR when it has one, and its "Up next" queue state (`unapproved` /
-  `capped` / `▶ now`); **Risks** and **Deliberately out of scope** come last, each folded shut behind
-  its opening words.
-- **`reason` is a caption, not a heading.** Once `approach` carries the summary, the split
-  justification renders as one muted line above the parts — _"Split this way because: …"_ — because
-  that is the size of the question it answers. It was the tab's headline, which is how a reader came
-  here for a root cause and got a paragraph about pull-request boundaries. On a plan stored **before**
-  `diagnosis` and `approach` existed both are null, and `reason` falls back to the headline under the
-  label it always had ("Why the planner split it", or "The approach" on the single-PR arm, where
-  nothing was split). The fallback is why the fields are separate rather than `reason` being
-  retargeted: a stored plan keeps meaning what it meant when it was written.
-- **Every prose field renders as markdown**, through the same `renderMarkdown` the write-up uses — a
-  planner writes them with `**bold**` lead-ins, backticked identifiers and bullets, and printed raw
-  those markers are most of what a long one looks like.
-- The fold is the other correction, and its reason is length: `risks` and `outOfScope` arrive at
-  whatever length a planner writes them, and open they were two walls of prose between the reader and
-  the Approve button. Folded is not hidden — the summary line carries the first ~110 characters
-  flattened to plain text, so the fold is a decision the reader makes rather than one made for them.
-- The tab's own count reads `· N parts`, `· one PR`, or `· being written`, never `· 0 parts`: on the
-  single-PR arm no parts is the _shape_, not an empty plan.
-- **Full write-up** — `plan.document`, rendered. Absent renders "This planner wrote no write-up", never
-  a hidden tab (see [08](08-planning.md)).
+### The verdict band
+
+`diagnosis` and `approach` **side by side**, not stacked: a long "what's wrong" used to push "what
+we'll do" off the first screen, and the two answer different questions. `verification` sits under the
+approach, since "how we'll know it worked" is part of what is being agreed to. `evidence` renders
+under the diagnosis as plain monospace citations — **not links**, because the cockpit has no source
+browser and `refUrls` answers only for tracker items, so a link there would go nowhere.
+
+**`reason` is a caption, not a heading.** Once `approach` carries the summary, the split justification
+renders as one muted line above the map — _"Split this way because: …"_ — because that is the size of
+the question it answers. On a plan stored **before** `diagnosis` and `approach` existed both are null
+and `reason` falls back to the headline under the label it always had ("Why the planner split it", or
+"The approach" on the single-PR arm). The fallback is why the fields are separate rather than `reason`
+being retargeted: a stored plan keeps meaning what it meant when it was written.
+
+### The map
+
+`PlanMap` draws the decomposition as a graph — the one thing about a plan only a picture can carry,
+and the one that is expensive to get wrong, since the stack edge decides which branch each part is cut
+from. It is the cockpit's only drawing.
+
+- **Waves left to right, one column per `depth`.** The depth is the server's own (`partDepth`, shipped
+  on `PlanPartView`) rather than one computed in the browser: a second implementation could draw a
+  rejoin in a wave before the thing it waits for, be internally consistent, and disagree with what
+  actually runs.
+- **Two edge kinds, drawn differently because they mean different things.** One dependency is a
+  **stack** — solid, work flowing along it, the part starting as soon as that sibling pushes. Several
+  is a **rejoin** — dashed, because nothing flows down any single one of them and the part waits for
+  every one to *merge*. An operator who reads a rejoin as a stack expects work to start far earlier
+  than it will.
+- **An edge that skips a wave is routed along a bus below the diagram.** Drawn directly it would pass
+  through whatever sits between its ends, and a line crossing a node reads as an edge *to* that node —
+  exactly the wrong reading on the rejoin that needs it.
+- A **human step** has a dashed amber border and no status stripe. Status is a 3px stripe rather than a
+  fill: a fill dark enough to read on is a fill too dark to tell apart.
+- Clicking a node scrolls to that part's card and marks it, which is what makes the map a way *in*
+  rather than a second place the same facts are stated.
+
+### The parts
+
+Each part carries its `touches` as path chips, its prose `scope` below them (suppressed when the
+planner answered both with the same thing), `size`, `rationale` (why its own PR), its `acceptance` as a
+**checklist**, its status, its PR, its "Up next" queue state (`unapproved` / `capped` / `▶ now`), and
+the stack edge spelled out as a sentence — a rejoin says *both* out loud, which the old
+`dependsOn[0]` rendering structurally could not.
+
+**Acceptance is ticked by the reviewer**, through `POST /api/plans/:id/acceptance`; nothing derives it
+([08](08-planning.md#acceptance-ticked)). **Scope drift** draws under a part in red when its agents
+wrote outside what it declared — the plan disagreeing with reality, which is the thing the surface
+exists to surface.
+
+### The caveats
+
+Four, folded shut behind their opening words, ordered by how much they bear on the decision:
+**Considered and rejected**, **Least sure about**, **Risks**, **Deliberately out of scope**. Each
+arrives at whatever length a planner writes it, and four open above the Approve button is four walls
+where the answer to "what are we doing" is none of them. Folded is not hidden — the summary carries
+the first ~110 characters flattened to plain text. **Least sure about opens by default while a verdict
+is pending**: it is the field written for exactly that moment, and folded it is one more thing to click
+before it can change a mind.
+
+Every prose field renders as markdown through the same `renderMarkdown` the write-up uses — a planner
+writes them with `**bold**` lead-ins, backticked identifiers and bullets, and printed raw those markers
+are most of what a long one looks like.
+
+### The decision bar
+
+**The buttons say what they do.** Approve reads _"Approve — start N agents now"_; Reject names its own
+arm, which differs between them (a refused decomposition falls back to one pull request, a refused
+single verdict goes back to the planner). Above them, what is being authorised in numbers: pull
+requests, agents over time, `maxConcurrentPartsPerIssue`, how many start immediately, steps for a
+person, parts that are large to review, and what the goal has cost so far.
+
+**Nothing there is a forecast.** Every figure is read off state that already exists; the harness cannot
+estimate what work will cost, and a made-up number on the button that authorises spending is worse than
+no number. The spend shown is spend already made.
+
+**Objection pins compose the note.** A part can be pinned *question* or *drop* while reading, and the
+pins are joined into the free-text note the accept and reject verdicts already carry — no new verdict,
+no new route, nothing the server has to learn. Reading a five-part plan and disagreeing with one of
+them is the ordinary case, and the only way to say so used to be to remember the slug and type it into
+a box at the bottom.
 
 Approve / Reject appear only while the plan is `awaiting_approval`, and route through the same
 `decideProposal` the escalation card uses — one verdict, one implementation, so the rail's row clears
-either way whichever surface you decided from. Replan and Abandon sit apart, because they settle
-nothing about the proposal in front of you. While a plan is being discussed the modal shows the
-conversation instead — the agent's status and last note, and a reply box that posts through
-`POST /api/agents/:id/respond` — and offers **End discussion** instead of a verdict.
+whichever surface you decided from. Replan and Abandon sit apart, because they settle nothing about the
+proposal in front of you. While a plan is being discussed the sheet shows the conversation instead —
+the agent's status and last note, and a reply box posting through `POST /api/agents/:id/respond` — and
+offers **End discussion** instead of a verdict.
+
+### What changed
+
+A replan and a discussion both rewrite the plan row, so ten minutes of conversation came back as the
+whole decomposition again with nothing saying which two parts moved. The rail's right-hand control
+opens the **diff** — the server's own (`GET /api/plans/:id/history`), never re-derived here — with the
+revision list above it: parts added, dropped, changed (field by field) or unchanged, and which prose
+fields the amendment rewrote. Prose is **named rather than diffed word by word**, because a planner
+rewrites a paragraph wholesale and a word-level diff of one is two paragraphs marked entirely changed.
+
+The control is absent until there is a second revision, and a fetch that fails leaves it absent rather
+than drawing an error for a view nobody has asked for.
 
 **Every entry point is keyed on the plan existing, and none on what it is doing.** That is a
-correction, not a restatement: entry points keyed on a transient condition left the modal reachable
+correction, not a restatement: entry points keyed on a transient condition left the sheet reachable
 only during the approval window, so the click that approved a plan was also the click that took away
 the only way to read it back.
 
@@ -1023,7 +1097,7 @@ read it.
 rule is uniform: a PR/issue number links as `refLink('#'+n, refUrls)`, a colon-form origin or structured
 ref as `refLink(ref, refUrls)`, free text carrying `#n` mentions through `linkify(text, refUrls)`. So
 the goal page's pull requests, the overview's rack and up-next rows, the backlog's rows, the world
-signals, the findings panel, escalations, the plan modal, the recovery cards, the agent drawer and the
+signals, the findings panel, escalations, the plan sheet, the recovery cards, the agent drawer and the
 work-tree panel all draw links wherever the provider can resolve them.
 
 For those link sites to resolve, five ref families the item lists do not cover are keyed on their own in

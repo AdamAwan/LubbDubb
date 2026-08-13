@@ -61,53 +61,81 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile'],
     template:
       'Issue #{number} ("{title}") needs a delivery plan before any code is written.\n\n{body}\n\n' +
-      'Read the repository and decide whether this work is ONE pull request or several. ' +
-      'Bias hard toward one: splitting is the exception, and turning a twenty-minute fix into three PRs ' +
-      'costs far more than it saves. Split only when the work genuinely cannot land as a single reviewable ' +
-      'PR — for example when a schema or interface change must merge before the code that consumes it.\n\n' +
-      'Submit your verdict with the plan_submit tool if you have it — it validates on the spot, so a ' +
-      'rejected plan comes back with the reason and you can fix it and call again. Otherwise write the ' +
-      'same document to {planFile} in this worktree, creating the directory if needed. For one PR:\n\n' +
-      '  {"version": 1, "verdict": "single", "reason": "<one sentence: why this shape>",\n' +
-      '   "diagnosis": "<what is actually wrong>", "approach": "<what you are going to do about it>",\n' +
-      '   "risks": "<what could go wrong>", "outOfScope": "<what you are not doing>",\n' +
-      '   "document": "<the full write-up, markdown>"}\n\n' +
-      'For several, each part being one reviewable PR:\n\n' +
-      '  {"version": 1, "verdict": "parts", "reason": "<one sentence: why this shape>",\n' +
-      '   "diagnosis": "...", "approach": "...",\n' +
-      '   "risks": "...", "outOfScope": "...", "document": "...", "parts": [\n' +
-      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [],\n' +
-      '     "rationale": "why this is its own PR", "acceptance": "what makes it done"},\n' +
-      '    {"slug": "dispatcher", "title": "...", "scope": "src/dispatcher/...", "dependsOn": ["schema"],\n' +
-      '     "rationale": "...", "acceptance": "..."},\n' +
-      '    {"slug": "wire-up", "title": "...", "scope": "src/system.ts", "dependsOn": ["schema", "dispatcher"],\n' +
-      '     "rationale": "...", "acceptance": "..."}\n' +
-      '  ]}\n\n' +
-      'Slugs are short, lowercase, kebab-case and unique; "scope" names the files or areas that part owns, ' +
-      'so parts running at the same time do not collide; "dependsOn" names the sibling slugs a part needs before ' +
-      'it can start. Usually that is none or one. **One** means it stacks: it starts as soon as that sibling has ' +
-      'pushed a branch, and is cut from that branch. **Several** means the lanes rejoin: a part naming several ' +
-      'does not start until every one of them has **merged**, and is then cut from the integration branch. Use it ' +
-      'for work that genuinely gathers separate lanes back together — the part that wires two independent pieces ' +
-      'to each other — and not to express a vague ordering, because it waits for all of them.\n\n' +
-      '"expectedKind" is optional and defaults to "code" — a part that ends in a merged pull request. Use ' +
-      '"report" when the deliverable is a write-up or a measurement, and "determination" when the part ' +
-      'decides whether anything needs building at all. They exist so investigative work can be decomposed ' +
-      'honestly instead of inventing pull requests for it; do not reach for them when the work is code.\n\n' +
-      '"diagnosis" and "approach" are the two the operator reads first, and they are the two nobody can ' +
-      'reconstruct from the rest: **diagnosis** is what is actually wrong — the root cause you found in the ' +
-      'code, named precisely, not a restatement of the issue text you were given; **approach** is what you ' +
-      'are going to do about it, in two or three sentences. Neither one is about how the work is split. ' +
-      'Leave "diagnosis" out only when the work is not a defect and there is genuinely nothing to diagnose. ' +
-      '"reason" is the narrow question of shape — why one PR, or why these parts — and is not the place ' +
-      'for either of the above.\n\n' +
-      '"document" is not optional in practice: a human reads it and decides whether this work happens. ' +
-      'Write it for them, in markdown — why the work is shaped this way, what you considered and rejected, ' +
-      'and a section naming whatever you are least sure about. A plan with no write-up is one they have to ' +
-      'take on trust.\n\n' +
-      'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you ' +
-      'are on branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its verdict to the plan file; nothing else it does is read. Asks for the headline pair (`diagnosis`, `approach` — the root cause and the fix, which is what the plan modal leads with), the write-up (`risks`, `outOfScope`, `document`) and per-part `rationale`/`acceptance` — all optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
+      'Read the repository first, and plan from what is actually there. Every field below is worth having ' +
+      'from someone who has read the code and worth nothing from someone who has read only the ticket.\n\n' +
+      '## The verdict: one pull request or several\n\n' +
+      'Bias hard toward one. Splitting is the exception, and turning a twenty-minute fix into three PRs costs ' +
+      'far more than it saves. Split only when the work genuinely cannot land as a single reviewable PR — for ' +
+      'example when a schema or interface change must merge before the code that consumes it.\n\n' +
+      '## How to submit it\n\n' +
+      'Use the **plan_submit** tool if you have it: it validates on the spot and hands back the reason if it ' +
+      'refuses, so you can fix and call again in the same turn. Otherwise write the same JSON to {planFile} in ' +
+      'this worktree, creating the directory if needed. One shape, both verdicts — on "single" the parts are ' +
+      'ignored, on "parts" at least one is required:\n\n' +
+      '  {"version": 1, "verdict": "single" | "parts",\n' +
+      '   "diagnosis": "...", "approach": "...", "reason": "...", "verification": "...",\n' +
+      '   "alternatives": "...", "openQuestions": "...", "risks": "...", "outOfScope": "...",\n' +
+      '   "evidence": [{"path": "src/store/plans.ts", "line": 118, "note": "what to look at here"}],\n' +
+      '   "document": "<the full write-up, markdown>",\n' +
+      '   "parts": [\n' +
+      '     {"slug": "schema", "title": "...", "scope": "...", "touches": ["src/store/"], "size": "s",\n' +
+      '      "dependsOn": [], "rationale": "...", "acceptance": "..."},\n' +
+      '     {"slug": "wire-up", "title": "...", "scope": "...", "touches": ["src/system.ts"], "size": "m",\n' +
+      '      "dependsOn": ["schema"], "rationale": "...", "acceptance": "..."}\n' +
+      '   ]}\n\n' +
+      'Nothing here needs to be guessed at: submit it, and a rejection tells you exactly which field was wrong.\n\n' +
+      '## What the fields mean\n\n' +
+      'Four of them carry the whole decision, and they are the four nobody can reconstruct from the rest.\n\n' +
+      '- **diagnosis** — what is actually wrong, in the code, named precisely. "The cache is never invalidated ' +
+      'because `refresh()` writes the new value under the old key (`src/cache.ts:88`)" is a diagnosis. "Users ' +
+      'see stale data" is the ticket, restated. If you find yourself writing the issue text back, you have not ' +
+      'read far enough yet. Leave it out only when the work is not a defect and there is genuinely nothing to ' +
+      'diagnose — there is no root cause of a feature.\n' +
+      '- **approach** — what you are going to do about it, in two or three sentences. Not the shape of the ' +
+      'pull requests: the change.\n' +
+      '- **alternatives** — what you considered and rejected, and why each was rejected. Name options you ' +
+      'actually weighed, not strawmen. This is the field an operator reads to decide whether you looked around ' +
+      'before you chose, and a plan with none reads as the first idea you had.\n' +
+      '- **openQuestions** — the assumption you would most like argued with, and what would change your mind. ' +
+      'Be specific about the decision rather than modest about the plan: "I assumed the retry belongs in the ' +
+      'client, but if the server owns idempotency it belongs there instead" is useful; "there may be edge ' +
+      'cases" is not. If the operator opens a discussion, this is its agenda.\n\n' +
+      'And four that make the rest checkable:\n\n' +
+      '- **evidence** — the places you read that the diagnosis rests on, as `path` (+ optional `line`) and a ' +
+      '`note` saying what the reader is meant to see. A root cause with no citation cannot be checked, and ' +
+      'one that can be checked in four seconds is worth far more than one that is merely well argued.\n' +
+      '- **verification** — how anyone will know the *whole* thing worked once every part has landed. Not per ' +
+      'part (that is "acceptance"), and not "the tests pass" unless the tests genuinely settle it.\n' +
+      '- **reason** — the narrow question of shape: why one PR, or why these parts. Not the fix, not the root ' +
+      'cause. One or two sentences.\n' +
+      '- **risks** and **outOfScope** — what could go wrong with this split, and what you deliberately left ' +
+      'alone. Both are read as caveats on the verdict, so keep them to things that would change a mind.\n\n' +
+      '## Per part\n\n' +
+      'Slugs are short, lowercase, kebab-case and unique — and stable: a replan merges on them. "scope" names ' +
+      'the files or areas that part owns in a sentence; **"touches"** is the same claim as repository paths, ' +
+      'and is the form that gets compared to what the part actually wrote, so declare it even when the prose ' +
+      'already says so. "size" is `s`, `m` or `l` — how big this is to *review*, not how long it takes; three ' +
+      'parts is not a cost, three large ones is. "acceptance" is what makes this part done, written so a ' +
+      'reviewer can tick it off. "rationale" is why it is its own PR rather than folded into a sibling.\n\n' +
+      '"dependsOn" names the sibling slugs a part needs before it can start, and usually that is none or one. ' +
+      '**One** means it stacks: it starts as soon as that sibling has pushed a branch, and is cut from that ' +
+      'branch. **Several** means the lanes rejoin: a part naming several does not start until every one of them ' +
+      'has **merged**, and is then cut from the integration branch. Use it for work that genuinely gathers ' +
+      'separate lanes back together — the part that wires two independent pieces to each other — and not to ' +
+      'express a vague ordering, because it waits for all of them.\n\n' +
+      '"expectedKind" defaults to "code" — a part that ends in a merged pull request. Use "report" when the ' +
+      'deliverable is a write-up or a measurement, "determination" when the part decides whether anything ' +
+      'needs building at all, and "human" for a step no agent can run: flipping a setting in a console nobody ' +
+      'gave the fleet an account for, plugging something in, looking at a rendered screen. A "human" part is ' +
+      'never dispatched, and anything naming it in "dependsOn" waits for a person to mark it done.\n\n' +
+      '## The write-up\n\n' +
+      '"document" is not optional in practice: a human reads it and decides whether this work happens. The ' +
+      'fields above are the summary; this is the argument. Do not repeat them back — cover how you got to the ' +
+      'diagnosis, what the code actually looked like when you got there, and what a reviewer of the finished ' +
+      'work should check. Markdown, and written for the person deciding.\n\n' +
+      'Do not implement anything and do not open a pull request. Writing the plan is the whole job — you are ' +
+      'on branch {branch} only so you have the repository to read.',
+    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its verdict to the plan file; nothing else it does is read. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -117,12 +145,14 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Read the repository and the state above, then submit the amended plan with the plan_submit tool if you ' +
       'have it (it validates on the spot and tells you why if it rejects), otherwise write it to {planFile} in ' +
       'this worktree. Either way it is the same document as the original:\n\n' +
-      '  {"version": 1, "verdict": "parts", "reason": "<one sentence: why this shape>",\n' +
-      '   "diagnosis": "<what is actually wrong>", "approach": "<what you are going to do about it>",\n' +
-      '   "risks": "...", "outOfScope": "...", "document": "...", "parts": [\n' +
-      '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [],\n' +
-      '     "rationale": "...", "acceptance": "..."}\n' +
-      '  ]}\n\n' +
+      '  {"version": 1, "verdict": "single" | "parts",\n' +
+      '   "diagnosis": "...", "approach": "...", "reason": "...", "verification": "...",\n' +
+      '   "alternatives": "...", "openQuestions": "...", "risks": "...", "outOfScope": "...",\n' +
+      '   "evidence": [{"path": "src/...", "line": 120, "note": "..."}], "document": "...",\n' +
+      '   "parts": [\n' +
+      '     {"slug": "schema", "title": "...", "scope": "...", "touches": ["src/store/"], "size": "s",\n' +
+      '      "dependsOn": [], "rationale": "...", "acceptance": "..."}\n' +
+      '   ]}\n\n' +
       'Rules that make an amendment safe:\n\n' +
       '- **Slugs are the merge key.** Re-use the exact slug of every part you are keeping, whatever else you change ' +
       'about it. A part you re-declare under a new slug is not the same part: the old one is treated as dropped and ' +
@@ -135,13 +165,20 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'one (it stacks on that branch and starts once that sibling has pushed), or several (the lanes rejoin — it ' +
       'starts only once every one of them has merged, and is cut from the integration branch). A cycle is refused.\n' +
       '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n' +
-      '- **Re-state the write-up.** `diagnosis`, `approach`, `document`, `risks` and `outOfScope` are replaced by ' +
-      'what you submit, not merged — an amendment that omits them leaves the previous ones standing, which will ' +
-      'read as though the old reasoning still applies. `diagnosis` is the root cause in the code and `approach` ' +
-      'is what you are going to do about it; neither is about how the work is split, which is `reason`.\n\n' +
+      '- **Re-state the whole narrative.** `diagnosis`, `approach`, `alternatives`, `openQuestions`, ' +
+      '`verification`, `evidence`, `risks`, `outOfScope` and `document` are replaced by what you submit, not ' +
+      'merged — an amendment that omits them leaves the previous ones standing, which will read as though the ' +
+      'old reasoning still applies to a plan that has changed.\n' +
+      '- **Say what moved, in `document`.** The operator is shown this amendment as a *diff* against the last ' +
+      'one, so the parts you added, dropped, re-scoped or rewired are already visible to them. What is not ' +
+      'visible is why, and that is the thing worth writing: open the write-up with what changed your mind.\n\n' +
+      'The field guide from a cold plan applies unchanged: `diagnosis` is the root cause in the code, ' +
+      '`approach` is what you are going to do about it, `alternatives` is what you rejected and why, ' +
+      '`openQuestions` is what you would most like argued with, and `reason` is the narrow question of shape. ' +
+      'Per part, `touches` is the paths that part owns and `size` is `s`/`m`/`l` — how big it is to review.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
       'branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule `issue-plan`, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the write-up (`diagnosis`/`approach`/`document`/`risks`/`outOfScope`) is replaced rather than merged. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule `issue-plan`, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the whole narrative is replaced rather than merged. It also tells the agent its amendment is read as a diff, so the write-up should say what changed its mind. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'discuss-plan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -150,16 +187,21 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'This is a conversation, not a planning run: nothing is scheduled while you are talking, and your job is to ' +
       'answer them well and amend the plan if they ask.\n\n{body}\n\n{current}\n\n' +
       'How this works:\n\n' +
-      '- Read the repository and the plan above, then use the escalate tool to open the conversation — say what ' +
-      'you understand the plan to be and what you think is most worth questioning about it. Escalating parks you ' +
-      'until they reply; their reply arrives as your next turn.\n' +
+      '- Read the repository and the plan above, then use the escalate tool to open the conversation. Open it on ' +
+      "the plan's own **open questions** if it has any — those are the decisions its author already flagged as " +
+      "the ones worth arguing about, and starting anywhere else wastes the operator's first reply. If it has " +
+      'none, say what you understand the plan to be and what you think is most worth questioning about it. ' +
+      'Escalating parks you until they reply; their reply arrives as your next turn.\n' +
       '- Answer honestly. If they are right that a split is wrong, say so. If they are wrong, say that too and ' +
       'explain why — you have read the code and they may not have.\n' +
       '- Escalate again each time you need them, and keep going until they are satisfied.\n' +
       '- When they are, submit the amended plan with the plan_submit tool (or write it to {planFile}), exactly as ' +
       'a replan would: slugs are the merge key, re-declare every part that is already merged, dispatched or in ' +
-      'review, and a part you leave out is retired only if nothing was started for it. Re-state "diagnosis", ' +
-      '"approach", "document", "risks" and "outOfScope" — they are replaced by what you submit, not merged.\n' +
+      'review, and a part you leave out is retired only if nothing was started for it. Re-state the whole ' +
+      'narrative — "diagnosis", "approach", "alternatives", "openQuestions", "verification", "evidence", ' +
+      '"risks", "outOfScope" and "document" are replaced by what you submit, not merged. Rewrite ' +
+      '"openQuestions" in particular: the ones you have just settled with them are no longer open, and leaving ' +
+      'them standing puts the conversation you have had back in front of the person who had it.\n' +
       '- If they end up wanting no change at all, submit the plan unchanged. Submitting is what ends the ' +
       'conversation and puts the plan back in front of them for approval.\n\n' +
       'Do not implement anything and do not open a pull request. You are on branch {branch} only so you have the ' +

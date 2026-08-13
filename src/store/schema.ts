@@ -360,6 +360,10 @@ CREATE TABLE IF NOT EXISTS plans (
   reason      TEXT,                   -- the planner's justification for its verdict — why this shape
   risks       TEXT,                   -- what could go wrong with this split
   out_of_scope TEXT,                  -- what the planner deliberately left out
+  alternatives TEXT,                  -- what was considered and rejected, and why
+  open_questions TEXT,                -- what the planner is least sure about
+  verification TEXT,                  -- how anyone knows the whole thing worked
+  evidence    TEXT,                   -- JSON array of {path, line, note}: where the diagnosis comes from
   document    TEXT,                   -- the full narrative, markdown
   discussing  INTEGER NOT NULL DEFAULT 0,  -- an operator is arguing with a planner about it
   status_comment_ref TEXT,            -- provider comment id, edited in place
@@ -378,8 +382,11 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   seq         INTEGER NOT NULL,
   title       TEXT NOT NULL,
   scope       TEXT NOT NULL,          -- files/areas this part owns, for the prompt
+  touches     TEXT,                   -- JSON array of paths: the same claim, checkable against what was written
   rationale   TEXT,                   -- why this is its own PR
   acceptance  TEXT,                   -- what makes this part done
+  acceptance_met TEXT,                -- JSON array of the criteria a reviewer has confirmed
+  size        TEXT,                   -- s | m | l, how big this is to review; null = unstated
   expected_kind   TEXT,               -- code | report | determination; null = unstated, reads as code
   outcome_kind    TEXT,               -- what it actually produced, written at close (never for a merge)
   outcome_ref     TEXT,               -- flag:<id> | finding:<id>, optional evidence
@@ -393,6 +400,25 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   UNIQUE (plan_id, slug)
+);
+
+-- Every verdict a planner has submitted for one plan, oldest first. The plan row
+-- is overwritten by each amendment, which is exactly why these exist: without
+-- them an operator who discussed a plan for ten minutes is handed the amended
+-- decomposition whole, with nothing anywhere saying which two parts moved.
+--
+-- The record is of what was *proposed*, not of what the store made of it: a part
+-- the amendment dropped but which kept running (because work had started) is
+-- absent here and live on the plan, and both readings are true.
+CREATE TABLE IF NOT EXISTS plan_revisions (
+  id          TEXT PRIMARY KEY,
+  plan_id     TEXT NOT NULL,
+  seq         INTEGER NOT NULL,       -- 1-based; v1 is the first verdict ever ingested
+  verdict     TEXT NOT NULL,          -- single | parts, as submitted
+  narrative   TEXT NOT NULL,          -- JSON PlanNarrative: the plan-level prose of this verdict
+  parts       TEXT NOT NULL,          -- JSON PlanPartInput[]: the parts as declared, in document order
+  at          TEXT NOT NULL,
+  UNIQUE (plan_id, seq)
 );
 
 CREATE TABLE IF NOT EXISTS agent_transcripts (

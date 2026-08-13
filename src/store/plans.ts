@@ -1,7 +1,18 @@
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 import { liveParts, partSettled } from '../plans/parts.js';
-import type { PartOutcomeKind, Plan, PlanPart, PlanPartInput, PlanStatus } from '../types.js';
+import type {
+  PartOutcomeKind,
+  PartSize,
+  Plan,
+  PlanEvidence,
+  PlanNarrative,
+  PlanPart,
+  PlanPartInput,
+  PlanRevision,
+  PlanStatus,
+  PlanVerdict,
+} from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -15,18 +26,28 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     approach: 'TEXT',
     risks: 'TEXT',
     out_of_scope: 'TEXT',
+    alternatives: 'TEXT',
+    open_questions: 'TEXT',
+    verification: 'TEXT',
+    evidence: 'TEXT',
     document: 'TEXT',
     discussing: 'INTEGER NOT NULL DEFAULT 0',
   },
   plan_parts: {
+    touches: 'TEXT',
     rationale: 'TEXT',
     acceptance: 'TEXT',
+    acceptance_met: 'TEXT',
+    size: 'TEXT',
     expected_kind: 'TEXT',
     outcome_kind: 'TEXT',
     outcome_ref: 'TEXT',
     outcome_summary: 'TEXT',
     blocked_reason: 'TEXT',
   },
+  // `plan_revisions` is a brand-new table, so `CREATE TABLE IF NOT EXISTS` is the
+  // whole migration and it needs no entry. That is true *once*: a column added to
+  // it later needs one here like any other.
 };
 
 /**
@@ -53,6 +74,10 @@ export class PlanStore {
     reason?: string | null;
     risks?: string | null;
     outOfScope?: string | null;
+    alternatives?: string | null;
+    openQuestions?: string | null;
+    verification?: string | null;
+    evidence?: PlanEvidence[] | null;
     document?: string | null;
     statusCommentRef?: string | null;
   }): Plan {
@@ -70,6 +95,14 @@ export class PlanStore {
       approach: input.approach ?? existing?.approach ?? null,
       risks: input.risks ?? existing?.risks ?? null,
       outOfScope: input.outOfScope ?? existing?.outOfScope ?? null,
+      alternatives: input.alternatives ?? existing?.alternatives ?? null,
+      openQuestions: input.openQuestions ?? existing?.openQuestions ?? null,
+      verification: input.verification ?? existing?.verification ?? null,
+      // Preserved on absence like the prose beside it, and on *absence* rather
+      // than on emptiness: a planner that cited nothing this time has not
+      // withdrawn what the last one cited, and `ingestPlanDocument` passes the
+      // list it actually parsed either way.
+      evidence: input.evidence ?? existing?.evidence ?? [],
       document: input.document ?? existing?.document ?? null,
       // Not settable here: discussion is its own one-way transition (`setPlanDiscussing`),
       // so an ingestion cannot accidentally re-open one it is meant to be closing.
@@ -82,15 +115,68 @@ export class PlanStore {
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO plans (id, origin_ref, title, status, diagnosis, approach, reason, risks, out_of_scope, document, discussing, status_comment_ref, created_at, updated_at)
-         VALUES (@id, @originRef, @title, @status, @diagnosis, @approach, @reason, @risks, @outOfScope, @document, @discussing, @statusCommentRef, @createdAt, @updatedAt)
+        `INSERT INTO plans (id, origin_ref, title, status, diagnosis, approach, reason, risks, out_of_scope,
+           alternatives, open_questions, verification, evidence, document, discussing, status_comment_ref,
+           created_at, updated_at)
+         VALUES (@id, @originRef, @title, @status, @diagnosis, @approach, @reason, @risks, @outOfScope,
+           @alternatives, @openQuestions, @verification, @evidence, @document, @discussing, @statusCommentRef,
+           @createdAt, @updatedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET title=excluded.title, status=excluded.status,
            diagnosis=excluded.diagnosis, approach=excluded.approach,
            reason=excluded.reason, risks=excluded.risks, out_of_scope=excluded.out_of_scope,
+           alternatives=excluded.alternatives, open_questions=excluded.open_questions,
+           verification=excluded.verification, evidence=excluded.evidence,
            document=excluded.document, status_comment_ref=excluded.status_comment_ref, updated_at=excluded.updated_at`,
       )
-      .run({ ...plan, discussing: plan.discussing ? 1 : 0 });
+      .run({ ...plan, discussing: plan.discussing ? 1 : 0, evidence: JSON.stringify(plan.evidence) });
     return plan;
+  }
+
+  /**
+   * Record the verdict a document carried, as its own revision.
+   *
+   * Append-only, and numbered off what is already there rather than off the plan —
+   * a plan re-planned three times has three revisions whatever its status has done
+   * in between. Called from {@link ingestPlanDocument} alone, which is the one
+   * place a document becomes rows, so a revision cannot exist for a verdict that
+   * was never persisted or be missing for one that was.
+   */
+  recordPlanRevision(
+    planId: string,
+    input: { verdict: PlanVerdict; narrative: PlanNarrative; parts: PlanPartInput[] },
+  ): PlanRevision {
+    const at = this.ctx.now();
+    const row = this.ctx.db.prepare(`SELECT MAX(seq) AS seq FROM plan_revisions WHERE plan_id=?`).get(planId) as
+      | { seq: number | null }
+      | undefined;
+    const revision: PlanRevision = {
+      id: `rev_${nanoid(10)}`,
+      planId,
+      seq: (row?.seq ?? 0) + 1,
+      verdict: input.verdict,
+      narrative: input.narrative,
+      parts: input.parts,
+      at,
+    };
+    this.ctx.db
+      .prepare(
+        `INSERT INTO plan_revisions (id, plan_id, seq, verdict, narrative, parts, at)
+         VALUES (@id, @planId, @seq, @verdict, @narrative, @parts, @at)`,
+      )
+      .run({
+        ...revision,
+        narrative: JSON.stringify(revision.narrative),
+        parts: JSON.stringify(revision.parts),
+      });
+    return revision;
+  }
+
+  /** Every verdict submitted for a plan, oldest first. */
+  listPlanRevisions(planId: string): PlanRevision[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM plan_revisions WHERE plan_id=? ORDER BY seq ASC`)
+      .all(planId) as PlanRevisionRow[];
+    return rows.map(rowToRevision);
   }
 
   getPlan(id: string): Plan | null {
@@ -127,8 +213,14 @@ export class PlanStore {
         seq: input.seq,
         title: input.title,
         scope: input.scope,
+        touches: input.touches,
         rationale: input.rationale,
         acceptance: input.acceptance,
+        // A reviewer's confirmations, not the planner's declaration — so they
+        // survive an amendment the way branch and PR do. What withdraws one is the
+        // criterion itself changing, which the text key handles without a rule here.
+        acceptanceMet: prev?.acceptanceMet ?? [],
+        size: input.size,
         expectedKind: input.expectedKind,
         // Progress, not declaration — an amendment re-declaring a part must not
         // wipe an outcome it already reached. Same split as branch/prNumber below.
@@ -151,19 +243,30 @@ export class PlanStore {
     const stmt = this.ctx.db.prepare(
       // The outcome columns are deliberately absent from DO UPDATE SET: they are
       // progress, and an amendment re-declaring a part must leave what it produced
-      // alone. `expected_kind` is part of the declaration, so it does update.
-      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, rationale, acceptance, expected_kind,
+      // alone. `expected_kind` is part of the declaration, so it does update, and so
+      // do `touches` and `size`. `acceptance_met` is not a declaration at all — it
+      // is a reviewer's confirmations — so it sits with the outcome columns.
+      `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
+         acceptance_met, size, expected_kind,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
          task_id, created_at, updated_at)
-       VALUES (@id, @planId, @slug, @seq, @title, @scope, @rationale, @acceptance, @expectedKind,
+       VALUES (@id, @planId, @slug, @seq, @title, @scope, @touches, @rationale, @acceptance,
+         @acceptanceMet, @size, @expectedKind,
          @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @blockedReason,
          @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
-         rationale=excluded.rationale, acceptance=excluded.acceptance, expected_kind=excluded.expected_kind,
+         touches=excluded.touches, rationale=excluded.rationale, acceptance=excluded.acceptance,
+         size=excluded.size, expected_kind=excluded.expected_kind,
          depends_on=excluded.depends_on, updated_at=excluded.updated_at`,
     );
     const insertAll = this.ctx.db.transaction((all: PlanPart[]) => {
-      for (const p of all) stmt.run({ ...p, dependsOn: JSON.stringify(p.dependsOn) });
+      for (const p of all)
+        stmt.run({
+          ...p,
+          dependsOn: JSON.stringify(p.dependsOn),
+          touches: JSON.stringify(p.touches),
+          acceptanceMet: JSON.stringify(p.acceptanceMet),
+        });
     });
     insertAll(rows);
     return rows;
@@ -220,6 +323,24 @@ export class PlanStore {
         updatedAt: next.updatedAt,
       });
     return next;
+  }
+
+  /**
+   * Record which of a part's acceptance criteria a reviewer has confirmed.
+   *
+   * The whole set is written rather than one criterion toggled, for
+   * `decideProposal`'s reason: the caller has the list it is looking at, and a
+   * per-criterion toggle would have to agree with a text key it did not compute.
+   * Returns null when the part is gone.
+   */
+  setPartAcceptanceMet(id: string, criteria: string[]): PlanPart | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    if (!row) return null;
+    const updatedAt = this.ctx.now();
+    this.ctx.db
+      .prepare(`UPDATE plan_parts SET acceptance_met=?, updated_at=? WHERE id=?`)
+      .run(JSON.stringify(criteria), updatedAt, id);
+    return { ...rowToPlanPart(row), acceptanceMet: criteria, updatedAt };
   }
 
   /**
@@ -383,11 +504,25 @@ interface PlanRow {
   approach: string | null | undefined;
   risks: string | null | undefined;
   out_of_scope: string | null | undefined;
+  alternatives: string | null | undefined;
+  open_questions: string | null | undefined;
+  verification: string | null | undefined;
+  evidence: string | null | undefined;
   document: string | null | undefined;
   discussing: number;
   status_comment_ref: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface PlanRevisionRow {
+  id: string;
+  plan_id: string;
+  seq: number;
+  verdict: string;
+  narrative: string;
+  parts: string;
+  at: string;
 }
 
 interface PlanPartRow {
@@ -398,8 +533,11 @@ interface PlanPartRow {
   title: string;
   scope: string;
   /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  touches: string | null | undefined;
   rationale: string | null | undefined;
   acceptance: string | null | undefined;
+  acceptance_met: string | null | undefined;
+  size: string | null | undefined;
   expected_kind: string | null | undefined;
   outcome_kind: string | null | undefined;
   outcome_ref: string | null | undefined;
@@ -425,6 +563,10 @@ function rowToPlan(r: PlanRow): Plan {
     reason: r.reason,
     risks: r.risks ?? null,
     outOfScope: r.out_of_scope ?? null,
+    alternatives: r.alternatives ?? null,
+    openQuestions: r.open_questions ?? null,
+    verification: r.verification ?? null,
+    evidence: parseEvidence(r.evidence),
     document: r.document ?? null,
     discussing: r.discussing === 1,
     statusCommentRef: r.status_comment_ref,
@@ -441,8 +583,11 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     seq: r.seq,
     title: r.title,
     scope: r.scope,
+    touches: parseStringArray(r.touches),
     rationale: r.rationale ?? null,
     acceptance: r.acceptance ?? null,
+    acceptanceMet: parseStringArray(r.acceptance_met),
+    size: partSizeOf(r.size),
     expectedKind: partOutcomeKindOf(r.expected_kind),
     outcomeKind: partOutcomeKindOf(r.outcome_kind),
     outcomeRef: r.outcome_ref ?? null,
@@ -477,10 +622,131 @@ function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | nu
   return raw === 'code' || raw === 'report' || raw === 'determination' || raw === 'human' ? raw : null;
 }
 
+/** Narrowed for {@link partOutcomeKindOf}'s reason — absent on older databases, and hand-editable. */
+function partSizeOf(raw: string | null | undefined): PartSize | null {
+  return raw === 's' || raw === 'm' || raw === 'l' ? raw : null;
+}
+
 function parseDependsOn(raw: string): string[] {
+  return parseStringArray(raw);
+}
+
+/**
+ * A JSON string array column, degrading to empty rather than throwing. Absent
+ * (an older database) and corrupt reach the same answer deliberately: neither is
+ * worth taking a whole snapshot down for, and "declared nothing" is the truthful
+ * reading of both.
+ */
+function parseStringArray(raw: string | null | undefined): string[] {
+  if (raw === null || raw === undefined) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The citation list, degrading per entry: one malformed row must not lose the rest. */
+function parseEvidence(raw: string | null | undefined): PlanEvidence[] {
+  if (raw === null || raw === undefined) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry): PlanEvidence[] => {
+      if (typeof entry !== 'object' || entry === null) return [];
+      const { path, line, note } = entry as Record<string, unknown>;
+      if (typeof path !== 'string' || path === '') return [];
+      return [
+        {
+          path,
+          line: typeof line === 'number' ? line : null,
+          note: typeof note === 'string' ? note : null,
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function rowToRevision(r: PlanRevisionRow): PlanRevision {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    seq: r.seq,
+    verdict: r.verdict === 'parts' ? 'parts' : 'single',
+    narrative: parseNarrative(r.narrative),
+    parts: parseRevisionParts(r.parts),
+    at: r.at,
+  };
+}
+
+/**
+ * A revision's stored prose. Every field degrades independently: these rows are
+ * written by one function and read by a view, so a shape that surprises the reader
+ * should cost that field rather than the history.
+ */
+function parseNarrative(raw: string): PlanNarrative {
+  const empty: PlanNarrative = {
+    reason: null,
+    diagnosis: null,
+    approach: null,
+    risks: null,
+    outOfScope: null,
+    alternatives: null,
+    openQuestions: null,
+    verification: null,
+    document: null,
+    evidence: [],
+  };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return empty;
+    const bag = parsed as Record<string, unknown>;
+    const text = (key: keyof PlanNarrative): string | null => (typeof bag[key] === 'string' ? bag[key] : null);
+    return {
+      reason: text('reason'),
+      diagnosis: text('diagnosis'),
+      approach: text('approach'),
+      risks: text('risks'),
+      outOfScope: text('outOfScope'),
+      alternatives: text('alternatives'),
+      openQuestions: text('openQuestions'),
+      verification: text('verification'),
+      document: text('document'),
+      evidence: parseEvidence(JSON.stringify(bag.evidence ?? [])),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/** A revision's declared parts, per entry, for {@link parseEvidence}'s reason. */
+function parseRevisionParts(raw: string): PlanPartInput[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry, index): PlanPartInput[] => {
+      if (typeof entry !== 'object' || entry === null) return [];
+      const bag = entry as Record<string, unknown>;
+      if (typeof bag.slug !== 'string' || bag.slug === '') return [];
+      const text = (key: string): string | null => (typeof bag[key] === 'string' ? bag[key] : null);
+      return [
+        {
+          slug: bag.slug,
+          seq: typeof bag.seq === 'number' ? bag.seq : index + 1,
+          title: text('title') ?? bag.slug,
+          scope: text('scope') ?? '',
+          touches: parseStringArray(JSON.stringify(bag.touches ?? [])),
+          dependsOn: parseStringArray(JSON.stringify(bag.dependsOn ?? [])),
+          rationale: text('rationale'),
+          acceptance: text('acceptance'),
+          size: partSizeOf(text('size')),
+          expectedKind: partOutcomeKindOf(text('expectedKind')),
+        },
+      ];
+    });
   } catch {
     return [];
   }

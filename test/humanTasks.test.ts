@@ -270,6 +270,7 @@ test('a plan step for a person is never dispatched, and holds what depends on it
     doc: {
       version: 1,
       verdict: 'parts',
+      evidence: [],
       reason: 'The console change has to happen before anything can verify it.',
       parts: [
         {
@@ -279,8 +280,9 @@ test('a plan step for a person is never dispatched, and holds what depends on it
           dependsOn: [],
           expectedKind: 'human',
           acceptance: 'A test event returns 200.',
+          touches: [],
         },
-        { slug: 'verify', title: 'Assert on the delivered event', scope: 'test/', dependsOn: ['webhook'] },
+        { slug: 'verify', title: 'Assert on the delivered event', scope: 'test/', touches: [], dependsOn: ['webhook'] },
       ],
     },
     originRef: 'issue:12',
@@ -336,6 +338,7 @@ test('declining a step blocks it rather than concluding it, so nothing downstrea
     doc: {
       version: 1,
       verdict: 'parts',
+      evidence: [],
       reason: 'A person has to flip it first.',
       parts: [
         {
@@ -344,8 +347,9 @@ test('declining a step blocks it rather than concluding it, so nothing downstrea
           scope: 'the console',
           dependsOn: [],
           expectedKind: 'human',
+          touches: [],
         },
-        { slug: 'verify', title: 'Assert on it', scope: 'test/', dependsOn: ['flip'] },
+        { slug: 'verify', title: 'Assert on it', scope: 'test/', touches: [], dependsOn: ['flip'] },
       ],
     },
     originRef: 'issue:12',

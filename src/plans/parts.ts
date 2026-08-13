@@ -373,7 +373,13 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
       : p.expectedKind && p.expectedKind !== 'code'
         ? `, planned as a ${p.expectedKind}`
         : '';
-    return `- "${p.slug}": ${p.title} [${p.status}, ${where}${stacks}${expects}] — ${p.scope}`;
+    // The declaration fields an amendment has to re-state to keep: a replanner
+    // shown only the prose scope re-declares the part without them, and `touches`
+    // silently empties on a part nobody meant to change.
+    const owns = p.touches.length === 0 ? '' : `\n  touches: ${p.touches.join(', ')}`;
+    const size = p.size === null ? '' : `\n  size: ${p.size}`;
+    const done = p.acceptance === null ? '' : `\n  done when: ${p.acceptance}`;
+    return `- "${p.slug}": ${p.title} [${p.status}, ${where}${stacks}${expects}] — ${p.scope}${owns}${size}${done}`;
   });
   const why = plan.reason ? `\nIt was split because: ${plan.reason}` : '';
   return `The current plan is "${plan.status}" with ${live.length} part(s).${why}\n${lines.join('\n')}`;
@@ -431,6 +437,75 @@ function describe(parts: PlanPart[], empty: string): string {
  * request, and a part that turns out to need no code learns `conclude_part` from
  * the tool list, where a tool belongs.
  */
+/** One thing a part is done when, and whether a reviewer has said it is true. */
+export interface AcceptanceCriterion {
+  text: string;
+  met: boolean;
+}
+
+/**
+ * A part's `acceptance` as the checklist the sheet draws.
+ *
+ * Split on lines rather than sentences: a planner asked for what makes a part done
+ * answers with either one sentence or a bulleted list, and splitting prose on `.`
+ * would cut `src/store/plans.ts` in half. A single-line acceptance is one
+ * criterion, which is the truthful reading of it.
+ *
+ * Derived on the server and shipped, rather than split again in the browser: the
+ * tick is stored against the criterion's own **text**, so a second implementation
+ * of this split is a second opinion about what the key is — and the failure would
+ * be a tick that silently never matches.
+ */
+export function acceptanceCriteria(part: PlanPart): AcceptanceCriterion[] {
+  if (part.acceptance === null) return [];
+  const met = new Set(part.acceptanceMet);
+  return part.acceptance
+    .split('\n')
+    .map((line) =>
+      line
+        // The markers a planner writes a list with, and nothing else: the text is
+        // the key, so anything stripped here has to be stripped identically
+        // forever or every stored tick is orphaned at once.
+        .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+        .trim(),
+    )
+    .filter((text) => text !== '')
+    .map((text) => ({ text, met: met.has(text) }));
+}
+
+/**
+ * The two things a part's own declaration says that its rendered prompt does not:
+ * the paths it was given, and what its planner said "done" means.
+ *
+ * Appended for {@link partOutcomeNote}'s reason, and worth appending at all
+ * because both are *checked* afterwards: `touches` is what a merged part's writes
+ * are compared against (`partScopeDrift`), and `acceptance` is what the plan sheet
+ * puts in front of a reviewer as a checklist. An agent that is judged on a
+ * criterion should be shown the criterion.
+ *
+ * Empty when the planner declared neither, which is every plan written before the
+ * fields existed — so a prompt that gains nothing is unchanged rather than gaining
+ * an empty heading.
+ */
+export function partDeclarationNote(part: PlanPart): string {
+  if (part.touches.length === 0 && part.acceptance === null) return '';
+  const lines: string[] = [];
+  if (part.touches.length > 0) {
+    lines.push(
+      `**The paths this part owns**, as its planner declared them:\n${part.touches.map((p) => `- ${p}`).join('\n')}\n\n` +
+        `Writing outside them is not blocked, and sometimes it is right — but it is recorded and shown to the ` +
+        `operator beside this part, so if you have to, say why in your pull request.`,
+    );
+  }
+  if (part.acceptance !== null) {
+    lines.push(
+      `**This part is done when:** ${part.acceptance}\n\nA reviewer is shown that as a checklist against your ` +
+        `pull request, so treat it as the specification rather than as a summary of one.`,
+    );
+  }
+  return `\n\n---\n\n${lines.join('\n\n')}`;
+}
+
 export function partOutcomeNote(part: PlanPart): string {
   // A human part never reaches an agent — `partIsHuman` keeps it out of the
   // candidate list entirely — so there is no prompt for this to be appended to.

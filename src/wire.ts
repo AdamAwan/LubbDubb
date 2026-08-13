@@ -35,6 +35,9 @@
  * a key that is always sent but may be empty is `| null`.
  */
 
+import type { PlanDiff } from './plans/planDiff.js';
+import type { AcceptanceCriterion } from './plans/parts.js';
+import type { PlanningPolicy } from './plans/planning.js';
 import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
 import type { CiVerdict } from './ci/ciPolicy.js';
 import type { IssuePickupStatus } from './dispatcher/issuePickup.js';
@@ -75,6 +78,7 @@ import type {
   JobSchedule,
   Plan,
   PlanPart,
+  PlanRevision,
   Proposal,
   PullRequest as WorldPullRequest,
   Retrospective,
@@ -216,6 +220,50 @@ export interface CockpitWorld extends WorldSnapshot {
 // ---------------------------------------------------------------------------
 
 /**
+ * A plan part with the two readings the sheet needs and the row cannot carry.
+ *
+ * Both are derived rather than stored, and both are derived **here** rather than
+ * in the browser: the criteria because their text is the key a tick is stored
+ * under, so a second split is a second opinion about that key; the drift because
+ * it is a join across `agent_files` and `tasks` that the cockpit does not hold and
+ * should not have to.
+ */
+export interface PlanPartView extends PlanPart {
+  /**
+   * How deep in the stack this part sits — `partDepth`, the longest path to a part
+   * with no dependencies, which is also the wave the sheet's map draws it in.
+   *
+   * Shipped rather than recomputed in the browser because it is the dispatcher's
+   * own ordering: a second implementation could draw a rejoin in a wave before the
+   * thing it waits for and be internally consistent while disagreeing with what
+   * actually runs.
+   */
+  depth: number;
+  /** {@link PlanPart.acceptance} as a checklist, with each criterion's confirmation folded in. */
+  acceptanceCriteria: AcceptanceCriterion[];
+  /**
+   * Paths this part's agents wrote that its `touches` did not declare. Always
+   * empty when it declared none — an undeclared part has not been contradicted.
+   */
+  outsideScope: string[];
+}
+
+/**
+ * What `GET /api/plans/:id/history` ships: every verdict a plan has had, and the
+ * last amendment read as a change.
+ *
+ * Its own route rather than a field on the state snapshot, for the reason the work
+ * graph and the retro have theirs: it is read when a sheet is opened, not every
+ * pulse, and the write-ups it carries are the largest prose the store holds. A
+ * plan with one verdict still answers — with one revision and a null diff, which
+ * is the honest shape of "nothing has been amended".
+ */
+export interface PlanHistory {
+  revisions: PlanRevision[];
+  diff: PlanDiff | null;
+}
+
+/**
  * The last cycle's ordered pickup plan (issue #69) — "what's next as of this
  * pulse". A projection recomputed every cycle, not a persisted queue; `at` is the
  * world snapshot it was planned against.
@@ -332,7 +380,17 @@ export interface CockpitState {
   retainedRuns: Issue[];
   /** The multi-PR plan graph: one plan per planned issue, and every plan's parts. */
   plans: Plan[];
-  planParts: PlanPart[];
+  planParts: PlanPartView[];
+  /**
+   * The funnel's policy, as the harness is actually running it.
+   *
+   * Shipped because approving a decomposition is agreeing to a *rate* as well as a
+   * shape — `maxConcurrentPartsPerIssue` is how many of its parts run at once, and
+   * the plan sheet states it on the button that performs the approval. The
+   * settings modal reads the same values through the running-config route; this is
+   * the one the sheet needs on every draw.
+   */
+  planning: PlanningPolicy;
   /**
    * Chains of stacked pull requests, derived from the world each pulse rather
    * than stored — a plan *adopts* a stack, so a hand-opened chain is drawn on the
@@ -532,12 +590,17 @@ export type {
   Finding,
   HumanTask,
   IssueRelative,
+  IssueSpend,
   Job,
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
   Plan,
+  PlanEvidence,
+  PlanNarrative,
   PlanPart,
+  PlanPartInput,
+  PlanRevision,
   Proposal,
   Retrospective,
   ScratchEntry,
@@ -568,3 +631,6 @@ export type {
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
 export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';
+export type { PlanDiff } from './plans/planDiff.js';
+export type { AcceptanceCriterion } from './plans/parts.js';
+export type { PlanningPolicy } from './plans/planning.js';

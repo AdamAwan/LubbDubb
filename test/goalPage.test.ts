@@ -1,13 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Agent, CockpitDecision, OpenPullRequest, Plan, PlanPart, PullRequest, Task } from '../web/src/types.js';
+import type {
+  Agent,
+  CockpitDecision,
+  OpenPullRequest,
+  Plan,
+  PlanPart,
+  PlanPartView,
+  PullRequest,
+  Task,
+} from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
 import { buildGoalPage, buildGoalTrack } from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 
-function part(over: Partial<PlanPart>): PlanPart {
+function part(over: Partial<PlanPart>): PlanPartView {
   return {
     id: 'p:a',
     planId: 'p',
@@ -17,6 +26,12 @@ function part(over: Partial<PlanPart>): PlanPart {
     scope: 'src/a.ts',
     rationale: null,
     acceptance: null,
+    touches: [],
+    acceptanceMet: [],
+    depth: 0,
+    acceptanceCriteria: [],
+    outsideScope: [],
+    size: null,
     expectedKind: null,
     outcomeKind: null,
     outcomeRef: null,
@@ -44,6 +59,10 @@ function plan(originRef: string): Plan {
     approach: null,
     risks: null,
     outOfScope: null,
+    alternatives: null,
+    openQuestions: null,
+    verification: null,
+    evidence: [],
     document: null,
     discussing: false,
     statusCommentRef: null,

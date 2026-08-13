@@ -9,6 +9,7 @@ import {
   partDepth,
   partIsHuman,
   partOrigin,
+  partDeclarationNote,
   partOutcomeNote,
   planIssueNumber,
   siblingContext,
@@ -188,7 +189,9 @@ function partCandidate(
           plan: plan.reason ?? 'the planner gave no reason',
           done,
           remaining,
-        }) + partOutcomeNote(part),
+        }) +
+        partDeclarationNote(part) +
+        partOutcomeNote(part),
       originRef: origin,
       originTitle: `${issue.title} — ${part.title}`,
       originSummary: part.scope,

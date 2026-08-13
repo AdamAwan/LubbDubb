@@ -1642,6 +1642,545 @@ body {
   overflow-y: auto;
   z-index: 50;
 }
+/* The plan sheet: wider than the modals that share this backdrop, and a column
+   with its own scrolling middle — the head, the rail and the decision bar stay put
+   while the plan scrolls between them. A plan is read *while* deciding, so the
+   verdict buttons must not scroll away from the part you are reading. */
+.plan-sheet {
+  width: min(980px, 96vw);
+  max-height: calc(100vh - 56px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--text);
+}
+.plan-sheet .pm-head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.pm-body {
+  overflow-y: auto;
+  padding: 12px 4px 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* The scroll container the rail's jumps land in. `scroll-margin-top` on the
+     sections would be the tidier answer, but the sections are the flex children
+     here and the gap already provides it. */
+  scroll-behavior: smooth;
+}
+.pm-body > section {
+  min-width: 0;
+}
+
+/* The rail. Jump links to the sections below, plus the History view as a distinct
+   control on the right — a different document, so it does not read as one more
+   place to scroll to. */
+.pm-rail {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  margin-top: 10px;
+}
+.pm-jump {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+.pm-jump:hover {
+  color: var(--text);
+}
+.pm-jump:focus-visible {
+  outline: 1px solid var(--blue);
+  outline-offset: -1px;
+}
+.pm-jump .k {
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 11px;
+  color: var(--grey);
+  margin-left: 4px;
+}
+.pm-jump.history {
+  border: 1px solid var(--border);
+  border-bottom-color: var(--border);
+  margin-bottom: -1px;
+}
+.pm-jump.history.on {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* The verdict band: the two questions side by side, so a long "what's wrong" does
+   not push "what we'll do" off the first screen. One column below 800px, where
+   two would be too narrow for prose either way. */
+.pm-verdict {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.pm-vcell {
+  background: var(--panel-2);
+  padding: 9px 11px;
+  min-width: 0;
+}
+.pm-vcell.wrong .pm-section-label {
+  color: var(--amber);
+}
+.pm-vcell.do .pm-section-label {
+  color: var(--green);
+}
+.pm-verify {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+}
+.pm-verify b {
+  display: block;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 3px;
+}
+@media (max-width: 800px) {
+  .pm-verdict {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Citations. Monospace and selectable rather than linked: the cockpit has no
+   source browser, and `refUrls` answers only for tracker items — a link here would
+   go nowhere. */
+.pm-cites {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
+}
+.pm-cite {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11.5px;
+  flex-wrap: wrap;
+}
+.pm-cite code {
+  font-family: var(--font-mono);
+  color: var(--blue);
+  white-space: nowrap;
+}
+.pm-cite em {
+  font-style: normal;
+  color: var(--muted);
+  min-width: 0;
+}
+
+/* -- The dependency map --------------------------------------------------- */
+/* The one drawing in the cockpit. It scrolls sideways inside its own box rather
+   than scaling down: a decomposition wide enough to overflow is one whose node
+   text would stop being readable if it were fitted. */
+.pm-map {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  padding: 8px 10px 6px;
+}
+.pm-map-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.pm-map {
+  overflow-x: auto;
+}
+.pm-wave-label {
+  fill: var(--grey);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.pm-edge {
+  fill: none;
+  stroke: var(--grey);
+  stroke-width: 1.5;
+}
+/* A rejoin waits for *every* one of its dependencies to merge, so nothing flows
+   down any single one of these edges — dashed says that where a solid line would
+   claim the opposite. */
+.pm-edge.rejoin {
+  stroke-dasharray: 4 3;
+}
+.pm-edge-head {
+  fill: var(--grey);
+}
+.pm-node {
+  cursor: pointer;
+}
+.pm-node-box {
+  fill: var(--panel);
+  stroke: var(--border);
+}
+.pm-node:hover .pm-node-box,
+.pm-node:focus-visible .pm-node-box {
+  stroke: var(--border-hi);
+}
+.pm-node.on .pm-node-box {
+  stroke: var(--accent);
+}
+.pm-node.human .pm-node-box {
+  stroke: var(--amber);
+  stroke-dasharray: 3 2;
+}
+.pm-node-title {
+  fill: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+.pm-node-slug,
+.pm-node-pr {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.pm-node-pr {
+  fill: var(--blue);
+}
+.pm-node-state {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  fill: var(--muted);
+}
+.pm-node-stripe {
+  fill: var(--grey);
+}
+.pm-node.done .pm-node-stripe {
+  fill: var(--green);
+}
+.pm-node.done .pm-node-state {
+  fill: var(--green);
+}
+.pm-node.review .pm-node-stripe {
+  fill: var(--blue);
+}
+.pm-node.review .pm-node-state {
+  fill: var(--blue);
+}
+.pm-node.live .pm-node-stripe {
+  fill: var(--accent);
+}
+.pm-node.live .pm-node-state {
+  fill: var(--accent);
+}
+.pm-node.bad .pm-node-stripe {
+  fill: var(--red);
+}
+.pm-node.bad .pm-node-state {
+  fill: var(--red);
+}
+.pm-node.human .pm-node-state {
+  fill: var(--amber);
+}
+.pm-map-key {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 6px;
+}
+.pm-map-key i {
+  display: inline-block;
+  width: 22px;
+  border-top: 1px solid var(--muted);
+  vertical-align: 4px;
+  margin-right: 6px;
+}
+.pm-map-key i.dash {
+  border-top-style: dashed;
+}
+.pm-map-key .human {
+  color: var(--amber);
+}
+
+/* -- Parts ---------------------------------------------------------------- */
+/* Declared paths, as chips. The prose `scope` stays below them when both exist:
+   one says what the part is for, the other says what it may write, and only the
+   second can be checked against what it did write. */
+.pm-touches {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.pm-touches code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--well);
+  border: 1px solid var(--border);
+  padding: 2px 5px;
+}
+/* Where a part wrote outside its declaration, and where a held part says why.
+   Loud on purpose: both are the plan disagreeing with reality, which is the one
+   thing this surface exists to surface. */
+.pm-drift {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding: 5px 8px;
+  background: var(--red-fill);
+  border: 1px solid var(--red-line);
+  color: var(--red);
+  font-size: 12px;
+}
+.pm-drift b {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pm-drift code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.pm-part.on {
+  background: var(--panel-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.pm-part-pins {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+/* An objection an operator pins while reading. It composes the note the two
+   verdicts already carry — no new mechanic — so it is drawn as a mark rather than
+   as a button that does something on its own. */
+.pm-pin {
+  font: 11px/1 var(--font-ui);
+  padding: 4px 7px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--grey);
+  cursor: pointer;
+}
+.pm-pin:hover {
+  color: var(--text);
+}
+.pm-pin.on {
+  border-style: solid;
+}
+.pm-pin.drop.on {
+  border-color: var(--red-line);
+  background: var(--red-fill);
+  color: var(--red);
+}
+.pm-pin.ask.on {
+  border-color: var(--blue-line);
+  background: var(--blue-fill);
+  color: var(--blue);
+}
+.pm-pins {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pm-pins .pm-section-label {
+  margin-bottom: 0;
+}
+.pm-pin-x {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0 0 4px;
+}
+
+/* The acceptance checklist. The tick is the reviewer's — nothing derives it. */
+.pm-accept {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 5px;
+  font-size: 12.5px;
+}
+.pm-accept > b {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.pm-crit {
+  display: grid;
+  grid-template-columns: 15px 1fr;
+  gap: 7px;
+  align-items: start;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.pm-crit input {
+  margin: 3px 0 0;
+  accent-color: var(--green);
+}
+.pm-crit.met > span {
+  color: var(--muted);
+}
+
+/* -- The decision bar ----------------------------------------------------- */
+/* What approving actually starts. Every figure is read off state that already
+   exists; nothing here is a forecast, because a made-up number on the button that
+   authorises spending is worse than no number. */
+.pm-authorising {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  background: var(--well);
+  border: 1px solid var(--border);
+}
+.pm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pm-stat b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pm-stat span {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.pm-stat.warn b {
+  color: var(--amber);
+}
+.pm-branches {
+  font-size: 11px;
+  color: var(--muted);
+}
+.pm-branches code {
+  font-family: var(--font-mono);
+}
+.pm-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.pm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pm-row .spacer {
+  flex: 1;
+}
+
+/* -- What changed --------------------------------------------------------- */
+.pm-revs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pm-diff-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.pm-diff-head .pm-section-label {
+  margin-bottom: 0;
+}
+.pm-diff-row {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-top: none;
+}
+.pm-dtag {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 5px;
+  text-align: center;
+  border: 1px solid var(--border);
+  color: var(--grey);
+}
+.pm-dtag.added {
+  color: var(--green);
+  background: var(--green-fill);
+  border-color: var(--green-line);
+}
+.pm-dtag.dropped {
+  color: var(--red);
+  background: var(--red-fill);
+  border-color: var(--red-line);
+}
+.pm-dtag.changed {
+  color: var(--blue);
+  background: var(--blue-fill);
+  border-color: var(--blue-line);
+}
+.pm-was {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.pm-was b {
+  color: var(--muted);
+  font-weight: 600;
+  margin-right: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.pm-was s {
+  color: var(--grey);
+  text-decoration-color: var(--red);
+}
+.pm-was ins {
+  color: var(--green);
+  text-decoration: none;
+}
+.pm-was p {
+  margin: 5px 0 0;
+}
+
 .plan-modal {
   width: min(760px, 96vw);
   background: var(--panel);
@@ -1929,9 +2468,6 @@ body {
 .pm-doc {
   font-size: 13px;
   line-height: 1.5;
-  max-height: 55vh;
-  overflow-y: auto;
-  padding-right: 4px;
 }
 .pm-doc h1,
 .pm-doc h2 {

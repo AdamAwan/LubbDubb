@@ -66,6 +66,13 @@ export interface CockpitActions {
    */
   abandonPlan(planId: string): Promise<void>;
   /**
+   * A reviewer's confirmation that one of a part's acceptance criteria holds.
+   * Keyed on the criterion's text, which is what the server stores — an index
+   * would move under a re-worded list and carry the tick onto something nobody
+   * looked at.
+   */
+  setAcceptance(planId: string, slug: string, criterion: string, met: boolean): Promise<void>;
+  /**
    * Which plan's modal is open. UI state, on the seam for the same reason
    * `select` is: the console cannot own it (the modal is shared and the triggers
    * are console-side), and `console/` may not reach `api.js` to open it another way.

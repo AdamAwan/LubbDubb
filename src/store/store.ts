@@ -52,6 +52,7 @@ import type {
   Plan,
   PlanPart,
   PlanPartInput,
+  PlanRevision,
   Retrospective,
   ScratchEntry,
   ScratchPadSummary,
@@ -360,6 +361,15 @@ export class Store {
   }
   updatePlanPart(id: string, patch: Parameters<PlanStore['updatePlanPart']>[1]): PlanPart | null {
     return this.plans.updatePlanPart(id, patch);
+  }
+  setPartAcceptanceMet(id: string, criteria: string[]): PlanPart | null {
+    return this.plans.setPartAcceptanceMet(id, criteria);
+  }
+  recordPlanRevision(planId: string, input: Parameters<PlanStore['recordPlanRevision']>[1]): PlanRevision {
+    return this.plans.recordPlanRevision(planId, input);
+  }
+  listPlanRevisions(planId: string): PlanRevision[] {
+    return this.plans.listPlanRevisions(planId);
   }
   markPartDispatched(id: string, taskId: string, branch: string): PlanPart | null {
     return this.plans.markPartDispatched(id, taskId, branch);

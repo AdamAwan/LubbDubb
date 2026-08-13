@@ -1,7 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
-import { planPartInputs } from './planDocument.js';
+import { planNarrative, planPartInputs } from './planDocument.js';
 import {
   amendedPlanStatus,
   partHasWork,
@@ -77,17 +77,13 @@ export function ingestPlanDocument(
   const surviving = existing.filter((p) => !retiring.has(p.id));
   const status = amendedPlanStatus(doc.verdict, surviving, input.requireApproval ?? false);
 
-  const plan = store.upsertPlan({
-    originRef,
-    title,
-    status,
-    reason: doc.reason,
-    diagnosis: doc.diagnosis ?? null,
-    approach: doc.approach ?? null,
-    risks: doc.risks ?? null,
-    outOfScope: doc.outOfScope ?? null,
-    document: doc.document ?? null,
-  });
+  const narrative = planNarrative(doc);
+  const plan = store.upsertPlan({ originRef, title, status, ...narrative });
+  // The verdict as submitted, kept beside the row it overwrote. Written here
+  // rather than in either transport because this is the one place a document
+  // becomes rows: a revision cannot then exist for a verdict that was never
+  // persisted, or be missing for one that was.
+  store.recordPlanRevision(plan.id, { verdict: doc.verdict, narrative, parts: declared });
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
   // A retired part's ask is withdrawn with it. Declined rather than deleted or a
   // third terminal of its own: "this is not going to be done, and here is why" is

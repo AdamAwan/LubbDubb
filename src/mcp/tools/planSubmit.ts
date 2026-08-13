@@ -54,12 +54,47 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       reason: { type: 'string', description: 'Why this shape — one or two sentences. Not the fix; the split.' },
       risks: { type: 'string', description: 'What could go wrong with this split.' },
       outOfScope: { type: 'string', description: 'What you deliberately left out, and why.' },
+      alternatives: {
+        type: 'string',
+        description:
+          'What you considered and rejected, and why each was rejected. Name real options you weighed, ' +
+          'not strawmen — this is the field an operator reads to decide whether you looked around before ' +
+          'you chose. An approach with no alternatives is one nobody can disagree with usefully.',
+      },
+      openQuestions: {
+        type: 'string',
+        description:
+          'What you are least sure about: the assumption you would most like argued with, and what would ' +
+          'change your mind. This is the agenda if the operator opens a discussion, so be specific about ' +
+          'the decision rather than modest about the plan.',
+      },
+      verification: {
+        type: 'string',
+        description:
+          'How anyone will know the whole thing worked, once every part has landed. Not per part — that is ' +
+          '"acceptance" — and not the test suite unless the test suite genuinely settles it.',
+      },
+      evidence: {
+        type: 'array',
+        description:
+          'Where in the code the diagnosis comes from. Cite the places you actually read; a root cause with ' +
+          'no citation cannot be checked, and a reader who cannot check it has to take it on trust.',
+        items: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Repository-relative path.' },
+            line: { type: 'number', description: 'Optional. Omit when the claim is about the file.' },
+            note: { type: 'string', description: 'What the reader is meant to see there.' },
+          },
+          required: ['path'],
+        },
+      },
       document: {
         type: 'string',
         description:
-          'The full write-up in markdown — the version a human reads before approving. ' +
-          'Cover why the work is shaped this way, what you considered and rejected, and ' +
-          'anything you are unsure about. This is what the operator reads; write it for them.',
+          'The full write-up in markdown — the version a human reads before approving. The fields above are ' +
+          'the summary; this is the argument. Do not repeat them: cover how you got to the diagnosis, what ' +
+          'the code actually looked like, and what a reviewer of the finished work should check.',
       },
       parts: {
         type: 'array',
@@ -72,7 +107,22 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
               description: 'Stable lowercase kebab-case id. Keep it identical across a replan.',
             },
             title: { type: 'string' },
-            scope: { type: 'string', description: 'The files or areas this part owns.' },
+            scope: { type: 'string', description: 'The files or areas this part owns, in a sentence.' },
+            touches: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'The same ownership claim as repository paths — a directory or a file per entry. What this ' +
+                'part is allowed to write. Declare it even when "scope" already says so in prose: this is ' +
+                'the form that gets compared to what the part actually wrote.',
+            },
+            size: {
+              type: 'string',
+              enum: ['s', 'm', 'l'],
+              description:
+                'How big this part is to *review*, not how long it takes. Three parts is not a cost; three ' +
+                'large ones is, and that is the thing an operator is agreeing to.',
+            },
             dependsOn: {
               type: 'array',
               items: { type: 'string' },
@@ -104,6 +154,10 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       approach: args.approach,
       risks: args.risks,
       outOfScope: args.outOfScope,
+      alternatives: args.alternatives,
+      openQuestions: args.openQuestions,
+      verification: args.verification,
+      evidence: args.evidence ?? [],
       document: args.document,
       parts: args.parts ?? [],
     });

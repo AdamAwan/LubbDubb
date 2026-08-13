@@ -170,6 +170,7 @@ export function useCockpit(): CockpitStatus {
 
       replan: (planId) => then(api.replan(planId)),
       abandonPlan: (planId) => then(api.abandonPlan(planId)),
+      setAcceptance: (planId, slug, criterion, met) => then(api.setAcceptance(planId, slug, criterion, met)),
       viewPlan: (planId) => setViewingPlan(planId),
       viewRetro: (issueRef) => setViewingRetro(issueRef),
       viewScratchpad: (issueRef) => setViewingScratchpad(issueRef),
