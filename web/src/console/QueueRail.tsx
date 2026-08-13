@@ -22,9 +22,17 @@ const GROUP_LABEL: Record<NeedGroup, string> = {
 };
 const GROUP_ORDER: NeedGroup[] = ['blocking', 'yours'];
 
-/** `issue:12` → `#12`; null stays null. There is no per-row goal title to show, only the ref. */
-function goalLabel(ref: string | null): string | null {
-  return ref === null ? null : ref.replace(/^issue:/, '#');
+/**
+ * What a row is about, in one token: its goal (`#12`) when it has one, else the
+ * pull request it was raised on (`PR #142`). Null only for an ask with neither,
+ * which is the one case a surface has nothing true to name.
+ *
+ * @public shared with the ask panel, which states the same subject in its header
+ */
+export function subjectLabel(row: NeedRow): string | null {
+  if (row.goalRef !== null) return row.goalRef.replace(/^issue:/, '#');
+  const pr = /^pr:(\d+)/.exec(row.originRef ?? '');
+  return pr ? `PR #${pr[1]}` : null;
 }
 
 /**
@@ -43,15 +51,36 @@ export function holdingLabel(holding: number): string {
  * is parked on this, not merely queued for the operator — so it alone earns the
  * urgent stripe and tag.
  *
+ * `focus` is the goal the situation area is currently drawing, when it is drawing
+ * one. A row about that goal is marked `aria-current` and every other row is
+ * dimmed, so the rail says which of its asks are the ones on screen — the rest
+ * stay legible and clickable, because muting is a reading aid and a rail that
+ * hid rows would hide the fleet's other blockers.
+ *
  * **Where a click goes is `row.opens`, never `row.goalRef`** — the derivation
  * decides it, because it is the only place that can tell a goal with a page from
  * a ref that merely looks like one. Only the recovery hold opens nothing, and it
  * renders as a `div` rather than a `button` so that every button on this rail
  * leads somewhere.
  */
-function Row({ row, now, actions }: { row: NeedRow; now: number; actions: CockpitActions }): JSX.Element {
+function Row({
+  row,
+  now,
+  focus,
+  actions,
+}: {
+  row: NeedRow;
+  now: number;
+  focus: string | null;
+  actions: CockpitActions;
+}): JSX.Element {
   const urgent = row.group === 'blocking';
-  const goal = goalLabel(row.goalRef);
+  const current = focus !== null && row.goalRef === focus;
+  // The recovery hold is never dimmed: while it stands no pulse runs at all, so
+  // it is not another goal's business — it is everyone's, including this one's.
+  const dim = focus !== null && !current && row.kind !== 'recovery';
+  const cls = ['cn-q', urgent ? 'cn-urgent' : '', dim ? 'cn-dim' : ''].filter((c) => c !== '').join(' ');
+  const goal = subjectLabel(row);
   const inner = (
     <>
       <i className="cn-stripe" />
@@ -72,13 +101,13 @@ function Row({ row, now, actions }: { row: NeedRow; now: number; actions: Cockpi
   );
 
   if (row.opens === null) {
-    return <div className={`cn-q ${urgent ? 'cn-urgent' : ''}`}>{inner}</div>;
+    return <div className={cls}>{inner}</div>;
   }
   const ref = row.goalRef;
   const open =
     row.opens === 'goal' && ref !== null ? () => actions.selectGoal(ref) : () => actions.openPanel({ ask: row.id });
   return (
-    <button type="button" className={`cn-q ${urgent ? 'cn-urgent' : ''}`} onClick={open}>
+    <button type="button" className={cls} onClick={open} aria-current={current ? 'true' : undefined}>
       {inner}
     </button>
   );
@@ -93,9 +122,14 @@ function Row({ row, now, actions }: { row: NeedRow; now: number; actions: Cockpi
  *
  * Renders even at zero rows (`cn-rail-empty`) — a rail that vanishes when
  * quiet is indistinguishable from one that broke.
+ *
+ * The focus is `goalPage`'s ref rather than `selectedGoal`, because a selected
+ * ref the world does not carry draws no page: highlighting against it would mute
+ * the whole rail in favour of a goal that is not on screen.
  */
 export function QueueRail({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const rows = view.needsYou;
+  const focus = view.goalPage === null ? null : `issue:${view.goalPage.issue.number}`;
   const sections = GROUP_ORDER.map((group) => ({ group, rows: rows.filter((r) => r.group === group) })).filter(
     (s) => s.rows.length > 0,
   );
@@ -114,7 +148,7 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
             <Fragment key={section.group}>
               <div className="cn-railsub">{GROUP_LABEL[section.group]}</div>
               {section.rows.map((row) => (
-                <Row key={row.id} row={row} now={view.now} actions={actions} />
+                <Row key={row.id} row={row} now={view.now} focus={focus} actions={actions} />
               ))}
             </Fragment>
           ))

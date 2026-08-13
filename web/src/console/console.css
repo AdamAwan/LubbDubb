@@ -219,6 +219,17 @@
   border-color: var(--cn-accent);
   background: #171c28;
 }
+/* The other half of the same reading: while a goal's page is open, its asks are
+   marked and everyone else's recede. Opacity only — the row stays readable and
+   clickable, and hover restores it in full, because the rail is still the fleet's
+   whole queue and a blocker you cannot read is a blocker you do not answer. */
+.cn-q.cn-dim {
+  opacity: 0.45;
+}
+.cn-q.cn-dim:hover,
+.cn-q.cn-dim:focus-visible {
+  opacity: 1;
+}
 .cn-q .cn-stripe {
   background: var(--cn-amber);
 }
@@ -370,6 +381,21 @@
   letter-spacing: 0;
   text-transform: none;
   color: var(--cn-fg-faint);
+}
+/* Not `margin-left: auto` — `.cn-age` already claims that, and the two would fight
+   over which one the header pushes right. */
+.cn-needs > header .cn-open {
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.cn-needs > header .cn-open:hover {
+  opacity: 1;
 }
 .cn-needs .cn-in {
   padding: 13px;
@@ -1118,6 +1144,31 @@ button.cn-grow {
 .cn-pbody {
   overflow: auto;
   padding: 14px 16px;
+}
+
+/* The ask panel's subject line: what this ask is about, and always a way there.
+   It sits above the scrolling body so it cannot scroll out from under the ask it
+   is naming. */
+.cn-psub {
+  margin: 0;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--cn-line);
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+}
+/* Said plainly rather than drawn as an alarm: an ask on a ticketless pull request
+   is a state the harness works on purpose, not a fault. */
+.cn-psub.cn-noGoal {
+  color: var(--cn-amber);
+}
+.cn-goto {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--cn-accent);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* ---------- backlog ---------- */

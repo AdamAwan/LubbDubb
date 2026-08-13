@@ -146,8 +146,9 @@ test('an ask opens its goal when that goal has a page, and the ask panel when it
       ...state,
       escalations: [
         escalation({ id: 'on-goal', agentId: 'a1', context: { originRef: `issue:${known.number}` } }),
-        // A pull request is not a goal, so there is no page to answer this on.
-        escalation({ id: 'on-pr', agentId: 'a2', context: { originRef: 'pr:142' } }),
+        // A pull request no ticket owns: nothing in the world links #9999, so
+        // there is no page to answer this on.
+        escalation({ id: 'on-pr', agentId: 'a2', context: { originRef: 'pr:9999' } }),
         // A goal-shaped ref the world does not carry: `buildGoalPage` returns
         // null for it, so routing on the ref alone opens an empty surface.
         escalation({ id: 'on-ghost', agentId: 'a3', context: { originRef: 'issue:99999' } }),
@@ -165,6 +166,39 @@ test('an ask opens its goal when that goal has a page, and the ask panel when it
   assert.equal(opens.get('on-ghost'), 'ask');
   // The ghost keeps saying which goal it names — only where it *goes* changes.
   assert.equal(rows.find((r) => r.id === 'on-ghost')?.goalRef, 'issue:99999');
+  // And an orphan PR keeps saying what it *is* about, which is all the ask panel
+  // has to name it by.
+  assert.equal(rows.find((r) => r.id === 'on-pr')?.originRef, 'pr:9999');
+});
+
+/**
+ * Most asks the harness raises come from a pull request, and most pull requests
+ * belong to a goal — through a part's row, the tracker's own link, or the branch
+ * convention. Reading only the literal `issue:` prefix sent every one of those to
+ * a panel with no context around it while the goal sat one lookup away.
+ */
+test('an ask raised on a pull request opens the goal that pull request belongs to', () => {
+  const state = buildDemoState();
+  const linked = state.world.issues.find((i) => i.linkedPrNumber !== null);
+  assert.ok(linked?.linkedPrNumber, 'the demo fixtures must carry an issue with a linked pull request');
+
+  const rows = buildNeedsYou(
+    stateWith({
+      ...state,
+      escalations: [escalation({ id: 'on-pr', agentId: 'a1', context: { originRef: `pr:${linked.linkedPrNumber}` } })],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      tasks: [],
+    }),
+  );
+
+  const row = rows.find((r) => r.id === 'on-pr');
+  assert.equal(row?.goalRef, `issue:${linked.number}`, 'the ask is read on the goal its pull request delivers');
+  assert.equal(row?.opens, 'goal');
+  // The subject it was raised on survives the resolution: the goal is where it is
+  // *read*, the PR is what it is *about*.
+  assert.equal(row?.originRef, `pr:${linked.linkedPrNumber}`);
 });
 
 test('a permission request is its own kind, not a plain escalation', () => {

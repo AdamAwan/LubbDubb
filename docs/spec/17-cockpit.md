@@ -204,12 +204,43 @@ values are the cases where that is not possible:
 
 - **`'ask'` — the ask panel**, a full-surface panel drawing the same `NeedsBand` the goal page draws,
   through the same shared components. It is the destination for an ask with **no goal page to be
-  answered on**: an escalation raised on a pull request (`originRef: 'pr:142'`, which is most rebase
-  and CI asks), a bench task with no ticket, or a goal-shaped ref the world no longer carries. The
-  panel closes itself — answering settles the row, the next snapshot drops it from `needsYou`, and a
-  panel whose row is gone draws nothing rather than offering a second verdict on a settled ask.
+  answered on**: an escalation on a pull request no ticket owns, a bench task with no ticket, or a
+  goal-shaped ref the world no longer carries. The panel closes itself — answering settles the row,
+  the next snapshot drops it from `needsYou`, and a panel whose row is gone draws nothing rather than
+  offering a second verdict on a settled ask.
 - **`null` — the recovery hold alone**, which is harness-wide and is answered on the banner above the
   console. It renders as a `div` rather than a `button`, because it is the one row with nowhere to go.
+
+**A `pr:<n>` origin is resolved to its goal, not read literally.** Most asks the harness raises come
+from a pull request — every rebase and CI question does — and most pull requests belong to a goal.
+`goalOf` therefore asks `goalOfPr` (`web/src/view/goalPage.ts`), which matches the same three ways
+`ownsPr` does, read backwards: a part's `prNumber`, the tracker's `linkedPrNumber`, or the branch
+convention. The convention itself has **one** implementation, `branchGoal`, because it is read in both
+directions and two readings of one string shape is how `issue/14` comes to match `issue:1`. A PR no
+ticket owns resolves to null and keeps the ask panel: the harness works ticketless pull requests as
+first-class subjects ([05](05-dispatcher.md)), so that is a real answer rather than a lookup failure.
+
+**`goalRef` is where an ask is read; `originRef` is what it is about.** Both ride on the row, because
+a resolved PR ask needs to say both — its goal page is where it belongs, and `#142` is still the thing
+in question. `subjectLabel` words it once for the rail and the panel: `#12`, else `PR #142`, else
+nothing.
+
+**The ask panel states its subject, always as a link.** It is the one surface with no context drawn
+around it, so `AskSubject` sits above the scrolling body: a goal reads _On goal #12 — read it in
+context →_, which closes the panel and opens that page (the band there draws the same ask, and a panel
+left standing over it would be one verdict offered twice); an orphan reads _No linked goal · raised on
+#142, a pull request no ticket owns_, linked out to the provider; and an ask with neither says so in
+those words. Blank was the failure mode being fixed — an operator who cannot tell "no goal" from "the
+goal did not load" is answering blind.
+
+**A band on the goal page can be opened as that panel** (`Open` in its header), for a goal carrying
+several asks or a page scrolled past one. It is the same `needBody`, so it is one ask reachable two
+ways rather than two asks.
+
+**The demo carries no goal-less ask.** Both fixture pull requests under work are owned by a ticket
+(`#248` → PR #142, `#236` → PR #139), so every row in the demo's rail leads to a goal page. The
+goal-less reading is still exercised — `test/console.test.ts` builds the orphan rather than fishing
+one out of the fixtures — because what the harness does is not what a demo should teach.
 
 **The destination is decided in `buildNeedsYou`, never in the rail**, and this is the load-bearing
 part: only the derivation can tell a `goalRef` that _has_ a page from one that merely looks like it
@@ -218,6 +249,22 @@ cannot drift. A rail that routed on `goalRef` alone drew every PR-origin escalat
 and every ref the world had dropped as a click that landed nowhere; both read, to an operator, as a
 console that is broken. `test/console.test.ts` asserts all three shapes and that the ask panel closes
 on the row settling; `test/needsYou.test.ts` asserts the routing itself.
+
+**While a goal's page is open, the rail says which of its rows are the ones on screen.** A row whose
+`goalRef` names that goal is marked `aria-current` and drawn against the accent; every other row is
+dimmed. The two halves are one reading — the page is the ask's context, so the rail's job while it is
+open is to state which asks that context covers, and an unmarked rail leaves the operator matching
+`#12` against a crumb by eye.
+
+**Dimmed, never filtered.** The rail is the fleet's whole queue and it is the only surface carrying
+some of these kinds at all; a row removed while a goal is open is a blocker nobody answers, and the
+count in the heading would stop matching what is under it. So muting is opacity alone — the row stays
+legible, clickable, and returns to full on hover or keyboard focus. **The recovery hold is never
+dimmed**: while it stands no pulse runs at all, so it is not some other goal's business.
+
+The focus is read off `goalPage`, not `selectedGoal` — a selected ref the world does not carry draws
+no page, and highlighting against it would mute the entire rail in favour of a goal that is not on
+screen.
 
 **At zero the rail keeps its place and says so** ("Nothing is waiting on you"). A surface that vanishes
 when quiet is indistinguishable from one that broke, and a column that came and went would reflow the

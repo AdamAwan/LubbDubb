@@ -349,6 +349,33 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: true, status: 'eligible', reasons: [] },
         }),
+        // The two goals the in-flight pull requests belong to. They are here so
+        // that every ask the demo raises has a goal page to be read on: an
+        // escalation from PR #142 or #139 resolves through `linkedPrNumber` and
+        // opens its goal, rather than a panel with no context around it. The
+        // harness does work ticketless PRs — the console still has the goal-less
+        // reading for them — but a demo is what the flow is *meant* to look like,
+        // and that is a queue where every row leads somewhere.
+        demoIssue({
+          id: 'iss-248',
+          number: 248,
+          title: 'Add token-bucket rate limiting to the ingest API',
+          body: 'The ingest endpoint has no ceiling; one client can starve the rest. Token bucket per API key.',
+          labels: ['lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: 142,
+          pickup: { eligible: false, status: 'has_pr', reasons: ['resolved into PR #142 — the PR rules own it now'] },
+        }),
+        demoIssue({
+          id: 'iss-236',
+          number: 236,
+          title: 'Read Azure DevOps reviewer votes as approval',
+          body: 'The connector reports every Azure PR as unapproved: reviewer votes are never mapped to approval state.',
+          labels: ['bug', 'lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: 139,
+          pickup: { eligible: false, status: 'has_pr', reasons: ['resolved into PR #139 — the PR rules own it now'] },
+        }),
         demoIssue({
           id: 'iss-205',
           number: 205,

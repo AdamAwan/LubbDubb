@@ -84,13 +84,47 @@ function belongsToGoal(candidate: string | null | undefined, ref: string): boole
  * verdict, and the pair is pinned by `test/goalPage.test.ts`.
  */
 function ownsPr(pr: PullRequest, issue: Issue, partPrs: ReadonlySet<number>): boolean {
-  const branch = `issue/${issue.number}`;
-  return (
-    partPrs.has(pr.number) ||
-    pr.number === issue.linkedPrNumber ||
-    pr.branch === branch ||
-    pr.branch.startsWith(`${branch}/`)
+  const ref = `issue:${issue.number}`;
+  return partPrs.has(pr.number) || pr.number === issue.linkedPrNumber || branchGoal(pr.branch) === ref;
+}
+
+/**
+ * The goal a branch name declares, as `issue:<n>` — `issue/12` and
+ * `issue/12/signer` both, and nothing else. One implementation of the convention,
+ * because it is read in two directions: from a goal, to find its pull requests
+ * ({@link ownsPr}); and from a pull request, to find the goal an ask raised on it
+ * belongs to ({@link goalOfPr}). Two readings of one string shape is how
+ * `issue/14` ends up matching `issue:1`.
+ */
+function branchGoal(branch: string): string | null {
+  const m = /^issue\/(\d+)(?:\/|$)/.exec(branch);
+  return m ? `issue:${m[1]}` : null;
+}
+
+/**
+ * The goal a pull request belongs to, as `issue:<n>`, or null when no ticket owns
+ * it. The same three ways {@link ownsPr} matches, read backwards — a PR row, a
+ * `linkedPrNumber`, or the branch convention.
+ *
+ * Null is a real answer, not a lookup failure: the harness works ticketless pull
+ * requests as first-class subjects ([05](../../../docs/spec/05-dispatcher.md)), so
+ * an ask raised on one has no goal to be read next to, and the surface that draws
+ * it must say so rather than imply a goal it cannot name.
+ *
+ * @public shared with buildNeedsYou, which routes a PR-origin ask by it
+ */
+export function goalOfPr(state: AppState, prNumber: number): string | null {
+  const part = (state.planParts ?? []).find((p) => p.prNumber === prNumber);
+  const plan = part ? (state.plans ?? []).find((pl) => pl.id === part.planId) : undefined;
+  if (plan) return plan.originRef;
+
+  const linked = state.world.issues.find((i) => i.linkedPrNumber === prNumber);
+  if (linked) return `issue:${linked.number}`;
+
+  const pr = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])].find(
+    (p) => p.number === prNumber,
   );
+  return pr ? branchGoal(pr.branch) : null;
 }
 
 const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
