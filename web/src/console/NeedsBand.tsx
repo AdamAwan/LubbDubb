@@ -42,6 +42,14 @@ export function NeedsBand({
           {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
           {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
         </span>
+        {/* The same ask, alone and in front — for a goal carrying several, or a
+            page scrolled past this one. It is the panel the rail opens for an ask
+            with no goal page, drawn from the same `needBody`, so there is one
+            implementation of the ask and two ways to reach it rather than two
+            asks. */}
+        <button type="button" className="cn-open" onClick={() => actions.openPanel({ ask: row.id })}>
+          Open
+        </button>
       </header>
       <div className="cn-in">{body}</div>
     </div>

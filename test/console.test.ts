@@ -311,8 +311,8 @@ test('every row that opens something is a button; only the recovery hold is not'
 
   const html = render(view({ needsYou: rows }));
 
-  // The row wrapper is the element opening `class="cn-q "` or `class="cn-q
-  // cn-urgent"` — the trailing space after `cn-q` rules out `cn-qin`/`cn-qkind`,
+  // The row wrapper is the element whose class is `cn-q` alone or `cn-q
+  // cn-urgent` — anchoring on the whole attribute rules out `cn-qin`/`cn-qkind`,
   // which are unrelated inner elements that happen to share the `cn-q` prefix.
   const rowWrapper = (title: string): string => {
     const titlePos = html.indexOf(title);
@@ -322,7 +322,7 @@ test('every row that opens something is a button; only the recovery hold is not'
     // class="…">` vs `<div class="…">`), so match the whole opening tag and
     // check its attributes rather than assuming `class` comes first.
     const matches = [...before.matchAll(/<(button|div)\b([^>]*)>/g)].filter(([, , attrs]) =>
-      /class="cn-q (?:cn-urgent)?"/.test(attrs ?? ''),
+      /class="cn-q(?: cn-urgent)?"/.test(attrs ?? ''),
     );
     const last = matches.at(-1);
     assert.ok(last, `no cn-q wrapper found before "${title}"`);
@@ -440,6 +440,76 @@ test('a selected goal draws its page instead of the overview', () => {
   assert.ok(html.includes('cn-goal'));
   assert.ok(v.goalPage !== null);
   assert.ok(decode(html).includes(String(v.goalPage!.issue.title)));
+});
+
+/**
+ * The rail's rows and the page are one reading, so while a goal is open the rail
+ * must say which of its asks are the ones on screen. Dimming rather than
+ * filtering: the rail is the fleet's whole queue, and a blocker dropped from it
+ * is a blocker nobody answers.
+ */
+test('the rail marks the open goal’s asks and mutes the rest', () => {
+  const ref = goalRef();
+  const rows = [
+    {
+      id: 'mine',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'On the open goal',
+      goalRef: ref,
+      opens: 'goal',
+      agentId: 'a1',
+      holding: 0,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'other',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'On some other goal',
+      goalRef: 'issue:9999',
+      opens: 'ask',
+      agentId: 'a2',
+      holding: 0,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'recovery',
+      kind: 'recovery',
+      group: 'blocking',
+      title: 'Answered on the banner above',
+      goalRef: null,
+      opens: null,
+      agentId: null,
+      holding: 0,
+      raisedAt: '',
+    },
+  ] as CockpitView['needsYou'];
+
+  const opened = render({ ...goalView(), needsYou: rows });
+  const wrapper = (title: string): string => {
+    const before = opened.slice(0, opened.indexOf(title));
+    // `class="cn-q…"` bounded by the closing quote or a space — `cn-qkind` and
+    // `cn-qin` share the prefix and would otherwise match as row wrappers.
+    const tag = [...before.matchAll(/<(?:button|div)\b[^>]*class="cn-q(?: [^"]*)?"[^>]*>/g)].at(-1);
+    assert.ok(tag, `no cn-q wrapper found before "${title}"`);
+    return tag[0];
+  };
+
+  assert.match(wrapper('On the open goal'), /aria-current="true"/, 'an ask on the open goal is the current row');
+  assert.doesNotMatch(wrapper('On the open goal'), /cn-dim/, 'the current row is never the muted one');
+  assert.match(wrapper('On some other goal'), /cn-dim/, 'another goal’s ask recedes while this one is open');
+  assert.doesNotMatch(
+    wrapper('Answered on the banner above'),
+    /cn-dim/,
+    'the recovery hold blocks every goal, so it is nobody else’s business to mute',
+  );
+
+  // With no goal on screen there is nothing to be current *against*: a rail that
+  // dimmed here would mute every row it draws.
+  const overview = render(view({ needsYou: rows }));
+  assert.ok(!overview.includes('cn-dim'), 'the rail mutes nothing while the overview is drawn');
+  assert.ok(!overview.includes('aria-current'), 'no row is current while no goal is open');
 });
 
 test('the ask is drawn above the plan, which is the whole point of the page', () => {
@@ -674,22 +744,53 @@ test('a reading opens the panel behind it, in front of the console', () => {
   }
 });
 
-test('an ask with no goal page is answered in the ask panel', () => {
-  const v = view();
-  const row = v.needsYou.find((n) => n.opens === 'ask' && n.kind !== 'bench' && n.kind !== 'close_out');
-  assert.ok(row, 'the demo fixtures must carry an escalation whose origin is not a goal');
+/**
+ * The demo carries no goal-less ask on purpose — every fixture pull request has a
+ * ticket that owns it — so the orphan is built here: the state the harness does
+ * reach when it works a ticketless PR, which is the case the panel exists for.
+ */
+function orphanAsk(): { v: CockpitView; row: CockpitView['needsYou'][number] } {
+  const base = view();
+  const found = base.needsYou.find((n) => n.kind === 'escalation' || n.kind === 'proposal' || n.kind === 'permission');
+  assert.ok(found, 'the demo fixtures must carry an escalation to build the orphan from');
+  const row = { ...found, goalRef: null, originRef: 'pr:9999', opens: 'ask' as const };
+  return { v: { ...base, needsYou: [row, ...base.needsYou.filter((n) => n.id !== row.id)] }, row };
+}
 
-  const html = render(view({ consolePanel: { ask: row.id } }));
+test('an ask with no goal page is answered in the ask panel', () => {
+  const { v, row } = orphanAsk();
+
+  const html = render({ ...v, consolePanel: { ask: row.id } });
   assert.ok(html.includes('cn-backdrop'), 'the ask must draw in front of the console');
   assert.ok(html.includes(`<h2>Needs you · ${KIND_LABEL[row.kind]}</h2>`), 'the panel names the ask the rail named');
   // The shared card, not a second wiring: its own controls are what answer the ask.
   assert.ok(html.includes('escalation-prompt'), 'the panel embeds the shared escalation card');
 });
 
+/**
+ * The panel is the one surface with nothing drawn around the ask, so it has to
+ * name the subject itself — and "no goal" has to read as a fact rather than as a
+ * line that failed to load.
+ */
+test('the ask panel says what the ask is about, and says so when there is no goal', () => {
+  const { v, row } = orphanAsk();
+  const orphan = decode(render({ ...v, consolePanel: { ask: row.id } }));
+  assert.match(orphan, /No linked goal/, 'an ask with no goal must say so in those words');
+  assert.match(orphan, /#9999/, 'and still name the pull request it was raised on');
+
+  // The same panel opened from a goal's band: the subject is that goal, and it is
+  // a way back onto its page rather than a label.
+  const onGoal = v.needsYou.find((n) => n.goalRef !== null);
+  assert.ok(onGoal, 'the demo fixtures must carry an ask that names a goal');
+  const linked = decode(render({ ...v, consolePanel: { ask: onGoal.id } }));
+  assert.match(linked, /On goal/);
+  assert.match(linked, new RegExp(`cn-goto[^<]*>\\s*${onGoal.goalRef!.replace('issue:', '#')}`));
+});
+
 test('the ask panel closes itself once the row it was drawing is settled', () => {
   const v = view();
-  const row = v.needsYou.find((n) => n.opens === 'ask');
-  assert.ok(row, 'the demo fixtures must carry an ask with no goal page');
+  const row = v.needsYou[0];
+  assert.ok(row, 'the demo fixtures must carry an ask');
 
   // What answering it looks like in the next snapshot: the row is gone from the
   // queue, so a panel still holding its id has nothing left to offer a verdict on.

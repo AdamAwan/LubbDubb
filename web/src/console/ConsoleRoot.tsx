@@ -1,8 +1,9 @@
 import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
+import type { NeedRow } from '../view/needsYou.js';
 import { TAB_LABEL, TopBar } from './TopBar.js';
-import { KIND_LABEL, QueueRail } from './QueueRail.js';
+import { KIND_LABEL, QueueRail, subjectLabel } from './QueueRail.js';
 import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { Overview } from './Overview.js';
@@ -15,7 +16,7 @@ import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
-import { relTime } from '../components/util.js';
+import { refLink, relTime } from '../components/util.js';
 import { axisScale, productionReading, type ProductionReading, type SeriesKey } from '../view/production.js';
 
 /**
@@ -169,6 +170,7 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
     if (body === null) return null;
     return (
       <Panel title={`Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
+        <AskSubject row={row} view={view} actions={actions} />
         <div className="cn-pbody">{body}</div>
       </Panel>
     );
@@ -178,6 +180,58 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
     <Panel title={PANEL_TITLE[panel]} onClose={close}>
       <div className="cn-pbody">{panelBody(panel, view, actions)}</div>
     </Panel>
+  );
+}
+
+/**
+ * What the ask in the panel is about, stated above it and always as a way there.
+ *
+ * The panel is the one surface with no context drawn around it, so the subject
+ * has to be on the panel itself. Three readings, and the third is the one worth
+ * the component: a goal, which is a way back onto its page; a pull request no
+ * ticket owns, linked out to the provider; and **neither**, said in those words.
+ * An ask that names nothing is not a bug in the console — the harness raises them
+ * on ticketless pull requests and on bench work nobody filed — but leaving the
+ * line blank makes it read as one, and an operator who cannot tell "no goal" from
+ * "the goal did not load" answers blind.
+ */
+function AskSubject({
+  row,
+  view,
+  actions,
+}: {
+  row: NeedRow;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const subject = subjectLabel(row);
+  if (row.goalRef !== null) {
+    const ref = row.goalRef;
+    // Closing first: the goal page draws this same ask in its band, so a panel
+    // left standing over it would be the same verdict offered twice.
+    const read = () => {
+      actions.openPanel(null);
+      actions.selectGoal(ref);
+    };
+    return (
+      <p className="cn-psub">
+        On goal{' '}
+        <button type="button" className="cn-goto" onClick={read}>
+          {subject} — read it in context →
+        </button>
+      </p>
+    );
+  }
+  const pr = /^pr:(\d+)/.exec(row.originRef ?? '');
+  return (
+    <p className="cn-psub cn-noGoal">
+      No linked goal ·{' '}
+      {pr ? (
+        <>raised on {refLink(`#${pr[1]}`, view.state.refUrls)}, a pull request no ticket owns</>
+      ) : (
+        'this ask stands on its own — nothing in the tracker is waiting on it'
+      )}
+    </p>
   );
 }
 

@@ -1,5 +1,5 @@
 import type { AppState, Escalation, HumanTask, PlanPart, Proposal } from '../types.js';
-import { goalIssue } from './goalPage.js';
+import { goalIssue, goalOfPr } from './goalPage.js';
 
 /**
  * What kind of answer a row wants. `permission` and `proposal` are escalations
@@ -46,6 +46,15 @@ export interface NeedRow {
    * goal can be named by a ref the console has no page for.
    */
   goalRef: string | null;
+  /**
+   * The ref the ask was actually raised on (`pr:142`, `issue:12:part:signer`), as
+   * the harness recorded it. Kept beside {@link goalRef} rather than folded into
+   * it because the two answer different questions: `goalRef` is the goal the ask
+   * is read *next to*, and this is what it is *about*. A row with no goal has one
+   * of these or nothing at all, and the ask panel draws it — an ask whose subject
+   * a surface cannot name is one the operator answers blind.
+   */
+  originRef: string | null;
   /** Where a click goes. */
   opens: NeedDestination;
   /** The parked agent, when there is one. */
@@ -65,12 +74,24 @@ export function partHolding(planId: string, slug: string, parts: readonly PlanPa
   return parts.filter((p) => p.status !== 'retired' && p.planId === planId && p.dependsOn.includes(slug)).length;
 }
 
-/** The goal a ref belongs to, as `issue:<n>` — `issue:12:part:x` and `issue:12` both fold to `issue:12`. */
-function goalOf(ref: string | null | undefined): string | null {
+/**
+ * The goal a ref belongs to, as `issue:<n>`.
+ *
+ * `issue:12:part:x` and `issue:12` both fold to `issue:12`. A **`pr:<n>`** origin
+ * is resolved through the world (`goalOfPr`): the goal page is where an ask is
+ * meant to be read, and most asks the harness raises come from a pull request, so
+ * reading only the literal prefix sent every rebase and CI question to a panel
+ * with no context around it while the goal that PR belongs to sat one lookup away.
+ * Null survives for a pull request no ticket owns — the harness works those too,
+ * and there is no goal to invent for them.
+ */
+function goalOf(ref: string | null | undefined, state: AppState): string | null {
   const m = /^(issue:\d+)/.exec(ref ?? '');
   // noUncheckedIndexedAccess makes a capture group read as possibly undefined
   // even once `m` is non-null; the regex guarantees it's set when `m` matches.
-  return m?.[1] ?? null;
+  if (m?.[1]) return m[1];
+  const pr = /^pr:(\d+)/.exec(ref ?? '');
+  return pr?.[1] ? goalOfPr(state, Number(pr[1])) : null;
 }
 
 function holdingForTask(task: HumanTask, parts: readonly PlanPart[]): number {
@@ -120,6 +141,7 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       group: 'blocking',
       title: `${state.recovery.length} runs were orphaned by a restart`,
       goalRef: null,
+      originRef: null,
       // The one row with nowhere to go: the recovery banner above the console is
       // where it is answered, and it is already on screen.
       opens: null,
@@ -131,13 +153,15 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
 
   for (const e of state.escalations.filter((x) => x.status === 'open')) {
     const proposal = proposals.find((p) => p.escalationId === e.id);
-    const goalRef = goalOf(state.tasks.find((t) => t.id === e.taskId)?.originRef ?? e.context.originRef);
+    const originRef = state.tasks.find((t) => t.id === e.taskId)?.originRef ?? e.context.originRef ?? null;
+    const goalRef = goalOf(originRef, state);
     rows.push({
       id: e.id,
       kind: kindOf(e, proposal),
       group: 'blocking',
       title: e.prompt,
       goalRef,
+      originRef,
       opens: opensAt(goalRef, state),
       agentId: e.agentId,
       holding: holdingForEscalation(e, state),
@@ -146,13 +170,14 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
   }
 
   for (const t of (state.humanTasks ?? []).filter((x) => x.status === 'open')) {
-    const goalRef = goalOf(t.originRef);
+    const goalRef = goalOf(t.originRef, state);
     rows.push({
       id: t.id,
       kind: t.kind === 'close_out' ? 'close_out' : 'bench',
       group: 'yours',
       title: t.title,
       goalRef,
+      originRef: t.originRef ?? null,
       opens: opensAt(goalRef, state),
       agentId: null,
       holding: holdingForTask(t, parts),
