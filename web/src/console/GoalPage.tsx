@@ -137,10 +137,14 @@ function Header({
           type="button"
           className={`cn-tgl ${watched === 'watched' ? 'cn-watch' : ''}`}
           onClick={() => void actions.setIssueWatched(issue.number, watched !== 'watched')}
+          // The route writes both labels on every toggle, so the title names both.
+          // Saying only "remove the watch label" understates a click that also
+          // tags the goal ignored — and the difference shows up in the backlog,
+          // where the goal lands in Ignored rather than back in Unwatched.
           title={
             watched === 'watched'
-              ? `Remove "${config.watchLabel}" so the harness leaves this goal alone`
-              : `Tag this goal "${config.watchLabel}" so the harness picks it up`
+              ? `Remove "${config.watchLabel}"${config.ignoreLabel ? ` and tag "${config.ignoreLabel}"` : ''} so the harness leaves this goal alone`
+              : `Tag this goal "${config.watchLabel}"${config.ignoreLabel ? ` and remove "${config.ignoreLabel}"` : ''} so the harness picks it up`
           }
         >
           {watched === 'watched' ? 'Watching' : 'Watch'}
