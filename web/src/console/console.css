@@ -69,6 +69,7 @@
   gap: 16px;
   padding: 0 14px;
   min-height: 46px;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--cn-line);
   background: var(--cn-panel);
 }
@@ -139,6 +140,53 @@
   display: flex;
   align-items: center;
   gap: 5px;
+}
+
+/* the nav, in the bar: the page's primary navigation, so it is drawn at the
+   bar's own size rather than the small type the readings wear — and it sits in
+   the one row that never scrolls.
+
+   `nowrap` and `flex: 0 0 auto`, unlike the readings beside it: three tabs
+   stacked one per line is not a tab strip, and the readings wrapping is the
+   give the bar already has. When even that runs out the *bar* wraps, dropping
+   the readings to a second line and leaving the nav whole. */
+.cn-nav {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+}
+/* `button`, where the mockup wrote `a`: navigating the console changes no URL —
+   there is no router — so an anchor would be a link to nowhere with a keyboard
+   behaviour it cannot honour. */
+.cn-nav a,
+.cn-nav button,
+.cn-nav span {
+  padding: 5px 12px;
+  border: 1px solid transparent; /* so gaining the active border moves nothing */
+  border-radius: var(--cn-r-sm);
+  font-size: 13px;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+}
+.cn-nav a:hover,
+.cn-nav button:hover {
+  background: var(--cn-panel-2);
+  color: var(--cn-fg-dim);
+}
+.cn-nav .cn-navsep {
+  color: var(--cn-line);
+  padding: 0;
+}
+.cn-nav .cn-on {
+  background: var(--cn-panel-2);
+  color: var(--cn-fg);
+  border-color: var(--cn-line);
+}
+.cn-nav .cn-n {
+  font: 600 10.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
 }
 
 /* ---------- body ---------- */
@@ -298,6 +346,36 @@
    same reason — no pulse runs until it is decided. */
 .cn-recovery {
   border-bottom: 1px solid var(--cn-line);
+}
+
+/* the crumb: the trail back out of a goal, at the head of the situation area
+   rather than in the bar — a title is as long as whoever filed it made it, and
+   one in the bar reflows the readings on the act of opening a goal. It wraps
+   rather than clipping, because here there is a line to spare. */
+.cn-crumb {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+}
+.cn-crumb button {
+  padding: 3px 8px 3px 5px;
+  margin-left: -5px; /* the label sits on the situation area's own left edge */
+  border-radius: var(--cn-r-sm);
+  color: var(--cn-fg-faint);
+}
+.cn-crumb button:hover {
+  background: var(--cn-panel-2);
+  color: var(--cn-fg-dim);
+}
+.cn-crumbsep {
+  color: var(--cn-line);
+}
+.cn-crumbnow {
+  color: var(--cn-fg-dim);
+  min-width: 0;
 }
 
 /* goal page */
@@ -542,41 +620,6 @@
 }
 .cn-criteria li {
   margin-bottom: 5px;
-}
-.cn-nav {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-/* `button`, where the mockup wrote `a`: navigating the console changes no URL —
-   there is no router — so an anchor would be a link to nowhere with a keyboard
-   behaviour it cannot honour. */
-.cn-nav a,
-.cn-nav button,
-.cn-nav span {
-  padding: 5px 11px;
-  border-radius: var(--cn-r-sm);
-  font-size: 12.5px;
-  color: var(--cn-fg-faint);
-}
-.cn-nav a:hover,
-.cn-nav button:hover {
-  background: var(--cn-panel-2);
-  color: var(--cn-fg-dim);
-}
-.cn-navsep {
-  color: var(--cn-line);
-}
-.cn-nav .cn-on {
-  background: var(--cn-panel-2);
-  color: var(--cn-fg);
-  border: 1px solid var(--cn-line);
-}
-.cn-nav .cn-n {
-  font: 600 10.5px var(--cn-mono);
-  color: var(--cn-fg-faint);
 }
 .cn-grpname {
   display: flex;
