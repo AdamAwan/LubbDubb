@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
 import { ensureColumns } from './migrate.js';
-import { TaskStore, TASK_COLUMNS } from './tasks.js';
+import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
@@ -143,6 +143,10 @@ export class Store {
     // carried now read off the parts.
     adoptFloorCompletions(this.db);
     absorbSinglePlanStatus(this.db);
+    // What kind of work each historical task was, so the by-task-type and
+    // by-check spend tables can speak about the runs that predate the columns.
+    // The one place a dispatch reason is ever parsed — see the function.
+    backfillTaskDispatchKind(this.db);
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);

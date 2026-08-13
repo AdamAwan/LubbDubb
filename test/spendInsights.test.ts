@@ -116,6 +116,8 @@ test('every origin shape lands in the phase it belongs to', () => {
       agent('a6', { costUsd: 6 }),
       agent('a7', { costUsd: 7 }),
       agent('a8', { costUsd: 8 }),
+      agent('a9', { costUsd: 9 }),
+      agent('a10', { costUsd: 10 }),
     ],
     tasks: [
       task('a1', 'issue:12:plan'),
@@ -126,6 +128,8 @@ test('every origin shape lands in the phase it belongs to', () => {
       task('a6', 'pr:41:ci'),
       task('a7', 'job:sweep'),
       task('a8', null),
+      task('a9', 'pr:41:comments'),
+      task('a10', 'pr:41:ci-gate'),
     ],
     nodes: [node('pr:41', 'issue:12')],
   });
@@ -134,27 +138,46 @@ test('every origin shape lands in the phase it belongs to', () => {
   assert.equal(byPhase.get('deliberation'), 7, 'the planner and the assay are deliberation');
   assert.equal(byPhase.get('build'), 3, 'the pickup root and a part are both build');
   assert.equal(byPhase.get('evidence'), 5, 'the assessment is evidence');
-  assert.equal(byPhase.get('landing'), 6, "a pull request's own agents are landing");
+  assert.equal(byPhase.get('ci'), 16, 'a failing check and a blocked gate are one pipeline’s bill');
+  assert.equal(byPhase.get('landing'), 9, 'and answering review is what is left of landing');
   assert.equal(byPhase.get('job'), 7, 'an operator job is its own phase');
   assert.equal(byPhase.get('other'), 8, 'an agent dispatched against nothing is unclassified');
-  assert.equal(insights.totals.costUsd, 36, 'the phases partition the fleet, so they sum to it');
+  assert.equal(insights.totals.costUsd, 55, 'the phases partition the fleet, so they sum to it');
   assert.deepEqual(
     insights.phases.map((p) => p.phase),
-    ['deliberation', 'build', 'landing', 'evidence', 'job', 'other'],
+    ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'],
     'phases ship in funnel order regardless of what cost what',
   );
 });
 
 /**
- * `landing` is separate from `build` even though both are work on the same code,
- * and this is the reading that separation exists for: a goal whose landing dwarfs
- * its build is a flaky pipeline, not an expensive goal — and the pull request's
- * money still belongs to the goal, which the lineage is what establishes.
+ * `landing` is the *remainder* of `pr:*` and not a list of suffixes, so a shape
+ * nobody thought to name still lands somewhere an operator can see. Only CI is
+ * named, because only CI is being lifted out — and a new PR concern must not need
+ * a code change here to be counted at all.
+ */
+test('every pull-request concern but CI falls to landing, named or not', () => {
+  const shapes = ['pr:41', 'pr:41:merge', 'pr:41:mergeable', 'pr:41:comment:c_7', 'pr:41:reply', 'pr:41:whatever-next'];
+  const insights = build({
+    agents: shapes.map((_, i) => agent(`a${i}`, { costUsd: 1 })),
+    tasks: shapes.map((ref, i) => task(`a${i}`, ref)),
+  });
+
+  const byPhase = new Map(insights.phases.map((p) => [p.phase, p.costUsd]));
+  assert.equal(byPhase.get('landing'), shapes.length);
+  assert.equal(byPhase.get('ci'), undefined, 'and none of them is mistaken for a check');
+});
+
+/**
+ * `ci` and `landing` are separate from `build` even though all three are work on
+ * the same code, and this is the reading that separation exists for: a goal whose
+ * CI dwarfs its build is a flaky pipeline, not an expensive goal — and the pull
+ * request's money still belongs to the goal, which the lineage is what establishes.
  */
 test("a pull request's spend joins its goal without joining its build", () => {
   const insights = build({
-    agents: [agent('a1', { costUsd: 2 }), agent('a2', { costUsd: 8 })],
-    tasks: [task('a1', 'issue:12:part:auth'), task('a2', 'pr:41:ci')],
+    agents: [agent('a1', { costUsd: 2 }), agent('a2', { costUsd: 8 }), agent('a3', { costUsd: 1 })],
+    tasks: [task('a1', 'issue:12:part:auth'), task('a2', 'pr:41:ci'), task('a3', 'pr:41:comments')],
     nodes: [node('pr:41', 'issue:12:part:auth')],
     issues: [issue(12, 'Rate limit the ingest API')],
   });
@@ -162,10 +185,11 @@ test("a pull request's spend joins its goal without joining its build", () => {
   const goal = insights.goals[0];
   assert.ok(goal);
   assert.equal(goal.issueNumber, 12);
-  assert.equal(goal.costUsd, 10, "the goal carries the pull request's spend");
+  assert.equal(goal.costUsd, 11, "the goal carries the pull request's spend");
   assert.equal(goal.title, 'Rate limit the ingest API');
   assert.equal(goal.byPhase.build, 2);
-  assert.equal(goal.byPhase.landing, 8, 'four times the build went on getting it through');
+  assert.equal(goal.byPhase.ci, 8, 'four times the build went on getting the checks green');
+  assert.equal(goal.byPhase.landing, 1, 'and the review it also needed is not folded in with them');
   assert.equal(insights.unattributedCostUsd, 0);
 });
 

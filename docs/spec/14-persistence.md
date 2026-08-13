@@ -93,7 +93,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 
 | Table                                  | Declared in        | Columns added                                                                                                  |
 | -------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `tasks`                                | `tasks.ts`         | `origin_title`, `origin_summary`, `dispatch_reason`                                                            |
+| `tasks`                                | `tasks.ts`         | `origin_title`, `origin_summary`, `dispatch_reason`, `rule`, `ci_checks`                                       |
 | `agents`                               | `agents.ts`        | `session_id`, `cost_usd`, `input_tokens`, `output_tokens`, `num_turns`, `note`, `noted_at`, `resumed_at`       |
 | `decisions`                            | `decisions.ts`     | `rule`, `admission`                                                                                            |
 | `findings`                             | `findings.ts`      | `ticket_ref`, `where_at`, `detail`                                                                             |
@@ -108,7 +108,7 @@ column is `where_at` and `rowToFinding` maps it to `where`. Both new columns are
 from before them reads as `null` on each — the pre-split report stays whole in `summary`
 ([13](13-jobs-and-findings.md#the-three-text-fields)).
 
-**Two migrations are not `ALTER`s.** `adoptFloorCompletions()` carries #203's `floor_completions`
+**Three migrations are not `ALTER`s.** `adoptFloorCompletions()` carries #203's `floor_completions`
 into `issue_runs` and drops it (#234). A reshape rather than a column: `completed_at` was `NOT NULL`
 and a run minted at pickup has no completion, so stretching the column to mean two things would leave
 "minted" and "finished" indistinguishable on exactly the databases with history in them. It is guarded
@@ -118,12 +118,27 @@ refreshed snapshots with the old shape's stale titles, and it runs in one transa
 dismissals would put every ended run back in front of the operator with the dispatcher acting on it
 again.
 
-`absorbSinglePlanStatus()` is the other: no column changes, the values in one do —
+`absorbSinglePlanStatus()` is the second: no column changes, the values in one do —
 `UPDATE plans SET status='active' WHERE status='single'`. `single` was a plan **shape** wearing a
 lifecycle status, which made the two exclusive; the shape is now read off the live parts
 ([08](08-planning.md#shape-is-the-parts)). Unconditional and idempotent — a database with no such rows
-updates none, and a second boot finds none left. Both run from `Store`'s constructor beside the
-`ensureColumns` pass, before any module is constructed, let alone reads.
+updates none, and a second boot finds none left.
+
+`backfillTaskDispatchKind()` is the third: it seeds `tasks.rule` and `tasks.ci_checks` on the runs
+dispatched before those columns existed, so the by-task-type and by-check spend tables
+([18](18-observability.md#by-task-type-and-by-check)) can speak about them. Two halves with very
+different standing. The **rule** is structural — each of `pr:<n>:ci`, `pr:<n>:ci-gate`,
+`pr:<n>:comments` and `pr:<n>:mergeable` is minted by exactly one rule, so reading it off the origin
+is a fact about the dispatch vocabulary. The **checks** are parsed out of the `dispatch_reason`
+sentence, and this is **the only place in the harness that parses one** — the read path never does,
+because a reader that re-derives a format reports zero, silently, the first time the wording changes
+(`ciStatusOf`'s rule, [18](18-observability.md)). Here that risk is bounded and visible: an
+unrecognised sentence leaves the row null, the money lands in the panel's stated `unnamedCostUsd`
+remainder, and nothing reads as free that was not. It only ever fills nulls, so it is idempotent and
+cannot overwrite what the dispatcher recorded properly.
+
+All three run from `Store`'s constructor beside the `ensureColumns` pass, before any module is
+constructed, let alone reads.
 
 **A column added to an existing table needs an entry here.** A brand-new table does not — its
 `CREATE TABLE` carries the full definition. `jobs`, `findings`, `plans`, `plan_parts`, `agent_flags`,

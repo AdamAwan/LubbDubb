@@ -66,6 +66,8 @@ export type {
   SpendPhase,
   SpendPhaseTotal,
   SpendRun,
+  TaskTypeSpend,
+  ChecksSpend,
   Stack,
   StackLanding,
   Task,
