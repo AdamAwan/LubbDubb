@@ -200,6 +200,8 @@ state; this is how it got there.
 
 | Where                                              | What it is                                                                     |
 | -------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`docs/operating.md`](docs/operating.md)           | How to operate the harness: what changes about the job, and what stays yours  |
+| [`docs/operating.html`](docs/operating.html)       | The same guide as a page to skim — open it in a browser                       |
 | [`docs/workflow.md`](docs/workflow.md)             | The end-to-end workflow, its variation points, and what is narrower than drawn |
 | [`docs/spec/`](docs/README.md)                     | The specification of every subsystem as it behaves today                       |
 | [`docs/prompt-templates/`](docs/prompt-templates/) | The rule dispatcher's built-in prompt bodies, ready to override                |

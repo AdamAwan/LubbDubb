@@ -91,21 +91,21 @@ Four surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident · Scan · Fleet      Spend Yield Output Findings Faults Launch ⚙ │  top bar
-├──────────────────────────────────────────────────────────────────────┤
-│ the recovery banner, when a previous run left work orphaned          │
-├───────────────┬──────────────────────────────────────────────────────┤
-│ NEEDS YOU  6  │  Overview · Backlog · Work · #142 Retry the intake   │
-│ ┌───────────┐ │  ──────────────────────────────────────────────────  │
-│ │ Blocking  │ │                                                      │
-│ │ escalation│ │            the situation area                        │
-│ │ plan      │ │   (a tab — overview, backlog, work — or a goal page) │
-│ │ permission│ │                                                      │
-│ │ Yours     │ │                                                      │
-│ │ bench     │ │                                                      │
-│ │ close-out │ │                                                      │
-│ └───────────┘ │                                                      │
-└───────────────┴──────────────────────────────────────────────────────┘
+│ ident │ Overview Backlog Work │ Scan · Fleet    Spend Yield … Launch ⚙ │  top bar
+├────────────────────────────────────────────────────────────────────────┤
+│ the recovery banner, when a previous run left work orphaned            │
+├───────────────┬────────────────────────────────────────────────────────┤
+│ NEEDS YOU  6  │  ‹ Overview / #142 Retry the intake   ← only on a goal │
+│ ┌───────────┐ │                                                        │
+│ │ Blocking  │ │                                                        │
+│ │ escalation│ │             the situation area                         │
+│ │ plan      │ │    (a tab — overview, backlog, work — or a goal page)  │
+│ │ permission│ │                                                        │
+│ │ Yours     │ │                                                        │
+│ │ bench     │ │                                                        │
+│ │ close-out │ │                                                        │
+│ └───────────┘ │                                                        │
+└───────────────┴────────────────────────────────────────────────────────┘
 ```
 
 **The recovery banner sits outside the situation area and above it, at every width.** While a crashed
@@ -119,11 +119,27 @@ outranks the nav's tab, whichever it is. Selecting a goal is what a queue row do
 move the nav — so with a tab winning, clicking an ask would land the operator on a triage list, or on
 the record, instead of on the ask.
 
-The **nav** is three tabs and a crumb: Overview, Backlog (carrying the unwatched count — the one
-number that says whether triage is worth opening, read off the same `backlogGroups` the view draws so
-the count and the rows cannot differ), Work, and, when a goal is open, its number and title. Every
-button clears _both_ pieces of state, because a nav click means "go here" and either half left
-standing would land somewhere else.
+The **nav** is three tabs: Overview, Backlog (carrying the unwatched count — the one number that says
+whether triage is worth opening, read off the same `backlogGroups` the view draws so the count and
+the rows cannot differ), and Work. Every button clears _both_ pieces of state, because a nav click
+means "go here" and either half left standing would land somewhere else.
+
+**The nav sits in the top bar** (`TopBar.tsx`), not at the head of the situation area. The situation
+area scrolls, and a page's primary navigation that scrolls away is navigation you have to scroll back
+to find; the bar is the `auto` row of the `.cn` grid and is the only part of the shell always on
+screen. It is drawn at the bar's own size rather than the smaller type the readings wear, because the
+readings are glanced at and the nav is aimed at, and it is `nowrap` where the readings wrap — three
+tabs stacked one per line is not a tab strip. When the bar runs out of room the _bar_ wraps, dropping
+the readings to a second line and leaving the nav whole.
+
+**The crumb is not in the nav**; it is drawn at the head of the situation area, and only when a goal
+is open. Two reasons that are one reason: an issue title has no length limit, so a crumb in the bar
+widens the nav by whatever a title happens to be and reflows the readings on the act of opening a
+goal — and the bar is the row an operator glances at without looking, so it has to be the same shape
+every time. And the crumb names what the _situation area_ is showing, so that is where it belongs. It
+reads `‹ <the tab you left> / #<n> <title>`, and the back button is `selectGoal(null)` alone: the tab
+was never cleared, so there is nothing to restore, and naming it is what makes the crumb a trail
+rather than a label.
 
 The tabs are a **list** (`ConsoleTab`, `web/src/cockpit/actions.ts`) rather than a hand-written pair
 of buttons over a boolean, for `ConsolePanel`'s reason: a destination that has to be remembered in two
@@ -526,7 +542,7 @@ It is a **lens**: nothing here, and nothing in the dispatcher, decides anything 
 
 ## The top bar and the panels
 
-The strip carries the ident, the pulse, the fleet cap, and seven readings: **Spend**, **Yield**,
+The strip carries the ident, the nav, the pulse, the fleet cap, and seven readings: **Spend**, **Yield**,
 **Output**, **Findings**, **Faults**, **Launch** and **Settings**. Each is one subject stated once, in
 a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
 the fleet cap is the shared `FleetControl`, which is already on that seam.
