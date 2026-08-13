@@ -82,6 +82,8 @@ function setup(): Harness {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
     {
@@ -92,6 +94,8 @@ function setup(): Harness {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
   ]);
@@ -338,6 +342,8 @@ test('reconciliation is inert with the funnel off', async () => {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
   ]);
@@ -371,6 +377,8 @@ test('the rendered comment reports progress and the PR numbers', () => {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
     {
@@ -381,6 +389,8 @@ test('the rendered comment reports progress and the PR numbers', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
   ]);
@@ -442,9 +452,11 @@ function partInput(slug: string, seq: number, dependsOn: string[]): PlanPartInpu
     seq,
     title: slug,
     scope: `src/${slug}/`,
+    touches: [],
     dependsOn,
     rationale: null,
     acceptance: null,
+    size: null,
     expectedKind: null,
   };
 }

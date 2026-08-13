@@ -222,8 +222,14 @@ export function followupPartInput(part: PlanPart, summary: string, seq: number):
     // The assessor's own words are the scope: it read the delivered state and said
     // what is missing from it, which is exactly what this part is for.
     scope: summary,
+    // No declared paths, and none inherited from the part this follows up: what an
+    // assessment found missing is prose about behaviour, and carrying the finished
+    // part's `touches` over would claim a scope nobody declared for this work —
+    // which `partScopeDrift` would then read as a promise about where it may write.
+    touches: [],
     rationale: `An assessment of the delivered work found that "${part.slug}" did not deliver its scope.`,
     acceptance: null,
+    size: null,
     dependsOn: [],
     expectedKind: 'code',
   };

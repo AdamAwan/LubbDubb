@@ -8,7 +8,7 @@ import type {
   ScratchPadSummary,
   WorldSnapshot,
 } from '../types.js';
-import type { CockpitState } from '../wire.js';
+import type { CockpitState, PlanPartView } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -24,6 +24,8 @@ import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
+import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
+import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
@@ -119,6 +121,34 @@ export function buildStateSnapshot(
   // on, so the ref shipped here is one `refUrls` can answer — and the same
   // function feeds that map below, so the key and the lookup cannot disagree.
   const wirePlans = plans.map((p) => ({ ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef) }));
+  // The two readings a part row cannot carry, folded once here rather than in the
+  // browser: the acceptance checklist, whose criterion text is the key each tick is
+  // stored under, and the scope drift, which is a join across `agent_files` and
+  // `tasks` the cockpit does not hold. Per plan, because drift needs the issue
+  // number to rebuild the part origins the tasks were dispatched on.
+  const drift = new Map<string, string[]>();
+  for (const plan of plans) {
+    const issueNumber = planIssueNumber(plan.originRef);
+    if (issueNumber === null) continue;
+    for (const d of planScopeDrift(
+      issueNumber,
+      planParts.filter((p) => p.planId === plan.id),
+      tasks,
+      files,
+    )) {
+      drift.set(d.partId, d.paths);
+    }
+  }
+  // Indexed per plan, because depth is a walk over *siblings*: one index across
+  // every plan would let two plans that happen to share a slug resolve each
+  // other's dependencies.
+  const partIndexes = new Map(plans.map((plan) => [plan.id, bySlug(planParts.filter((p) => p.planId === plan.id))]));
+  const wirePlanParts: PlanPartView[] = planParts.map((part) => ({
+    ...part,
+    depth: partDepth(part, partIndexes.get(part.planId) ?? bySlug([part])),
+    acceptanceCriteria: acceptanceCriteria(part),
+    outsideScope: drift.get(part.id) ?? [],
+  }));
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
   // same rows rule `work-item-back-to-pickup` reads, so the chip and the rule can't disagree.
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
@@ -391,7 +421,11 @@ export function buildStateSnapshot(
     // chip could say "2/5 parts merged" and nothing could say *which* five. The
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
     plans: wirePlans,
-    planParts,
+    planParts: wirePlanParts,
+    // The funnel's policy as the harness is running it: approving a decomposition
+    // is agreeing to a rate as well as a shape, and the sheet states that rate on
+    // the button that performs the approval.
+    planning: config.planning,
     // Chains of stacked pull requests, derived from the world rather than stored:
     // a plan *adopts* a stack, so a chain a human opened by hand is drawn on the
     // same terms as one a plan produced. The unfiltered open list, for the reason

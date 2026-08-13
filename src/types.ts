@@ -1347,6 +1347,31 @@ export interface Plan {
   risks: string | null;
   /** What the planner deliberately left out. */
   outOfScope: string | null;
+  /**
+   * What the planner considered and rejected, and why. Null when it said nothing.
+   *
+   * Its own field rather than a paragraph of {@link document} because of *when* it
+   * is read: it is the most useful thing an approver can have and it was reachable
+   * only by opening the write-up and scrolling, which is not what anyone does with
+   * a decision in front of them.
+   */
+  alternatives: string | null;
+  /** What the planner is least sure about — the agenda a discussion opens on. */
+  openQuestions: string | null;
+  /**
+   * How anyone will know the *whole* thing worked. Distinct from a part's
+   * `acceptance`, which answers the same question one branch at a time and never
+   * for the issue — which is the question `issue-assess` is later handed cold.
+   */
+  verification: string | null;
+  /**
+   * Where in the code the diagnosis comes from. Empty when the planner cited
+   * nothing, which is every plan written before the field existed.
+   *
+   * A root cause with no citation is unfalsifiable, and the harness asks for
+   * testimony to be attributable everywhere else it takes any (`report_finding`).
+   */
+  evidence: PlanEvidence[];
   /** The full narrative, markdown — the read-in-depth version of this plan. */
   document: string | null;
   /** True while an operator is discussing this plan with an agent (see rule `issue-plan`). */
@@ -1356,6 +1381,72 @@ export interface Plan {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * The plan-level prose of one verdict, gathered so a revision can hold it whole.
+ *
+ * Every field is on {@link Plan} as well, and that is not duplication: the plan row
+ * is what the harness acts on *now*, while a revision is what was said *then* —
+ * and the row is overwritten by every amendment, which is exactly the reason the
+ * snapshot has to exist separately.
+ */
+export interface PlanNarrative {
+  reason: string | null;
+  diagnosis: string | null;
+  approach: string | null;
+  risks: string | null;
+  outOfScope: string | null;
+  alternatives: string | null;
+  openQuestions: string | null;
+  verification: string | null;
+  document: string | null;
+  evidence: PlanEvidence[];
+}
+
+/**
+ * One verdict, exactly as the planner submitted it.
+ *
+ * Written at ingestion — the one place a document becomes rows — so the record is
+ * of what was *proposed*, not of what the store made of it. That distinction is
+ * the whole value on a replan: a part the amendment dropped but `partsToRetire`
+ * kept (because work had started) appears as dropped here and as live on the plan,
+ * and both readings are true.
+ */
+/** What a planner decided about shape: one pull request, or several. */
+export type PlanVerdict = 'single' | 'parts';
+
+export interface PlanRevision {
+  id: string;
+  planId: string;
+  /** 1-based. v1 is the first verdict ever ingested for this plan. */
+  seq: number;
+  verdict: PlanVerdict;
+  narrative: PlanNarrative;
+  /** The parts as declared, in document order. Empty on a `single` verdict. */
+  parts: PlanPartInput[];
+  at: string;
+}
+
+/**
+ * One place in the code a plan's diagnosis rests on — the planner's citation.
+ *
+ * `line` is optional because a claim is often about a file rather than a line, and
+ * a planner made to invent one would invent one. `note` says what the reader is
+ * meant to see there; without it a citation is a path, which is not evidence.
+ */
+export interface PlanEvidence {
+  path: string;
+  line: number | null;
+  note: string | null;
+}
+
+/**
+ * How big a part is to *review*, as the planner judged it — not how long it takes.
+ * Three values rather than a number, for the reason story points are not hours:
+ * the useful signal is "this one is not like the others", and any finer scale
+ * invites a precision the planner does not have.
+ */
+export type PartSize = 's' | 'm' | 'l';
 
 /**
  * Where one part of a multi-PR plan sits: `pending` (dependencies outstanding),
@@ -1400,10 +1491,34 @@ export interface PlanPart {
   title: string;
   /** Files/areas this part owns, so concurrent parts don't collide. */
   scope: string;
+  /**
+   * The same claim as {@link scope}, as paths rather than prose. Empty when the
+   * planner declared none.
+   *
+   * Two fields rather than one because they are read by different things and only
+   * one of them can be *checked*: `scope` is what the part's agent is told, at
+   * whatever grain the work has, while these are what a merged part's writes are
+   * compared against (`partScopeDrift`). Narrowing `scope` to an array would have
+   * cost the prose; deriving the array by parsing the prose would have invented
+   * paths nobody declared.
+   */
+  touches: string[];
   /** Why this is its own PR rather than folded into a sibling. */
   rationale: string | null;
   /** What makes this part done. */
   acceptance: string | null;
+  /**
+   * Which of the criteria in {@link acceptance} a reviewer has confirmed, held as
+   * the criterion text itself rather than an index.
+   *
+   * Keyed on the text so a re-declared criterion loses its tick, which is the
+   * behaviour worth having: an amendment that rewords what "done" means has
+   * withdrawn the thing that was confirmed. An index would silently carry the tick
+   * across to a criterion nobody looked at.
+   */
+  acceptanceMet: string[];
+  /** How big this part is to review, as the planner judged it. Null when unstated. */
+  size: PartSize | null;
   /** What the planner expected this part to produce. Null means unstated, which reads as `code`. */
   expectedKind: PartOutcomeKind | null;
   /** What it actually produced, written when it concludes. Null until then; a merged part derives `code`. */
@@ -1432,7 +1547,7 @@ export interface PlanPart {
 /** A part as the planner declared it, before the store assigns identity or progress. */
 export type PlanPartInput = Pick<
   PlanPart,
-  'slug' | 'seq' | 'title' | 'scope' | 'dependsOn' | 'rationale' | 'acceptance' | 'expectedKind'
+  'slug' | 'seq' | 'title' | 'scope' | 'touches' | 'dependsOn' | 'rationale' | 'acceptance' | 'size' | 'expectedKind'
 >;
 
 /** One cumulative usage report from a session's turn-end `result` event. */

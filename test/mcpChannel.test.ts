@@ -629,6 +629,7 @@ test('plan_submit accepts and persists the widened document', async () => {
         dependsOn: [],
         rationale: 'a pure predicate with no callers',
         acceptance: 'round-trips; tampered and expired refused',
+        touches: [],
       },
     ],
   });
@@ -1569,6 +1570,8 @@ test('conclude_part closes a part that produced no PR, and the plan rolls up com
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: 'report',
     },
   ]);

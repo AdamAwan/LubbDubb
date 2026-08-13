@@ -32,10 +32,11 @@ import type {
  * Every field below is prose an agent wrote and no template renders:
  *
  * - **the pad**, read by `retroBriefing` alone until now;
- * - **`diagnosis` / `approach` / `document` / `risks` / `outOfScope`** — the planner's
- *   write-up, which reaches the plan modal and no agent. On a `single` verdict that
- *   write-up is the *entire* product of a code agent that read the whole repository,
- *   and rule `issue-pickup`'s prompt is the issue title and body;
+ * - **the planner's whole narrative** — `diagnosis`, `approach`, `verification`,
+ *   `alternatives`, `openQuestions`, `evidence`, `risks`, `outOfScope` and the
+ *   write-up, all of which reach the plan sheet and no agent. On a `single` verdict
+ *   that narrative is the *entire* product of a code agent that read the whole
+ *   repository, and rule `issue-pickup`'s prompt is the issue title and body;
  * - **a part's `rationale` / `acceptance`** — declared by the planner, stored, and
  *   rendered nowhere at all;
  * - **the verdicts' prose** — an assay's summary, a conclusion's note, an
@@ -137,8 +138,23 @@ function planSection(plan: Plan | null): string {
   // verdict the agent picking the issue up is otherwise told only its title and body.
   if (plan.diagnosis) lines.push(`**What the planner found was actually wrong:** ${plan.diagnosis}`);
   if (plan.approach) lines.push(`**What the planner said would be done about it:** ${plan.approach}`);
+  // The one an agent picking the work up can *act* on: it is the test the work
+  // will be judged by, and an agent told it beforehand is being told what finished
+  // means rather than being asked to guess it.
+  if (plan.verification) lines.push(`**How the planner said we would know it worked:** ${plan.verification}`);
+  if (plan.alternatives) lines.push(`**What the planner considered and rejected:** ${plan.alternatives}`);
+  if (plan.openQuestions) lines.push(`**What the planner was least sure about:** ${plan.openQuestions}`);
   if (plan.risks) lines.push(`**What the planner thought could go wrong:** ${plan.risks}`);
   if (plan.outOfScope) lines.push(`**What the planner deliberately left out:** ${plan.outOfScope}`);
+  // Cited so the agent can start where the planner finished rather than re-reading
+  // the repository to find the same lines. Rendered flat: the briefing is appended
+  // prose, and a nested list of links would be the only structure in it.
+  if (plan.evidence.length > 0) {
+    const cites = plan.evidence
+      .map((e) => `${e.path}${e.line === null ? '' : `:${e.line}`}${e.note === null ? '' : ` — ${e.note}`}`)
+      .join('\n');
+    lines.push(`**Where the planner found it:**\n${cites}`);
+  }
   if (plan.document) {
     const doc =
       plan.document.length > MAX_DOCUMENT

@@ -1,7 +1,16 @@
 // Seed data for the GitHub Pages demo. This is the canned world the fake backend
 // (demoBackend.ts) starts from — a plausible slice of an engineering day so every
 // cockpit panel has something real-looking to render. No server, no network.
-import type { AppState, Issue, OpenPullRequest, PlanPart } from '../types.js';
+import type {
+  AppState,
+  Issue,
+  OpenPullRequest,
+  PlanHistory,
+  PlanNarrative,
+  PlanPart,
+  PlanPartView,
+  PlanRevision,
+} from '../types.js';
 
 interface DemoSeed {
   state: AppState;
@@ -75,17 +84,51 @@ function demoPr(seed: OpenPrSeed): OpenPullRequest {
  * `demoIssue`'s reason: the store writes them for every row, so a fixture leaving
  * them out was describing a part the reconciler could not have produced.
  */
-type PartSeed = Omit<PlanPart, 'blockedReason' | 'expectedKind' | 'outcomeKind' | 'outcomeRef' | 'outcomeSummary'> &
-  Partial<PlanPart>;
+type PartSeed = Omit<
+  PlanPart,
+  | 'blockedReason'
+  | 'expectedKind'
+  | 'outcomeKind'
+  | 'outcomeRef'
+  | 'outcomeSummary'
+  | 'touches'
+  | 'acceptanceMet'
+  | 'size'
+> &
+  Partial<PlanPart> & {
+    /** Seeded rather than derived: the demo has no `agent_files` to join against. */
+    outsideScope?: string[];
+    /** Seeded when a demo plan is deeper than one stack — see {@link demoPart}. */
+    depth?: number;
+  };
 
-function demoPart(seed: PartSeed): PlanPart {
-  return {
+function demoPart(seed: PartSeed): PlanPartView {
+  const part: PlanPart = {
     expectedKind: null,
+    touches: [],
+    acceptanceMet: [],
+    size: null,
     outcomeKind: null,
     outcomeRef: null,
     outcomeSummary: null,
     blockedReason: null,
     ...seed,
+  };
+  return {
+    ...part,
+    // The wave the map draws it in. The server computes it with `partDepth`, a
+    // longest-path walk; a seed has no siblings to walk, so `depth` is seeded
+    // explicitly wherever a demo plan is deeper than one stack.
+    depth: seed.depth ?? (part.dependsOn.length === 0 ? 0 : 1),
+    // Split here the way the server splits it, rather than seeded per part: the
+    // demo is meant to exercise the same rendering the real snapshot produces, and
+    // a hand-written checklist would drift from the one criterion text is keyed on.
+    acceptanceCriteria: (part.acceptance ?? '')
+      .split('\n')
+      .map((line) => line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '').trim())
+      .filter((text) => text !== '')
+      .map((text) => ({ text, met: part.acceptanceMet.includes(text) })),
+    outsideScope: seed.outsideScope ?? [],
   };
 }
 
@@ -107,6 +150,14 @@ export function buildDemoState(): DemoSeed {
       canFileTickets: false,
     },
     control: { cap: 3, paused: false },
+    // What the plan sheet's approval bar states: the funnel is on, verdicts are
+    // proposals, and two of a plan's parts run at once.
+    planning: {
+      enabled: true,
+      requireApproval: true,
+      maxConcurrentPartsPerIssue: 2,
+      gitFetchIntervalMs: 60_000,
+    },
     worldObservedAt: ago(0),
     world: {
       takenAt: ago(0),
@@ -595,6 +646,10 @@ export function buildDemoState(): DemoSeed {
         risks:
           'The repository interface has to cover every query the harness makes today, or a missed one surfaces as a runtime error instead of a compile error.',
         outOfScope: 'Swapping the underlying engine off SQLite — this only adds the seam, it does not use it.',
+        alternatives: null,
+        openQuestions: null,
+        verification: null,
+        evidence: [],
         document:
           '# Move the store behind a repository interface\n\n' +
           'Three parts, stacked: the schema migration has to land before anything can read through the new ' +
@@ -629,6 +684,32 @@ export function buildDemoState(): DemoSeed {
           '**Guard window.** Moving `/artifacts` outside the `/api` prefix means part 2 briefly serves artifacts with no guard at all — the capability check has to land in the same PR, not a later one. **Two modes.** With `auth.enabled` off there is no signing key, so the route serves with no capability at all, and only one of those two modes is covered by the capability tests today. **Snapshot churn.** Part 3 widens the state snapshot, which every cockpit panel reads; a field added there is a field every consumer has to tolerate the absence of on an older server.',
         outOfScope:
           '- Capability revocation. Named as a rejected alternative in the write-up — it needs a store of its own and nothing here creates one.\n- Any change to the cockpit bearer token.\n- Artifact TTL, which stays at 5 minutes.',
+        alternatives:
+          '**Allow-list the route inside the prefix guard.** One line, and the fix I would have shipped a year ago. Rejected because one exception is a line and the second one is a policy: the guard stops being readable as "everything under `/api` is authenticated" the moment anything under it is not.\n\n' +
+          '**Serve the artifact through an authenticated `fetch` and hand the browser a blob URL.** Works, and keeps the route where it is — but the chip stops being a link, so it cannot be opened in a new tab, bookmarked or sent to anyone. That is most of what a chip is for.\n\n' +
+          '**A cookie scoped to `/artifacts`.** Rejected on the two-modes problem below: with `auth.enabled` off there is nothing to put in it, so the cookie path needs the same unauthenticated arm the capability path needs, and it costs a `SameSite` argument as well.',
+        openQuestions:
+          'With `auth.enabled` off there is no signing key, so the route has to serve with no capability at all — and I am not certain that arm should exist rather than the route simply 404ing. I have written it as "serves everything", which is what the operator running with auth off has already chosen, but it is the one decision here I would want argued with.\n\n' +
+          'Second, smaller: I assumed the capability rides in the query string. A path segment would keep it out of proxy logs. I have no evidence anyone proxies this.',
+        verification:
+          'Open an artifact chip in the cockpit with `auth.enabled` on, in a new tab, and get the file rather than a 401 — that is the whole bug, and it is not reproducible from a test that can set a header.',
+        evidence: [
+          {
+            path: 'src/server/app.ts',
+            line: 88,
+            note: 'the prefix guard: `addHook` over `/api`, which `/artifacts/:id` sits under',
+          },
+          {
+            path: 'src/server/routes/artifacts.ts',
+            line: 24,
+            note: 'the route, registered inside the guarded prefix',
+          },
+          {
+            path: 'web/src/components/AgentDrawer.tsx',
+            line: 212,
+            note: 'the chip is an `<a href>` — a navigation, so no Authorization header',
+          },
+        ],
         document:
           '# Serving artifacts outside the authenticated /api prefix\n\n' +
           'Every artifact chip in the cockpit currently 401s. This is not a bug in the guard — it is a structural ' +
@@ -665,6 +746,9 @@ export function buildDemoState(): DemoSeed {
         rationale:
           'The migration has to be reviewable on its own — it changes nothing behaviourally until the reads part lands.',
         acceptance: 'The new tables exist and the migration runs clean on a copy of the production database.',
+        touches: [],
+        acceptanceMet: [],
+        size: null,
         branch: 'issue/212/schema',
         prNumber: 140,
         status: 'merged',
@@ -701,6 +785,9 @@ export function buildDemoState(): DemoSeed {
         rationale:
           'Writes go last — the read path has to be proven out first, or a write bug is indistinguishable from a read bug.',
         acceptance: 'Every executor/agent write goes through the interface; direct SQLite access is gone from both.',
+        touches: [],
+        acceptanceMet: [],
+        size: null,
         branch: null,
         prNumber: null,
         status: 'ready',
@@ -723,6 +810,9 @@ export function buildDemoState(): DemoSeed {
         expectedKind: 'human',
         rationale: 'Nobody gave the fleet console credentials, and nobody should.',
         acceptance: 'Staging reads and writes against the new tables.',
+        touches: [],
+        acceptanceMet: [],
+        size: null,
         branch: null,
         prNumber: null,
         status: 'ready',
@@ -740,6 +830,9 @@ export function buildDemoState(): DemoSeed {
         dependsOn: ['cutover'],
         rationale: 'The only part that can prove the cutover worked, and it cannot start before it has.',
         acceptance: 'A soak run over the new schema passes against staging.',
+        touches: [],
+        acceptanceMet: [],
+        size: null,
         branch: null,
         prNumber: null,
         status: 'pending',
@@ -755,10 +848,17 @@ export function buildDemoState(): DemoSeed {
         slug: 'signer',
         seq: 1,
         title: 'Add the capability signer',
-        scope: 'src/server/artifactCapability.ts',
+        scope: 'The signing and verification of a short-lived capability, and nothing that calls it.',
         dependsOn: [],
         rationale: 'A pure sign/verify predicate with no callers yet — reviewable in isolation from the route change.',
-        acceptance: 'mint/verify round-trip on a flag id, with expiry and tamper cases unit-tested.',
+        acceptance:
+          '- A capability minted for a flag id verifies, and one for another id does not.\n' +
+          '- An expired capability is refused.\n' +
+          '- A tampered payload is refused.',
+        touches: ['src/server/artifactCapability.ts'],
+        acceptanceMet: [],
+        size: 's',
+        depth: 0,
         branch: null,
         prNumber: null,
         status: 'ready',
@@ -772,10 +872,17 @@ export function buildDemoState(): DemoSeed {
         slug: 'route',
         seq: 2,
         title: 'Move the artifact route outside /api and require the capability',
-        scope: 'src/server/app.ts',
+        scope: 'Where the artifact route is registered, and the guard it sits behind.',
         dependsOn: ['signer'],
         rationale: 'This is the only part that changes who can reach what, so it stays separate from the pure signer.',
-        acceptance: '/artifacts/:id serves only with a valid capability; every existing route still 401s without one.',
+        acceptance:
+          '- `/artifacts/:id` serves only with a valid capability.\n' +
+          '- Every route still under `/api` 401s without a bearer token.\n' +
+          '- With `auth.enabled` off the route serves with no capability at all.',
+        touches: ['src/server/app.ts', 'src/server/routes/artifacts.ts'],
+        acceptanceMet: [],
+        size: 'm',
+        depth: 1,
         branch: null,
         prNumber: null,
         status: 'ready',
@@ -789,11 +896,19 @@ export function buildDemoState(): DemoSeed {
         slug: 'mint',
         seq: 3,
         title: 'Mint capabilities into the snapshot',
-        scope: 'src/server/app.ts, web/src/api.ts',
-        dependsOn: ['route'],
+        scope: 'The state snapshot that mints a capability per chip, and the chip that opens it.',
+        // A rejoin: it wires the signer's output into the route, so it waits for
+        // *both* lanes to have merged rather than stacking on either.
+        dependsOn: ['signer', 'route'],
         rationale:
-          'Touches the cockpit as well as the server, so it waits until the route it points at actually exists.',
-        acceptance: 'Every artifact chip in the cockpit opens without a 401.',
+          'Touches the cockpit as well as the server, so it waits until both the signer and the route it points at exist.',
+        acceptance:
+          '- Every artifact chip in the cockpit opens in a new tab without a 401.\n' +
+          '- The snapshot carries a capability per chip, and no capability for a flag with no artifact.',
+        touches: ['src/server/stateSnapshot.ts', 'web/src/components/AgentDrawer.tsx'],
+        acceptanceMet: [],
+        size: 'm',
+        depth: 2,
         branch: null,
         prNumber: null,
         status: 'ready',
@@ -1572,3 +1687,187 @@ export function buildDemoState(): DemoSeed {
 
   return { state, transcripts };
 }
+
+/**
+ * A plan's revision history, for the sheet's "What changed" view.
+ *
+ * Authored rather than derived, and only for `plan-231` — the demo's world is
+ * built fresh in the browser each load, so no replan has ever landed in it and
+ * there is nothing to snapshot. The real route reads `plan_revisions`, which
+ * `ingestPlanDocument` writes on every submission.
+ *
+ * The amendment below is the one worth showing: a discussion in which the
+ * operator argued the snapshot change was not a third pull request, the planner
+ * agreed and folded it in, and a new part appeared for the unauthenticated arm
+ * nobody had thought about. Anything else answers with no revisions, which is what
+ * a plan with no history draws — no History control at all.
+ */
+export function demoPlanHistory(planId: string): PlanHistory {
+  if (planId !== 'plan-231') return { revisions: [], diff: null };
+  const at = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
+  const narrative = (over: Partial<PlanNarrative>): PlanNarrative => ({
+    reason: null,
+    diagnosis: null,
+    approach: null,
+    risks: null,
+    outOfScope: null,
+    alternatives: null,
+    openQuestions: null,
+    verification: null,
+    document: null,
+    evidence: [],
+    ...over,
+  });
+  const part = (over: Partial<PlanPartInputView> & { slug: string; seq: number }): PlanPartInputView => ({
+    title: over.slug,
+    scope: '',
+    touches: [],
+    dependsOn: [],
+    rationale: null,
+    acceptance: null,
+    size: null,
+    expectedKind: null,
+    ...over,
+  });
+  const revisions: PlanRevision[] = [
+    {
+      id: 'rev-231-1',
+      planId,
+      seq: 1,
+      verdict: 'parts',
+      at: at(40),
+      narrative: narrative({
+        reason: 'The signer has to exist before the route can verify one, and the guard change touches every route.',
+        approach: 'Sign a short-lived capability into the artifact URL and move the route out from behind the guard.',
+      }),
+      parts: [
+        part({
+          slug: 'signer',
+          seq: 1,
+          title: 'Add the capability signer',
+          touches: ['src/server/artifactCapability.ts'],
+          size: 's',
+        }),
+        part({
+          slug: 'route',
+          seq: 2,
+          title: 'Move the artifact route outside /api',
+          touches: ['src/server/app.ts'],
+          dependsOn: ['signer'],
+          size: 'm',
+        }),
+        part({
+          slug: 'mint',
+          seq: 3,
+          title: 'Mint capabilities into the snapshot',
+          touches: ['src/server/stateSnapshot.ts'],
+          dependsOn: ['route'],
+          size: 's',
+        }),
+        part({
+          slug: 'chips',
+          seq: 4,
+          title: 'Point the cockpit chips at the minted URL',
+          touches: ['web/src/components/AgentDrawer.tsx'],
+          dependsOn: ['mint'],
+          size: 's',
+        }),
+      ],
+    },
+    {
+      id: 'rev-231-2',
+      planId,
+      seq: 2,
+      verdict: 'parts',
+      at: at(12),
+      narrative: narrative({
+        reason:
+          'The capability signer has to exist before the route can verify one, and the guard change touches every route.',
+        approach:
+          'Move `/artifacts/:id` out from behind the prefix guard and gate it on a short-lived signed capability instead.',
+        openQuestions: 'Whether the unauthenticated arm should serve everything or 404.',
+      }),
+      parts: [
+        part({
+          slug: 'signer',
+          seq: 1,
+          title: 'Add the capability signer',
+          touches: ['src/server/artifactCapability.ts'],
+          size: 's',
+        }),
+        part({
+          slug: 'route',
+          seq: 2,
+          title: 'Move the artifact route outside /api and require the capability',
+          touches: ['src/server/app.ts', 'src/server/routes/artifacts.ts'],
+          dependsOn: ['signer'],
+          size: 'm',
+        }),
+        part({
+          slug: 'mint',
+          seq: 3,
+          title: 'Mint capabilities into the snapshot',
+          touches: ['src/server/stateSnapshot.ts', 'web/src/components/AgentDrawer.tsx'],
+          dependsOn: ['signer', 'route'],
+          size: 'm',
+        }),
+      ],
+    },
+  ];
+  return {
+    revisions,
+    diff: {
+      seq: 2,
+      againstSeq: 1,
+      verdictChanged: false,
+      parts: [
+        { slug: 'signer', kind: 'unchanged', title: 'Add the capability signer', fields: [] },
+        {
+          slug: 'route',
+          kind: 'changed',
+          title: 'Move the artifact route outside /api and require the capability',
+          fields: [
+            {
+              field: 'title',
+              from: 'Move the artifact route outside /api',
+              to: 'Move the artifact route outside /api and require the capability',
+            },
+            {
+              field: 'touches',
+              from: 'src/server/app.ts',
+              to: 'src/server/app.ts, src/server/routes/artifacts.ts',
+            },
+          ],
+        },
+        {
+          slug: 'mint',
+          kind: 'changed',
+          title: 'Mint capabilities into the snapshot',
+          fields: [
+            {
+              field: 'touches',
+              from: 'src/server/stateSnapshot.ts',
+              to: 'src/server/stateSnapshot.ts, web/src/components/AgentDrawer.tsx',
+            },
+            { field: 'dependsOn', from: 'route', to: 'route, signer' },
+            { field: 'size', from: 's', to: 'm' },
+          ],
+        },
+        {
+          slug: 'chips',
+          kind: 'dropped',
+          title: 'Point the cockpit chips at the minted URL',
+          fields: [],
+        },
+      ],
+      narrative: [
+        { field: 'approach', kind: 'rewritten' },
+        { field: 'reason', kind: 'rewritten' },
+        { field: 'openQuestions', kind: 'written' },
+      ],
+    },
+  };
+}
+
+/** The declaration half of a part, as a revision stores it — `seq` and all. */
+type PlanPartInputView = PlanRevision['parts'][number];

@@ -19,7 +19,7 @@ unchanged, so no call site anywhere knows.
 | `priority.ts`      | `priority_overrides`                                                        |
 | `findings.ts`      | `findings`                                                                  |
 | `humanTasks.ts`    | `human_tasks`                                                               |
-| `plans.ts`         | `plans`, `plan_parts`                                                       |
+| `plans.ts`         | `plans`, `plan_parts`, `plan_revisions`                                     |
 | `issueVerdicts.ts` | `issue_conclusions`, `issue_deliveries`, `issue_shortfalls`, `issue_assays` |
 | `scratch.ts`       | `scratch_entries`, `retrospectives`                                         |
 | `agents.ts`        | `agents`, `usage_events`, `agent_flags`, `agent_files`                      |
@@ -99,8 +99,8 @@ answer without leaving the file you added the column's reader to. Current entrie
 | `findings`                             | `findings.ts`      | `ticket_ref`, `where_at`, `detail`                                                                             |
 | `human_tasks`                          | `humanTasks.ts`    | `kind` (`'ask'` default, so every row from before the close-out reads as one), `dismissed_at`                  |
 | `issue_deliveries`, `issue_shortfalls` | `issueVerdicts.ts` | `detail` on **both** (the assessor's account beside its headline)                                              |
-| `plans`                                | `plans.ts`         | `diagnosis`, `approach`, `risks`, `out_of_scope`, `document`, `discussing`                                     |
-| `plan_parts`                           | `plans.ts`         | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
+| `plans`                                | `plans.ts`         | `diagnosis`, `approach`, `risks`, `out_of_scope`, `alternatives`, `open_questions`, `verification`, `evidence`, `document`, `discussing` |
+| `plan_parts`                           | `plans.ts`         | `touches`, `rationale`, `acceptance`, `acceptance_met`, `size`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
 | `jobs`                                 | `jobs.ts`          | `origin_ref`                                                                                                   |
 
 `findings.where_at` is the one column whose name does not match its field: `where` is SQL, so the
@@ -168,7 +168,8 @@ introduced.
 | `human_tasks`        | Work only a person can do. `part_id` is the only way one holds work off the fleet; nothing in the dispatcher reads this table. `kind` tells the harness's own close-out from everything a person or an agent asked for, and `dismissed_at` is the settled row an operator has cleared off the bench — presentation, never a fourth status.                                                       | —                                                                                                                                         |
 | `issue_conclusions`  | Whether an issue is finished, per issue origin. One row, overwritten per declaration.                                                                                                                                                                                                                                                                                                            | `origin_ref` is `PRIMARY KEY`                                                                                                             |
 | `plans`              | One delivery plan per issue.                                                                                                                                                                                                                                                                                                                                                                     | `origin_ref` is `UNIQUE`                                                                                                                  |
-| `plan_parts`         | Parts of a multi-PR plan. `depends_on` is a JSON array of sibling slugs.                                                                                                                                                                                                                                                                                                                         | `UNIQUE (plan_id, slug)`                                                                                                                  |
+| `plan_parts`         | Parts of a multi-PR plan. `depends_on`, `touches` and `acceptance_met` are JSON arrays.                                                                                                                                                                                                                                                                                                                         | `UNIQUE (plan_id, slug)`                                                                                                                  |
+| `plan_revisions`     | Every verdict a planner has submitted for one plan, oldest first. `narrative` and `parts` are JSON. Append-only.                                                                                                                                                                                                                                                                                 | `UNIQUE (plan_id, seq)`                                                                                                                   |
 | `issue_deliveries`   | The harness's own park: an issue assessed as delivered. Gates pickup; expires on world signal.                                                                                                                                                                                                                                                                                                   | `origin_ref` is `PRIMARY KEY`                                                                                                             |
 | `issue_shortfalls`   | The negative mirror: an issue worked whose goal is still not reached, with the cause that routes it. Gates **nothing**; lives until the arm it named is performed. `detail` is the assessor's account; both verdict tables carry one, because an assessment lands in exactly one of them and a column on only the negative table would be silently dropped by every `delivered` verdict.         | `origin_ref` is `PRIMARY KEY`; `cause` is nullable                                                                                        |
 | `issue_assays`       | Whether an issue's goal text can be worked from at all, judged before anything is dispatched. Gates the funnel; expires when the text changes or the world moves.                                                                                                                                                                                                                                | `origin_ref` is `PRIMARY KEY`; `goal_ref` fingerprints the text judged                                                                    |
@@ -360,6 +361,22 @@ set of sibling rows to delete, in one transaction.
 discussing)`, `setPlanStatusComment`, `rollUpPlanStatus(planId)`, `upsertPlanParts(planId, parts)`
 (merges on slug, **never deletes**), `listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
 `markPartDispatched(id, taskId, branch)`.
+
+### Why a plan's verdicts are kept
+
+`plans` is **overwritten** by every amendment — that is what makes a replan a replan, and what keeps
+the plan id its parts hang off. It is also why `plan_revisions` has to exist separately: an operator
+who discussed a plan for ten minutes was handed the amended decomposition whole, with nothing anywhere
+saying which two parts moved.
+
+A revision is written by `ingestPlanDocument` alone, and it records **what was proposed** rather than
+what the store made of it — a part the amendment dropped but which `partsToRetire` spared is absent
+from the revision and live on `plan_parts`. Both are true, and the pair is the reading the plan sheet
+draws. → [08](08-planning.md#revisions)
+
+`plan_revisions` needed no `ensureColumns` entry because it is a brand-new table and
+`CREATE TABLE IF NOT EXISTS` is the whole migration. **That is true once**: a column added to it later
+needs an entry like any other.
 
 `plans.status` is `planning | awaiting_approval | active | complete | abandoned` — the plan's **life**,
 and nothing else. Whether the issue is being delivered as one pull request or several is `planShape`'s

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PlanPartInput } from '../types.js';
+import type { PlanNarrative, PlanPartInput } from '../types.js';
 
 /**
  * The planner's side channel: `.lubbdubb/plan.json`, written into its worktree.
@@ -27,6 +27,24 @@ export function isPlanFile(path: string): boolean {
  */
 export const MAX_PLAN_DOCUMENT_CHARS = 60_000;
 
+/**
+ * How many citations are kept. A planner asked for evidence occasionally answers
+ * with a file listing; trimmed rather than refused, for {@link
+ * MAX_PLAN_DOCUMENT_CHARS}'s reason — the verdict must not be sunk by its
+ * footnotes.
+ */
+const MAX_EVIDENCE = 24;
+
+/** Same bound, same argument, for a part's declared paths. */
+const MAX_TOUCHES = 40;
+
+const EvidenceSchema = z.object({
+  path: z.string().min(1),
+  /** Optional because a claim is often about a file; a planner made to invent a line would. */
+  line: z.number().int().positive().optional(),
+  note: z.string().min(1).optional(),
+});
+
 const PartSchema = z.object({
   /** Stable and author-chosen: an amended plan merges on it, so it must survive a replan. */
   slug: z
@@ -36,6 +54,14 @@ const PartSchema = z.object({
   title: z.string().min(1),
   /** Files/areas this part owns — what substitutes for a human holding the split in their head. */
   scope: z.string().min(1),
+  /**
+   * The same ownership claim as paths. Beside `scope` rather than replacing it:
+   * only this form can be compared to what the part's agent actually wrote, and
+   * only the prose form survives work whose scope is not a set of files.
+   */
+  touches: z.array(z.string().min(1)).max(MAX_TOUCHES).default([]),
+  /** How big this part is to review. Absent means the planner did not say. */
+  size: z.enum(['s', 'm', 'l']).optional(),
   dependsOn: z.array(z.string().min(1)).default([]),
   /** Why this is its *own* PR rather than folded into a sibling. */
   rationale: z.string().min(1).optional(),
@@ -87,6 +113,26 @@ const PlanDocumentSchema = z
     risks: z.string().min(1).optional(),
     /** What the planner deliberately left out. */
     outOfScope: z.string().min(1).optional(),
+    /**
+     * What was considered and rejected, what the planner is least sure about, and
+     * how anyone will know the whole thing worked.
+     *
+     * All three were already asked for — inside `document`, where they are prose in
+     * a write-up nobody opens while deciding. As fields they can be put in front of
+     * the verdict, and `openQuestions` can be what a discussion opens on.
+     */
+    alternatives: z.string().min(1).optional(),
+    openQuestions: z.string().min(1).optional(),
+    verification: z.string().min(1).optional(),
+    /**
+     * Where in the code the diagnosis comes from. Trimmed to {@link MAX_EVIDENCE}
+     * rather than refused, like the write-up: a plan is not worth rejecting over
+     * the length of its footnotes.
+     */
+    evidence: z
+      .array(EvidenceSchema)
+      .default([])
+      .transform((list) => (list.length > MAX_EVIDENCE ? list.slice(0, MAX_EVIDENCE) : list)),
     /**
      * The full narrative, markdown. Stored on the plan row rather than surfaced
      * as an artifact chip: `GET /artifacts/:id` serves out of the agent's
@@ -224,9 +270,34 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
     seq: index + 1,
     title: part.title,
     scope: part.scope,
+    touches: part.touches,
     dependsOn: part.dependsOn,
     rationale: part.rationale ?? null,
     acceptance: part.acceptance ?? null,
+    size: part.size ?? null,
     expectedKind: part.expectedKind ?? null,
   }));
+}
+
+/**
+ * The plan-level prose of a document, as the shape a revision stores and the plan
+ * row carries.
+ *
+ * One function so the two writes cannot disagree about what "the narrative" is:
+ * {@link ingestPlanDocument} passes it to `upsertPlan` and to `recordPlanRevision`
+ * in the same breath, and a field added to the document reaches both or neither.
+ */
+export function planNarrative(doc: PlanDocument): PlanNarrative {
+  return {
+    reason: doc.reason,
+    diagnosis: doc.diagnosis ?? null,
+    approach: doc.approach ?? null,
+    risks: doc.risks ?? null,
+    outOfScope: doc.outOfScope ?? null,
+    alternatives: doc.alternatives ?? null,
+    openQuestions: doc.openQuestions ?? null,
+    verification: doc.verification ?? null,
+    document: doc.document ?? null,
+    evidence: doc.evidence.map((e) => ({ path: e.path, line: e.line ?? null, note: e.note ?? null })),
+  };
 }

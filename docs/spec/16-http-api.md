@@ -687,6 +687,27 @@ delete re-files the same obligation next pulse) and the snapshot keeps shipping 
 stops drawing it. Broadcasts `dirty`, `dismissFinding`'s reason — nothing in the world moved. Returns
 `{ ok: true, humanTask }`. → [13](13-jobs-and-findings.md#getting-it-off-the-bench--post-apihuman-tasksiddismiss)
 
+### `GET /api/plans/:id/history`
+
+404 when the plan is unknown. Ships `{ revisions, diff }` — every verdict this plan has had, oldest
+first, and the last amendment read as a change (`latestPlanDiff`, null on a plan with one verdict).
+
+**A route of its own rather than a field on `/api/state`**, for the reason the work graph and the
+retrospective have theirs: it is read when a plan sheet is opened rather than on every poll, and the
+write-ups it carries are the largest prose the store holds — a plan replanned three times would put
+three of them into each snapshot. The diff is computed here rather than in the browser because it is a
+*reading of the plan*, and a second derivation in the cockpit would be a second answer to a question
+the server already answers. → [08](08-planning.md#revisions)
+
+### `POST /api/plans/:id/acceptance`
+
+`{ slug, criterion, met }`. 404 when the plan or the part is unknown; **409 when the text names no
+criterion the part declares** — a tick the sheet could never draw again would report a confirmation
+nobody would see. Keyed on the criterion's **text**, which is what the store holds, so a re-worded
+criterion loses its tick. Broadcasts `dirty` and **runs no cycle**: a reviewer's note about finished
+work schedules nothing, and a pulse per checkbox is a pulse per checkbox. Returns `{ ok: true, part }`.
+→ [08](08-planning.md#acceptance-ticked)
+
 ### `POST /api/plans/:id/replan`
 
 404 when the plan is unknown. Flips the plan to `planning`, **withdraws any pending plan proposal**

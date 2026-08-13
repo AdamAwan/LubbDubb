@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { AppState, Escalation, HumanTask, OrphanedWork, PlanPart } from '../web/src/types.js';
+import type { AppState, Escalation, HumanTask, OrphanedWork, PlanPart, PlanPartView } from '../web/src/types.js';
 import { buildNeedsYou, partHolding } from '../web/src/view/needsYou.js';
 import type { NeedGroup, NeedKind, NeedRow } from '../web/src/view/needsYou.js';
 
@@ -8,7 +8,7 @@ import type { NeedGroup, NeedKind, NeedRow } from '../web/src/view/needsYou.js';
 const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
 const buildDemoState = () => buildDemoSeed().state;
 
-function part(over: Partial<PlanPart>): PlanPart {
+function part(over: Partial<PlanPart>): PlanPartView {
   return {
     id: 'p:a',
     planId: 'p',
@@ -18,6 +18,12 @@ function part(over: Partial<PlanPart>): PlanPart {
     scope: 'src/a.ts',
     rationale: null,
     acceptance: null,
+    touches: [],
+    acceptanceMet: [],
+    depth: 0,
+    acceptanceCriteria: [],
+    outsideScope: [],
+    size: null,
     expectedKind: null,
     outcomeKind: null,
     outcomeRef: null,

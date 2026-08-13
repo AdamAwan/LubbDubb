@@ -58,6 +58,8 @@ test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
     {
@@ -68,6 +70,8 @@ test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
   ]);
@@ -113,6 +117,8 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
     {
@@ -123,6 +129,8 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
   ]);
@@ -148,6 +156,8 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       dependsOn: [],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
     {
@@ -158,6 +168,8 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
       dependsOn: ['schema'],
       rationale: null,
       acceptance: null,
+      touches: [],
+      size: null,
       expectedKind: null,
     },
   ]);
@@ -386,6 +398,7 @@ test('the widened plan document round-trips through ingestion', () => {
           dependsOn: [],
           rationale: 'a pure predicate with no callers',
           acceptance: 'mint/verify round-trip, tampered and expired both refused',
+          touches: [],
         },
       ],
     }),

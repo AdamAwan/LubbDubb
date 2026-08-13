@@ -1,14 +1,37 @@
 import type { FastifyInstance } from 'fastify';
 import { planProposalRef } from '../../proposals/proposals.js';
 import { planOrigin } from '../../plans/planning.js';
-import { planIssueNumber } from '../../plans/parts.js';
+import { acceptanceCriteria, planIssueNumber } from '../../plans/parts.js';
 import { abandonDecomposition } from '../../plans/planApproval.js';
-import { checked, IdParams } from '../validation.js';
+import { latestPlanDiff } from '../../plans/planDiff.js';
+import type { PlanHistory } from '../../wire.js';
+import { AcceptanceBody, checked, IdParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-/** The four ways out of a plan verdict an operator does not want to simply accept or reject. */
+/** The four ways out of a plan verdict an operator does not want to simply accept or reject, plus its history. */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, harness, agents, proposals } = system;
+
+  // Every verdict this plan has had, and the last amendment read as a change.
+  //
+  // A route of its own rather than a field on `/api/state`, for the reason the work
+  // graph and the retro have theirs: it is read when a sheet is opened rather than
+  // every pulse, and the write-ups it carries are the largest prose the store holds
+  // — a plan replanned three times would put three of them into every poll.
+  //
+  // The diff is computed here rather than in the browser because it is a *reading
+  // of the plan*, and the cockpit re-deriving one would be a second answer to a
+  // question the server already answers. It is null on a plan with a single
+  // verdict, which is not an amendment and would draw every part as "added".
+  app.get(
+    '/api/plans/:id/history',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const { id } = params;
+      if (!store.getPlan(id)) return reply.code(404).send({ error: 'plan not found' });
+      const revisions = store.listPlanRevisions(id);
+      return { revisions, diff: latestPlanDiff(revisions) } satisfies PlanHistory;
+    }),
+  );
 
   // Send a plan back for replanning. The mechanism already exists —
   // `resolvePlanRoute` routes a plan row in `planning` status to rule `issue-plan` — so this
@@ -47,6 +70,41 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, plan: next };
+    }),
+  );
+
+  // Tick (or un-tick) one of a part's acceptance criteria.
+  //
+  // The reviewer's own reading, never the harness's: nothing here derives whether a
+  // criterion holds, for the reason `conclude_part` refuses to derive an outcome —
+  // inferring a positive terminal from incidental evidence is the mistake the
+  // harness refuses everywhere. What this adds is only that the criteria are *in
+  // front of* the merged pull request instead of in a plan nobody reopens.
+  //
+  // Keyed on the criterion's text rather than its index, so a re-worded criterion
+  // loses its tick. That is the behaviour worth having: an amendment that changes
+  // what "done" means has withdrawn the thing that was confirmed.
+  app.post(
+    '/api/plans/:id/acceptance',
+    checked({ params: IdParams, body: AcceptanceBody }, async ({ params, body, reply }) => {
+      const plan = store.getPlan(params.id);
+      if (!plan) return reply.code(404).send({ error: 'plan not found' });
+      const part = store.listPlanParts(plan.id).find((p) => p.slug === body.slug);
+      if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
+      // Refused rather than stored: a tick against text no criterion carries can
+      // never be shown again, so accepting it would report a confirmation the sheet
+      // would then not draw.
+      const criteria = acceptanceCriteria(part);
+      if (!criteria.some((c) => c.text === body.criterion))
+        return reply.code(409).send({ error: 'that criterion is not one this part declares' });
+      const next = body.met
+        ? [...part.acceptanceMet.filter((c) => c !== body.criterion), body.criterion]
+        : part.acceptanceMet.filter((c) => c !== body.criterion);
+      const updated = store.setPartAcceptanceMet(part.id, next);
+      hub.broadcast({ type: 'world:changed' });
+      // No cycle: a reviewer's note about finished work schedules nothing, and
+      // running one would be a pulse per checkbox.
+      return { ok: true, part: updated };
     }),
   );
 
