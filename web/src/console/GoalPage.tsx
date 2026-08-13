@@ -350,7 +350,10 @@ function PullRequests({ page, refUrls }: { page: GoalPageView; refUrls: Record<s
       <div className="cn-rows">
         {open.length === 0 && closed.length === 0 && <p className="cn-empty">No pull request names this goal yet.</p>}
         {open.map((pr) => (
-          <div className="cn-row" key={pr.number}>
+          // An ignored PR is drawn spent, the same as a closed one below and as an
+          // ignored goal in the backlog: nothing will happen on it, and a row at
+          // full weight says the opposite.
+          <div className={`cn-row ${pr.attention.status === 'ignored' ? 'cn-spent' : ''}`} key={pr.number}>
             <span className="cn-grow">
               <b className="cn-name">
                 {refLink(`#${pr.number}`, refUrls)} {pr.title}

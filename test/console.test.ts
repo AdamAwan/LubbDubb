@@ -639,6 +639,30 @@ test('an empty rack still draws — a surface that vanishes reads as one that br
   assert.ok(html.includes('Pull requests'));
 });
 
+test('an ignored PR is drawn spent, not at the same weight as the ones being worked', () => {
+  const v = view();
+  const prs = v.state.world.pullRequests;
+  const first = prs[0];
+  assert.ok(first, 'the demo fixtures must carry an open PR');
+  const ignored = {
+    ...first,
+    labels: [v.state.config.ignoreLabel],
+    attention: { status: 'ignored' as const, reasons: ['tagged "lubbdubb-ignore" — the harness is leaving it alone'] },
+  };
+  const html = render({
+    ...v,
+    state: { ...v.state, world: { ...v.state.world, pullRequests: [ignored, ...prs.slice(1)] } },
+  });
+  // The row this PR is drawn in, not "some row on the page": the overview draws
+  // several kinds of row and one of them being spent proves nothing.
+  const row = html.split('<div class="cn-row').find((chunk) => chunk.includes(ignored.title));
+  assert.ok(row, 'the ignored PR is still listed — an ignored PR that vanishes is the other bug');
+  assert.ok(row.startsWith(' cn-spent'), 'the ignored PR’s row carries the spent tone');
+  // The court chip still names it, in the server's own word — the tone is the
+  // second reading, never a replacement for the first.
+  assert.ok(html.includes('>ignored</i>'), 'the court chip says which arm it is');
+});
+
 test('a goal row is a way into its page', () => {
   const html = render(view());
   assert.ok(html.includes('cn-goal-row'));
