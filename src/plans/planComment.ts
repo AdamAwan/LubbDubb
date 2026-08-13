@@ -63,9 +63,24 @@ function validation(checks: ValidationCheck[]): string {
       ? `**Validation** — all ${verdict.total} check${verdict.total === 1 ? '' : 's'} settled.`
       : `**Validation** — ${verdict.passed + verdict.waived}/${verdict.total} settled.`;
   const lines = live.map(
-    (c) => `- ${checkMark(c)} **${c.title}**${c.resultNote === null ? '' : ` — ${c.resultNote}`}${amended(c)}`,
+    (c) =>
+      `- ${checkMark(c)} **${c.title}**${c.resultNote === null ? '' : ` — ${c.resultNote}`}${recorder(c)}${amended(c)}`,
   );
   return `\n\n${heading}\n\n${lines.join('\n')}`;
+}
+
+/**
+ * That an agent took this reading rather than a person.
+ *
+ * Said only for the agent, not for both: this comment is read by somebody trying
+ * to find out whether the goal was checked, and "a person checked it" is what a
+ * validation checklist already means. The exception is the one worth a word — an
+ * agent ran a procedure the operator handed it, which is a weaker thing than a
+ * person having sat in front of the running system, and a reader deciding how
+ * much the tick is worth is entitled to know which they are looking at.
+ */
+function recorder(check: ValidationCheck): string {
+  return check.resultBy === 'agent' ? ' _(recorded by an agent)_' : '';
 }
 
 /**

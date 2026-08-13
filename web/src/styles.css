@@ -2547,6 +2547,18 @@ body {
   border-left: 2px solid var(--border);
   color: var(--muted);
 }
+/* The fleet gave this check back. The amendment band's weight, because it is the
+   same kind of news — nothing is going to happen to this check unless a person
+   does it — and the same amber, because both mean "read this before you act". */
+.pm-vback {
+  margin: 6px 0 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--amber);
+  border-left-width: 3px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--amber);
+}
 .pm-vgone {
   margin-top: 10px;
   font-size: 12px;

@@ -57,6 +57,7 @@ export interface RuleConditions {
   assessment: boolean;
   assay: boolean;
   retrospective: boolean;
+  validation: boolean;
   workItemStates: boolean;
 }
 
@@ -228,6 +229,16 @@ const RULES = [
     name: 'Open issue without a PR',
     description:
       'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR. With the planning funnel on, this fires only for an issue whose plan says `single`; its behaviour for such an issue is otherwise unchanged.',
+  },
+
+  // ---- Last, deliberately: it must never take a slot from work. -------------
+  {
+    id: 'validate-check',
+    kind: 'rule',
+    name: 'Handed-over validation check',
+    description:
+      'A validation check on a delivered goal that the **operator** handed to the fleet, and which nobody has recorded a reading against, gets a code agent to run it on a throwaway branch cut from the default branch and report what it saw. The hand-over is the entire gate: a planner’s `fleetCandidate` nomination dispatches nothing, because whether an agent can run a check depends on what logins and browsers this deployment has, which a planner reading the repository cannot know. It ranks **last of every rule**, below even one-shot pickup, because validation’s standing promise is that it blocks nothing — a check that could take the final slot from a blocked part or a red build would make the one feature that gates nothing the reason something else did not run. An agent that finds it cannot do the work hands the check back with its reason instead of recording a failure, which returns it to the operator; one that crashes or spends its attempt cap leaves the check exactly as it was, `unrun` and still flagged, with no escalation — the flag is already the ask.',
+    enabled: (c) => c.validation,
   },
 
   // ---- Not stages. Position here is display order only. ---------------------

@@ -1,7 +1,7 @@
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
-import type { Decision, Issue } from '../types.js';
+import type { Decision, Issue, ValidationCheck } from '../types.js';
 import { isIssuePickupEligible, issuePriority, openPrForIssue, type IssuePickupPolicy } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import { type CiPolicy } from '../ci/ciPolicy.js';
@@ -11,6 +11,7 @@ import { deliveryHold } from '../delivery/delivery.js';
 import { candidateParents } from '../issueRelations.js';
 import { assayHold, type AssayPolicy } from '../intake/assay.js';
 import { type RetrospectivePolicy } from '../retro/retro.js';
+import { type ValidationPolicy } from '../validation/policy.js';
 import { type AssessmentPolicy } from '../delivery/assessment.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import {
@@ -36,6 +37,7 @@ import { planApproval } from './rules/planApproval.js';
 import { planBlocked } from './rules/planBlocked.js';
 import { planPart } from './rules/planPart.js';
 import { issuePickup } from './rules/issuePickup.js';
+import { validateCheck } from './rules/validateCheck.js';
 
 /**
  * What each rule does, keyed by its id. The **order they run in is not here** —
@@ -69,6 +71,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'plan-blocked': planBlocked,
   'plan-part': planPart,
   'issue-pickup': issuePickup,
+  'validate-check': validateCheck,
 };
 
 /**
@@ -111,6 +114,8 @@ export class RuleDispatcher implements Dispatcher {
   private readonly assessment: AssessmentPolicy;
   private readonly assay: AssayPolicy;
   private readonly retrospective: RetrospectivePolicy;
+  private readonly validation: ValidationPolicy;
+  private readonly validationRoot: string;
   private readonly ci: CiPolicy;
 
   /**
@@ -145,6 +150,8 @@ export class RuleDispatcher implements Dispatcher {
     ci: Partial<CiPolicy> = {},
     assay: Partial<AssayPolicy> = {},
     retrospective: Partial<RetrospectivePolicy> = {},
+    validation: Partial<ValidationPolicy> = {},
+    validationRoot = '.lubbdubb/validation',
   ) {
     // An **omitted** policy means the feature is out, for every one of the four
     // below — the contract `pickup` already states two paragraphs up ("omitted =>
@@ -155,6 +162,8 @@ export class RuleDispatcher implements Dispatcher {
     // caller is asking for the rule not to fire.
     this.assay = { enabled: assay.enabled ?? false };
     this.retrospective = { enabled: retrospective.enabled ?? false };
+    this.validation = { enabled: validation.enabled ?? false };
+    this.validationRoot = validationRoot;
     this.defaultBranch = defaultBranch;
     this.ci = { checks: ci.checks ?? [] };
     this.planning = {
@@ -198,6 +207,7 @@ export class RuleDispatcher implements Dispatcher {
       assessment: this.assessment.enabled,
       assay: this.assay.enabled,
       retrospective: this.retrospective.enabled,
+      validation: this.validation.enabled,
       workItemStates: s.workItemStates !== null,
     };
     for (const rule of DISPATCH_PIPELINE) {
@@ -359,6 +369,18 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
+    // The validation plans, grouped by the plan they hang off. Built only when
+    // the feature is on: with it off `validate-check` never runs, and grouping a
+    // table nothing will read would be a fold per pulse for nobody.
+    const validationChecks = new Map<string, ValidationCheck[]>();
+    if (this.validation.enabled) {
+      for (const check of ctx.validationChecks ?? []) {
+        const group = validationChecks.get(check.planId);
+        if (group) group.push(check);
+        else validationChecks.set(check.planId, [check]);
+      }
+    }
+
     // Throttle a persistent concern: a finished agent that didn't clear its origin
     // cools down instead of re-dispatching every cycle, and escalates once its
     // attempts are spent. Escalations don't claim headroom (no agent is started);
@@ -425,6 +447,7 @@ export class RuleDispatcher implements Dispatcher {
       // and most are visible only as some other item's parent.
       parentCandidates: candidateParents(ctx.world.issues, this.pickup.containerTypes),
       routes,
+      validationChecks,
       // Written by `issue-assay` / `issue-assess`, read by the stages the pipeline
       // runs after them. See {@link StageContext} — the ordering is load-bearing.
       assaying: new Set<number>(),
@@ -436,6 +459,7 @@ export class RuleDispatcher implements Dispatcher {
       planning: this.planning,
       ci: this.ci,
       defaultBranch: this.defaultBranch,
+      validationRoot: this.validationRoot,
       // `workItemStates` narrows both work-item rules' config to non-null. Narrowed
       // once, here, so each stage reads it off a value the type system already
       // knows is present — and the same predicate is what the registry's `enabled`

@@ -1032,7 +1032,12 @@ with the previous wording folded behind _What it used to say_. The amendments ar
 at the top with their letters, because a sheet of nine checks with one rewritten is exactly where a
 per-row band gets scrolled past. The band clears when the operator records a reading against the new
 wording and by nothing else: a dismiss button would clear it for somebody who had merely seen it.
-→ [20](20-validation.md)
+
+A check the fleet **handed back** draws a band of the same weight and the same amber, carrying the
+agent's reason. Same weight because it is the same kind of news — nothing is going to happen to this
+check unless a person does it — and the reason is quoted rather than summarised because it is usually
+the one sentence saying what a person can do that an agent could not.
+→ [20](20-validation.md#the-hand-over)
 
 ### The caveats
 

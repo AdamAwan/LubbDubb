@@ -428,6 +428,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     config.ci,
     config.assay,
     config.retrospective,
+    config.validation,
+    config.validationRoot,
   );
 
   // The store holds scheduling intent; this folds git + provider reality back onto

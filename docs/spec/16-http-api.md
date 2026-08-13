@@ -28,7 +28,7 @@ is about.
 | `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                 |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                    |
 | `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                       |
-| `routes/validation.ts`  | One validation check's current reading: result, defer, waive, reset                         |
+| `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it      |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                          |
 | `routes/spend.ts`       | `/api/spend` — the breakdown behind the cost indicators                                     |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
@@ -737,6 +737,23 @@ commonest cause is not a typo but an amendment landing between the sheet being d
 Each writes the check's whole current reading, clearing whatever the last one left behind, and
 broadcasts `world:changed`. **None of them runs a cycle** — nothing here schedules work, and a pulse
 per checkbox is a pulse per checkbox. Returns `{ ok: true, check }`. → [20](20-validation.md)
+
+### `POST /api/plans/:id/validation/:checkId/handover`
+
+Body `{to: 'fleet' | 'human'}`, and **the only writer of a check's `actor`**. Handing a check to the
+fleet is an operator act by construction: no plan document, no amendment and no agent reaches this
+route, which is what keeps "an agent may run this" a statement about the deployment rather than a
+planner's guess about it. `fleetCandidate` is the planner's argument for pressing it; it is not this.
+
+**409** on an unknown or superseded check, the four routes above's rule. **400** on handing over a
+check that already reads `passed`, `failed`, `waived` or `deferred`, pointing at `reset`: rule
+`validate-check` only ever runs an `unrun` check, so accepting would take and then never move — and
+refusing also protects the reading, since an agent re-running a check behind the person who settled
+it would overwrite their answer with its own. Taking a check **back** is always allowed; it stops
+something from happening.
+
+Broadcasts `world:changed` and **runs no cycle** — the rule picks the hand-over up on the next pulse
+like any other world fact. Returns `{ ok: true, check }`. → [20](20-validation.md#the-hand-over)
 
 ### `POST /api/plans/:id/replan`
 

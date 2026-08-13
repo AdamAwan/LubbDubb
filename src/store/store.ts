@@ -67,6 +67,7 @@ import type {
   ValidationAmendment,
   ValidationAmendResult,
   ValidationCheck,
+  ValidationCheckActor,
   ValidationCheckState,
   ValidationResource,
   WorkNode,
@@ -414,6 +415,15 @@ export class Store {
   linkValidationResourceTask(planId: string, name: string, humanTaskId: string): void {
     this.validation.linkValidationResourceTask(planId, name, humanTaskId);
   }
+  getValidationCheck(planId: string, checkId: string): ValidationCheck | null {
+    return this.validation.getValidationCheck(planId, checkId);
+  }
+  setValidationActor(planId: string, checkId: string, actor: ValidationCheckActor): ValidationCheck | null {
+    return this.validation.setValidationActor(planId, checkId, actor);
+  }
+  recordValidationHandback(planId: string, checkId: string, note: string): ValidationCheck | null {
+    return this.validation.recordValidationHandback(planId, checkId, note);
+  }
   listValidationChecks(planId: string): ValidationCheck[] {
     return this.validation.listValidationChecks(planId);
   }
@@ -429,7 +439,12 @@ export class Store {
   recordValidationResult(
     planId: string,
     checkId: string,
-    input: { state: ValidationCheckState; note: string | null; by: 'operator' | null; until?: string | null },
+    input: {
+      state: ValidationCheckState;
+      note: string | null;
+      by: 'operator' | 'agent' | null;
+      until?: string | null;
+    },
   ): ValidationCheck | null {
     return this.validation.recordValidationResult(planId, checkId, input);
   }

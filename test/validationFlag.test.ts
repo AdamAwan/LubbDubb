@@ -60,6 +60,8 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     covers: [],
     fleetCandidate: false,
     candidateWhy: null,
+    actor: 'human',
+    handbackNote: null,
     state: 'unrun',
     resultNote: null,
     resultBy: null,

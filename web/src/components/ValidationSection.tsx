@@ -26,6 +26,7 @@ export function ValidationSection({
   onDefer,
   onWaive,
   onReset,
+  onHandover,
 }: {
   /** Superseded checks included — drawing what a plan withdrew is half the point. */
   checks: ValidationCheck[];
@@ -35,6 +36,7 @@ export function ValidationSection({
   onDefer: (checkId: string, reason: string) => Promise<unknown> | unknown;
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
   onReset: (checkId: string) => Promise<unknown> | unknown;
+  onHandover: (checkId: string, to: 'fleet' | 'human') => Promise<unknown> | unknown;
 }) {
   const live = checks.filter((c) => c.supersededReason === null);
   const withdrawn = checks.filter((c) => c.supersededReason !== null);
@@ -105,6 +107,7 @@ export function ValidationSection({
           onDefer={(reason) => onDefer(check.id, reason)}
           onWaive={(reason) => onWaive(check.id, reason)}
           onReset={() => onReset(check.id)}
+          onHandover={(to) => onHandover(check.id, to)}
         />
       ))}
       {withdrawn.length > 0 && (
@@ -145,6 +148,7 @@ function CheckBlock({
   onDefer,
   onWaive,
   onReset,
+  onHandover,
 }: {
   check: ValidationCheck;
   resources: ValidationResourceView[];
@@ -153,6 +157,7 @@ function CheckBlock({
   onDefer: (reason: string) => Promise<unknown> | unknown;
   onWaive: (reason: string) => Promise<unknown> | unknown;
   onReset: () => Promise<unknown> | unknown;
+  onHandover: (to: 'fleet' | 'human') => Promise<unknown> | unknown;
 }) {
   const [verb, setVerb] = useState<Verb | null>(null);
   const [note, setNote] = useState('');
@@ -182,8 +187,18 @@ function CheckBlock({
           <span className="pm-vtitle">{check.title}</span>
           <span className="chip small mono">{check.id}</span>
           <span className={`chip small${stateTone(check.state)}`}>{check.state}</span>
-          {check.fleetCandidate && (
-            <span className="chip small" title={check.candidateWhy ?? 'The planner thinks an agent could run this'}>
+          {/* The operator's own decision, drawn ahead of the planner's suggestion
+              about it — one is what will happen, the other is an argument. */}
+          {check.actor === 'fleet' && (
+            <span className="chip small warn" title="You handed this to the fleet; an agent will run it">
+              with the fleet
+            </span>
+          )}
+          {check.fleetCandidate && check.actor !== 'fleet' && (
+            <span
+              className="chip small"
+              title={check.candidateWhy ?? 'The planner thinks an agent could run this — you decide'}
+            >
               an agent could run this
             </span>
           )}
@@ -194,6 +209,15 @@ function CheckBlock({
           ))}
         </div>
         {check.amendedAt !== null && <AmendBand check={check} refUrls={refUrls} />}
+        {/* The fleet tried and could not. Drawn as loudly as an amendment because
+            it is the same kind of news — this check is not going to happen unless
+            you do it — and because the reason is usually the one sentence that
+            says what a person can do that an agent could not. */}
+        {check.handbackNote !== null && (
+          <div className="pm-vback">
+            <b>Back with you</b> <span className="muted">{check.handbackNote}</span>
+          </div>
+        )}
         <div className="pm-vbody">
           <div>
             <b>Do</b>
@@ -221,6 +245,11 @@ function CheckBlock({
         {check.resultNote !== null && (
           <div className="pm-vnote">
             {check.resultNote}
+            {/* Who took the reading, beside the reading. "An agent says this
+                passed" and "I ran it and it passed" are different facts, and the
+                second must never be read off the first — which is the whole of
+                what this feature is for, one level down. */}
+            {check.resultBy === 'agent' && <i className="k">recorded by an agent</i>}
             {check.deferUntil !== null && <i className="k">until {check.deferUntil}</i>}
           </div>
         )}
@@ -240,6 +269,29 @@ function CheckBlock({
                 <button className="btn ghost small" onClick={() => setVerb('waived')}>
                   Waive
                 </button>
+                {/* The hand-over, beside the four readings and deliberately not
+                    among them: it says who runs the check, not what it said. It
+                    is offered on every unrun check rather than only on a
+                    nominated one — the planner's nomination is an argument, and
+                    an operator who knows their own deployment does not need the
+                    planner's permission to use it. */}
+                {check.actor === 'fleet' ? (
+                  <AsyncButton
+                    className="ghost small"
+                    title="Stop waiting for an agent and take this check back"
+                    onClick={() => onHandover('human')}
+                  >
+                    Take it back
+                  </AsyncButton>
+                ) : (
+                  <AsyncButton
+                    className="ghost small"
+                    title="Let the harness put an agent on this check once the goal is delivered"
+                    onClick={() => onHandover('fleet')}
+                  >
+                    Hand to the fleet
+                  </AsyncButton>
+                )}
               </>
             ) : (
               // One way back from every settled state, and it takes no note for a

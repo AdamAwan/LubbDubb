@@ -17,6 +17,7 @@ import { retroSubmit } from './tools/retroSubmit.js';
 import { scratchAppend } from './tools/scratchAppend.js';
 import { scratchRead } from './tools/scratchRead.js';
 import { validationAmend } from './tools/validationAmend.js';
+import { validationReport } from './tools/validationReport.js';
 import { worldRead } from './tools/worldRead.js';
 
 /**
@@ -53,6 +54,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   retro_submit: retroSubmit,
   open_pr: openPr,
   validation_amend: validationAmend,
+  validation_report: validationReport,
 };
 
 /**

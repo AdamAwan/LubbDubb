@@ -1462,6 +1462,25 @@ export interface PlanEvidence {
 export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'deferred';
 
 /**
+ * Who is expected to run a check — **the operator's decision, and only theirs**.
+ *
+ * `human` is the default and stays the default. The planner's {@link
+ * ValidationCheck.fleetCandidate} is a nomination and does not set this: whether
+ * an agent can run a check is a property of the deployment (what logins it has,
+ * whether anything can drive a browser), which a planner reading the repository
+ * cannot know. A wrong guess is a check dispatched against a login the fleet does
+ * not have, so the nomination is information and the deciding stays with the
+ * person who has the information.
+ *
+ * `fleet` is a hand-over: the operator has read the check and said the harness's
+ * own agents may run it. It is not permanent — an agent that finds it cannot do
+ * the work hands it back (see {@link ValidationCheck.handbackNote}), and a
+ * rewording returns it, because the hand-over was a decision about wording that
+ * no longer exists.
+ */
+export type ValidationCheckActor = 'human' | 'fleet';
+
+/**
  * One executable step in a goal's validation plan: what to do, what a pass looks
  * like, and what anyone concluded from running it.
  *
@@ -1502,10 +1521,32 @@ export interface ValidationCheck {
    */
   fleetCandidate: boolean;
   candidateWhy: string | null;
+  /**
+   * Who is expected to run it. `human` unless an operator handed it over — see
+   * {@link ValidationCheckActor}, and note that this is deliberately *not*
+   * derived from {@link ValidationCheck.fleetCandidate}.
+   */
+  actor: ValidationCheckActor;
+  /**
+   * Why the fleet gave this check back, in the agent's words, and null once
+   * anything has been recorded about the check since.
+   *
+   * The alternative is an agent recording `failed` when it simply could not get
+   * to the environment, which is the most expensive possible lie: it flags the
+   * goal for a reason that has nothing to do with the goal. A hand-back leaves
+   * the state exactly as it was and says what stopped it.
+   */
+  handbackNote: string | null;
   state: ValidationCheckState;
   /** Required with every result, and with a deferral or a waiver. */
   resultNote: string | null;
-  resultBy: 'operator' | null;
+  /**
+   * Who took the reading. **Drawn wherever the reading is**, because "an agent
+   * says this passed" and "I ran it and it passed" are different facts, and the
+   * whole feature exists to stop the second being assumed from evidence that only
+   * supports the first.
+   */
+  resultBy: 'operator' | 'agent' | null;
   resultAt: string | null;
   /** When a deferral says it comes back. Null is "not yet, and I am not saying when". */
   deferUntil: string | null;

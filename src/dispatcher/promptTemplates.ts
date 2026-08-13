@@ -31,6 +31,7 @@ type PromptId =
   | 'issue-assess'
   | 'issue-assay'
   | 'issue-retro'
+  | 'validation-check'
   | 'pr-ci-fix'
   | 'pr-ci-gate'
   | 'pr-base-update-behind'
@@ -311,6 +312,20 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'Issue #{number} ("{title}") has been delivered. Write the retrospective for it — the account of what shipped, and of how the work actually went.\n\n{body}\n\nYou have no worktree and you are not implementing anything. What you have is the scratchpad the agents on this goal left and the record the harness kept, both appended below, plus world_read if you need the state of a pull request or the issue itself.\n\nWrite one document, in markdown, for two readers:\n\n1. **What shipped** — for someone reviewing this goal who did not watch it happen: the pull requests, what each part delivered or decided, what was concluded to need no code or to be out of scope, and anything still outstanding.\n2. **How the run went** — for the operator: where agents were spent and on what, which gates, escalations or retries cost time, what surprised the agents, and what you would change about the process — a prompt, a gate, a config, a habit of decomposition. Be specific and name the evidence; "it went well" helps nobody, and neither does a list of everything that happened.\n\nQuote the scratchpad where it earns it and attribute it, and say plainly where the pad and the harness\'s record disagree — that disagreement is usually the most useful thing in the document. Then call retro_submit with a summary of one or two sentences and the document itself. Nothing you write is posted to the tracker, nothing is closed, and nothing is scheduled from it: a human reads it and decides what to change.',
     doc: "Sent to a desk agent when an issue the harness parked as delivered has no retrospective yet (rule `issue-retro`). The issue's scratchpad and the harness dossier are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop them. Placeholders: {number} {title} {body}.",
+  },
+  'validation-check': {
+    placeholders: ['number', 'title', 'letter', 'root'],
+    template:
+      'Issue #{number} ("{title}") has been delivered, and check {letter} of its validation plan has been handed to the fleet to run. Run it, and report what you saw.\n\n' +
+      'The check itself is appended below: a procedure and what a pass looks like. Follow the procedure as written. You are on a branch cut from the default branch, so the repository you can see is the delivered state — this is not a branch to build on, and nothing you do here should be committed or pushed.\n\n' +
+      'Anything the check needs that is not in the repository lives under {root}. It is named there, not pathed, so look for the names the check lists.\n\n' +
+      'Then call validation_report exactly once. Which check you are reporting on is already decided by what you were dispatched to run, so you say only what happened:\n\n' +
+      '- "passed" — you followed the procedure and saw what it says to expect. Say what you actually saw, not that it passed.\n' +
+      '- "failed" — you followed the procedure and did not see it. Say what happened instead. A failure here is a finding about the goal and it is worth having.\n' +
+      '- "handback" — you could not run it. Say what stopped you. This is the right answer, not a last resort: the fleet has no interactive login, no browser and no account on whatever environment this deployment tests against, and a check that needs one is a check for a person. It records no result and returns the check to the operator with your reason.\n\n' +
+      '**Do not report "passed" from evidence you did not gather.** A green build, a merged pull request, code that looks correct and a test suite that already covers it are none of them this check: it exists precisely because those had all happened and somebody still wanted the thing exercised. If you did not carry out the procedure, the answer is "handback".\n\n' +
+      'If the check describes something that no longer exists — a screen that moved, a command that was renamed — call validation_amend to correct its wording rather than failing it, and then report against what you did.',
+    doc: "Sent to a code agent when an operator has handed a validation check to the fleet and the goal is parked as delivered (rule `validate-check`). The check's own procedure, expectation and resources are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot act without. Placeholders: {number} {title} {letter} {root}.",
   },
   'pr-ci-fix': {
     placeholders: ['number', 'title', 'branch'],

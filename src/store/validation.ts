@@ -3,6 +3,7 @@ import type {
   ValidationAmendment,
   ValidationAmendResult,
   ValidationCheck,
+  ValidationCheckActor,
   ValidationCheckInput,
   ValidationCheckState,
   ValidationResource,
@@ -20,9 +21,20 @@ import type { StoreContext } from './context.js';
  * IF NOT EXISTS` never alters an existing table, so without these three entries
  * every database from before the amendment tool would read `undefined` for all
  * of them and silently draw no band at all.
+ *
+ * `actor` and `handback_note` arrived the change after that, with the fleet
+ * hand-over, and fail the same way without an entry: every existing check would
+ * read `undefined` for `actor`, and a column whose absence means "human" is one
+ * whose absence is invisible — the hand-over control would simply never take.
  */
 export const VALIDATION_COLUMNS: ColumnMigrations = {
-  validation_checks: { revision: 'TEXT', amended_at: 'TEXT', amend_note: 'TEXT' },
+  validation_checks: {
+    revision: 'TEXT',
+    amended_at: 'TEXT',
+    amend_note: 'TEXT',
+    actor: 'TEXT',
+    handback_note: 'TEXT',
+  },
   validation_resources: {},
 };
 
@@ -228,6 +240,14 @@ export class ValidationStore {
       covers: input.covers,
       fleetCandidate: input.fleetCandidate,
       candidateWhy: input.candidateWhy,
+      // The hand-over is withdrawn by exactly what withdraws the result, and for
+      // the same reason: both were decisions an operator made about wording that
+      // no longer exists. A check reworded to say "log into the test environment"
+      // and still assigned to the fleet would be run by an agent nobody handed it
+      // to — and the amendment band is already in front of the operator, saying
+      // what changed, which is where the decision to hand it over again belongs.
+      actor: keep ? prev.actor : 'human',
+      handbackNote: keep ? prev.handbackNote : null,
       state: keep ? prev.state : 'unrun',
       resultNote: keep ? prev.resultNote : null,
       resultBy: keep ? prev.resultBy : null,
@@ -328,6 +348,68 @@ export class ValidationStore {
     return rows.map(rowToCheck);
   }
 
+  /**
+   * One live check, or null — the read every writer that has to *decide* before
+   * it writes shares, so the hand-over route and the reporting tool cannot come
+   * to different conclusions about what a check currently says.
+   *
+   * Live only, on {@link ValidationStore.recordValidationResult}'s terms: a check
+   * its plan has withdrawn is not one to hand over, run or report on.
+   */
+  getValidationCheck(planId: string, checkId: string): ValidationCheck | null {
+    const row = this.ctx.db
+      .prepare(`SELECT * FROM validation_checks WHERE plan_id=? AND id=? AND superseded_reason IS NULL`)
+      .get(planId, checkId) as ValidationCheckRow | undefined;
+    return row ? rowToCheck(row) : null;
+  }
+
+  /**
+   * Hand a check to the fleet, or take it back. **The operator's act and nobody
+   * else's** — no document, no amendment and no agent reaches this, which is what
+   * keeps "an agent may run this" a statement about the deployment rather than a
+   * planner's guess about it.
+   *
+   * Handing it over clears any previous hand-back: the operator has read why the
+   * fleet gave it up and is sending it again anyway, so leaving the old reason
+   * standing beside a check that is now in flight would describe the wrong
+   * attempt.
+   */
+  setValidationActor(planId: string, checkId: string, actor: ValidationCheckActor): ValidationCheck | null {
+    const current = this.getValidationCheck(planId, checkId);
+    if (!current) return null;
+    const next: ValidationCheck = {
+      ...current,
+      actor,
+      handbackNote: actor === 'fleet' ? null : current.handbackNote,
+      updatedAt: this.ctx.now(),
+    };
+    this.writeCheck(next);
+    return next;
+  }
+
+  /**
+   * The fleet giving a check back: it could not run this, and here is why.
+   *
+   * **It records no reading.** The state is left exactly as it was, because that
+   * is the honest answer — an agent that could not reach the environment has not
+   * found anything out about the goal, and `failed` would flag it for a reason
+   * that has nothing to do with the code. That refusal is the whole point of
+   * having a third answer: without it the only ways to end a dispatch are a lie
+   * and silence.
+   */
+  recordValidationHandback(planId: string, checkId: string, note: string): ValidationCheck | null {
+    const current = this.getValidationCheck(planId, checkId);
+    if (!current) return null;
+    const next: ValidationCheck = {
+      ...current,
+      actor: 'human',
+      handbackNote: note,
+      updatedAt: this.ctx.now(),
+    };
+    this.writeCheck(next);
+    return next;
+  }
+
   listValidationResources(planId: string): ValidationResource[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM validation_resources WHERE plan_id=? ORDER BY name ASC`)
@@ -364,15 +446,18 @@ export class ValidationStore {
   recordValidationResult(
     planId: string,
     checkId: string,
-    input: { state: ValidationCheckState; note: string | null; by: 'operator' | null; until?: string | null },
+    input: {
+      state: ValidationCheckState;
+      note: string | null;
+      by: 'operator' | 'agent' | null;
+      until?: string | null;
+    },
   ): ValidationCheck | null {
-    const row = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks WHERE plan_id=? AND id=? AND superseded_reason IS NULL`)
-      .get(planId, checkId) as ValidationCheckRow | undefined;
-    if (!row) return null;
+    const current = this.getValidationCheck(planId, checkId);
+    if (!current) return null;
     const ts = this.ctx.now();
     const next: ValidationCheck = {
-      ...rowToCheck(row),
+      ...current,
       state: input.state,
       resultNote: input.note,
       resultBy: input.by,
@@ -387,6 +472,10 @@ export class ValidationStore {
       revision: null,
       amendedAt: null,
       amendNote: null,
+      // Answered for the band's reason, and the same one: it says why the last
+      // dispatch came to nothing, and somebody who has since recorded a reading
+      // has moved past it.
+      handbackNote: null,
       updatedAt: ts,
     };
     this.writeCheck(next);
@@ -400,15 +489,16 @@ export class ValidationStore {
         // unquoted column named for one is a syntax error at prepare time.
         // `check_expect` follows it so the pair reads as a pair.
         `INSERT INTO validation_checks (plan_id, id, letter, seq, title, check_do, check_expect, uses, covers,
-           fleet_candidate, candidate_why, state, result_note, result_by, result_at, defer_until,
-           superseded_reason, revision, amended_at, amend_note, created_at, updated_at)
+           fleet_candidate, candidate_why, actor, handback_note, state, result_note, result_by, result_at,
+           defer_until, superseded_reason, revision, amended_at, amend_note, created_at, updated_at)
          VALUES (@planId, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
-           @fleetCandidate, @candidateWhy, @state, @resultNote, @resultBy, @resultAt, @deferUntil,
-           @supersededReason, @revision, @amendedAt, @amendNote, @createdAt, @updatedAt)
+           @fleetCandidate, @candidateWhy, @actor, @handbackNote, @state, @resultNote, @resultBy, @resultAt,
+           @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @createdAt, @updatedAt)
          ON CONFLICT(plan_id, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
-           candidate_why=excluded.candidate_why, state=excluded.state, result_note=excluded.result_note,
+           candidate_why=excluded.candidate_why, actor=excluded.actor,
+           handback_note=excluded.handback_note, state=excluded.state, result_note=excluded.result_note,
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
            amended_at=excluded.amended_at, amend_note=excluded.amend_note, updated_at=excluded.updated_at`,
@@ -467,6 +557,9 @@ interface ValidationCheckRow {
   covers: string;
   fleet_candidate: number;
   candidate_why: string | null;
+  /** Added with the fleet hand-over — `undefined` on a database that predates it; see {@link VALIDATION_COLUMNS}. */
+  actor: string | null | undefined;
+  handback_note: string | null | undefined;
   state: string;
   result_note: string | null;
   result_by: string | null;
@@ -503,9 +596,14 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     covers: parseStringArray(r.covers),
     fleetCandidate: r.fleet_candidate === 1,
     candidateWhy: r.candidate_why,
+    // Anything that is not the word `fleet` is a human's check, which is the
+    // direction a value this does not recognise must fail in: an unreadable
+    // column becoming a hand-over would dispatch an agent nobody asked for.
+    actor: r.actor === 'fleet' ? 'fleet' : 'human',
+    handbackNote: r.handback_note ?? null,
     state: checkStateOf(r.state),
     resultNote: r.result_note,
-    resultBy: r.result_by === 'operator' ? 'operator' : null,
+    resultBy: r.result_by === 'operator' || r.result_by === 'agent' ? r.result_by : null,
     resultAt: r.result_at,
     deferUntil: r.defer_until,
     supersededReason: r.superseded_reason,

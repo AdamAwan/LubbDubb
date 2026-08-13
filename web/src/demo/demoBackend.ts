@@ -453,6 +453,16 @@ class DemoServer {
   async setValidation(planId: string, checkId: string, act: ValidationAct): Promise<{ ok: true }> {
     const check = (this.state.validationChecks ?? []).find((c) => c.planId === planId && c.id === checkId);
     if (check && check.supersededReason === null) {
+      // The hand-over writes who runs it, never a reading — mirrored separately
+      // because folding it into the branch below would have the demo record a
+      // state the real route does not touch.
+      if (act.kind === 'handover') {
+        if (act.to === 'fleet' && check.state !== 'unrun') return { ok: true };
+        check.actor = act.to;
+        if (act.to === 'fleet') check.handbackNote = null;
+        this.dirty();
+        return { ok: true };
+      }
       const state =
         act.kind === 'result'
           ? act.result
@@ -466,6 +476,7 @@ class DemoServer {
       check.resultBy = act.kind === 'reset' ? null : 'operator';
       check.resultAt = act.kind === 'reset' ? null : new Date().toISOString();
       check.deferUntil = null;
+      check.handbackNote = null;
       this.dirty();
     }
     return { ok: true };

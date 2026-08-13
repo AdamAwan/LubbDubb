@@ -9,7 +9,12 @@ export type ValidationAct =
   | { kind: 'result'; result: 'passed' | 'failed'; note: string }
   | { kind: 'defer'; reason: string }
   | { kind: 'waive'; reason: string }
-  | { kind: 'reset' };
+  | { kind: 'reset' }
+  // The one act that is not a reading: who is expected to *run* the check. Here
+  // rather than as a method of its own because it is written on the same row,
+  // through the same seam, by the same person deciding the same thing — what
+  // happens to this check next.
+  | { kind: 'handover'; to: 'fleet' | 'human' };
 
 /**
  * Which full-surface panel is in front. One value rather than a boolean each: a
