@@ -721,6 +721,120 @@ body {
   font-size: 12px;
 }
 
+/* The download pair on an insight panel. Ghost buttons and a dim label: taking a
+   copy of a reading is never the thing you came to the panel to do, and a control
+   drawn louder than the figures it exports would say otherwise. */
+.dl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dl-lb {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- The print sheet -------------------------------------------------------
+   A `.pdf` export is the panel itself, cloned into `#print-sheet` and printed by
+   the browser. Nothing here rebuilds a reading; it re-dresses the one already
+   drawn, and the whole of that is two jobs.
+
+   One: show the sheet and hide the page around it. The clone is a direct child of
+   `body`, so that is one rule rather than one per level of an overlay's nesting.
+
+   Two: turn the lights on. Both surfaces are dark — the cockpit is #191b1c and
+   the console is darker still — and a dark panel on paper is a full ink well for
+   a page nobody can read at a desk. The tokens are overridden on the sheet rather
+   than the components restyled, which is the same division the phase colours
+   keep: a component names a thing and the sheet decides what it looks like. The
+   accents survive on purpose — a phase bar with no colour is not the panel. */
+#print-sheet {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  body.printing > *:not(#print-sheet) {
+    display: none !important;
+  }
+  body.printing #print-sheet {
+    display: block;
+  }
+
+  #print-sheet {
+    --bg: #fff;
+    --panel: #fff;
+    --panel-2: #fff;
+    --well: #fff;
+    --text: #16181a;
+    --muted: #55585c;
+    --border: #c3c6c9;
+    --border-lo: #dcdee0;
+    --cn-bg: #fff;
+    --cn-panel: #fff;
+    --cn-panel-2: #fff;
+    --cn-fg: #16181a;
+    --cn-fg-dim: #55585c;
+    --cn-fg-faint: #7c8085;
+    --cn-line: #dcdee0;
+    --cn-line-soft: #eceef0;
+    background: #fff;
+    color: #16181a;
+    /* The bars and the plot lines *are* the reading. A browser dropping them to
+       save ink would print a legend beside four empty rectangles. */
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  #print-sheet h1 {
+    margin: 0;
+    font-size: 20px;
+  }
+  #print-sheet .print-when {
+    margin: 2px 0 14px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* The panel is a scroll box on screen and a run of pages here: a pane that
+     keeps its own height prints the first screenful and drops the rest. */
+  #print-sheet .read-modal,
+  #print-sheet .cn-prod,
+  #print-sheet .sp {
+    max-height: none;
+    height: auto;
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+  /* Every control is a way to do something, and there is nothing to press on
+     paper — including the export button that produced the page. */
+  #print-sheet button,
+  #print-sheet .dl,
+  #print-sheet .pm-head {
+    display: none !important;
+  }
+  /* Two columns at a screen's width, stacked at a page's. */
+  #print-sheet .sp-cols {
+    display: block;
+  }
+  #print-sheet .sp-col + .sp-col {
+    margin-top: 16px;
+  }
+  #print-sheet tr,
+  #print-sheet .cn-row,
+  #print-sheet .sp-tile,
+  #print-sheet svg {
+    break-inside: avoid;
+  }
+  #print-sheet .sp-sub {
+    break-after: avoid;
+  }
+}
+
 .esc-context {
   margin: 8px 0;
 }
@@ -1324,14 +1438,12 @@ body {
 }
 
 /* ── Work graph ──────────────────────────────────────────────────────────
-   Shell-level rather than drawn by the console: the graph is the one surface that
-   outlives the world snapshot, so it is styled only through the tokens above. */
+   A shared component, drawn as the console's Work tab and styled only through the
+   tokens above — the console's own sheet never reaches in. No padding of its own:
+   the situation area supplies it, and the tab has no heading because the nav item
+   that opened it is the heading. */
 .work-panel {
-  padding: 0 16px 24px;
-}
-.work-panel h2 {
-  font-size: 14px;
-  color: var(--muted);
+  padding: 0;
 }
 .work-panel h3 {
   font-size: 13px;
@@ -1551,6 +1663,16 @@ body {
 }
 .pm-close {
   margin-left: auto;
+}
+/* The download pair rides on the right of a panel head, with the close beside it:
+   two ways of being done with a panel belong together. It takes the auto margin
+   over from `.pm-close`, which would otherwise claim its own share of the gap and
+   split the pair down the middle. */
+.pm-head .dl {
+  margin-left: auto;
+}
+.pm-head .dl + .pm-close {
+  margin-left: 0;
 }
 .pm-tabs {
   display: flex;

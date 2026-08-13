@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import type {
   ChecksSpend,
   SpendGoal,
@@ -9,6 +9,7 @@ import type {
   TaskTypeSpend,
 } from '../types.js';
 import { api } from '../api.js';
+import { Downloads, toCsv } from './Downloads.js';
 import { fmtTokens, fmtUsd, relTime } from './util.js';
 
 /**
@@ -47,6 +48,11 @@ import { fmtTokens, fmtUsd, relTime } from './util.js';
 export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
   const [insights, setInsights] = useState<SpendInsights | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  // The modal, not the breakdown inside it: the body is three different elements
+  // across loading, failure and the all-unmeasured case, and a ref that is null
+  // on two of them is a button that silently does nothing. The chrome it brings
+  // along — the head, the close — is dropped by the print sheet's own rules.
+  const modal = useRef<HTMLDivElement>(null);
 
   // Escape closes, as it does on every other panel that covers the cockpit: a
   // thing this large must not have exactly one exit.
@@ -78,6 +84,7 @@ export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
   return (
     <div className="read-backdrop" onClick={onClose}>
       <div
+        ref={modal}
         className="read-modal"
         role="dialog"
         aria-modal="true"
@@ -87,6 +94,33 @@ export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
         <div className="pm-head">
           <span className="pm-title">Spend</span>
           <span className="sp-note">the same money, split three ways</span>
+          {/* Only once there is something to take. The control is drawn from the
+              same `insights` the body is, so a failed fetch cannot offer a file
+              of zeroes — which is the panel's own rule about `$0.00` applied to
+              the one artefact that leaves the browser and outlives the tab. */}
+          {insights !== null && (
+            <Downloads
+              name="lubbdubb-spend"
+              files={[
+                {
+                  format: 'csv',
+                  title:
+                    'Every table on this panel, in the order it is drawn — totals, phases, days, task types, checks, goals, runs',
+                  build: () => spendCsv(insights),
+                },
+                {
+                  format: 'json',
+                  title: 'The exact payload this panel drew, unrounded',
+                  build: () => JSON.stringify(insights, null, 2),
+                },
+              ]}
+              sheet={{
+                heading: 'Spend',
+                title: 'This panel as it stands, through the browser’s own print — choose “Save as PDF”',
+                node: () => modal.current,
+              }}
+            />
+          )}
           <button className="btn ghost small pm-close" onClick={onClose}>
             close
           </button>
@@ -155,6 +189,126 @@ function Body({ insights, state }: { insights: SpendInsights | null; state: 'loa
       <Runs runs={insights.runs} rankedFrom={insights.rankedFrom} />
     </div>
   );
+}
+
+/**
+ * The panel as a file: seven sections in the order the panel draws them, parted by
+ * blank lines and each headed by its own name.
+ *
+ * Seven tables rather than one grid, because that is what the panel is — a total,
+ * three splits, a trend and two rankings — and folding them into a single sheet
+ * would lose which figure was a whole and which was a part.
+ *
+ * **Figures go out raw.** `fmtUsd` rounds to the cent and `fmtTokens` to three
+ * significant figures, which is right for a glance and wrong for a sum: a
+ * hundred rows of `$0.00` add up to real money. The formatting is presentation
+ * and stops at the screen.
+ *
+ * Every truncation and every remainder the panel states in prose is stated here
+ * as a row. A file read six months from now has no panel beside it, so a cap it
+ * does not carry is a cap nobody will know about — and this section list grows
+ * with the panel: a table the export forgets is the same silent under-report,
+ * arriving as a complete-looking file.
+ */
+export function spendCsv(insights: SpendInsights): string {
+  const { totals, windows, phases, goals, runs, timeline, taskTypes, checks } = insights;
+  const order = phases.map((p) => p.phase);
+
+  return toCsv([
+    ['Totals'],
+    ['Measure', 'Value'],
+    ['All-time cost (USD)', totals.costUsd],
+    ['Last 5h cost (USD)', windows.fiveHourCostUsd],
+    ['Last 7d cost (USD)', windows.sevenDayCostUsd],
+    ['Input tokens', totals.inputTokens],
+    ['Output tokens', totals.outputTokens],
+    ['Turns', totals.turns],
+    ['Measured runs', totals.measuredRuns],
+    ['Unmeasured runs', totals.unmeasuredRuns],
+    ['Reached no goal (USD)', insights.unattributedCostUsd],
+    ['Generated (ISO)', insights.generatedAt],
+    [],
+
+    ['Phases'],
+    ['Phase', 'Label', 'Definition', 'Cost (USD)', 'Runs', 'Input tokens', 'Output tokens'],
+    ...phases.map((p) => [p.phase, p.label, p.blurb, p.costUsd, p.runs, p.inputTokens, p.outputTokens]),
+    [],
+
+    // Rolling 24h buckets, so the label is the instant each one opens and never a
+    // calendar date — the panel's `now` axis, written out.
+    ['Daily'],
+    ['Bucket start (ISO)', 'Cost (USD)'],
+    ...timeline.buckets.map((b) => [b.startsAt, b.costUsd]),
+    [],
+
+    // The dispatch rule that sent each run, so "what does answering a review
+    // comment cost us" is a row rather than an arithmetic exercise.
+    ['Task types'],
+    ['Rule', 'Label', 'Rationale', 'Cost (USD)', 'Runs', 'Per run (USD)'],
+    ...taskTypes.map((t) => [t.rule, t.label, t.description, t.costUsd, t.runs, t.perRunUsd]),
+    [],
+
+    ['Failing checks'],
+    ['Check', 'Cost (USD)', 'Runs', 'Sole-cause runs', 'Per run (USD)', 'Last (ISO)'],
+    ...checks.checks.map((c) => [c.name, c.costUsd, c.runs, c.soleRuns, c.perRunUsd, c.lastAt]),
+    // The remainder, for the reason the goal table carries its own: a check
+    // column that does not name the CI money nothing could place reads as a
+    // partition of all of it.
+    ['Named no check', checks.unnamedCostUsd],
+    ['Attributed to a check', checks.attributedCostUsd],
+    [
+      `The ${checks.checks.length} costliest of ${checks.seen} checks seen. A run red on two checks splits its cost ` +
+        'evenly between them, so these rows sum to the attributed total and never overstate it.',
+    ],
+    [],
+
+    ['Goals'],
+    ['Issue', 'Title', 'Cost (USD)', 'Runs', 'Input tokens', 'Output tokens', 'Last activity (ISO)', ...order],
+    ...goals.map((g) => [
+      g.issueNumber,
+      g.title,
+      g.costUsd,
+      g.agents,
+      g.inputTokens,
+      g.outputTokens,
+      g.lastAt,
+      ...order.map((p) => g.byPhase[p]),
+    ]),
+    // The remainder is a row here for the reason it is a row on the panel: these
+    // figures are a partition, and one that does not carry its own remainder
+    // reads as complete.
+    ['', 'Reached no goal', insights.unattributedCostUsd],
+    [],
+
+    ['Runs'],
+    [
+      'Agent',
+      'Origin',
+      'Title',
+      'Phase',
+      'Issue',
+      'Cost (USD)',
+      'Input tokens',
+      'Output tokens',
+      'Turns',
+      'Started (ISO)',
+      'Ended (ISO)',
+    ],
+    ...runs.map((r) => [
+      r.agentId,
+      r.originRef,
+      r.title,
+      r.phase,
+      r.issueNumber,
+      r.costUsd,
+      r.inputTokens,
+      r.outputTokens,
+      r.numTurns,
+      r.startedAt,
+      r.endedAt,
+    ]),
+    [`The ${runs.length} costliest of ${insights.rankedFrom} measured runs.`],
+  ]);
 }
 
 /** A share of the whole, as a percentage — the reading every bar here is drawn from. */

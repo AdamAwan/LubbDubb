@@ -39,7 +39,7 @@ function view(over: Partial<CockpitView> = {}): CockpitView {
       reliabilityOpen: false,
       selectedGoal: null,
       consolePanel: null,
-      backlogOpen: false,
+      tab: 'overview',
     }),
     ...over,
   };
@@ -353,7 +353,7 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
     reliabilityOpen: false,
     selectedGoal: ref,
     consolePanel: null,
-    backlogOpen: false,
+    tab: 'overview',
   });
 }
 
@@ -492,7 +492,7 @@ test('a backlog row is a way into the goal it names', () => {
   // One way into a goal, from every surface that lists one — the queue row, the
   // overview row and this. It is the name rather than the whole row, because a
   // backlog row carries controls of its own and a button cannot hold them.
-  const html = render(view({ backlogOpen: true }));
+  const html = render(view({ tab: 'backlog' }));
   assert.ok(html.includes('cn-grow cn-goal-row'));
 });
 
@@ -575,7 +575,7 @@ function groupHeadings(html: string): string[] {
 const BACKLOG_GROUPS = ['Watched', 'Blocked at intake', 'Unwatched', 'Ignored'];
 
 test('the backlog groups by watch state and gives intake its own group', () => {
-  const v = view({ backlogOpen: true });
+  const v = view({ tab: 'backlog' });
   const html = render(v);
   assert.deepEqual(groupHeadings(html), BACKLOG_GROUPS, 'four groups, in the order triage reads them');
 
@@ -597,13 +597,13 @@ test('the backlog groups by watch state and gives intake its own group', () => {
 });
 
 test('a backlog group with nothing in it is muted, never removed', () => {
-  const v = view({ backlogOpen: true });
+  const v = view({ tab: 'backlog' });
   const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, issues: [] } } });
   assert.deepEqual(groupHeadings(html), BACKLOG_GROUPS, 'a group that vanishes when quiet reads as one that broke');
 });
 
 test('a container type is disabled rather than absent — “cannot be picked up” is worth seeing', () => {
-  const v = view({ backlogOpen: true });
+  const v = view({ tab: 'backlog' });
   const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
   assert.ok(container, 'the demo fixtures must carry an item the harness refuses as a container');
   const reason = container.pickup.reasons[0];
@@ -661,21 +661,45 @@ test('injection rides in the launch panel, and the demo build is the whole of it
   );
 });
 
-test('the backlog replaces the overview, and a selected goal outranks both', () => {
-  assert.ok(render(view()).includes('World signals'), 'no goal and no backlog is the overview');
-  assert.ok(!render(view({ backlogOpen: true })).includes('World signals'), 'the backlog replaces the overview');
+test('each tab replaces the last, and a selected goal outranks every one of them', () => {
+  assert.ok(render(view()).includes('World signals'), 'the overview is the tab the console opens on');
+  assert.ok(!render(view({ tab: 'backlog' })).includes('World signals'), 'a tab replaces the one before it');
+  assert.ok(!render(view({ tab: 'work' })).includes('World signals'));
 
-  // A queue row selects a goal without closing whatever the nav left open, so the
-  // goal has to win — otherwise clicking an ask lands on the backlog.
+  // A queue row selects a goal without moving the nav, so the goal has to win —
+  // otherwise clicking an ask lands on a triage list, or on the record.
   const v = goalView();
-  assert.ok(render({ ...v, backlogOpen: true }).includes('cn-goal'));
+  for (const tab of ['backlog', 'work'] as const) {
+    assert.ok(render({ ...v, tab }).includes('cn-goal'), `a goal must outrank the ${tab} tab`);
+  }
+});
+
+/**
+ * The work graph is the one surface that outlives the world snapshot, and it used
+ * to hang off the bottom of the shell below the whole console — reachable only by
+ * scrolling past every panel. It is a destination now. The nav is what says so:
+ * three tabs, so a tab added to `ConsoleTab` and forgotten in the nav fails here
+ * rather than being a view nothing can reach.
+ */
+test('the work graph is a nav destination, not a strip under the page', () => {
+  const nav = render(view()).split('</nav>')[0] ?? '';
+  for (const label of ['Overview', 'Backlog', 'Work']) {
+    assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
+  }
+
+  assert.ok(render(view({ tab: 'work' })).includes('work-panel'), 'the Work tab draws the graph');
+  assert.ok(!render(view()).includes('work-panel'), 'and no other tab draws it');
 });
 
 test('the shell renders the console, and the drawer that the console only asks for', () => {
   const src = readFileSync(new URL('../web/src/App.tsx', import.meta.url).pathname, 'utf8');
   assert.ok(src.includes('ConsoleRoot'), 'the shell must render the console');
-  // `AgentDrawer` seeds itself over its own route, so it cannot live under
-  // `console/`. The console asks with `actions.select(id)` and the shell answers —
-  // without this the three call sites that open an agent do nothing at all.
+  // The drawer is overlaid rather than placed, and which agent is open is cockpit
+  // state — the subscription is tied to it. The console asks with
+  // `actions.select(id)` and the shell answers; without this the three call sites
+  // that open an agent do nothing at all.
   assert.ok(src.includes('AgentDrawer'), 'the shell must answer the console’s request for a drawer');
+  // The graph moved into the console's nav. Left here as well it would draw twice,
+  // once below everything, which is the surface this replaced.
+  assert.ok(!src.includes('WorkTreePanel'), 'the work graph is the console’s Work tab, not a strip under it');
 });

@@ -40,22 +40,23 @@ What keeps that from swallowing the cockpit's rules is the split on **behaviour 
 the shared card, not a compact copy of it, because a copy is how one surface ends up offering free
 text on a proposal that only takes a verdict.
 
-**Six surfaces hang off the shell rather than off the console**, and each for one reason — it reaches
-`api.js`, which `console/` may not:
+**Five surfaces hang off the shell rather than off the console**, and each for one reason — it is
+_overlaid_ rather than placed. Which one is open is cockpit state, not console state (the drawer's
+output subscription is tied to it), and the surfaces that open one are scattered across the page:
 
-| Surface                                        | Why the shell                                                        |
-| ---------------------------------------------- | -------------------------------------------------------------------- |
-| `AgentDrawer`                                  | seeds itself from the persisted transcript over its own route        |
-| `WorkTreePanel`                                | its own routes, fetched on open, never polled — the graph only grows |
-| `PlanModal` / `RetroModal` / `ScratchpadModal` | fetch the document they draw                                         |
-| `SettingsModal`                                | `GET /api/config`, `/api/ci-policy`, `/api/prompts`                  |
-| `SpendModal`                                   | `GET /api/spend`                                                     |
-| `ReliabilityModal`                             | `GET /api/reliability`                                               |
+| Surface                                        | Opened from                                                 |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `AgentDrawer`                                  | a fleet row, a goal's part, an ask — `select`               |
+| `PlanModal` / `RetroModal` / `ScratchpadModal` | the goal page — `viewPlan` / `viewRetro` / `viewScratchpad` |
+| `SettingsModal`                                | the top bar — `openSettings`                                |
+| `SpendModal`                                   | the Spend reading — `openSpend`                             |
+| `ReliabilityModal`                             | the Yield reading — `openReliability`                       |
 
-The console asks for each the way it asks for a plan — a method on the seam (`select`, `viewPlan`,
-`viewRetro`, `viewScratchpad`, `openSettings`, `openSpend`, `openReliability`) — and the shell answers.
-Which one is open is cockpit state, not console state, or closing the drawer would lose its
-subscription.
+The console asks for each the way it asks for a plan — a method on the seam — and the shell answers.
+
+**Reaching `api.js` is not itself a reason to sit on the shell.** The rule is that no module under
+`console/` _imports_ it; a shared component that does is embedded like any other, and several are —
+`LaunchPanel`, `SchedulePanel` and `WorkTreePanel` all ride their own routes from inside the console.
 
 The two screens `App.tsx` still draws itself — "Connecting…" and the locked-out page — stay there
 because neither has a view-model to draw.
@@ -86,7 +87,7 @@ those modules in.
 
 ## Shape
 
-Three surfaces and one shell.
+Four surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -94,11 +95,11 @@ Three surfaces and one shell.
 ├──────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned          │
 ├───────────────┬──────────────────────────────────────────────────────┤
-│ NEEDS YOU  6  │  Overview · Backlog · #142 Retry the intake job      │
+│ NEEDS YOU  6  │  Overview · Backlog · Work · #142 Retry the intake   │
 │ ┌───────────┐ │  ──────────────────────────────────────────────────  │
 │ │ Blocking  │ │                                                      │
 │ │ escalation│ │            the situation area                        │
-│ │ plan      │ │      (the overview, a goal page, or the backlog)     │
+│ │ plan      │ │   (a tab — overview, backlog, work — or a goal page) │
 │ │ permission│ │                                                      │
 │ │ Yours     │ │                                                      │
 │ │ bench     │ │                                                      │
@@ -113,16 +114,22 @@ is stale for the same one reason, and the banner is the one thing on screen stil
 not a card in a track, so it needs no span rule to be full width. `test/console.test.ts` asserts the
 placement rather than trusting the stylesheet.
 
-**The situation area draws exactly one of three things**, and the precedence is load-bearing: a
-selected goal outranks the backlog, which outranks the overview. Selecting a goal is what a queue row
-does, and it does not close whatever the nav left open — so with the backlog winning, clicking an ask
-would land the operator on a triage list instead of on the ask.
+**The situation area draws exactly one thing**, and the precedence is load-bearing: a selected goal
+outranks the nav's tab, whichever it is. Selecting a goal is what a queue row does, and it does not
+move the nav — so with a tab winning, clicking an ask would land the operator on a triage list, or on
+the record, instead of on the ask.
 
-The **nav** is two destinations and a crumb: Overview, Backlog (carrying the unwatched count — the one
+The **nav** is three tabs and a crumb: Overview, Backlog (carrying the unwatched count — the one
 number that says whether triage is worth opening, read off the same `backlogGroups` the view draws so
-the count and the rows cannot differ), and, when a goal is open, its number and title. Both buttons
-clear _both_ pieces of state, because a nav click means "go here" and either half left standing would
-land somewhere else.
+the count and the rows cannot differ), Work, and, when a goal is open, its number and title. Every
+button clears _both_ pieces of state, because a nav click means "go here" and either half left
+standing would land somewhere else.
+
+The tabs are a **list** (`ConsoleTab`, `web/src/cockpit/actions.ts`) rather than a hand-written pair
+of buttons over a boolean, for `ConsolePanel`'s reason: a destination that has to be remembered in two
+booleans and four call sites is a destination that arrives half-wired. `test/console.test.ts` renders
+the nav and asserts all three labels, so a tab added to the type and forgotten in the nav is a view
+nothing can reach — and fails.
 
 ### The console at width
 
@@ -429,6 +436,27 @@ either direction, and a button that writes nothing is worse than one that says w
 Assignment filtering is a server-side concern (`workItemAssignedTo` for Azure; GitHub has no issue
 assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
 
+## The work tab
+
+The durable record: `WorkTreePanel`, the shared component, drawn as the third nav destination. It is
+**the one surface that outlives the world snapshot** — every other panel draws the snapshot and so
+forgets a pull request the moment it ages out of `closedPrWindowMs`, while this one still knows that
+#40 merged and which issue it delivered.
+
+It is a **tab rather than a strip below the console**, which is where it used to sit. A surface hung
+under a full-height layout is reachable only by scrolling past everything else, so the record an
+operator opens the cockpit to check read as an afterthought of the page — and the two views above it,
+already tabbed, said plainly what shape the third should be.
+
+Two things it keeps from that move. It is **fetched on open and never polled** — `/api/work` for the
+roots, `/api/work/:ref` for a subtree — because `/api/state` comes round every couple of seconds and
+the graph only ever grows; being a tab is what makes "on open" honest, since nothing fetches until the
+operator goes there. And **unrecorded work** stays at its head: what the harness did that nothing in
+the tracker accounts for, with `File a work item` and `Ignore` beside each row, since nobody outside
+can ever mark done what nothing records. → [16](16-http-api.md#get-apiwork)
+
+It is a **lens**: nothing here, and nothing in the dispatcher, decides anything from what it draws.
+
 ## The top bar and the panels
 
 The strip carries the ident, the pulse, the fleet cap, and seven readings: **Spend**, **Yield**,
@@ -648,6 +676,58 @@ fleet is getting and never a rate card
 ([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
 runs, which appear in no figure above it.
 
+**It [exports](#exporting-a-reading)**, seven sections in the order the panel draws them — totals,
+phases, days, task types, failing checks, goals, runs — with the phase split riding inside each goal
+row as it rides inside that goal's bar, and each of the three remainders (reached no goal, named no
+check, attributed to a check) carried as its own row.
+
+## Exporting a reading
+
+`web/src/components/Downloads.tsx`. [Spend](#spend) and [Yield](#yield) are the two surfaces that
+answer a question nobody asks at the glass — what a month cost, split how, and what it bought — and
+those answers are wanted in a spreadsheet, a ticket or a budget review rather than in a tab that is
+gone on the next poll. The twins offer the **same three files**, which is the same rule that makes them
+twins at all:
+
+- **CSV is what the panel drew**, table by table, in the order it drew them, parted by blank lines and
+  each section headed by its own name. Sections rather than one grid, because a panel _is_ several
+  tables and flattening them loses which figure was a whole and which was a part. The two files read
+  across: opened side by side they answer where the money went and what it bought, which is what the
+  panels are for.
+- **JSON is what the panel was handed**, unrounded and unformatted — for the next program rather than
+  for a person.
+- **PDF is the panel itself, printed.** Not a document built to resemble it: the panel is cloned into
+  a `#print-sheet` under `body` and the browser lays out the same nodes under the same stylesheet, so
+  the graph on paper is the graph on screen and cannot drift from it. **No PDF library** — bundling one
+  would mean hand-placing every table and bar a second time, which is a second presentation of one
+  reading and the drift this cockpit refuses everywhere else it derives something twice.
+
+Four rules hold them:
+
+- **Figures leave raw.** `fmtUsd` rounds to the cent, `fmtTokens` to three significant figures, a rate
+  to a whole percent and a wait to `3.5h` — right for a glance and wrong for a sum, since a hundred
+  rows of `$0.00` add up to real money. A rate leaves as a fraction and a duration in milliseconds. The
+  cockpit's formatting is presentation and stops at the screen.
+- **Every caveat the panel states in prose leaves as a row** — the truncated rankings, the unattributed
+  and unnamed remainders, the two halves measured over different windows, a red being a verdict rather
+  than a pull request, cost-per-red being per verdict rather than per fix, stopped not being failed. A
+  file read six months from now has no method note beside it, so a cap it does not carry is a cap
+  nobody will know about. A `null` stays an empty cell and never a `0`.
+- **A table added to a panel is added to its export in the same change.** An export that quietly
+  forgets one arrives as a complete-looking file that under-reports, which is the failure every rule
+  above exists to prevent — and the one the reader has no way to detect.
+- **Nothing exports what it could not fetch.** The control is drawn only once there is a payload —
+  each panel's own "a failed fetch must not read as a clean fleet" rule, applied to the one artefact
+  that outlives the tab.
+- **Built in the browser from the data already on screen.** There is no export route, and adding one
+  would be a second derivation of a reading the server has already shipped. The CSV carries a
+  byte-order mark, because Excel reads a BOM-less UTF-8 file as the local codepage and mangles the one
+  goal title with an em dash in it. The print sheet turns the lights on — the tokens are overridden on
+  `#print-sheet`, not the components restyled, which is the division the phase colours already keep —
+  and keeps the accents, because a phase bar with no colour is not the panel.
+
+`test/insightExport.test.ts` pins the quoting, the sections, the precision and the caveat rows.
+
 ## Yield
 
 `web/src/components/ReliabilityModal.tsx`, opened from the Yield reading, drawing the payload
@@ -688,6 +768,11 @@ Four pictures:
 **The method note states the two things a reader would otherwise discover by disbelieving the panel:**
 the two halves are measured over different windows, and a red is a CI verdict rather than a pull
 request. It also names the unmeasured runs, which count in every rate above it and in no dollar.
+
+**It [exports](#exporting-a-reading)** as Spend does, and the twins offer the same three files for the
+reason they share their chrome. Six sections — tallies, outcomes, CI days, phases, the reddest pull
+requests, the repeats — and the phase table is keyed the way Spend's is, from the same server-side
+classifier, so the two files join on it.
 
 ## Data flow
 
@@ -957,7 +1042,8 @@ from a reader that broke, and because each of these is a decision rather than an
   be built from.
 - **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
   Up next is a reading rather than a control; the rail carries only `open` human tasks, so there is no
-  settled tail to dismiss from; and the work graph is shell-owned and reaches its own route directly.
+  settled tail to dismiss from; and the work tab embeds the shared panel, which reaches its own route
+  directly — the seam keeps the method for the reason it keeps `setStackLanding`.
 - **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
   nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`
   instead, which is what the agent chose to say rather than whatever its last line happened to be.
@@ -998,7 +1084,7 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Four files, split on what they can see:
+Seven files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
@@ -1006,6 +1092,8 @@ Four files, split on what they can see:
 - `test/goalPage.test.ts` — the page's assembly: which parts, PRs, agents and decisions belong to a
   goal, and the prefix trap `issue:14` versus `issue:1`.
 - `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
+- `test/insightExport.test.ts` — the [exports](#exporting-a-reading): the CSV quoting, the sections and
+  their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
 - `test/markdown.test.ts` and `test/richText.test.ts` — the two prose renderers, and the line between
   them: agent-authored markdown never interprets HTML, tracker-authored HTML is drawn as structure.
 
@@ -1022,7 +1110,8 @@ goal page answering through the shared card, a held part quoting the reconciler,
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
 no measured spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the
 backlog's four groups, its rows being ways into their goals and its disabled container toggle, the fault
-log keeping its clear at zero, a panel's two ways
-out, the demo gate on injection, the precedence between a goal, the backlog and the overview, the
-recovery banner outside the situation area, a dropped socket drawing nothing at all, and the shell
-rendering the drawer the console only asks for.
+log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence
+between a goal and whichever tab the nav is on, all three tabs appearing in the nav (a destination added
+to `ConsoleTab` and forgotten there is a view nothing can reach), the work graph drawn by its own tab
+and no other, the recovery banner outside the situation area, a dropped socket drawing nothing at all,
+and the shell rendering the drawer the console only asks for — and no longer the work graph.

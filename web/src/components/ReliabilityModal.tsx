@@ -1,6 +1,7 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import type { CiHealth, CiSubject, ReliabilityInsights, RunOutcomeTotal, RunPhaseHealth, RunRepeat } from '../types.js';
 import { api } from '../api.js';
+import { Downloads, toCsv } from './Downloads.js';
 import { fmtUsd, relTime } from './util.js';
 
 /**
@@ -31,6 +32,10 @@ import { fmtUsd, relTime } from './util.js';
 export function ReliabilityModal({ onClose }: { onClose: () => void }): JSX.Element {
   const [insights, setInsights] = useState<ReliabilityInsights | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  // The modal, for the reason the spend panel refs the modal: the body is three
+  // different elements across loading, failure and nothing-settled, and a ref
+  // that is null on two of them is a button that silently does nothing.
+  const modal = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -60,6 +65,7 @@ export function ReliabilityModal({ onClose }: { onClose: () => void }): JSX.Elem
   return (
     <div className="read-backdrop" onClick={onClose}>
       <div
+        ref={modal}
         className="read-modal"
         role="dialog"
         aria-modal="true"
@@ -69,6 +75,31 @@ export function ReliabilityModal({ onClose }: { onClose: () => void }): JSX.Elem
         <div className="pm-head">
           <span className="pm-title">Yield</span>
           <span className="sp-note">did it finish, and did it go green</span>
+          {/* Only once there is something to take, as on the spend panel: a fetch
+              that failed must not leave with a file saying the fleet never fails. */}
+          {insights !== null && (
+            <Downloads
+              name="lubbdubb-yield"
+              files={[
+                {
+                  format: 'csv',
+                  title:
+                    'Every table on this panel, in the order it is drawn — tallies, outcomes, CI days, phases, PRs, repeats',
+                  build: () => reliabilityCsv(insights),
+                },
+                {
+                  format: 'json',
+                  title: 'The exact payload this panel drew, unrounded',
+                  build: () => JSON.stringify(insights, null, 2),
+                },
+              ]}
+              sheet={{
+                heading: 'Yield',
+                title: 'This panel as it stands, through the browser’s own print — choose “Save as PDF”',
+                node: () => modal.current,
+              }}
+            />
+          )}
           <button className="btn ghost small pm-close" onClick={onClose}>
             close
           </button>
@@ -137,6 +168,102 @@ function Body({
       <Repeats repeats={runs.repeats} repeatedOrigins={runs.repeatedOrigins} />
     </div>
   );
+}
+
+/**
+ * The panel as a file: six sections in the order the panel draws them, parted by
+ * blank lines and each headed by its own name. Spend's export read across, so
+ * these two can be opened side by side — which is what the panels are for.
+ *
+ * **Figures go out raw**, and here that matters more than on the spend panel: a
+ * rate is shipped as a fraction rather than the rounded percent on screen, and a
+ * duration in milliseconds rather than `3.4h`. `fmtDuration` is the reading a
+ * person wants and the one nothing can be recomputed from.
+ *
+ * The three caveats the panel argues in prose are rows here — the two halves
+ * measured over different windows, a red being a verdict rather than a pull
+ * request, and stopped not being failed. On paper there is no method note to read
+ * them off.
+ */
+export function reliabilityCsv(insights: ReliabilityInsights): string {
+  const { runs, ci, windowDays } = insights;
+
+  return toCsv([
+    ['Tallies'],
+    ['Measure', 'Value'],
+    ['Runs settled', runs.settled],
+    ['Runs still out', runs.live],
+    ['Runs finished', runs.completed],
+    ['Completion rate', runs.completionRate],
+    ['Runs lost to faults', runs.lost],
+    ['Runs stopped', runs.stopped],
+    ['Total cost (USD)', runs.costUsd],
+    ['Lost to faults (USD)', runs.lostCostUsd],
+    ['Unmeasured settled runs', runs.unmeasuredRuns],
+    ['CI verdicts red', ci.reds],
+    ['CI verdicts green', ci.greens],
+    ['CI red rate', ci.redRate],
+    ['PRs that went red', ci.prsAffected],
+    ['PRs observed', ci.prsObserved],
+    ['Recoveries', ci.recoveries],
+    ['Median back to green (ms)', ci.medianToGreenMs],
+    ['Slowest back to green (ms)', ci.slowestToGreenMs],
+    ['Still red', ci.unrecovered],
+    ['Red checks cost (USD)', ci.ciCostUsd],
+    ['Landing cost over the window (USD)', ci.landingCostUsd],
+    // The window split looks like a mistake until it is stated, so it is stated.
+    ['Outcomes measured over', 'all time'],
+    ['CI measured over (days)', windowDays],
+    // A red is a verdict, not a pull request: one PR that failed nine times is
+    // nine reds, and a reader summing the red column needs to know which.
+    ['A red is', 'one CI verdict, not one pull request'],
+    // One CI agent often answers several reds at once, so a PR that went red four
+    // times and was fixed once divides the same money four ways.
+    ['Cost per red is', 'per verdict, not per fix — the price of breaking, not of repairing'],
+    // Stopped is somebody's decision, and a fleet an operator steers is not an
+    // unreliable one — only faults count against the rate.
+    ['Counts against the completion rate', 'failed and crashed only — stopped runs do not'],
+    ['Generated (ISO)', insights.generatedAt],
+    [],
+
+    ['Outcomes'],
+    ['Outcome', 'Label', 'Definition', 'Runs', 'Cost (USD)'],
+    ...runs.byOutcome.map((o) => [o.outcome, o.label, o.blurb, o.runs, o.costUsd]),
+    [],
+
+    // Rolling 24h buckets, so the label is the instant each one opens and never a
+    // calendar date — the panel's `now` axis, written out.
+    ['CI verdicts by day'],
+    ['Bucket start (ISO)', 'Red', 'Green'],
+    ...ci.timeline.buckets.map((b) => [b.startsAt, b.red, b.green]),
+    [],
+
+    ['Phases'],
+    ['Phase', 'Label', 'Settled', 'Finished', 'Completion rate', 'Lost', 'Stopped', 'Lost (USD)', 'Median run (ms)'],
+    ...runs.byPhase.map((p) => [
+      p.phase,
+      p.label,
+      p.settled,
+      p.completed,
+      p.completionRate,
+      p.lost,
+      p.stopped,
+      p.lostCostUsd,
+      p.medianMs,
+    ]),
+    [],
+
+    ['Reddest pull requests'],
+    ['Ref', 'PR', 'Went red', 'Went green', 'Red for (ms)', 'Cost (USD)', 'Still red'],
+    ...ci.flakiest.map((s) => [s.ref, s.prNumber, s.reds, s.greens, s.redMs, s.costUsd, s.stillRed ? 'yes' : 'no']),
+    [`The ${ci.flakiest.length} reddest of ${ci.prsAffected} pull requests that went red.`],
+    [],
+
+    ['Ran more than once'],
+    ['Origin', 'Title', 'Runs', 'Faults', 'Cost (USD)', 'Last (ISO)'],
+    ...runs.repeats.map((r) => [r.originRef, r.title, r.runs, r.lost, r.costUsd, r.lastAt]),
+    [`The ${runs.repeats.length} most-repeated of ${runs.repeatedOrigins} origins that ran more than once.`],
+  ]);
 }
 
 /** A share of the whole, as a percentage. */
