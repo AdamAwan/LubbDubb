@@ -28,6 +28,17 @@ function goalLabel(ref: string | null): string | null {
 }
 
 /**
+ * What an ask is holding, worded once. The rail row and the band the row opens
+ * both state it, and a count read twice in two sentences is a count the reader
+ * has to check against itself.
+ *
+ * @public shared with GoalPage's needs band
+ */
+export function holdingLabel(holding: number): string {
+  return `holding ${holding} ${holding === 1 ? 'part' : 'parts'}`;
+}
+
+/**
  * One row. `group === 'blocking'` is the same red/amber split the Factory
  * Floor draws — an agent is parked on this, not merely queued for the
  * operator — so it alone earns the urgent stripe and tag.
@@ -52,7 +63,7 @@ function Row({ row, now, actions }: { row: NeedRow; now: number; actions: Cockpi
           {row.agentId !== null && <span>{row.agentId}</span>}
           {row.agentId !== null && goal !== null && <span>·</span>}
           {goal !== null && <span>{goal}</span>}
-          {row.holding > 0 && <span className="cn-hold">holding {row.holding} parts</span>}
+          {row.holding > 0 && <span className="cn-hold">{holdingLabel(row.holding)}</span>}
         </div>
       </div>
     </>

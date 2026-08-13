@@ -159,6 +159,25 @@ test('a row states what it is holding, and a row holding nothing draws no count'
   assert.ok(!html.includes('holding 0'), 'a zero is not a reading — draw no count');
 });
 
+test('one part is held, not "1 parts" — the count and the noun agree', () => {
+  const rows = [
+    {
+      id: 'a',
+      kind: 'bench',
+      group: 'yours',
+      title: 'Holds exactly one',
+      goalRef: 'issue:1',
+      agentId: null,
+      holding: 1,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ] as CockpitView['needsYou'];
+
+  const html = render(view({ needsYou: rows }));
+  assert.ok(html.includes('holding 1 part<'), 'a single held part reads in the singular');
+  assert.ok(!html.includes('holding 1 parts'));
+});
+
 test('an empty queue collapses the rail rather than removing it', () => {
   const html = render(view({ needsYou: [] }));
   assert.ok(html.includes('cn-rail'), 'a surface that vanishes when quiet reads as one that broke');

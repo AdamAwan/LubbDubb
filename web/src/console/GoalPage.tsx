@@ -10,7 +10,7 @@ import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { fmtUsd, refLink, relTime } from '../components/util.js';
 import { watchBucket } from '../worldBuckets.js';
-import { KIND_LABEL } from './QueueRail.js';
+import { KIND_LABEL, holdingLabel } from './QueueRail.js';
 
 /**
  * One goal, with what it wants from you pinned above everything it is doing.
@@ -225,7 +225,7 @@ function NeedsBand({
         Needs you · {KIND_LABEL[row.kind]}
         <span className="cn-age">
           {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
-          {row.holding > 0 && ` · holding ${row.holding} parts`}
+          {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
         </span>
       </header>
       <div className="cn-in">{body}</div>
