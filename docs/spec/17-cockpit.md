@@ -1173,6 +1173,14 @@ other.
 - **The body is open and uncapped.** No `<details>`, no `max-height`. It is the thing you opened the
   band to read. Every block of prose is held to a ~72ch measure. `recentOutput` and `draft` keep their
   `<pre>` and their 180px cap — they are evidence you glance at, not the thing you are deciding.
+- **A plan approval reads as _what the plan does_, plus a way into the plan.** The quoted block is the
+  planner's diagnosis and approach ([08](08-planning.md#requiring-approval)) — not the decomposition,
+  which is a diagram in the plan panel and a poor flat list here. Below it, `Read the full plan` is
+  drawn full-width and toned like the accept button rather than as one more ghost link beside
+  `Open agent transcript`: it is the click the card is asking for, ahead of the two that settle it, and
+  everything an approver would want that will not fit on a card — the split, the evidence, the risks,
+  what it ruled out — is behind it. One control on the card, not two: it was rendered in both arms of
+  the agent-actions row before, which is how it ended up looking like an afterthought in each.
 
 A **permission request** (`context.permission`, #130) renders the command and **Allow / Deny** instead
 of the answer box — the agent is blocked in a tool call, so the verdict goes to

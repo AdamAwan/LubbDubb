@@ -920,6 +920,36 @@ body {
   margin: 8px 0;
 }
 
+/* The way into the plan behind a plan approval. Full width and toned like the
+   accept button rather than sized like the ghost links above it: the card says
+   what the plan does, and everything else you would want before authorising it —
+   the split drawn, the evidence, the risks — is through here. It is the click
+   this card is asking for, ahead of the two that settle it. */
+.esc-plan-open {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  text-align: left;
+  background: var(--blue-fill);
+  border-color: var(--blue-line-2);
+}
+.esc-plan-open:hover {
+  background: var(--panel-2);
+  border-color: var(--blue);
+}
+.esc-plan-open-label {
+  color: var(--blue);
+  font-weight: 600;
+}
+.esc-plan-open-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* Clearing an item without answering it. Set apart below the real action rather
    than beside it: dismissing is the way out, not one of the answers. */
 .esc-dismiss {

@@ -15,6 +15,7 @@ import {
   abandonDecomposition,
   describeProposedParts,
   describeSingleRoute,
+  planApprovalDetail,
   planApprovalNote,
 } from '../src/plans/planApproval.js';
 import { planApprovalWarnings, planIsWedged } from '../src/plans/planWedge.js';
@@ -67,6 +68,29 @@ test('the single arm of the ask carries a shape too, and says what each answer d
   assert.match(planApprovalNote(12, true), /Reject and the plan goes back to a planner/);
   assert.match(planApprovalNote(12, false), /bottom of the stack first/);
   assert.match(planApprovalNote(12, false), /worked as a single pull request instead/);
+});
+
+test('the ask leads with what the plan does, and falls back to the shape justification', () => {
+  // The two fields an approver is actually deciding on, labelled and in this
+  // order: what is wrong, then what is going to be done about it. The split is
+  // not here — it is drawn in the plan panel the card's own button opens.
+  const full = planApprovalDetail({
+    diagnosis: 'The signer is cached at module load.',
+    approach: 'Resolve it per request instead.',
+    reason: 'Two seams, two reviews.',
+  });
+  assert.match(String(full), /What's wrong[\s\S]*cached at module load/);
+  assert.match(String(full), /What we'll do[\s\S]*per request/);
+  assert.doesNotMatch(String(full), /Two seams/, 'why *this shape* is the template’s job, not the body’s');
+  // A plan from before those fields existed still has a body rather than a
+  // headline and nothing else.
+  assert.equal(
+    planApprovalDetail({ diagnosis: null, approach: null, reason: 'Two seams, two reviews.' }),
+    'Two seams, two reviews.',
+  );
+  // Said nothing at all: an absent block, not an empty labelled one.
+  assert.equal(planApprovalDetail({ diagnosis: null, approach: null, reason: null }), null);
+  assert.equal(planApprovalDetail({ diagnosis: '  ', approach: '', reason: ' ' }), null);
 });
 
 test('approval is on by default, in both places that default it', () => {
@@ -269,10 +293,17 @@ test('with approval on, the verdict lands, one proposal is pending, and nothing 
   const esc = system.store.getEscalation(proposal!.escalationId!)!;
   assert.equal(esc.type, 'approve_change');
   assert.match(esc.prompt, /2 pull request/);
-  assert.match(esc.prompt, /"schema"/);
   // The arm's own paragraph is appended, so an override that never learned about
   // the single arm cannot leave a reader guessing which question this is.
   assert.match(esc.prompt, /bottom of the stack first/);
+  // What the plan *does* rides in `detail`, labelled, where the card draws it as
+  // its own block above the buttons — and the split is not in the ask at all: it
+  // is a diagram in the plan panel, one click away, and the question here is
+  // whether the work is right rather than how it is cut up.
+  assert.match(String(esc.context.detail), /two writers disagree/);
+  assert.match(String(esc.context.detail), /non-null with a backfill/);
+  assert.equal(esc.context.detailFrom, 'What the plan says');
+  assert.doesNotMatch(esc.prompt, /"schema"/);
 
   const parts = system.store.listPlanParts(plan.id);
   assert.deepEqual(
@@ -397,7 +428,9 @@ test('with approval on, a single verdict is put to the operator and picks nothin
   // decomposition's part list, and says what each answer does.
   const esc = system.store.getEscalation(proposal!.escalationId!)!;
   assert.match(esc.prompt, /1 pull request/);
-  assert.match(esc.prompt, /branch issue\/12/);
+  // The branch is still named — a branch that already exists is exactly what the
+  // other warnings on this ask are about — now by the appended arm paragraph.
+  assert.match(esc.prompt, /one agent on issue\/12/);
   assert.match(esc.prompt, /Reject and the plan goes back to a planner/);
   assert.equal(system.store.listTasks().length, 0, 'nothing is worked before the acceptance step');
 
@@ -651,6 +684,8 @@ function submitPlan(system: System, originRef: string, slugs: string[]): void {
       version: 1,
       verdict: 'parts',
       reason: 'Schema first.',
+      diagnosis: 'The column is nullable and two writers disagree about it.',
+      approach: 'Make it non-null with a backfill, then teach both writers the one shape.',
       parts: slugs.map((slug) => ({ slug, title: slug, scope: `src/${slug}/`, dependsOn: [] })),
     }),
   );

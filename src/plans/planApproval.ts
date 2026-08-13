@@ -1,5 +1,5 @@
 import type { Store } from '../store/store.js';
-import type { PlanPart } from '../types.js';
+import type { Plan, PlanPart } from '../types.js';
 import { amendedPlanStatus, liveParts, partsToRetire, planShape } from './parts.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { abandonBlockers } from './planWedge.js';
@@ -54,6 +54,40 @@ export function describeSingleRoute(issueNumber: number): string {
     `- no split: one agent works the whole issue on branch ${issueBranch(issueNumber)} and opens a single ` +
     `pull request.`
   );
+}
+
+/**
+ * What the operator actually reads on the card: what the planner found, and what
+ * it is going to do about it.
+ *
+ * The ask used to carry {@link describeProposedParts} as its body — the split, in
+ * dispatch order, with every prerequisite — and that is the wrong half of the
+ * plan to put in front of someone. A decomposition is *how* the work is cut up;
+ * the question being answered here is whether the work is right at all, and the
+ * split is one click away in the plan panel, drawn, where it reads far better
+ * than a flat list ever did. So the card leads with `diagnosis` and `approach`
+ * and the shape stays behind **Read the full plan**.
+ *
+ * Quoted rather than templated, for `propose_shortfall`'s reason: this is the
+ * planner's prose, up to a couple of thousand characters of it, and the cockpit
+ * labels a block whose edges it can see.
+ *
+ * Falls back to `reason` — a plan written before those fields existed, or a
+ * planner that filled in neither, would otherwise leave the card with a headline
+ * and nothing else. Null when it said nothing at all, which the caller carries
+ * as an absent block rather than an empty one.
+ */
+export function planApprovalDetail(plan: Pick<Plan, 'diagnosis' | 'approach' | 'reason'>): string | null {
+  const blocks: string[] = [];
+  const diagnosis = plan.diagnosis?.trim();
+  const approach = plan.approach?.trim();
+  if (diagnosis) blocks.push(`**What's wrong**\n\n${diagnosis}`);
+  if (approach) blocks.push(`**What we'll do**\n\n${approach}`);
+  if (blocks.length === 0) {
+    const reason = plan.reason?.trim();
+    return reason ? reason : null;
+  }
+  return blocks.join('\n\n');
 }
 
 /**

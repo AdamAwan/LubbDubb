@@ -154,7 +154,14 @@ const ActionSchema = z.discriminatedUnion('type', [
     planId: z.string().min(1),
     /** The issue the plan hangs off (`issue:12`) — the proposal's ref is derived from it. */
     originRef: z.string().min(1),
-    /** What the operator is shown: the decomposition, and what each verdict means. */
+    /**
+     * What the plan diagnosed and what it will do about it, as quoted markdown —
+     * carried beside `prompt` for `propose_shortfall`'s reason: the cockpit labels
+     * the block, and an operator's prompt override cannot bury the planner's own
+     * words in a paragraph. Null when the planner wrote neither.
+     */
+    detail: z.string().min(1).nullable().default(null),
+    /** What the operator is shown: what the plan is for, and what each verdict means. */
     prompt: z.string().min(1),
     ...base,
   }),

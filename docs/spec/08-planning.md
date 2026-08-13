@@ -495,11 +495,29 @@ and the cockpit's furnace and plan cards.
 | Reject               | `ProposalDesk.reject` → `refusePlan`, carrying the operator's note.                                                                                                                                                                                |
 | Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
 
-**What the ask says** is one template and two appended paragraphs. `plan-approval` is rendered with
-`{parts}` — the pull requests the plan produces, `1` on a single verdict — and `{list}`, which is
-`describeProposedParts` for a decomposition and `describeSingleRoute` for a single verdict (naming the
-`issue/<n>` branch, because a branch that already exists is what the other warnings on this ask are
-about). What approving and rejecting _this_ verdict do is then **appended** by `planApprovalNote`,
+**What the ask says** is one template, a quoted block, and two appended paragraphs.
+
+The **body of the card is `planApprovalDetail(plan)`** — the plan's `diagnosis` and its `approach`,
+labelled _What's wrong_ and _What we'll do_ — carried as the escalation's `context.detail` with
+`context.detailFrom` of `What the plan says`, never spliced into the prompt. Same discipline as a
+shortfall's assessor quote and for the same two reasons: it is the planner's prose, and the cockpit can
+label a block whose edges it can see ([17](17-cockpit.md#how-an-escalation-card-is-laid-out)). It falls
+back to `reason` when the planner filled in neither, and is absent when it said nothing at all.
+
+**The decomposition is not in the ask.** It used to be its body — `describeProposedParts`, every part
+in dispatch order with every prerequisite — and that is the wrong half of a plan to put in front of
+someone about to authorise it: how the work is cut up is a question you reach _after_ agreeing the work
+is right, and the split is one click away in the plan panel, drawn as waves, where it reads far better
+than a flat list did. The card's **Read the full plan** control is the route to it, and the built-in
+template says so.
+
+`plan-approval` is rendered with `{parts}` — the pull requests the plan produces, `1` on a single
+verdict — and with `{list}`, which is still `describeProposedParts` for a decomposition and
+`describeSingleRoute` for a single verdict (naming the `issue/<n>` branch, because a branch that already
+exists is what the other warnings on this ask are about). The built-in template no longer interpolates
+`{list}`; it is rendered anyway, so an operator override written when the split _was_ the body keeps
+working. The single arm's branch survives that either way — `planApprovalNote` names it in the
+paragraph it appends, which is the half no override can drop. What approving and rejecting _this_ verdict do is then **appended** by `planApprovalNote`,
 never interpolated: the template is operator-overridable and `loadPromptTemplates` rejects only
 _unknown_ placeholders, so an `{arm}` token would be silently dropped by exactly the deployments that
 customised most — and the two arms settle differently enough that a reader given the wrong paragraph

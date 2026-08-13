@@ -1284,7 +1284,10 @@ export function buildDemoState(): DemoSeed {
         type: 'approve_change',
         status: 'open',
         prompt:
-          'Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it as one PR.',
+          'There is a plan for issue #231 ("Mint fails on a rotated signer") and nothing is scheduled until you ' +
+          'approve it — 3 pull requests of work.\n\n' +
+          'Why this shape: split on the seams the tests already draw; one PR would put the signer rewrite and ' +
+          'the route change in the same review.',
         context: {
           originRef: 'issue:231',
           planId: 'plan-231',
@@ -1292,15 +1295,18 @@ export function buildDemoState(): DemoSeed {
           // has no agent behind it and is not an assessment, so a card deriving
           // the label from "no agent" would caption a planner's decomposition as
           // an assessor's finding.
-          detailFrom: 'How the planner split it',
-          // Markdown, so the demo shows the rendered path rather than the grey
-          // block it used to be.
+          detailFrom: 'What the plan says',
+          // What it found and what it will do about it — not the split, which is
+          // drawn in the plan panel the card's own button opens. Markdown, so the
+          // demo shows the rendered path rather than the grey block it used to be.
           detail:
-            'Split on the seams the tests already draw:\n\n' +
-            '- **signer** — pure, no deps, lands first\n' +
-            '- **route** — needs the signer\n' +
-            '- **mint** — needs both\n\n' +
-            'One PR would put the signer rewrite and the route change in the same review.',
+            "**What's wrong**\n\n" +
+            'The signer is cached at module load, so a rotation leaves every mint route holding the retired key ' +
+            'until the process restarts.\n\n' +
+            "**What we'll do**\n\n" +
+            'Make the signer a resolved dependency rather than a module singleton, thread it through the mint ' +
+            'route, and have the route ask for it per request. The cache stays, keyed on the rotation stamp the ' +
+            'signer already publishes.',
         },
         agentId: null,
         taskId: null,

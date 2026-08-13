@@ -1,6 +1,11 @@
 import { issueWatchGateReason } from '../issuePickup.js';
 import { planProposalHold, planProposalRef } from '../../proposals/proposals.js';
-import { describeProposedParts, describeSingleRoute, planApprovalNote } from '../../plans/planApproval.js';
+import {
+  describeProposedParts,
+  describeSingleRoute,
+  planApprovalDetail,
+  planApprovalNote,
+} from '../../plans/planApproval.js';
 import { planApprovalWarnings } from '../../plans/planWedge.js';
 import { liveParts, planIssueNumber } from '../../plans/parts.js';
 import type { RawAction, StageContext } from './context.js';
@@ -47,6 +52,11 @@ export function planApproval(s: StageContext): void {
       // silently drop them on exactly the deployments that customised most.
       // `{parts}` is the pull requests the plan produces, which is 1 for a single
       // verdict — the count the template's sentence is about either way.
+      //
+      // `{list}` is still rendered although the built-in template no longer uses
+      // it: the split moved behind the plan panel, and an override written when it
+      // was the body of the ask must keep working.
+      detail: planApprovalDetail(plan),
       prompt:
         s.templates.render('plan-approval', {
           number: issueNumber,
