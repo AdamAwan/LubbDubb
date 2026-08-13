@@ -1,6 +1,7 @@
 import { dispatchVerdict } from '../dispatchCooldown.js';
 import { issueWatchGateReason } from '../issuePickup.js';
 import { issueOrigin } from '../../plans/planning.js';
+import { claimIsLive } from '../../validation/desktop.js';
 import { checkBriefing, validateBranch, validateOrigin } from '../../validation/fleet.js';
 import { validationGoalDir } from '../../validation/resources.js';
 import { liveChecks } from '../../validation/verdict.js';
@@ -49,6 +50,16 @@ export function validateCheck(s: StageContext): void {
       // carries a settled reading, and re-running one behind the person who
       // settled it would overwrite their answer with an agent's.
       if (check.actor !== 'fleet' || check.state !== 'unrun') continue;
+      // And a third, which is somebody *currently* running it rather than a
+      // decision about who should. A desktop session claims a check before it
+      // starts; dispatching an agent underneath one would put two things in the
+      // same environment against the same procedure, and the second reading would
+      // overwrite the first without either knowing the other existed.
+      //
+      // Read through `claimIsLive` rather than off `claimedBy`, so a claim whose
+      // session died means the same thing here as it does to the person trying to
+      // take it — otherwise a killed session blocks a check from the fleet forever.
+      if (claimIsLive(check, s.now, s.validationClaimMinutes)) continue;
 
       const checkOrigin = validateOrigin(issue.number, check.id);
       const verdict = dispatchVerdict(checkOrigin, s.now, ctx.recentDecisions, s.cooldown);

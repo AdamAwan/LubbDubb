@@ -1,5 +1,6 @@
 import { loadDeploymentConfig } from '../config.js';
 import { buildSystem } from '../system.js';
+import { installDesktopSkill } from '../validation/desktopSkill.js';
 import { buildApp } from './app.js';
 
 /**
@@ -16,6 +17,14 @@ async function main(): Promise<void> {
   // carrying the tool channel. Best-effort by contract: a false return means agents
   // run on the sentinels alone, which is a supported configuration, not a failed start.
   const mcpReady = config.mcp.enabled ? await system.mcp.listen() : false;
+
+  // The desktop channel, on the same terms. `listen()` is the only thing that
+  // binds the stable socket or writes into the operator's home directory, which
+  // is why it is behind an explicitly-off-by-default flag rather than a default.
+  const desktopReady = config.validation.enabled && config.validation.desktop ? await system.desktop.listen() : false;
+  if (desktopReady && config.validation.desktopSkill) {
+    installDesktopSkill(config.validation.desktopSkillPath, system.errors);
+  }
 
   // Runs before the boot cycle, though the hold does not depend on that: the
   // harness re-asks every pulse, so what this ordering buys is only that the very
@@ -40,6 +49,18 @@ async function main(): Promise<void> {
   console.log(
     `[lubbdubb] agent tools: ${mcpReady ? 'on' : config.mcp.enabled ? 'unavailable — sentinels only' : 'disabled'}`,
   );
+  if (desktopReady) {
+    // Printed with the command rather than a reference to it: this is the one
+    // thing an operator has to do by hand, exactly once, and looking it up in the
+    // spec is the step where they stop.
+    const { command, args } = system.desktop.registration();
+    console.log(`[lubbdubb] desktop validation channel on — register it in Claude Code once with:`);
+    console.log(`[lubbdubb]   claude mcp add --scope user lubbdubb -- ${command} ${args.join(' ')}`);
+    console.log(`[lubbdubb] credential at ${system.desktop.credentialPath()} (0600), reminted every start`);
+    if (config.validation.desktopSkill) {
+      console.log(`[lubbdubb] /lubbdubb skill installed at ${config.validation.desktopSkillPath}`);
+    }
+  }
 
   if (crashed.length > 0) {
     // Loud, and printed after the cockpit URL so it is the last thing on screen:
@@ -66,6 +87,7 @@ async function main(): Promise<void> {
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
     await system.mcp.close();
+    await system.desktop.close();
     await app.close();
     system.store.close();
     process.exit(0);

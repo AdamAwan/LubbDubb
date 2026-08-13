@@ -14,10 +14,34 @@
 // Fail open: any problem here (no env, refused connection, socket dropped) exits
 // quietly. `claude` then reports one unavailable MCP server and the agent runs
 // exactly as it does today, on the sentinels alone.
+//
+// `--desktop` is the operator's own Claude Code rather than a spawned agent. It
+// reads the socket and token from a 0600 credential file instead of the env, and
+// that is the whole reason the file exists: the MCP registration an operator adds
+// once is then a fixed command line with no secret in it, and a token minted
+// fresh at every harness start needs no re-registration.
+import { readFileSync } from 'node:fs';
 import { connect } from 'node:net';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
-const socketPath = process.env.LUBBDUBB_MCP_SOCKET;
-const token = process.env.LUBBDUBB_MCP_TOKEN;
+const desktop = process.argv.includes('--desktop');
+let socketPath = process.env.LUBBDUBB_MCP_SOCKET;
+let token = process.env.LUBBDUBB_MCP_TOKEN;
+
+if (desktop) {
+  const path =
+    process.env.LUBBDUBB_DESKTOP_CREDENTIAL || join(homedir(), '.lubbdubb', 'desktop.json');
+  try {
+    const credential = JSON.parse(readFileSync(path, 'utf8'));
+    socketPath = credential.socket;
+    token = credential.token;
+  } catch {
+    // No harness running, or no credential written. Fail open like everything
+    // else here: `claude` reports one unavailable server and carries on.
+    process.exit(0);
+  }
+}
 
 if (!socketPath || !token) process.exit(0);
 

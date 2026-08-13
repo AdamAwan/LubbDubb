@@ -1039,6 +1039,16 @@ check unless a person does it — and the reason is quoted rather than summarise
 the one sentence saying what a person can do that an agent could not.
 → [20](20-validation.md#the-hand-over)
 
+Three chips and two markers say **who**, and each is there because its absence would be read as
+something else. **with the fleet** on a handed-over check, ahead of the planner's nomination about it
+— one is what will happen, the other is an argument. **running at ‹label›** while a desktop session
+holds the check, with the timestamp on the hover rather than the chip, because a claim sitting there
+since yesterday has expired and the operator is the only one placed to notice. And beside a reading,
+**recorded by an agent** or **recorded from a desktop session**. A reading a person took draws
+nothing at all, because that is already what a validation checklist means — the markers are the
+exceptions, which is exactly what a reader deciding how much a tick is worth needs.
+→ [20](20-validation.md#the-desktop-channel)
+
 ### The caveats
 
 Four, folded shut behind their opening words, ordered by how much they bear on the decision:

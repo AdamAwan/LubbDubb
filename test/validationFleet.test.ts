@@ -175,6 +175,8 @@ function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
     candidateWhy: null,
     actor: 'human',
     handbackNote: null,
+    claimedBy: null,
+    claimedAt: null,
     state: 'unrun',
     resultNote: null,
     resultBy: null,

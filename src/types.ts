@@ -1481,6 +1481,24 @@ export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'd
 export type ValidationCheckActor = 'human' | 'fleet';
 
 /**
+ * Who took a reading, and the three are genuinely different claims about how
+ * much a tick is worth.
+ *
+ * - `operator` — a person ran the procedure and ticked it. The default a
+ *   validation checklist already means, which is why it is the one that draws no
+ *   marker anywhere.
+ * - `agent` — a fleet agent the operator handed the check to ran it unattended.
+ * - `desktop` — the operator's own Claude Code session ran it, at their keyboard,
+ *   on their machine. Not the fleet, because nobody dispatched it and it reached
+ *   an environment the fleet cannot; and not a person, because a person did not
+ *   carry out the steps.
+ *
+ * The distinction is the point rather than bookkeeping: a reader deciding whether
+ * to re-run a check before closing a goal is deciding on exactly this.
+ */
+export type ValidationCheckResultBy = 'operator' | 'agent' | 'desktop';
+
+/**
  * One executable step in a goal's validation plan: what to do, what a pass looks
  * like, and what anyone concluded from running it.
  *
@@ -1546,8 +1564,26 @@ export interface ValidationCheck {
    * whole feature exists to stop the second being assumed from evidence that only
    * supports the first.
    */
-  resultBy: 'operator' | 'agent' | null;
+  resultBy: ValidationCheckResultBy | null;
   resultAt: string | null;
+  /**
+   * The label a desktop session claimed this check under, and null when nobody
+   * holds it. **At most one live claim exists across the whole harness** — the
+   * operator's own constraint, said as they said it: they can only run a single
+   * branch at once, and two things reaching for it is the failure the claim
+   * exists to prevent.
+   *
+   * A claim is not {@link ValidationCheck.actor}. The actor says who is expected
+   * to run a check; a claim says who is running it *now*, and it stops the fleet
+   * dispatching one out from under a person mid-run.
+   */
+  claimedBy: string | null;
+  /**
+   * When the claim was taken. A claim older than `validation.desktopClaimMinutes`
+   * is stale and holds nothing — the backstop for a harness that was killed
+   * between a claim and its release, which no socket close can cover.
+   */
+  claimedAt: string | null;
   /** When a deferral says it comes back. Null is "not yet, and I am not saying when". */
   deferUntil: string | null;
   /**

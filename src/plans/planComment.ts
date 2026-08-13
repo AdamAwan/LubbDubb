@@ -80,7 +80,13 @@ function validation(checks: ValidationCheck[]): string {
  * much the tick is worth is entitled to know which they are looking at.
  */
 function recorder(check: ValidationCheck): string {
-  return check.resultBy === 'agent' ? ' _(recorded by an agent)_' : '';
+  if (check.resultBy === 'agent') return ' _(recorded by an agent)_';
+  // A third thing, and worth its own words on a ticket somebody else may read:
+  // the operator's own Claude ran the procedure at their keyboard. Stronger than
+  // the fleet's reading — it reached the real environment — and weaker than a
+  // person's, because no person carried the steps out.
+  if (check.resultBy === 'desktop') return ' _(recorded from a desktop session)_';
+  return '';
 }
 
 /**

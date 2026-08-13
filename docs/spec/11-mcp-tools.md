@@ -35,6 +35,9 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over) |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                               |
 
+There is a **second, much shorter list** for the desktop channel below — three tools, none of them
+the fleet's. See [The desktop channel](#the-desktop-channel).
+
 ### The `_status` envelope
 
 **Every** tool response carries `_status` — _except_ `request_permission`, whose response is the bare
@@ -520,8 +523,54 @@ a trade worth making.
 - A connection that does not hand over a token first is **dropped unanswered**. The handshake line is
   `{"lubbdubb":1,"token":"…"}`; everything after it is newline-delimited JSON-RPC 2.0.
 
-`listen()` removes a stale socket file from a crashed run before binding — binding is the only way to
-tell a dead socket from a live one, and a live one means another harness owns the path.
+`src/mcp/socketChannel.ts` is the listening half — bind, handshake, frame — and **both** channels use
+it. A second copy of "a connection that does not identify itself gets nothing" would be a second
+place for the only rule between a local process and the whole store to drift.
+
+How a path already in use is treated is the one thing the two channels differ on, and it is
+load-bearing both ways:
+
+- **The fleet socket carries the pid**, so nothing else can want that exact path and a file on it is
+  debris from a crashed run. It is removed before binding — binding is the only way to tell a dead
+  socket from a live one.
+- **The desktop socket is stable**, which is what lets the MCP server be registered once. A _live_
+  socket on it therefore belongs to another harness, and unlinking it would silently steal every
+  future desktop session from a running process. So the path is probed with a connect first: a live
+  one is refused with a message naming the conflict, and only a dead one is cleared.
+
+## The desktop channel
+
+`src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
+spawned agent — so a validation check needing a browser and a login the fleet does not have can be
+run at their keyboard and reported onto the same row. Off unless `validation.desktop`;
+[20](20-validation.md#the-desktop-channel) owns the behaviour.
+
+| Tool                | Purpose                                                                                               |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                        |
+| `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                   |
+| `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument. |
+
+Four things differ from the fleet channel, and each answers a way this credential is unlike an
+agent's:
+
+- **Identity has no agent behind it.** Nobody dispatched a desktop session, so there is no task and
+  no origin. The equivalent chain is `token → connection → claim`, and it gives the same guarantee:
+  which check a report is about is settled before the report rather than by it.
+- **The tool set is narrowed by construction, not filtered.** `DESKTOP_TOOL_NAMES` is its own list
+  and `src/mcp/desktopTools.ts` is a `Record` over it; this server never reaches `buildTools`. The
+  credential is long-lived and sits in a home directory, so the guarantee has to be that there is no
+  path to `conclude_work` at all — not that a filter is currently correct.
+- **The credential is a file, and the registration carries no secret.** The token is minted at every
+  `listen()` and written to `validation.desktopCredentialPath` at `0600`; `bridge.mjs --desktop`
+  reads it at spawn. So `claude mcp add --scope user lubbdubb -- node …/bridge.mjs --desktop` is a
+  fixed command line, added once, that survives every restart and every reminted token.
+- **No `ALLOWED_MCP_TOOLS` equivalent.** The fleet's grants exist because nobody is at the prompt to
+  approve a call ([Launch flags](#launch-flags)). Here somebody is, on their own machine.
+
+Per-connection state is the reason `SocketChannel` mints a connection id: a claim belongs to one
+connection, so closing that terminal releases it and a second terminal sharing the same token cannot
+release the first one's check.
 
 ## The wire protocol
 

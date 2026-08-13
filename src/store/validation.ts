@@ -5,6 +5,7 @@ import type {
   ValidationCheck,
   ValidationCheckActor,
   ValidationCheckInput,
+  ValidationCheckResultBy,
   ValidationCheckState,
   ValidationResource,
   ValidationResourceInput,
@@ -26,6 +27,13 @@ import type { StoreContext } from './context.js';
  * hand-over, and fail the same way without an entry: every existing check would
  * read `undefined` for `actor`, and a column whose absence means "human" is one
  * whose absence is invisible — the hand-over control would simply never take.
+ *
+ * `claimed_by` and `claimed_at` arrived with the desktop channel and are the
+ * quietest of the three. Their absence reads as "nothing is claimed", which is
+ * true of every database that predates them and stays true forever afterwards:
+ * the claim would never be written, so the fleet would keep dispatching checks a
+ * person was in the middle of running — the exact collision the claim exists to
+ * prevent, on precisely the deployments that upgraded rather than started fresh.
  */
 export const VALIDATION_COLUMNS: ColumnMigrations = {
   validation_checks: {
@@ -34,6 +42,8 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     amend_note: 'TEXT',
     actor: 'TEXT',
     handback_note: 'TEXT',
+    claimed_by: 'TEXT',
+    claimed_at: 'TEXT',
   },
   validation_resources: {},
 };
@@ -248,6 +258,12 @@ export class ValidationStore {
       // what changed, which is where the decision to hand it over again belongs.
       actor: keep ? prev.actor : 'human',
       handbackNote: keep ? prev.handbackNote : null,
+      // Dropped by the same predicate, and it is the same argument one step
+      // further on: somebody is running this check *right now* against wording
+      // that no longer exists. Releasing the claim is what lets them re-take it
+      // against the current wording and see the amendment band while they do.
+      claimedBy: keep ? prev.claimedBy : null,
+      claimedAt: keep ? prev.claimedAt : null,
       state: keep ? prev.state : 'unrun',
       resultNote: keep ? prev.resultNote : null,
       resultBy: keep ? prev.resultBy : null,
@@ -400,14 +416,87 @@ export class ValidationStore {
   recordValidationHandback(planId: string, checkId: string, note: string): ValidationCheck | null {
     const current = this.getValidationCheck(planId, checkId);
     if (!current) return null;
+    const ts = this.ctx.now();
     const next: ValidationCheck = {
       ...current,
       actor: 'human',
       handbackNote: note,
-      updatedAt: this.ctx.now(),
+      // Whoever gave it back is done with it, so the claim goes with them. A
+      // hand-back that left the claim standing would block the check against the
+      // one thing it is now waiting for — somebody else picking it up.
+      claimedBy: null,
+      claimedAt: null,
+      updatedAt: ts,
     };
     this.writeCheck(next);
     return next;
+  }
+
+  /**
+   * Take the one live desktop claim for a check, or say who already holds it.
+   *
+   * **One claim at a time, across every plan.** Not a lock per check: the
+   * operator's constraint is that they can only run one branch at once, so a
+   * second check claimed while the first is live is two things reaching for the
+   * same working copy. The refusal names the check that holds it, which is the
+   * only thing the caller needs in order to fix it.
+   *
+   * Whole thing in one synchronous method for the store's usual reason — the
+   * search, the decision and the write happen with nothing between them, so two
+   * sessions racing cannot both read "nothing is claimed".
+   *
+   * `staleBefore` is the caller's clock policy, not this method's: a claim taken
+   * before it holds nothing, because the session that took it is gone in a way no
+   * socket close reported.
+   */
+  claimValidationCheck(
+    planId: string,
+    checkId: string,
+    holder: string,
+    staleBefore: string,
+  ):
+    | { ok: true; check: ValidationCheck; tookOverFrom: string | null }
+    | { ok: false; reason: 'gone' }
+    | { ok: false; reason: 'held'; by: ValidationCheck } {
+    const target = this.getValidationCheck(planId, checkId);
+    if (!target) return { ok: false, reason: 'gone' };
+    const live = this.liveClaims(staleBefore);
+    const other = live.find((c) => c.planId !== planId || c.id !== checkId);
+    if (other) return { ok: false, reason: 'held', by: other };
+    // Re-claiming what you already hold is not a conflict, and saying so beats
+    // refusing: a session whose bridge reconnected mid-run would otherwise be
+    // locked out by its own claim.
+    const tookOverFrom = target.claimedBy !== null && target.claimedBy !== holder ? target.claimedBy : null;
+    const ts = this.ctx.now();
+    const next: ValidationCheck = { ...target, claimedBy: holder, claimedAt: ts, updatedAt: ts };
+    this.writeCheck(next);
+    return { ok: true, check: next, tookOverFrom };
+  }
+
+  /** Give a claimed check back, whoever holds it. Idempotent — releasing an unclaimed check is a no-op. */
+  releaseValidationClaim(planId: string, checkId: string): ValidationCheck | null {
+    const current = this.getValidationCheck(planId, checkId);
+    if (!current || current.claimedBy === null) return current;
+    const next: ValidationCheck = { ...current, claimedBy: null, claimedAt: null, updatedAt: this.ctx.now() };
+    this.writeCheck(next);
+    return next;
+  }
+
+  /**
+   * Every check whose claim is still live at `staleBefore` — live rows only, and
+   * expired claims excluded, so a caller never has to decide what "claimed" means
+   * for itself. Normally at most one; more than one is only reachable from a
+   * database edited by hand, and the caller that cares takes the first.
+   */
+  liveClaims(staleBefore: string): ValidationCheck[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM validation_checks
+         WHERE claimed_by IS NOT NULL AND claimed_at > ? AND superseded_reason IS NULL
+         ORDER BY claimed_at ASC`,
+      )
+      .all(staleBefore) as ValidationCheckRow[];
+    return rows.map(rowToCheck);
   }
 
   listValidationResources(planId: string): ValidationResource[] {
@@ -449,7 +538,7 @@ export class ValidationStore {
     input: {
       state: ValidationCheckState;
       note: string | null;
-      by: 'operator' | 'agent' | null;
+      by: ValidationCheckResultBy | null;
       until?: string | null;
     },
   ): ValidationCheck | null {
@@ -476,6 +565,10 @@ export class ValidationStore {
       // dispatch came to nothing, and somebody who has since recorded a reading
       // has moved past it.
       handbackNote: null,
+      // The reading is in; the run is over. Held open, the claim would keep the
+      // operator's one-at-a-time budget spent on a check nobody is running.
+      claimedBy: null,
+      claimedAt: null,
       updatedAt: ts,
     };
     this.writeCheck(next);
@@ -489,16 +582,19 @@ export class ValidationStore {
         // unquoted column named for one is a syntax error at prepare time.
         // `check_expect` follows it so the pair reads as a pair.
         `INSERT INTO validation_checks (plan_id, id, letter, seq, title, check_do, check_expect, uses, covers,
-           fleet_candidate, candidate_why, actor, handback_note, state, result_note, result_by, result_at,
-           defer_until, superseded_reason, revision, amended_at, amend_note, created_at, updated_at)
+           fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
+           result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, created_at,
+           updated_at)
          VALUES (@planId, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
-           @fleetCandidate, @candidateWhy, @actor, @handbackNote, @state, @resultNote, @resultBy, @resultAt,
-           @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @createdAt, @updatedAt)
+           @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
+           @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @createdAt,
+           @updatedAt)
          ON CONFLICT(plan_id, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
            candidate_why=excluded.candidate_why, actor=excluded.actor,
-           handback_note=excluded.handback_note, state=excluded.state, result_note=excluded.result_note,
+           handback_note=excluded.handback_note, claimed_by=excluded.claimed_by,
+           claimed_at=excluded.claimed_at, state=excluded.state, result_note=excluded.result_note,
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
            superseded_reason=excluded.superseded_reason, revision=excluded.revision,
            amended_at=excluded.amended_at, amend_note=excluded.amend_note, updated_at=excluded.updated_at`,
@@ -560,6 +656,9 @@ interface ValidationCheckRow {
   /** Added with the fleet hand-over — `undefined` on a database that predates it; see {@link VALIDATION_COLUMNS}. */
   actor: string | null | undefined;
   handback_note: string | null | undefined;
+  /** Added with the desktop channel — `undefined` on a database that predates it. */
+  claimed_by: string | null | undefined;
+  claimed_at: string | null | undefined;
   state: string;
   result_note: string | null;
   result_by: string | null;
@@ -601,9 +700,15 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     // column becoming a hand-over would dispatch an agent nobody asked for.
     actor: r.actor === 'fleet' ? 'fleet' : 'human',
     handbackNote: r.handback_note ?? null,
+    // A claim needs both halves to mean anything — the holder to name it and the
+    // timestamp to expire it — so a row carrying one without the other is read as
+    // claimed by nobody. That is the safe direction here: an unreadable claim
+    // becoming live would block the fleet from a check forever.
+    claimedBy: r.claimed_by !== null && r.claimed_by !== undefined && r.claimed_at ? r.claimed_by : null,
+    claimedAt: r.claimed_by !== null && r.claimed_by !== undefined && r.claimed_at ? r.claimed_at : null,
     state: checkStateOf(r.state),
     resultNote: r.result_note,
-    resultBy: r.result_by === 'operator' || r.result_by === 'agent' ? r.result_by : null,
+    resultBy: resultByOf(r.result_by),
     resultAt: r.result_at,
     deferUntil: r.defer_until,
     supersededReason: r.superseded_reason,
@@ -624,6 +729,17 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
  */
 function checkStateOf(raw: string): ValidationCheckState {
   return raw === 'passed' || raw === 'failed' || raw === 'waived' || raw === 'deferred' ? raw : 'unrun';
+}
+
+/**
+ * Narrowed for {@link checkStateOf}'s reason, and the failure is the one the
+ * attribution exists to prevent: a word this does not know reads as null, which
+ * draws *no* marker — and no marker means "a person ran this". A new
+ * {@link ValidationCheckResultBy} missing from here silently upgrades an agent's
+ * reading to a human's.
+ */
+function resultByOf(raw: string | null): ValidationCheckResultBy | null {
+  return raw === 'operator' || raw === 'agent' || raw === 'desktop' ? raw : null;
 }
 
 /** Narrowed for {@link checkStateOf}'s reason; null is the honest reading of a word this does not know. */

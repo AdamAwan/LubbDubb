@@ -68,6 +68,7 @@ import type {
   ValidationAmendResult,
   ValidationCheck,
   ValidationCheckActor,
+  ValidationCheckResultBy,
   ValidationCheckState,
   ValidationResource,
   WorkNode,
@@ -424,6 +425,17 @@ export class Store {
   recordValidationHandback(planId: string, checkId: string, note: string): ValidationCheck | null {
     return this.validation.recordValidationHandback(planId, checkId, note);
   }
+  claimValidationCheck(
+    planId: string,
+    checkId: string,
+    holder: string,
+    staleBefore: string,
+  ): ReturnType<ValidationStore['claimValidationCheck']> {
+    return this.validation.claimValidationCheck(planId, checkId, holder, staleBefore);
+  }
+  releaseValidationClaim(planId: string, checkId: string): ValidationCheck | null {
+    return this.validation.releaseValidationClaim(planId, checkId);
+  }
   listValidationChecks(planId: string): ValidationCheck[] {
     return this.validation.listValidationChecks(planId);
   }
@@ -442,7 +454,7 @@ export class Store {
     input: {
       state: ValidationCheckState;
       note: string | null;
-      by: 'operator' | 'agent' | null;
+      by: ValidationCheckResultBy | null;
       until?: string | null;
     },
   ): ValidationCheck | null {

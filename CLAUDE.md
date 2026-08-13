@@ -153,6 +153,12 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   `src/mcp/`.** Three things must agree — the server id, the tool names, and the
   `mcp__<key>__<tool>` grants. `test/mcpChannel.test.ts` asserts all three against each other.
   → [11](docs/spec/11-mcp-tools.md#launch-flags)
+- **There are two channels, and `validation_report` is a tool on both.** The fleet's is
+  `src/mcp/tools/validationReport.ts`; the operator's own Claude Code gets
+  `src/mcp/desktopTools.ts`, whose set is `DESKTOP_TOOL_NAMES` and never `buildTools`. They share the
+  schema, the store writes and the hand-back wording, and differ in where the check comes from — an
+  origin, or a claim. Editing one and believing you have edited "the report tool" leaves the other on
+  the old behaviour, with nothing red. → [11](docs/spec/11-mcp-tools.md#the-desktop-channel)
 - **Never add `ANTHROPIC_API_KEY` to spawn env or config to "fix" an auth problem.** Model
   credentials are _inherited_ from the parent shell, and in non-interactive mode `claude` always
   uses the key when present, with no approval prompt — so a stray export moves the whole fleet onto

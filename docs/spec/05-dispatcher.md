@@ -686,6 +686,12 @@ half is:
   nothing: whether an agent _can_ run a check depends on what logins and browsers this deployment
   has, which a planner reading the repository cannot know. `actor` is written by one route and one
   operator.
+- **And never under a live desktop claim.** A check the operator's own Claude Code has taken is one
+  somebody is running right now; dispatching underneath it would put two things in the same
+  environment against the same procedure, the second reading overwriting the first. Read through
+  `claimIsLive` rather than off `claimed_by`, so a claim whose session died means the same thing here
+  as it does to a person trying to take one — the alternative is a killed session blocking a check
+  from the fleet forever. → [20](20-validation.md#the-claim)
 - **Fails open and silent**, `issue-retro`'s rule: a crashed or capped agent leaves the check `unrun`
   and still flagged, with no escalation. The flag is already the ask.
 

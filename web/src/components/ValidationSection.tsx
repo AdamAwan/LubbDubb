@@ -194,6 +194,19 @@ function CheckBlock({
               with the fleet
             </span>
           )}
+          {/* Somebody is running this *now*, which is a different fact from who
+              is expected to and is drawn ahead of both. The timestamp is on the
+              hover rather than the chip because a claim that has been sitting
+              there since yesterday has expired, and the operator is the only one
+              in a position to notice that from a glance. */}
+          {check.claimedBy !== null && (
+            <span
+              className="chip small warn"
+              title={`Claimed by a desktop session at ${check.claimedAt ?? 'an unknown time'} — the fleet will not run it while this stands`}
+            >
+              running at {check.claimedBy}
+            </span>
+          )}
           {check.fleetCandidate && check.actor !== 'fleet' && (
             <span
               className="chip small"
@@ -250,6 +263,12 @@ function CheckBlock({
                 second must never be read off the first — which is the whole of
                 what this feature is for, one level down. */}
             {check.resultBy === 'agent' && <i className="k">recorded by an agent</i>}
+            {/* Not "by an agent" and not silence: a desktop session is the
+                operator's own Claude, which reached an environment the fleet
+                cannot and still did not carry the steps out by hand. Silence is
+                reserved for a person, because that is what a checklist already
+                means. */}
+            {check.resultBy === 'desktop' && <i className="k">recorded from a desktop session</i>}
             {check.deferUntil !== null && <i className="k">until {check.deferUntil}</i>}
           </div>
         )}

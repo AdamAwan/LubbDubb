@@ -89,7 +89,15 @@ export function validateReport(args: unknown): { ok: true; report: ParsedReport 
   return { ok: false, error: first ? first.message : 'the report could not be read' };
 }
 
-/** How a hand-back reads on the row an operator will see it on. */
-export function handbackReason(reason: string): string {
-  return `An agent could not run this check: ${reason}`;
+/**
+ * How a hand-back reads on the row an operator will see it on.
+ *
+ * `by` is on the sentence because the two hand-backs mean different things to
+ * the person reading the row: a fleet agent gave up on a check somebody handed
+ * it, and their own desktop session gave up on a check they went and took. The
+ * first is a question about the deployment; the second is one about the check.
+ */
+export function handbackReason(reason: string, by: 'agent' | 'desktop'): string {
+  const who = by === 'desktop' ? 'A desktop session' : 'An agent';
+  return `${who} could not run this check: ${reason}`;
 }

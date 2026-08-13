@@ -170,6 +170,12 @@ export interface StageContext {
    */
   validationRoot: string;
   /**
+   * `validation.desktopClaimMinutes`, so `validate-check` and the desktop tools
+   * agree about when a claim has expired. A rule with its own opinion about that
+   * would dispatch an agent for a check somebody's Claude was still running.
+   */
+  validationClaimMinutes: number;
+  /**
    * The two work-item rules' config, narrowed to non-null once so each reads it
    * off a value the type system already knows is present. Null when the operator
    * has not configured both a review state and pickup states — which is also
