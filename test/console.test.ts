@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { GoalPartView } from '../web/src/view/goalPage.js';
-import type { CockpitActions } from '../web/src/cockpit/actions.js';
+import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
 // `React.createElement`; the bundle uses the automatic one. The global goes in
@@ -431,4 +431,123 @@ test('an empty rack still draws — a surface that vanishes reads as one that br
 test('a goal row is a way into its page', () => {
   const html = render(view());
   assert.ok(html.includes('cn-goal-row'));
+});
+
+/**
+ * The one `<button …>` opening tag whose *attributes* carry `needle`.
+ *
+ * Opening tags only, so a string that also appears in a row's text cannot be
+ * mistaken for the control that quotes it — and exactly one, because "some button
+ * on the page says this" is the assertion that passes with the wrong button.
+ */
+function buttonWith(html: string, needle: string): string {
+  const tags = [...html.matchAll(/<button\b[^>]*>/g)].map((m) => m[0]).filter((t) => t.includes(needle));
+  assert.equal(tags.length, 1, `expected exactly one button whose attributes mention "${needle}"`);
+  const tag = tags[0];
+  assert.ok(tag);
+  return tag;
+}
+
+/** Every backlog group heading, in document order. */
+function groupHeadings(html: string): string[] {
+  return [...html.matchAll(/<div class="cn-grpname">([^<]*)/g)].map((m) => (m[1] ?? '').trim());
+}
+
+const BACKLOG_GROUPS = ['Watched', 'Blocked at intake', 'Unwatched', 'Ignored'];
+
+test('the backlog groups by watch state and gives intake its own group', () => {
+  const v = view({ backlogOpen: true });
+  const html = render(v);
+  assert.deepEqual(groupHeadings(html), BACKLOG_GROUPS, 'four groups, in the order triage reads them');
+
+  // Intake is pulled *out* of Watched rather than greyed inside it: an `unclear`
+  // assay is the one intake reading that stops dispatch, and among watched rows
+  // it reads as a detail instead of as the thing holding all work.
+  const intake = v.state.world.issues.find((i) => i.assay?.verdict === 'unclear');
+  assert.ok(intake, 'the demo fixtures must carry a goal the assay refused');
+  const assay = intake.assay;
+  assert.ok(assay);
+
+  const decoded = decode(html);
+  const quoted = decoded.indexOf(assay.summary);
+  assert.ok(quoted !== -1, 'the assayer’s own words are quoted, never reworded');
+  assert.ok(
+    decoded.indexOf('Blocked at intake') < quoted && quoted < decoded.indexOf('Unwatched'),
+    'the refused goal belongs in the intake group, not in Watched',
+  );
+});
+
+test('a backlog group with nothing in it is muted, never removed', () => {
+  const v = view({ backlogOpen: true });
+  const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, issues: [] } } });
+  assert.deepEqual(groupHeadings(html), BACKLOG_GROUPS, 'a group that vanishes when quiet reads as one that broke');
+});
+
+test('a container type is disabled rather than absent — “cannot be picked up” is worth seeing', () => {
+  const v = view({ backlogOpen: true });
+  const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
+  assert.ok(container, 'the demo fixtures must carry an item the harness refuses as a container');
+  const reason = container.pickup.reasons[0];
+  assert.ok(reason, 'the server says why it refuses one — the button quotes that and invents nothing');
+
+  // Untagged, so it falls into the triage group, which is the group that draws a
+  // Watch button at all. The fixture's container carries the watch label.
+  const issues = v.state.world.issues.map((i) => (i.number === container.number ? { ...i, labels: [] } : i));
+  const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, issues } } });
+
+  // Deliberately not `html.includes('disabled')`: the console draws other
+  // disabled buttons (the rack's ignore toggle, with no ignore label configured),
+  // so that assertion passes with no container on the page at all.
+  assert.match(buttonWith(html, 'is a container'), / disabled=""/, 'the button is drawn, and refuses');
+
+  const open = v.state.world.issues.find((i) => i.pickup.status === 'unwatched');
+  assert.ok(open, 'the demo fixtures must carry an open item nobody has opted in');
+  assert.doesNotMatch(buttonWith(html, `#${open.number}`), / disabled=""/, 'an ordinary item is still watchable');
+});
+
+test('the fault log keeps its clear even when it is empty', () => {
+  const v = view({ consolePanel: 'faults' });
+  const html = render({ ...v, state: { ...v.state, errors: [] } });
+  assert.ok(html.includes('Clear'), 'the only route to clear must not depend on there being rows');
+
+  const full = render(v);
+  const first = v.state.errors[0];
+  assert.ok(first, 'the demo fixtures must carry a recorded fault');
+  assert.ok(
+    full.indexOf('Clear') < full.indexOf(first.message),
+    'one misclick between “leave” and “delete the only copy” is too few',
+  );
+});
+
+test('a reading opens the panel behind it, in front of the console', () => {
+  const panels: [ConsolePanel, string][] = [
+    ['findings', 'Findings'],
+    ['faults', 'Faults'],
+    ['output', 'Output'],
+    ['launch', 'Launch'],
+  ];
+  for (const [panel, title] of panels) {
+    const html = render(view({ consolePanel: panel }));
+    assert.ok(html.includes('cn-backdrop'), `${String(panel)} must draw in front of the console`);
+    assert.ok(html.includes(`<h2>${title}</h2>`), `${String(panel)} must name itself`);
+  }
+});
+
+test('injection rides in the launch panel, and the demo build is the whole of it', () => {
+  assert.match(render(view({ consolePanel: 'launch' })), /class="inject"/);
+  assert.doesNotMatch(
+    render(view({ consolePanel: 'launch', demo: false })),
+    /class="inject"/,
+    'a real run must not offer a panel that lies to the harness',
+  );
+});
+
+test('the backlog replaces the overview, and a selected goal outranks both', () => {
+  assert.ok(render(view()).includes('World signals'), 'no goal and no backlog is the overview');
+  assert.ok(!render(view({ backlogOpen: true })).includes('World signals'), 'the backlog replaces the overview');
+
+  // A queue row selects a goal without closing whatever the nav left open, so the
+  // goal has to win — otherwise clicking an ask lands on the backlog.
+  const v = goalView();
+  assert.ok(render({ ...v, backlogOpen: true }).includes('cn-goal'));
 });

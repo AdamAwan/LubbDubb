@@ -113,6 +113,10 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
     state.runOutcomes.completionRate === null ? null : Math.round(state.runOutcomes.completionRate * 100);
   const spendUsd = state.usage.windows.fiveHourCostUsd;
   const faultCount = state.errors.length;
+  // The queue, not the history: a launched blueprint that has been dispatched is
+  // an agent in the Fleet, and counting it here would have the reading climb as
+  // work starts rather than as it waits.
+  const queued = state.jobs.filter((job) => job.status === 'queued').length;
   // Same derivation the production graph itself is built on (`actions.openPanel('output')`
   // opens it) — a gauge and the panel it opens must start out agreeing, so this is
   // the windowed rate, not a different-shaped count of the same events.
@@ -175,6 +179,13 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           quiet={faultCount === 0}
           onOpen={() => actions.openPanel('faults')}
           title="Recorded faults — open the fault log"
+        />
+        <Read
+          label="Launch"
+          value={`${queued}`}
+          quiet={queued === 0}
+          onOpen={() => actions.openPanel('launch')}
+          title="Blueprints waiting for a free slot — open the launch desk"
         />
         <Read label="Settings" value={null} quiet={false} onOpen={() => actions.openSettings(true)} title="Settings" />
       </div>
