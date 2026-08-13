@@ -1,0 +1,1420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LubbDubb — theme options</title>
+    <style>
+      /* ------------------------------------------------------------------
+       * Five dark themes for the console, each drawing the same screen.
+       *
+       * Every colour is a token. The console's real sheet still carries ~60
+       * literals (#4a2226, #141d2e, …) beside its --cn-* tokens; those are
+       * re-expressed here as color-mix() of a hue with the ground, which is
+       * what makes a theme a token swap rather than a rewrite.
+       *
+       * No script: each screen carries its palette on itself, so all five are
+       * on the page at once and compare by scrolling.
+       * ------------------------------------------------------------------ */
+
+      /* A. GRAPHITE — warm neutral ground, the harness's own orange, square
+         corners. Puts the console in the same language as the shared
+         components in styles.css, which are already orange-on-graphite. */
+      [data-theme='graphite'] {
+        --bg: #191b1c;
+        --panel: #212426;
+        --panel-2: #292c2e;
+        --line: #3a3e41;
+        --fg: #e9e7e1;
+        --dim: #a5a39d;
+        --faint: #787672;
+        --accent: #ff9c1a;
+        --red: #e2564a;
+        --amber: #f2c14e;
+        --green: #6fbf5a;
+        --on-hue: #1c1b1a;
+        --r: 0px;
+        --ui: 'Segoe UI', system-ui, sans-serif;
+      }
+
+      /* B. BLUEPRINT — deep navy, cyan accent. The most conservative move from
+         today: same darkness, colder and more saturated, so status hues sit
+         further from the ground than they currently do. */
+      [data-theme='blueprint'] {
+        --bg: #0a121b;
+        --panel: #0f1a26;
+        --panel-2: #14212f;
+        --line: #1f3348;
+        --fg: #dfe9f2;
+        --dim: #8fa6bb;
+        --faint: #5f758a;
+        --accent: #35c8e0;
+        --red: #ff6b6b;
+        --amber: #ffb347;
+        --green: #4fd6a0;
+        --on-hue: #062029;
+        --r: 3px;
+      }
+
+      /* C. EMBER — highest contrast of the five. Near-black ground, panels
+         barely lifted off it, copper accent. Chrome recedes to almost nothing,
+         so the only bright things on the page carry a status. */
+      [data-theme='ember'] {
+        --bg: #0b0b0c;
+        --panel: #131314;
+        --panel-2: #1a1a1c;
+        --line: #2a2a2d;
+        --fg: #f2efe9;
+        --dim: #9b9791;
+        --faint: #6a6763;
+        --accent: #e07a3f;
+        --red: #ef4444;
+        --amber: #eab308;
+        --green: #5cb85c;
+        --on-hue: #140a04;
+        --r: 2px;
+      }
+
+      /* D. SLATE — cool neutral, one green accent, no second chroma anywhere it
+         is not saying something. Quietest of the five: the page reads as grey
+         until something is wrong. */
+      [data-theme='slate'] {
+        --bg: #16181a;
+        --panel: #1d2022;
+        --panel-2: #24282b;
+        --line: #33383c;
+        --fg: #e3e6e8;
+        --dim: #969b9f;
+        --faint: #6b7075;
+        --accent: #5ec98a;
+        --red: #e05c5c;
+        --amber: #e0a83c;
+        --green: #5ec98a;
+        --on-hue: #0c1a12;
+        --r: 2px;
+      }
+
+      /* E. NOCTURNE — indigo-black, violet accent, soft corners. The least
+         instrument-like of the five; reads as an application rather than a
+         panel, which is either the point or the objection. */
+      [data-theme='nocturne'] {
+        --bg: #101018;
+        --panel: #171725;
+        --panel-2: #1e1e2e;
+        --line: #2c2c42;
+        --fg: #e6e4f0;
+        --dim: #a09dba;
+        --faint: #6f6c8a;
+        --accent: #a78bfa;
+        --red: #f4708a;
+        --amber: #f0b45e;
+        --green: #57d6a8;
+        --on-hue: #140f24;
+        --r: 10px;
+      }
+
+      /* ---- derivation: every tint is a mix of a hue with the ground.
+         Declared on the same element as the palette, so each screen resolves
+         against its own six hues. ---- */
+      [data-theme] {
+        --lift: color-mix(in srgb, var(--fg) 7%, var(--panel));
+        --lift-3: color-mix(in srgb, var(--fg) 28%, var(--panel));
+        --accent-line: color-mix(in srgb, var(--accent) 42%, var(--panel));
+        --accent-fill: color-mix(in srgb, var(--accent) 14%, var(--bg));
+        --accent-ink: color-mix(in srgb, var(--accent) 74%, var(--fg));
+        --red-line: color-mix(in srgb, var(--red) 40%, var(--panel));
+        --red-fill: color-mix(in srgb, var(--red) 13%, var(--bg));
+        --red-fill-2: color-mix(in srgb, var(--red) 22%, var(--bg));
+        --red-ink: color-mix(in srgb, var(--red) 74%, var(--fg));
+        --amber-line: color-mix(in srgb, var(--amber) 40%, var(--panel));
+        --amber-fill: color-mix(in srgb, var(--amber) 13%, var(--bg));
+        --amber-fill-2: color-mix(in srgb, var(--amber) 22%, var(--bg));
+        --amber-ink: color-mix(in srgb, var(--amber) 74%, var(--fg));
+        --green-line: color-mix(in srgb, var(--green) 40%, var(--panel));
+        --green-fill: color-mix(in srgb, var(--green) 13%, var(--bg));
+        --mono: ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace;
+        --ui: -apple-system, 'Segoe UI', system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #0f0f10;
+        color: #ddd;
+        font:
+          13px/1.45 -apple-system,
+          'Segoe UI',
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ---- caption between screens (mockup chrome, not the design) ---- */
+      .cap {
+        max-width: 78ch;
+        margin: 0 auto;
+        padding: 30px 20px 12px;
+      }
+      .cap h2 {
+        margin: 0 0 4px;
+        font:
+          700 15px/1.3 ui-monospace,
+          Consolas,
+          monospace;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #fff;
+      }
+      .cap p {
+        margin: 0;
+        color: #8b8b8f;
+        font-size: 13px;
+      }
+      .cap.top {
+        padding-top: 24px;
+      }
+      .cap.top p {
+        color: #a0a0a6;
+      }
+
+      /* ---- the screen ---- */
+      .screen {
+        background: var(--bg);
+        color: var(--fg);
+        font: 13px/1.45 var(--ui);
+        border-top: 1px solid #000;
+        border-bottom: 1px solid #000;
+      }
+      .screen button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        cursor: pointer;
+      }
+
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 42px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        flex-wrap: wrap;
+      }
+      .brand {
+        font: 700 14px/1 var(--ui);
+        letter-spacing: -0.2px;
+      }
+      .brand span {
+        color: var(--faint);
+        font-weight: 400;
+        margin-left: 8px;
+        font-size: 12px;
+      }
+      .read {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        border: 1px solid transparent;
+        border-radius: var(--r);
+        white-space: nowrap;
+      }
+      .read b {
+        font: 600 12px/1 var(--mono);
+      }
+      .read i {
+        font: 400 11px/1 var(--ui);
+        font-style: normal;
+        color: var(--faint);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+      .read.scan {
+        border-color: var(--accent-line);
+        background: var(--accent-fill);
+      }
+      .spacer {
+        margin-left: auto;
+      }
+
+      .body {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+      }
+      @media (max-width: 960px) {
+        .body {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .rail {
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+        padding-bottom: 14px;
+      }
+      .rail-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .rail-head h3 {
+        margin: 0;
+        font-size: 12px;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .count {
+        margin-left: auto;
+        font: 600 11px/1 var(--mono);
+        background: var(--red);
+        color: var(--on-hue);
+        padding: 3px 7px;
+        border-radius: 99px;
+      }
+      .rail-list {
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .grp {
+        font: 600 10px/1 var(--mono);
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+        color: var(--faint);
+        padding: 8px 6px 2px;
+      }
+      .q {
+        display: grid;
+        grid-template-columns: 3px 1fr;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--panel-2);
+        overflow: hidden;
+      }
+      .q .stripe {
+        background: var(--amber);
+      }
+      .q.urgent .stripe {
+        background: var(--red);
+      }
+      .qin {
+        padding: 10px 12px 11px 2px;
+      }
+      .qkind {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 5px;
+      }
+      .tag {
+        font: 600 10px/1 var(--mono);
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        padding: 3px 6px;
+        border-radius: 4px;
+        background: var(--amber-fill-2);
+        color: var(--amber);
+      }
+      .urgent .tag {
+        background: var(--red-fill-2);
+        color: var(--red);
+      }
+      .age {
+        margin-left: auto;
+        color: var(--faint);
+        font-size: 11px;
+      }
+      .qmeta {
+        margin-top: 5px;
+        font: 400 11px/1 var(--mono);
+        color: var(--faint);
+      }
+
+      .main {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      .tabs {
+        display: flex;
+        gap: 6px;
+      }
+      .tab {
+        padding: 5px 11px;
+        border-radius: var(--r);
+        color: var(--dim);
+        border: 1px solid transparent;
+      }
+      .tab.on {
+        background: var(--panel-2);
+        border-color: var(--line);
+        color: var(--fg);
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        background: var(--panel);
+        overflow: hidden;
+      }
+      .card > header {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 13px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel-2);
+      }
+      .card > header h3 {
+        margin: 0;
+        font: 600 11px/1 var(--mono);
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .pill {
+        font: 600 10px/1 var(--mono);
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        padding: 3px 7px;
+        color: var(--faint);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--line);
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .t {
+        min-width: 0;
+      }
+      .t b {
+        font-weight: 600;
+      }
+      .t div {
+        color: var(--faint);
+        font: 400 11px/1.4 var(--mono);
+        margin-top: 3px;
+      }
+      .r {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex: none;
+      }
+      .money {
+        font: 400 12px/1 var(--mono);
+        color: var(--dim);
+      }
+      .lamp {
+        width: 8px;
+        height: 8px;
+        border-radius: 99px;
+        background: var(--green);
+      }
+      .lamp.off {
+        background: var(--lift-3);
+      }
+      .chip {
+        font: 600 10px/1 var(--mono);
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        padding: 3px 7px;
+        color: var(--dim);
+      }
+      .chip.you {
+        background: var(--red-fill-2);
+        border-color: var(--red-line);
+        color: var(--red);
+      }
+      .chip.harness {
+        background: var(--accent-fill);
+        border-color: var(--accent-line);
+        color: var(--accent-ink);
+      }
+      .chip.ok {
+        background: var(--green-fill);
+        border-color: var(--green-line);
+        color: var(--green);
+      }
+      .sq {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        background: var(--red);
+        flex: none;
+      }
+      .sq.g {
+        background: var(--green);
+      }
+
+      .chainhd {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 13px;
+        background: var(--panel-2);
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .chainhd .why {
+        color: var(--faint);
+        font: 400 11px/1 var(--mono);
+      }
+      .btn {
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        padding: 4px 10px;
+        color: var(--dim);
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--on-hue);
+        font-weight: 600;
+      }
+      .rung {
+        padding-left: 34px;
+        position: relative;
+      }
+      .rung::before {
+        content: attr(data-n);
+        position: absolute;
+        left: 13px;
+        color: var(--faint);
+        font: 400 11px/1 var(--mono);
+      }
+
+      .needs {
+        border: 1px solid var(--red-line);
+        border-radius: var(--r);
+        background: var(--red-fill);
+        overflow: hidden;
+      }
+      .needs > header {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 13px;
+        background: var(--red-fill-2);
+        border-bottom: 1px solid var(--red-line);
+        color: var(--red-ink);
+        font: 600 11px/1 var(--mono);
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+      }
+      .needs .in {
+        padding: 12px 13px 13px;
+      }
+      .needs p {
+        margin: 0 0 10px;
+      }
+      .acts {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .warnbox {
+        border: 1px solid var(--amber-line);
+        background: var(--amber-fill);
+        color: var(--amber-ink);
+        border-radius: var(--r);
+        padding: 8px 11px;
+        font-size: 12px;
+      }
+      .seg {
+        display: flex;
+        gap: 2px;
+      }
+      .seg i {
+        width: 11px;
+        height: 6px;
+        background: var(--lift-3);
+        display: block;
+      }
+      .seg i.m {
+        background: var(--green);
+      }
+      .seg i.n {
+        background: var(--accent);
+      }
+      .seg i.h {
+        background: var(--red);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="cap top">
+      <h2>Five theme options</h2>
+      <p>
+        The same overview screen, five times. Nothing here is interactive — scroll to compare. Each palette is six hues
+        plus a ground; every tint on the page is derived from those by <code>color-mix()</code>, so a theme is a token
+        swap.
+      </p>
+    </div>
+
+    <!-- A ------------------------------------------------------------- -->
+    <div class="cap">
+      <h2>A · Graphite</h2>
+      <p>
+        Warm neutral ground, the harness's own orange, square corners. The only one that speaks the same language as the
+        shared components in <code>styles.css</code>, which are already orange-on-graphite.
+      </p>
+    </div>
+    <div class="screen" data-theme="graphite">
+      <div class="bar">
+        <div class="brand">LubbDubb <span>demo</span></div>
+        <div class="read scan"><i>Scan</i><b>8s</b></div>
+        <div class="read"><i>Fleet</i><b>2/3</b></div>
+        <div class="spacer"></div>
+        <div class="read"><i>Spend</i><b>$1.15</b></div>
+        <div class="read"><i>Yield</i><b>83%</b></div>
+        <div class="read"><i>Faults</i><b>2</b></div>
+      </div>
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head">
+            <h3>Needs you</h3>
+            <span class="count">8</span>
+          </div>
+          <div class="rail-list">
+            <div class="grp">Blocking</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Plan</span><span class="age">35m ago</span></div>
+                <div>Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule.</div>
+                <div class="qmeta">#231</div>
+              </div>
+            </div>
+            <div class="q urgent">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Escalation</span><span class="age">27m ago</span></div>
+                <div>An assessment of #205 found the work done and the goal still not reached.</div>
+                <div class="qmeta">#205</div>
+              </div>
+            </div>
+            <div class="grp">Yours to do</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Bench</span><span class="age">43m ago</span></div>
+                <div>Point the staging database at the new schema</div>
+                <div class="qmeta">#212 · holding 1 part</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <main class="main">
+          <div class="tabs"><span class="tab on">Overview</span><span class="tab">Backlog</span></div>
+          <section class="needs">
+            <header>Needs you · Plan</header>
+            <div class="in">
+              <p>
+                Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it
+                as one PR.
+              </p>
+              <div class="acts">
+                <span class="btn primary">Approve plan</span><span class="btn">Reject</span
+                ><span class="age">recorded either way</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Fleet</h3>
+              <span class="pill">2 out</span>
+            </header>
+            <div class="row">
+              <span class="sq"></span>
+              <div class="t">
+                <b>Fix failing CI on PR #142</b>
+                <div>pr:142 — reworking the policy-evaluation fold · 31:16</div>
+              </div>
+              <div class="r"><span class="money">$0.84</span></div>
+            </div>
+            <div class="row">
+              <span class="sq g"></span>
+              <div class="t">
+                <b>Rebase PR #139 on main</b>
+                <div>pr:139 — three files conflict, working in order · 27:16</div>
+              </div>
+              <div class="r"><span class="money">$0.31</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Pull requests</h3>
+              <span class="pill">5 open</span>
+            </header>
+            <div class="chainhd">
+              <b>Stack of 2 · #212 Move the store behind a repository interface</b>
+              <span class="why">#144 CI failing · #143 → #144</span>
+              <span class="btn" style="margin-left: auto">Land the stack</span>
+            </div>
+            <div class="row rung" data-n="1">
+              <div class="t">
+                <b>#143 [2/3] route reads through the interface</b>
+                <div>#212 · issue/212/reads</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip you">You</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row rung" data-n="2">
+              <div class="t">
+                <b>#144 [3/3] route writes through the interface</b>
+                <div>issue/212/writes</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip">Elsewhere</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#142 Add rate limiting to the ingest API</b>
+                <div>feature/rate-limit</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip harness">Harness</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#139 Azure DevOps connector: reviewer votes → approval</b>
+                <div>feature/azure-approval</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip ok">Ready</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Goals in flight</h3>
+              <span class="pill">4</span>
+            </header>
+            <div class="row">
+              <div class="t">
+                <b>#212 Move the store behind a repository interface</b>
+                <div>5 parts · 1 merged · planning · 1 asking you</div>
+              </div>
+              <div class="r">
+                <span class="seg"><i class="m"></i><i class="n"></i><i class="n"></i><i class="h"></i><i></i></span
+                ><span class="chip you">You</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#844 Tokenise card entry</b>
+                <div>active</div>
+              </div>
+              <div class="r"><span class="chip harness">Harness</span></div>
+            </div>
+          </section>
+          <div class="warnbox">
+            Two agents wrote <code>src/store/store.ts</code> in the same cycle — #143 and #144 overlap on one file.
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- B ------------------------------------------------------------- -->
+    <div class="cap">
+      <h2>B · Blueprint</h2>
+      <p>
+        Deep navy, cyan accent. The smallest move from where the console is now: same darkness, colder and more
+        saturated, so the status hues sit further off the ground than they do today.
+      </p>
+    </div>
+    <div class="screen" data-theme="blueprint">
+      <div class="bar">
+        <div class="brand">LubbDubb <span>demo</span></div>
+        <div class="read scan"><i>Scan</i><b>8s</b></div>
+        <div class="read"><i>Fleet</i><b>2/3</b></div>
+        <div class="spacer"></div>
+        <div class="read"><i>Spend</i><b>$1.15</b></div>
+        <div class="read"><i>Yield</i><b>83%</b></div>
+        <div class="read"><i>Faults</i><b>2</b></div>
+      </div>
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head">
+            <h3>Needs you</h3>
+            <span class="count">8</span>
+          </div>
+          <div class="rail-list">
+            <div class="grp">Blocking</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Plan</span><span class="age">35m ago</span></div>
+                <div>Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule.</div>
+                <div class="qmeta">#231</div>
+              </div>
+            </div>
+            <div class="q urgent">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Escalation</span><span class="age">27m ago</span></div>
+                <div>An assessment of #205 found the work done and the goal still not reached.</div>
+                <div class="qmeta">#205</div>
+              </div>
+            </div>
+            <div class="grp">Yours to do</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Bench</span><span class="age">43m ago</span></div>
+                <div>Point the staging database at the new schema</div>
+                <div class="qmeta">#212 · holding 1 part</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <main class="main">
+          <div class="tabs"><span class="tab on">Overview</span><span class="tab">Backlog</span></div>
+          <section class="needs">
+            <header>Needs you · Plan</header>
+            <div class="in">
+              <p>
+                Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it
+                as one PR.
+              </p>
+              <div class="acts">
+                <span class="btn primary">Approve plan</span><span class="btn">Reject</span
+                ><span class="age">recorded either way</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Fleet</h3>
+              <span class="pill">2 out</span>
+            </header>
+            <div class="row">
+              <span class="sq"></span>
+              <div class="t">
+                <b>Fix failing CI on PR #142</b>
+                <div>pr:142 — reworking the policy-evaluation fold · 31:16</div>
+              </div>
+              <div class="r"><span class="money">$0.84</span></div>
+            </div>
+            <div class="row">
+              <span class="sq g"></span>
+              <div class="t">
+                <b>Rebase PR #139 on main</b>
+                <div>pr:139 — three files conflict, working in order · 27:16</div>
+              </div>
+              <div class="r"><span class="money">$0.31</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Pull requests</h3>
+              <span class="pill">5 open</span>
+            </header>
+            <div class="chainhd">
+              <b>Stack of 2 · #212 Move the store behind a repository interface</b>
+              <span class="why">#144 CI failing · #143 → #144</span>
+              <span class="btn" style="margin-left: auto">Land the stack</span>
+            </div>
+            <div class="row rung" data-n="1">
+              <div class="t">
+                <b>#143 [2/3] route reads through the interface</b>
+                <div>#212 · issue/212/reads</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip you">You</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row rung" data-n="2">
+              <div class="t">
+                <b>#144 [3/3] route writes through the interface</b>
+                <div>issue/212/writes</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip">Elsewhere</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#142 Add rate limiting to the ingest API</b>
+                <div>feature/rate-limit</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip harness">Harness</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#139 Azure DevOps connector: reviewer votes → approval</b>
+                <div>feature/azure-approval</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip ok">Ready</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Goals in flight</h3>
+              <span class="pill">4</span>
+            </header>
+            <div class="row">
+              <div class="t">
+                <b>#212 Move the store behind a repository interface</b>
+                <div>5 parts · 1 merged · planning · 1 asking you</div>
+              </div>
+              <div class="r">
+                <span class="seg"><i class="m"></i><i class="n"></i><i class="n"></i><i class="h"></i><i></i></span
+                ><span class="chip you">You</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#844 Tokenise card entry</b>
+                <div>active</div>
+              </div>
+              <div class="r"><span class="chip harness">Harness</span></div>
+            </div>
+          </section>
+          <div class="warnbox">
+            Two agents wrote <code>src/store/store.ts</code> in the same cycle — #143 and #144 overlap on one file.
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- C ------------------------------------------------------------- -->
+    <div class="cap">
+      <h2>C · Ember</h2>
+      <p>
+        Highest contrast of the five. Near-black ground, panels barely lifted off it, copper accent. The chrome recedes
+        almost to nothing, so the only bright things on the page are the rows carrying a status.
+      </p>
+    </div>
+    <div class="screen" data-theme="ember">
+      <div class="bar">
+        <div class="brand">LubbDubb <span>demo</span></div>
+        <div class="read scan"><i>Scan</i><b>8s</b></div>
+        <div class="read"><i>Fleet</i><b>2/3</b></div>
+        <div class="spacer"></div>
+        <div class="read"><i>Spend</i><b>$1.15</b></div>
+        <div class="read"><i>Yield</i><b>83%</b></div>
+        <div class="read"><i>Faults</i><b>2</b></div>
+      </div>
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head">
+            <h3>Needs you</h3>
+            <span class="count">8</span>
+          </div>
+          <div class="rail-list">
+            <div class="grp">Blocking</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Plan</span><span class="age">35m ago</span></div>
+                <div>Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule.</div>
+                <div class="qmeta">#231</div>
+              </div>
+            </div>
+            <div class="q urgent">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Escalation</span><span class="age">27m ago</span></div>
+                <div>An assessment of #205 found the work done and the goal still not reached.</div>
+                <div class="qmeta">#205</div>
+              </div>
+            </div>
+            <div class="grp">Yours to do</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Bench</span><span class="age">43m ago</span></div>
+                <div>Point the staging database at the new schema</div>
+                <div class="qmeta">#212 · holding 1 part</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <main class="main">
+          <div class="tabs"><span class="tab on">Overview</span><span class="tab">Backlog</span></div>
+          <section class="needs">
+            <header>Needs you · Plan</header>
+            <div class="in">
+              <p>
+                Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it
+                as one PR.
+              </p>
+              <div class="acts">
+                <span class="btn primary">Approve plan</span><span class="btn">Reject</span
+                ><span class="age">recorded either way</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Fleet</h3>
+              <span class="pill">2 out</span>
+            </header>
+            <div class="row">
+              <span class="sq"></span>
+              <div class="t">
+                <b>Fix failing CI on PR #142</b>
+                <div>pr:142 — reworking the policy-evaluation fold · 31:16</div>
+              </div>
+              <div class="r"><span class="money">$0.84</span></div>
+            </div>
+            <div class="row">
+              <span class="sq g"></span>
+              <div class="t">
+                <b>Rebase PR #139 on main</b>
+                <div>pr:139 — three files conflict, working in order · 27:16</div>
+              </div>
+              <div class="r"><span class="money">$0.31</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Pull requests</h3>
+              <span class="pill">5 open</span>
+            </header>
+            <div class="chainhd">
+              <b>Stack of 2 · #212 Move the store behind a repository interface</b>
+              <span class="why">#144 CI failing · #143 → #144</span>
+              <span class="btn" style="margin-left: auto">Land the stack</span>
+            </div>
+            <div class="row rung" data-n="1">
+              <div class="t">
+                <b>#143 [2/3] route reads through the interface</b>
+                <div>#212 · issue/212/reads</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip you">You</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row rung" data-n="2">
+              <div class="t">
+                <b>#144 [3/3] route writes through the interface</b>
+                <div>issue/212/writes</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip">Elsewhere</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#142 Add rate limiting to the ingest API</b>
+                <div>feature/rate-limit</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip harness">Harness</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#139 Azure DevOps connector: reviewer votes → approval</b>
+                <div>feature/azure-approval</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip ok">Ready</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Goals in flight</h3>
+              <span class="pill">4</span>
+            </header>
+            <div class="row">
+              <div class="t">
+                <b>#212 Move the store behind a repository interface</b>
+                <div>5 parts · 1 merged · planning · 1 asking you</div>
+              </div>
+              <div class="r">
+                <span class="seg"><i class="m"></i><i class="n"></i><i class="n"></i><i class="h"></i><i></i></span
+                ><span class="chip you">You</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#844 Tokenise card entry</b>
+                <div>active</div>
+              </div>
+              <div class="r"><span class="chip harness">Harness</span></div>
+            </div>
+          </section>
+          <div class="warnbox">
+            Two agents wrote <code>src/store/store.ts</code> in the same cycle — #143 and #144 overlap on one file.
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- D ------------------------------------------------------------- -->
+    <div class="cap">
+      <h2>D · Slate</h2>
+      <p>
+        Cool neutral ground, a single green accent, and no second chroma anywhere it is not saying something. The
+        quietest of the five: the page reads as grey until something is wrong.
+      </p>
+    </div>
+    <div class="screen" data-theme="slate">
+      <div class="bar">
+        <div class="brand">LubbDubb <span>demo</span></div>
+        <div class="read scan"><i>Scan</i><b>8s</b></div>
+        <div class="read"><i>Fleet</i><b>2/3</b></div>
+        <div class="spacer"></div>
+        <div class="read"><i>Spend</i><b>$1.15</b></div>
+        <div class="read"><i>Yield</i><b>83%</b></div>
+        <div class="read"><i>Faults</i><b>2</b></div>
+      </div>
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head">
+            <h3>Needs you</h3>
+            <span class="count">8</span>
+          </div>
+          <div class="rail-list">
+            <div class="grp">Blocking</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Plan</span><span class="age">35m ago</span></div>
+                <div>Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule.</div>
+                <div class="qmeta">#231</div>
+              </div>
+            </div>
+            <div class="q urgent">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Escalation</span><span class="age">27m ago</span></div>
+                <div>An assessment of #205 found the work done and the goal still not reached.</div>
+                <div class="qmeta">#205</div>
+              </div>
+            </div>
+            <div class="grp">Yours to do</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Bench</span><span class="age">43m ago</span></div>
+                <div>Point the staging database at the new schema</div>
+                <div class="qmeta">#212 · holding 1 part</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <main class="main">
+          <div class="tabs"><span class="tab on">Overview</span><span class="tab">Backlog</span></div>
+          <section class="needs">
+            <header>Needs you · Plan</header>
+            <div class="in">
+              <p>
+                Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it
+                as one PR.
+              </p>
+              <div class="acts">
+                <span class="btn primary">Approve plan</span><span class="btn">Reject</span
+                ><span class="age">recorded either way</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Fleet</h3>
+              <span class="pill">2 out</span>
+            </header>
+            <div class="row">
+              <span class="sq"></span>
+              <div class="t">
+                <b>Fix failing CI on PR #142</b>
+                <div>pr:142 — reworking the policy-evaluation fold · 31:16</div>
+              </div>
+              <div class="r"><span class="money">$0.84</span></div>
+            </div>
+            <div class="row">
+              <span class="sq g"></span>
+              <div class="t">
+                <b>Rebase PR #139 on main</b>
+                <div>pr:139 — three files conflict, working in order · 27:16</div>
+              </div>
+              <div class="r"><span class="money">$0.31</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Pull requests</h3>
+              <span class="pill">5 open</span>
+            </header>
+            <div class="chainhd">
+              <b>Stack of 2 · #212 Move the store behind a repository interface</b>
+              <span class="why">#144 CI failing · #143 → #144</span>
+              <span class="btn" style="margin-left: auto">Land the stack</span>
+            </div>
+            <div class="row rung" data-n="1">
+              <div class="t">
+                <b>#143 [2/3] route reads through the interface</b>
+                <div>#212 · issue/212/reads</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip you">You</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row rung" data-n="2">
+              <div class="t">
+                <b>#144 [3/3] route writes through the interface</b>
+                <div>issue/212/writes</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip">Elsewhere</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#142 Add rate limiting to the ingest API</b>
+                <div>feature/rate-limit</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip harness">Harness</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#139 Azure DevOps connector: reviewer votes → approval</b>
+                <div>feature/azure-approval</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip ok">Ready</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Goals in flight</h3>
+              <span class="pill">4</span>
+            </header>
+            <div class="row">
+              <div class="t">
+                <b>#212 Move the store behind a repository interface</b>
+                <div>5 parts · 1 merged · planning · 1 asking you</div>
+              </div>
+              <div class="r">
+                <span class="seg"><i class="m"></i><i class="n"></i><i class="n"></i><i class="h"></i><i></i></span
+                ><span class="chip you">You</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#844 Tokenise card entry</b>
+                <div>active</div>
+              </div>
+              <div class="r"><span class="chip harness">Harness</span></div>
+            </div>
+          </section>
+          <div class="warnbox">
+            Two agents wrote <code>src/store/store.ts</code> in the same cycle — #143 and #144 overlap on one file.
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- E ------------------------------------------------------------- -->
+    <div class="cap">
+      <h2>E · Nocturne</h2>
+      <p>
+        Indigo-black, violet accent, soft 10px corners. The least instrument-like of the five — it reads as an
+        application rather than a panel, which is either the point or the objection.
+      </p>
+    </div>
+    <div class="screen" data-theme="nocturne">
+      <div class="bar">
+        <div class="brand">LubbDubb <span>demo</span></div>
+        <div class="read scan"><i>Scan</i><b>8s</b></div>
+        <div class="read"><i>Fleet</i><b>2/3</b></div>
+        <div class="spacer"></div>
+        <div class="read"><i>Spend</i><b>$1.15</b></div>
+        <div class="read"><i>Yield</i><b>83%</b></div>
+        <div class="read"><i>Faults</i><b>2</b></div>
+      </div>
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head">
+            <h3>Needs you</h3>
+            <span class="count">8</span>
+          </div>
+          <div class="rail-list">
+            <div class="grp">Blocking</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Plan</span><span class="age">35m ago</span></div>
+                <div>Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule.</div>
+                <div class="qmeta">#231</div>
+              </div>
+            </div>
+            <div class="q urgent">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Escalation</span><span class="age">27m ago</span></div>
+                <div>An assessment of #205 found the work done and the goal still not reached.</div>
+                <div class="qmeta">#205</div>
+              </div>
+            </div>
+            <div class="grp">Yours to do</div>
+            <div class="q">
+              <span class="stripe"></span>
+              <div class="qin">
+                <div class="qkind"><span class="tag">Bench</span><span class="age">43m ago</span></div>
+                <div>Point the staging database at the new schema</div>
+                <div class="qmeta">#212 · holding 1 part</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <main class="main">
+          <div class="tabs"><span class="tab on">Overview</span><span class="tab">Backlog</span></div>
+          <section class="needs">
+            <header>Needs you · Plan</header>
+            <div class="in">
+              <p>
+                Issue #231 was decomposed into 3 parts: signer, route, mint. Approve to schedule, or reject to keep it
+                as one PR.
+              </p>
+              <div class="acts">
+                <span class="btn primary">Approve plan</span><span class="btn">Reject</span
+                ><span class="age">recorded either way</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Fleet</h3>
+              <span class="pill">2 out</span>
+            </header>
+            <div class="row">
+              <span class="sq"></span>
+              <div class="t">
+                <b>Fix failing CI on PR #142</b>
+                <div>pr:142 — reworking the policy-evaluation fold · 31:16</div>
+              </div>
+              <div class="r"><span class="money">$0.84</span></div>
+            </div>
+            <div class="row">
+              <span class="sq g"></span>
+              <div class="t">
+                <b>Rebase PR #139 on main</b>
+                <div>pr:139 — three files conflict, working in order · 27:16</div>
+              </div>
+              <div class="r"><span class="money">$0.31</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Pull requests</h3>
+              <span class="pill">5 open</span>
+            </header>
+            <div class="chainhd">
+              <b>Stack of 2 · #212 Move the store behind a repository interface</b>
+              <span class="why">#144 CI failing · #143 → #144</span>
+              <span class="btn" style="margin-left: auto">Land the stack</span>
+            </div>
+            <div class="row rung" data-n="1">
+              <div class="t">
+                <b>#143 [2/3] route reads through the interface</b>
+                <div>#212 · issue/212/reads</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip you">You</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row rung" data-n="2">
+              <div class="t">
+                <b>#144 [3/3] route writes through the interface</b>
+                <div>issue/212/writes</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip">Elsewhere</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#142 Add rate limiting to the ingest API</b>
+                <div>feature/rate-limit</div>
+              </div>
+              <div class="r">
+                <span class="lamp off"></span><span class="chip harness">Harness</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#139 Azure DevOps connector: reviewer votes → approval</b>
+                <div>feature/azure-approval</div>
+              </div>
+              <div class="r">
+                <span class="lamp"></span><span class="chip ok">Ready</span><span class="btn">Ignore</span>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <header>
+              <h3>Goals in flight</h3>
+              <span class="pill">4</span>
+            </header>
+            <div class="row">
+              <div class="t">
+                <b>#212 Move the store behind a repository interface</b>
+                <div>5 parts · 1 merged · planning · 1 asking you</div>
+              </div>
+              <div class="r">
+                <span class="seg"><i class="m"></i><i class="n"></i><i class="n"></i><i class="h"></i><i></i></span
+                ><span class="chip you">You</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="t">
+                <b>#844 Tokenise card entry</b>
+                <div>active</div>
+              </div>
+              <div class="r"><span class="chip harness">Harness</span></div>
+            </div>
+          </section>
+          <div class="warnbox">
+            Two agents wrote <code>src/store/store.ts</code> in the same cycle — #143 and #144 overlap on one file.
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div class="cap" style="padding-bottom: 40px">
+      <p>
+        Whichever wins, the prerequisite is the same: <code>console.css</code> currently carries ~60 colour literals
+        beside its <code>--cn-*</code> tokens. Re-expressing those as mixes of a hue with the ground — the block at the
+        top of this file — is the actual work. After that a theme is fifteen lines.
+      </p>
+    </div>
+  </body>
+</html>

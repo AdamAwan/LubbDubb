@@ -76,9 +76,25 @@ covers `--r-*` (radius), `--font-ui|mono|display`, and `--border-hi`/`--border-l
 that makes a bevel expressible.
 
 The console's own colours are `--cn-*` properties on `:root` in `console.css` — a separate prefix so
-the two sheets cannot collide while both are loaded, and custom properties rather than literals at
-each use site because **no visual theme is settled**: the palette ported from the mockup is a
-placeholder, and the point of the token seam is that replacing it is one block.
+the two sheets cannot collide while both are loaded.
+
+**The theme is Ember**, and both sheets carry it: a near-black ground, panels lifted off it by barely a
+value step, copper as the one accent. Chrome recedes almost to invisibility on purpose — a page of rows
+carrying nothing should read as unlit, so the row that _is_ carrying a status is the only bright thing
+on it.
+
+**A palette is six values; every tint is derived from them.** `--cn-bg`, three foreground steps and
+five hues are the whole of what a theme states. The border, wash and lettering each hue needs are then
+`color-mix` of that hue with the surface it sits on — `--cn-red-line` against the panel,
+`--cn-red-fill` over the ground, `--cn-red-ink` against the foreground, and `--cn-*-fill-2` for the
+heavier wash a header takes over its own card; `--cn-lift*` and `--cn-line-hi` do the same for
+surfaces raised off a panel. `styles.css` derives its own tints the same way from the same palette, so
+a shared component and the console panel around it move together.
+
+This is what makes re-theming one block rather than an audit. It replaced sixty colour literals written
+at their use sites — each one a separate opinion about how far a red sits off the ground, drifting from
+its neighbours one edit at a time, and none of them findable except by grep. **A new tint is a token
+derived beside the others, never a literal at a rule.**
 
 `console.css` is imported from `main.tsx`, not from a module under `console/`. A `.css` import there
 would be invisible to `tsx`, which has no CSS loader and would throw when `test/console.test.ts` pulls
