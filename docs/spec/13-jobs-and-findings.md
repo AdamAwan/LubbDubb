@@ -96,6 +96,12 @@ cut dispatches them first: a manual request takes the next free slot. A job belo
 - **No cooldown throttle applies** — a job is a one-shot request, not a persistent signal.
 - The emitted action carries `jobId`, and the executor calls `Store.markJobDispatched(jobId, task.id)`
   **only after** the agent actually spawns, so a job the cap or pause gate held stays `queued`.
+- A dispatch that **throws** — a worktree `ensure` that fails, a session that will not start — also
+  leaves the job `queued`, and the executor settles the task row it had already written so the job's
+  own `job:<id>` origin is claimable again next cycle. Without that settlement a job is retried
+  forever against a claim only it holds, and the harness reports "nothing actionable" while its queue
+  stands still; see
+  [09 — A failed dispatch settles its task row](09-execution.md#a-failed-dispatch-settles-its-task-row).
 
 ### Standing in for another origin
 

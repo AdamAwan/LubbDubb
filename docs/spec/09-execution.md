@@ -68,7 +68,8 @@ also advertises zero headroom while paused, so this is belt and braces.
 
 ### 5. Spawn
 
-`materializeTask(action)` then `agents.spawn(task, cwd)`. On success:
+`recordDispatchTask(action)`, then `workingDirectory(task, action)`, then `agents.spawn(task, cwd)`. On
+success:
 
 - `liveCount` increments.
 - `if (action.jobId) store.markJobDispatched(jobId, task.id)`.
@@ -77,9 +78,40 @@ also advertises zero headroom while paused, so this is belt and braces.
 Both marks happen **only after the agent actually spawns**, so a dispatch the cap or pause gate held
 leaves the job `queued` and the part `ready` for a later cycle.
 
-A throw from either step is caught and audited as `rejected: Failed to start agent: <message>`.
+A throw from any of the three steps is caught and audited as
+`rejected: Failed to start agent: <message>`, and the task row the dispatch already wrote is settled —
+see [A failed dispatch settles its task row](#a-failed-dispatch-settles-its-task-row).
+
+### A failed dispatch settles its task row
+
+A dispatch that throws after `recordDispatchTask` leaves a task row behind, and that row is **not**
+inert: `queued` is deliberately an active status (`src/tasks.ts`), because the row is written before
+the worktree and the agent exist and has to hold the claim across that window. Left alone it is a
+permanent claim on
+
+- its **origin** — `findActiveTaskByOrigin` and the dispatcher's `activeOrigins`,
+- its **branch** — `findActiveTaskByBranch`,
+- and, when the dispatch came from a job, **whatever that job stands in for**. The claim on
+  `job:<id>` is what stops rule `manual-job` re-dispatching it, so the job never leaves `queued` — and
+  a queued job with an `originRef` stands in for that origin (`STANDING_SQL`, `src/store/jobs.ts`),
+  which wedges a second piece of work behind the first. The same holds down the other arm of that
+  query: a `dispatched` job whose task is active keeps standing for its origin.
+
+So `ActionExecutor.abandonUnstarted(task)` settles it as **`interrupted`** — the word a recovery
+`remove` verdict already writes for work that was claimed and never done — which is terminal to all
+three gates. Only when the row is still active: `AgentManager.spawn` settles its own task as `failed`
+when the session fails to start, which is a more specific reading of the same failure and is not
+overwritten.
+
+Nothing else is unwound, because nothing else was done: `markJobDispatched` and `markPartDispatched`
+run only after the spawn, so the job is still `queued` and the part still `ready`, and the next cycle
+re-dispatches the same work. One transient `worktrees.ensure` failure therefore costs a cycle rather
+than wedging a chain of work shut for the life of the database (`test/dispatchFailure.test.ts`).
 
 ## Task materialisation
+
+The row and the directory are separate steps, so the executor holds the created task when the
+directory step throws and can settle it:
 
 - **Code** — `store.createTask({kind:'code', …, branch})`, then
   `worktrees.ensure(action.branch, action.base ?? defaultBranch)`. A stacked plan part names the branch
@@ -232,7 +264,7 @@ reason was already captured, rendered into a hold string and written to the audi
 no agent at all, so refusing a draft with *"too defensive — just fix the lint"* left the next agent on
 `pr:<n>:comment:<id>` starting from the prompt that produced the draft you refused.
 
-`materializeTask` appends it to the dispatch prompt when the standing verdict for the action's
+`recordDispatchTask` appends it to the dispatch prompt when the standing verdict for the action's
 **exact** origin ref is a rejection carrying a note.
 
 - **In the executor, not the dispatcher.** Every dispatch passes here whatever composed it, so the
@@ -260,7 +292,7 @@ missing; it was in the store, and nothing handed it over. The scratchpad's own d
 "for whoever works this goal next", and its only reader was the retrospective — the one agent on a goal
 that does none of the work.
 
-`materializeTask` appends `priorWorkBriefing(...)` (`src/briefing/priorWork.ts`, pure) to the dispatch
+`recordDispatchTask` appends `priorWorkBriefing(...)` (`src/briefing/priorWork.ts`, pure) to the dispatch
 prompt.
 
 - **Only what no prompt already renders.** The rule that stops it becoming a second account of things
@@ -298,7 +330,7 @@ which while the request is a blueprint is `job:<id>` and afterwards is the `issu
 was filed as. See [14](14-persistence.md#blueprint-attachments) for the rows and the re-key, and
 [16](16-http-api.md#launching-a-blueprint) for how they arrive.
 
-`materializeTask` appends `attachmentsNote(...)` (`src/jobs/attachments.ts`, pure) to the dispatch
+`recordDispatchTask` appends `attachmentsNote(...)` (`src/jobs/attachments.ts`, pure) to the dispatch
 prompt: one line per image giving its **absolute path**, the mime **sniffed from its bytes**, and the
 operator's own filename as a label.
 

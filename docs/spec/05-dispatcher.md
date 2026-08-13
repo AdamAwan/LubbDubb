@@ -646,7 +646,7 @@ dropped by exactly the overrides that customised most:
    pulse already wrote and derives no verdicts**: a fold that computed one would be a second opinion
    about a decision made somewhere else.
 
-Assembled in `ActionExecutor.materializeTask` for the branch gate's reason — every dispatch passes
+Assembled in `ActionExecutor.recordDispatchTask` for the branch gate's reason — every dispatch passes
 through it — and keyed on the exact retro origin, so a finished goal's audit trail never lands in
 front of an agent dispatched to fix CI.
 

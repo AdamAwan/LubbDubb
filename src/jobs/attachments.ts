@@ -120,7 +120,7 @@ export function prepareAttachments(inputs: JobAttachmentInput[] | undefined): Pr
  * What a dispatched agent is told about the images the operator attached.
  *
  * **Appended to the rendered prompt, never filled into it** — the rule every
- * other briefing in `materializeTask` follows, and for the same reason: templates
+ * other briefing in `recordDispatchTask` follows, and for the same reason: templates
  * are operator-overridable and the loader rejects only *unknown* placeholders, so
  * an override that never learned about an `{attachments}` token would drop the
  * screenshot on exactly the deployments that customised most.

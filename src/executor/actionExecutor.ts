@@ -30,6 +30,7 @@ import { retroSubmitOrigin } from '../retro/retro.js';
 import { padTestimony, retroDossier } from '../retro/dossier.js';
 import { priorWorkBriefing } from '../briefing/priorWork.js';
 import { padOriginFor } from '../scratch/pad.js';
+import { isActiveTask } from '../tasks.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
 interface ExecutorDeps {
@@ -157,8 +158,12 @@ export class ActionExecutor {
             record('deferred', `Deferred: concurrency cap ${this.deps.runtime.cap} reached; will retry next cycle.`);
             break;
           }
+          // Held outside the `try` so the catch can settle a row the throw left
+          // behind — see {@link ActionExecutor.abandonUnstarted}.
+          let task: Task | null = null;
           try {
-            const { task, cwd } = await this.materializeTask(action);
+            task = this.recordDispatchTask(action);
+            const cwd = await this.workingDirectory(task, action);
             this.deps.agents.spawn(task, cwd);
             liveCount += 1;
             // An operator-launched job leaves the queue only once its agent is
@@ -174,6 +179,7 @@ export class ActionExecutor {
               `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`,
             );
           } catch (err) {
+            if (task) this.abandonUnstarted(task);
             record('rejected', `Failed to start agent: ${(err as Error).message}`);
           }
           break;
@@ -569,8 +575,40 @@ export class ActionExecutor {
   }
 
   /**
-   * Create the task row and its working directory (worktree for code, scratch for
-   * desk) — and the one place a dispatch prompt picks up what an operator said
+   * Settle a task row whose dispatch threw before its agent ever ran.
+   *
+   * **This is the whole reason the row is settled rather than left alone.**
+   * `queued` is deliberately an *active* status (`src/tasks.ts`), because the row
+   * is written before the worktree and the agent exist and must hold the claim
+   * across that window. So a row nothing ever started is not inert: it is a
+   * permanent claim on its origin (`findActiveTaskByOrigin`, the dispatcher's
+   * `activeOrigins`) and on its branch (`findActiveTaskByBranch`) — and the claim
+   * on `job:<id>` is what stops the job re-dispatching, which leaves it `queued`,
+   * which keeps it standing in for whatever *it* redoes (`STANDING_SQL` in
+   * `src/store/jobs.ts`), wedging a second piece of work behind the first. One
+   * transient `ensure` failure otherwise shuts a chain of work for the life of the
+   * database against an idle fleet, with the harness reporting "nothing
+   * actionable" every cycle.
+   *
+   * `interrupted` is the word a recovery `remove` verdict already writes for work
+   * that was claimed and never done (`src/agents/recoveryDesk.ts`), and it is
+   * terminal to all three gates, so nothing re-reads the row as in flight. The job
+   * or plan part behind the dispatch is untouched: `markJobDispatched` /
+   * `markPartDispatched` only run after the spawn, so both are still queued/ready
+   * and the next cycle re-dispatches them.
+   *
+   * Conditional on the row still being active, because
+   * {@link AgentManager.spawn} settles its own task as `failed` when the session
+   * fails to start — a more specific reading of the same failure, which this must
+   * not overwrite.
+   */
+  private abandonUnstarted(task: Task): void {
+    const current = this.deps.store.getTask(task.id);
+    if (current && isActiveTask(current)) this.deps.store.updateTask(task.id, { status: 'interrupted' });
+  }
+
+  /**
+   * Create the task row — and the one place a dispatch prompt picks up what an operator said
    * when they refused an act for this exact origin (issue #109 phase 4).
    *
    * It happens here, not in the dispatcher that composed the prompt, for the
@@ -586,9 +624,7 @@ export class ActionExecutor {
    * drop a human's words — and it would drop them on exactly the deployments that
    * customised the prompt most. Appending has no fallback to get wrong.
    */
-  private async materializeTask(
-    action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
-  ): Promise<{ task: Task; cwd: string }> {
+  private recordDispatchTask(action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' }): Task {
     const { store } = this.deps;
     // The origin *and* the signals folded under it: a review-comment dispatch
     // names the PR's whole review, while a refused reply draft is filed against
@@ -620,8 +656,8 @@ export class ActionExecutor {
     // exact origin — see `attachmentsFor`.
     const attachments = attachmentsFor(action.originRef, store);
     const prompt = [action.prompt, guidance, outstanding, prior, briefing, attachments].filter(Boolean).join('\n\n');
-    if (action.type === 'dispatch_code_agent') {
-      const task = store.createTask({
+    if (action.type === 'dispatch_code_agent')
+      return store.createTask({
         kind: 'code',
         title: action.title,
         prompt,
@@ -636,12 +672,7 @@ export class ActionExecutor {
         rule: action.rule,
         ciChecks: action.ciChecks ?? null,
       });
-      // A stacked plan part names the branch it forks from; everything else takes
-      // the configured integration branch.
-      const cwd = await this.deps.worktrees.ensure(action.branch, action.base ?? this.deps.defaultBranch);
-      return { task, cwd };
-    }
-    const task = store.createTask({
+    return store.createTask({
       kind: 'desk',
       title: action.title,
       prompt,
@@ -652,9 +683,31 @@ export class ActionExecutor {
       dispatchReason: action.reason,
       rule: action.rule,
     });
+  }
+
+  /**
+   * The directory the agent will run in: the branch's worktree for code, a
+   * per-task scratch directory for desk.
+   *
+   * Split from {@link ActionExecutor.recordDispatchTask} so the two steps a
+   * dispatch can fail at — writing the row, and preparing the place — are
+   * separately observable at the one call site. That is what lets the caller hold
+   * the created task and settle it when this throws; a single method that did both
+   * has nothing to hand back on the failing path, which is how a transient
+   * `ensure` failure (an `EBUSY` rmdir on Windows) left a live `queued` row
+   * wedging its origin and branch for good.
+   */
+  private async workingDirectory(
+    task: Task,
+    action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
+  ): Promise<string> {
+    // A stacked plan part names the branch it forks from; everything else takes
+    // the configured integration branch.
+    if (action.type === 'dispatch_code_agent')
+      return this.deps.worktrees.ensure(action.branch, action.base ?? this.deps.defaultBranch);
     const cwd = resolve(this.deps.deskRoot, task.id);
     mkdirSync(cwd, { recursive: true });
-    return { task, cwd };
+    return cwd;
   }
 }
 
