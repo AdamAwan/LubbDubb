@@ -136,6 +136,37 @@ test('recovery sorts above everything, because no pulse runs while it is up', ()
   assert.equal(rows[0]?.goalRef, null);
 });
 
+test('an ask opens its goal when that goal has a page, and the ask panel when it does not', () => {
+  const state = buildDemoState();
+  const known = state.world.issues[0];
+  assert.ok(known, 'the demo fixtures must carry an issue');
+
+  const rows = buildNeedsYou(
+    stateWith({
+      ...state,
+      escalations: [
+        escalation({ id: 'on-goal', agentId: 'a1', context: { originRef: `issue:${known.number}` } }),
+        // A pull request is not a goal, so there is no page to answer this on.
+        escalation({ id: 'on-pr', agentId: 'a2', context: { originRef: 'pr:142' } }),
+        // A goal-shaped ref the world does not carry: `buildGoalPage` returns
+        // null for it, so routing on the ref alone opens an empty surface.
+        escalation({ id: 'on-ghost', agentId: 'a3', context: { originRef: 'issue:99999' } }),
+      ],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      tasks: [],
+    }),
+  );
+  const opens = new Map(rows.map((r) => [r.id, r.opens]));
+
+  assert.equal(opens.get('on-goal'), 'goal');
+  assert.equal(opens.get('on-pr'), 'ask');
+  assert.equal(opens.get('on-ghost'), 'ask');
+  // The ghost keeps saying which goal it names — only where it *goes* changes.
+  assert.equal(rows.find((r) => r.id === 'on-ghost')?.goalRef, 'issue:99999');
+});
+
 test('a permission request is its own kind, not a plain escalation', () => {
   const rows = buildNeedsYou(
     stateWith({

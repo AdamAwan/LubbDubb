@@ -4,8 +4,14 @@ import type { RecoveryVerdict, WorkNodeView } from '../types.js';
  * Which full-surface panel is in front. One value rather than a boolean each: a
  * boolean per panel admits far more states than there are, and two panels in
  * front at once is not something this layout can draw.
+ *
+ * `{ ask }` carries the queue row it is showing, for an ask with no goal page to
+ * be answered on — a pull request's escalation, a bench task with no ticket. It
+ * rides in this same value rather than beside it so that "two at once" stays
+ * unrepresentable: a second field would let an ask and the fault log both be in
+ * front, which is the state this type exists to rule out.
  */
-export type ConsolePanel = 'findings' | 'faults' | 'output' | 'launch' | null;
+export type ConsolePanel = 'findings' | 'faults' | 'output' | 'launch' | { ask: string } | null;
 
 /**
  * Which destination the situation area is on. One value rather than a boolean

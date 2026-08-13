@@ -9,6 +9,7 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { GoalPartView } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
+import { KIND_LABEL } from '../web/src/console/QueueRail.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
 // `React.createElement`; the bundle uses the automatic one. The global goes in
@@ -268,7 +269,7 @@ test('the rail renders array order within a group, never a re-sort', () => {
   assert.ok(lowPos < highPos, 'the blocking group must keep array order, not re-sort by holding');
 });
 
-test('a row with a goalRef is a button; the recovery hold (no goalRef) is not', () => {
+test('every row that opens something is a button; only the recovery hold is not', () => {
   const rows = [
     {
       id: 'clickable',
@@ -276,8 +277,23 @@ test('a row with a goalRef is a button; the recovery hold (no goalRef) is not', 
       group: 'blocking',
       title: 'Opens a goal',
       goalRef: 'issue:9',
+      opens: 'goal',
       agentId: 'a1',
       holding: 1,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      // The escalation a pull request raised: no goal page to be answered on, so
+      // it opens the ask panel. Before that destination existed it drew as a
+      // `div` and a click on it did nothing at all.
+      id: 'no-goal',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'Opens the ask panel',
+      goalRef: null,
+      opens: 'ask',
+      agentId: 'a3',
+      holding: 0,
       raisedAt: '2026-01-01T00:00:00.000Z',
     },
     {
@@ -286,6 +302,7 @@ test('a row with a goalRef is a button; the recovery hold (no goalRef) is not', 
       group: 'blocking',
       title: 'Answered on the banner above',
       goalRef: null,
+      opens: null,
       agentId: null,
       holding: 0,
       raisedAt: '',
@@ -314,11 +331,16 @@ test('a row with a goalRef is a button; the recovery hold (no goalRef) is not', 
     return tag;
   };
 
-  assert.equal(rowWrapper('Opens a goal'), 'button', 'a row with a goalRef is a button');
+  assert.equal(rowWrapper('Opens a goal'), 'button', 'a row that opens a goal is a button');
+  assert.equal(
+    rowWrapper('Opens the ask panel'),
+    'button',
+    'an ask with no goal page still has somewhere to go, so it is a button',
+  );
   assert.equal(
     rowWrapper('Answered on the banner above'),
     'div',
-    'the recovery row has no goalRef and must not be wrapped in a button',
+    'the recovery row opens nothing and must not be wrapped in a button',
   );
 });
 
@@ -650,6 +672,29 @@ test('a reading opens the panel behind it, in front of the console', () => {
     assert.ok(html.includes('cn-backdrop'), `${String(panel)} must draw in front of the console`);
     assert.ok(html.includes(`<h2>${title}</h2>`), `${String(panel)} must name itself`);
   }
+});
+
+test('an ask with no goal page is answered in the ask panel', () => {
+  const v = view();
+  const row = v.needsYou.find((n) => n.opens === 'ask' && n.kind !== 'bench' && n.kind !== 'close_out');
+  assert.ok(row, 'the demo fixtures must carry an escalation whose origin is not a goal');
+
+  const html = render(view({ consolePanel: { ask: row.id } }));
+  assert.ok(html.includes('cn-backdrop'), 'the ask must draw in front of the console');
+  assert.ok(html.includes(`<h2>Needs you · ${KIND_LABEL[row.kind]}</h2>`), 'the panel names the ask the rail named');
+  // The shared card, not a second wiring: its own controls are what answer the ask.
+  assert.ok(html.includes('escalation-prompt'), 'the panel embeds the shared escalation card');
+});
+
+test('the ask panel closes itself once the row it was drawing is settled', () => {
+  const v = view();
+  const row = v.needsYou.find((n) => n.opens === 'ask');
+  assert.ok(row, 'the demo fixtures must carry an ask with no goal page');
+
+  // What answering it looks like in the next snapshot: the row is gone from the
+  // queue, so a panel still holding its id has nothing left to offer a verdict on.
+  const html = render({ ...v, consolePanel: { ask: row.id }, needsYou: v.needsYou.filter((n) => n.id !== row.id) });
+  assert.ok(!html.includes('cn-backdrop'), 'a settled ask must not leave a panel standing');
 });
 
 test('injection rides in the launch panel, and the demo build is the whole of it', () => {

@@ -1,17 +1,13 @@
-import { useState, type JSX, type ReactNode } from 'react';
+import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, PartGroup } from '../view/goalPage.js';
-import type { NeedRow } from '../view/needsYou.js';
 import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
-import { EscalationCard } from '../components/EscalationCard.js';
-import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
-import { renderMarkdown } from '../components/markdown.js';
 import { renderRichText } from '../components/richText.js';
 import { fmtUsd, refLink, relTime } from '../components/util.js';
 import { watchBucket } from '../worldBuckets.js';
-import { KIND_LABEL, holdingLabel } from './QueueRail.js';
+import { NeedsBand } from './NeedsBand.js';
 
 /**
  * One goal, with what it wants from you pinned above everything it is doing.
@@ -211,86 +207,6 @@ function Header({
         />
       )}
     </div>
-  );
-}
-
-/**
- * One open ask, pinned. Red when an agent is parked on it, amber when the
- * obligation is only the operator's — the rail's own split, carried over so the
- * row and the band it opens read the same.
- *
- * The band draws nothing at all when the row's source is gone from the snapshot.
- * A header over an empty box would claim something is waiting while offering no
- * way to answer it.
- */
-function NeedsBand({
-  row,
-  view,
-  actions,
-}: {
-  row: NeedRow;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element | null {
-  const body = bandBody(row, view, actions);
-  if (body === null) return null;
-  return (
-    <div className={`cn-needs ${row.group === 'blocking' ? '' : 'cn-soft'}`}>
-      <header>
-        Needs you · {KIND_LABEL[row.kind]}
-        <span className="cn-age">
-          {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}
-          {row.holding > 0 && ` · ${holdingLabel(row.holding)}`}
-        </span>
-      </header>
-      <div className="cn-in">{body}</div>
-    </div>
-  );
-}
-
-/**
- * What answers this ask — the shared component that owns its verdict, wired the
- * way the stamp desk and the bench wire it. `buttonClass` is the one seam a
- * station passes, so the console's buttons and a modal's are one component
- * wearing two faces.
- */
-function bandBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
-  if (row.kind === 'bench' || row.kind === 'close_out') {
-    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
-    if (!task) return null;
-    return (
-      <>
-        <p>{task.title}</p>
-        {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
-        <div className="cn-acts">
-          <HumanTaskActions
-            task={task}
-            buttonClass="cn-btn"
-            onDone={(id) => actions.completeHumanTask(id)}
-            onDecline={(id, note) => actions.declineHumanTask(id, note)}
-          />
-        </div>
-      </>
-    );
-  }
-  const escalation = view.state.escalations.find((e) => e.id === row.id);
-  if (!escalation) return null;
-  return (
-    <EscalationCard
-      escalation={escalation}
-      proposal={view.proposalFor.get(escalation.id)}
-      resumedAt={escalation.agentId ? (view.agentById.get(escalation.agentId)?.resumedAt ?? null) : null}
-      now={view.now}
-      refUrls={view.state.refUrls}
-      onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
-      onAnswerQuestions={(answers) => actions.answerQuestions(escalation.id, answers)}
-      onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
-      onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
-      onDismiss={(id, note) => actions.dismissEscalation(id, note)}
-      onOpenAgent={(id) => actions.select(id)}
-      onComplete={(id) => actions.completeAgent(id)}
-      onViewPlan={(id) => actions.viewPlan(id)}
-    />
   );
 }
 

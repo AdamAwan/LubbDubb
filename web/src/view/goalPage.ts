@@ -105,6 +105,24 @@ const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
 };
 
 /**
+ * The issue a goal ref names — the world's copy, or a run the harness retained
+ * after the ticket left the world. Undefined for a ref with no goal behind it.
+ *
+ * Exported because *whether a ref has a page* is what decides where a queue row
+ * goes ({@link NeedRow.opens}), and asking that question a second way is exactly
+ * how a row ends up opening a page that renders nothing.
+ *
+ * @public shared with buildNeedsYou's destination rule
+ */
+export function goalIssue(state: AppState, ref: string): Issue | undefined {
+  const number = Number(/^issue:(\d+)$/.exec(ref)?.[1]);
+  if (!Number.isFinite(number)) return undefined;
+  return (
+    state.world.issues.find((i) => i.number === number) ?? (state.retainedRuns ?? []).find((i) => i.number === number)
+  );
+}
+
+/**
  * Everything one goal's page draws, assembled from the snapshot. Null for a ref
  * the world does not carry: a page of empty sections is indistinguishable from a
  * goal that exists and has nothing on it, and only one of those is worth drawing.
@@ -113,11 +131,7 @@ const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
  * reading — answering on either settles the row and the next snapshot clears both.
  */
 export function buildGoalPage(state: AppState, ref: string, needs: readonly NeedRow[]): GoalPageView | null {
-  const number = Number(/^issue:(\d+)$/.exec(ref)?.[1]);
-  if (!Number.isFinite(number)) return null;
-
-  const issue =
-    state.world.issues.find((i) => i.number === number) ?? (state.retainedRuns ?? []).find((i) => i.number === number);
+  const issue = goalIssue(state, ref);
   if (!issue) return null;
 
   const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
