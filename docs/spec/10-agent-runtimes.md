@@ -442,6 +442,13 @@ exactly the window this arm cleans up after. A task created before this process 
 is constant for the life of the process, so two readings never disagree, and a second restart just moves
 it forward. `buildSystem`'s `bootedAt` option exists so a test can place a task on either side of it.
 
+The fence is safe to keep this narrow because that window always ends within the run that opened it:
+the dispatch either spawns, or throws and settles its own row — see
+[09 — A failed dispatch settles its task row](09-execution.md#a-failed-dispatch-settles-its-task-row).
+An agentless task outliving its own run is therefore a crash, which is what this arm is for. Widening
+the fence to cover an orphan created _during_ a run would buy nothing and cost the property it exists
+for: a pulse could park work an executor is midway through starting.
+
 The pending set is therefore the rows themselves, not state held in the desk: it survives a second
 restart, two cockpits cannot disagree about it, and `detect()` is idempotent. Arm two writes nothing at
 all during detection — it is a reading — but it is still announced to the error log and the boot banner,
