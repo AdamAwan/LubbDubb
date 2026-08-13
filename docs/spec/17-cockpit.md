@@ -617,6 +617,53 @@ fleet is getting and never a rate card
 ([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
 runs, which appear in no figure above it.
 
+**It [exports](#exporting-a-reading)**, five sections in the order the panel draws them — totals,
+phases, days, goals, runs — with the phase split riding inside each goal row as it rides inside that
+goal's bar.
+
+## Exporting a reading
+
+`web/src/components/Downloads.tsx`. [Spend](#spend) and [Yield](#yield) are the two surfaces that
+answer a question nobody asks at the glass — what a month cost, split how, and what it bought — and
+those answers are wanted in a spreadsheet, a ticket or a budget review rather than in a tab that is
+gone on the next poll. The twins offer the **same three files**, which is the same rule that makes them
+twins at all:
+
+- **CSV is what the panel drew**, table by table, in the order it drew them, parted by blank lines and
+  each section headed by its own name. Sections rather than one grid, because a panel _is_ several
+  tables and flattening them loses which figure was a whole and which was a part. The two files read
+  across: opened side by side they answer where the money went and what it bought, which is what the
+  panels are for.
+- **JSON is what the panel was handed**, unrounded and unformatted — for the next program rather than
+  for a person.
+- **PDF is the panel itself, printed.** Not a document built to resemble it: the panel is cloned into
+  a `#print-sheet` under `body` and the browser lays out the same nodes under the same stylesheet, so
+  the graph on paper is the graph on screen and cannot drift from it. **No PDF library** — bundling one
+  would mean hand-placing every table and bar a second time, which is a second presentation of one
+  reading and the drift this cockpit refuses everywhere else it derives something twice.
+
+Four rules hold them:
+
+- **Figures leave raw.** `fmtUsd` rounds to the cent, `fmtTokens` to three significant figures, a rate
+  to a whole percent and a wait to `3.5h` — right for a glance and wrong for a sum, since a hundred
+  rows of `$0.00` add up to real money. A rate leaves as a fraction and a duration in milliseconds. The
+  cockpit's formatting is presentation and stops at the screen.
+- **Every caveat the panel states in prose leaves as a row** — the truncated rankings, the unattributed
+  remainder, the two halves measured over different windows, a red being a verdict rather than a pull
+  request, stopped not being failed. A file read six months from now has no method note beside it, so a
+  cap it does not carry is a cap nobody will know about. A `null` stays an empty cell and never a `0`.
+- **Nothing exports what it could not fetch.** The control is drawn only once there is a payload —
+  each panel's own "a failed fetch must not read as a clean fleet" rule, applied to the one artefact
+  that outlives the tab.
+- **Built in the browser from the data already on screen.** There is no export route, and adding one
+  would be a second derivation of a reading the server has already shipped. The CSV carries a
+  byte-order mark, because Excel reads a BOM-less UTF-8 file as the local codepage and mangles the one
+  goal title with an em dash in it. The print sheet turns the lights on — the tokens are overridden on
+  `#print-sheet`, not the components restyled, which is the division the phase colours already keep —
+  and keeps the accents, because a phase bar with no colour is not the panel.
+
+`test/insightExport.test.ts` pins the quoting, the sections, the precision and the caveat rows.
+
 ## Yield
 
 `web/src/components/ReliabilityModal.tsx`, opened from the Yield reading, drawing the payload
@@ -657,6 +704,11 @@ Four pictures:
 **The method note states the two things a reader would otherwise discover by disbelieving the panel:**
 the two halves are measured over different windows, and a red is a CI verdict rather than a pull
 request. It also names the unmeasured runs, which count in every rate above it and in no dollar.
+
+**It [exports](#exporting-a-reading)** as Spend does, and the twins offer the same three files for the
+reason they share their chrome. Six sections here rather than five — tallies, outcomes, CI days,
+phases, the reddest pull requests, the repeats — and the phase table is keyed the way Spend's is, from
+the same server-side classifier, so the two files join on it.
 
 ## Data flow
 
@@ -948,7 +1000,7 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Four files, split on what they can see:
+Five files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
@@ -956,6 +1008,8 @@ Four files, split on what they can see:
 - `test/goalPage.test.ts` — the page's assembly: which parts, PRs, agents and decisions belong to a
   goal, and the prefix trap `issue:14` versus `issue:1`.
 - `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
+- `test/insightExport.test.ts` — the [exports](#exporting-a-reading): the CSV quoting, the sections and
+  their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
 
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
 `Date.now()` and the rendered relative times would drift between runs otherwise.
