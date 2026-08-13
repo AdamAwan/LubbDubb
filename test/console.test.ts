@@ -358,6 +358,27 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
 }
 
 /**
+ * `more_work` is a verdict the harness acts on — it puts the goal back in front
+ * of pickup once no PR is open — so losing the only control that sets it loses
+ * the behaviour, silently and with every type still checking. The floor carried
+ * it; this pins that the goal page carries it too.
+ */
+test('a goal can still be sent back for more work, not only marked done', () => {
+  const html = renderToStaticMarkup(createElement(ConsoleRoot, { view: goalView(), actions }));
+  assert.ok(html.includes('Work left'), 'the goal page must offer the more_work verdict');
+
+  const already = goalView((s) => {
+    const issue = s.world.issues.find((i) => `issue:${i.number}` === goalRef());
+    assert.ok(issue, 'the fixture goal must be in the world');
+    issue.conclusion = { ...issue.conclusion, verdict: 'more_work' };
+  });
+  assert.ok(
+    !renderToStaticMarkup(createElement(ConsoleRoot, { view: already, actions })).includes('Work left'),
+    'a goal already sent back does not offer the same verdict again',
+  );
+});
+
+/**
  * The shared card is embedded rather than reimplemented compactly, and this is
  * what that buys: the options an agent offered through `escalate` stay one click
  * on the goal page, and a proposal arrives with its verdict buttons instead of a

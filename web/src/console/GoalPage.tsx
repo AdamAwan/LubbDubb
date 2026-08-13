@@ -91,6 +91,10 @@ function Header({
     defaultWatched: false,
   });
   const finished = issue.conclusion.verdict === 'done';
+  // `more_work` is not the opposite of `done` — it is the verdict that puts a
+  // goal back in front of the harness once no PR is open, so it needs its own
+  // control rather than a second meaning for the finished toggle.
+  const moreWork = issue.conclusion.verdict === 'more_work';
   const merged = page.parts.filter((p) => p.group === 'merged').length;
   const url = issue.url ?? refUrls[`#${issue.number}`];
   // Keyed on the run existing and not having been ended, never on anything the
@@ -161,6 +165,16 @@ function Header({
         >
           {finished ? 'Unfinish' : 'Mark done'}
         </button>
+        {issue.state === 'open' && !moreWork && (
+          <button
+            type="button"
+            className="cn-tgl"
+            onClick={() => void actions.setIssueConclusion(issue.number, 'more_work')}
+            title="Say there is work left here, so the harness picks it up again once no PR is open"
+          >
+            Work left
+          </button>
+        )}
         {config.canFileTickets && (
           <button
             type="button"
