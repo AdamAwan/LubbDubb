@@ -195,15 +195,7 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
  * line blank makes it read as one, and an operator who cannot tell "no goal" from
  * "the goal did not load" answers blind.
  */
-function AskSubject({
-  row,
-  view,
-  actions,
-}: {
-  row: NeedRow;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element {
+function AskSubject({ row, view, actions }: { row: NeedRow; view: CockpitView; actions: CockpitActions }): JSX.Element {
   const subject = subjectLabel(row);
   if (row.goalRef !== null) {
     const ref = row.goalRef;
