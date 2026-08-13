@@ -613,6 +613,14 @@ something it can see. That asymmetry is the whole of what `kind` discriminates �
 rather than a title match, because recognising its own row by the sentence it wrote is parsing prose
 the harness composed.
 
+**It carries the goal's validation flag.** When the goal's validation plan is not clear, the task's
+detail states the counts and lists what is outstanding with its reasons — refreshed every pulse, since
+`recordHumanTask` updates the detail on a repeat, so it says what is outstanding _now_ rather than
+when the row was filed. That is the moment worth putting it: a chip on a screen is something an
+operator may not be looking at, and this row is put in front of them at the point they are about to
+close the ticket. Marking it done then costs a note. It blocks nothing.
+→ [20](20-validation.md)
+
 **"Closed" is read as "no longer in the open set", two ways**, because the providers disagree about
 what a closed issue looks like. Azure DevOps keeps reporting the work item with a closed state;
 GitHub's issues provider fetches open issues only, so a closed one stops appearing. Reading only the

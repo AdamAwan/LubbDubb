@@ -2395,6 +2395,107 @@ body {
   font-size: 11px;
   margin-top: 4px;
 }
+/* The validation plan. One row per check, the letter in the gutter where the
+   part sequence number sits — the same reading position, because it is the same
+   kind of handle. */
+.pm-vrow {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.pm-vrow:first-of-type {
+  border-top: none;
+}
+.pm-vrow > div {
+  min-width: 0;
+  flex: 1;
+}
+.pm-vrow.gone {
+  opacity: 0.55;
+}
+.pm-vletter {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  width: 16px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.pm-vhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pm-vtitle {
+  font-weight: 600;
+  min-width: 0;
+}
+.pm-vbody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.pm-vbody b {
+  display: block;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+@media (max-width: 800px) {
+  .pm-vbody {
+    grid-template-columns: 1fr;
+  }
+}
+.pm-vres {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+.pm-vnote {
+  font-size: 12px;
+  margin-top: 5px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  color: var(--fg);
+}
+.pm-vacts,
+.pm-vsay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.pm-vsay input {
+  flex: 1;
+  min-width: 0;
+}
+/* The count, stated once at the top of the section rather than left to be
+   counted off the rows. Amber, not red: it blocks nothing. */
+.pm-vflag {
+  margin: 6px 0 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--amber);
+  border-left-width: 3px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--amber);
+}
+.pm-vgone {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.pm-vgone summary {
+  color: var(--muted);
+  cursor: pointer;
+}
 .pm-cut {
   display: flex;
   align-items: center;

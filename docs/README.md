@@ -78,6 +78,7 @@ deliberately left unchecked, and why, is in
 | [17](spec/17-cockpit.md)             | The cockpit                 | The console: the queue rail, goal pages, the overview, the backlog, live updates   |
 | [18](spec/18-observability.md)       | Observability               | The error log, decision log, activity feed, usage accounting, debug logging        |
 | [19](spec/19-development.md)         | Development and quality     | The `check` gate, test seams, the smoke run, build outputs                         |
+| [20](spec/20-validation.md)          | Validation                  | Checks on the delivered goal, resources, the verdict, and the close-out flag       |
 
 ## Conventions used throughout
 

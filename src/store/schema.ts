@@ -640,6 +640,53 @@ CREATE TABLE IF NOT EXISTS issue_runs (
   updated_at      TEXT NOT NULL
 );
 
+-- How anyone checks that the *goal* was met: the executable form of the plan's
+-- plan's verification narrative. Per goal rather than per part — a check usually spans
+-- parts, and the question it answers is whether the thing works.
+--
+-- The id is author-chosen and stable, so an amended plan merges onto these rows;
+-- the letter is assigned at ingestion and never reused, so the handle a person
+-- types names one check for the life of the goal. The result is columns rather
+-- than a table: a check has exactly one current reading, and the trail of how it
+-- got there is the record beside it.
+CREATE TABLE IF NOT EXISTS validation_checks (
+  plan_id     TEXT NOT NULL,
+  id          TEXT NOT NULL,          -- author-chosen kebab-case slug; the merge key
+  letter      TEXT NOT NULL,          -- A, B, C… — the handle a person types
+  seq         INTEGER NOT NULL,       -- declaration order, for rendering; never the letter
+  title       TEXT NOT NULL,
+  check_do    TEXT NOT NULL,          -- the procedure, markdown ("do" is a SQLite keyword)
+  check_expect TEXT NOT NULL,         -- what a pass looks like
+  uses        TEXT NOT NULL,          -- JSON array of resource *names*, never paths
+  covers      TEXT NOT NULL,          -- JSON array of part slugs this check exercises
+  fleet_candidate INTEGER NOT NULL DEFAULT 0,  -- the planner's nomination; dispatches nothing
+  candidate_why   TEXT,               -- why an agent could run it; kept only with the nomination
+  state       TEXT NOT NULL,          -- unrun | passed | failed | waived | deferred
+  result_note TEXT,                   -- the one current reading: a result, a deferral's reason, a waiver's
+  result_by   TEXT,                   -- operator; null while unrun
+  result_at   TEXT,
+  defer_until TEXT,                   -- when a deferral says it comes back; null is "not saying"
+  superseded_reason TEXT,             -- set when an amendment stopped declaring it; null is live
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (plan_id, id)
+);
+
+-- What a check needs that is not in the repository: a seeded fixture, a reference
+-- screenshot, an account on an environment. Named rather than pathed — the path
+-- an agent sees, the path the cockpit serves and the path an operator opens are
+-- three different strings, and a stored absolute one is wrong for two of them the
+-- moment the configured validation root moves.
+CREATE TABLE IF NOT EXISTS validation_resources (
+  plan_id  TEXT NOT NULL,
+  name     TEXT NOT NULL,
+  kind     TEXT,                      -- fixture | access | reference | data; null = unstated
+  note     TEXT,
+  provided INTEGER NOT NULL DEFAULT 1, -- 0 is the planner asking for something it cannot produce
+  human_task_id TEXT,                 -- the ask filed for an unprovided one, so a replan files it once
+  PRIMARY KEY (plan_id, name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
@@ -653,6 +700,7 @@ CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_kind_origin ON human_tasks(kind, origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
+CREATE INDEX IF NOT EXISTS idx_validation_checks_plan ON validation_checks(plan_id);
 CREATE INDEX IF NOT EXISTS idx_proposals_ref ON proposals(ref);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);

@@ -2,6 +2,7 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planNarrative, planPartInputs } from './planDocument.js';
+import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
 import {
   amendedPlanStatus,
   partHasWork,
@@ -14,6 +15,9 @@ import {
 
 /** What a human task says when the plan that asked for it stopped asking. */
 const RETIRED_PART_RESOLUTION = 'An amended plan no longer includes this step.';
+
+/** The same settlement, one layer down: a check an amended plan stopped declaring. */
+const SUPERSEDED_CHECK_REASON = 'An amended plan no longer includes this check.';
 
 /** What an ingestion did, so either caller can report it in its own idiom. */
 interface PlanIngestResult {
@@ -58,6 +62,13 @@ export function ingestPlanDocument(
      * operator's policy, so neither can persist a verdict the other wouldn't.
      */
     requireApproval?: boolean;
+    /**
+     * `validation.enabled` — whether the document's validation block becomes
+     * rows at all. Carried in rather than read from a config here for
+     * {@link requireApproval}'s reason: ingestion is store-only, and both
+     * transports pass their own operator's policy.
+     */
+    validationEnabled?: boolean;
   },
 ): PlanIngestResult {
   const { doc, originRef, title } = input;
@@ -114,6 +125,43 @@ export function ingestPlanDocument(
     });
   }
 
+  // The validation plan, folded on the same terms as the parts: merged on the
+  // check id, letters assigned once, and a check the amendment stopped declaring
+  // superseded rather than deleted. Written here rather than in either transport
+  // for the reason the revision is — this is the one place a document becomes
+  // rows, so the two transports cannot ingest subtly different check sets.
+  //
+  // `doc.validation` absent leaves existing checks exactly as they are, which is
+  // the only honest reading: an operator override that never learned the block
+  // produces plans without one, and treating that as "the planner withdrew every
+  // check" would supersede a validation plan somebody is halfway through.
+  if ((input.validationEnabled ?? false) && doc.validation) {
+    store.ingestValidation(plan.id, {
+      checks: validationCheckInputs(
+        doc.validation,
+        written.map((p) => p.slug),
+      ),
+      resources: validationResourceInputs(doc.validation),
+      supersededReason: SUPERSEDED_CHECK_REASON,
+    });
+    // A resource the planner says it cannot produce is an ask, not a check that
+    // mysteriously never runs. `recordHumanTask` refreshes on a repeat, so a
+    // replan that re-declares the same resource does not file it twice — and one
+    // that re-declares a resource the operator already settled leaves that
+    // settlement standing.
+    for (const resource of store.listValidationResources(plan.id)) {
+      if (resource.provided) continue;
+      const { task } = store.recordHumanTask({
+        title: `Provide "${resource.name}" for validating ${originRef}`,
+        detail: resourceAskDetail(resource.name, resource.note),
+        originRef,
+        agentId: null,
+        taskId: null,
+      });
+      store.linkValidationResourceTask(plan.id, resource.name, task.id);
+    }
+  }
+
   // An amended plan is what *ends* a discussion — the agent has said its piece and
   // submitted. Cleared here rather than in the route so it holds for both
   // transports, and so an agent that finishes without anyone pressing a button
@@ -133,6 +181,21 @@ export function ingestPlanDocument(
       ? { liveParts: surviving.filter(partHasWork).length }
       : null,
   };
+}
+
+/**
+ * What the ask for an unprovided resource says. The planner's own note when it
+ * left one — it is the only thing that says *which* fixture or *whose* account —
+ * and never empty, because a bench row reading only "provide it" is a row nobody
+ * can act on.
+ */
+function resourceAskDetail(name: string, note: string | null): string {
+  return [
+    `The validation plan needs **${name}**, and the planner could not produce it.`,
+    ...(note === null ? [] : ['', note]),
+    '',
+    'Put it where the harness keeps validation resources for this goal, then mark this done. Nothing is blocked by it — the checks that use it simply cannot be run yet.',
+  ].join('\n');
 }
 
 /** The operator-facing explanation for an overridden `single` verdict. Pure. */

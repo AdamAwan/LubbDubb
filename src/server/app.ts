@@ -31,6 +31,7 @@ import { register as registerSchedules } from './routes/schedules.js';
 import { register as registerSpend } from './routes/spend.js';
 import { register as registerStacks } from './routes/stacks.js';
 import { register as registerState } from './routes/state.js';
+import { register as registerValidation } from './routes/validation.js';
 import { register as registerWork } from './routes/work.js';
 
 /**
@@ -56,6 +57,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerSchedules,
   registerSpend,
   registerStacks,
+  registerValidation,
   registerWork,
 ];
 

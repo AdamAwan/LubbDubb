@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ValidationSchema } from '../validation/checkDocument.js';
 import type { PlanNarrative, PlanPartInput } from '../types.js';
 
 /**
@@ -147,6 +148,14 @@ const PlanDocumentSchema = z
       .transform((s) => (s.length > MAX_PLAN_DOCUMENT_CHARS ? s.slice(0, MAX_PLAN_DOCUMENT_CHARS) : s))
       .optional(),
     parts: z.array(PartSchema).default([]),
+    /**
+     * How anyone checks the *goal* was met, as steps rather than as a paragraph —
+     * {@link verification}'s executable form. Optional for the reason every field
+     * added after v1 is, and read on **both** verdicts: a goal delivered as one
+     * pull request needs validating exactly as much as a decomposed one.
+     * → `src/validation/checkDocument.ts`
+     */
+    validation: ValidationSchema.optional(),
   })
   .superRefine((doc, ctx) => {
     if (doc.verdict === 'single') return; // parts are ignored on a single verdict

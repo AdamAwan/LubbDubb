@@ -171,6 +171,7 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       originRef: issueOrigin(planner.number),
       title: task.originTitle ?? task.title,
       requireApproval: deps.requirePlanApproval,
+      validationEnabled: deps.validationEnabled,
     });
     if (result.overriddenSingle) {
       const message = overriddenSingleMessage(issueOrigin(planner.number), result.overriddenSingle.liveParts);

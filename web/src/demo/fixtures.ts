@@ -10,6 +10,7 @@ import type {
   PlanPart,
   PlanPartView,
   PlanRevision,
+  ValidationCheck,
 } from '../types.js';
 
 interface DemoSeed {
@@ -26,7 +27,7 @@ interface DemoSeed {
  */
 type IssueSeed = Omit<
   Issue,
-  'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'spend'
+  'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'spend' | 'validation'
 > &
   Partial<Issue>;
 
@@ -42,6 +43,35 @@ function demoIssue(seed: IssueSeed): Issue {
     // nothing are different facts, and the demo must not model the one the
     // cockpit is built to keep apart. Fixtures that have been worked set it.
     spend: null,
+    // Null is "no validation plan", which is a third reading and not a synonym
+    // for clear — the fixtures that have one set it.
+    validation: null,
+    ...seed,
+  };
+}
+
+/**
+ * One validation check, with the fields a fixture rarely varies defaulted — the
+ * `demoPart` helper's reason: a fixture that had to state every column would
+ * state most of them wrong.
+ */
+function demoCheck(
+  seed: Partial<ValidationCheck> & Pick<ValidationCheck, 'id' | 'letter' | 'seq' | 'title' | 'createdAt' | 'updatedAt'>,
+): ValidationCheck {
+  return {
+    planId: 'plan-231',
+    do: '',
+    expect: '',
+    uses: [],
+    covers: [],
+    fleetCandidate: false,
+    candidateWhy: null,
+    state: 'unrun',
+    resultNote: null,
+    resultBy: null,
+    resultAt: null,
+    deferUntil: null,
+    supersededReason: null,
     ...seed,
   };
 }
@@ -917,6 +947,52 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(12),
       }),
     ],
+    // A validation plan on the plan awaiting approval, so the sheet's section and
+    // the flag are both reachable in the demo rather than only in a real
+    // deployment that has written one. Three checks, one of each interesting
+    // state: one passed, one nobody has got to, and one nominated for the fleet.
+    validationChecks: [
+      demoCheck({
+        id: 'chip-opens-in-a-new-tab',
+        createdAt: ago(12),
+        updatedAt: ago(12),
+        letter: 'A',
+        seq: 1,
+        title: 'An artifact chip opens in a new tab with auth on',
+        do: 'Run the cockpit with `auth.enabled`, open a goal with an artifact chip, and middle-click the chip.',
+        expect: 'The file renders. No 401, and no bearer token anywhere in the URL bar.',
+        covers: ['route'],
+        state: 'passed',
+        resultNote: 'Opened #212’s design doc in a new tab — served straight through.',
+        resultBy: 'operator',
+        resultAt: ago(2),
+      }),
+      demoCheck({
+        id: 'auth-off-still-serves',
+        createdAt: ago(12),
+        updatedAt: ago(12),
+        letter: 'B',
+        seq: 2,
+        title: 'With auth off, artifacts still serve',
+        do: 'Set `auth.enabled` to false, restart, and open the same chip.',
+        expect: 'The file renders with no capability in the URL at all.',
+        covers: ['route'],
+      }),
+      demoCheck({
+        id: 'tampered-capability-refused',
+        createdAt: ago(12),
+        updatedAt: ago(12),
+        letter: 'C',
+        seq: 3,
+        title: 'A tampered capability is refused',
+        do: 'Copy an artifact URL, change one character of the signature, and request it.',
+        expect: 'A 403, and the artifact is not served.',
+        covers: ['signer'],
+        fleetCandidate: true,
+        candidateWhy: 'a plain HTTP request against a running harness; needs no login and no browser',
+      }),
+    ],
+    validationResources: [],
     jobs: [],
     // One recurrence, so the desk's schedule list is not an empty box in the demo.
     // Its `nextRunAt` is null for the reason the demo backend never fires one: the

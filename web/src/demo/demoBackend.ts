@@ -32,6 +32,7 @@ import type {
   WorldEventKind,
 } from '../types.js';
 import type { WsClient } from '../api.js';
+import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
 
 type Emit = Record<string, unknown>;
@@ -102,7 +103,15 @@ function injectedPr(pr: Omit<OpenPullRequest, 'attention' | 'ciVerdict'>): OpenP
 function injectedIssue(
   issue: Omit<
     Issue,
-    'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'pickup' | 'spend'
+    | 'assay'
+    | 'conclusion'
+    | 'delivery'
+    | 'retrospective'
+    | 'scratchpad'
+    | 'shortfall'
+    | 'pickup'
+    | 'spend'
+    | 'validation'
   >,
 ): Issue {
   return {
@@ -117,6 +126,8 @@ function injectedIssue(
     // A goal injected this second has had no agent on it, so nothing has been
     // measured — which is null, not zero. See `demoIssue`.
     spend: null,
+    // And nothing has planned it, so it has no validation plan at all.
+    validation: null,
   };
 }
 
@@ -426,6 +437,35 @@ class DemoServer {
       plan.status = 'planning';
       plan.updatedAt = new Date().toISOString();
       this.addDecision('dispatch_code_agent', 'executed', `replanning ${plan.title}`, 'issue-plan');
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * One validation check's current reading — the demo mirror of the four routes
+   * under `/api/plans/:id/validation/:checkId`.
+   *
+   * Everything the last reading left behind is cleared here too, because that is
+   * the property worth mirroring: a demo that left a deferral's reason standing
+   * under a "passed" chip would teach the control wrong.
+   */
+  async setValidation(planId: string, checkId: string, act: ValidationAct): Promise<{ ok: true }> {
+    const check = (this.state.validationChecks ?? []).find((c) => c.planId === planId && c.id === checkId);
+    if (check && check.supersededReason === null) {
+      const state =
+        act.kind === 'result'
+          ? act.result
+          : act.kind === 'defer'
+            ? 'deferred'
+            : act.kind === 'waive'
+              ? 'waived'
+              : 'unrun';
+      check.state = state;
+      check.resultNote = act.kind === 'result' ? act.note : act.kind === 'reset' ? null : act.reason;
+      check.resultBy = act.kind === 'reset' ? null : 'operator';
+      check.resultAt = act.kind === 'reset' ? null : new Date().toISOString();
+      check.deferUntil = null;
       this.dirty();
     }
     return { ok: true };
@@ -1780,6 +1820,8 @@ export const demoApi = {
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
   setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
     getServer().setAcceptance(planId, slug, criterion, met),
+  setValidation: (planId: string, checkId: string, act: ValidationAct) =>
+    getServer().setValidation(planId, checkId, act),
   abandonPlan: (planId: string) => getServer().abandonPlan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),
   endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),

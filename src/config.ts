@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
 import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
+import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
 import { DEFAULT_ASSESSMENT, type AssessmentPolicy } from './delivery/assessment.js';
 import { DEFAULT_ASSAY, type AssayPolicy } from './intake/assay.js';
 import { DEFAULT_RETROSPECTIVE, type RetrospectivePolicy } from './retro/retro.js';
@@ -169,6 +170,15 @@ export interface Config {
    */
   retrospective: RetrospectivePolicy;
   /**
+   * The validation plan (`src/validation/`) — how anyone checks the *goal* was
+   * met, as steps a person or an agent runs rather than as a paragraph nobody
+   * ever executes. **On by default**, unlike the three funnels above, because it
+   * spends no agent and gates nothing: a planner is asked for checks, a person
+   * marks them off, and the only consequence is that closing a goal with checks
+   * outstanding says so. Off leaves the surface out entirely. Deep-merged.
+   */
+  validation: ValidationPolicy;
+  /**
    * The typed tool channel back to the harness — the `lubbdubb` MCP server every
    * spawned agent is wired to (issue #108).
    *
@@ -320,6 +330,21 @@ export interface Config {
    * per-tenant path) can say so.
    */
   attachmentRoot: string;
+  /**
+   * Root under which a goal's validation resources are kept — the fixtures,
+   * reference material and sample data a check needs, one directory per goal
+   * (`<root>/issue-284/`).
+   *
+   * `attachmentRoot`'s storage rule, argument for argument, because it is the
+   * same problem: **outside every worktree**, so a fixture can never be committed
+   * onto a branch and outlives the worktree reap that removes the agent that used
+   * it; **canonical rather than copied per dispatch**, so the planner, each
+   * validating agent and the operator read one file; and **a config key**, so a
+   * deployment wanting a tmpfs or a per-tenant path can say so. Every launched
+   * agent is granted read access to the whole root, the same real widening
+   * attachments already make.
+   */
+  validationRoot: string;
   /** The git repo the harness operates on (worktrees are cut from here). */
   repoRoot: string;
   /**
@@ -481,6 +506,7 @@ const DEFAULTS: Config = {
   assessment: DEFAULT_ASSESSMENT,
   assay: DEFAULT_ASSAY,
   retrospective: DEFAULT_RETROSPECTIVE,
+  validation: DEFAULT_VALIDATION,
   mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
@@ -510,6 +536,7 @@ const DEFAULTS: Config = {
   worktreeRoot: '.lubbdubb/worktrees',
   deskRoot: '.lubbdubb/desk',
   attachmentRoot: '.lubbdubb/attachments',
+  validationRoot: '.lubbdubb/validation',
   repoRoot: process.cwd(),
   defaultBranch: 'main',
   reapMergedBranches: true,
@@ -549,6 +576,9 @@ function resolveRootPaths(merged: Config): void {
   // absolute path is load-bearing twice over: it is what an agent's prompt names,
   // and what the launch grants read access to.
   merged.attachmentRoot = resolve(merged.repoRoot, merged.attachmentRoot);
+  // And validation resources for both of those reasons at once: an agent's prompt
+  // names the absolute path, and the launch grants read access to it.
+  merged.validationRoot = resolve(merged.repoRoot, merged.validationRoot);
 
   // Prompt overrides belong to the repo being operated on, like the worktree
   // roots above — resolve relative to repoRoot, honour an absolute override.
@@ -615,6 +645,8 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
   if (lower.assay ?? upper.assay) merged.assay = { ...DEFAULTS.assay, ...lower.assay, ...upper.assay };
   if (lower.retrospective ?? upper.retrospective)
     merged.retrospective = { ...DEFAULTS.retrospective, ...lower.retrospective, ...upper.retrospective };
+  if (lower.validation ?? upper.validation)
+    merged.validation = { ...DEFAULTS.validation, ...lower.validation, ...upper.validation };
   if (lower.mcp ?? upper.mcp) merged.mcp = { ...DEFAULTS.mcp, ...lower.mcp, ...upper.mcp };
   if (lower.auth ?? upper.auth) merged.auth = { ...DEFAULTS.auth, ...lower.auth, ...upper.auth };
   return merged;
@@ -680,6 +712,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   merged.assessment = { ...DEFAULTS.assessment, ...overrides.assessment };
   merged.assay = { ...DEFAULTS.assay, ...overrides.assay };
   merged.retrospective = { ...DEFAULTS.retrospective, ...overrides.retrospective };
+  merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
 
   // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
   // than an accidental off.

@@ -105,7 +105,8 @@ with no hierarchy, so the GitHub prompt is unchanged.
   "reason": "<one sentence: why this shape>",
   "diagnosis": "<what is actually wrong>",
   "approach": "<what is going to be done about it>",
-  "parts": [{ "slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [] }]
+  "parts": [{ "slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [] }],
+  "validation": { "resources": [], "checks": [] }
 }
 ```
 
@@ -129,6 +130,12 @@ Validation (`PlanDocumentSchema`, zod):
   walk is depth-first over **every** edge, not down a single chain: while arity was capped at one a
   chain walk _was_ the whole graph, but the moment a part may name several a cycle reachable only
   through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
+
+`validation` is the executable form of the `verification` narrative below — how anyone checks the
+*goal* was met, as steps rather than as a paragraph. Optional, read on both verdicts, and owned
+entirely by [20](20-validation.md), which states its schema, its refusals and what an amendment may do
+to a check somebody has already run. The one thing worth knowing here: a check declares no actor, and
+a document that gives one is refused.
 
 `parsePlanDocument(raw)` parses JSON then validates; `validatePlanDocument(value)` validates an
 already-decoded object. The `plan_submit` tool enters at the second, the file path at the first —
@@ -200,7 +207,8 @@ about must not erase a narrative some other write put there.
 
 ## Ingestion
 
-`ingestPlanDocument(store, {doc, originRef, title, requireApproval})` in `src/plans/planIngest.ts` is
+`ingestPlanDocument(store, {doc, originRef, title, requireApproval, validationEnabled})` in
+`src/plans/planIngest.ts` is
 the **one** place a plan document becomes plan rows, so the file path and the tool path cannot drift
 into two subtly different writes. `requireApproval` is `planning.requireApproval`, passed in by each
 transport (`AgentManager` for the file path, `McpToolDeps` for the tool path) rather than read from a
@@ -225,6 +233,10 @@ For an amendment:
    read back by `planShape`.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes).
+4. `store.ingestValidation`, on the same terms one layer down: merged on the check id, letters
+   assigned once, and a check the amendment stopped declaring superseded rather than deleted. Gated on
+   `validationEnabled`, carried in exactly as `requireApproval` is and for its reason.
+   → [20](20-validation.md)
 
 An overridden `single` is reported rather than silently applied — asked of the parts
 (`singleOverruled`), never of the status, since an honoured single verdict is `active` too:
@@ -732,6 +744,11 @@ that read the whole repository, and until #206 they reached the cockpit and stop
 looking at the issue on the tracker got a progress table and no reasoning at all, on work a plan had
 been approved for. They are folded into `<details>` after the part rows, because the progress list is
 what a reader of the thread comes back to several times and the reasoning is what they read once.
+
+The validation checklist rides in the same comment, and **open rather than folded** — the reasoning
+is what a reader reads once, but whether the goal was actually checked is what a reader of the thread
+next month is trying to find out, and that reader is not on the operator's machine.
+→ [20](20-validation.md)
 
 Two fields are deliberately **not** carried: `risks` and `openQuestions`. Both are caveats *on the
 verdict*, addressed to whoever is deciding whether the work happens — and by the time anything is

@@ -82,7 +82,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '      "dependsOn": [], "rationale": "...", "acceptance": "..."},\n' +
       '     {"slug": "wire-up", "title": "...", "scope": "...", "touches": ["src/system.ts"], "size": "m",\n' +
       '      "dependsOn": ["schema"], "rationale": "...", "acceptance": "..."}\n' +
-      '   ]}\n\n' +
+      '   ],\n' +
+      '   "validation": {"resources": [...], "checks": [...]}}\n\n' +
       'Nothing here needs to be guessed at: submit it, and a rejection tells you exactly which field was wrong.\n\n' +
       '## What the fields mean\n\n' +
       'Four of them carry the whole decision, and they are the four nobody can reconstruct from the rest.\n\n' +
@@ -128,6 +129,29 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'needs building at all, and "human" for a step no agent can run: flipping a setting in a console nobody ' +
       'gave the fleet an account for, plugging something in, looking at a rendered screen. A "human" part is ' +
       'never dispatched, and anything naming it in "dependsOn" waits for a person to mark it done.\n\n' +
+      '## How anyone checks it worked\n\n' +
+      'Beside "verification", and different from it: `verification` is the sentence, `validation` is the ' +
+      'steps. Add a "validation" block when there is something a person or an agent could actually *run* ' +
+      'against the delivered goal — and there almost always is.\n\n' +
+      '  "validation": {\n' +
+      '    "resources": [{"name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author"},\n' +
+      '                  {"name": "test-env login", "kind": "access", "provided": false}],\n' +
+      '    "checks": [{"id": "merged-branch-gone", "title": "A squash-merged part branch is gone on both sides",\n' +
+      '                "do": "Run the harness against the fixture repo and merge the seeded PR…",\n' +
+      '                "expect": "No issue/284/reap ref, locally or on the remote.",\n' +
+      '                "uses": ["fixture-repo.tar.gz"], "covers": ["reap-writer"],\n' +
+      '                "fleetCandidate": true, "why": "reads the repo and runs git; no login, no browser"}]}\n\n' +
+      '- **"id"** is kebab-case, unique and *stable* — an amended plan merges on it, like a part slug.\n' +
+      '- **"do"** is the procedure and **"expect"** is what a pass looks like. A check that cannot say what a ' +
+      'pass looks like is not a check. Write both for somebody who has not read your plan.\n' +
+      '- **"covers"** names the part slugs a check exercises, so the sheet can show which parts nothing ' +
+      'checks. Validation is per *goal*, so a check spanning several parts is normal.\n' +
+      '- **"resources"** are what a check needs that is not in the repository. Name them; never write paths. ' +
+      '`"provided": false` says you need something you cannot produce, and files an ask for it.\n' +
+      '- **"fleetCandidate"** is a *suggestion* that an agent could run this one, with "why". Every check is ' +
+      'a person\u2019s until they say otherwise, and you cannot say otherwise: you do not know whether this ' +
+      'deployment\u2019s fleet has a browser, a login or an environment. **There is no "actor" field and a ' +
+      'document carrying one is refused.**\n\n' +
       '## The write-up\n\n' +
       '"document" is not optional in practice: a human reads it and decides whether this work happens. The ' +
       'fields above are the summary; this is the argument. Do not repeat them back — cover how you got to the ' +
@@ -152,7 +176,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '   "parts": [\n' +
       '     {"slug": "schema", "title": "...", "scope": "...", "touches": ["src/store/"], "size": "s",\n' +
       '      "dependsOn": [], "rationale": "...", "acceptance": "..."}\n' +
-      '   ]}\n\n' +
+      '   ],\n' +
+      '   "validation": {"resources": [...], "checks": [...]}}\n\n' +
       'Rules that make an amendment safe:\n\n' +
       '- **Slugs are the merge key.** Re-use the exact slug of every part you are keeping, whatever else you change ' +
       'about it. A part you re-declare under a new slug is not the same part: the old one is treated as dropped and ' +
@@ -165,6 +190,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'one (it stacks on that branch and starts once that sibling has pushed), or several (the lanes rejoin — it ' +
       'starts only once every one of them has merged, and is cut from the integration branch). A cycle is refused.\n' +
       '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n' +
+      '- **Validation check ids are a merge key too.** Re-use the exact "id" of every check you are keeping. A ' +
+      'check you leave out is *superseded*, not deleted — it stays on the record, greyed, with its letter ' +
+      'retired. Rewording a check\u2019s "title", "do" or "expect" withdraws whatever result it had, which is ' +
+      'correct: you have changed what a pass means. Re-state the whole "validation" block, and omitting it ' +
+      'entirely leaves the existing checks exactly as they are.\n' +
       '- **Re-state the whole narrative.** `diagnosis`, `approach`, `alternatives`, `openQuestions`, ' +
       '`verification`, `evidence`, `risks`, `outOfScope` and `document` are replaced by what you submit, not ' +
       'merged — an amendment that omits them leaves the previous ones standing, which will read as though the ' +

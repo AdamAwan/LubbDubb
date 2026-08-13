@@ -221,7 +221,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // config'd root, outside every worktree. Every launch is granted read access to
   // that root, which is what makes the path in an agent's prompt openable.
   const attachments = new AttachmentFiles(config.attachmentRoot);
-  const additionalDirectories = [config.attachmentRoot];
+  // Validation resources ride alongside for the same reason and on the same
+  // terms: a fixture is only useful to an agent that can open it, and the root is
+  // outside every worktree precisely so it survives the reap. Granted whether or
+  // not `validation.enabled` — the directory is the harness's own and empty on a
+  // deployment that never writes one, and a grant that came and went with a policy
+  // flag would make an agent's readable set depend on config it cannot see.
+  const additionalDirectories = [config.attachmentRoot, config.validationRoot];
 
   const perm = config.agentPermissionMode;
   const extraArgs = config.claudeArgs;
@@ -308,6 +314,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
     requirePlanApproval: config.planning.requireApproval,
+    validationEnabled: config.validation.enabled,
     // Lazy for the same reason as `agents`: the desk is built after this server
     // (it needs the escalation inbox). Off entirely when the operator disabled the
     // backstop, so `request_permission` denies rather than blocks.
@@ -340,6 +347,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
     requirePlanApproval: config.planning.requireApproval,
+    validationEnabled: config.validation.enabled,
     // So `link_ticket` can move a blueprint's images off the filing job and onto
     // the ticket it just created (issue #249) — the same instance the launch route
     // wrote them with, since both halves must agree about the root.
