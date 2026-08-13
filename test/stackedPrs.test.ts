@@ -62,6 +62,8 @@ function plan(over: Partial<Plan> = {}): Plan {
     title: 'Big thing',
     status: 'active',
     reason: 'Schema first.',
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

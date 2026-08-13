@@ -40,6 +40,8 @@ function plan(originRef: string): Plan {
     title: 'A plan',
     status: 'active',
     reason: null,
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

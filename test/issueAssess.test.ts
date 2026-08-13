@@ -124,6 +124,8 @@ function plan(status: Plan['status']): Plan {
     title: 'Split it',
     status,
     reason: 'because',
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

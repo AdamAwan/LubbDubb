@@ -561,6 +561,8 @@ function planRow(over: Partial<Plan> = {}): Plan {
     title: 'Add the thing',
     status: 'active',
     reason: 'Schema first.',
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

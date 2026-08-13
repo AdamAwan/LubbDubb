@@ -541,6 +541,8 @@ function planRow(): Plan {
     title: 'Big thing',
     status: 'awaiting_approval',
     reason: 'Schema must land first.',
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

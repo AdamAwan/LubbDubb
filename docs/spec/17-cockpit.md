@@ -944,10 +944,29 @@ whichever surface mentions the plan.
 
 **Two tabs**, because the decision view has to stay short enough to hold in your head:
 
-- **Plan** — the planner's reason in full; **Risks** and **Deliberately out of scope** side by side
-  when present; every part in dispatch order with its scope, `rationale` (why its own PR), `acceptance`
-  (done when), the stack edge spelled out as a sentence rather than the terse `on <slug>` chip, its
-  status, its PR when it has one, and its "Up next" queue state (`unapproved` / `capped` / `▶ now`).
+- **Plan** — the answer, then the work, then the caveats. **What's wrong** (`diagnosis`) and **What
+  we'll do** (`approach`) lead; every part follows in dispatch order with its scope, `rationale` (why
+  its own PR), `acceptance` (done when), the stack edge spelled out as a sentence rather than the terse
+  `on <slug>` chip, its status, its PR when it has one, and its "Up next" queue state (`unapproved` /
+  `capped` / `▶ now`); **Risks** and **Deliberately out of scope** come last, each folded shut behind
+  its opening words.
+- **`reason` is a caption, not a heading.** Once `approach` carries the summary, the split
+  justification renders as one muted line above the parts — _"Split this way because: …"_ — because
+  that is the size of the question it answers. It was the tab's headline, which is how a reader came
+  here for a root cause and got a paragraph about pull-request boundaries. On a plan stored **before**
+  `diagnosis` and `approach` existed both are null, and `reason` falls back to the headline under the
+  label it always had ("Why the planner split it", or "The approach" on the single-PR arm, where
+  nothing was split). The fallback is why the fields are separate rather than `reason` being
+  retargeted: a stored plan keeps meaning what it meant when it was written.
+- **Every prose field renders as markdown**, through the same `renderMarkdown` the write-up uses — a
+  planner writes them with `**bold**` lead-ins, backticked identifiers and bullets, and printed raw
+  those markers are most of what a long one looks like.
+- The fold is the other correction, and its reason is length: `risks` and `outOfScope` arrive at
+  whatever length a planner writes them, and open they were two walls of prose between the reader and
+  the Approve button. Folded is not hidden — the summary line carries the first ~110 characters
+  flattened to plain text, so the fold is a decision the reader makes rather than one made for them.
+- The tab's own count reads `· N parts`, `· one PR`, or `· being written`, never `· 0 parts`: on the
+  single-PR arm no parts is the _shape_, not an empty plan.
 - **Full write-up** — `plan.document`, rendered. Absent renders "This planner wrote no write-up", never
   a hidden tab (see [08](08-planning.md)).
 

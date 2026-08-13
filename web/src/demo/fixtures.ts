@@ -568,6 +568,11 @@ export function buildDemoState(): DemoSeed {
         originRef: 'issue:212',
         title: 'Move the store behind a repository interface',
         status: 'active',
+        // Deliberately left on the old shape: a plan written before `diagnosis`
+        // and `approach` existed, so the modal falls back to reading `reason` as
+        // the headline. Every plan in a real database predates them once.
+        diagnosis: null,
+        approach: null,
         reason: 'The schema move has to merge before anything reads through the new interface.',
         risks:
           'The repository interface has to cover every query the harness makes today, or a missed one surfaces as a runtime error instead of a compile error.',
@@ -596,12 +601,16 @@ export function buildDemoState(): DemoSeed {
         originRef: 'issue:231',
         title: 'Split the cockpit auth guard from the artifact route',
         status: 'awaiting_approval',
+        diagnosis:
+          'Every artifact chip 401s, and not because the guard is wrong: `/artifacts/:id` sits **inside** the `/api` prefix the cockpit guards with a bearer token, and opening a chip is a top-level browser navigation — which cannot carry an `Authorization` header. The route has never been reachable the way it is reached.',
+        approach:
+          'Move `/artifacts/:id` out from behind the prefix guard and gate it on a short-lived signed capability instead, minted into the state snapshot beside each chip. The URL carries its own proof, so a plain navigation works and nothing else moves outside the guard.',
         reason:
           'The capability signer has to exist before the route can verify one, and the guard change touches every route.',
         risks:
-          'Moving /artifacts outside the /api prefix means part 2 briefly serves artifacts with no guard at all — the capability check has to land in the same PR, not a later one.',
+          '**Guard window.** Moving `/artifacts` outside the `/api` prefix means part 2 briefly serves artifacts with no guard at all — the capability check has to land in the same PR, not a later one. **Two modes.** With `auth.enabled` off there is no signing key, so the route serves with no capability at all, and only one of those two modes is covered by the capability tests today. **Snapshot churn.** Part 3 widens the state snapshot, which every cockpit panel reads; a field added there is a field every consumer has to tolerate the absence of on an older server.',
         outOfScope:
-          'Capability revocation, and any change to the cockpit bearer token. Artifact TTL stays at 5 minutes.',
+          '- Capability revocation. Named as a rejected alternative in the write-up — it needs a store of its own and nothing here creates one.\n- Any change to the cockpit bearer token.\n- Artifact TTL, which stays at 5 minutes.',
         document:
           '# Serving artifacts outside the authenticated /api prefix\n\n' +
           'Every artifact chip in the cockpit currently 401s. This is not a bug in the guard — it is a structural ' +

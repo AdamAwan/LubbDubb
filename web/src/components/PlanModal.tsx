@@ -19,6 +19,14 @@ import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
  * one click away; the alternative cost — a wall of prose above the buttons — is
  * worse, because it is paid on every approval rather than on the ones where you
  * want the detail.
+ *
+ * The Plan tab is the shape of the work, and only then the caveats. `reason` is
+ * the one paragraph that says what is going to happen, so it leads; the parts
+ * follow; **Risks** and **Deliberately out of scope** are folded shut behind a
+ * one-line preview. All three were flat blocks of a planner's prose, at their
+ * natural length, above the Approve button — three walls where the answer to
+ * "what are we doing" is one of them. Folded is not hidden: the preview line is
+ * there so the fold is a decision you make, not one made for you.
  */
 export function PlanModal({
   plan,
@@ -76,6 +84,13 @@ export function PlanModal({
   // proposed; during a discussion there is nothing to approve, because the
   // amended plan comes back as a fresh proposal.
   const decidable = proposal?.status === 'pending' && !plan.discussing ? proposal : null;
+  // `approach` is the summary once a planner writes one; `reason` stands in for it
+  // on every plan stored before the field existed, which is why the fallback is
+  // here rather than in the store.
+  const headline = plan.approach ?? plan.reason;
+  // And once `approach` carries the summary, `reason` is demoted to what it
+  // actually answers — a caption on the split, next to the split.
+  const shapeNote = plan.approach ? plan.reason : null;
   const cutAt = live.findIndex((p) => {
     const q = queued.get(partOriginOf(issueNumber, p.slug));
     return q !== undefined && q.status !== 'dispatching';
@@ -132,7 +147,18 @@ export function PlanModal({
 
         <div className="pm-tabs">
           <button className={`pm-tab${tab === 'plan' ? ' on' : ''}`} onClick={() => setTab('plan')}>
-            Plan <span className="count">· {live.length} parts</span>
+            Plan{' '}
+            <span className="count">
+              {/* "0 parts" is the single-PR arm read as an empty plan. It is not
+                  empty; it is the shape where the whole issue is one branch —
+                  and only a plan still being written has none for the other
+                  reason, which is the same split the body draws. */}
+              {live.length > 0
+                ? `· ${live.length} part${live.length === 1 ? '' : 's'}`
+                : plan.status === 'planning'
+                  ? '· being written'
+                  : '· one PR'}
+            </span>
           </button>
           <button className={`pm-tab${tab === 'writeup' ? ' on' : ''}`} onClick={() => setTab('writeup')}>
             Full write-up
@@ -152,26 +178,29 @@ export function PlanModal({
           )
         ) : (
           <>
-            {plan.reason && (
-              <div className="pm-why">
-                <span className="pm-section-label">Why the planner split it</span>
-                {plan.reason}
+            {plan.diagnosis && (
+              <div className="pm-why pm-prose">
+                <span className="pm-section-label">What&rsquo;s wrong</span>
+                {renderMarkdown(plan.diagnosis, refUrls)}
               </div>
             )}
-            {(plan.risks || plan.outOfScope) && (
-              <div className="pm-flags">
-                {plan.risks && (
-                  <div className="pm-flag risk">
-                    <span className="pm-section-label">Risks</span>
-                    {plan.risks}
-                  </div>
-                )}
-                {plan.outOfScope && (
-                  <div className="pm-flag oos">
-                    <span className="pm-section-label">Deliberately out of scope</span>
-                    {plan.outOfScope}
-                  </div>
-                )}
+            {headline && (
+              <div className="pm-why pm-prose">
+                {/* On a plan that predates both fields this is `reason`, under the
+                    label `reason` used to carry. The fallback is the whole reason
+                    the fields are separate rather than one retargeted `reason`:
+                    stored plans keep meaning what they meant when they were
+                    written, and read back under a heading that is true of them. */}
+                <span className="pm-section-label">
+                  {plan.approach ? 'What we’ll do' : live.length > 0 ? 'Why the planner split it' : 'The approach'}
+                </span>
+                {renderMarkdown(headline, refUrls)}
+              </div>
+            )}
+            {shapeNote && plan.status !== 'planning' && (
+              <div className="pm-shape">
+                {live.length > 0 ? 'Split this way because: ' : 'One pull request because: '}
+                {shapeNote}
               </div>
             )}
             {live.length === 0 ? (
@@ -185,7 +214,9 @@ export function PlanModal({
               </p>
             ) : (
               <div>
-                <span className="pm-section-label">{live.length} parts, in dispatch order</span>
+                <span className="pm-section-label">
+                  {live.length} part{live.length === 1 ? '' : 's'}, in dispatch order
+                </span>
                 {live.map((part, idx) => (
                   <div key={part.id}>
                     {idx === cutAt && (
@@ -203,6 +234,14 @@ export function PlanModal({
                     />
                   </div>
                 ))}
+              </div>
+            )}
+            {(plan.risks || plan.outOfScope) && (
+              <div className="pm-flags">
+                {plan.risks && <Caveat kind="risk" label="Risks" body={plan.risks} refUrls={refUrls} />}
+                {plan.outOfScope && (
+                  <Caveat kind="oos" label="Deliberately out of scope" body={plan.outOfScope} refUrls={refUrls} />
+                )}
               </div>
             )}
           </>
@@ -290,6 +329,53 @@ export function PlanModal({
       </div>
     </div>
   );
+}
+
+/**
+ * One folded caveat — the planner's prose about what could go wrong, or what it
+ * left alone. Shut by default with its opening words on the summary line, because
+ * either one runs to several hundred words at the length a planner naturally
+ * writes them, and both sat open above the Approve button.
+ */
+function Caveat({
+  kind,
+  label,
+  body,
+  refUrls,
+}: {
+  kind: 'risk' | 'oos';
+  label: string;
+  body: string;
+  refUrls: Record<string, string>;
+}) {
+  return (
+    <details className={`pm-flag ${kind}`}>
+      <summary className="pm-flag-head">
+        <span className="pm-section-label">{label}</span>
+        <span className="pm-flag-teaser">{teaser(body)}</span>
+      </summary>
+      <div className="pm-prose">{renderMarkdown(body, refUrls)}</div>
+    </details>
+  );
+}
+
+/**
+ * The first line's worth of a markdown block as plain text. The markers are
+ * stripped rather than rendered: a teaser is one line of a flex row, and a
+ * `**bold**` lead-in — which is how a planner opens nearly every one of these —
+ * would otherwise spend that line on the label it was going to give the first
+ * point anyway.
+ */
+function teaser(body: string): string {
+  const flat = body
+    // List markers first, and per line: a block that opens as a bullet would
+    // otherwise lead with a stray dash, and the `*` form is indistinguishable
+    // from emphasis once the markers are gone.
+    .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, '')
+    .replace(/[*`#>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return flat.length > 110 ? `${flat.slice(0, 110).trimEnd()}…` : flat;
 }
 
 function PartBlock({

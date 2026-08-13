@@ -39,7 +39,19 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     type: 'object',
     properties: {
       verdict: { type: 'string', enum: ['single', 'parts'], description: 'One PR, or several.' },
-      reason: { type: 'string', description: 'Why this shape — one or two sentences.' },
+      diagnosis: {
+        type: 'string',
+        description:
+          'What is actually wrong, in the code — the root cause you found, not a restatement of the ' +
+          'issue. Omit only when the work is not a defect and there is nothing to diagnose.',
+      },
+      approach: {
+        type: 'string',
+        description:
+          'What you are going to do about it, in two or three sentences. This is the summary the ' +
+          'operator approves on, so write the fix, not the shape of the pull requests.',
+      },
+      reason: { type: 'string', description: 'Why this shape — one or two sentences. Not the fix; the split.' },
       risks: { type: 'string', description: 'What could go wrong with this split.' },
       outOfScope: { type: 'string', description: 'What you deliberately left out, and why.' },
       document: {
@@ -88,6 +100,8 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       version: 1,
       verdict: args.verdict,
       reason: args.reason,
+      diagnosis: args.diagnosis,
+      approach: args.approach,
       risks: args.risks,
       outOfScope: args.outOfScope,
       document: args.document,

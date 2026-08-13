@@ -355,7 +355,9 @@ CREATE TABLE IF NOT EXISTS plans (
   origin_ref  TEXT NOT NULL UNIQUE,   -- "issue:12"
   title       TEXT NOT NULL,
   status      TEXT NOT NULL,          -- planning | awaiting_approval | active | complete | abandoned
-  reason      TEXT,                   -- the planner's justification for its verdict
+  diagnosis   TEXT,                   -- what is actually wrong: the root cause, on work that has one
+  approach    TEXT,                   -- what is going to be done about it
+  reason      TEXT,                   -- the planner's justification for its verdict — why this shape
   risks       TEXT,                   -- what could go wrong with this split
   out_of_scope TEXT,                  -- what the planner deliberately left out
   document    TEXT,                   -- the full narrative, markdown

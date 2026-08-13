@@ -93,6 +93,8 @@ function plan(over: Partial<Plan> = {}): Plan {
     title: 'Widget plan',
     status: 'active',
     reason: null,
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

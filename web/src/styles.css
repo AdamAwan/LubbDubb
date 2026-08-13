@@ -1705,6 +1705,36 @@ body {
   padding: 6px 8px;
   margin-bottom: 8px;
 }
+/* Planner prose, rendered rather than dumped: these fields arrive as markdown and
+   used to print their own asterisks and backticks. Tighter than `.pm-doc`, which
+   is a document you settle in to read — this is a paragraph inside a decision. */
+.pm-prose {
+  line-height: 1.5;
+}
+.pm-prose > :first-child {
+  margin-top: 0;
+}
+.pm-prose > :last-child {
+  margin-bottom: 0;
+}
+.pm-prose p {
+  margin: 5px 0;
+}
+.pm-prose ul,
+.pm-prose ol {
+  margin: 5px 0;
+  padding-left: 18px;
+}
+.pm-prose li {
+  margin: 3px 0;
+}
+.pm-prose code {
+  background: var(--well);
+  border-radius: var(--r-sm);
+  padding: 1px 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
 .pm-section-label {
   display: block;
   color: var(--muted);
@@ -1712,6 +1742,13 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-bottom: 3px;
+}
+/* The split justification, once `approach` has taken the headline: a caption on
+   the parts rather than a section of its own. */
+.pm-shape {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 8px;
 }
 .pm-flags {
   display: flex;
@@ -1724,6 +1761,46 @@ body {
   border-radius: var(--r-md);
   padding: 6px 8px;
   border-left: 3px solid var(--border);
+}
+/* The fold. `display: flex` on a `<summary>` drops the disclosure marker in
+   WebKit, so the triangle is drawn here — a fold with no affordance reads as a
+   truncated block, which is the thing this replaced. */
+.pm-flag-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+.pm-flag-head::-webkit-details-marker {
+  display: none;
+}
+.pm-flag-head::before {
+  content: '▸';
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+}
+.pm-flag[open] > .pm-flag-head::before {
+  content: '▾';
+}
+.pm-flag-head .pm-section-label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+.pm-flag-teaser {
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pm-flag[open] > .pm-flag-head .pm-flag-teaser {
+  display: none;
+}
+.pm-flag[open] > .pm-prose {
+  margin-top: 6px;
 }
 .pm-flag.risk {
   border-left-color: var(--amber);
