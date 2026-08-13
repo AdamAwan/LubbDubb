@@ -16,6 +16,7 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
+const { Panel } = await import('../web/src/console/Panel.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -100,6 +101,24 @@ test('decode reverses text-node escaping, and only in that order', () => {
   // which is not what the page rendered.
   assert.equal(decode('&amp;lt;'), '&lt;');
   assert.equal(decode('&#x27;'), "'");
+});
+
+test('a panel draws its backdrop and its close button, both of them ways out', () => {
+  // The third way out is Escape, registered in an effect. `renderToStaticMarkup`
+  // runs no effects, so the listener is out of reach here — the two exits that
+  // are in the markup are the ones this pins.
+  const html = renderToStaticMarkup(
+    createElement(Panel, {
+      title: 'Findings',
+      onClose: () => undefined,
+      children: createElement('p', null, 'body'),
+    }),
+  );
+
+  assert.ok(html.includes('cn-backdrop'), 'the backdrop is an exit and must be drawn');
+  assert.ok(html.includes('Close'), 'the button is an exit and must be drawn');
+  assert.ok(html.includes('Findings'));
+  assert.ok(html.includes('body'), 'a panel draws what it was handed');
 });
 
 test('the rail carries every blocking kind in one list', () => {
