@@ -3,7 +3,7 @@ import { buildNeedsYou } from './needsYou.js';
 import type { NeedRow } from './needsYou.js';
 import { buildGoalPage } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
-import type { ConsolePanel } from '../cockpit/actions.js';
+import type { ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
 
 /**
  * Everything the console draws, derived once per render and handed over as plain data.
@@ -47,8 +47,8 @@ export interface CockpitView {
   goalPage: GoalPageView | null;
   /** Which full-surface panel is in front, or null. */
   consolePanel: ConsolePanel;
-  /** Whether the backlog view is open instead of the overview. */
-  backlogOpen: boolean;
+  /** Where the nav is. A selected goal outranks it, so this is not what is drawn. */
+  tab: ConsoleTab;
 
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -130,8 +130,8 @@ interface ViewInputs {
   selectedGoal: string | null;
   /** Which full-surface panel is in front. */
   consolePanel: ConsolePanel;
-  /** Whether the backlog view is open instead of the overview. */
-  backlogOpen: boolean;
+  /** Where the nav is. */
+  tab: ConsoleTab;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -179,7 +179,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     selectedGoal: input.selectedGoal,
     goalPage: input.selectedGoal ? buildGoalPage(state, input.selectedGoal, needsYou) : null,
     consolePanel: input.consolePanel,
-    backlogOpen: input.backlogOpen,
+    tab: input.tab,
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,

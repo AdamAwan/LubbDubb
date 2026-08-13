@@ -40,22 +40,23 @@ What keeps that from swallowing the cockpit's rules is the split on **behaviour 
 the shared card, not a compact copy of it, because a copy is how one surface ends up offering free
 text on a proposal that only takes a verdict.
 
-**Six surfaces hang off the shell rather than off the console**, and each for one reason — it reaches
-`api.js`, which `console/` may not:
+**Five surfaces hang off the shell rather than off the console**, and each for one reason — it is
+_overlaid_ rather than placed. Which one is open is cockpit state, not console state (the drawer's
+output subscription is tied to it), and the surfaces that open one are scattered across the page:
 
-| Surface                                        | Why the shell                                                        |
-| ---------------------------------------------- | -------------------------------------------------------------------- |
-| `AgentDrawer`                                  | seeds itself from the persisted transcript over its own route        |
-| `WorkTreePanel`                                | its own routes, fetched on open, never polled — the graph only grows |
-| `PlanModal` / `RetroModal` / `ScratchpadModal` | fetch the document they draw                                         |
-| `SettingsModal`                                | `GET /api/config`, `/api/ci-policy`, `/api/prompts`                  |
-| `SpendModal`                                   | `GET /api/spend`                                                     |
-| `ReliabilityModal`                             | `GET /api/reliability`                                               |
+| Surface                                        | Opened from                                                 |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `AgentDrawer`                                  | a fleet row, a goal's part, an ask — `select`               |
+| `PlanModal` / `RetroModal` / `ScratchpadModal` | the goal page — `viewPlan` / `viewRetro` / `viewScratchpad` |
+| `SettingsModal`                                | the top bar — `openSettings`                                |
+| `SpendModal`                                   | the Spend reading — `openSpend`                             |
+| `ReliabilityModal`                             | the Yield reading — `openReliability`                       |
 
-The console asks for each the way it asks for a plan — a method on the seam (`select`, `viewPlan`,
-`viewRetro`, `viewScratchpad`, `openSettings`, `openSpend`, `openReliability`) — and the shell answers.
-Which one is open is cockpit state, not console state, or closing the drawer would lose its
-subscription.
+The console asks for each the way it asks for a plan — a method on the seam — and the shell answers.
+
+**Reaching `api.js` is not itself a reason to sit on the shell.** The rule is that no module under
+`console/` _imports_ it; a shared component that does is embedded like any other, and several are —
+`LaunchPanel`, `SchedulePanel` and `WorkTreePanel` all ride their own routes from inside the console.
 
 The two screens `App.tsx` still draws itself — "Connecting…" and the locked-out page — stay there
 because neither has a view-model to draw.
@@ -86,7 +87,7 @@ those modules in.
 
 ## Shape
 
-Three surfaces and one shell.
+Four surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -94,11 +95,11 @@ Three surfaces and one shell.
 ├──────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned          │
 ├───────────────┬──────────────────────────────────────────────────────┤
-│ NEEDS YOU  6  │  Overview · Backlog · #142 Retry the intake job      │
+│ NEEDS YOU  6  │  Overview · Backlog · Work · #142 Retry the intake   │
 │ ┌───────────┐ │  ──────────────────────────────────────────────────  │
 │ │ Blocking  │ │                                                      │
 │ │ escalation│ │            the situation area                        │
-│ │ plan      │ │      (the overview, a goal page, or the backlog)     │
+│ │ plan      │ │   (a tab — overview, backlog, work — or a goal page) │
 │ │ permission│ │                                                      │
 │ │ Yours     │ │                                                      │
 │ │ bench     │ │                                                      │
@@ -113,16 +114,22 @@ is stale for the same one reason, and the banner is the one thing on screen stil
 not a card in a track, so it needs no span rule to be full width. `test/console.test.ts` asserts the
 placement rather than trusting the stylesheet.
 
-**The situation area draws exactly one of three things**, and the precedence is load-bearing: a
-selected goal outranks the backlog, which outranks the overview. Selecting a goal is what a queue row
-does, and it does not close whatever the nav left open — so with the backlog winning, clicking an ask
-would land the operator on a triage list instead of on the ask.
+**The situation area draws exactly one thing**, and the precedence is load-bearing: a selected goal
+outranks the nav's tab, whichever it is. Selecting a goal is what a queue row does, and it does not
+move the nav — so with a tab winning, clicking an ask would land the operator on a triage list, or on
+the record, instead of on the ask.
 
-The **nav** is two destinations and a crumb: Overview, Backlog (carrying the unwatched count — the one
+The **nav** is three tabs and a crumb: Overview, Backlog (carrying the unwatched count — the one
 number that says whether triage is worth opening, read off the same `backlogGroups` the view draws so
-the count and the rows cannot differ), and, when a goal is open, its number and title. Both buttons
-clear _both_ pieces of state, because a nav click means "go here" and either half left standing would
-land somewhere else.
+the count and the rows cannot differ), Work, and, when a goal is open, its number and title. Every
+button clears _both_ pieces of state, because a nav click means "go here" and either half left
+standing would land somewhere else.
+
+The tabs are a **list** (`ConsoleTab`, `web/src/cockpit/actions.ts`) rather than a hand-written pair
+of buttons over a boolean, for `ConsolePanel`'s reason: a destination that has to be remembered in two
+booleans and four call sites is a destination that arrives half-wired. `test/console.test.ts` renders
+the nav and asserts all three labels, so a tab added to the type and forgotten in the nav is a view
+nothing can reach — and fails.
 
 ### The console at width
 
@@ -397,6 +404,27 @@ either direction, and a button that writes nothing is worse than one that says w
 
 Assignment filtering is a server-side concern (`workItemAssignedTo` for Azure; GitHub has no issue
 assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
+
+## The work tab
+
+The durable record: `WorkTreePanel`, the shared component, drawn as the third nav destination. It is
+**the one surface that outlives the world snapshot** — every other panel draws the snapshot and so
+forgets a pull request the moment it ages out of `closedPrWindowMs`, while this one still knows that
+#40 merged and which issue it delivered.
+
+It is a **tab rather than a strip below the console**, which is where it used to sit. A surface hung
+under a full-height layout is reachable only by scrolling past everything else, so the record an
+operator opens the cockpit to check read as an afterthought of the page — and the two views above it,
+already tabbed, said plainly what shape the third should be.
+
+Two things it keeps from that move. It is **fetched on open and never polled** — `/api/work` for the
+roots, `/api/work/:ref` for a subtree — because `/api/state` comes round every couple of seconds and
+the graph only ever grows; being a tab is what makes "on open" honest, since nothing fetches until the
+operator goes there. And **unrecorded work** stays at its head: what the harness did that nothing in
+the tracker accounts for, with `File a work item` and `Ignore` beside each row, since nobody outside
+can ever mark done what nothing records. → [16](16-http-api.md#get-apiwork)
+
+It is a **lens**: nothing here, and nothing in the dispatcher, decides anything from what it draws.
 
 ## The top bar and the panels
 
@@ -907,7 +935,8 @@ from a reader that broke, and because each of these is a decision rather than an
   be built from.
 - **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
   Up next is a reading rather than a control; the rail carries only `open` human tasks, so there is no
-  settled tail to dismiss from; and the work graph is shell-owned and reaches its own route directly.
+  settled tail to dismiss from; and the work tab embeds the shared panel, which reaches its own route
+  directly — the seam keeps the method for the reason it keeps `setStackLanding`.
 - **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
   nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`
   instead, which is what the agent chose to say rather than whatever its last line happened to be.
@@ -969,6 +998,8 @@ button and the recovery hold not, the ask drawn above the plan, a goal with no a
 goal page answering through the shared card, a held part quoting the reconciler, a goal with no measured
 spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the backlog's four
 groups and its disabled container toggle, the fault log keeping its clear at zero, a panel's two ways
-out, the demo gate on injection, the precedence between a goal, the backlog and the overview, the
-recovery banner outside the situation area, a dropped socket drawing nothing at all, and the shell
-rendering the drawer the console only asks for.
+out, the demo gate on injection, the precedence between a goal and whichever tab the nav is on, all three
+tabs appearing in the nav (a destination added to `ConsoleTab` and forgotten there is a view nothing
+can reach), the work graph drawn by its own tab and no other, the recovery banner outside the
+situation area, a dropped socket drawing nothing at all, and the shell rendering the drawer the
+console only asks for — and no longer the work graph.

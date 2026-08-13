@@ -205,7 +205,7 @@ test('the view model exposes the queue and the selected goal together', async ()
     reliabilityOpen: false,
     selectedGoal: ref,
     consolePanel: null,
-    backlogOpen: false,
+    tab: 'overview',
   });
 
   assert.equal(view.selectedGoal, ref);
@@ -235,7 +235,7 @@ test('no selected goal means no goal page', async () => {
     reliabilityOpen: false,
     selectedGoal: null,
     consolePanel: null,
-    backlogOpen: false,
+    tab: 'overview',
   });
 
   assert.equal(view.goalPage, null);

@@ -5,7 +5,6 @@ import { AgentDrawer } from './components/AgentDrawer.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
-import { WorkTreePanel } from './components/WorkTreePanel.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { ReliabilityModal } from './components/ReliabilityModal.js';
 import { SpendModal } from './components/SpendModal.js';
@@ -48,22 +47,22 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
  * neither has a view-model to draw — the console cannot render a cockpit whose
  * state never arrived.
  *
- * The work graph hangs off the shell for the same class of reason. It is not in
- * the view-model at all — it has its own routes, fetched on open rather than on
- * every poll — so drawing it below `ConsoleRoot` would mean reaching `api.js`
- * from the presentation layer, which is exactly what the seam forbids (and
- * `test/console.test.ts` asserts).
+ * The work graph is **not** here: it is a destination in the console's nav, drawn
+ * by `ConsoleRoot` the way the launch desk is. It still rides its own routes
+ * rather than the view-model — fetched on open rather than on every poll — but
+ * that never made it the shell's, since embedding a component that reaches
+ * `api.js` is not `console/` importing it, and the import ban is the whole rule.
  *
- * The prompt book sits beside it on the same argument, reached from the other
- * direction: it is fetched rather than polled because it is read once at boot and
- * cannot change while the harness is up, so it has its own route and no place in
- * the view-model either.
+ * The prompt book is fetched rather than polled for the same reason the graph is:
+ * it is read once at boot and cannot change while the harness is up, so it has
+ * its own route and no place in the view-model. It rides in the settings modal,
+ * which *is* the shell's, for the reason below.
  *
- * `AgentDrawer` is here for the first of those reasons: it seeds itself from the
- * persisted transcript over its own route before the socket's deltas start
- * arriving, so it reaches `api.js` and cannot live under `console/`. The console
- * asks for it the way it asks for a plan — `actions.select(id)`, a flag on the
- * seam — and the shell answers.
+ * `AgentDrawer` and the modals are here because each is *overlaid* rather than
+ * placed: which one is open is cockpit state — the drawer's subscription is tied
+ * to it — and every surface that opens one is somewhere else on the page. The
+ * console asks the way it asks for a plan (`actions.select(id)`, a flag on the
+ * seam) and the shell answers.
  */
 export function App() {
   const status = useCockpit();
@@ -134,10 +133,6 @@ export function App() {
       )}
       {status.view.spendOpen && <SpendModal onClose={() => status.actions.openSpend(false)} />}
       {status.view.reliabilityOpen && <ReliabilityModal onClose={() => status.actions.openReliability(false)} />}
-      <section className="work-panel">
-        <h2>Work</h2>
-        <WorkTreePanel now={status.view.now} canFileTickets={status.view.state.config.canFileTickets} />
-      </section>
     </>
   );
 }

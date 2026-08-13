@@ -1324,14 +1324,12 @@ body {
 }
 
 /* ── Work graph ──────────────────────────────────────────────────────────
-   Shell-level rather than drawn by the console: the graph is the one surface that
-   outlives the world snapshot, so it is styled only through the tokens above. */
+   A shared component, drawn as the console's Work tab and styled only through the
+   tokens above — the console's own sheet never reaches in. No padding of its own:
+   the situation area supplies it, and the tab has no heading because the nav item
+   that opened it is the heading. */
 .work-panel {
-  padding: 0 16px 24px;
-}
-.work-panel h2 {
-  font-size: 14px;
-  color: var(--muted);
+  padding: 0;
 }
 .work-panel h3 {
   font-size: 13px;
