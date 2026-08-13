@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="How to operate LubbDubb: what changes about the job, and the decisions that stay yours." />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+    </style>
+    <title>Operating LubbDubb</title>
+
+    <style>
+      :root {
+        --paper: #f1f4f3;
+        --panel: #ffffff;
+        --panel-2: #e7ecea;
+        --ink: #101619;
+        --ink-2: #3c4a4d;
+        --ink-3: #6b7a7c;
+        --accent: #0e7c7b;
+        --accent-soft: rgba(14, 124, 123, 0.1);
+        --red: #c4453d;
+        --red-soft: rgba(196, 69, 61, 0.11);
+        --amber: #9c6f10;
+        --amber-soft: rgba(181, 129, 26, 0.14);
+        --rule: rgba(16, 22, 25, 0.13);
+        --rule-soft: rgba(16, 22, 25, 0.07);
+
+        --font-display: 'Iowan Old Style', Charter, 'Bitstream Charter', Cambria, Georgia, serif;
+        --font-ui: system-ui, 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #0b1012;
+          --panel: #121a1d;
+          --panel-2: #182226;
+          --ink: #e4ebe9;
+          --ink-2: #a9b8b8;
+          --ink-3: #7c8c8c;
+          --accent: #35b0aa;
+          --accent-soft: rgba(53, 176, 170, 0.13);
+          --red: #e2716a;
+          --red-soft: rgba(226, 113, 106, 0.13);
+          --amber: #d9a441;
+          --amber-soft: rgba(217, 164, 65, 0.14);
+          --rule: rgba(228, 235, 233, 0.16);
+          --rule-soft: rgba(228, 235, 233, 0.08);
+        }
+      }
+
+      :root[data-theme='dark'] {
+        --paper: #0b1012;
+        --panel: #121a1d;
+        --panel-2: #182226;
+        --ink: #e4ebe9;
+        --ink-2: #a9b8b8;
+        --ink-3: #7c8c8c;
+        --accent: #35b0aa;
+        --accent-soft: rgba(53, 176, 170, 0.13);
+        --red: #e2716a;
+        --red-soft: rgba(226, 113, 106, 0.13);
+        --amber: #d9a441;
+        --amber-soft: rgba(217, 164, 65, 0.14);
+        --rule: rgba(228, 235, 233, 0.16);
+        --rule-soft: rgba(228, 235, 233, 0.08);
+      }
+
+      :root[data-theme='light'] {
+        --paper: #f1f4f3;
+        --panel: #ffffff;
+        --panel-2: #e7ecea;
+        --ink: #101619;
+        --ink-2: #3c4a4d;
+        --ink-3: #6b7a7c;
+        --accent: #0e7c7b;
+        --accent-soft: rgba(14, 124, 123, 0.1);
+        --red: #c4453d;
+        --red-soft: rgba(196, 69, 61, 0.11);
+        --amber: #9c6f10;
+        --amber-soft: rgba(181, 129, 26, 0.14);
+        --rule: rgba(16, 22, 25, 0.13);
+        --rule-soft: rgba(16, 22, 25, 0.07);
+      }
+
+      body {
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--font-ui);
+        font-size: 17px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 24px 96px;
+      }
+
+      /* ---------- header ---------- */
+
+      .masthead {
+        padding: 56px 0 40px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 24px;
+      }
+
+      .thesis {
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: clamp(2rem, 5.2vw, 3.1rem);
+        line-height: 1.1;
+        letter-spacing: -0.015em;
+        text-wrap: balance;
+        margin: 0 0 24px;
+        max-width: 17ch;
+      }
+
+      .thesis em {
+        font-style: italic;
+        color: var(--accent);
+      }
+
+      .standfirst {
+        font-size: 1.1rem;
+        color: var(--ink-2);
+        max-width: 62ch;
+        margin: 0;
+      }
+
+      .trace {
+        display: block;
+        width: 100%;
+        height: 46px;
+        margin: 36px 0 0;
+        overflow: visible;
+      }
+
+      .trace path {
+        fill: none;
+        stroke: var(--accent);
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 1400;
+        stroke-dashoffset: 1400;
+        animation: draw 2.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards;
+      }
+
+      @keyframes draw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .trace path {
+          animation: none;
+          stroke-dashoffset: 0;
+        }
+      }
+
+      /* ---------- shell ---------- */
+
+      .shell {
+        display: grid;
+        gap: 56px;
+      }
+
+      .railnav {
+        display: none;
+      }
+
+      .column {
+        display: grid;
+        gap: 64px;
+        min-width: 0;
+        max-width: 70ch;
+        padding-top: 56px;
+      }
+
+      @media (min-width: 1080px) {
+        .shell {
+          grid-template-columns: 176px minmax(0, 1fr);
+          gap: 64px;
+        }
+
+        .railnav {
+          display: block;
+          position: sticky;
+          top: 32px;
+          align-self: start;
+          padding-top: 64px;
+        }
+
+        .railnav ol {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 2px;
+          border-left: 1px solid var(--rule);
+        }
+
+        .railnav a {
+          display: block;
+          padding: 5px 0 5px 14px;
+          margin-left: -1px;
+          border-left: 2px solid transparent;
+          font-family: var(--font-mono);
+          font-size: 0.73rem;
+          letter-spacing: 0.05em;
+          color: var(--ink-3);
+          text-decoration: none;
+          transition: color 0.15s, border-color 0.15s;
+        }
+
+        .railnav a:hover,
+        .railnav a:focus-visible {
+          color: var(--accent);
+          border-left-color: var(--accent);
+        }
+      }
+
+      /* ---------- sections ---------- */
+
+      .band {
+        display: grid;
+        gap: 20px;
+        scroll-margin-top: 24px;
+      }
+
+      .band > h2 {
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: clamp(1.5rem, 3vw, 1.95rem);
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        text-wrap: balance;
+        margin: 0;
+      }
+
+      .band > p {
+        margin: 0;
+        max-width: 65ch;
+        color: var(--ink-2);
+      }
+
+      .band > p.lead {
+        color: var(--ink);
+        font-size: 1.05rem;
+      }
+
+      .kicker {
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin: 0 0 -10px;
+      }
+
+      strong {
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.86em;
+        background: var(--panel-2);
+        padding: 1px 5px;
+        border-radius: 3px;
+      }
+
+      /* ---------- before / after table ---------- */
+
+      .scroller {
+        overflow-x: auto;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.95rem;
+      }
+
+      th {
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        font-weight: 500;
+        text-align: left;
+        padding: 0 16px 10px 0;
+        border-bottom: 1px solid var(--rule);
+        white-space: nowrap;
+      }
+
+      td {
+        padding: 12px 16px 12px 0;
+        border-bottom: 1px solid var(--rule-soft);
+        vertical-align: top;
+        color: var(--ink-2);
+      }
+
+      tr.mine td {
+        color: var(--ink);
+      }
+
+      tr.mine td:last-child {
+        font-weight: 600;
+      }
+
+      .tag {
+        display: inline-block;
+        font-family: var(--font-mono);
+        font-size: 0.66rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        border-radius: 3px;
+        white-space: nowrap;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .tag.red {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .tag.amber {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      /* ---------- flow strip ---------- */
+
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 6px;
+        padding: 20px;
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+      }
+
+      .flow .step {
+        flex: 1 1 96px;
+        padding: 10px 12px;
+        border-radius: 3px;
+        background: var(--panel-2);
+        font-size: 0.82rem;
+        line-height: 1.35;
+        color: var(--ink-2);
+      }
+
+      .flow .step.gate {
+        background: var(--accent-soft);
+        color: var(--ink);
+        box-shadow: inset 0 0 0 1px var(--accent);
+      }
+
+      .flow .step b {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 0.6rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 3px;
+      }
+
+      .flow .step.plain b {
+        color: var(--ink-3);
+      }
+
+      /* ---------- move cards ---------- */
+
+      .moves {
+        display: grid;
+        gap: 2px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .move {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 0 18px;
+        padding: 22px 22px 24px;
+        background: var(--panel);
+      }
+
+      .move > .num {
+        font-family: var(--font-display);
+        font-size: 1.9rem;
+        line-height: 1;
+        color: var(--accent);
+        grid-row: span 3;
+      }
+
+      .move > h3 {
+        margin: 0 0 6px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        letter-spacing: -0.005em;
+      }
+
+      .move > .rule-line {
+        margin: 0 0 12px;
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        line-height: 1.4;
+        color: var(--ink);
+      }
+
+      .move > ul {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 6px;
+        font-size: 0.93rem;
+        color: var(--ink-2);
+      }
+
+      .move li::marker {
+        color: var(--ink-3);
+      }
+
+      /* ---------- callout ---------- */
+
+      .note {
+        border-left: 2px solid var(--accent);
+        padding: 2px 0 2px 18px;
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--ink-2);
+        max-width: 64ch;
+      }
+
+      .note b {
+        color: var(--ink);
+      }
+
+      /* ---------- reading cards ---------- */
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 2px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .card {
+        background: var(--panel);
+        padding: 18px 20px 20px;
+        display: grid;
+        gap: 7px;
+        align-content: start;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-weight: 500;
+      }
+
+      .card p {
+        margin: 0;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        color: var(--ink-2);
+      }
+
+      .card p.watch {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      /* ---------- day timeline ---------- */
+
+      .day {
+        display: grid;
+        gap: 0;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .day li {
+        display: grid;
+        grid-template-columns: 116px minmax(0, 1fr);
+        gap: 20px;
+        padding: 16px 0;
+        border-top: 1px solid var(--rule-soft);
+      }
+
+      .day li:first-child {
+        border-top: 1px solid var(--rule);
+      }
+
+      .day .when {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        padding-top: 4px;
+      }
+
+      .day .what {
+        font-size: 0.95rem;
+        color: var(--ink-2);
+      }
+
+      .day .what b {
+        display: block;
+        color: var(--ink);
+        font-weight: 600;
+        margin-bottom: 3px;
+      }
+
+      /* ---------- don't list ---------- */
+
+      .avoid {
+        display: grid;
+        gap: 14px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .avoid li {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        gap: 12px;
+        font-size: 0.95rem;
+        color: var(--ink-2);
+      }
+
+      .avoid .x {
+        font-family: var(--font-mono);
+        color: var(--red);
+        line-height: 1.5;
+      }
+
+      .avoid b {
+        color: var(--ink);
+      }
+
+      /* ---------- fixed band ---------- */
+
+      .fixed {
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: 24px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .fixed .item {
+        display: grid;
+        gap: 5px;
+      }
+
+      .fixed .item b {
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        font-weight: 400;
+      }
+
+      .fixed .item span {
+        font-size: 0.93rem;
+        color: var(--ink-2);
+      }
+
+      /* ---------- footer ---------- */
+
+      .footer {
+        margin-top: 72px;
+        padding-top: 28px;
+        border-top: 1px solid var(--rule);
+        display: grid;
+        gap: 10px;
+        font-size: 0.9rem;
+        color: var(--ink-3);
+      }
+
+      .footer a {
+        color: var(--accent);
+        text-decoration-color: var(--rule);
+        text-underline-offset: 3px;
+      }
+
+      a:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="masthead">
+        <p class="eyebrow">LubbDubb · operator's guide</p>
+        <h1 class="thesis">You stop producing the change. You start owning the <em>verdicts</em>.</h1>
+        <p class="standfirst">
+          Using an agent is a tool. LubbDubb is a harness: it watches your tracker, your pull requests and
+          your CI on a heartbeat, decides what to do next, and puts agents on it — then hands you back the
+          handful of decisions that were actually yours all along.
+        </p>
+        <svg class="trace" viewBox="0 0 1200 46" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 30 H150 L162 30 L172 12 L182 42 L192 30 L206 30 H430 L442 30 L452 12 L462 42 L472 30 L486 30 H760 L772 30 L782 12 L792 42 L802 30 L816 30 H1060 L1072 30 L1082 12 L1092 42 L1102 30 L1116 30 H1200" />
+        </svg>
+      </header>
+
+      <div class="shell">
+        <nav class="railnav" aria-label="Sections">
+          <ol>
+            <li><a href="#shift">The shift</a></li>
+            <li><a href="#goal">The unit of work</a></li>
+            <li><a href="#moves">Your five moves</a></li>
+            <li><a href="#rail">What you're asked</a></li>
+            <li><a href="#day">A day</a></li>
+            <li><a href="#readings">Four readings</a></li>
+            <li><a href="#avoid">Four ways to fail</a></li>
+            <li><a href="#fixed">Not negotiable</a></li>
+            <li><a href="#week">First week</a></li>
+          </ol>
+        </nav>
+
+        <main class="column">
+          <section class="band" id="shift">
+            <p class="kicker">01 — The shift</p>
+            <h2>What moves off your desk, and what stays on it</h2>
+            <p>
+              Three rows never move. They are the rows that need judgement, and judgement is the one thing
+              the harness will not fake for you.
+            </p>
+            <div class="scroller">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">You used to</th>
+                    <th scope="col">Now</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Pick the next ticket</td>
+                    <td>The dispatcher ranks every candidate; you re-order <strong>Up next</strong> if it's wrong</td>
+                  </tr>
+                  <tr>
+                    <td>Cut the branch, open the PR</td>
+                    <td>An agent does, one per part, each in its own worktree</td>
+                  </tr>
+                  <tr>
+                    <td>Chase red CI</td>
+                    <td>Each failing check is classified and worked — or <em>held</em>, if it isn't ours to fix</td>
+                  </tr>
+                  <tr>
+                    <td>Write the change</td>
+                    <td>An agent writes it. You read the plan, then the delivered result</td>
+                  </tr>
+                  <tr class="mine">
+                    <td>Decide whether the goal is even clear</td>
+                    <td>Still you <span class="tag">yours</span></td>
+                  </tr>
+                  <tr class="mine">
+                    <td>Decide what "done" means</td>
+                    <td>Still you <span class="tag">yours</span></td>
+                  </tr>
+                  <tr class="mine">
+                    <td>Decide whether this may leave the building</td>
+                    <td>Still you <span class="tag">yours</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="band" id="goal">
+            <p class="kicker">02 — The unit of work</p>
+            <h2>Stop thinking in branches. Think in goals.</h2>
+            <p>
+              The harness cuts branches and reaps them. A <strong>goal</strong> is a ticket, and every goal
+              runs the same path — whether you wrote the ticket yourself or typed a sentence into
+              <strong>Launch</strong>, which files one for you and sends it through the same funnel.
+            </p>
+            <div class="flow">
+              <div class="step plain"><b>in</b>Ticket</div>
+              <div class="step gate"><b>gate</b>Enough information?</div>
+              <div class="step plain"><b>then</b>Plan the work</div>
+              <div class="step gate"><b>gate · yours</b>Plan accepted?</div>
+              <div class="step plain"><b>then</b>Do the work</div>
+              <div class="step gate"><b>gate · yours</b>Goal achieved?</div>
+              <div class="step plain"><b>out</b>Report</div>
+            </div>
+            <p class="note">
+              <b>The gates are decisions, not formalities.</b> Each one is something that has to be decided,
+              not a step that always passes — and "goal achieved: no" returns to <em>planning</em>, never
+              straight back to coding, because what's missing may be a different decomposition.
+            </p>
+          </section>
+
+          <section class="band" id="moves">
+            <p class="kicker">03 — The job</p>
+            <h2>Everything you do in a day is one of five moves</h2>
+
+            <div class="moves">
+              <article class="move">
+                <div class="num">1</div>
+                <h3>State a goal well enough to be worked</h3>
+                <p class="rule-line">Write for a reader who has the code, but not your last three weeks.</p>
+                <ul>
+                  <li>Say what should be <strong>true when it's done</strong>, not what to type.</li>
+                  <li>Name the thing — file, route, screen, symptom. An agent can search; it can't guess which of four panels you meant.</li>
+                  <li>Paste the evidence. Attachments follow the issue through to the agent working it; images paste straight into the composer.</li>
+                  <li>Don't write the diff. A ticket that dictates the implementation gets you a worse one, and hides that you hadn't decided the outcome.</li>
+                </ul>
+              </article>
+
+              <article class="move">
+                <div class="num">2</div>
+                <h3>Answer what's in "Needs you"</h3>
+                <p class="rule-line">The left rail is your whole inbox. Red first — those are costing you a slot.</p>
+                <ul>
+                  <li><strong>Red</strong> means an agent is parked on a question only you can answer, holding a fleet slot and a worktree while it waits.</li>
+                  <li><strong>Amber</strong> means the obligation is yours and nothing in the fleet is blocked.</li>
+                  <li>Answer on the <strong>goal's page</strong>, not from the row. An escalation read without its goal is a sentence with no subject.</li>
+                </ul>
+              </article>
+
+              <article class="move">
+                <div class="num">3</div>
+                <h3>Steer mid-run, sparingly</h3>
+                <p class="rule-line">The drawer is for "you're going the wrong way" — not for coding by proxy.</p>
+                <ul>
+                  <li>Click any agent for its live transcript, its reasoning, and a box to type into.</li>
+                  <li>If you're steering every agent one instruction at a time, the <em>ticket</em> was underspecified. Kill the run and fix the goal.</li>
+                  <li>This is the most common way people fail here: it converts a fleet back into one pair of hands.</li>
+                </ul>
+              </article>
+
+              <article class="move">
+                <div class="num">4</div>
+                <h3>Judge what was delivered</h3>
+                <p class="rule-line">Asked of what actually landed — never of the agent's confidence in itself.</p>
+                <ul>
+                  <li><strong>Mark done</strong> when the goal is met.</li>
+                  <li><strong>Work left</strong> when it isn't — a third control, not the toggle's other end, because it's what puts the goal back in front of the harness.</li>
+                  <li><strong>Raise a bug</strong> when you ran it and it doesn't do what you expect. That's the one fact no agent on the goal can derive: none of them ran it.</li>
+                </ul>
+              </article>
+
+              <article class="move">
+                <div class="num">5</div>
+                <h3>Conclude, or let it end</h3>
+                <p class="rule-line">A fleet whose goals never conclude is a rail nobody reads any more.</p>
+                <ul>
+                  <li>The harness <strong>never closes your ticket</strong>. A delivered goal whose item is still open files a close-out on your bench.</li>
+                  <li>That one settles itself the moment the tracker stops listing the item open.</li>
+                  <li>Everything else ends by <em>Mark done</em>, <em>Work left</em>, or <em>End the run</em>.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="band" id="rail">
+            <p class="kicker">04 — The rail</p>
+            <h2>Six things the harness will ask you for</h2>
+            <div class="scroller">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Ask</th>
+                    <th scope="col">What it is</th>
+                    <th scope="col">You</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="tag red">blocking</span> Escalation</td>
+                    <td>A parked agent asking you something</td>
+                    <td>Type the answer; it unparks</td>
+                  </tr>
+                  <tr>
+                    <td><span class="tag red">blocking</span> Plan proposal</td>
+                    <td>A decomposition into parts, before any of it is built</td>
+                    <td>Accept, or reject with a reason</td>
+                  </tr>
+                  <tr>
+                    <td><span class="tag red">blocking</span> Outbound act</td>
+                    <td>Something an agent wants to send into the world</td>
+                    <td>Accept or reject</td>
+                  </tr>
+                  <tr>
+                    <td><span class="tag red">blocking</span> Permission</td>
+                    <td>An agent hit a command outside the allow-list</td>
+                    <td>Allow or refuse</td>
+                  </tr>
+                  <tr>
+                    <td><span class="tag amber">yours</span> Bench task</td>
+                    <td>Work only a person can do — flip a setting, look at a screen</td>
+                    <td>Do it, then mark done</td>
+                  </tr>
+                  <tr>
+                    <td><span class="tag amber">yours</span> Close-out</td>
+                    <td>A delivered goal whose ticket is still open</td>
+                    <td>Close it — it settles itself</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="note">
+              <b>A rejection isn't a dead end, and isn't a mute button.</b> It stands until the world gives a
+              reason to ask again — a push, a CI result, an approval, a comment — and the reason you typed is
+              handed to the next agent that works that item. Write it as if the next agent will read it,
+              because it will.
+            </p>
+            <p class="note">
+              <b>The plan proposal is the highest-leverage thirty seconds in your day.</b> It's the last cheap
+              moment to change the shape of the work. Read the parts and their dependency chain, not the
+              prose: is this the right decomposition, is anything missing, is one part doing two things.
+              Rejecting costs one replan. Accepting a bad shape costs you every PR underneath it.
+            </p>
+          </section>
+
+          <section class="band" id="day">
+            <p class="kicker">05 — Rhythm</p>
+            <h2>A day, concretely</h2>
+            <ol class="day">
+              <li>
+                <div class="when">First</div>
+                <div class="what">
+                  <b>Clear the recovery banner, if it's up</b>
+                  A previous run left agents orphaned. While it stands <em>no cycle runs at all</em>, so
+                  everything else on screen is stale for one reason. Restore, requeue or remove each one.
+                </div>
+              </li>
+              <li>
+                <div class="when">Then</div>
+                <div class="what">
+                  <b>Drain the rail, red first</b>
+                  Red rows hold agents that cost you a slot and a worktree while they wait. The rail sorts
+                  most-holding first for exactly that reason, and never re-sorts under you.
+                </div>
+              </li>
+              <li>
+                <div class="when">Glance</div>
+                <div class="what">
+                  <b>Four readings in the top bar</b>
+                  Faults, then Output, then Yield, then Spend — in that order. What each is for is below.
+                </div>
+              </li>
+              <li>
+                <div class="when">Check</div>
+                <div class="what">
+                  <b>Up next</b>
+                  The dispatcher's ranked plan, cut at your current headroom, every row carrying its reason
+                  verbatim. Wrong order? Drag it; the override persists. Wrong <em>reasons</em>? That's a
+                  configuration conversation, not a drag.
+                </div>
+              </li>
+              <li>
+                <div class="when">Periodically</div>
+                <div class="what">
+                  <b>Triage the backlog</b>
+                  Nothing in it blocks an agent — which is why it's a tab and not a rail. The unwatched count
+                  in the nav is the one number that says whether opening it is worth it.
+                </div>
+              </li>
+              <li>
+                <div class="when">When non-zero</div>
+                <div class="what">
+                  <b>Read findings</b>
+                  Claims agents filed about things <em>outside</em> their own task. They queue nothing by
+                  design — one agent's hunch spending another agent's slot is a capability escalation, not a
+                  convenience. Promote it, file it for later, or dismiss it.
+                </div>
+              </li>
+            </ol>
+          </section>
+
+          <section class="band" id="readings">
+            <p class="kicker">06 — Instruments</p>
+            <h2>Four readings, and the one number that matters</h2>
+            <div class="cards">
+              <article class="card">
+                <h3>Faults</h3>
+                <p>Recorded failures. Blocks nothing.</p>
+                <p class="watch">A rising count means something is quietly not working.</p>
+              </article>
+              <article class="card">
+                <h3>Output</h3>
+                <p>The only reading against <em>time</em> — the only way to tell a fleet that's producing from one that's merely busy.</p>
+                <p class="watch">Dispatches per merge: effort over output.</p>
+              </article>
+              <article class="card">
+                <h3>Yield</h3>
+                <p>How runs ended, the CI red rate, and the median time back to green.</p>
+                <p class="watch">The repeats table — a goal that quietly went round four times.</p>
+              </article>
+              <article class="card">
+                <h3>Spend</h3>
+                <p>Where the money went, split by phase and by goal.</p>
+                <p class="watch">Which phase is eating the budget, not the total.</p>
+              </article>
+            </div>
+            <p class="note">
+              <b>A rising dispatch line over a flat merge line is a fleet spinning</b>, and the fix is almost
+              always upstream of the agents: goals too vague, plans too coarse, or a check nobody classified
+              so an agent keeps being sent at a wall it was never getting through.
+            </p>
+            <p>
+              Throughput has two dials, and neither is the model. <strong>Concurrency</strong> is the fleet
+              cap, adjustable live — but its real ceiling is how fast you answer the rail, so if the rail is
+              always full, lower it. Parked agents holding slots are worse than idle ones. The other dial is
+              <strong>how much you had to answer</strong>: a goal that ran ticket to merge on two clicks is
+              the point; a goal that took nine escalations was a goal that was never stated.
+            </p>
+          </section>
+
+          <section class="band" id="avoid">
+            <p class="kicker">07 — Failure modes</p>
+            <h2>Four habits that don't survive the move</h2>
+            <ul class="avoid">
+              <li>
+                <span class="x">✕</span>
+                <span><b>Watching work happen.</b> Following one transcript to the end feels like productivity and is the most expensive hour you can spend here. Open a drawer to steer or diagnose, then close it.</span>
+              </li>
+              <li>
+                <span class="x">✕</span>
+                <span><b>Doing it yourself because it's faster.</b> Sometimes true, and fine — but do it as a ticket the harness knows about, or the record has a hole in it and the close-out sweep will ask you about work you already did.</span>
+              </li>
+              <li>
+                <span class="x">✕</span>
+                <span><b>Batching the rail.</b> Asks are cheap to answer and expensive to leave. Each blocking one is an agent holding a slot. The rail is not email.</span>
+              </li>
+              <li>
+                <span class="x">✕</span>
+                <span><b>Treating a plan rejection as a failure.</b> It's the mechanism working. A replan costs one agent; an accepted bad plan costs every PR under it.</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="band" id="fixed">
+            <p class="kicker">08 — Fixed</p>
+            <h2>Two things you can't configure away</h2>
+            <p>Both exist so this is safe to leave running. Understand them before trying to work around them.</p>
+            <div class="fixed">
+              <div class="item">
+                <b>Every act that reaches the outside world is authorized.</b>
+                <span>By you, or by an explicit auto-send decision you opted a specific action into — off by default. There is no arm where an agent posts, merges or files unasked.</span>
+              </div>
+              <div class="item">
+                <b>An agent declares that it finished. Nothing infers it.</b>
+                <span>Silence never reads as success. The failure this chooses is the cheap, visible one: work sitting still with a marker on it, rather than work quietly assumed complete.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="band" id="week">
+            <p class="kicker">09 — Ramp</p>
+            <h2>Your first week</h2>
+            <ol class="day">
+              <li>
+                <div class="when">Day 1</div>
+                <div class="what">
+                  <b>Watch it turn</b>
+                  Run the example config's mock agent, or a real repo with a small watched label set. Force a
+                  pulse with <em>Scan</em> and read the decision log: what was decided, and which rule produced
+                  it. Nothing here is unexplainable — including an idle cycle.
+                </div>
+              </li>
+              <li>
+                <div class="when">Days 2–3</div>
+                <div class="what">
+                  <b>One goal, end to end</b>
+                  Pick a real ticket you'd have done yourself. Let it run. Answer everything. Then compare the
+                  result to what you'd have written — and note where the <em>ticket</em>, not the agent, was
+                  the limiting factor.
+                </div>
+              </li>
+              <li>
+                <div class="when">Day 4</div>
+                <div class="what">
+                  <b>Turn the cap up</b>
+                  Two or three agents. This is where operating starts feeling different from using: you'll
+                  notice you're now reading rather than typing.
+                </div>
+              </li>
+              <li>
+                <div class="when">Day 5</div>
+                <div class="what">
+                  <b>Tune what you saw</b>
+                  The CI policy, so a check nobody here can fix <em>holds</em> instead of sending an agent at a
+                  wall. The prompt book, if the house style of your reports or tickets is wrong. The watch
+                  labels, if the wrong things are being picked up.
+                </div>
+              </li>
+            </ol>
+          </section>
+
+          <footer class="footer">
+            <p>
+              The full text is <code>docs/operating.md</code>. Beside it: <code>docs/workflow.md</code> for the
+              workflow in full and where a different one slots in, and <code>docs/spec/</code> for the
+              specification of every subsystem as it behaves today — the cockpit (17), issue pickup (06),
+              planning (08), jobs and findings (13), observability (18), configuration (02).
+            </p>
+          </footer>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

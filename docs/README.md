@@ -15,6 +15,8 @@ off by default is described as off by default, and what turning it on does.
 | ------------------- | ---------------------------------------------------------------------------------------------- |
 | `spec/`             | The specification, one document per subsystem. Numbered by the order they build on each other. |
 | `workflow.md`       | The end-to-end workflow the harness is built to run, and where a different one slots in.       |
+| `operating.md`      | The operator's guide: what changes about the job, and the five decisions that stay yours.      |
+| `operating.html`    | The same guide as a page to skim — open it in a browser. Kept in step with `operating.md`.     |
 | `prompt-templates/` | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id. |
 
 `spec/` holds the specification and nothing else. Dated design documents — the proposals that
