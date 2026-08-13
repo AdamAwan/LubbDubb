@@ -74,6 +74,19 @@ const ISSUE_SUBTREE = /^issue:(\d+)(?::|$)/;
 const PR_NODE = /^(pr:\d+)(?::|$)/;
 
 /**
+ * The pull request a `pr:*` origin concerns, or null for a ref that names none.
+ *
+ * One reduction, exported, because two modules need it for different ends — the
+ * lineage walk below, and `buildCiHealth`'s per-pull-request CI spend, which joins
+ * an agent's `pr:41:ci` origin to the `pr:41` its CI verdicts are recorded against.
+ * Two regexes over one ref shape is the second opinion this module already refuses
+ * to have about goal attribution.
+ */
+export function prNodeRefOf(originRef: string): string | null {
+  return PR_NODE.exec(originRef)?.[1] ?? null;
+}
+
+/**
  * How far up the lineage the walk goes. `parent_ref` is write-once and therefore
  * acyclic by construction, so this is the belt to that brace — the same stance
  * `listWorkSubtree`'s `UNION` takes, and for the same reason: an accounting read
@@ -121,7 +134,7 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
 
 /** The goal an origin's spend belongs to: by name if it can be, by lineage otherwise. */
 function issueBehind(originRef: string | null, parentOf: ReadonlyMap<string, string | null>): number | null {
-  let ref = originRef === null ? null : (PR_NODE.exec(originRef)?.[1] ?? originRef);
+  let ref = originRef === null ? null : (prNodeRefOf(originRef) ?? originRef);
   for (let hop = 0; ref !== null && hop < MAX_HOPS; hop++) {
     const named = ISSUE_SUBTREE.exec(ref);
     if (named) return Number(named[1]);

@@ -209,6 +209,7 @@ export function reliabilityCsv(insights: ReliabilityInsights): string {
     ['Median back to green (ms)', ci.medianToGreenMs],
     ['Slowest back to green (ms)', ci.slowestToGreenMs],
     ['Still red', ci.unrecovered],
+    ['Red checks cost (USD)', ci.ciCostUsd],
     ['Landing cost over the window (USD)', ci.landingCostUsd],
     // The window split looks like a mistake until it is stated, so it is stated.
     ['Outcomes measured over', 'all time'],
@@ -216,6 +217,9 @@ export function reliabilityCsv(insights: ReliabilityInsights): string {
     // A red is a verdict, not a pull request: one PR that failed nine times is
     // nine reds, and a reader summing the red column needs to know which.
     ['A red is', 'one CI verdict, not one pull request'],
+    // One CI agent often answers several reds at once, so a PR that went red four
+    // times and was fixed once divides the same money four ways.
+    ['Cost per red is', 'per verdict, not per fix — the price of breaking, not of repairing'],
     // Stopped is somebody's decision, and a fleet an operator steers is not an
     // unreliable one — only faults count against the rate.
     ['Counts against the completion rate', 'failed and crashed only — stopped runs do not'],
@@ -250,8 +254,8 @@ export function reliabilityCsv(insights: ReliabilityInsights): string {
     [],
 
     ['Reddest pull requests'],
-    ['Ref', 'PR', 'Went red', 'Went green', 'Red for (ms)', 'Still red'],
-    ...ci.flakiest.map((s) => [s.ref, s.prNumber, s.reds, s.greens, s.redMs, s.stillRed ? 'yes' : 'no']),
+    ['Ref', 'PR', 'Went red', 'Went green', 'Red for (ms)', 'Cost (USD)', 'Still red'],
+    ...ci.flakiest.map((s) => [s.ref, s.prNumber, s.reds, s.greens, s.redMs, s.costUsd, s.stillRed ? 'yes' : 'no']),
     [`The ${ci.flakiest.length} reddest of ${ci.prsAffected} pull requests that went red.`],
     [],
 
@@ -343,6 +347,19 @@ function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
               ? `${ci.unrecovered} still red`
               : 'nothing has had to recover'
             : `median of ${ci.recoveries} · slowest ${fmtDuration(ci.slowestToGreenMs)}`}
+        </span>
+      </div>
+      {/* The tile the CI split exists for. A red rate says how often the pipeline
+          breaks; this says what breaking costs, which is the form the question
+          arrives in — and the per-red figure beside it is the one an operator can
+          multiply by the reds they expect next week. */}
+      <div className="sp-tile sp-well">
+        <span className="lb">Red checks cost</span>
+        <span className="vl">{fmtUsd(ci.ciCostUsd)}</span>
+        <span className="sb">
+          {ci.reds === 0
+            ? 'nothing went red in this window'
+            : `${fmtUsd(ci.ciCostUsd / ci.reds)} a red · ${fmtUsd(ci.landingCostUsd)} on the rest of landing`}
         </span>
       </div>
     </div>
@@ -550,6 +567,8 @@ function Flakiest({ ci }: { ci: CiHealth }): JSX.Element {
             <th className="n">Went red</th>
             <th className="n">Went green</th>
             <th className="n">Red for</th>
+            <th className="n">Cost</th>
+            <th className="n">A red</th>
             <th className="n">Now</th>
           </tr>
         </thead>
@@ -563,6 +582,11 @@ function Flakiest({ ci }: { ci: CiHealth }): JSX.Element {
               <td className="n b">{s.reds}</td>
               <td className="n">{s.greens}</td>
               <td className="n">{fmtDuration(s.redMs)}</td>
+              {/* Zero is a real answer and an em dash is a different one: a pull
+                  request can go red and be fixed by a human, or by an agent whose
+                  spend fell outside this window, and neither is "cost nothing". */}
+              <td className="n b">{s.costUsd > 0 ? fmtUsd(s.costUsd) : <span className="dim">—</span>}</td>
+              <td className="n">{s.costUsd > 0 ? fmtUsd(s.costUsd / s.reds) : <span className="dim">—</span>}</td>
               <td className="n">
                 {s.stillRed ? <span className="rl-still">still red</span> : <span className="dim">green</span>}
               </td>
@@ -653,10 +677,17 @@ function Method({ insights }: { insights: ReliabilityInsights }): JSX.Element {
       <p>
         <b>A red is a CI verdict, not a pull request.</b> One pull request that failed nine times is nine reds, which is
         the point — the table below names it. Runs still pending are not verdicts and are counted as neither.
-        {ci.landingCostUsd > 0 && (
+      </p>
+      <p>
+        <b>Cost per red is per verdict, not per fix.</b> The money is what agents on{' '}
+        <span className="mono">pr:&lt;n&gt;:ci</span> spent in this window, and one of them often answers several reds
+        at once — so a pull request that went red four times and was fixed once divides the same money four ways. It is
+        the price of the pipeline breaking, not the price of a repair.
+        {ci.ciCostUsd > 0 && (
           <>
             {' '}
-            Getting pull requests through their checks cost <b>{fmtUsd(ci.landingCostUsd)}</b> over this window.
+            Answering checks cost <b>{fmtUsd(ci.ciCostUsd)}</b> over this window; the rest of landing — review comments,
+            retargets, the merge — cost <b>{fmtUsd(ci.landingCostUsd)}</b>.
           </>
         )}
       </p>

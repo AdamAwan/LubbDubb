@@ -617,9 +617,10 @@ fleet is getting and never a rate card
 ([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
 runs, which appear in no figure above it.
 
-**It [exports](#exporting-a-reading)**, five sections in the order the panel draws them — totals,
-phases, days, goals, runs — with the phase split riding inside each goal row as it rides inside that
-goal's bar.
+**It [exports](#exporting-a-reading)**, seven sections in the order the panel draws them — totals,
+phases, days, task types, failing checks, goals, runs — with the phase split riding inside each goal
+row as it rides inside that goal's bar, and each of the three remainders (reached no goal, named no
+check, attributed to a check) carried as its own row.
 
 ## Exporting a reading
 
@@ -649,9 +650,13 @@ Four rules hold them:
   rows of `$0.00` add up to real money. A rate leaves as a fraction and a duration in milliseconds. The
   cockpit's formatting is presentation and stops at the screen.
 - **Every caveat the panel states in prose leaves as a row** — the truncated rankings, the unattributed
-  remainder, the two halves measured over different windows, a red being a verdict rather than a pull
-  request, stopped not being failed. A file read six months from now has no method note beside it, so a
-  cap it does not carry is a cap nobody will know about. A `null` stays an empty cell and never a `0`.
+  and unnamed remainders, the two halves measured over different windows, a red being a verdict rather
+  than a pull request, cost-per-red being per verdict rather than per fix, stopped not being failed. A
+  file read six months from now has no method note beside it, so a cap it does not carry is a cap
+  nobody will know about. A `null` stays an empty cell and never a `0`.
+- **A table added to a panel is added to its export in the same change.** An export that quietly
+  forgets one arrives as a complete-looking file that under-reports, which is the failure every rule
+  above exists to prevent — and the one the reader has no way to detect.
 - **Nothing exports what it could not fetch.** The control is drawn only once there is a payload —
   each panel's own "a failed fetch must not read as a clean fleet" rule, applied to the one artefact
   that outlives the tab.
@@ -706,9 +711,9 @@ the two halves are measured over different windows, and a red is a CI verdict ra
 request. It also names the unmeasured runs, which count in every rate above it and in no dollar.
 
 **It [exports](#exporting-a-reading)** as Spend does, and the twins offer the same three files for the
-reason they share their chrome. Six sections here rather than five — tallies, outcomes, CI days,
-phases, the reddest pull requests, the repeats — and the phase table is keyed the way Spend's is, from
-the same server-side classifier, so the two files join on it.
+reason they share their chrome. Six sections — tallies, outcomes, CI days, phases, the reddest pull
+requests, the repeats — and the phase table is keyed the way Spend's is, from the same server-side
+classifier, so the two files join on it.
 
 ## Data flow
 

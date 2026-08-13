@@ -79,6 +79,13 @@ const ActionSchema = z.discriminatedUnion('type', [
      * de-dup doesn't read them straight back to it (`dispatchedSignalsByBranch`).
      */
     signalRefs: z.array(z.string()).optional(),
+    /**
+     * The CI checks this dispatch answers, as the provider names them. Carried
+     * onto the task so spend can be read back per check (`src/taskTypeSpend.ts`)
+     * — the dispatch reason names them too, but only in a sentence, and the read
+     * path must never parse one. Set by the two CI rules; absent everywhere else.
+     */
+    ciChecks: z.array(z.string()).optional(),
     ...origin,
     ...job,
     ...part,

@@ -630,6 +630,11 @@ export class ActionExecutor {
         originTitle: action.originTitle,
         originSummary: action.originSummary,
         dispatchReason: action.reason,
+        // What kind of work this is, and which checks it answers — recorded on
+        // the task because a decision row carries the rule but nothing links it
+        // to the agent, so it can say a rule fired and never what that cost.
+        rule: action.rule,
+        ciChecks: action.ciChecks ?? null,
       });
       // A stacked plan part names the branch it forks from; everything else takes
       // the configured integration branch.
@@ -645,6 +650,7 @@ export class ActionExecutor {
       originTitle: action.originTitle,
       originSummary: action.originSummary,
       dispatchReason: action.reason,
+      rule: action.rule,
     });
     const cwd = resolve(this.deps.deskRoot, task.id);
     mkdirSync(cwd, { recursive: true });

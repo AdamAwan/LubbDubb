@@ -1,5 +1,5 @@
 import type { Agent, AgentStatus, Task, UsageEvent, WorldEvent } from './types.js';
-import { roundUsd } from './issueSpend.js';
+import { prNodeRefOf, roundUsd } from './issueSpend.js';
 import { phaseLabel, phaseOf, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from './world/worldDiff.js';
 
@@ -18,11 +18,11 @@ import { ciStatusOf } from './world/worldDiff.js';
  *   uses, so "assayers always finish, part agents crash a third of the time" is a
  *   sentence the two panels can be read into together.
  * - **CI health** — how often a pull request went red, how long it stayed red, and
- *   which ones did it repeatedly. The spend panel's `landing` phase already
- *   argues that "a goal whose landing dwarfs its build is not an expensive goal,
- *   it is a flaky pipeline"; this is the reading that settles which one it is, and
- *   it carries the landing spend of the same window so the flakiness has a price
- *   next to it.
+ *   which ones did it repeatedly. The spend panel's `ci` phase already argues that
+ *   "a goal whose landing dwarfs its build is not an expensive goal, it is a flaky
+ *   pipeline"; this is the reading that settles which one it is, and it carries the
+ *   `ci` spend of the same window — fleet-wide and *per pull request* — so every
+ *   count of reds has the money it took to answer them sitting beside it.
  *
  * ## Why the two halves are windowed differently
  *
@@ -199,6 +199,20 @@ export interface CiSubject {
   redMs: number;
   /** True when it was still red at the window's end — its `redMs` is still running. */
   stillRed: boolean;
+  /**
+   * What the `ci` phase spent on *this* pull request inside the window — the
+   * agents dispatched against its `pr:<n>:ci` and `pr:<n>:ci-gate`.
+   *
+   * Beside `reds`, this is the reading the whole split exists for: cost over reds
+   * is what one CI failure costs to answer, and it is a figure no other surface
+   * can produce. Note it is a **cost per red, not a cost per fix** — one agent
+   * often answers several reds at once, and a pull request that went red four
+   * times and was fixed once divides the same money four ways.
+   *
+   * Windowed from dated `usage_events` like {@link CiHealth.ciCostUsd}, so an
+   * agent that started before the window does not drop its whole cost into it.
+   */
+  costUsd: number;
 }
 
 interface CiBucket {
@@ -230,12 +244,19 @@ export interface CiHealth {
   /** The {@link TOP_ROWS} reddest pull requests, most reds first. */
   flakiest: CiSubject[];
   /**
-   * What the `landing` phase cost inside this window — the price of everything
-   * above, in the spend panel's own vocabulary.
+   * What the `ci` phase cost inside this window — the price of everything above,
+   * in the spend panel's own vocabulary.
    *
    * Summed from dated `usage_events` rather than from whole agent rows, because
    * the question is what was spent *in the window*: an agent that started before
    * it would otherwise drop its entire cost into a fortnight it barely touched.
+   */
+  ciCostUsd: number;
+  /**
+   * What the rest of landing cost over the same window — review comments, the
+   * merge, a retarget. Shipped beside `ciCostUsd` rather than folded into it
+   * because the panel's claim is that a red pipeline has a price, and a figure
+   * that also carried the cost of being reviewed could not support it.
    */
   landingCostUsd: number;
   timeline: { bucketMs: number; startsAt: string; buckets: CiBucket[] };
@@ -466,6 +487,7 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
       greens: 0,
       redMs: 0,
       stillRed: false,
+      costUsd: 0,
     };
 
     if (status === 'failing') {
@@ -502,13 +524,34 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
     subject.redMs += now - since;
   }
 
+  // Which of the two pull-request phases each run belongs to, and — for a CI run —
+  // the `pr:<n>` its money is about. The classifier decides, never the shape of the
+  // ref read a second time here.
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
-  const landingAgents = new Set(
-    agents.filter((a) => phaseOf(originOfTask.get(a.taskId) ?? null) === 'landing').map((a) => a.id),
-  );
-  const landingCostUsd = usageEvents
-    .filter((e) => landingAgents.has(e.agentId) && Date.parse(e.at) >= start)
-    .reduce((sum, e) => roundUsd(sum + e.costUsd), 0);
+  const prRuns = new Map<string, { phase: 'ci' | 'landing'; ref: string | null }>();
+  for (const agent of agents) {
+    const originRef = originOfTask.get(agent.taskId) ?? null;
+    const phase = phaseOf(originRef);
+    if (phase !== 'ci' && phase !== 'landing') continue;
+    prRuns.set(agent.id, { phase, ref: originRef === null ? null : prNodeRefOf(originRef) });
+  }
+
+  let ciCostUsd = 0;
+  let landingCostUsd = 0;
+  for (const event of usageEvents) {
+    const run = prRuns.get(event.agentId);
+    if (run === undefined || Date.parse(event.at) < start) continue;
+    if (run.phase === 'landing') {
+      landingCostUsd = roundUsd(landingCostUsd + event.costUsd);
+      continue;
+    }
+    ciCostUsd = roundUsd(ciCostUsd + event.costUsd);
+    // A CI run whose pull request reported no verdict in this window has no row to
+    // land on — it is in the total above and in none of the rows below, which is
+    // the same stance the rankings already take about their caps.
+    const subject = run.ref === null ? undefined : subjects.get(run.ref);
+    if (subject) subject.costUsd = roundUsd(subject.costUsd + event.costUsd);
+  }
 
   const ranked = [...subjects.values()].sort((a, b) => b.reds - a.reds || b.redMs - a.redMs);
   return {
@@ -522,6 +565,7 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
     slowestToGreenMs: recoveries.length > 0 ? Math.max(...recoveries) : null,
     unrecovered: redSince.size,
     flakiest: ranked.filter((s) => s.reds > 0).slice(0, TOP_ROWS),
+    ciCostUsd,
     landingCostUsd,
     timeline: { bucketMs: DAY_MS, startsAt: new Date(start).toISOString(), buckets },
   };

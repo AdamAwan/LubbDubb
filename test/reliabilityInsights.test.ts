@@ -134,7 +134,7 @@ test('phases come from the spend classifier, so both panels split the same runs'
     task('a1', 'issue:12:part:schema'), // build
     task('a2', 'issue:12:part:api'), // build
     task('a3', 'issue:12:plan'), // deliberation
-    task('a4', 'pr:41:ci'), // landing
+    task('a4', 'pr:41:ci'), // ci
     task('a5', 'job:j1'), // job
   ];
   const { runs } = build({ agents, tasks });
@@ -144,7 +144,8 @@ test('phases come from the spend classifier, so both panels split the same runs'
   assert.equal(byPhase.get('build')?.completionRate, 0.5);
   assert.equal(byPhase.get('build')?.lostCostUsd, 1);
   assert.equal(byPhase.get('deliberation')?.completionRate, 1);
-  assert.equal(byPhase.get('landing')?.label, 'Landing', 'the label is the spend panel’s own');
+  assert.equal(byPhase.get('ci')?.label, 'CI', 'the label is the spend panel’s own');
+  assert.equal(byPhase.get('landing'), undefined, 'a CI run is not landing — the split is the same one');
   assert.equal(byPhase.get('job')?.settled, 1);
 });
 
@@ -247,9 +248,14 @@ test('no verdict observed is null, never a clean pipeline', () => {
   assert.equal(ci.flakiest.length, 0);
 });
 
-test('the landing figure is the windowed money, from dated deltas', () => {
-  const agents = [agent('a1', 'done'), agent('a2', 'done')];
-  const tasks = [task('a1', 'pr:41:ci'), task('a2', 'issue:12:part:schema')];
+test('the CI and landing figures are the windowed money, from dated deltas', () => {
+  const agents = [agent('a1', 'done'), agent('a2', 'done'), agent('a3', 'done'), agent('a4', 'done')];
+  const tasks = [
+    task('a1', 'pr:41:ci'),
+    task('a2', 'issue:12:part:schema'),
+    task('a3', 'pr:41:comments'),
+    task('a4', 'pr:41:ci-gate'),
+  ];
   const usageEvents: UsageEvent[] = [
     { agentId: 'a1', costUsd: 0.5, at: iso(NOW - 60 * MIN) },
     { agentId: 'a1', costUsd: 0.25, at: iso(NOW - 30 * MIN) },
@@ -258,9 +264,61 @@ test('the landing figure is the windowed money, from dated deltas', () => {
     { agentId: 'a1', costUsd: 9, at: iso(NOW - 30 * 24 * 60 * MIN) },
     // Build, not landing — the classifier decides, not the caller.
     { agentId: 'a2', costUsd: 4, at: iso(NOW - 30 * MIN) },
+    { agentId: 'a3', costUsd: 1.5, at: iso(NOW - 30 * MIN) },
+    { agentId: 'a4', costUsd: 0.4, at: iso(NOW - 20 * MIN) },
   ];
   const { ci } = build({ agents, tasks, usageEvents });
-  assert.equal(ci.landingCostUsd, 0.75);
+  assert.equal(ci.ciCostUsd, 1.15, 'a blocked gate is the same pipeline’s bill as a failing check');
+  assert.equal(ci.landingCostUsd, 1.5, 'answering review is landing, and never in the CI figure');
+});
+
+/**
+ * The reading the split exists for. A count of reds says how often the pipeline
+ * breaks; only this says what breaking costs — and it has to reach the row of the
+ * pull request whose checks the money was actually spent on, which is a join from
+ * `pr:41:ci` to the `pr:41` the verdicts are recorded against.
+ */
+test('CI spend lands on the pull request whose checks it answered', () => {
+  const agents = [agent('a1', 'done'), agent('a2', 'done')];
+  const tasks = [task('a1', 'pr:41:ci'), task('a2', 'pr:88:ci')];
+  const { ci } = build({
+    agents,
+    tasks,
+    ciEvents: [
+      ciEvent('pr:41', 'failing', NOW - 120 * MIN),
+      ciEvent('pr:41', 'passing', NOW - 90 * MIN),
+      ciEvent('pr:41', 'failing', NOW - 60 * MIN),
+      ciEvent('pr:41', 'passing', NOW - 50 * MIN),
+      ciEvent('pr:88', 'failing', NOW - 40 * MIN),
+      ciEvent('pr:88', 'passing', NOW - 30 * MIN),
+    ],
+    usageEvents: [
+      { agentId: 'a1', costUsd: 3, at: iso(NOW - 55 * MIN) },
+      { agentId: 'a2', costUsd: 1, at: iso(NOW - 35 * MIN) },
+    ],
+  });
+
+  const byRef = new Map(ci.flakiest.map((s) => [s.ref, s]));
+  assert.equal(byRef.get('pr:41')?.costUsd, 3, 'both of #41’s reds were answered by its own agent');
+  assert.equal(byRef.get('pr:41')?.reds, 2);
+  assert.equal(byRef.get('pr:88')?.costUsd, 1, 'and #88’s money does not leak onto it');
+  assert.equal(ci.ciCostUsd, 4, 'the rows are a partition of the fleet’s CI spend');
+});
+
+/**
+ * A CI agent whose pull request reported no verdict inside the window has no row
+ * to land on. Its money must still reach the total, or the tile the panel leads
+ * with would be a sum of the table rather than of the fleet.
+ */
+test('CI spend on a pull request with no verdict counts in the total and in no row', () => {
+  const { ci } = build({
+    agents: [agent('a1', 'done')],
+    tasks: [task('a1', 'pr:41:ci')],
+    usageEvents: [{ agentId: 'a1', costUsd: 2.5, at: iso(NOW - 30 * MIN) }],
+  });
+
+  assert.equal(ci.ciCostUsd, 2.5);
+  assert.equal(ci.flakiest.length, 0);
 });
 
 test('the timelines bucket by day and end at now', () => {

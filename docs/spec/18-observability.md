@@ -186,15 +186,51 @@ and drawn by the Spend panel ([17](17-cockpit.md#spend)). Three splits of one po
 coverage caveat:
 
 - **By phase** — `deliberation` (`:plan`, `:assay`), `build` (the pickup root and every `:part:`),
-  `landing` (`pr:*`), `evidence` (`:assess`, `:retro`), `job` (`job:*`) and `other`. A partition:
-  they sum to the fleet total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather
-  than a second one, so **a new origin suffix is classified in exactly one place** — an unrecognised
-  suffix surfaces as `other` rather than being folded into whichever neighbour looked closest.
+  `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
+  `:retro`), `job` (`job:*`) and `other`. A partition: they sum to the fleet total. The issue-subtree
+  phases are `issueOriginRole`'s vocabulary rather than a second one, so **a new origin suffix is
+  classified in exactly one place** — an unrecognised suffix surfaces as `other` rather than being
+  folded into whichever neighbour looked closest.
 - **By goal** — `rollUpIssueSpend`'s own per-issue totals, ranked, with the phase split inside each
   row and `unattributedCostUsd` as the last row rather than a footnote.
 - **Over time** — 14 rolling 24-hour buckets over `usage_events`. Rolling rather than calendar days
   for the same reason the 5h/7d windows are: a calendar day needs a timezone the harness has no
   opinion about.
+- **By task type** and **by failing check** — `rollUpTaskTypes` and `rollUpChecks`
+  (`src/taskTypeSpend.ts`), the grain below `phases`. See below.
+
+### By task type, and by check
+
+A phase is the coarsest useful grain and stops one question short of the operator's: not "what does
+landing cost" but **"what is `dotnet test` costing me, and what are review comments costing me"**.
+Two rollups answer it, both keyed on columns the dispatcher writes at dispatch time:
+
+- **`Task.rule`** — the `DISPATCH_RULES` id that proposed the task. A partition of every measured
+  run (each has one rule, or `null`, which is a row and not a silence), so review comments get a
+  figure of their own that no phase can give them. Labels come from the registry, never restated.
+- **`Task.ciChecks`** — the checks a CI dispatch was sent to answer, as the provider names them.
+
+**`decisions.rule` already recorded the same id and could not be used.** A decision row has no link
+to the task it created, so it can say a rule fired and never what that firing cost. The column on
+`tasks` is what closes that gap.
+
+**A check's cost is a share, not a receipt.** One agent is dispatched for every red check on a PR at
+once, and nothing in the harness records which of them it actually spent its turns on — so a run's
+cost is **split evenly** across the checks it named. That keeps the rows a partition of
+`attributedCostUsd`; charging each check the whole run would read better per row and add up to more
+money than the fleet spent. `soleRuns` is shipped per check so a row that never shared can be told
+from one that always did. CI money on runs that named no check is `unnamedCostUsd` — a remainder,
+never dropped, for `unattributedCostUsd`'s reason exactly.
+
+**The read path never parses a dispatch reason.** `ciDispatchReason` names the failing checks in
+prose too, and reading that back is the defect `ciStatusOf`'s one-matcher rule exists to prevent: a
+reader that re-derives a format reports zero, silently, the first time the wording changes — and a
+spend table quietly reading `$0.00` is worse than a missing one. It is parsed **once**, by
+`backfillTaskDispatchKind` at boot, to seed the runs that predate the columns. There, the risk is
+bounded and visible: a sentence it does not recognise leaves the row null and lands in
+`unnamedCostUsd`, which the panel states. The backfill only ever fills nulls, so it is idempotent and
+cannot overwrite what the dispatcher recorded properly; the `rule` half of it is structural (each of
+the four PR origins is minted by exactly one rule) rather than parsed at all.
 
 **One attribution, not two.** The goal totals are the roll-up's, taken whole, and the phase split
 rides on the `attribution` map it returns rather than on a second walk of the work graph. The panel
@@ -207,10 +243,25 @@ change to how spend finds its goal belongs in `rollUpIssueSpend` and nowhere els
 work graph's: it reads every agent the harness has ever run, and `/api/state` comes round every
 couple of seconds for every open cockpit. What the *indicators* need is already on the snapshot.
 
-**`landing` is separate from `build`** although both are work on the same code, because the two fail
-differently and an operator acts on the difference: build is what a goal cost to write, landing is
-what it cost to get through. A goal whose landing dwarfs its build is a flaky pipeline, not an
-expensive goal.
+**`ci` and `landing` are separate from `build`** although all three are work on the same code,
+because they fail differently and an operator acts on the difference: build is what a goal cost to
+write, and the other two are what it cost to get through. A goal whose CI dwarfs its build is a flaky
+pipeline, not an expensive goal.
+
+**`ci` is split out of `landing` because it is the one an operator can act on alone.** Answering
+review comments is the cost of being reviewed and a fleet cannot decline it; re-running failing
+checks is the cost of a broken suite, which is a bug with a price — folded together the two are one
+number that cannot say which it is. `pr:<n>:ci-gate` (checks waiting on an action rather than
+failing) counts as `ci` too: same pipeline, same money, and a phase per dispatch state would rank
+states instead of causes.
+
+**`landing` is the remainder of `pr:*`, not a list of suffixes.** `merge`, `mergeable`, `comments`,
+`comment:<id>`, `reply` and the bare `pr:<n>` all fall to it, and so does a concern nobody has
+invented yet. Only `ci` is matched by name, because only `ci` is being lifted out — **a new pull
+request concern must not need a change in `phaseOf` to be counted at all.** That is the opposite
+stance to the issue subtree, and deliberately: there, an unnamed suffix means a *role* nobody
+decided, which is worth surfacing as `other`; here it means one more thing a pull request needed
+before it landed, which is exactly what `landing` is.
 
 **Unmeasured runs are counted, once.** A run that reported nothing appears in no figure on the panel
 — the same silence the roll-up keeps — and `totals.unmeasuredRuns` is shipped beside the totals so
@@ -230,8 +281,10 @@ stops one short of: the money bought *something*, and **did it work**. It is ser
   same set of runs. Plus what the faults cost, the median run length per phase, and the origins the
   harness went round more than once.
 - **CI health**, over 14 rolling days. Transitions into failing and into passing, the red rate over
-  them, how long a pull request stays red, which pull requests went red repeatedly, and what the
-  `landing` phase cost inside the same window.
+  them, how long a pull request stays red, which pull requests went red repeatedly, and what the `ci`
+  and `landing` phases each cost inside the same window — fleet-wide as `ciCostUsd`, and **per pull
+  request** as `CiSubject.costUsd`, so a count of reds and the money it took to answer them sit in
+  one row.
 
 **The two windows differ on purpose.** A completion rate is a property of the harness and wants every
 run it has ever done behind it. A red rate is a property of a pipeline _as it stands_, and folding in
@@ -246,6 +299,15 @@ is money spent.
 **Live runs are in no rate.** An unfinished run has no outcome, so `settled` is the denominator
 everywhere and `live` is reported beside it. A rate that folded live runs in would fall every time
 the fleet got busy.
+
+**Cost per red is per verdict, not per fix.** `CiSubject.costUsd` over `reds` is what the panel
+draws, and one CI agent often answers several reds at once — a pull request that went red four times
+and was fixed once divides the same money four ways. It prices the pipeline breaking, not a repair.
+Both figures are windowed off dated `usage_events` rather than whole agent rows, so a run that
+started before the window does not drop its entire cost into a fortnight it barely touched. A CI run
+whose pull request reported no verdict inside the window reaches `ciCostUsd` and no row: **the total
+is over the fleet, the rows are a ranking**, the same stance every other table here takes about its
+cap.
 
 **A red is a CI verdict, not a pull request.** One pull request that failed nine times is nine reds;
 `prsAffected`/`prsObserved` is the other reading and both are shipped. `pending` and `unknown` are not

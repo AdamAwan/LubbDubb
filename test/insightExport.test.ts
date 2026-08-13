@@ -55,6 +55,7 @@ function insights(over: Partial<SpendInsights> = {}): SpendInsights {
     deliberation: 0,
     build: 0,
     landing: 0,
+    ci: 0,
     evidence: 0,
     job: 0,
     other: 0,
@@ -109,6 +110,17 @@ function insights(over: Partial<SpendInsights> = {}): SpendInsights {
       },
     ],
     rankedFrom: 9,
+    taskTypes: [
+      {
+        rule: 'issue-pickup',
+        label: 'Pick a goal up',
+        description: 'Starts the first agent on a watched goal',
+        costUsd: 0.002,
+        runs: 1,
+        perRunUsd: 0.002,
+      },
+    ],
+    checks: { checks: [], seen: 0, attributedCostUsd: 0, unnamedCostUsd: 0.0005 },
     timeline: {
       bucketMs: 86_400_000,
       startsAt: '2026-08-12T09:00:00.000Z',
@@ -128,12 +140,15 @@ test('spend leaves at full precision — the cockpit’s rounding stops at the s
   assert.ok(!csv.includes('$'), 'a formatted figure is a presentation, not an export');
 });
 
-test('spend carries the five tables the panel draws, in the order it draws them', () => {
+test('spend carries every table the panel draws, in the order it draws them', () => {
   const csv = spendCsv(insights());
   // Led with a break so the first section, which opens the file, matches the same
   // "on a line of its own" shape as the rest.
   const lead = `\r\n${csv}`;
-  const order = ['Totals', 'Phases', 'Daily', 'Goals', 'Runs'].map((s) => lead.indexOf(`\r\n${s}\r\n`));
+  // A table added to the panel and not to this list is the failure the export
+  // exists to prevent: a complete-looking file that under-reports.
+  const names = ['Totals', 'Phases', 'Daily', 'Task types', 'Failing checks', 'Goals', 'Runs'];
+  const order = names.map((s) => lead.indexOf(`\r\n${s}\r\n`));
   assert.ok(
     order.every((at, i) => at !== -1 && (i === 0 || at > order[i - 1]!)),
     'the sections must all be present and in panel order',
@@ -154,6 +169,11 @@ test('the caveats the panel says in prose leave as rows', () => {
   assert.ok(csv.includes('The 1 costliest of 9 measured runs.'));
   // Unmeasured is not free, and it is not zero either.
   assert.ok(section(csv, 'Totals').includes('Unmeasured runs,5'));
+  // The check table's own remainder, for the goal table's reason: per-check
+  // figures read as a partition of CI money, and a provider that reported no
+  // per-check detail must not vanish out of it.
+  assert.ok(section(csv, 'Failing checks').includes('Named no check,0.0005'));
+  assert.ok(section(csv, 'Failing checks').some((r) => r.includes('costliest of 0 checks seen')));
 });
 
 /** A minimal payload for the twin panel: enough of every table to export one row of it. */
@@ -212,7 +232,8 @@ function yieldOf(over: Partial<ReliabilityInsights> = {}): ReliabilityInsights {
       medianToGreenMs: 900_000,
       slowestToGreenMs: 3_600_000,
       unrecovered: 1,
-      flakiest: [{ ref: 'pr:143', prNumber: 143, reds: 5, greens: 2, redMs: 7_200_000, stillRed: true }],
+      flakiest: [{ ref: 'pr:143', prNumber: 143, reds: 5, greens: 2, redMs: 7_200_000, costUsd: 1.5, stillRed: true }],
+      ciCostUsd: 3.4,
       landingCostUsd: 2.75,
       timeline: {
         bucketMs: 86_400_000,
@@ -245,7 +266,7 @@ test('yield carries the six tables the panel draws, in the order it draws them',
     order.every((at, i) => at !== -1 && (i === 0 || at > order[i - 1]!)),
     'the sections must all be present and in panel order',
   );
-  assert.ok(section(csv, 'Reddest pull requests').some((r) => r.startsWith('pr:143,143,5,2,7200000,yes')));
+  assert.ok(section(csv, 'Reddest pull requests').some((r) => r.startsWith('pr:143,143,5,2,7200000,1.5,yes')));
 });
 
 test('the method note leaves as rows — the two windows, what a red is, what stopped is not', () => {
@@ -256,6 +277,9 @@ test('the method note leaves as rows — the two windows, what a red is, what st
   assert.ok(tallies.includes('Outcomes measured over,all time'));
   assert.ok(tallies.includes('CI measured over (days),14'));
   assert.ok(tallies.some((r) => r.startsWith('A red is,')), 'a reader summing reds must know they are verdicts'); // prettier-ignore
+  // One CI agent answers several reds at once, so the per-red figure divides one
+  // repair across every verdict it cleared.
+  assert.ok(tallies.some((r) => r.startsWith('Cost per red is,')));
   assert.ok(tallies.some((r) => r.startsWith('Counts against the completion rate,')));
   // Both rankings are capped, and both say so.
   assert.ok(csv.includes('The 1 reddest of 3 pull requests that went red.'));
