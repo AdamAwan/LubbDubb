@@ -1229,21 +1229,23 @@ const DEMO_GOAL_SEEDS: {
     title: 'Route every store read through the interface',
     agents: 7,
     hoursAgo: 2,
-    byPhase: { deliberation: 3.4, build: 9.8, landing: 3.9, evidence: 1.32 },
+    byPhase: { deliberation: 3.4, build: 9.8, ci: 2.6, landing: 1.3, evidence: 1.32 },
   },
   {
     issueNumber: 205,
     title: 'Document the sentinel protocol in the README',
     agents: 4,
     hoursAgo: 1,
-    byPhase: { deliberation: 1.6, build: 3.24, landing: 0.5, evidence: 0.8 },
+    byPhase: { deliberation: 1.6, build: 3.24, ci: 0.3, landing: 0.2, evidence: 0.8 },
   },
   {
     issueNumber: 903,
     title: 'Totals drift by a penny on multi-currency carts',
     agents: 3,
     hoursAgo: 26,
-    byPhase: { deliberation: 0.6, build: 1.44, landing: 1.04, evidence: 0.2 },
+    // The goal whose CI dwarfs its build — the shape the split exists to surface,
+    // on screen in the demo rather than only in the argument for it.
+    byPhase: { deliberation: 0.6, build: 1.44, ci: 0.92, landing: 0.12, evidence: 0.2 },
   },
   {
     issueNumber: 208,
@@ -1269,7 +1271,8 @@ const demoTokens = (costUsd: number) => ({
 const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   deliberation: { label: 'Deliberation', blurb: 'Planning and assaying — deciding what the work is' },
   build: { label: 'Build', blurb: 'The pickup and every part — where a branch is cut and a PR is written' },
-  landing: { label: 'Landing', blurb: 'Getting a pull request through its checks and its review' },
+  ci: { label: 'CI', blurb: 'Answering a pull request’s failing or blocked checks — what a red pipeline costs' },
+  landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },
   evidence: { label: 'Evidence', blurb: 'Assessing what shipped, and writing the run up' },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
@@ -1315,7 +1318,7 @@ const DEMO_RUNS: {
     agentId: 'agent-d4',
     title: 'Fix the failing checks on #143',
     originRef: 'pr:143:ci',
-    phase: 'landing',
+    phase: 'ci',
     costUsd: 2.2,
     turns: 31,
     hoursAgo: 4,
@@ -1358,6 +1361,49 @@ const DEMO_RUNS: {
   },
 ];
 
+/**
+ * Cost by kind of work. The rules are real `DISPATCH_RULES` ids and the labels
+ * are their real names — the demo must not invent a vocabulary the running
+ * harness does not use.
+ */
+const DEMO_TASK_TYPES: { rule: string | null; costUsd: number; runs: number }[] = [
+  { rule: 'plan-part', costUsd: 11.24, runs: 5 },
+  { rule: 'issue-plan', costUsd: 5.9, runs: 4 },
+  { rule: 'pr-ci-failing', costUsd: 4.24, runs: 6 },
+  { rule: 'issue-pickup', costUsd: 3.86, runs: 2 },
+  { rule: 'issue-assess', costUsd: 2.82, runs: 4 },
+  { rule: 'pr-review-comment', costUsd: 1.62, runs: 3 },
+  { rule: 'manual-job', costUsd: 0.96, runs: 1 },
+  { rule: null, costUsd: 0.7, runs: 1 },
+];
+
+/** The registry's own ids and names — the demo must not invent a vocabulary the harness does not use. */
+const RULE_COPY: Record<string, { label: string; description: string | null }> = {
+  'plan-part': { label: 'Plan part ready', description: 'A part of an approved plan, worked on its own branch' },
+  'issue-plan': { label: 'Issue needs a plan', description: 'Break a goal into parts before any code is written' },
+  'pr-ci-failing': { label: 'Failing CI', description: 'A PR with failing CI gets a code agent to push a fix' },
+  'issue-pickup': { label: 'Open issue without a PR', description: 'An open issue with no PR and nobody on it' },
+  'issue-assess': { label: 'Issue may be finished', description: 'Judge whether what shipped actually met the goal' },
+  'pr-review-comment': {
+    label: 'Unhandled review comments',
+    description: 'Every unresolved review thread on a PR goes to one code agent together',
+  },
+  'manual-job': { label: 'Operator-launched job', description: 'A prompt queued from the cockpit' },
+  none: { label: 'No rule', description: 'Dispatched outside the pulse — an accepted proposal, or agent lifecycle' },
+};
+
+/**
+ * What each failing check costs. Qodana is the shape the table exists to expose:
+ * fewer runs than the test suite, but nearly twice as expensive each time — the
+ * reading only the per-dispatch column gives.
+ */
+const DEMO_CHECKS: { name: string; costUsd: number; runs: number; soleRuns: number; hoursAgo: number }[] = [
+  { name: 'dotnet test', costUsd: 1.94, runs: 5, soleRuns: 3, hoursAgo: 4 },
+  { name: 'Qodana', costUsd: 1.18, runs: 2, soleRuns: 2, hoursAgo: 9 },
+  { name: 'build (ubuntu-latest)', costUsd: 0.46, runs: 3, soleRuns: 0, hoursAgo: 26 },
+  { name: 'lint', costUsd: 0.24, runs: 2, soleRuns: 1, hoursAgo: 31 },
+];
+
 /** The trend: a fortnight of daily totals, busiest at the near end. */
 const DEMO_DAYS = [0.4, 0, 1.1, 2.3, 1.8, 0, 0.9, 3.4, 2.2, 1.6, 0.7, 2.9, 4.1, 5.3];
 
@@ -1381,7 +1427,8 @@ const DEMO_PHASE_HEALTH: {
 }[] = [
   { phase: 'build', settled: 8, lost: 2, stopped: 0, lostCostUsd: 2.4, medianMs: 26 * 60_000 },
   { phase: 'deliberation', settled: 6, lost: 0, stopped: 0, lostCostUsd: 0, medianMs: 4 * 60_000 },
-  { phase: 'landing', settled: 6, lost: 1, stopped: 0, lostCostUsd: 0.7, medianMs: 9 * 60_000 },
+  { phase: 'ci', settled: 4, lost: 1, stopped: 0, lostCostUsd: 0.7, medianMs: 9 * 60_000 },
+  { phase: 'landing', settled: 2, lost: 0, stopped: 0, lostCostUsd: 0, medianMs: 7 * 60_000 },
   { phase: 'evidence', settled: 3, lost: 0, stopped: 1, lostCostUsd: 0, medianMs: 6 * 60_000 },
   { phase: 'job', settled: 1, lost: 0, stopped: 0, lostCostUsd: 0, medianMs: 12 * 60_000 },
 ];
@@ -1420,13 +1467,18 @@ const DEMO_CI_DAYS: [number, number][] = [
   [2, 2],
 ];
 
-/** The pull requests CI kept sending back. One is still red, which is the state worth drawing. */
+/**
+ * The pull requests CI kept sending back. One is still red, which is the state
+ * worth drawing — and #151 cost nothing, which is the other one: a red a human
+ * fixed draws an em dash rather than `$0.00`, and the demo has to show that cell
+ * or nobody sees the branch. The costs sum to `ciCostUsd` below.
+ */
 const DEMO_FLAKY: CiSubject[] = [
-  { ref: 'pr:144', prNumber: 144, reds: 6, greens: 5, redMs: 4.2 * 3_600_000, stillRed: true },
-  { ref: 'pr:212', prNumber: 212, reds: 4, greens: 4, redMs: 1.6 * 3_600_000, stillRed: false },
-  { ref: 'pr:205', prNumber: 205, reds: 3, greens: 3, redMs: 52 * 60_000, stillRed: false },
-  { ref: 'pr:198', prNumber: 198, reds: 3, greens: 2, redMs: 2.1 * 3_600_000, stillRed: true },
-  { ref: 'pr:151', prNumber: 151, reds: 1, greens: 1, redMs: 14 * 60_000, stillRed: false },
+  { ref: 'pr:144', prNumber: 144, reds: 6, greens: 5, redMs: 4.2 * 3_600_000, stillRed: true, costUsd: 1.9 },
+  { ref: 'pr:212', prNumber: 212, reds: 4, greens: 4, redMs: 1.6 * 3_600_000, stillRed: false, costUsd: 1.1 },
+  { ref: 'pr:205', prNumber: 205, reds: 3, greens: 3, redMs: 52 * 60_000, stillRed: false, costUsd: 0.6 },
+  { ref: 'pr:198', prNumber: 198, reds: 3, greens: 2, redMs: 2.1 * 3_600_000, stillRed: true, costUsd: 0.7 },
+  { ref: 'pr:151', prNumber: 151, reds: 1, greens: 1, redMs: 14 * 60_000, stillRed: false, costUsd: 0 },
 ];
 
 /** Origins the harness went round more than once — the reading no card shows. */
@@ -1512,7 +1564,8 @@ function buildDemoReliability(): ReliabilityInsights {
       slowestToGreenMs: 5 * 3_600_000,
       unrecovered: DEMO_FLAKY.filter((f) => f.stillRed).length,
       flakiest: DEMO_FLAKY,
-      landingCostUsd: 6.4,
+      ciCostUsd: round(DEMO_FLAKY.reduce((a, f) => a + f.costUsd, 0)),
+      landingCostUsd: 2.1,
       timeline: {
         bucketMs: day,
         startsAt: new Date(start).toISOString(),
@@ -1533,6 +1586,7 @@ function buildDemoSpend(): SpendInsights {
   const zero = (): Record<SpendPhase, number> => ({
     deliberation: 0,
     build: 0,
+    ci: 0,
     landing: 0,
     evidence: 0,
     job: 0,
@@ -1569,7 +1623,7 @@ function buildDemoSpend(): SpendInsights {
     phaseRuns[loose.phase] += 1;
   }
 
-  const order: SpendPhase[] = ['deliberation', 'build', 'landing', 'evidence', 'job', 'other'];
+  const order: SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'];
   const phases = order
     .filter((phase) => phaseRuns[phase] > 0)
     .map((phase) => ({
@@ -1610,6 +1664,19 @@ function buildDemoSpend(): SpendInsights {
     phases,
     goals,
     unattributedCostUsd: round(DEMO_LOOSE.reduce((a, l) => a + l.costUsd, 0)),
+    taskTypes: DEMO_TASK_TYPES.map((t) => ({
+      ...t,
+      ...(RULE_COPY[t.rule ?? 'none'] ?? { label: t.rule ?? 'No rule', description: null }),
+      perRunUsd: round(t.costUsd / t.runs),
+    })),
+    checks: {
+      checks: DEMO_CHECKS.map((c) => ({ ...c, perRunUsd: round(c.costUsd / c.runs), lastAt: iso(c.hoursAgo) })),
+      seen: DEMO_CHECKS.length,
+      attributedCostUsd: round(DEMO_CHECKS.reduce((a, c) => a + c.costUsd, 0)),
+      // A provider reporting no per-check detail, so the panel's footnote about
+      // CI money in none of the rows is on screen rather than a dead branch.
+      unnamedCostUsd: 0.42,
+    },
     runs,
     rankedFrom: measuredRuns,
     timeline: {

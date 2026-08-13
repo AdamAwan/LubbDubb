@@ -566,4 +566,5 @@ export type {
   RunTally,
 } from './reliabilityInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
+export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';

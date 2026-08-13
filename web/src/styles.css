@@ -2102,10 +2102,11 @@ body {
    Three conventions hold it together and all three are load-bearing.
 
    **Phase colour is a variable, not a value.** The component names a phase
-   (`var(--sp-landing)`) and this block decides what that looks like. Six are
-   needed and the palette has five that read apart at swatch size, so `--sp-job`
+   (`var(--sp-landing)`) and this block decides what that looks like. Seven are
+   needed and the palette has six that read apart at swatch size, so `--sp-job`
    is the one new hue — deliberately outside the alarm colours, because a job is
-   not a warning.
+   not a warning. `--sp-ci` is the one that *is* an alarm colour, and it is the
+   only phase that should be: it is the money a red pipeline is charging.
 
    **Tables here are read down a column, so every numeric cell is tabular.** A
    ranked table whose figures do not line up is a list.
@@ -2178,10 +2179,11 @@ body {
 
    **Phase colour is a variable, not a value.** The panel's components name a
    phase (`var(--sp-landing)`) and this block decides what that looks like, which
-   keeps the palette in the stylesheet where the rest of the shell's is. Six are
-   needed and the token palette has five that read apart at swatch size, so
+   keeps the palette in the stylesheet where the rest of the shell's is. Seven are
+   needed and the token palette has six that read apart at swatch size, so
    `--sp-job` is the one new hue — deliberately outside the alarm colours, because
-   a job is not a warning.
+   a job is not a warning. `--sp-ci` is the one phase that *is* an alarm colour,
+   and the only one that should be: it is what a red pipeline is charging.
 
    **Tables here are read down a column, so every numeric cell is tabular.** A
    ranked table whose figures do not line up is a list. */
@@ -2191,6 +2193,7 @@ body {
   gap: 4px;
   --sp-deliberation: var(--blue);
   --sp-build: var(--green);
+  --sp-ci: var(--red);
   --sp-landing: var(--accent);
   --sp-evidence: var(--amber);
   --sp-job: #9b7fc4;

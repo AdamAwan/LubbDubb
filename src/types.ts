@@ -348,6 +348,39 @@ export interface Task {
   originTitle: string | null;
   originSummary: string | null;
   dispatchReason: string | null;
+  /**
+   * The dispatcher rule that proposed this task (a `DISPATCH_RULES` id), captured
+   * at dispatch so an agent's cost can be read back against *what kind of work it
+   * was* — the "by task type" split in `src/taskTypeSpend.ts`.
+   *
+   * `decisions.rule` already records the same id, but a decision row has no link
+   * to the task it created, so it can say a rule fired and never what that firing
+   * cost. Typed as a plain string rather than `DispatchRuleId` because domain
+   * types must not reach into `src/dispatcher/`; an unknown id is rendered as
+   * itself rather than dropped, which is what keeps a rule renamed tomorrow
+   * visible instead of silently unbilled.
+   *
+   * Null for a task dispatched from outside the pulse (an accepted proposal,
+   * agent lifecycle), and on rows written before the column existed that the
+   * backfill could not place. **Optional**, for {@link PullRequest.ciChecks}'s
+   * reason: absent means "not recorded", so every persisted row that predates
+   * the column — and every caller that has no rule to give — reads unchanged.
+   */
+  rule?: string | null;
+  /**
+   * The CI checks this task was dispatched to answer, as the provider names them
+   * (`dotnet test`, `Qodana`) — `null` for every task that is not a CI dispatch,
+   * and for a CI dispatch whose provider reported no per-check detail.
+   *
+   * Recorded structurally rather than left in {@link dispatchReason}'s sentence,
+   * which names them too. Re-reading that prose is the defect `ciStatusOf`'s
+   * one-matcher rule exists to prevent: a reader that re-derives the format
+   * reports zero, silently, the first time the wording changes.
+   *
+   * Optional for {@link rule}'s reason, and read through `?? null` everywhere —
+   * absent and null both mean "this run named no check".
+   */
+  ciChecks?: string[] | null;
   status: TaskStatus;
   agentId: string | null;
   createdAt: string;

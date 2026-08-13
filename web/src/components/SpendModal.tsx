@@ -1,5 +1,13 @@
 import { useEffect, useState, type JSX } from 'react';
-import type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from '../types.js';
+import type {
+  ChecksSpend,
+  SpendGoal,
+  SpendInsights,
+  SpendPhase,
+  SpendPhaseTotal,
+  SpendRun,
+  TaskTypeSpend,
+} from '../types.js';
 import { api } from '../api.js';
 import { fmtTokens, fmtUsd, relTime } from './util.js';
 
@@ -126,6 +134,17 @@ function Body({ insights, state }: { insights: SpendInsights | null; state: 'loa
               column has the room — and the caveats are worth more level with the
               figures they qualify than three screens below them. */}
           <Method insights={insights} />
+        </section>
+      </div>
+
+      <div className="sp-cols">
+        <section className="sp-col">
+          <p className="sp-sub">By task type</p>
+          <TaskTypes types={insights.taskTypes} total={totals.costUsd} />
+        </section>
+        <section className="sp-col">
+          <p className="sp-sub">By failing check</p>
+          <Checks checks={insights.checks} />
         </section>
       </div>
 
@@ -326,7 +345,7 @@ function Timeline({ insights }: { insights: SpendInsights }): JSX.Element {
 
 /** The phase split inside one goal, as a bar the width of its share of the fleet. */
 function GoalBar({ goal, total }: { goal: SpendGoal; total: number }): JSX.Element {
-  const order: SpendPhase[] = ['deliberation', 'build', 'landing', 'evidence', 'job', 'other'];
+  const order: SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'];
   return (
     <span className="sp-gbar" style={{ width: `${Math.max(share(goal.costUsd, total), 1.5)}%` }}>
       {order
@@ -412,6 +431,118 @@ function Goals({
         )}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * Cost per kind of work — the grain below the phase bar.
+ *
+ * A phase folds every pull-request concern into two rows; this is where review
+ * comments, a base update and a merge each get a number of their own. The labels
+ * are the dispatch registry's, shipped by the server, so a row here is named
+ * exactly as the rule that produced it is named everywhere else in the cockpit.
+ */
+function TaskTypes({ types, total }: { types: readonly TaskTypeSpend[]; total: number }): JSX.Element {
+  if (types.length === 0) return <p className="empty">Nothing has been measured yet.</p>;
+  return (
+    <table className="sp-tbl">
+      <thead>
+        <tr>
+          <th>Task type</th>
+          <th className="n">Cost</th>
+          <th className="n">Share</th>
+          <th className="n">Runs</th>
+          <th className="n">Each</th>
+        </tr>
+      </thead>
+      <tbody>
+        {types.map((t) => (
+          <tr key={t.rule ?? '—'}>
+            <td>
+              <span className="nm" title={t.description ?? undefined}>
+                {t.label}
+              </span>
+              {t.rule !== null && <span className="bl mono">{t.rule}</span>}
+            </td>
+            <td className="n b">{fmtUsd(t.costUsd)}</td>
+            <td className="n">{fmtShare(t.costUsd, total)}</td>
+            <td className="n">{t.runs}</td>
+            <td className="n">{fmtUsd(t.perRunUsd)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * What each failing check costs to answer.
+ *
+ * The one table in the cockpit that names `dotnet test` and `Qodana`, and the
+ * reason the dispatcher records check names as data at all. **`Each` is the
+ * column to read** — a check that goes red twice a week and takes an agent an
+ * hour every time is a bigger bill than one that fails constantly and is fixed
+ * in a turn, and only the per-dispatch figure says so.
+ *
+ * The shared-cost caveat rides in the footer rather than a tooltip, because it
+ * qualifies every number in the table: an agent sent at three red checks at once
+ * splits its cost three ways, and nothing in the harness knows which of them it
+ * actually worked on.
+ */
+function Checks({ checks }: { checks: ChecksSpend }): JSX.Element {
+  const { checks: rows, seen, attributedCostUsd, unnamedCostUsd } = checks;
+  if (rows.length === 0) {
+    return (
+      <p className="empty">
+        {unnamedCostUsd > 0
+          ? `${fmtUsd(unnamedCostUsd)} went on CI, but no run named the checks it was answering — the provider ` +
+            'reports no per-check detail.'
+          : 'No CI agent has run yet, so no check has cost anything.'}
+      </p>
+    );
+  }
+  return (
+    <>
+      <table className="sp-tbl">
+        <thead>
+          <tr>
+            <th>Check</th>
+            <th className="n">Cost</th>
+            <th className="n">Share</th>
+            <th className="n">Runs</th>
+            <th className="n">Each</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => (
+            <tr key={c.name}>
+              <td>
+                <span className="nm mono">{c.name}</span>
+                {/* Named alone on every dispatch means the cost is unshared and
+                    the row is exact — worth saying, since it is the difference
+                    between a figure and an estimate. */}
+                <span className="bl">
+                  {c.soleRuns === c.runs
+                    ? 'always the only check red — unshared'
+                    : `${c.soleRuns} of ${c.runs} runs were about this check alone`}
+                </span>
+              </td>
+              <td className="n b">{fmtUsd(c.costUsd)}</td>
+              <td className="n">{fmtShare(c.costUsd, attributedCostUsd)}</td>
+              <td className="n">{c.runs}</td>
+              <td className="n">{fmtUsd(c.perRunUsd)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="empty">
+        A run sent at several red checks splits its cost evenly between them — nothing records which one it actually
+        worked on, so these are shares, not receipts.
+        {seen > rows.length && ` The ${rows.length} costliest of ${seen} checks.`}
+        {unnamedCostUsd > 0 &&
+          ` A further ${fmtUsd(unnamedCostUsd)} went on CI runs that named no check, and is in none of the rows above.`}
+      </p>
+    </>
   );
 }
 

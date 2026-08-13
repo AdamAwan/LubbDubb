@@ -147,6 +147,9 @@ export function prCiFailing(s: StageContext): void {
         originTitle: pr.title,
         originSummary: `PR #${pr.number} on branch ${pr.branch} · CI ${pr.ciStatus}${pr.approved ? ' · approved' : ''}`,
         urgent: ciVerdict.urgent,
+        // The same names `ciDispatchReason` puts in the audit sentence, kept as
+        // data so spend can be read per check without anything parsing prose.
+        ciChecks: ciVerdict.dispatch.map((m) => m.name),
       });
     } else if (ciFailing && ciNeedsHuman(ciVerdict)) {
       // Nothing an agent can fix, and the operator asked to be told. Put it to
@@ -210,6 +213,7 @@ export function prCiFailing(s: StageContext): void {
         originTitle: pr.title,
         originSummary: `PR #${pr.number} on branch ${pr.branch} · waiting on ${waiting}`,
         urgent: gateVerdict.urgent,
+        ciChecks: gateVerdict.watched.map((m) => m.name),
       });
     }
     if (needsBaseUpdate(pr)) {
@@ -379,6 +383,7 @@ export function prCiFailing(s: StageContext): void {
           // the dispatch origin alone can't say, since it names the branch's
           // whole review rather than any one thread.
           signalRefs: signalsOf(top).map((sig) => sig.ref),
+          ciChecks: top.ciChecks,
           rule: top.rule,
           reason: top.dispatchReason,
         } satisfies RawAction,
@@ -440,6 +445,12 @@ interface PrConcern {
    * branch. Dispatch at branch granularity, de-dup at thread granularity.
    */
   signals?: PrSignal[];
+  /**
+   * The CI checks this concern is about, carried onto the dispatch and from there
+   * onto the task. Set by the two CI rules; every other concern leaves it unset,
+   * which is what "this run was not about a named check" means downstream.
+   */
+  ciChecks?: string[];
 }
 
 /** One world signal inside a {@link PrConcern}: what it is about, and how it reads. */

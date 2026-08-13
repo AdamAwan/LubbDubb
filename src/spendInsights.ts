@@ -1,6 +1,7 @@
 import type { Agent, Issue, IssueSpend, Task, UsageEvent, WorkNode } from './types.js';
 import { issueOriginRole } from './issueOrigins.js';
 import { rollUpIssueSpend, roundUsd } from './issueSpend.js';
+import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
 
 /**
  * The spend breakdown: the same money the cost chips report, split three ways at
@@ -47,16 +48,24 @@ import { rollUpIssueSpend, roundUsd } from './issueSpend.js';
  * *outside* the subtree, which is where the last three come from: a pull request's
  * own agents (`pr:41:ci`, `pr:41:comments`), an operator's job, and the remainder.
  *
- * `landing` is separate from `build` even though both are work on the same code,
- * because the two fail differently and an operator acts on the difference: build
- * is what the goal cost to write, landing is what it cost to get *through* —
- * failing checks re-run, review comments answered. A goal whose landing dwarfs its
- * build is not an expensive goal, it is a flaky pipeline.
+ * `ci` and `landing` are separate from `build` even though all three are work on
+ * the same code, because they fail differently and an operator acts on the
+ * difference: build is what the goal cost to write, and the other two are what it
+ * cost to get *through*. A goal whose landing dwarfs its build is not an expensive
+ * goal, it is a flaky pipeline.
+ *
+ * **`ci` is split out of `landing` because it is the one an operator can act on
+ * alone.** Answering review comments is the cost of being reviewed and a fleet
+ * cannot decline it; re-running failing checks is the cost of a *broken suite*,
+ * which is a bug with a price — and folded together the two are one number that
+ * cannot say which it is. `pr:<n>:ci-gate` — checks waiting on an action rather
+ * than failing — counts here too: it is the same pipeline costing the same money,
+ * and a phase per dispatch state would rank states instead of causes.
  */
-export type SpendPhase = 'deliberation' | 'build' | 'landing' | 'evidence' | 'job' | 'other';
+export type SpendPhase = 'deliberation' | 'build' | 'ci' | 'landing' | 'evidence' | 'job' | 'other';
 
-/** Reading order, funnel order: decide, build, land, check, and the two remainders. */
-const PHASE_ORDER: readonly SpendPhase[] = ['deliberation', 'build', 'landing', 'evidence', 'job', 'other'];
+/** Reading order, funnel order: decide, build, go green, land, check, and the two remainders. */
+const PHASE_ORDER: readonly SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'];
 
 /**
  * What each phase is, in the operator's words rather than the ref vocabulary's.
@@ -69,7 +78,8 @@ const PHASE_ORDER: readonly SpendPhase[] = ['deliberation', 'build', 'landing', 
 const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   deliberation: { label: 'Deliberation', blurb: 'Planning and assaying — deciding what the work is' },
   build: { label: 'Build', blurb: 'The pickup and every part — where a branch is cut and a PR is written' },
-  landing: { label: 'Landing', blurb: 'Getting a pull request through its checks and its review' },
+  ci: { label: 'CI', blurb: 'Answering a pull request’s failing or blocked checks — what a red pipeline costs' },
+  landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },
   evidence: { label: 'Evidence', blurb: 'Assessing what shipped, and writing the run up' },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
@@ -86,6 +96,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * a complete one.
  */
 const TOP_RUNS = 20;
+
+/**
+ * The two concerns the `ci` phase is: checks that failed, and checks blocked
+ * waiting on an action (`src/dispatcher/rules/prCiFailing.ts` dispatches both).
+ * They ride together because they are one pipeline's bill — see {@link SpendPhase}.
+ */
+const CI_CONCERN = /^pr:\d+:ci(?:-gate)?$/;
 
 /** The fleet's spend in one line, and how much of the fleet it actually covers. */
 interface SpendTotals {
@@ -178,6 +195,14 @@ export interface SpendInsights {
   goals: SpendGoal[];
   /** The remainder that reached no goal — `rollUpIssueSpend`'s own figure. */
   unattributedCostUsd: number;
+  /**
+   * Cost per kind of work — the grain below `phases`, off the rule each task
+   * recorded at dispatch. A partition of the same money: review comments get a
+   * figure of their own here, which no phase can give them.
+   */
+  taskTypes: TaskTypeSpend[];
+  /** Cost per CI check — what `dotnet test` and `Qodana` are each costing. */
+  checks: ChecksSpend;
   /** The {@link TOP_RUNS} costliest runs, costliest first. */
   runs: SpendRun[];
   /** How many runs the table above is a ranking *of*, so the cap can be stated against it. */
@@ -210,7 +235,12 @@ interface SpendInsightsInput {
  */
 export function phaseOf(originRef: string | null): SpendPhase {
   if (originRef === null) return 'other';
-  if (originRef.startsWith('pr:')) return 'landing';
+  // `landing` is the remainder of `pr:*` rather than a list of its own suffixes,
+  // and deliberately: `merge`, `comments`, `comment:<id>`, `reply`, `mergeable`
+  // and the bare `pr:<n>` all belong there, and a new one must not have to be
+  // remembered here to be counted at all. Only CI is named, because only CI is
+  // being lifted out.
+  if (originRef.startsWith('pr:')) return CI_CONCERN.test(originRef) ? 'ci' : 'landing';
   if (originRef.startsWith('job:')) return 'job';
   const issueNumber = /^issue:(\d+)(?::|$)/.exec(originRef)?.[1];
   if (issueNumber === undefined) return 'other';
@@ -237,7 +267,7 @@ export function phaseLabel(phase: SpendPhase): string {
 
 /** A zeroed phase record — the shape every `byPhase` starts from, so every key is present. */
 function zeroPhases(): Record<SpendPhase, number> {
-  return { deliberation: 0, build: 0, landing: 0, evidence: 0, job: 0, other: 0 };
+  return { deliberation: 0, build: 0, ci: 0, landing: 0, evidence: 0, job: 0, other: 0 };
 }
 
 /** Where an agent's run sits in time: when it finished, or when it started if it has not. */
@@ -345,6 +375,8 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     phases: PHASE_ORDER.map((p) => phaseTotals.get(p)).filter((p): p is SpendPhaseTotal => p !== undefined),
     goals,
     unattributedCostUsd: rollup.unattributedCostUsd,
+    taskTypes: rollUpTaskTypes({ agents, tasks }),
+    checks: rollUpChecks({ agents, tasks }),
     runs: [...runs].sort((a, b) => b.costUsd - a.costUsd).slice(0, TOP_RUNS),
     rankedFrom: runs.length,
     timeline: bucketise(usageEvents, now),
