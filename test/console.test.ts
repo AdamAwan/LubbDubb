@@ -846,6 +846,10 @@ test('the shell renders the console, and the drawer that the console only asks f
   // that open an agent do nothing at all.
   assert.ok(src.includes('AgentDrawer'), 'the shell must answer the console’s request for a drawer');
   // The graph moved into the console's nav. Left here as well it would draw twice,
-  // once below everything, which is the surface this replaced.
-  assert.ok(!src.includes('WorkTreePanel'), 'the work graph is the console’s Work tab, not a strip under it');
+  // once below everything, which is the surface this replaced. Asserted on the
+  // import and the element, not on the name: the shell's own comments cite
+  // `WorkTreePanel` as the precedent for what else hangs off the shell, and a
+  // substring test made writing down the reason a build failure.
+  assert.ok(!/import\s+\{[^}]*WorkTreePanel/.test(src), 'the shell must not import the work graph');
+  assert.ok(!src.includes('<WorkTreePanel'), 'the work graph is the console’s Work tab, not a strip under it');
 });
