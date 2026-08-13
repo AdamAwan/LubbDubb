@@ -31,7 +31,7 @@ is about.
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                          |
 | `routes/spend.ts`       | `/api/spend` — the breakdown behind the cost indicators                                     |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
-| `routes/reliability.ts` | `/api/reliability` — run outcomes and CI health, the reading beside the spend one            |
+| `routes/reliability.ts` | `/api/reliability` — run outcomes and CI health, the reading beside the spend one           |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                               |
 | `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                              |
 
@@ -854,8 +854,8 @@ Four properties hold it together:
   carries none of them — nothing acts on a dead PR, so nothing folds a verdict for one.
 
 Pinning the contract found three live cockpit bugs that had compiled for as long as they existed: the
-factory floor read `task.status === 'active'` (not a `TaskStatus`, so a running agent left its station
-drawn unstaffed), and the Production graph counted `outcome === 'ok'` and
+presentation layer read `task.status === 'active'` (not a `TaskStatus`, so a running agent drew as
+unstaffed), and the Production graph counted `outcome === 'ok'` and
 `action.type === 'escalate'` — neither a value the harness emits, so the escalation series had always
 read zero.
 
@@ -931,11 +931,12 @@ Eight consistency points:
 - **`refUrls` covers closed PRs too**, since the cockpit's "recently closed" section links their
   numbers, and it resolves finding refs directly (a finding often names an item not in the world).
 - **`refUrls` also keys world-event refs, every task's origin ref, every goal's own ref and every
-  decision's subject** (#199), on top of the `#n` item keys. The activity feed / signals panels draw a
-  world event's structured `ref` (`pr:42`, `issue:13`); the fleet, overlap and recovery cards draw a
-  task's colon-form origin (`pr:142:ci`, `issue:13:part:x`); the factory's Goal Floor and belt speak
-  `issue:<n>` for every world issue **and every retained run** (which is by definition absent from the
-  issue list); and the shift log's Ref column draws `decision.subjectRef`. None of those is the `#n`
+  decision's subject** (#199), on top of the `#n` item keys. The world-signals card draws a world
+  event's structured `ref` (`pr:42`, `issue:13`); the recovery and agent cards draw a task's colon-form
+  origin (`pr:142:ci`, `issue:13:part:x`); the up-next queue draws a candidate's own origin, which is
+  `issue:<n>` for every world issue **and every retained run** (the latter by definition absent from
+  the issue list); and `decision.subjectRef` is keyed for whatever reads the audit rows. None of those
+  is the `#n`
   the item lists key by, so each is resolved on its own. A `job:<id>` origin resolves to nothing and is
   omitted, and the feed's `#n`-in-prose still links off the item keys through `linkify`.
 - **A decision's subject ref is derived on the server and shipped on the row** (`decisionSubjectRef`,
