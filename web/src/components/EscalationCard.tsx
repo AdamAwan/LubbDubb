@@ -54,7 +54,7 @@ export function EscalationCard({
    * for direction — and often the direction is "you're finished".
    */
   onComplete?: (agentId: string) => Promise<unknown> | unknown;
-  /** Open the full plan behind a `plan` proposal — the card carries a summary, not the decomposition. */
+  /** Open the full plan behind a `plan` proposal — the card carries what it does, not how it is cut up. */
   onViewPlan?: (planId: string) => void;
 }) {
   const [text, setText] = useState('');
@@ -83,6 +83,13 @@ export function EscalationCard({
   // park would call a brand-new question stale.
   const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
   const [headline, body] = splitPrompt(escalation.prompt);
+  // The plan behind a `plan` proposal. Drawn as its own control below the body
+  // rather than as one more ghost link among the agent actions: the card carries
+  // what the plan diagnosed and what it will do, and everything else about it —
+  // the split as a diagram, the evidence, the risks, what it ruled out — is in
+  // that panel. Reading it is the thing to do before approving, so it is the
+  // thing the card looks like it wants.
+  const planId = proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? context.planId : null;
 
   return (
     <div className="card escalation">
@@ -177,18 +184,14 @@ export function EscalationCard({
               Mark work done
             </AsyncButton>
           ) : null}
-          {proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? (
-            <button className="btn ghost small" onClick={() => onViewPlan(context.planId as string)}>
-              View the full plan →
-            </button>
-          ) : null}
         </div>
-      ) : proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? (
-        <div className="esc-agent-actions">
-          <button className="btn ghost small" onClick={() => onViewPlan(context.planId as string)}>
-            View the full plan →
-          </button>
-        </div>
+      ) : null}
+
+      {planId ? (
+        <button className="btn esc-plan-open" onClick={() => onViewPlan!(planId)}>
+          <span className="esc-plan-open-label">Read the full plan</span>
+          <span className="esc-plan-open-hint">the split, the evidence, what it rules out →</span>
+        </button>
       ) : null}
 
       {permission ? <pre className="esc-output">{permission.summary}</pre> : null}

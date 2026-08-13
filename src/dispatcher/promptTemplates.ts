@@ -231,10 +231,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'plan-approval': {
     placeholders: ['number', 'title', 'parts', 'reason', 'list'],
     template:
-      'Issue #{number} ("{title}") was planned as {parts} pull request(s), and nothing is scheduled until you ' +
-      'approve the plan.\n\nWhy it was planned this way: {reason}\n\n{list}\n\n' +
-      'If you want a different plan, use Replan on the plan panel: that asks the planner again and comes back here.',
-    doc: "Put to a human when `planning.requireApproval` is on and a planner's verdict has landed — either arm, a decomposition or a single pull request (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What approving and rejecting *this* verdict do is appended by the rule rather than templated, so an override cannot lose it. Placeholders: {number} {title} {parts} (the pull requests the plan produces — 1 on a single verdict) {reason} {list}.",
+      'There is a plan for issue #{number} ("{title}") and nothing is scheduled until you approve it — {parts} ' +
+      'pull request(s) of work.\n\nWhy this shape: {reason}\n\n' +
+      'Open the full plan for the split, what it cites and what it leaves out. If you want a different one, use ' +
+      'Replan there: that asks the planner again and comes back here.',
+    doc: "Put to a human when `planning.requireApproval` is on and a planner's verdict has landed — either arm, a decomposition or a single pull request (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What the planner diagnosed and what it will do about it is *not* templated — it is carried beside this as the escalation's `detail` and rendered as the body of the card, so an override cannot bury it in a paragraph. What approving and rejecting *this* verdict do is appended by the rule for the same reason. {list} is the decomposition in dispatch order; the built-in template no longer uses it (the split is one click away in the plan panel, drawn) but it is still rendered, so an override written around it keeps working. Placeholders: {number} {title} {parts} (the pull requests the plan produces — 1 on a single verdict) {reason} {list}.",
   },
   'issue-shortfall': {
     placeholders: ['number', 'title', 'consequence'],

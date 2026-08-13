@@ -715,9 +715,10 @@ from an agent.** The cockpit reads the first paragraph as the card's headline an
 as the body ([17](17-cockpit.md)), so a prompt that opens with a paragraph opens with a wall.
 
 Quoted text goes beside the prompt instead, as `context.detail`, with `context.detailFrom` naming who
-wrote it. That is what rule `issue-shortfall` does with an assessment and rule `pr-ci-blocked` does
-with its list of escalate-only checks — both used to splice them into the sentence, and an assessment
-is up to two thousand characters. Templated, an operator override could bury it mid-paragraph again;
+wrote it. That is what rule `issue-shortfall` does with an assessment, rule `plan-approval` does with
+the plan's diagnosis and approach, and rule `pr-ci-blocked` does with its list of escalate-only checks
+— all of them used to splice them into the sentence, and an assessment is up to two thousand
+characters. Templated, an operator override could bury it mid-paragraph again;
 carried beside the prompt, no override can reach it. The three templates that are an escalation's
 _whole_ prompt — `issue-pickup-escalation`, `plan-part-escalation`, `pr-concern-escalation` — render
 to a single line, asserted in `test/promptTemplates.test.ts`.

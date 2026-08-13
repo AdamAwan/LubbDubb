@@ -234,7 +234,14 @@ export class ActionExecutor {
           const esc = this.deps.escalations.create({
             type: 'approve_change',
             prompt: action.prompt,
-            context: { originRef: action.originRef, planId: action.planId },
+            // The planner's diagnosis and approach ride in `detail`, not in the
+            // prompt, for `propose_shortfall`'s reason: the card renders it as its
+            // own labelled body, directly above the two buttons.
+            context: {
+              originRef: action.originRef,
+              planId: action.planId,
+              ...(action.detail ? { detail: action.detail, detailFrom: 'What the plan says' } : {}),
+            },
           });
           const proposal = store.createProposal({
             kind: 'plan',
