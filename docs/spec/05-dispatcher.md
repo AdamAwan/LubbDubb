@@ -613,9 +613,9 @@ shortfall gates nothing, so refusing one leaves the issue exactly where it was.
 
 `retrospective.enabled` (**on by default**) puts one **desk** agent on a goal the harness has already
 parked as delivered, to write the run up: what shipped, and what came out of the process of shipping
-it. It is the consumer of a step the cockpit had always named and the harness had never taken — the
-Goal Floor's Manifest station, _Report what was done_, which drew the working agent's conclusion note
-or an em dash and was read by nothing.
+it. It is the consumer of a step the cockpit had always named and the harness had never taken — _report
+what was done_, which drew the working agent's conclusion note or an em dash and was read by nothing.
+The goal page's tail draws it now ([17](17-cockpit.md#the-pull-requests-and-the-tail)).
 
 It fires when the issue passes the watch gate, has a standing delivery (or resolves `done`), has no
 `retrospectives` row, and has nothing live anywhere under `issue:<n>`. **A retained run counts**

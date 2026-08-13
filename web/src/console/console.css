@@ -1,0 +1,1129 @@
+/*
+ * The console — everything under `.cn`. Ported from the approved mockup at
+ * `docs/superpowers/mockups/layout-a.html`, which is the layout reference: the
+ * shell grid, the rail, the card/row vocabulary and the breakpoints all come
+ * from there, every class renamed `cn-`.
+ *
+ * What is deliberately absent: any rule targeting a *shared* component's own
+ * class — the escalation card, the recovery banner, the findings panel, the
+ * human-task actions. Those style themselves only through the tokens in
+ * `styles.css`; the moment this sheet reaches into one of them the console and
+ * the shared component stop being separable, and a change to one silently
+ * redraws the other.
+ *
+ * The mockup's dark palette is a placeholder — a visual theme is chosen
+ * separately later — so every colour is a custom property here rather than a
+ * literal at each use site, and the properties are `--cn-*` so they cannot
+ * collide with the shared-component tokens in `styles.css` while both sheets are
+ * loaded together.
+ */
+:root {
+  --cn-bg: #0d0e11;
+  --cn-panel: #15171b;
+  --cn-panel-2: #1b1e23;
+  --cn-line: #24272e;
+  --cn-line-soft: #1e2126;
+  --cn-fg: #e7e9ec;
+  --cn-fg-dim: #9aa1ab;
+  --cn-fg-faint: #6b727c;
+  --cn-accent: #5b8cff;
+  --cn-red: #ff5f5f;
+  --cn-amber: #f5a524;
+  --cn-green: #3ecf8e;
+  --cn-violet: #a78bfa;
+  --cn-r: 8px;
+  --cn-r-sm: 6px;
+  --cn-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --cn-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+}
+
+.cn {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100dvh;
+  background: var(--cn-bg);
+  color: var(--cn-fg);
+  font: 13px/1.45 var(--cn-ui);
+  -webkit-font-smoothing: antialiased;
+}
+.cn button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.cn a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ---------- top bar ---------- */
+/* `min-height`, not `height`: the readings wrap once the bar runs out of room at
+   laptop widths, and a fixed strip pushed the last one out through its own
+   border. The bar is the row that says what the fleet is doing — it grows by a
+   line rather than cropping one. */
+.cn-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  min-height: 46px;
+  border-bottom: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+}
+.cn-ident {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.cn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cn-green);
+  box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.15);
+}
+.cn-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--cn-line);
+}
+.cn-reads {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.cn-read {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel-2);
+  white-space: nowrap;
+}
+.cn-read b {
+  font: 600 12px/1 var(--cn-mono);
+}
+.cn-read span {
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.cn-read.cn-act:hover {
+  border-color: #333842;
+  background: #20242a;
+}
+.cn-read .cn-chev {
+  color: var(--cn-fg-faint);
+  font-size: 10px;
+}
+/* Zero mutes a reading — dims it without removing it, so the fault or finding
+   count that just went quiet stays exactly where an operator learned to look. */
+.cn-read.cn-quiet b {
+  color: var(--cn-fg-faint);
+}
+.cn-scan {
+  border-color: #2b3a5c;
+  background: #161c2b;
+}
+.cn-cap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ---------- body ---------- */
+.cn-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 0;
+}
+/* < 1100: rail above, one column. 1100+: rail beside. 1500+: goal page gains
+   its right column. 2000+: overview in four tracks. Matching these in React as
+   well would cost a resize listener and a second definition of every boundary. */
+@media (min-width: 1100px) {
+  .cn-body {
+    grid-template-columns: 360px 1fr;
+  }
+}
+
+/* ---------- queue rail ---------- */
+.cn-rail {
+  border-right: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.cn-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--cn-line);
+}
+.cn-rail-head h2 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+}
+.cn-count {
+  margin-left: auto;
+  font: 600 11px/1 var(--cn-mono);
+  background: var(--cn-red);
+  color: #180404;
+  padding: 3px 7px;
+  border-radius: 99px;
+}
+.cn-rail-list {
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* A queue longer than the rail is tall must scroll, not squash: flex items
+   shrink by default, and a row shorter than its text hides the ask's goal and
+   age behind `overflow: hidden` with no scrollbar to say anything is missing. */
+.cn-rail-list > * {
+  flex-shrink: 0;
+}
+
+.cn-q {
+  display: grid;
+  grid-template-columns: 3px 1fr;
+  gap: 10px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel-2);
+  padding: 0;
+  text-align: left;
+  overflow: hidden;
+  width: 100%;
+}
+.cn-q:hover {
+  border-color: #343943;
+}
+.cn-q[aria-current='true'] {
+  border-color: var(--cn-accent);
+  background: #171c28;
+}
+.cn-q .cn-stripe {
+  background: var(--cn-amber);
+}
+.cn-q.cn-urgent .cn-stripe {
+  background: var(--cn-red);
+}
+.cn-q .cn-qin {
+  padding: 10px 12px 11px 2px;
+}
+.cn-qkind {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+.cn-tag {
+  font: 600 10px/1 var(--cn-mono);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #2a2118;
+  color: var(--cn-amber);
+}
+.cn-urgent .cn-tag {
+  background: #2b1517;
+  color: var(--cn-red);
+}
+.cn-qage {
+  margin-left: auto;
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-qtitle {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0 0 6px;
+}
+.cn-qmeta {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  flex-wrap: wrap;
+}
+.cn-qmeta .cn-hold {
+  color: var(--cn-amber);
+}
+.cn-urgent .cn-qmeta .cn-hold {
+  color: var(--cn-red);
+}
+.cn-railsub {
+  padding: 10px 14px 4px;
+  font-size: 11px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+/* Zero rows still draws the rail — a note here, not an absent surface, is
+   what keeps "quiet" distinguishable from "broken". */
+.cn-rail-empty {
+  padding: 16px 13px;
+  margin: 0;
+  color: var(--cn-fg-faint);
+  font-size: 12px;
+}
+
+/* ---------- situation ---------- */
+.cn-sit {
+  overflow: auto;
+  min-height: 0;
+  padding: 14px;
+}
+
+/* the recovery banner: outside and above the situation area at every width,
+   because while it is up every goal in the situation area is stale for the
+   same reason — no pulse runs until it is decided. */
+.cn-recovery {
+  border-bottom: 1px solid var(--cn-line);
+}
+
+/* goal page */
+.cn-goal {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cn-ghwho {
+  min-width: 0;
+}
+.cn-gh {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.cn-gh h1 {
+  margin: 0 0 7px;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.cn-ghmeta {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+}
+.cn-ghacts {
+  margin-left: auto;
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.cn-needs {
+  border: 1px solid #4a2226;
+  background: #1a1214;
+  border-radius: var(--cn-r);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.cn-needs.cn-soft {
+  border-color: #4a3a1c;
+  background: #1a1610;
+}
+.cn-needs > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  background: #241417;
+  border-bottom: 1px solid #4a2226;
+  font: 600 11px var(--cn-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: #ff8f8f;
+}
+.cn-needs.cn-soft > header {
+  background: #241d10;
+  border-bottom-color: #4a3a1c;
+  color: #e8c37a;
+}
+.cn-needs > header .cn-age {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cn-fg-faint);
+}
+.cn-needs .cn-in {
+  padding: 13px;
+}
+.cn-needs .cn-in > p:first-child {
+  margin: 0 0 11px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.cn-gcols {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+@media (min-width: 1500px) {
+  .cn-gcols {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  }
+}
+.cn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.cn-tick {
+  padding: 13px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--cn-fg-dim);
+}
+.cn-tick ul {
+  margin: 9px 0 0;
+  padding-left: 18px;
+}
+.cn-tick li {
+  margin-bottom: 5px;
+}
+.cn-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  font-size: 12.5px;
+}
+.cn-kv:last-child {
+  border-bottom: 0;
+}
+.cn-kv span {
+  color: var(--cn-fg-faint);
+}
+.cn-kv b {
+  font: 12.5px var(--cn-mono);
+  font-weight: 600;
+}
+
+/* the plan's waves stack below 1500px rather than scrolling sideways */
+.cn-waves {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+}
+@media (min-width: 1500px) {
+  /* Wrapping tracks rather than one implicit row per wave: how many waves fit is
+     a question about the card, not the viewport — the same 1500px that turns the
+     waves sideways also halves the card by giving the goal its right-hand
+     column, so a plan of three waves spilled past the card's edge and under that
+     column until roughly 1680px wide. */
+  .cn-waves {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+/* One tone per group, and the same four the segment track uses: green for what
+   landed, blue for what is moving, red for what is stuck, dimmed for what has
+   not started. */
+.cn-part.cn-merged {
+  border-color: #1e4733;
+}
+.cn-part.cn-now {
+  border-color: #26456f;
+  background: #141d2e;
+}
+.cn-part.cn-held {
+  border-color: #4a2226;
+  background: #1e1315;
+}
+.cn-part.cn-waiting {
+  opacity: 0.55;
+}
+.cn-part .cn-why {
+  color: #ff8f8f;
+}
+
+/* plan approval */
+.cn-dag {
+  display: flex;
+  align-items: stretch;
+  overflow: auto;
+  padding: 13px;
+}
+.cn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 250px;
+  flex: 1;
+}
+.cn-coln {
+  font: 11px var(--cn-mono);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  padding-bottom: 3px;
+}
+.cn-part {
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel-2);
+  padding: 10px 12px;
+}
+.cn-part b {
+  display: block;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.cn-part p {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+  line-height: 1.45;
+}
+.cn-part .cn-dep {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-arrow {
+  width: 26px;
+  display: grid;
+  place-items: center;
+  color: #3a3f48;
+  font-size: 15px;
+}
+.cn-warnbox {
+  border: 1px solid #4a3a1c;
+  background: #1c1710;
+  border-radius: var(--cn-r);
+  padding: 11px 13px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: #e8c37a;
+}
+.cn-criteria {
+  padding: 12px 13px;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+  line-height: 1.6;
+}
+.cn-criteria li {
+  margin-bottom: 5px;
+}
+.cn-nav {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+/* `button`, where the mockup wrote `a`: navigating the console changes no URL —
+   there is no router — so an anchor would be a link to nowhere with a keyboard
+   behaviour it cannot honour. */
+.cn-nav a,
+.cn-nav button,
+.cn-nav span {
+  padding: 5px 11px;
+  border-radius: var(--cn-r-sm);
+  font-size: 12.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-nav a:hover,
+.cn-nav button:hover {
+  background: var(--cn-panel-2);
+  color: var(--cn-fg-dim);
+}
+.cn-navsep {
+  color: var(--cn-line);
+}
+.cn-nav .cn-on {
+  background: var(--cn-panel-2);
+  color: var(--cn-fg);
+  border: 1px solid var(--cn-line);
+}
+.cn-nav .cn-n {
+  font: 600 10.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-grpname {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 2px 8px;
+  font-size: 11.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+}
+.cn-grpname .cn-n {
+  font: 600 10.5px var(--cn-mono);
+  letter-spacing: 0;
+  color: var(--cn-fg-faint);
+}
+.cn-grpname .cn-hint {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-tgl {
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  border-radius: var(--cn-r-sm);
+  padding: 4px 10px;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+}
+.cn-tgl:hover {
+  border-color: #39404c;
+  color: var(--cn-fg);
+}
+.cn-tgl.cn-watch {
+  border-color: #26456f;
+  color: #7fa8ff;
+  background: #141d2e;
+}
+.cn-lbl {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  border: 1px solid var(--cn-line);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.cn-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cn-pill {
+  padding: 4px 10px;
+  border: 1px solid var(--cn-line);
+  border-radius: 99px;
+  background: var(--cn-panel);
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-pill.cn-on {
+  color: var(--cn-fg);
+  border-color: #39404c;
+  background: var(--cn-panel-2);
+}
+
+.cn-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 1200px) {
+  .cn-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 2000px) {
+  .cn-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.cn-span2 {
+  grid-column: span 1;
+}
+@media (min-width: 1200px) {
+  .cn-span2 {
+    grid-column: span 2;
+  }
+}
+
+.cn-card {
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cn-card > h3 {
+  margin: 0;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  font-size: 11.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cn-card > h3 .cn-n {
+  font: 600 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line);
+  padding: 2px 6px;
+  border-radius: 99px;
+}
+.cn-card > h3 .cn-more {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* A zero mutes the reading rather than removing it — the way in to the ended
+   shifts stays exactly where an operator learned to look for it. */
+.cn-card > h3 .cn-more.cn-quiet {
+  opacity: 0.5;
+}
+.cn-rows {
+  display: flex;
+  flex-direction: column;
+}
+.cn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  min-width: 0;
+}
+.cn-row:last-child {
+  border-bottom: 0;
+}
+.cn-row:hover {
+  background: #181b20;
+}
+/* A row that is also a way in — the button reset above strips the chrome, so only
+   the box model is restated here. */
+button.cn-row {
+  width: 100%;
+  text-align: left;
+}
+/* Work that has already ended: present, and plainly behind the live rows. */
+.cn-row.cn-spent {
+  opacity: 0.55;
+}
+.cn-row .cn-grow {
+  min-width: 0;
+  flex: 1;
+}
+.cn-name {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cn-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The queue's reason is a whole sentence the server wrote, and the half that says
+   what is holding the item is usually the tail of it — so it wraps rather than
+   taking the row's ellipsis, which would hide exactly that half. */
+.cn-sub.cn-wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.cn-sub.cn-held {
+  color: var(--cn-amber);
+}
+.cn-num {
+  font: 12px var(--cn-mono);
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+}
+
+.cn-lamp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--cn-fg-faint);
+}
+.cn-lamp.cn-run {
+  background: var(--cn-green);
+  box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.13);
+}
+.cn-lamp.cn-ask {
+  background: var(--cn-red);
+  box-shadow: 0 0 0 3px rgba(255, 95, 95, 0.15);
+}
+.cn-lamp.cn-wait {
+  background: var(--cn-amber);
+}
+.cn-lamp.cn-off {
+  background: #3a3f48;
+}
+
+.cn-chip {
+  font: 600 10.5px/1 var(--cn-mono);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--cn-line);
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+}
+.cn-chip.cn-you {
+  background: #2b1517;
+  border-color: #4a2226;
+  color: var(--cn-red);
+}
+.cn-chip.cn-harness {
+  background: #12212e;
+  border-color: #1f3b52;
+  color: #63b3ed;
+}
+.cn-chip.cn-stall {
+  background: #2a2118;
+  border-color: #4a3a1c;
+  color: var(--cn-amber);
+}
+.cn-chip.cn-ok {
+  background: #122a1e;
+  border-color: #1e4733;
+  color: var(--cn-green);
+}
+
+/* goal progress */
+.cn-track {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+/* A goal row's own two readings sit at its end and keep their size: the track is
+   a count of parts, so it must not stretch with the title beside it. */
+.cn-goal-row .cn-track {
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 40%;
+}
+.cn-seg {
+  width: 16px;
+  height: 6px;
+  border-radius: 2px;
+  background: #2a2f37;
+}
+.cn-seg.cn-done {
+  background: var(--cn-green);
+}
+.cn-seg.cn-live {
+  background: var(--cn-accent);
+}
+.cn-seg.cn-block {
+  background: var(--cn-red);
+}
+.cn-seg.cn-hold {
+  background: var(--cn-amber);
+}
+
+/* ci dots */
+.cn-ci {
+  display: flex;
+  gap: 3px;
+}
+.cn-cd {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: #2a2f37;
+}
+.cn-cd.cn-pass {
+  background: var(--cn-green);
+}
+.cn-cd.cn-fail {
+  background: #4a4f58;
+}
+.cn-cd.cn-notours {
+  background: var(--cn-amber);
+}
+.cn-cd.cn-wait {
+  background: var(--cn-accent);
+}
+.cn-cd.cn-mute {
+  background: transparent;
+  border: 1px dashed #3a3f48;
+}
+
+.cn-empty {
+  padding: 16px 13px;
+  color: var(--cn-fg-faint);
+  font-size: 12px;
+}
+
+/* ---------- detail ---------- */
+.cn-detail {
+  max-width: 1100px;
+}
+.cn-dhead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.cn-dhead h1 {
+  margin: 0 0 6px;
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.cn-dmeta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+}
+.cn-ask {
+  border: 1px solid #4a2226;
+  background: #1a1214;
+  border-radius: var(--cn-r);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.cn-ask p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cn-opts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.cn-opt {
+  border: 1px solid #39404c;
+  background: var(--cn-panel-2);
+  border-radius: var(--cn-r-sm);
+  padding: 7px 12px;
+}
+.cn-opt:hover {
+  border-color: var(--cn-accent);
+  background: #1a2030;
+}
+.cn textarea {
+  width: 100%;
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  color: var(--cn-fg);
+  padding: 9px 11px;
+  font: 13px var(--cn-ui);
+  resize: vertical;
+  min-height: 64px;
+}
+.cn-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cn-btn {
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  border-radius: var(--cn-r-sm);
+  padding: 7px 14px;
+  color: var(--cn-fg-dim);
+}
+.cn-btn.cn-primary {
+  background: var(--cn-accent);
+  border-color: var(--cn-accent);
+  color: #08122b;
+  font-weight: 600;
+}
+.cn-btn:hover {
+  border-color: #39404c;
+}
+
+.cn-ctx {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 1500px) {
+  .cn-ctx {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.cn pre {
+  margin: 0;
+  padding: 12px 13px;
+  font: 11.5px/1.6 var(--cn-mono);
+  color: var(--cn-fg-dim);
+  overflow: auto;
+  max-height: 260px;
+}
+
+/* goal line */
+.cn-line {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 14px 13px;
+  overflow: auto;
+}
+.cn-st {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 96px;
+}
+.cn-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+}
+.cn-box.cn-done {
+  border-color: #1e4733;
+  background: #102a1e;
+}
+.cn-box.cn-live {
+  border-color: #26456f;
+  background: #141d2e;
+}
+.cn-box.cn-ask {
+  border-color: #4a2226;
+  background: #1e1315;
+}
+.cn-box.cn-todo {
+  opacity: 0.45;
+}
+.cn-st small {
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  text-align: center;
+  line-height: 1.3;
+}
+.cn-link {
+  flex: 1;
+  height: 1px;
+  background: var(--cn-line);
+  min-width: 18px;
+}
+.cn-link.cn-done {
+  background: #1e4733;
+}
+
+/* ---------- off the air ---------- */
+.cn-offline {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  color: var(--cn-fg-dim);
+}
+.cn-offline h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: var(--cn-fg);
+}
+.cn-offline p {
+  margin: 0;
+  max-width: 46ch;
+}
+
+/* ---------- full-surface panel ---------- */
+.cn-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 5, 6, 0.6);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 50;
+}
+.cn-panel {
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  width: min(900px, 100%);
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cn-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cn-line);
+}
+.cn-panel-head h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.cn-panel-head .cn-btn {
+  margin-left: auto;
+}
+
+/* The panel's body scrolls, not the panel: the head carries an exit, and a head
+   that scrolled away would leave a covering surface with two of its three ways
+   out reachable only by scrolling back. */
+.cn-pbody {
+  overflow: auto;
+  padding: 14px 16px;
+}
+
+/* ---------- backlog ---------- */
+.cn-backlog {
+  max-width: 1100px;
+}
+
+/* ---------- production graph ---------- */
+.cn-prod svg {
+  width: 100%;
+  height: auto;
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+}
+.cn-prod text {
+  fill: var(--cn-fg-faint);
+  font: 10px var(--cn-mono);
+}
+.cn-sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}

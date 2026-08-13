@@ -44,16 +44,16 @@ adding one label and removing the other — so the two stay mutually exclusive. 
 
 Assembled once in `src/system.ts` from config and handed to whichever dispatcher is selected:
 
-| Field             | From config                  | Effect                                                              |
-| ----------------- | ---------------------------- | ------------------------------------------------------------------- |
-| `watchLabel`      | derived from `labelPrefix`   | Opt-in gate. Empty = gate off.                                      |
-| `ignoreLabel`     | derived from `labelPrefix`   | Explicit exclusion. Empty = gate off.                               |
-| `requireOwnLabel` | `issuePickupRequireOwnLabel` | Read `labelsAddedByViewer` instead of `labels` for the watch check. |
-| `priorityLabels`  | `issuePriorityLabels`        | Label → weight.                                                     |
-| `defaultPriority` | `issueDefaultPriority`       | Weight when no label matches.                                       |
-| `pickupStates`    | `issuePickupStates`          | Allowed provider-native workflow states.                            |
+| Field             | From config                  | Effect                                                                               |
+| ----------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
+| `watchLabel`      | derived from `labelPrefix`   | Opt-in gate. Empty = gate off.                                                       |
+| `ignoreLabel`     | derived from `labelPrefix`   | Explicit exclusion. Empty = gate off.                                                |
+| `requireOwnLabel` | `issuePickupRequireOwnLabel` | Read `labelsAddedByViewer` instead of `labels` for the watch check.                  |
+| `priorityLabels`  | `issuePriorityLabels`        | Label → weight.                                                                      |
+| `defaultPriority` | `issueDefaultPriority`       | Weight when no label matches.                                                        |
+| `pickupStates`    | `issuePickupStates`          | Allowed provider-native workflow states.                                             |
 | `containerTypes`  | `issueContainerTypes`        | Item types that are never worked. Unset falls back to the default pair; `[]` is off. |
-| `inReviewState`   | `issueInReviewState`         | The state rule `work-item-in-review` parks an item in.              |
+| `inReviewState`   | `issueInReviewState`         | The state rule `work-item-in-review` parks an item in.                               |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
@@ -90,7 +90,7 @@ Azure DevOps work items hang in a tree; GitHub issues do not. `src/issueRelation
 of what that tree means to the harness — pure over an issue plus policy, so the dispatcher's gate,
 the cockpit's chip and the note an agent reads can never form different opinions about one item.
 
-Two rules of the tree change what may be *done* with an item rather than merely describing it.
+Two rules of the tree change what may be _done_ with an item rather than merely describing it.
 
 **A container is never worked.** A Feature is a statement of intent its stories deliver; putting an
 agent on one asks it to implement a decomposition that already exists beside it in the tracker. The
@@ -99,7 +99,7 @@ workable, which is why its verdict is `container` and not `unwatched`. The chip 
 exactly that reason: `unwatched` would send an operator to the one control that cannot help.
 
 **A leaf is meant to have a parent.** A story, bug or tech-debt item under no feature is an item
-whose *why* is recorded nowhere. `isOrphanIssue` is true only when all three of these hold — the
+whose _why_ is recorded nowhere. `isOrphanIssue` is true only when all three of these hold — the
 provider tracks hierarchy (`parent === null`, never `undefined`), the item is not itself a container,
 and its type is one teams put under a feature (so a Task under a story is not nagged about a parent
 it never wanted).
@@ -117,7 +117,7 @@ tracker's hierarchy and never writes it, so nothing here links, re-parents or ed
 `issue-assay`, `issue-plan` (and its replan/discuss arms) and `issue-pickup` — never interpolated.
 Appending is the rule every added instruction follows (see
 [05](05-dispatcher.md#prompt-templates)): templates are operator-overridable and `loadPromptTemplates`
-rejects only *unknown* placeholders, so a `{related}` token would be dropped silently by exactly the
+rejects only _unknown_ placeholders, so a `{related}` token would be dropped silently by exactly the
 deployments that customised most, losing the feature's goal on the installs most likely to have one.
 
 It carries, in this order and only when there is something to say:
@@ -160,22 +160,22 @@ checked in the same order rule `issue-pickup` applies them, so it predicts what 
 guessing. `buildStateSnapshot` attaches it to each issue as `pickup`, and the cockpit renders it as a
 chip.
 
-| Status      | Meaning                                                                |
-| ----------- | ---------------------------------------------------------------------- |
-| `done`      | Closed, and the harness holds no run at it.                            |
-| `retained`  | Closed, but its run lives until the operator dismisses it.             |
-| `planning`  | In the plan funnel — a verdict is owed, or the issue split into parts. |
-| `has_pr`    | An open PR resolves it; the PR rules own it now.                       |
-| `active`    | A task on this origin is queued / running / waiting on you.            |
-| `ignored`   | Carries the explicit ignore tag.                                       |
-| `container` | A Feature/Epic — its children are the work, never it.                  |
-| `unwatched` | Not opted in, or parked by the state gate.                             |
-| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                   |
-| `escalated` | Attempt cap spent; parked on a human.                                  |
-| `delivered` | Assessed as delivered — parked until the world or the operator says otherwise. |
+| Status      | Meaning                                                                            |
+| ----------- | ---------------------------------------------------------------------------------- |
+| `done`      | Closed, and the harness holds no run at it.                                        |
+| `retained`  | Closed, but its run lives until the operator dismisses it.                         |
+| `planning`  | In the plan funnel — a verdict is owed, or the issue split into parts.             |
+| `has_pr`    | An open PR resolves it; the PR rules own it now.                                   |
+| `active`    | A task on this origin is queued / running / waiting on you.                        |
+| `ignored`   | Carries the explicit ignore tag.                                                   |
+| `container` | A Feature/Epic — its children are the work, never it.                              |
+| `unwatched` | Not opted in, or parked by the state gate.                                         |
+| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                               |
+| `escalated` | Attempt cap spent; parked on a human.                                              |
+| `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.     |
 | `assay`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it. |
-| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                |
-| `eligible`  | Would be picked up next cycle.                                         |
+| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                            |
+| `eligible`  | Would be picked up next cycle.                                                     |
 
 The closed arm splits on the run, not on the tracker. A close is the tracker's answer and a run
 outlives it (issue #234), so `done` is kept for the case it was always right about — a closed ticket
@@ -368,11 +368,11 @@ fell short.
 That is why it is a **separate table** rather than a polarity column on `issue_deliveries`, and the
 reason is stronger than the one that split deliveries from conclusions:
 
-|              | `issue_deliveries`                                | `issue_shortfalls`                       |
-| ------------ | ------------------------------------------------- | ---------------------------------------- |
-| read by      | a gate, every pulse                               | one rule, until it is acted on           |
-| effect       | **holds** pickup                                  | **releases** work                        |
-| ends on      | world signal, tracker move, operator clear        | the arm it named being performed         |
+|         | `issue_deliveries`                         | `issue_shortfalls`               |
+| ------- | ------------------------------------------ | -------------------------------- |
+| read by | a gate, every pulse                        | one rule, until it is acted on   |
+| effect  | **holds** pickup                           | **releases** work                |
+| ends on | world signal, tracker move, operator clear | the arm it named being performed |
 
 One table with a `polarity` column would leave every present and future reader remembering which one
 it was holding, from rows that look identical until you read a column — the drift class this repo has
@@ -438,8 +438,8 @@ way to stop the harness working:
   `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence.
 - **The hold expires on its own** (below).
 - **The operator can clear or override it** (`POST /api/issues/:number/assay`), from either cockpit:
-  the refused issue's row in `WorldSummary`, and the Goal Floor's refused-assay plate as a second
-  entry point onto the same action ([17](17-cockpit.md)). Only a refusal draws the affordance — a
+  the backlog files a refused goal under **Blocked at intake** and puts the override on its row
+  ([17](17-cockpit.md#the-backlog)). Only a refusal draws the affordance — a
   `workable` verdict blocks nothing — and clearing is a distinct third option rather than the same
   toggle's other end.
 
@@ -450,7 +450,7 @@ eligibility filter and `issuePickupStatus` — so the chip can never promise wha
 refuses. Two arms, plus a clearer that is deliberately not an arm:
 
 1. **The goal text changed.** The row stores `goal_ref`, a NUL-joined fingerprint of the title and
-   body the verdict was cast against (`goalFingerprint`), taken from the *task* rather than re-read
+   body the verdict was cast against (`goalFingerprint`), taken from the _task_ rather than re-read
    from the world — so an edit made while the assayer was running is not silently swallowed. A
    different fingerprint means the verdict describes a ticket that no longer exists: the hold ends
    and the issue is assayed again. This is #158's fourth requirement, and it could not be an event:
@@ -469,7 +469,7 @@ so a caller that wants the quote reads it there. Folding them in made the longes
 renders — a paragraph and a raw ISO timestamp inside a chip built to be scanned. The World panel puts
 the summary and a relative time in that chip's `title` instead.
 
-**There is no timer arm**, for `deliveryHold`'s reason: a refused goal waits on the world to *become*
+**There is no timer arm**, for `deliveryHold`'s reason: a refused goal waits on the world to _become_
 something else, which is an event, not a duration. A clock expiry would re-ask a question whose
 answer has not changed, at the price of an agent each time.
 
@@ -501,7 +501,7 @@ nothing.
 
 The assay applies only to issues that already pass the watch gate — it never filters an untagged
 backlog. So it does second-guess an explicit operator signal, and is argued for on that basis: the
-tag says *work this*, and the assay's answer is not *no* but *with what?*. A question, asked once,
+tag says _work this_, and the assay's answer is not _no_ but _with what?_. A question, asked once,
 that the operator ends by editing the ticket, replying to it, or clearing the verdict.
 
 ### Cost

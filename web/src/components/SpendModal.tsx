@@ -11,12 +11,12 @@ import { fmtTokens, fmtUsd, relTime } from './util.js';
  * standing as a way in of its own. A reading and the reading behind it are one
  * subject, and the bar's rule is that a subject is stated once.
  *
- * **It lives here rather than under `factory/` because it fetches.** The floor may
- * not reach `api.js` — every capability it has is enumerated on `CockpitActions`,
- * asserted structurally in `test/factoryFloor.test.ts` — so the sanctioned route
- * is the one the retrospective, the notepad and the settings modal all take: the
- * control is floor-side, the panel hangs off the shell, and `openSpend` on the
- * seam is the whole of what passes between them.
+ * **It lives here rather than under `console/` because it fetches.** The console
+ * may not reach `api.js` — every capability it has is enumerated on `CockpitActions`,
+ * asserted structurally in `test/console.test.ts` — so the sanctioned route is the
+ * one the retrospective, the notepad and the settings modal all take: the reading
+ * is console-side, the panel hangs off the shell, and `openSpend` on the seam is
+ * the whole of what passes between them.
  *
  * Four pictures, in the order the questions arrive. **Phases** first, because it
  * is the one split no other surface in the cockpit can show: a goal's card folds

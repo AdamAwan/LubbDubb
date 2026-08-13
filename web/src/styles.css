@@ -1,14 +1,14 @@
 /*
  * The token layer is the styling contract for *shared* components — the drawer,
  * the escalation card, recovery — which have one implementation and must look
- * native beside the floor's own markup. A shared component styles itself only
- * through these; `factory/factory.css` writes whatever CSS it likes for `.fx`
- * and touches no shared class.
+ * native beside the presentation layer's own markup. A shared component styles
+ * itself only through these; `console/console.css` writes whatever CSS it likes
+ * for `.cn` and touches no shared class.
  */
 :root {
-  /* Cool grey-slate, sampled from a factory game's own UI. The orange accent is
-     meant to be the only warm thing in the frame, so the ground stays cool: on a
-     warm one it competed with the floor rather than sitting on it. */
+  /* Cool grey-slate. The orange accent is meant to be the only warm thing in the
+     frame, so the ground stays cool: on a warm one it competed with the surface
+     it sits on rather than sitting on it. */
   --bg: #191b1c;
   --panel: #313436;
   --panel-2: #292c2e;
@@ -37,13 +37,13 @@
   --blue-line-2: #37607a;
   --blue-fill: #17242c;
   --green-fill: #16240f;
-  /* Ink on a light or warm fill: the floor colour, not near-black — a machine
-     panel's lettering is the panel's own shadow, not ink from somewhere else. */
+  /* Ink on a light or warm fill: the ground colour, not near-black — a panel's
+     lettering is the panel's own shadow, not ink from somewhere else. */
   --on-light: #1c1b1a;
   --on-warm: #1c1b1a;
   --well: #16181a;
 
-  /* Square. Nothing on a factory floor is rounded. */
+  /* Square, everywhere. A rounded corner is a soft edge on an instrument. */
   --r-sm: 0;
   --r-md: 0;
   --r-lg: 0;
@@ -69,7 +69,7 @@ body {
   background: var(--bg);
   color: var(--text);
   /* Through the token, not repeated as a literal: re-pointing --font-ui must move
-     the page with it, or the floor's panels change face while the shared
+     the page with it, or the console's panels change face while the shared
      components around them do not. */
   font: 14px/1.5 var(--font-ui);
 }
@@ -1324,7 +1324,7 @@ body {
 }
 
 /* ── Work graph ──────────────────────────────────────────────────────────
-   Shell-level rather than drawn by the floor: the graph is the one surface that
+   Shell-level rather than drawn by the console: the graph is the one surface that
    outlives the world snapshot, so it is styled only through the tokens above. */
 .work-panel {
   padding: 0 16px 24px;
@@ -2090,8 +2090,8 @@ body {
    The chrome the two reading panels share — the spend breakdown behind the Power
    gauge (`components/SpendModal.tsx`) and the reliability breakdown behind the
    Yield gauge (`components/ReliabilityModal.tsx`). Both are shell-side rather
-   than floor-side because they fetch, so their styles are here rather than in
-   `factory.css` — the seam is the same one that puts the retrospective and the
+   than console-side because they fetch, so their styles are here rather than in
+   `console.css` — the seam is the same one that puts the retrospective and the
    settings modal in this file.
 
    The classes below are named for what they are (`.read-modal`, `.sp-well`)
@@ -2137,7 +2137,7 @@ body {
   color: var(--text);
 }
 /* The head's one-line gloss, pushed to the right of the title and away from the
-   close button — the same placement the floor's own panels give theirs. */
+   close button — the same placement the console's own panels give theirs. */
 .sp-note {
   margin-left: auto;
   margin-right: 12px;
@@ -2145,8 +2145,8 @@ body {
   font-size: 10.5px;
   color: var(--grey);
 }
-/* This panel's section caption. Its own rule rather than the floor's `.fx-sub`,
-   which lives in the other stylesheet and belongs to the floor's type scale. */
+/* This panel's section caption. Its own rule rather than a console class, which
+   lives in the other stylesheet and belongs to the console's type scale. */
 .sp-sub {
   font-family: var(--font-mono);
   font-size: 9.5px;
@@ -2156,8 +2156,8 @@ body {
   margin: 12px 0 6px;
 }
 /* This panel's sunk face: every box in it is a reading, never a control. Its own
-   rule rather than the floor's `.fx-sunk`, for `.sp-sub`'s reason — that class
-   belongs to the other stylesheet and to the floor's bevel vocabulary. */
+   rule rather than a console class, for `.sp-sub`'s reason — that one belongs to
+   the other stylesheet and to the console's own recessed vocabulary. */
 .sp-well {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -2178,10 +2178,10 @@ body {
 
    **Phase colour is a variable, not a value.** The panel's components name a
    phase (`var(--sp-landing)`) and this block decides what that looks like, which
-   keeps the palette in the stylesheet where the rest of the floor's is. Six are
-   needed and the floor's palette has five that read apart at swatch size, so
-   `--sp-job` is the one new hue — deliberately outside the floor's alarm colours,
-   because a job is not a warning.
+   keeps the palette in the stylesheet where the rest of the shell's is. Six are
+   needed and the token palette has five that read apart at swatch size, so
+   `--sp-job` is the one new hue — deliberately outside the alarm colours, because
+   a job is not a warning.
 
    **Tables here are read down a column, so every numeric cell is tabular.** A
    ranked table whose figures do not line up is a list. */
@@ -2415,7 +2415,7 @@ body {
    **Outcome colour is a variable, not a value**, for the phase palette's reason.
    The two palettes are deliberately different in kind: a phase is a category and
    its colours only have to read apart, while an outcome is a *verdict* and its
-   colours carry the floor's alarm vocabulary — green finished, red failed. Grey
+   colours carry the alarm vocabulary — green finished, red failed. Grey
    is doing real work here: a killed run is not a fault, and colouring it like one
    would make every steered fleet look broken. */
 

@@ -1,16 +1,21 @@
 import type { AppState, Agent, Task, AgentFlag, AgentFile, OrphanedWork, Escalation, Proposal } from '../types.js';
+import { buildNeedsYou } from './needsYou.js';
+import type { NeedRow } from './needsYou.js';
+import { buildGoalPage } from './goalPage.js';
+import type { GoalPageView } from './goalPage.js';
+import type { ConsolePanel } from '../cockpit/actions.js';
 
 /**
- * Everything the floor draws, derived once per render and handed over as plain data.
+ * Everything the console draws, derived once per render and handed over as plain data.
  *
  * This is deliberately a pure function of the snapshot rather than a set of hooks:
  * the drawing code must not be able to reach the network, and the derivations below
  * (which lived inside `App`'s body until the view model split them out) are the part
- * worth testing. No field here is a function or a promise — anything the floor can
- * *do* lives on `CockpitActions` instead, so the two halves stay separable.
+ * worth testing. No field here is a function or a promise — anything the console
+ * can *do* lives on `CockpitActions` instead, so the two halves stay separable.
  */
 export interface CockpitView {
-  /** The raw snapshot. The floor reads config/world/refUrls straight off it. */
+  /** The raw snapshot. The console reads config/world/refUrls straight off it. */
   state: AppState;
   /** Wall clock for relative-time rendering, ticking once a second. */
   now: number;
@@ -34,6 +39,17 @@ export interface CockpitView {
   /** Overlaps still in flight, the only ones an operator can still act on. */
   liveOverlapCount: number;
 
+  /** Every blocking item, merged and ordered — the queue rail's whole contents. */
+  needsYou: NeedRow[];
+  /** The goal whose page is open, as `issue:<n>`, or null for the overview. */
+  selectedGoal: string | null;
+  /** That goal's page, or null when none is selected or the ref is not in the world. */
+  goalPage: GoalPageView | null;
+  /** Which full-surface panel is in front, or null. */
+  consolePanel: ConsolePanel;
+  /** Whether the backlog view is open instead of the overview. */
+  backlogOpen: boolean;
+
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
   /** Streamed output for the open drawer only; undefined for everyone else. */
@@ -52,8 +68,8 @@ export interface CockpitView {
   agentById: ReadonlyMap<string, Agent>;
   /**
    * The open question an agent is waiting on an answer to, keyed by agent id —
-   * the join that lets the floor draw the ask *on the bot* rather than only in an
-   * inbox. One escalation rather than a list because the harness parks an agent
+   * the join that lets the console draw the ask *on the agent* rather than only in
+   * an inbox. One escalation rather than a list because the harness parks an agent
    * at most once at a time (`system.ts`'s `waiting` handler returns early while
    * one is open), so a list would promise a plurality that cannot occur.
    *
@@ -110,6 +126,12 @@ interface ViewInputs {
   spendOpen: boolean;
   /** Whether the reliability breakdown is open. */
   reliabilityOpen: boolean;
+  /** The goal whose page is open, as `issue:<n>`. */
+  selectedGoal: string | null;
+  /** Which full-surface panel is in front. */
+  consolePanel: ConsolePanel;
+  /** Whether the backlog view is open instead of the overview. */
+  backlogOpen: boolean;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -137,6 +159,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
   const interval = state.config.heartbeatIntervalMs;
   const sincePulse = now - input.lastPulseAt;
 
+  const needsYou = buildNeedsYou(state);
+
   return {
     state,
     now,
@@ -150,6 +174,12 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,
     openHumanTaskCount: (state.humanTasks ?? []).filter((t) => t.status === 'open').length,
     liveOverlapCount: (state.overlaps ?? []).filter((o) => o.live).length,
+
+    needsYou,
+    selectedGoal: input.selectedGoal,
+    goalPage: input.selectedGoal ? buildGoalPage(state, input.selectedGoal, needsYou) : null,
+    consolePanel: input.consolePanel,
+    backlogOpen: input.backlogOpen,
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,

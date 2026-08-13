@@ -101,7 +101,7 @@ test('buildStateSnapshot keys each task origin ref so agent/overlap/recovery car
   system.store.close();
 });
 
-test('buildStateSnapshot keys every goal by its canonical ref, so the factory floor can link it', async () => {
+test('buildStateSnapshot keys every goal by its canonical ref, so the cockpit can link it', async () => {
   // The Goal Floor's patch strip and the belt's crates speak the colon form
   // (`issue:13` is a patch's ref and a crate's origin), which the `#n` keys the
   // issue list is built from do not answer. Keyed on the issue existing, not on

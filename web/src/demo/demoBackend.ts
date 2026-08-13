@@ -369,9 +369,9 @@ class DemoServer {
   }
 
   /**
-   * End a run — the demo mirror of the one way a goal leaves the floor (#203,
+   * End a run — the demo mirror of the one way a goal leaves the console (#203,
    * #234). Marks the run dismissed wherever it rides (a still-present issue, or a
-   * forgotten-issue entry in `retainedRuns`), which is what the floor filters on.
+   * forgotten-issue entry in `retainedRuns`), which is what the console filters on.
    */
   async dismissRun(issueNumber: number): Promise<{ ok: true }> {
     const present = this.state.world.issues.find((i) => i.number === issueNumber);

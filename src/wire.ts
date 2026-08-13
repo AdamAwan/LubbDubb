@@ -257,7 +257,7 @@ export interface CockpitDecision extends Decision {
  * that introduces it. The route asks the same function again before recording,
  * because a disabled button is a courtesy and not a gate.
  */
-export interface StackLandingView {
+interface StackLandingView {
   /** The stack this concerns, as `/api/state` is currently deriving it. */
   ref: string;
   /** Whether every rung is clear, so the click may be offered at all. */
@@ -287,7 +287,7 @@ interface CockpitConfig {
 }
 
 /** Account-level Claude usage: the rolling cost windows, plus real limits when captured. */
-export interface CockpitUsage {
+interface CockpitUsage {
   windows: { fiveHourCostUsd: number; sevenDayCostUsd: number };
   /** Pro/Max only, via the PTY status-line capture. Null => the UI falls back to cost. */
   rateLimits: AccountRateLimits | null;
@@ -566,4 +566,4 @@ export type {
   RunTally,
 } from './reliabilityInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
-export type { Stack, StackRung } from './stacks/stack.js';
+export type { Stack } from './stacks/stack.js';

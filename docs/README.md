@@ -73,7 +73,7 @@ deliberately left unchecked, and why, is in
 | [14](spec/14-persistence.md)         | Persistence                 | The SQLite schema, migrations, the Store API surface, durability rules             |
 | [15](spec/15-integrations.md)        | Integrations                | The connector/sink seams, and the fake, GitHub and Azure DevOps providers          |
 | [16](spec/16-http-api.md)            | HTTP and WebSocket API      | Every route, the state snapshot, the event stream                                  |
-| [17](spec/17-cockpit.md)             | The cockpit                 | The web UI: panels, live updates, demo mode                                        |
+| [17](spec/17-cockpit.md)             | The cockpit                 | The console: the queue rail, goal pages, the overview, the backlog, live updates   |
 | [18](spec/18-observability.md)       | Observability               | The error log, decision log, activity feed, usage accounting, debug logging        |
 | [19](spec/19-development.md)         | Development and quality     | The `check` gate, test seams, the smoke run, build outputs                         |
 

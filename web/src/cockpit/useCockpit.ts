@@ -4,7 +4,7 @@ import type { WsClient } from '../api.js';
 import type { AppState } from '../types.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
-import type { CockpitActions } from './actions.js';
+import type { CockpitActions, ConsolePanel } from './actions.js';
 
 /**
  * How long a refetch waits so a burst of live signals collapses into one request.
@@ -19,10 +19,11 @@ type CockpitStatus =
   | { kind: 'ready'; view: CockpitView; actions: CockpitActions };
 
 /**
- * Everything between the harness and the floor: the snapshot fetch, the websocket,
- * the coalescing refresh, and which drawer is open. The floor receives its output and never
- * see any of this — which is the point, since it is the half that must behave
- * identically whatever the cockpit looks like.
+ * Everything between the harness and the drawn surface: the snapshot fetch, the
+ * websocket, the coalescing refresh, and which drawer is open. The presentation
+ * layer receives its output and never sees any of this — which is the point,
+ * since it is the half that must behave identically whatever the cockpit looks
+ * like.
  */
 export function useCockpit(): CockpitStatus {
   const [state, setState] = useState<AppState | null>(null);
@@ -35,6 +36,9 @@ export function useCockpit(): CockpitStatus {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState(false);
   const [reliabilityOpen, setReliabilityOpen] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
+  const [consolePanel, setConsolePanel] = useState<ConsolePanel>(null);
+  const [backlogOpen, setBacklogOpen] = useState(false);
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
   // Last output line per agent, fed by compact `agent:tail` frames — used for
@@ -172,6 +176,9 @@ export function useCockpit(): CockpitStatus {
       openSettings: (open) => setSettingsOpen(open),
       openSpend: (open) => setSpendOpen(open),
       openReliability: (open) => setReliabilityOpen(open),
+      selectGoal: (ref) => setSelectedGoal(ref),
+      openPanel: (panel) => setConsolePanel(panel),
+      openBacklog: (open) => setBacklogOpen(open),
       discussPlan: (planId) => then(api.discussPlan(planId)),
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -218,6 +225,9 @@ export function useCockpit(): CockpitStatus {
       settingsOpen,
       spendOpen,
       reliabilityOpen,
+      selectedGoal,
+      consolePanel,
+      backlogOpen,
     }),
   };
 }

@@ -16,846 +16,509 @@ and that `src/wire.ts` is the only server module the SPA names at all. See
 
 The cockpit is three layers, split so that how it _looks_ stays separable from how it behaves:
 
-| Layer        | Path                        | Job                                                                                            |
-| ------------ | --------------------------- | ---------------------------------------------------------------------------------------------- |
-| Wiring       | `web/src/cockpit/`          | fetch, websocket, coalesced refresh, which drawer is open, the bound `CockpitActions`. No JSX. |
-| Derivation   | `web/src/view/viewModel.ts` | the pure `buildViewModel` → `CockpitView`. No React.                                           |
-| Presentation | `web/src/factory/`          | the Factory Floor — the whole drawn surface, rooted at `FactoryRoot`.                          |
+| Layer        | Path               | Job                                                                                            |
+| ------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
+| Wiring       | `web/src/cockpit/` | fetch, websocket, coalesced refresh, which drawer is open, the bound `CockpitActions`. No JSX. |
+| Derivation   | `web/src/view/`    | the pure `buildViewModel` → `CockpitView`, and the derivations it folds. No React.             |
+| Presentation | `web/src/console/` | the console — the whole drawn surface, rooted at `ConsoleRoot`.                                |
 
-`App.tsx` is only the shell: acquire state, render `FactoryRoot`. The two screens it still owns —
-"Connecting…" and the locked-out page — stay there because neither has a view-model to draw.
-
-**The floor owns its whole layout.** It is handed a finished `CockpitView` and renders whatever tree
-it likes rather than filling slots in a shared page, because the reading worth having redraws the
-data (a dispatch queue as a belt feeding machines) rather than arranging panels.
+`App.tsx` is only the shell: acquire state, hand the console a finished `CockpitView`. **The console
+owns its whole layout.** It is given the view-model and renders whatever tree it likes rather than
+filling slots in a shared page.
 
 What keeps that from swallowing the cockpit's rules is the split on **behaviour weight**:
 
-- **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold
-  semantics: `AgentDrawer`, `EscalationCard`, `RecoveryPanel`, `InjectPanel`, `LaunchPanel`,
-  `FindingsPanel`, `SchedulePanel`, `WorldSummary`, the buttons, and the leaf helpers. The escalation 409 rules and
-  the recovery verdicts get exactly one implementation, and the floor embeds them and tints them
-  through the tokens.
-- **Drawn** (`web/src/factory/`) — anything that draws over data it was handed: the belt, the bays,
-  the desks, the gauges, the chips, the status bar.
+- **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold semantics:
+  `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `FindingsPanel`, `LaunchPanel`,
+  `SchedulePanel`, `InjectPanel`, `FleetControl`, `AgentDrawer`, the modals, the buttons and the leaf
+  helpers. The escalation 409 rules, the recovery verdicts and the decline-needs-a-note refusal get
+  exactly one implementation, and the console **embeds** them rather than redrawing them.
+- **Drawn** (`web/src/console/`) — anything that draws over data it was handed: the rail rows, the
+  goal page's sections, the overview's cards, the backlog's groups, the top bar's readings.
 
-**One panel hangs off the shell rather than off the floor**, below it: the work graph
-(`WorkTreePanel`). It is absent from the view-model because it rides its own route, **fetched on
-open, never polled**, since it only ever grows. Drawing it from `factory/` would mean reaching
-`api.js` directly, which is exactly what the seam forbids and `test/factoryFloor.test.ts` asserts.
+`test/console.test.ts` pins the embedding from the sharp end: a goal page answering an ask must render
+the shared card, not a compact copy of it, because a copy is how one surface ends up offering free
+text on a proposal that only takes a verdict.
 
-The prompt book hung there too until #244 and is now a **tab of the settings modal** below — same
-fetched-on-open route, same shell ownership, a findable place. It lists the prompt ids (each with the
-opening sentence of its doc and an `overridden` badge), and a row opens a modal carrying the doc in
-full, the placeholders an override may use, the path of the override file, and the effective template
-text. It is read-only: the path is what makes it actionable, since overriding is a file drop
-([16](16-http-api.md#get-apiprompts)). The demo build serves an empty book: the web
-bundle imports no server code, and a copy of eighteen prompts shipped to fill the panel would be free
-to drift from the originals with nothing to catch it.
+**Six surfaces hang off the shell rather than off the console**, and each for one reason — it reaches
+`api.js`, which `console/` may not:
 
-`WorldSummary` is shared rather than drawn for that split's reason. Most of it is drawing, but the
-watch/ignore toggles, the conclusion verdict and the assay override are operator controls with
-refusal rules behind them. A second implementation would sooner or later ship a world view missing a
-toggle, and the capability would be gone with no error to say so. The assay override is the sharpest
-case, which is why it is here and not only on the Goal Floor: an `unclear` verdict is the one intake
-reading that _blocks_ dispatch ([06](06-issue-pickup.md)), so a cockpit without it is one you cannot
-un-block an issue from.
+| Surface                                        | Why the shell                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------------- |
+| `AgentDrawer`                                  | seeds itself from the persisted transcript over its own route        |
+| `WorkTreePanel`                                | its own routes, fetched on open, never polled — the graph only grows |
+| `PlanModal` / `RetroModal` / `ScratchpadModal` | fetch the document they draw                                         |
+| `SettingsModal`                                | `GET /api/config`, `/api/ci-policy`, `/api/prompts`                  |
+| `SpendModal`                                   | `GET /api/spend`                                                     |
+| `ReliabilityModal`                             | `GET /api/reliability`                                               |
 
-**Nothing under `factory/` imports `api.js`.** Every mutation is enumerated on `CockpitActions`,
+The console asks for each the way it asks for a plan — a method on the seam (`select`, `viewPlan`,
+`viewRetro`, `viewScratchpad`, `openSettings`, `openSpend`, `openReliability`) — and the shell answers.
+Which one is open is cockpit state, not console state, or closing the drawer would lose its
+subscription.
+
+The two screens `App.tsx` still draws itself — "Connecting…" and the locked-out page — stay there
+because neither has a view-model to draw.
+
+**Nothing under `console/` imports `api.js`.** Every mutation is enumerated on `CockpitActions`,
 pre-bound, so drawing code cannot grow a capability with no refusal rule behind it — it would surface
-only as a button nobody wrote a rule for. Asserted structurally in `test/factoryFloor.test.ts`.
+only as a button nobody wrote a rule for. Asserted structurally in `test/console.test.ts`.
 
 ### Tokens
 
-Tokens on `:root` in `styles.css` are the styling contract **for shared components**, which is
-narrower than the usual meaning: `factory.css` writes whatever CSS it likes for its own `.fx` markup,
-but a shared component must be restyleable without being edited. So shared components style
-themselves only through tokens, and nothing in `factory.css` targets a shared component's class —
-the moment it reaches into `.escalation-card` the two stop being separable and a change to one
-silently redraws the other. Beyond colour the set covers `--r-*` (radius — all `0`, since nothing on
-a factory floor is rounded), `--font-ui|mono|display`, and `--border-hi`/`--border-lo`, the light/dark
-pair that makes the bevel expressible.
-
-`factory.css` is imported from `main.tsx`, not from a module under `factory/`. A `.css` import there
-would be invisible to `tsx`, which has no CSS loader and would throw when `test/factoryFloor.test.ts`
-pulls those modules in.
-
-### The floor
-
-**Factory Floor** (`web/src/factory/`) — the dispatcher's decision drawn as a production line. The
-fleet cap is a roboport with a pad per slot, each slot is a machine bay, the "Up next" queue is a
-belt of crates, and the headroom cut is a hazard-striped gate the belt backs up behind. It exists to
-make one claim visible that a column-per-subject layout makes you assemble by eye: **a bay runs only
-when it has both an item and a bot**.
-
-Three properties keep it a view rather than a costume, and they are what to preserve when changing
-it:
-
-- **Nothing is drawn that isn't in the snapshot.** Every bay is a live agent, every crate is a
-  `QueueItem`, every scanner cell is a check the CI policy classified. There is no progress bar,
-  because nothing reports progress — a bay shows elapsed time instead.
-- **The rocket means one thing: a goal closing.** `iconForStage('launch')` and
-  `iconForEventKind('issue_closed')` are the only two places it appears. It used to be spent on
-  `pr_merged` as well, which double-booked it and left the one event that _is_ a launch falling
-  through to a flask; `test/factoryFloor.test.ts` now asserts that nothing about a pull request wears
-  it.
-- **The belt is the harness running, so it stops when the harness does** (paused, or held on
-  recovery), as does the radar sweep. A belt still moving while no cycle will run is the one
-  genuinely misleading thing this layout could draw, so `test/factoryFloor.test.ts` asserts it rather
-  than trusting the CSS. The same test pins the gate to the dispatching prefix — a gate that drifted
-  off the cut would be confidently wrong, which is worse than no picture.
-- **The vocabulary is stated once**, in the pure `factory/vocabulary.ts`, so the belt and the bay
-  cannot disagree about what a plan part looks like.
-
-Red means exactly one thing on that floor: an agent parked on a question only you can answer.
-
-#### The floor at width
-
-`FactoryRoot` binds every panel to a `const` and then places it, so what a panel contains and where
-it sits are separate edits. Placement is **one CSS grid**: every panel is a direct child of
-`.fx-grid`, in the order it reads — **the Bench**, then the line, then Parts Inspection and Bots in
-the Field side by side, then the goal floor, the yard, the shift log and signals. Production is not a panel at all: it
-is the **Output** gauge in the status bar, and the graph opens from it.
-
-**Inspection and Bots share a row from 1500px up, half the width each.** The parts on the rack and
-the bots that will work them are one reading, and the old arrangement made you join them by eye —
-the strip full-width above two rails, Bots partway down the left one. At four tracks each half is
-still wider than either panel gets in the two-column arrangement below; below 1500 they stack,
-because an inspection row's fixed columns (the scanner ladder, the court chip) squeeze the title to
-nothing at half of 940px.
-
-There were **two rails** here — `floor` (the line, bots, the goal floor, the yard) and `world`
-(signals, shift log) — split on _whose turn it is_, each scrolling on its own with `.fx` pinned to
-`100dvh`. They are gone, and so are their scrollbars. A column that scrolls independently means the
-page has no single reading position: what you are looking for can be out of sight inside a box that
-itself has not moved, and the panel beside the one you are reading does not travel with it. One grid
-scrolls as one page. A third rail went earlier for a different reason — `act`, what _you_ are the
-blocker for, whose panels are read as a count far more often than as contents, and a count is a
-gauge rather than a column.
-
-There is **one DOM for every width**; the arrangement is chosen in CSS alone:
-
-| width    | arrangement                                                                                                                                           |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| < 940    | one column                                                                                                                                            |
-| 940–1499 | two columns; everything but the shift log and signals spans both                                                                                      |
-| ≥ 1500   | four columns — the Bench, the line, the goal floor and the yard span all four; Inspection and Bots take two each, and so do the shift log and signals |
-
-**The breakpoints are therefore stated once.** Matching them in React as well — rendering a
-different tree per width — buys nothing and costs a resize listener, a re-render on every drag, and
-a second definition of the boundary that will disagree with this one the first time either moves.
-
-Four consequences to preserve:
-
-- **Document order is reading order**, so no panel carries an `order`. The `order` values that used
-  to restore the reading order when the rails dissolved are gone with them; a panel moved in
-  `FactoryRoot` moves on the floor, which is the point. `test/factoryFloor.test.ts` pins the sequence
-  and pins every panel as a _direct_ child of the grid — a wrapper re-introduced round any of them
-  takes it out of the grid and its span rule then does nothing.
-- **The goal floor and the yard span the full width, and the goal floor's drawing grows into it.**
-  Both are laid out left to right across a goal's whole span, so a half-width column turns the patch
-  belt into something you scroll sideways — the reading the panel exists to give at a glance. The
-  floor SVG therefore takes its intrinsic width as a custom property and carries
-  `width: 100%; min-width: <intrinsic>; max-width: <intrinsic> * 1.8`: it scales up to the panel
-  (which is where its height comes from — height follows the viewBox), keeps 1:1 and scrolls when the
-  panel is narrower, and stops at 1.8× so a two-machine goal on a 3440px display is not blown up into
-  a poster. It is the pattern `.fx-line` already used for the belt.
-- **The full-bleed pictures need a container that caps them.** The line and the production graph
-  scale with their container; given the whole of a 3440px display, the graph alone became a
-  ~500px-tall chart that ate the first screen. Spans are what stop that, which is why widening the
-  old centred ribbon without also tiling it made the floor worse rather than better. The graph is no
-  longer on the floor at all (below), but the constraint is the line's too.
-- **The Bench is the first tile, above the line.** Work a person does by hand comes ahead of
-  everything the line does by itself, and it is the one panel on this floor whose contents are the
-  operator's own to do rather than the fleet's. It spans every track at both multi-column
-  arrangements, for the goal floor's reason rather than a pictorial one: it is a list of instructions
-  read across the top of the floor, and halving it would put the work you are the blocker for in a
-  column beside the work you are not. It is drawn **only when something is on it** — a panel with
-  nothing in it is not a panel — so a floor with an empty bench has no `bench` tile at all, which
-  `test/factoryFloor.test.ts` asserts from both sides along with the reading order.
-
-  It is a **panel and not a desk**. The three desks are counts in the status bar you open when you
-  want them, which is right for things read as "how many"; this is a list you work through, and a
-  plan step on it is holding assemblers shut somewhere below.
-
-  **The bench is drawn by the floor** (`components/Bench.tsx`) rather than as a list of cards. That
-  is the one place the drawn/shared split lands differently from findings
-  and recovery, and the reason is what the split is actually for: those two are _flows_ with refusal
-  rules, and this is a _list of machines_. Everything else on this floor is a machine with a lamp, a
-  plate and a caption; plain cards dropped into a factory card read as a form somebody left on
-  the shop floor. So each task is a **station** — `fx-station`, an `fx-sunk` plate with an amber
-  edge, a `Lamp`, the instruction as its heading and the origin and age on the right — laid out two
-  to a row from 1100px, because a bench is a row of stations you walk along rather than a column you
-  scroll.
-
-  What the floor does **not** redraw is the pair of buttons and the rule between them:
-  `HumanTaskActions` is shared, embedded here with `buttonClass="fx-btn"`, exactly as `BotCard`
-  embeds the wired `EscalationCard` and for the same stated reason — the refusal that a decline needs
-  a note has one implementation wherever you meet it. `ConfirmButton`'s `className` seam
-  is the precedent for the prop.
-
-  Three things the station says that a plain card cannot:
-
-  - **It has a lamp**, because it is a machine: `warn` while it waits on you, `off` once done,
-    `ghost` for one you declined — drawn but not built, which is what a declined step is. **Never
-    `bad`**: red on this floor means one thing, an agent parked on a question only you can answer,
-    and a task nobody is blocked on must not borrow it.
-  - **What it is holding.** A plan step counts the live siblings that named its slug and says "3
-    parts cannot start until this is done" — derived on the floor off `planParts`, a read-only view
-    like every other reading here. It is the fact only the floor has the parts to state, and the
-    difference between a chore and the reason the line is short. A standalone ask draws no count
-    rather than a zero, because it genuinely holds nothing.
-  - **The instructions are open, not folded away.** A list you scan can fold them behind a `<details>`
-    because its column is a list you scan; the bench is a thing you stand at and work from, and a
-    disclosure you have to open first is a step between you and the job. The sheet is capped and
-    scrolls inside itself rather than pushing the line off the screen.
-
-  **A settled station carries a third button, Dismiss**, and it is the floor's own rather than a
-  third arm of `HumanTaskActions`: the shared component is the *pair* with the refusal rule between
-  them, and a dismissal decides nothing. It is what stops the settled tail becoming a permanent
-  fixture — the close-out sweep files and settles its own rows without anyone touching them, so the
-  account of work nobody did accumulates under the work you have. Only a settled station has one; an
-  open task has two answers and hiding it is neither.
-  → [13](13-jobs-and-findings.md#getting-it-off-the-bench--post-apihuman-tasksiddismiss)
-
-  **`benchTasks` decides what is on the bench, and the tile's guard reads the same array the panel
-  draws.** Open first, then at most four settled, dismissed ones on neither. The floor asks that
-  question twice — a panel with nothing in it is not a panel — and deriving the visibility from the
-  raw `humanTasks` instead is exactly how a bench of four dismissed rows draws as an empty panel.
-  `test/factoryFloor.test.ts` asserts both sides. The rows themselves keep arriving in the snapshot:
-  the goal floor's close-out station reads one, so filtering them off the wire would silently turn a
-  dismissed decline into "nothing was owed".
-
-- **Recovery is outside `.fx-grid` entirely**, above it, because while it is up no pulse runs and
-  every other surface is stale for the same reason. It is a banner, so it needs no `grid-column` to
-  span — it is a block at every width.
-
-#### The seven ways in
-
-Alerts, faults and blueprints stood in the act rail, and each is read as a **number** far more often
-than as contents. So the number is a gauge in the status bar and the panel opens from it as a
-[`Modal`](#what-the-floor-draws-beyond-the-queue) — `FactoryModal` is one value rather than a boolean
-per modal, because a boolean each admits far more states than there are, and two panels in front at
-once is not something this floor can draw. The desks themselves are `components/Desks.tsx`
-(`StampDesk` / `FaultLog` / `BlueprintDesk` / `FindingsDesk`), each taking `{ view, actions }`
-like `StatusBar`: a `ConfirmButton`, a forty-row log and a demo gate are _contents_, and the root's
-job is placement. Being components is also the only way `renderToStaticMarkup` can reach a panel
-behind a click, which is what keeps them tested.
-
-**Findings is the fourth**, and it was never in that rail — it stood in the floor rail as the
-`Off-Blueprint` panel, which drew nothing at all when there was nothing to report, so at zero
-there was no reading and at one the rail reflowed. The rename is to the harness's own word for
-these (the `findings` table, `report_finding`, `FindingsPanel`), so one subject has one name from
-the tool call to the gauge, and it is 35px narrower than `Off-blueprint` was. It does not buy the
-single-row bar back, and Output made that worse rather than better: the bar's content is 1878px
-now, so it is one row above ~1900px and two below, and the duplicate-removal that fixed this last
-time has nothing left to remove. That is the cost of the spark — 213px against a counted gauge's
-~122px — and it is paid knowingly: the alternative is a gauge whose face is a number that cannot
-say what the panel was for. The threshold landing on the railed breakpoint is a coincidence, not a
-rule; nothing keys on it. It belongs with the desks rather than on the floor because the floor
-rail is what the _harness_ is doing, and a finding is something nobody is doing: nothing in the
-dispatcher reads `findings`, so promote / file / dismiss is the only way one becomes anything.
-
-**Output is the fifth**, and it is the one that was never a count. Production had already been
-reduced to a panel at the head of the world rail whose entire content was a tile you clicked to open
-the graph — a way in standing in a rail, above two panels an operator actually watches. It is read
-the way the desks are read, so it became a gauge the same way; the difference is only what a gauge
-of it can say. A rate over a 6h window collapsed to one number is a snapshot again, which is the
-thing the graph exists to escape, so the **face is a spark** — `ProductionSpark`, the same plotting
-functions the graph uses, at gauge weight — and the value beside it is the output rate alone,
-merges an hour. Dispatches per merge is the number that joins the two and it is a sentence rather
-than a glyph, so it is the hover and the graph's own note. The spark drops the escalation series:
-in a 64-unit box a third colour is a smudge, the bar already speaks for escalations in a gauge of
-its own four inches to the right, and what is left — a filled ground of dispatches with a merge line
-over it — is exactly the comparison the churn ratio is a number for.
-
-**Power is the sixth, and the only one that was already in the bar.** It is the floor's cost
-indicator, and a cost indicator raises exactly one question it cannot hold — *where did it go*. So the
-gauge gained a way in rather than the bar gaining a seventh gauge for the same subject: a reading and
-the reading behind it are one subject a click apart, which is the rule the section below states. The
-face is unchanged — the 5h meter and the accumulator bank when the status-line capture has seen the
-subscriber windows, the shared cost chip when it has not — and only the frame is now `.fx-act` with a
-chevron. It is the one way in whose face can be **empty**: `UsageChip` draws nothing at all until
-something has been reported, and the way in survives that deliberately, for the reason a zero count
-never removes a gauge. A fleet whose spend reads as nothing is precisely when an operator goes
-looking for why, and [Spend](#spend) is the only surface that answers *unmeasured* rather than
-*free*.
-
-**Yield is the seventh, and it is Output's other half.** Output says how much came off the line;
-Yield says how much of it was any good, and a floor can be busy while losing a third of its runs. It
-sits beside Output for that reason — the two are one subject a gauge apart — and it wears Power's
-meter rather than Output's spark, because a completion rate is a fraction of a whole and a spark
-would draw it as a rate. It is the second way in whose face can be **absent**: nothing is drawn until
-the first run settles, since a rate over no runs is not 100%, and a gauge reading perfect on an idle
-floor is the one lie this bar must not tell. Its reading comes off the snapshot (`runOutcomes`) and
-is folded by the same function the panel behind it opens with, so clicking through cannot change the
-number ([18](18-observability.md#the-reliability-breakdown)).
-
-Five rules hold them:
-
-- **A gauge that acts must look like it does.** An `onClick` on a plain `.fx-read` is invisible —
-  indistinguishable from a neighbour that does not respond, which is exactly how it was first
-  reported when `Power` was inert and someone tried it. A gauge that does something is `.fx-act`: a
-  real `<button>` with a raised face, a hover lift and a pointer. Icons are distinct per gauge
-  (`alert`, `gear`, `chest`, `blueprint`, `lamp`, `battery`, `flask`) so seven adjacent buttons stay
-  legible. **The chevron is the narrower word** — it says _there is a panel behind this_ — so all seven carry
-  one and `Scan`, which runs a pulse rather than opening anything, does not (`.fx-run`).
-  `test/factoryFloor.test.ts` counts the ways in by chevron for that reason.
-- **Only Alerts is ever red**, and that is the floor's existing rule rather than a new one: red means
-  an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
-  finding is something a bot noticed on its way past rather than something it is stuck on (amber),
-  and a queued blueprint is waiting on a slot, not on you (neither). **A poor yield is amber too**,
-  and that is the rule doing real work rather than a formality: a fleet losing a third of its runs
-  reads as the most alarming thing on the bar, and it is still a reading about work already over
-  with nobody parked on it.
-- **A gauge counts what a click resolves.** Findings counts findings at `open` and nothing
-  else: promoted, filed and dismissed are done, `filing` is decided (an agent is creating the
-  ticket), and **overlaps are excluded** — an overlap is diagnostic, with no button on it anywhere,
-  so a number a click could not move would be the dead `see the fault log at the foot of the floor`
-  line in a new place. They still show in the desk, because they answer the same question the
-  findings do. The consequence is honest and stated in the design: two agents editing one file is
-  the most urgent thing in that drawer and the one thing the face cannot advertise.
-- **A zero count mutes a gauge; it never removes it.** Faults is the only way to the fault log, which
-  carries the two-step `clear` — a control that must not become unreachable because the log happens
-  to be empty — and a gauge that vanished would reflow the bar every time its number left zero.
-  `test/factoryFloor.test.ts` asserts they survive a zero, counting the ways in by chevron. Power
-  extends this from a muted count to an **absent reading**: no usage reported at all still draws the
-  gauge and its way in.
-- **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
-  listed the same escalations in full: one reading in two places. `StampDesk` is the whole inbox, and
-  answering still happens on the shared `EscalationCard`, which owns the refusal rules.
-- **The gauge notifies; it is not the only route.** "Something needs you, _somewhere_" is a question
-  a spatial view answers badly, which is why the desk exists — but it was also the only place an
-  operator could see _which_ bot was waiting, or answer it, and that made a notifier mandatory
-  (#245). The bot on the floor now carries its own question; see
-  [What the floor draws beyond the queue](#what-the-floor-draws-beyond-the-queue).
-
-**Shifts Ended is a sixth panel behind a click, and the one that does _not_ open from the bar.** The
-bots whose shift has ended are history, and a list of them under the bots that are out _now_ makes
-the panel read as longer than the fleet is — with a tail that never empties, since a finished agent
-is kept forever. So the treatment is the desks' and the placement is not: the count is a button in
-the **Bots panel's own head** (`.fx-head-act`, beside the pads-free reading) and the cards open in
-front of it. Panel-local because the reading is only meaningful against a fleet — "3 shifts ended"
-among the bar's gauges says nothing the Bots panel does not say better — and because the bar is
-already two rows below ~1900px. The list is **bounded at 24** with the note naming the total, the
-shift log's convention.
-
-#### One subject, once — and nothing at all when the link drops
-
-Absorbing the act rail made the bar the busiest surface on the floor, and it was carrying two of
-everything. The fleet was a `Bots` reading _and_ the `live/cap` inside the cap control an inch to its
-right; the pulse was a `Scan` countdown at one end _and_ a "Run a scan" button at the other. Three
-rules now hold it, and each removes a duplicate rather than shrinking a survivor — the bar's wrap
-point moved in by ~260px without a reading being lost:
-
-- **The reading and its control are one gauge.** `Bots` _is_ `FleetControl`, wearing the gauge's icon
-  and label; the shared component is unchanged, because `factory/` may not reach `api.js` and embedding
-  it is the sanctioned route to a control. Its own `cap` caption is hidden in `factory.css` — a third
-  word for one number.
-- **The gauge is the button.** `ScanRead` presses, and the countdown on its face is what says whether
-  pressing it is worth anything. It stays pressable while paused or held: that is precisely when an
-  operator wants to confirm nothing moves. The radar still stops turning in both.
-- **Config is a hover, not a caption.** Which dispatcher is wired cannot change while the harness is
-  up, so it is the ident's `title`. `demo` stays on the face — it is the difference between a floor
-  and a picture of one.
-
-The **live/offline chip is gone entirely**, and this is the one change that is not only about width.
-Every panel on this floor is a reading the harness confirms, and a stale one is drawn in exactly the
-chrome of a live one, so a chip in the corner asked an operator to remember to check it before
-believing anything else — the same failure `capped` and `unapproved` were added to `QueueItem` to
-fix, one level up. So a dropped socket **empties the floor**: the bar is the ident plus a single
-`Link · offline` reading, and the rails, the recovery banner, the modals and the drawer are not
-rendered at all — one `Off the air` card in their place. Nothing is being polled into a lie, the
-harness is unaffected and says so, and the reconnect brings the floor back by itself.
-`test/factoryFloor.test.ts` asserts both halves: one fleet reading and no second scan button while
-connected, and no gauge at all while not.
-
-#### What the floor draws beyond the queue
-
-Each of these is a game mechanic kept only because a snapshot field already carried the reading; the
-argument for each is in its module's header, and the reason for the shape is worth stating here:
-
-- **Machine status** (`bayMachineStatus` / `crateMachineStatus`) replaces the old two-word
-  `beltTag`. The game already has a word for each of these conditions — an assembler with nothing to
-  consume says _no ingredients_, one whose output nobody takes says _output full_ — and those carry
-  a diagnosis "Cooling down" does not. Both halves of the floor route through the one file so the
-  two `waiting`s stay apart: a **waiting agent** is parked on a human and is red, a **waiting item**
-  merely has no free bay and is not. A paused floor answers `No power` before anything else, since
-  nothing else explains every machine at once.
-- **The floor is laid out from the cap**, not from a fixed four slots, up to `MAX_BAYS`. The old
-  array named the surplus in the header and cropped it off the picture, which made the one control
-  an operator actually turns invisible in the panel that exists to show it. Pads shrink to fit the
-  roboport's face so "one pad per slot" stays literally true.
-- **The belt is drawn as a belt**: chevrons in the tier colour running along a dark body, pointing
-  the way the queue moves. They are a mask rather than an inline SVG background, because the arrow
-  has to take `--fx-belt` and a data URI cannot read a custom property. The crossed diagonals this
-  replaced read as hazard tape — a warning, which is the one thing a belt is not — and drew no
-  direction at all, leaving the animation as the only thing that said which way the queue ran. An
-  arrow says it standing still, which matters because a stopped belt is a state this floor draws.
-- **The floor fills the panel; the plan does not stretch to it.** The bay count sets the plan's own
-  width, which at one or two bays is narrower than any screen — so the width goes in as an inline
-  `--fx-plan-w` and `.fx-line` takes it as a **`min-width`** with `width: 100%`. The sunk floor and
-  the belt then reach the panel's edge at any cap, because a belt that stops where the bays stop is
-  the one thing a line never does; above the panel's width the scroller takes over as before. The SVG
-  is pinned to `--fx-plan-w` rather than to the floor: stretched, it rescales and centres its viewBox,
-  and the crates — laid out in the same px units as the bays — would stop lining up with the
-  inserters they feed.
-- **The belt compresses behind the cut.** The boarding prefix keeps the crate pitch; everything
-  behind butts together with no gap, because that is what a belt does when nothing is taking from
-  it. Each run is omitted when empty — an empty flex child still takes the row's gap, and that gap
-  is exactly where the gate sits.
-- **A bot carries the question it is waiting on** (`BotCard`, `view.escalationByAgent`). The bot
-  reads as _Asking you_ and is red, and the whole shared `EscalationCard` is placed inside it: the
-  prompt, the context, the one-click `options`, the answer box, the verdict buttons, the dismiss. So
-  an escalation can be read and answered end to end without leaving the floor, and the desk is the
-  fleet-wide notifier it was always right to be rather than the only route (#245). Three things hold
-  it:
-  - **The reading is keyed off the escalation, never off `agent.status`.** Parking is only a request
-    — the `escalate` tool returns at once — so an agent that carried on working still owes an answer,
-    and a bot that stopped reading as asking while the desk still listed the item would be the two
-    surfaces disagreeing. `EscalationCard`'s own `agent resumed` chip says which of the two is
-    happening. A parked bot with no open escalation keeps the older `Idle — needs you` reading and
-    its `waitingReason`; that text is dropped when the card is there, since the card carries the same
-    sentence with the answer attached.
-  - **The card is placed, not rebuilt.** `Slip` (`components/Desks.tsx`) wires it once and both the
-    desk and `FactoryRoot` render that, so the refusal rules — a proposal cannot be answered with
-    free text, a permission verdict goes to `/permission` and not `/answer`, "Dismiss (rejects)" vs
-    "Dismiss (denies)" — have one implementation and cannot hold on one surface only. `BotCard` takes
-    the finished element and owns nothing but the gap (`.fx-ask`), which keeps the floor's rule that
-    no CSS here targets a shared component's class.
-  - **The join is a view-model derivation**, `escalationByAgent`, off the same `status === 'open'`
-    filter `openEscalations` uses — which is what makes the two views one reading: answering settles
-    the row and the next snapshot clears both, with nothing kept in step by hand. One escalation per
-    agent rather than a list, because the harness parks an agent at most once at a time. An
-    escalation no agent raised (a plan approval) has no bot to sit on and stays the desk's alone, as
-    do ended shifts: a dead agent's escalations are cascade-dismissed, so an answer box there would
-    be chrome nothing can settle. The Line's bays and the Goal Floor keep reading a parked agent red
-    through `bayMachineStatus` and gain no answering affordance — one place to answer from
-    the floor is the point.
-- **Inserters swing on a transfer, not on occupancy** (`inserterPhase`). An arm that ran for the
-  life of an agent was the one moving thing on the floor carrying no information. A swing is one
-  heartbeat from the agent's `startedAt`, and it carries the item while it swings.
-- **Parts Inspection** (`inspection.ts` + `components/Inspection.tsx`) draws every open PR as one
-  row, **above both rails**. It replaced two panels — the silo towers and the Launches log — and the
-  reason is the analogy: a launch is a _goal closing_ (`iconForStage`), so a PR drawn as a silo topped
-  with a rocket claimed the merge was the ending. A merge loads one part into the silo. Six things
-  carry it:
-  - **It sits above the rails, breaking their whose-turn split on purpose.** A PR is the world object
-    an operator is most often the blocker for, so it outranks the split rather than living inside it.
-    It needs no breakpoint case: it is one full-width child above a grid that collapses to one column.
-  - **Two groups, on `attention.status` alone** (`rack`/`rackGroup`) — `you` and `stalled` are yours,
-    everything else is in hand, dimmed and **never collapsed** (a fold puts a click between an
-    operator and _is anything stuck_). A merge-ready PR needs no arm of its own: it is already `you`
-    through the pending-proposal arm, and under `autoSend` it reads `harness` and correctly drops to
-    _in hand_. Inside a group the order is PR number — the old sort was fullest-first, which put the
-    PRs you had to decide on below the ones the harness was already fixing.
-  - **The ladder is two groups, and the split is an argument about denominators.** The fixed four
-    existed because `health.reasons` names only what is wrong — a numerator with no bottom. That holds
-    for the three gates a _human_ moves (`mergeGates`: approved, comments, conflicts) and **fails for
-    CI**, because `ciVerdict` is an enumerable list of named checks with states. So CI became the
-    **scanner group**: one cell per check the policy classified, from the shared `scannersFor`
-    (`scanners.ts` — moved out of `goalFloor.ts` so the strip and the Goal Floor's PR machine cannot
-    disagree about which check is red). The scanner cells **share one fixed track**, so a big CI matrix
-    gives thin cells rather than pushing the three gates out of column.
-  - **Five scanner states, and none of them is red.** `damaged` is unlit — failing, a bot is coming;
-    `not_ours` is amber — failing and none is, which the old single CI cell could not say and which is
-    the whole reason per-check policy exists; `muted` is a dashed outline, `awaiting` blue, passing
-    green. Red is left to the court chip and the row stripe, so it keeps meaning _a question only you
-    can answer_ on a row with four failing checks. No check **name** is written on the floor; every one
-    comes off the verdict.
-  - **`attention.status` names the court, read off the server and never re-derived**
-    (`prCourt`); `attention.reasons`/`health.reasons` are quoted, never parsed. An empty rack still
-    draws — a surface that vanishes when quiet is indistinguishable from one that broke. The merge
-    count from `closedPullRequests` is all that survives of the Launches log, in the header.
-  - **The Yard gives up its PR list.** `WorldSummary` takes `showPullRequests` (default `true`, so
-    the floor passes `false`, and the
-    flag gates the tab counts and the recently-closed list as well as the rows, or the counts would
-    not match what the tab shows. One subject, one place: the argument that dissolved the act rail.
-  - **The watch/ignore toggle moves with the PRs.** `showPullRequests={false}` also drops the
-    exclude toggle `WorldSummary` renders on every PR row, so once the factory moved its PRs onto the
-    rack the toggle had no home — the only way to `-ignore` a PR from the cockpit was to switch to
-    The Yard. So each open rack row carries it (`onToggleExclude` → `actions.setPrExcluded` →
-    `POST /api/prs/:n/exclude`, the same label write `WorldSummary` makes): `ignore` when untagged, `watch`
-    to lift it, read off `pr.labels.includes(ignoreLabel)`. With **no `ignoreLabel` configured** the
-    gate is off, so the button renders **disabled rather than absent** — the control keeps its place
-    on the row and the reason is one hover away, the same rule the empty rack is drawn for. A merged
-    PR has none: there is nothing to leave alone.
-- **Production** (`production.ts`) is the only panel that reads against time, which is the only way
-  to answer whether the floor is producing rather than merely busy. Rates come from the timestamps
-  already on `decisions` and `worldEvents`; a held or skipped dispatch is not counted, because it
-  produced no work. The churn ratio (dispatches per merge) is the point of the panel. When the
-  decision log does not reach back to the window's start the panel **says so**: a rate that silently
-  under-reports is worse than no rate. It is the one panel an operator _consults_ rather than
-  watches, and it is **not on the floor**: it draws at two sizes off one set of plotting functions —
-  the **spark** on the status bar's Output gauge (two series, gauge weight; see
-  [the seven ways in](#the-seven-ways-in)) and the **full graph** — axes, deltas, spend, the
-  truncation caveat — behind the click, in the floor's `Modal`. Two components drawing the same
-  series independently would be two things to keep in step for no gain; the only difference between
-  them is the rectangle they plot into, how heavy the strokes are in it, and whether the axes are
-  labelled. `FactoryRoot` derives the reading once and hands it to both, so the gauge and the graph
-  cannot disagree. The modal is an `.fx-card` with a backdrop rather than
-  a second surface, and closes on the backdrop, the button _and_ Escape — a thing that covers the
-  floor must not have exactly one exit.
-- **The Goal Floor** (`goalFloor.ts` + `components/GoalFloor.tsx`) draws **one ticket's whole
-  production line**, patch to launch, and takes the slot the tech tree had. See
-  [The Goal Floor](#the-goal-floor) below.
-- **Circuit signals** group `worldEvents` by `(kind, ref)` and carry a count — three comments on one
-  PR read as one signal, not three unrelated rows. Polarity comes from the **kind alone**
-  (`signalPolarity`); the summary is prose written for a human, and parsing it here would be a
-  second reader of a string nobody promised to keep stable, so `pr_ci` is neutral rather than
-  guessed.
-- **Power** (`power.ts`) pairs satisfaction (the 5h window) with an accumulator bank (the 7d one),
-  because they fail differently: full satisfaction over a draining bank is a week's budget going on
-  an afternoon. The bank is a **segmented gauge** filled from one number, not a staircase of
-  per-cell levels that do not exist. A brownout dims the machinery and nothing else — the reading
-  belongs on the floor, but not at the cost of the text needed to act on it. Both are absent
-  entirely when the subscriber limits were never captured; there is no denominator on an API key.
-- **The shift log gives the subject its own column** (`EventLog`). `Tick · Action · Ref · Detail ·
-Rule · Outcome · By`. `linkify` still runs over Detail, so a sentence naming `#142` gets its link
-  where it stands — but a detail is prose, and half the harness's own details name their subject in
-  some other shape ("dispatched agent for …", "replanning …") or not at all. Ref draws
-  `decision.subjectRef`, the server's answer to what the row is _about_, through `refLink`: the
-  colon form is the harness's own vocabulary and is worth reading whether or not it resolves, so an
-  unresolvable ref stays on screen as text rather than vanishing. A row about nothing external draws
-  a dash — see [16](16-http-api.md#refurls) for why the derivation is the server's.
-
-Two of the three desks carry a rule of their own:
-
-- **`BlueprintDesk`** is the `LaunchPanel`, the `SchedulePanel` and the `InjectPanel`. The schedule
-  panel sits under the composer rather than on a desk of its own because it is the same act with a
-  `when` attached: a firing writes the identical job the composer writes, into the identical queue
-  drawn below both of them. The `InjectPanel` hangs off **`view.demo`** —
-  the static Pages build. Injection fakes a world change, which is only ever something the demo
-  needs: a real run against a fake provider is still a real run, and a panel that lies to the harness
-  there is a way to lie to yourself about what it is reacting to. The empty-floor line reads from the
-  same predicate, so it never offers an injection there is no panel for. The shell reads `view.demo`
-  too — one predicate, because there is no second thing for a second one to disagree with.
-- **`FaultLog`** offers a two-step **clear** whenever it has any, posting `POST /api/errors/clear`.
-  Two-step because the rows go: nothing in the harness reads the fault log back, so a clear costs
-  nothing anything decides on — but it costs the only copy, and for every cockpit rather than this
-  one. It sits _above_ the log rather than in the modal head beside `Close`: one misclick between
-  "leave" and "delete the only copy" is too few. The log draws forty rows, not the eight a rail had
-  room for — eight was a crop for a column, and this is the surface you went looking for.
-
-#### Spend
-
-`components/Spend.tsx`, opened from the [Power gauge](#the-seven-ways-in), drawing the payload
-`GET /api/spend` returns ([18](18-observability.md#the-spend-breakdown)). It is the answer to the
-question every cost figure in the cockpit raises and none of them can hold.
-
-**Fetched on open, three states, and the third is the point.** Loading, the breakdown, and a
-_failure_ — because a fetch that failed must not render as a fleet that has spent nothing. `$0.00`
-is a real answer here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the
-failure mode. The all-zero case gets its own sentence rather than a table of zeroes: **unmeasured is
-not free**, and a panel of `$0.00` rows says the wrong one of those.
-
-**Nothing here is derived in the browser.** The server ships the splits, for the reason `PrAttention`
-and `StackLandingView` are shipped: a cockpit-side re-derivation of which goal a pull request's money
-belongs to would be a second opinion about a decision made elsewhere, drawn inches from the first.
-What the cockpit owns is presentation — the phase **colours**, which live in the stylesheet as
-`--sp-<phase>` so the component names a phase and the sheet decides what that looks like.
-
-Four pictures, in the order the questions arrive:
-
-- **Four tiles** — all-time, the 5h and 7d windows, and the token split. The windows restate exactly
-  what the gauge the operator just clicked says, and are there for that reason rather than their own:
-  a panel opened from a chip must begin by agreeing with it.
-- **Where it went** — one stacked bar over the whole fleet, and a legend that is also the table
-  (cost, share, runs, average per run). The blurb under each phase name is the phase's definition,
-  shipped with the figures rather than held here, because it is a claim about what the harness did
-  and not about how to draw it.
-- **The trend** — 14 rolling daily buckets as **bars, not lines**: these are totals over a period and
-  not samples of a rate, and a line between two days implies money moved smoothly between them, which
-  is exactly what a fleet that ran for one afternoon did not do.
-- **By goal**, then **the costliest runs**. Each goal row's bar is drawn at the width of its share of
-  the fleet and split by phase inside, so it carries two readings at once: how much of the budget this
-  goal was, and what inside it the money went on. The runs table is capped and **says so** — a
-  silently truncated table reads as a complete one.
-
-**The method note is part of the panel, not a footnote**, and it sits level with the figures it
-qualifies rather than three screens below them. It states the one thing the numbers cannot: dollars
-are the provider's own, already net of cache pricing, while tokens are gross with cache reads and
-writes folded into input — so the tile's dollars-per-million-input-tokens is a measure of how much
-cache the fleet is getting and never a rate card
-([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
-runs, which appear in no figure above it.
-
-#### Yield
-
-`web/src/components/ReliabilityModal.tsx`, opened from the [Yield gauge](#the-seven-ways-in), drawing
-the payload `GET /api/reliability` returns ([18](18-observability.md#the-reliability-breakdown)). It
-is [Spend](#spend)'s twin and is built as one deliberately — the same chrome, the same tables, the
-same phase vocabulary — because the two answer halves of one question: where the money went, and what
-it bought.
-
-**Fetched on open, three states**, for Spend's reason with the sign flipped: a fetch that failed must
-not render as a fleet that never fails. 100% is a real answer here, so it cannot also be the failure
-mode. A fleet with runs still out and none settled gets its own sentence rather than a table of
-zeroes — **not yet is not perfect**.
-
-**Nothing here is derived in the browser**, again for `PrAttention`'s reason. What the cockpit owns is
-presentation: the outcome **colours**, which live in the stylesheet as `--rl-<outcome>` beside the
-phase palette. The two palettes differ in kind on purpose — a phase is a category whose colours only
-have to read apart, while an outcome is a _verdict_ and carries the floor's alarm vocabulary. Grey is
-doing real work in it: a killed run is not a fault, and colouring it like one would make every
-steered fleet look broken.
-
-Four pictures:
-
-- **Four tiles** — runs finished, money lost to faults, the CI red rate, and the median time back to
-  green. The first restates exactly what the gauge just said, for the reason Spend's windows do. The
-  other two are the rates' _prices_: a rate with no cost beside it is a statistic, and the question an
-  operator opened this on was whether to do something about it.
-- **How runs ended** — one stacked bar over every settled run, and a legend that is also the table.
-  The blurb under each ending is shipped with the figures rather than held here, as the phase copy is.
-- **CI verdicts** — 14 rolling daily buckets, red **stacked on** green rather than two series, because
-  the reading is a ratio and two lines make that a comparison instead of a glance. Bars for the spend
-  trend's reason.
-- **By phase**, then the two rankings — the reddest pull requests and the origins that ran more than
-  once. Both are capped and **say so**. The repeats table is a ranking and never a count of mistakes:
-  a part agent that lands and then answers review comments legitimately runs twice, and what earns it
-  a table is that the expensive kind of repetition is invisible everywhere else — a goal whose card
-  shows one number quietly went round four times.
-
-**The method note states the two things a reader would otherwise discover by disbelieving the panel:**
-the two halves are measured over different windows, and a red is a CI verdict rather than a pull
-request. It also names the unmeasured runs, which count in every rate above it and in no dollar.
-
-#### The Goal Floor
-
-`TheLine` draws the **dispatcher** — bays, belt, headroom gate, subject: agents. The Goal Floor draws
-the **work**: one ticket's whole production line, in the order
-[`docs/workflow.md`](../workflow.md) describes it. Ticket → is there enough here to act on → plan →
-do the work → checks → merge → is the goal achieved → report → update the ticket → launch → close the
-ticket. Every node below corresponds to a stage of that document, which is what the floor is checked
-against.
-
-| Factory              | Harness                                             |
-| -------------------- | --------------------------------------------------- |
-| Ore patch            | A ticket, and the strip that picks which floor      |
-| Assay drill          | The goal assay, rule `issue-assay`                  |
-| Furnace              | The planner, rule `issue-plan`                      |
-| Splitter / merger    | Where the plan's edge list branches and rejoins     |
-| Assembly machine     | A plan part, carrying the pull request it produced  |
-| Scanners on the belt | CI checks, classified — plus human review           |
-| Silo                 | The goal, filling with settled parts                |
-| Satellite            | The assessment, rule `issue-assess`                 |
-| Manifest             | Report what was done — `issue.conclusion.note`      |
-| Signal post          | Update the ticket — state and status comment        |
-| Launch               | `delivered`, or a launch that failed verification   |
-| Close-out            | The `close_out` human task: go and close the ticket |
-
-Seven properties, and they are what to preserve:
-
-- **The strip is the goals we have a claim staked to.** Issues are opt-in
-  ([06](06-issue-pickup.md)), so an untagged ticket has no production line and is drawn none:
-  `floorGoals(issues, {watchLabel, ignoreLabel})` keeps what `watchBucket` — the World panel's own
-  predicate, not a second reading of the same labels — calls `watched`. Two exceptions, and each is a
-  way the panel could otherwise go confidently blank. An **empty watch label** filters nothing
-  (`labelPrefix: ''` is the act-on-everything escape hatch, and issues default opt-out, so filtering
-  there would hide every goal on exactly the deployments that turned the gate off). And **anything in
-  flight is drawn whatever its tags say** (`inProduction`: `active` / `has_pr` / `planning` /
-  `delivered`) — a tag pulled mid-flight must not make a live plan, an open pull request or a running
-  agent invisible, which covers `ignored` as much as `unwatched`, because the reason is the visibility
-  of live work and not the tag's polarity. Order is **claimed first, then ascending issue number**: the
-  strip is a place positions are learned, so it is sorted on the two things that barely move rather
-  than on status or activity, which would shuffle it under an operator exactly while something is
-  going wrong. `inProduction` lives beside the filter because it is also the default pick's heuristic
-  — a floor with nothing moving on it is the least useful thing to land on — and nothing staked at all
-  gets its **own** empty line, since "nothing is tagged" and "the provider returned no goals" are
-  different facts and only one of them has an action.
-- **Every machine is a work item.** A splitter and a merger have no status, no agent and no origin
-  ref — they are where the edge list branches — so they are belt _fixtures_. Drawing one as a machine
-  also stretches it to the full height of the fan-out, which is the same mistake showing up as a
-  visual bug.
-- **Position comes from structure alone.** `layoutFloor(refs, edges)` is pure over refs and
-  dependency edges — no status, no tone, no timestamps — and memoised on the shape, so a machine moves
-  only when a part appears, is retired, or opens a pull request. Without the split a floor is re-laid
-  on every poll and jitters exactly when an operator is watching it most closely. Column is
-  **longest-path depth**, not `dependsOn[0]`'s: a part waiting on several must never draw to the left
-  of something it waits on. That also means it tolerates **in-degree > 1** today, before the plan
-  schema can emit it (#170), so relaxing the arity cap needs no cockpit change.
-- **Absent is not stopped.** A goal nothing has assayed draws **no drill**; one refused at intake
-  draws a drill that is red, stopped, and carrying its reason. Collapsing the two would put #158 back
-  — the whole point of intake having a verdict. That refusal's plate is a **second entry point** onto
-  the shared assay override above (`PlanModal`'s pattern, where three surfaces reach one `viewPlan`),
-  and the only plate carrying one: `FloorPlate.assayIssue` names the issue an override would rewrite
-  and is null on every other plate, so the component never decides for itself which plate that is —
-  the first `workable` plate anyone adds cannot silently grow buttons. The buttons sit beside the
-  assayer's words rather than over them, with the expiry sentence under both.
-- **A CI machine's state comes from the verdict, never a check's name.** Scanners are generated from
-  `pr.ciVerdict` (`dispatch` → damaged, `escalate` → not ours, `ignored` → muted), so a floor running
-  against a config naming any check at all renders with no code change, and **no check name from any
-  workplace appears in this repository**. Human review is the exception worth knowing: reviewer
-  policies deliberately do not fold into `ciChecks` — they map to `approved`/`unresolvedComments` —
-  so that one scanner is fed from `pr.approved` or it is permanently absent.
-- **A stopped machine says why, in the harness's own words.** Every plate under the floor quotes a
-  string the server computed: an assay summary, a planner's reason, a `health` reason, a
-  `QueueItem.reason`. No prose is assembled in the browser and none is parsed, for `signalPolarity`'s
-  reason. The queue's own words are reused on a held machine too — a part the cap is holding says
-  _output backed up_ rather than _ready to start_ beside a bot that is never coming.
-- **The belt is the harness running.** A lit belt animates only while cycles run; paused or held on
-  recovery, they all stop. `cold` is a different fact and a different class — an edge nothing can
-  travel yet, because the machine behind it has not produced anything. Asserted in
-  `test/factoryFloor.test.ts` rather than trusted to the CSS.
-
-**Two sources, with different jobs.** `/api/state` is the live reading and wins wherever both speak;
-`GET /api/work/issue:<n>` is fetched **once** when a floor is opened, never on a poll, and may only
-_add_ settled machines the world has forgotten — a PR merged past `closedPrWindowMs`. That one line is
-the whole of the merge: two sources each partly owning a field is how they start disagreeing. The
-fetch goes through `fetchWorkSubtree` on `CockpitActions`, because `factory/` may not import `api.js`.
-
-**A run is kept until the operator dismisses it (#203, #234).** The floor is otherwise built from the
-live world, so a goal — and the Manifest's way in to its retrospective — dropped off the moment the
-tracker stopped returning the issue (closed by hand) or its watch tag came off. So the harness's run
-at a goal is recorded server-side while the issue is still live (`issue_runs`, keyed on the issue
-origin), and the row keeps the issue's title, body, labels, linked PR and workflow state as they last
-stood, because a retained run is **dispatched from** and not merely drawn.
-
-**Minted at pickup, not at completion (#234).** #203 recorded a _completion_, which is a row that is
-never written for a goal nobody finished — so an abandoned goal, or one whose ticket was closed
-mid-flight, disappeared with no card to dismiss. A run is minted the first pulse the harness has work
-under the goal (`hasPriorWork`, the same predicate `issue-assess` uses to tell "nothing has started"
-from "something finished"), and the completion instant is stamped later, when the signals say the goal
-is reached. "Complete" (`isGoalComplete`, `src/floor/runs.ts`, recorded each pulse in `harness.ts`)
-folds two kinds of input, and the rule between them is **evidence adds; a standing verdict
-subtracts**:
-
-- **Evidence** — a write-up exists, or a `delivered` verdict was ever reached. Each says the goal was
-  reached at least once, and they are why the conclusion alone is not enough: a finished goal nobody
-  declared resolves to `undeclared`. The delivery is read as _presence_, not as still standing.
-- **The standing verdict**, from [`resolveIssueConclusion`](06-issue-pickup.md#concluding-an-issue) —
-  `done` completes, and **`more_work` outranks every piece of evidence above**, because the operator,
-  the assessor, the working agent or a plan being re-drawn is saying _now_ that work remains.
-
-The conclusion and the plan are asked through that resolver rather than read as two more raw signals,
-and reading them raw was a defect with two faces: an operator's `more_work` toggle was argued with by
-a `complete` plan — the exact contradiction the resolver's first arm exists to forbid — and a standing
-shortfall was not consulted at all, so an assessor's "nothing was delivered" lost to the stale `done`
-of the agent it was assessing.
-
-**The gate is on stamping a completion, never on keeping a run.** Retention stays one-way: nothing
-deletes a row, `recordIssueRun` never clears a completion instant or resurrects a dismissal, and a
-genuinely finished goal resolves to `done` or `undeclared` — never `more_work` — so it cannot fall off
-the floor on its own. What no longer happens is the harness recording a goal as finished on the same
-pulse its own scheduler is putting agents on it. The snapshot then does two things: it stamps every
-issue the harness has a run at with a `run` field (`startedAt`, `completedAt`, `outcome`,
-`dismissed`), and it rebuilds the runs the world has forgotten into a separate `retainedRuns` list —
-through `retainedRunIssues`, the _same_ function the dispatcher unions into its issue list, and then
-the _same_ `enrichIssue` path a live issue takes, so the card the operator sees and the subject the
-harness acts on are one thing. The floor merges that list in, the world's copy winning for a goal
-still present, so the Yard and world panels stay a view of the live world. `floorGoals` gains a third
-way onto the strip beside claimed and in-flight: a **retained run**, drawn until dismissed. The order
-of its checks is load-bearing — in-flight is tested first, so a dismissed goal that re-enters
-production is drawn as live work.
-
-**The floor is where a goal's spend is stated, because it is the only panel that draws one whole.**
-Every other reading of cost in the cockpit is per *agent* — a figure on a card that leaves with the
-run — so nothing added a planner, four parts and three CI agents into the one number an operator
-budgets in. The Spend row does (`Issue.spend`, [18](18-observability.md#per-goal-spend)): one total,
-the agent count it is over, and the token split. It hangs off the goal **having been measured**, never
-off the floor's state — the lesson `planId` and `retroRef` learned — and a goal with no measurement
-draws no row at all rather than a `$0.00` one.
-
-**Dismissal is the terminal act, and since #234 it is a gate as well as the card** (`POST
-/api/issues/:n/dismiss-run` → `Store.dismissIssueRun`). This reverses #203's stated invariant that
-dismissal is _never_ a gate, deliberately and for the reason the retention exists at all: a run that
-outlives the ticket has to be endable, or the dispatcher would keep asking about a goal the operator
-has finished with. Two routes reach it and the row decides which — a run the harness had judged ends
-`judged`, one it had not ends `abandoned` — so the outcome is never claimed beyond the evidence.
-Operator-only, one-way, and it persists across a restart: a dismissed run is not unioned back into the
-issue list, so nothing further is scheduled for a goal whose ticket the tracker has stopped returning.
-While the ticket _is_ still returned it is the tracker's own answer that puts the goal in the world, so
-dismissal ends the retention rather than parking a live issue — the operator's `-ignore` tag is what
-says "leave this one alone", and a dismissal that could silently park an open ticket would make a
-mis-click far more expensive than the card it was aimed at. An accidental dismissal is undone by the
-goal being worked again, not by an un-dismiss. The report itself is untouched — the row is the run,
-not the write-up, which `GET /api/retrospectives/:ref` still serves. The Dismiss control hangs off the
-run **existing and not yet ended** (`retainedRun`), never off the floor's state — the lesson `planId`
-and `retroRef` learned.
-
-**The tail reads the goal check's verdict, and nothing else (#234).** The Manifest, the Signal post
-and the Launch sit on the satellite's yes arm; they used to be drawn off `delivery !== null ||
-pickupStatus === 'delivered' || pickupStatus === 'done'`, and `done` is _any closed issue_ — so three
-stations drew as built, under a green **Delivered · Away**, with the goal check beneath them reading
-**Not yet built**. They now read the delivery row the satellite reads. Where there is no verdict they
-are drawn `presence: 'unbuilt'` — the vocabulary the furnace already uses — rather than cut from the
-route: an omitted station says "not reached" in a shape indistinguishable from the floor simply ending
-there, which is how the contradiction went unnoticed. The Launch therefore has **three** readings, not
-two: `away`, `returned`, and `unbuilt`. A shortfall still returns before the Manifest, which is the
-one arm that draws nothing.
-
-**The close-out is read off the row, never off the ticket.** The station after the Launch is the one
-a _person_ staffs, and it draws the `close_out` human task
-([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)) — the same rows the Bench
-above the line draws, so the two cannot disagree about what is owed. It is not re-derived from
-`issue.state` for the reason the satellite is not read off `conclusion`: the obligation has its own
-life, and the one thing no reading of the tracker can see is the operator **declining** to close it.
-Four readings — `waiting`, `closed`, `declined`, `unbuilt` — and `declined` is toned `off` rather than
-red, because a settlement is an answer and a red machine at the end of a delivered line would say
-something went wrong on a floor where nothing did. The one arm that does read the world is a
-delivered goal with no task at all: nothing was owed, because the item was never listed open after the
-launch. The station borrows the Bench's lamp, which is already the mark for work the fleet cannot do.
-
-**It replaced the tech tree rather than joining it.** The tree's one unique claim — depth is how many
-merges must land before a part can start — survives intact as the floor's column, and `stateOf` /
-`depths` moved into `goalFloor.ts` as `partProgress` and `layoutFloor`. Keeping both would have left
-two components deriving a part's state from `PlanPart.status` independently, which is the drift class
-this codebase has already paid for twice.
-
-**Two verdicts are computed server-side and shipped** (`pr.ciVerdict`, `issue.assay` — see
-[16](16-http-api.md)), and that is _why_: nothing under `web/` may import `src/dispatcher/` or
-`src/graph/`, asserted structurally in `test/workGraph.test.ts` beside the two that say the same of
-the dispatcher.
-
-**The signal post claims both signals the harness sends** (#171): the work item's state move, and the
-one living status comment the plan reconciler keeps. Three things hold it together. **A plan with no
-comment says so rather than falling silent**, which is what having a writer on the wire buys: both
-states are readings rather than one reading and one blank. **No plan is not the same as no comment** —
-an unplanned issue has no plan row, so nothing _could_ have written one, and that third reading gets
-its own words rather than being folded into the second. And **the reading and the way in are separate
-facts**: the meta line states which of the three it is and is drawn whatever the provider can resolve,
-while the machine's `link` — captioned `notice ↗`, never printing the ref, which is machinery —
-appears only when `refUrls` has a URL for it. Keeping them apart is what lets a plan under a provider
-that builds no URLs still say a notice went out, without offering a way in that goes nowhere.
-`signalPostStatus` is a closed fold with a word per combination of the two signals, asserted arm by
-arm in `test/factoryFloor.test.ts`.
-
-`Machine.link` is `{ref, label} | null` and is **never set beside `prNumber`**: they share one corner
-of the node, so a machine claiming two ways out would draw one over the other. The test asserts that
-rather than trusting it.
-
-**Two machines carry one.** The signal post's `notice ↗` above, and the **ore patch**'s `ticket ↗` —
-the one machine on the floor that _is_ a ticket. Both are captioned rather than printed for the same
-reason: the ref is already on the meta line under the name (`issue:12 · In Progress`), so the corner
-has room for a word and not for the ref again. Both go through `refChip`, so a provider that builds no
-URLs draws neither caption rather than a caption over nothing.
-
-One thing is still deliberately **not** drawn. Quality-pillar commentary is not drawn at all, for the
-stronger version of the old reason — nothing in the harness writes it, so a third line there would be
-a machine reading a field with no writer.
-
-The icons are original marks in `Sprite.tsx`. The game the treatment nods at owns its art outright
-and licenses none of it for redistribution, so none of it is used or traced; what carries the
-reference is the vocabulary — a bay, an inserter, a roboport — which is nobody's property. The
-display face is Bahnschrift/DIN Alternate, already present on Windows and macOS respectively, rather
-than a bundled webfont.
-
-### Settings
-
-A cog in the status bar opens a shared modal. Since #244 it carries **three tabs**, which is
-everything an operator configures answering to one control:
-
-| Tab         | Reads                | Shows                                                                            |
-| ----------- | -------------------- | -------------------------------------------------------------------------------- |
-| `Settings`  | `GET /api/config`    | The live controls, and the configuration this process ran up on                  |
-| `CI policy` | `GET /api/ci-policy` | What the harness does about a red PR, check by check                             |
-| `Prompts`   | `GET /api/prompts`   | The rule dispatcher's prompt book                                                |
-
-The tabs exist because the last two were, in practice, unreadable. `ci.checks` was visible only by
-opening `lubbdubb.config.json` on the host, and the prompt book hung off the Work panel — a place
-nobody looks for a setting. Stacking all three down one scrolling panel would have reproduced the
-finding problem inside the modal.
+Tokens on `:root` in `web/src/styles.css` are the styling contract **for shared components**, which is
+narrower than the usual meaning: `web/src/console/console.css` writes whatever CSS it likes for its own
+`.cn` markup, but a shared component must be restyleable without being edited. So shared components
+style themselves only through tokens, and **nothing in `console.css` targets a shared component's
+class** — the moment it reaches into `.escalation-card` the two stop being separable and a change to
+one silently redraws the other. `test/console.test.ts` asserts that by name. Beyond colour the set
+covers `--r-*` (radius), `--font-ui|mono|display`, and `--border-hi`/`--border-lo`, the light/dark pair
+that makes a bevel expressible.
+
+The console's own colours are `--cn-*` properties on `:root` in `console.css` — a separate prefix so
+the two sheets cannot collide while both are loaded, and custom properties rather than literals at
+each use site because **no visual theme is settled**: the palette ported from the mockup is a
+placeholder, and the point of the token seam is that replacing it is one block.
+
+`console.css` is imported from `main.tsx`, not from a module under `console/`. A `.css` import there
+would be invisible to `tsx`, which has no CSS loader and would throw when `test/console.test.ts` pulls
+those modules in.
+
+## Shape
+
+Three surfaces and one shell.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ ident · Scan · Fleet      Spend Yield Output Findings Faults Launch ⚙ │  top bar
+├──────────────────────────────────────────────────────────────────────┤
+│ the recovery banner, when a previous run left work orphaned          │
+├───────────────┬──────────────────────────────────────────────────────┤
+│ NEEDS YOU  6  │  Overview · Backlog · #142 Retry the intake job      │
+│ ┌───────────┐ │  ──────────────────────────────────────────────────  │
+│ │ Blocking  │ │                                                      │
+│ │ escalation│ │            the situation area                        │
+│ │ plan      │ │      (the overview, a goal page, or the backlog)     │
+│ │ permission│ │                                                      │
+│ │ Yours     │ │                                                      │
+│ │ bench     │ │                                                      │
+│ │ close-out │ │                                                      │
+│ └───────────┘ │                                                      │
+└───────────────┴──────────────────────────────────────────────────────┘
+```
+
+**The recovery banner sits outside the situation area and above it, at every width.** While a crashed
+run stands, the harness runs no cycles at all — so every goal the rail or the situation area would draw
+is stale for the same one reason, and the banner is the one thing on screen still true. It is a block,
+not a card in a track, so it needs no span rule to be full width. `test/console.test.ts` asserts the
+placement rather than trusting the stylesheet.
+
+**The situation area draws exactly one of three things**, and the precedence is load-bearing: a
+selected goal outranks the backlog, which outranks the overview. Selecting a goal is what a queue row
+does, and it does not close whatever the nav left open — so with the backlog winning, clicking an ask
+would land the operator on a triage list instead of on the ask.
+
+The **nav** is two destinations and a crumb: Overview, Backlog (carrying the unwatched count — the one
+number that says whether triage is worth opening, read off the same `backlogGroups` the view draws so
+the count and the rows cannot differ), and, when a goal is open, its number and title. Both buttons
+clear _both_ pieces of state, because a nav click means "go here" and either half left standing would
+land somewhere else.
+
+### The console at width
+
+There is **one DOM for every width**; the arrangement is chosen in CSS alone. Matching the breakpoints
+in React as well — rendering a different tree per width — buys nothing and costs a resize listener, a
+re-render on every drag, and a second definition of each boundary that will disagree with the first
+time either moves.
+
+| width     | arrangement                                                                   |
+| --------- | ----------------------------------------------------------------------------- |
+| < 1100    | the rail above the situation area; one column throughout                      |
+| 1100–1199 | the rail beside the situation area (360px); situation in one column           |
+| 1200–1499 | overview cards in two tracks; Fleet, Goals and Pull requests span both        |
+| 1500–1999 | the goal page gains its right-hand column, and its plan waves go side by side |
+| ≥ 2000    | overview cards in four tracks; the three spanning cards take two each         |
+
+**The breakpoints are therefore stated once**, in `console.css`, and each is a statement about a
+different surface: 1100 is the shell, 1200 the overview grid, 1500 the goal page, 2000 the overview
+again. The plan's waves use `auto-fit` above 1500 rather than a fixed track count, so how many waves
+sit in a row is a question about the card and not about the viewport — the same 1500px that turns the
+waves sideways also halves the card by giving the goal its right-hand column.
+
+**The plan's waves stack vertically below 1500px** rather than scrolling sideways. A horizontally
+scrolling plan is the failure this layout is a reaction to.
+
+**Document order is reading order.** No card carries a CSS `order`; a section moved in `Overview.tsx`
+or `GoalPage.tsx` moves on screen, which is the point.
+
+## The queue rail — "Needs you"
+
+A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
+permission requests, bench tasks, close-outs and the recovery hold. `buildNeedsYou`
+(`web/src/view/needsYou.ts`) is the merge, and it is pure.
+
+**Six kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
+underneath, named apart because the verdict differs — a permission goes to `/permission`, a proposal
+carries accept/reject, a plain question takes free text. Drawing them as one kind is how a surface ends
+up offering the wrong control. `bench` and `close_out` are human tasks, likewise split, since a
+close-out is the step after a launch and reads as one ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
+
+**Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
+`yours` means the obligation is the operator's and nothing inside the fleet is waiting. That is the
+whole of the colour rule: **red means an agent is parked on a question only you can answer, and
+nothing else.** A bench task genuinely blocks no agent, so it is amber, and the merge of six surfaces
+into one list preserves the distinction rather than flattening it.
+
+**The order is the derivation's, and the rail never re-sorts.** `buildNeedsYou` sorts:
+
+1. **Recovery first** — while it is up no pulse runs at all, so every other row is waiting on it
+   whether or not it says so.
+2. **`blocking` before `yours`.**
+3. **Most-holding first.**
+4. **Oldest first.**
+
+`QueueRail` groups the already-ordered array by `NeedGroup` for its two sub-headings and does nothing
+else, so the rail and the view-model stay one reading. `test/console.test.ts` feeds it deliberately
+out-of-order rows and asserts array order survives — a second sort in the component is the drift that
+would make the rail's own claim about urgency stop being `needsYou`'s.
+
+**Every row states what it is holding**, and that count is the sort key within a group. `holding` is
+**live direct dependents only** — the parts whose `dependsOn` names this ask's slug and which are not
+retired. A transitive count would claim work that a sibling, not this ask, is the blocker for.
+`partHolding` is the one implementation, lifted out of the station that first had it so the rail, the
+goal page and the count cannot disagree; the sentence is worded once too, by `holdingLabel`, so "1
+part" and "3 parts" agree with their noun on both surfaces. **A row holding nothing draws no count
+rather than a zero.**
+
+**A row is a link to a goal, not to a modal.** Clicking one calls `selectGoal(row.goalRef)` and opens
+that goal's page with the ask pinned at the top of it. The recovery hold has no `goalRef` — it is
+harness-wide — so it renders as a `div` rather than a `button`: there is nowhere for a click to go, and
+it is answered on the banner above. `test/console.test.ts` asserts both shapes.
+
+**At zero the rail keeps its place and says so** ("Nothing is waiting on you"). A surface that vanishes
+when quiet is indistinguishable from one that broke, and a column that came and went would reflow the
+whole shell every time the last ask was answered. A group with no rows draws no heading, though — an
+empty "Yours to do" under a full "Blocking" is furniture.
+
+## The goal page
+
+**A queue row opens the goal it is about, with the ask pinned at the top of that goal's page.** That is
+the console's one novel claim, and it is the answer to the fault the redesign was for: an escalation
+shown without the goal it is about is a sentence with no subject. Answering "Redis or Postgres?" wants
+the ticket, the plan, the part's siblings and what is waiting on it — so the ask is drawn _with_ them
+rather than in an inbox beside them.
+
+`buildGoalPage(state, ref, needs)` (`web/src/view/goalPage.ts`) assembles the whole page from the
+snapshot. It returns **null** for a ref the world does not carry: a page of empty sections is
+indistinguishable from a goal that exists and has nothing on it, and only one of those is worth
+drawing. A **retained run** is found too (`retainedRuns`), so a goal whose ticket the tracker has
+stopped returning still has a page to be dismissed from.
+
+`needs` is **passed in** rather than rebuilt, so the rail and the page are one reading — answering on
+either settles the row and the next snapshot clears both, with nothing kept in step by hand.
+
+Order on the page, top to bottom:
+
+1. **The goal header** — number, title, item type, workflow state, the assay verdict with the
+   assayer's own summary in its title, the conclusion verdict, when the run started, the agent count,
+   what it has cost, and how many parts have merged. Every chip quotes a reading the server already
+   made; nothing here is a second opinion. A `null` spend draws no reading at all, because nothing
+   was ever measured and `$0.00` would report a goal that cost nothing
+   ([18](18-observability.md#per-goal-spend)).
+2. **The "Needs you" bands** — every open ask on this goal, stacked, answerable in place. Red for
+   asks blocking an agent, amber for the operator's own, the rail's own split carried over so a row
+   and the band it opens read the same. **A goal with no ask draws no band at all** — a band that is
+   sometimes furniture stops being read as a demand — and `test/console.test.ts` asserts that from both
+   sides.
+3. **The plan**, left to right in dispatch order.
+4. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against.
+5. **Pull requests for this goal**, with the court chip and the CI ladder.
+
+At ≥1500px a right-hand column carries **On this goal** (who is working it now), **Spend** and **The
+tail**. Below that, the two stacks are one column.
+
+### The header's controls
+
+Watch, the conclusion, raising a bug, the ticket, and ending the run.
+
+- **The watch toggle writes both tags.** `setIssueWatched` tags the watch label and clears the ignore
+  label, or the reverse — so the title names both. Saying only "remove the watch label" understates a
+  click that also tags the goal ignored, and the difference is visible: the goal lands in the
+  backlog's Ignored group rather than back in Unwatched.
+- **Three conclusion controls, not two.** `Mark done` / `Unfinish` writes or withdraws `done`. **Work
+  left** writes `more_work`, and it is a third control rather than the finished toggle's other end
+  because `more_work` is not the opposite of `done` — it is the verdict that puts a goal back in front
+  of the harness once no PR is open ([06](06-issue-pickup.md#concluding-an-issue)). It is offered only
+  on an open ticket that does not already carry it.
+- **Raise a bug** is gated on `config.canFileTickets` and opens the shared `RaiseBugModal`. It files
+  into the tracker rather than writing a verdict about the item, and it leaves the goal's own verdict
+  where it found it.
+- **End the run** is keyed on the run **existing and not yet ended**, never on anything else the page
+  is showing — the lesson `planId` and `retroRef` learned. It is how a retained run is ended, so it
+  has to be reachable for exactly as long as the harness still holds one
+  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)).
+
+### The bands
+
+Each band embeds the **shared** component that owns its refusal rules — `EscalationCard` for a
+question, a permission or a proposal, `HumanTaskActions` for a bench task or a close-out. Embedded,
+never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
+`buttonClass` is the one seam the console passes, so the shared buttons wear the console's face without
+the console reaching into their class.
+
+**A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
+claim something is waiting while offering no way to answer it.
+
+### The plan
+
+Four groups — **Merged**, **Now**, **Held**, **Not started** — folded by `PartGroup` off `status`
+alone. Four rather than eight statuses because the page is read as a sequence, and `ready` versus
+`pending` is a distinction the queue's own reason states better than a column heading can. `retired`
+folds to nothing and is not drawn.
+
+**A held part quotes the reconciler's `blockedReason` verbatim.** It is the one status nothing else in
+the world explains — a blocked part has no branch, no PR and no agent to read — so a paraphrase here
+would be the only account there is, and wrong ([08](08-planning.md#the-ref-collision-guard)).
+
+The overview's segment track is folded by `buildGoalTrack` off **the page's own groups**, not off
+`status` a second time, so a row and the page it opens cannot disagree about whether a part is held or
+merely not started.
+
+### The pull requests and the tail
+
+Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
+never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
+ladder is one dot per check the policy classified — failing, not-ours, muted — with **no check name
+written anywhere in this repository**: every one comes off the verdict. Where the provider reported no
+per-check detail at all the aggregate speaks under a generic name rather than drawing nothing, because
+missing detail is not a clean bill of health.
+
+`courtTone` and `CiLadder` are exported from `GoalPage.tsx` and drawn by the overview's rack too. Two
+readings of one verdict side by side is how the same PR comes to wear two tones nobody chose.
+
+**The tail** is what is left after the parts: the goal check (the delivery's or the shortfall's own
+summary), the write-up, closing the ticket, and the notepad. Each states its own author's verdict or
+that nothing has run — "not reached yet" is a fact about the goal worth seeing, not an empty section.
+The write-up and the notepad carry a way in, each keyed on the document **existing** and on nothing the
+page is doing.
+
+### What the goal page deliberately does not draw
+
+**This goal's slice of the decision log.** `buildGoalPage` computes `decisions` — the rows whose
+`subjectRef` names the goal — and nothing renders it. The snapshot ships the last hundred audit rows
+fleet-wide and a cycle spends one of them every pulse on its own rationale, so filtered to one goal the
+list is a handful of dispatches at best and empty for any goal not touched in the last few hours. The
+design's stated arm was that this becomes its own route, and this takes that arm: **deferred, not
+half-built.** A per-goal activity list is a route away, and the derivation is already here to draw it
+from.
+
+## The overview
+
+What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**.
+
+Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
+`attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
+goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
+vanishes when quiet is indistinguishable from one that broke.
+
+- **Fleet** — who is out, what they are on, and what it has cost. The lamp reads red off
+  `escalationByAgent`, not off `status === 'waiting'`: an agent can be parked with nothing asked of the
+  operator, the two disagree in exactly that case, and the ask wins. **Ended shifts are behind a
+  disclosure in the card's own head**, not a second card: they are the same rows read for a different
+  question, and the count stays in the header at zero, muted, so the way in does not move.
+- **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
+  (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
+  re-inferred from agents, plans and pull requests, which are three inputs the server has already
+  folded into one. Each row is a way into that goal's page, carries its segment track, and takes a
+  **court chip read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
+  about it. Anything else would let a chip say "you" with nothing to answer.
+- **Pull requests** — every open PR with its court chip, its CI ladder, and the watch/ignore toggle.
+  A PR is joined to its goal through the **plan parts** rather than guessed from the branch name; a PR
+  nobody's plan claims is left out of that map and draws its branch instead, which is honest about what
+  is known. The toggle is **disabled rather than absent** with no ignore label configured: the gate
+  being off is a fact about the deployment worth seeing, and a control that comes and goes with a
+  config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a
+  closed list at all — absent means the retention window is off, which is not the claim "none merged".
+- **Up next** — the last pulse's ranked queue, each row carrying `QueueItem.reason` verbatim. The
+  reason is the whole point of the card, being the direct answer to "are we working on the right
+  thing", so it wraps rather than being clipped and nothing here re-words it. A held item is toned off
+  `status`, which is a fact the same sentence already states in words.
+- **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows. Three review
+  comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
+  first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
+  again.
+
+## The backlog
+
+A nav view, opened rather than always present, because triage is periodic — **nothing in it blocks an
+agent**, which is the whole difference between this surface and the rail. Four groups, every open item
+in exactly one of them:
+
+| Group             | Holds                                                   |
+| ----------------- | ------------------------------------------------------- |
+| Watched           | what the harness will pick up                           |
+| Blocked at intake | an `unclear` assay, quoted, with the override beside it |
+| Unwatched         | the triage list, newest first                           |
+| Ignored           | tagged leave-alone, a tail, with un-ignore              |
+
+**Which items the harness will work is `watchBucket`'s answer** (`web/src/worldBuckets.ts`), read once
+here rather than re-derived from the labels — a second reading of the same tags is how two surfaces
+start disagreeing about what is watched. It carries the server's precedence: ignore wins, then watch,
+else the type default.
+
+**Intake is pulled _out_ of Watched rather than greyed inside it.** An `unclear` assay is the one
+intake reading that _stops dispatch_ ([06](06-issue-pickup.md)); among the watched rows it reads as a
+detail rather than as the thing holding all the work. An **ignored** item is never intake, whatever a
+stale verdict says: "leave this alone" is the operator's own instruction and outranks a reading about a
+goal nobody is going to work.
+
+**One pass and one assignment per item**, not four filters. An item matching two predicates would draw
+twice, with two toggles, and the second would be a different answer to the same question. Closed items
+are left out altogether — a closed ticket is neither watchable nor ignorable. Each group draws 25 rows
+and then states the remainder; a group with nothing in it is muted, never removed.
+
+**The row quotes and never parses.** The intake group prints the assayer's own sentence
+(`Assay: unclear — "…"`); every other group prints `pickup.reasons[0]`. The watch and ignore labels are
+filtered out of the chips a row shows: which group a row is filed under already states its watch state,
+and the toggle beside it states it again — a third copy is the noise that made the old flat world panel
+unreadable.
+
+**The override is `Override → workable`**, on intake rows alone, writing through `setIssueAssay`. A
+`workable` verdict blocks nothing, so a button on one would offer to change a reading that changes no
+behaviour.
+
+**A container type is disabled rather than absent** (`WatchToggle`), carrying the dispatcher's own
+refusal as its title: "cannot be picked up" is a fact about the item worth seeing. It is disabled only
+in the direction that would opt the item _in_ — that is the click whose promise the harness will not
+keep — so un-watching one still works, or a container tagged once could never be untagged from here.
+The same rule covers a deployment with the gate off (`labelPrefix: ''`): there is no tag to write in
+either direction, and a button that writes nothing is worse than one that says why.
+
+Assignment filtering is a server-side concern (`workItemAssignedTo` for Azure; GitHub has no issue
+assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
+
+## The top bar and the panels
+
+The strip carries the ident, the pulse, the fleet cap, and seven readings: **Spend**, **Yield**,
+**Output**, **Findings**, **Faults**, **Launch** and **Settings**. Each is one subject stated once, in
+a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
+the fleet cap is the shared `FleetControl`, which is already on that seam.
+
+Four rules hold them:
+
+- **A reading that opens something carries a chevron; a reading that acts does not.** `Scan` presses
+  to run a pulse rather than opening a panel, so it wears the same raised chrome and no chevron — a
+  reading that opens something and a reading that does something are different promises, and the
+  chevron is the only thing that says which. Scan stays pressable while paused or held: that is
+  precisely when an operator wants to confirm nothing moves.
+- **A zero count mutes a reading; it never removes it.** The gauge staying put is what lets an operator
+  glance at the same spot every time rather than hunting for a control that reflows when its number
+  happens to hit zero. Yield extends this from a muted count to an **absent** one: nothing is drawn
+  until the first run settles, since a rate over no runs is not 100% and a gauge reading perfect on an
+  idle fleet is the one lie this bar must not tell.
+- **The gauge and the panel behind it share one derivation.** Output reads `productionReading`
+  (`web/src/view/production.ts`) — the same function the output graph is built from — rather than a
+  differently-shaped count of the same events, so the two agree from the first paint. It sits in
+  `view/` for exactly that: a pure, React-free derivation neither surface owns.
+- **Launch counts the queue, not the history.** A launched blueprint that has been dispatched is an
+  agent in the Fleet, and counting it here would have the reading climb as work starts rather than as
+  it waits.
+
+**Which panel is in front is one value**, `ConsolePanel`, not a boolean each: a boolean per panel
+admits far more states than there are, and two panels in front at once is not something this layout can
+draw. A `Panel` has **three ways out** — the backdrop, the button and Escape — because a thing that
+covers the console must not have exactly one exit; `test/console.test.ts` pins them.
+
+Four panels open from the bar, and Settings, Spend and Yield are shell-owned modals beside them:
+
+- **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
+  `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in
+  the dispatcher reads `findings`, so those three buttons are the only way one becomes anything.
+- **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
+  for a column. It offers a **two-step clear**, drawn **above** the rows and **at zero rows as well**:
+  nothing in the harness reads the fault log back, so a clear costs nothing anything decides on, but it
+  costs the only copy and for every cockpit rather than this one. One misclick between "leave" and
+  "delete the only copy" is too few, and the only route to it must not depend on there being rows.
+  Amber, never red — the log blocks nothing.
+- **Output** — the one reading that is against _time_, which is the only way to answer whether the
+  fleet is producing rather than merely busy. Rates come from the timestamps already on `decisions` and
+  `worldEvents`; a held or skipped dispatch is not counted, because it produced no work. **The churn
+  ratio (dispatches per merge) is the point of the panel**: dispatches are effort and merges are
+  output, and a rising first line over a flat second one is a fleet spinning. A series with nothing in
+  the first half of the window draws no delta rather than a 0% one — there is nothing to have changed
+  from. When the decision log does not reach back to the window's start the panel **says so**: a rate
+  that silently under-reports is worse than no rate.
+- **Launch** — the shared `LaunchPanel` and `SchedulePanel` together, since a recurrence is the same
+  act with a `when` attached: a firing writes the identical job the composer writes, into the identical
+  queue drawn below both. `InjectPanel` rides here under **`view.demo`** alone. Injection fakes a world
+  change, which only the static demo has any use for — a real run against a fake provider is still a
+  real run, and a panel that lies to the harness there is a way to lie to yourself about what it is
+  reacting to. There is no server route behind it for a second predicate to disagree with.
+
+### Launching work
+
+`LaunchPanel` stamps an operator job: prompt, optional title, code or desk, optional branch, and the
+queue including cancel. It also takes **images** (#249) — a screenshot of the panel to change, the
+broken screen — by **paste** into the prompt, by **drop** anywhere on the composer, and by an **Attach
+image** button over a hidden file input. Each attachment shows as a thumbnail with the operator's
+filename and a × that removes it before launch.
+
+- **The thumbnail is the same base64 the request carries**, scaled by CSS. Nothing here resizes,
+  re-encodes or generates a thumbnail: the stored bytes are the operator's bytes.
+- **The composer states no bounds.** How many, how big and which formats are the server's rules
+  (`src/jobs/attachments.ts`), and a second copy here is how the two come to disagree — so the panel
+  refuses only what is not an image at all (a category, not a number) and otherwise reports the
+  server's refusal verbatim, keeping the prompt and its attachments for a retry.
+- **The browser's mime is not sent.** It drives the local preview only; the server decides the type
+  from the bytes, so a field it ignores would read as one it honours.
+
+`AttachmentStrip` draws what was attached to a queued blueprint (`job:<id>`). The URL comes from
+`attachmentUrls`, never string-built, because it carries a short-lived capability that the cockpit's
+bearer token structurally cannot substitute for — an `<img>` load sends no `Authorization` header
+([16](16-http-api.md#get-attachmentsid)). Clicking opens the image at its own size in a new tab,
+`rel="noreferrer"` so the capability does not ride out in a referrer.
+
+`SchedulePanel` puts a blueprint on a clock: a cron expression, a prompt, code/desk, and every
+recurrence with its next run, its last run, and pause / run now / delete.
+
+- **The expression is typed, and four common ones are buttons.** Reading `0 9 * * 1-5` and writing it
+  are different asks, and only one of them is the operator's actual intention.
+- **A refused expression is shown in the server's own words.** The cron parser names the field and
+  what that field accepts, and a second wording in the browser would be a worse one written further
+  from the syntax. The form is kept for a retry — a rejected expression is usually one character away
+  from a good one.
+- **A paused recurrence is dimmed, not hidden or moved.** It is a standing intention the operator
+  wrote, and this panel is the only surface anywhere that says it exists.
+- **Two times, in two registers.** `relTime` clamps a future instant to "0s ago", so the next run is
+  rendered by the panel's own `untilTime` ("in 3h") beside the last run's "ran 2d ago".
+  → [13](13-jobs-and-findings.md#schedules)
+
+### Nothing at all when the link drops
+
+Every reading in the console is one the harness confirms, and a stale one is drawn in exactly the
+chrome of a live one — so a chip in the corner would ask an operator to remember to check it before
+believing anything else. A dropped socket therefore **empties the console**: the bar is the ident plus
+a single `Link · offline` reading, and the rail, the situation area, the recovery banner and the panels
+are not rendered at all — one `Off the air` card in their place, saying that the harness is unaffected
+and that the console returns by itself. `test/console.test.ts` asserts that no gauge, no rail and no
+situation area survive the drop.
+
+## Settings
+
+A reading in the top bar opens a shared modal carrying **three tabs**, which is everything an operator
+configures answering to one control:
+
+| Tab         | Reads                | Shows                                                           |
+| ----------- | -------------------- | --------------------------------------------------------------- |
+| `Settings`  | `GET /api/config`    | The live controls, and the configuration this process ran up on |
+| `CI policy` | `GET /api/ci-policy` | What the harness does about a red PR, check by check            |
+| `Prompts`   | `GET /api/prompts`   | The rule dispatcher's prompt book                               |
+
+The tabs exist because the last two were, in practice, unreadable: `ci.checks` was visible only by
+opening `lubbdubb.config.json` on the host, and the prompt book hung off the work panel, a place nobody
+looks for a setting. Stacking all three down one scrolling panel would have reproduced that inside the
+modal.
 
 A tab's body is **mounted on its first visit and never unmounted**, hidden rather than torn down when
 another is selected. Each fetches a constant once, so unmounting would buy nothing and cost a re-fetch
@@ -865,11 +528,32 @@ The **prompt book's own modal nests inside this one**, and that is why the setti
 Escape listener: `PromptModal` has one, so Escape and a backdrop click close the template being read
 and leave the modal behind it standing. Two listeners would close both layers on one key.
 
-The arrangement is `PlanModal`'s exactly. The modal reads routes `factory/` may not, so it hangs off
-the shell in `App.tsx` and the floor-side cog only flips `settingsOpen` through
-`CockpitActions.openSettings` — the same seam `viewPlan` uses, for the same reason.
+The prompt book lists the prompt ids (each with the opening sentence of its doc and an `overridden`
+badge), and a row opens a modal carrying the doc in full, the placeholders an override may use, the
+path of the override file, and the effective template text. It is read-only: the path is what makes it
+actionable, since overriding is a file drop ([16](16-http-api.md#get-apiprompts)). The demo build
+serves an empty book — the web bundle imports no server code, and a copy of eighteen prompts shipped to
+fill the panel would be free to drift from the originals with nothing to catch it.
 
-#### The CI policy tab
+The config tab is **read-only and fetched on open**, both for the prompt book's reasons:
+`loadConfig` runs once at boot so polling would be paying for a constant, and a write route's honest
+answer to "when does this take effect" is "at the next restart". Values are grouped, and each one that
+differs from the built-in default is marked — the question an operator opens this to ask is not "what
+are the values" but "what did I change", and answering it needs a baseline, which is why the server
+computes the comparison rather than shipping the object alone.
+
+Two values would make that block a lie, and are drawn separately above it: `maxConcurrentAgents` and
+`startPaused` are both shadowed at runtime by `RuntimeControl` ([09](09-execution.md)) and revert on
+restart. The modal shows the live cap and pause state from `control`, naming the configured value it is
+overriding where the two differ. Both halves of that pair are read out of the same fetched block, so
+they can never come from two readings that disagree.
+
+Nothing is redacted, and that is not an oversight: `Config` holds no secrets by construction
+([02](02-configuration.md)), which is the same rule that keeps `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT` and
+`LUBBDUBB_TOKEN` in the environment. `auth.tokenFile` is a path worth reading, and blanking it would
+hide a useful value while implying the invariant is not real.
+
+### The CI policy tab
 
 The ordered `ci.checks` rules as the running server has them: the glob, the **effective** `states`, the
 **effective** `onFailure`, its `guidance` and `urgent` flag, numbered so "first match wins" is
@@ -878,59 +562,101 @@ operator reading the config file sees an absent field and has no way to know the
 it alone" rather than "fall through to the default". `states` is marked the same way, and a rule that
 watches `pending` without `failing` says so explicitly: a failure of that check falls through to a
 later rule, which is the one consequence of `states` an operator would not predict from the file.
-Below the table, the routing a failing check matching **no rule** takes: `dispatch` — and the note
-that a check in any other state matching no rule does nothing, since watching one is opt-in per rule. Under Azure, the branch-policy kinds and the mode each is surfaced under follow, marked
-default-or-chosen.
+Below the table, the routing a failing check matching **no rule** takes: `dispatch` — and the note that
+a check in any other state matching no rule does nothing, since watching one is opt-in per rule. Under
+Azure, the branch-policy kinds and the mode each is surfaced under follow, marked default-or-chosen.
 
 An empty policy is a full answer rather than a blank tab: no rules means every failing check takes the
 unmatched routing, and the tab says so.
 
 Every effective value is computed by `describeCiPolicy` on the server
-([16](16-http-api.md#get-apici-policy)) — the component asserts nothing of its own about the policy,
-so it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: there is no
+([16](16-http-api.md#get-apici-policy)) — the component asserts nothing of its own about the policy, so
+it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: there is no
 config-write path in the harness at all.
 
-The config tab is **read-only and fetched on open**, both for the prompt book's reasons
-([16](16-http-api.md)): `loadConfig` runs once at boot so polling would be paying for a constant, and
-a write route's honest answer to "when does this take effect" is "at the next restart". Values are
-grouped, and each one that differs from the built-in default is marked — the question an operator
-opens this to ask is not "what are the values" but "what did I change", and answering it needs a
-baseline, which is why the server computes the comparison rather than shipping the object alone.
+## Spend
 
-Two values would make that block a lie, and are drawn separately above it: `maxConcurrentAgents` and
-`startPaused` are both shadowed at runtime by `RuntimeControl` ([09](09-execution.md)) and revert on
-restart. The modal shows the live cap and pause state from `control`, naming the configured value it
-is overriding where the two differ. Both halves of that pair are read out of the same fetched block,
-so they can never come from two readings that disagree.
+`web/src/components/SpendModal.tsx`, opened from the Spend reading, drawing the payload
+`GET /api/spend` returns ([18](18-observability.md#the-spend-breakdown)). It is the answer to the
+question every cost figure in the cockpit raises and none of them can hold.
 
-Nothing is redacted, and that is not an oversight: `Config` holds no secrets by construction
-([02](02-configuration.md)), which is the same rule that keeps `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT` and
-`LUBBDUBB_TOKEN` in the environment. `auth.tokenFile` is a path worth reading, and blanking it would
-hide a useful value while implying the invariant is not real.
+**Fetched on open, three states, and the third is the point.** Loading, the breakdown, and a _failure_
+— because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real
+answer here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the failure mode.
+The all-zero case gets its own sentence rather than a table of zeroes: **unmeasured is not free**, and
+a panel of `$0.00` rows says the wrong one of those.
 
-### Tests
+**Nothing here is derived in the browser.** The server ships the splits, for the reason `PrAttention`
+and `StackLandingView` are shipped: a cockpit-side re-derivation of which goal a pull request's money
+belongs to would be a second opinion about a decision made elsewhere, drawn inches from the first. What
+the cockpit owns is presentation — the phase **colours**, which live in the stylesheet as `--sp-<phase>`
+so the component names a phase and the sheet decides what that looks like.
 
-`test/cockpitViewModel.test.ts` covers the derivations (untestable while they lived inside a
-component). `test/factoryFloor.test.ts` holds the structural no-`api` rule, and renders the floor
-against the demo fixtures.
+Four pictures, in the order the questions arrive:
 
-The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative
-to `Date.now()` and the rendered relative times would drift between runs otherwise.
+- **Four tiles** — all-time, the 5h and 7d windows, and the token split. The windows restate exactly
+  what the reading the operator just clicked says, and are there for that reason rather than their own:
+  a panel opened from a gauge must begin by agreeing with it.
+- **Where it went** — one stacked bar over the whole fleet, and a legend that is also the table (cost,
+  share, runs, average per run). The blurb under each phase name is the phase's definition, shipped
+  with the figures rather than held here, because it is a claim about what the harness did and not
+  about how to draw it.
+- **The trend** — 14 rolling daily buckets as **bars, not lines**: these are totals over a period and
+  not samples of a rate, and a line between two days implies money moved smoothly between them, which
+  is exactly what a fleet that ran for one afternoon did not do.
+- **By goal**, then **the costliest runs**. Each goal row's bar is drawn at the width of its share of
+  the fleet and split by phase inside, so it carries two readings at once: how much of the budget this
+  goal was, and what inside it the money went on. The runs table is capped and **says so** — a silently
+  truncated table reads as a complete one.
 
-`test/factoryFloor.test.ts` covers the floor's pure vocabulary exhaustively (every `QueueItem.status`
-and every Goal Floor stage has a machine word; only `waiting` reads as jammed; the two `waiting`s do
-not read alike; a paused floor outranks every other diagnosis; every `StatusTone` resolves to a
-colour) plus each derivation added beside it: the floor's longest-path columns, lanes, fixtures,
-retired parts and a cycle that must not hang the cockpit; every `PlanPart.status` folding to a
-progress; absent-is-not-stopped; scanners generated from the verdict with human review fed from
-approval; ghosts; the tail; the silo's fixed denominator; production counting only what landed and
-admitting when the log is too short; the accumulator gauge clamping. It also pins the renders where
-being wrong would be worse than being absent: both belts stopping, the gate tracking the cut, the
-belt splitting into a moving and a compressed run, the floor widening with the cap up to its bound,
-and the bot on the floor carrying its own question — that a running agent with an open escalation
-still draws one, that an agent-less escalation stays the desk's alone, that answering empties both
-surfaces, and that a proposal reaching a bot arrives with its verdict buttons rather than a reply
-box.
+**The method note is part of the panel, not a footnote**, and it sits level with the figures it
+qualifies rather than three screens below them. It states the one thing the numbers cannot: dollars are
+the provider's own, already net of cache pricing, while tokens are gross with cache reads and writes
+folded into input — so the tile's dollars-per-million-input-tokens is a measure of how much cache the
+fleet is getting and never a rate card
+([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
+runs, which appear in no figure above it.
+
+## Yield
+
+`web/src/components/ReliabilityModal.tsx`, opened from the Yield reading, drawing the payload
+`GET /api/reliability` returns ([18](18-observability.md#the-reliability-breakdown)). It is
+[Spend](#spend)'s twin and is built as one deliberately — the same chrome, the same tables, the same
+phase vocabulary — because the two answer halves of one question: where the money went, and what it
+bought.
+
+**Fetched on open, three states**, for Spend's reason with the sign flipped: a fetch that failed must
+not render as a fleet that never fails. 100% is a real answer here, so it cannot also be the failure
+mode. A fleet with runs still out and none settled gets its own sentence rather than a table of zeroes
+— **not yet is not perfect**.
+
+**Nothing here is derived in the browser**, again for `PrAttention`'s reason. What the cockpit owns is
+presentation: the outcome **colours**, which live in the stylesheet as `--rl-<outcome>` beside the phase
+palette. The two palettes differ in kind on purpose — a phase is a category whose colours only have to
+read apart, while an outcome is a _verdict_ and carries the alarm vocabulary. Grey is doing real work
+in it: a killed run is not a fault, and colouring it like one would make every steered fleet look
+broken.
+
+Four pictures:
+
+- **Four tiles** — runs finished, money lost to faults, the CI red rate, and the median time back to
+  green. The first restates exactly what the reading just said, for the reason Spend's windows do. The
+  other two are the rates' _prices_: a rate with no cost beside it is a statistic, and the question an
+  operator opened this on was whether to do something about it.
+- **How runs ended** — one stacked bar over every settled run, and a legend that is also the table. The
+  blurb under each ending is shipped with the figures rather than held here, as the phase copy is.
+- **CI verdicts** — 14 rolling daily buckets, red **stacked on** green rather than two series, because
+  the reading is a ratio and two lines make that a comparison instead of a glance. Bars for the spend
+  trend's reason.
+- **By phase**, then the two rankings — the reddest pull requests and the origins that ran more than
+  once. Both are capped and **say so**. The repeats table is a ranking and never a count of mistakes: a
+  part agent that lands and then answers review comments legitimately runs twice, and what earns it a
+  table is that the expensive kind of repetition is invisible everywhere else — a goal whose row shows
+  one number quietly went round four times.
+
+**The method note states the two things a reader would otherwise discover by disbelieving the panel:**
+the two halves are measured over different windows, and a red is a CI verdict rather than a pull
+request. It also names the unmeasured runs, which count in every rate above it and in no dollar.
 
 ## Data flow
 
@@ -940,410 +666,32 @@ One state object, one socket.
 - A WebSocket connection delivers events. `dirty`, `world:changed`, `control:changed` and
   `world:events` each trigger a refetch; `cycle:end` also resets the heartbeat countdown anchor.
 - **Refetches are coalesced** (`scheduleRefresh`, `REFRESH_COALESCE_MS`): at most one request in
-  flight, at most one queued behind it, and a short trailing window so a burst collapses into one.
-  The server pairs a coarse `dirty` with almost every specific frame, so one pulse alone is four
-  signals, and `agents.on('files')` fires once per file an agent writes — fetching per signal made
-  the request rate a function of agent tool-call volume. The queued refetch **always runs**:
-  coalescing may merge the signals in between but must never drop the last, or the cockpit settles on
-  a state older than what it was told about. The initial fetch on mount is immediate, not delayed.
+  flight, at most one queued behind it, and a short trailing window so a burst collapses into one. The
+  server pairs a coarse `dirty` with almost every specific frame, so one pulse alone is four signals,
+  and `agents.on('files')` fires once per file an agent writes — fetching per signal made the request
+  rate a function of agent tool-call volume. The queued refetch **always runs**: coalescing may merge
+  the signals in between but must never drop the last, or the cockpit settles on a state older than
+  what it was told about. The initial fetch on mount is immediate, not delayed.
 - `agent:output` deltas accumulate into a per-agent scrollback (capped at ~1M characters) — but only
   for the agent whose drawer is open, because output is delivered to subscribers only.
-- `agent:tail` lines land in a separate map and drive the fleet-card previews.
+- `agent:tail` lines land in a separate map.
 - The WS client is held in a ref so subscribe/unsubscribe survives effect churn, and it reconnects on
   its own.
 
 The drawer subscribes to full output on open and unsubscribes on close or switch.
 
-## Layout
-
-A top bar and three columns.
-
-### Top bar
-
-Brand, a **heartbeat countdown** (a progress track showing the fraction of `heartbeatIntervalMs`
-elapsed since the last pulse), a **world age** chip, a live/offline connection chip, the usage chip, the
-active dispatcher, a `paused` chip when paused, the fleet control, and **Pulse now**.
-
-- **World age** — `worldObservedAt` rendered relative ("world 2m ago"), or "world not yet observed"
-  before the first cycle. Stated rather than implied because the cockpit's world is the reading the
-  last pulse took, not a live one (see [16](16-http-api.md)); a reading that keeps ageing past an
-  interval is the visible symptom of pulses failing, which no countdown can show.
-
-- **`UsageChip`** — the account 5h/weekly rate limits when the PTY status-line capture has seen any;
-  otherwise it falls back to the rolling 5h/7d cost windows.
-- **`FleetControl`** — live count against the cap, with the cap and pause both editable. Writes go to
-  `POST /api/control`, and the `control:changed` broadcast updates every open cockpit.
-
-### Above the grid
-
-- **`RecoveryPanel`** — rendered above everything else when `state.recovery` is non-empty: one card per
-  piece of work the previous run orphaned, with **Restore** / **Requeue** / **Remove**, each keyed on the
-  task id (an orphan may never have had an agent). A banner rather than a
-  panel because while it is up the harness runs **no cycles at all**, so every other surface on the page
-  is stale for the same one reason — and the heartbeat countdown in the top bar reads `pulse held`
-  instead of counting down to a pulse that will not fire. Restore is replaced by the reason it cannot be
-  offered (`restoreBlocked`) rather than hidden. Each card shows how the run ended (crashed, shut down,
-  or `never started` — a task recorded before a restart caught it, which no agent ever ran), the agent's
-  last progress note, and the question it was parked on if it was parked on one. A `never started` card
-  says outright that no work was done and that the item is what is holding its origin and branch shut,
-  since that is the fact behind an otherwise unexplained idle fleet.
-- **`SchedulePanel`** — put a blueprint on a clock: a cron expression, a prompt, code/desk, and the
-  list of every recurrence with its next run, its last run, and pause / run now / delete. The button
-  is `+ New schedule` behind a clock face, drawn inline for `LaunchPanel`'s reason — but in
-  `currentColor`, because a recurrence is not a *kind* of thing the way a blueprint is; it is the
-  same blueprint on a timer.
-
-  - **The expression is typed, and four common ones are buttons.** Reading `0 9 * * 1-5` and writing
-    it are different asks, and only one of them is the operator's actual intention.
-  - **A refused expression is shown in the server's own words** under the composer, exactly as a
-    refused attachment is: the cron parser names the field and what that field accepts, and a second
-    wording in the browser would be a worse one written further from the syntax. The form is kept for
-    a retry — a rejected expression is usually one character away from a good one.
-  - **A paused recurrence is dimmed, not hidden or moved.** It is a standing intention the operator
-    wrote, and the reason to keep drawing it is that this panel is the only surface anywhere that
-    says it exists.
-  - **Two times, in two registers.** `relTime` clamps a future instant to "0s ago", so the next run
-    is rendered by the panel's own `untilTime` ("in 3h") beside the last run's "ran 2d ago". They are
-    the two things a standing intention is judged on, and the panel is the only place either is
-    legible — everything downstream sees a job, not a schedule. → [13](13-jobs-and-findings.md#schedules)
-- **`InjectPanel`** — rendered **only** under `view.demo`, and it calls `injectDemoEvent` rather than
-  anything on the `api` seam: there is no server route behind it. See
-  [Demo mode](#demo-mode) for why the harness ships no injection surface at all.
-- **`LaunchPanel`** — stamp a blueprint: an operator job (prompt, optional title, code/desk, optional
-  branch) and the queue, including cancel. The button is `+ New blueprint` behind a blue blueprint
-  plate — drawn inline in the component rather than added to the floor's sprite sheet, because the panel
-  is shared and the sprites are not. It is the one glyph in the cockpit that is not `currentColor`: a
-  blueprint is blue the way a warning is amber, so the colour is the noun.
-
-  It also takes **images** (issue #249) — a screenshot of the panel to change, the broken screen — by
-  **paste** into the prompt (⌘/Ctrl+V, the common case), by **drop** anywhere on the composer, and by
-  an **Attach image** button over a hidden file input. Each attachment shows as a thumbnail with the
-  operator's filename and a × that removes it before launch; ⌘/Ctrl+Enter still submits.
-
-  - **The thumbnail is the same base64 the request carries**, scaled by CSS. Nothing in this feature
-    resizes, re-encodes or generates a thumbnail: the stored bytes are the operator's bytes.
-  - **The composer states no bounds.** How many, how big and which formats are the server's rules
-    (`src/jobs/attachments.ts`), and a second copy here is how the two come to disagree — so the panel
-    refuses only what is not an image at all (a category, not a number) and otherwise reports the
-    server's refusal verbatim in an inline error, keeping the prompt and its attachments for a retry.
-    That works because `json()` in `web/src/api.ts` now surfaces a refused request's `{error}` rather
-    than its status line.
-  - **The browser's mime is not sent.** It drives the local preview only; the server decides the type
-    from the bytes, so a field it ignores would read as one it honours.
-
-  Once launched, each queued blueprint in the panel's list carries an **`AttachmentStrip`** of what
-  was attached to it.
-
-- **`AttachmentStrip`** — the images attached to a piece of work, drawn wherever that work is: under a
-  queued blueprint in `LaunchPanel` (`job:<id>`) and on the issue row in `WorldSummary`
-  (`issue:<n>`). One component drawn twice, deliberately.
-
-  An attachment starts life keyed to a queued blueprint and, at the tracker fork, changes hands to the
-  ticket that blueprint became ([14](14-persistence.md#blueprint-attachments)). Those are two
-  different cards, and the point of the re-key is that the operator watches the screenshot move from
-  the first to the second rather than wondering where it went — which two components would sooner or
-  later disagree about, at exactly the moment the operator is comparing them.
-
-  - **The thumbnail is the full image, scaled by CSS**, the composer's rule and for its reason.
-  - **The URL comes from `attachmentUrls`**, never string-built, the same way artifact chips read
-    `artifactUrls`: it carries a short-lived capability that the cockpit's bearer token structurally
-    cannot substitute for, since an `<img>` load sends no `Authorization` header
-    ([16](16-http-api.md#get-attachmentsid)).
-  - **Clicking opens the image at its own size** in a new tab, `rel="noreferrer"` so the capability
-    does not ride out in a referrer. The `title` carries the operator's label and the absolute path the
-    agent was told to read, which is what lets a thumbnail be matched against a prompt.
-
-- **`Vitals`** — fleet-level counts.
-
-### Left column — Fleet
-
-`AgentCard` per live agent: status dot, the task title and its origin ref (linked through `refUrls`),
-elapsed time, cost/tokens where reported, the agent's `note` where it has one, the compact tail line,
-artifact chips from `flags`, and a kill button. Clicking opens the drawer. Below, a **History**
-section shows the last 8 finished agents.
-
-When the fleet is empty the panel says so, and tells the operator whether to inject an event or wait
-for the world to change — chosen from `view.demo`, the same predicate the panel itself hangs off.
-
-### Middle column
-
-- **Needs you** — open escalations, newest first, as `EscalationCard`s. Each card carries the task
-  title, the origin ref, a tail of the agent's output, and — when the park came through the `escalate`
-  tool — the `detail` and one-click `options`. Answering posts to
-  `POST /api/escalations/:id/answer`; the card can also open the agent's drawer. A **permission
-  request** (`context.permission`, issue #130) renders the command and **Allow / Deny** buttons
-  instead of the answer box — the agent is blocked in a tool call, so the verdict goes to
-  `POST /api/escalations/:id/permission`, not `/answer`.
-
-  A **questionnaire** (`context.questions`) is the third replacement for the answer box: a count chip
-  and an **Answer N questions →** button opening `QuestionnaireModal`, one card per question with its
-  own detail, options and box. The list does not unpack into the panel — "Needs you" is a list of
-  things needing you, and one item that becomes three is a list that no longer reads as one. Its
-  options **fill** the box rather than sending, which is what separates them from the card's one-click
-  chips: those settle a question, where here every answer waits for the others, so picking one and
-  then qualifying it costs nothing. One **Send answers** posts the whole array to `/answer`; a
-  question left blank is sent as an explicit non-answer, so the agent knows not to wait on it. The
-  card is shared, so the modal styles itself through the tokens alone and the floor gains no markup.
-
-  **How a card is laid out, and the one rule behind it: `prompt` is the harness speaking to you, and
-  `context.detail` is text the harness is _quoting_ from an agent.** Two mechanisms follow, doing two
-  different jobs, and neither subsumes the other.
-
-  - **The prompt splits at its first blank line.** The first paragraph is the headline; the rest is
-    the body, rendered as markdown. Both halves are the same author's words — a rule writing "here is
-    what happened" and then "here is what accepting does" is writing one message with two paragraphs
-    — so the split is the card's and not the author's. Asking every rule and every operator override
-    to file its second half somewhere else would be a second contract to get wrong. This is what gives
-    `plan-approval` and a wedged plan back the paragraphs a flat `<div>` used to collapse.
-  - **Quoted text lives in `context.detail`**, never spliced into the prompt. It is up to two
-    thousand characters of someone else's prose; interpolating it is what turned a shortfall card into
-    one unreadable paragraph, and it leaves the cockpit unable to label a block whose edges it cannot
-    see. `renderMarkdown` draws it, with `refUrls`, so a `#142` inside it stays a link — without that,
-    moving text out of the linkified prompt silently unlinks every ref in it.
-  - **`context.detailFrom` names who wrote that block, declared by whoever quoted it.** Never derived
-    from `agentId`: the harness quotes an assessor on a shortfall and a planner on a decomposition and
-    both arrive with no agent behind them, so "no agent, therefore an assessor" mislabels every plan
-    approval. Same discipline as a shortfall's `cause` — the party that knows says so. Absent, the
-    card falls back to what it actually knows and names no role.
-  - **The body is open and uncapped.** No `<details>`, no `max-height`. It is the thing you opened the
-    panel to read, and a 180px window onto a two-thousand-character assessment is the wall again with
-    a scrollbar — the argument the Bench already makes for its stations. The panel scrolls instead.
-    Every block of prose is held to a ~72ch measure, and the headline to `--text`: the card is as wide
-    as its panel, and a 150-character line is one the eye loses returning from, whatever the type is
-    doing. `recentOutput` and `draft` keep their `<pre>` and their 180px cap — they are evidence you
-    glance at, not the thing you are deciding.
-
-- **Your bench** (`HumanTaskPanel`, when any exist) — work only a person can do, with the open count
-  in the heading. Each row carries the ask, its origin linked through `refUrls`, who is asking (an
-  agent that hit something it could not do, a planner that declared the step, or you), the
-  instructions collapsed as markdown, and **Done** / **Decline**.
-
-  It sits directly under "Needs you" and above everything the fleet owns, because it is the other
-  list of things only you can settle — and it is deliberately **not inside** "Needs you". An
-  escalation is a question holding one agent open on a socket, answered by typing back into its
-  session; these outlive every agent and a restart, and other work can be made to wait on them.
-  Filing the two together would put a thing that costs ten seconds beside a thing that costs an
-  afternoon, under one heading that could only be honest about one of them.
-  → [13](13-jobs-and-findings.md#it-is-not-an-escalation-and-the-difference-is-not-a-nuance)
-
-  **Two buttons, because there are two truthful answers.** Done settles it, and where the task backs
-  a plan step it concludes that part, releasing every sibling that named it. Decline takes a
-  **required** note and settles it the other way: the step is not concluded, so nothing waiting on it
-  starts — the plan stops visibly with your words on the jammed machine's plate, and Replan or
-  Abandon are the ways out. The note box is what the button is disabled on rather than a 400 after
-  the fact, which would be the same rule stated twice in the wrong place.
-
-  A `plan step` chip marks the rows that are holding assemblers shut, before anything else on the
-  line: it is the difference between "please do this" and "nothing below this can start until you
-  do". Settled tasks stay in a short tail with their note, for the reason a dismissed finding does —
-  until you **Dismiss** one, which is the way off the bench and decides nothing about the work.
-
-- **Plans** (`PlanPanel`, rendered only when plans exist) — each plan's parts drawn as a stack, joined
-  to `upcoming` **by origin** (`issue:<n>:part:<slug>`) so the dispatch cut is visible, with a
-  **Replan** button. A plan `awaiting_approval` says so on the card and states that nothing below is
-  scheduled until you accept the proposal in "Needs you". Each row also opens the plan modal (below).
-- **Findings** (`FindingsPanel`, when any exist) — the open count in the heading, since a finding
-  never expires into work on its own and this is the only nudge there is. Each has **Queue job**
-  (work it now), **File ticket** (defer it — hidden unless `config.canFileTickets`) and **Dismiss**. A
-  finding being filed shows `filing…` and is drawn among the open ones, since an agent that died
-  before creating the ticket is only visible here; a filed one carries its ticket ref as a link.
-- **File overlaps** (`OverlapPanel`, when any exist) — the **live** count in the heading, since those
-  are the only ones an operator can still act on; a settled overlap stays as the record of what
-  collided. Each row shows the path, its writers with their origins and branches, and marks the
-  `sameWorktree` case.
-- **World** (`WorldSummary`) — open PRs with their attention chip, their health verdict and an exclude
-  toggle; issues with their state, linked PR, pickup chip, **plan chip**, conclusion chip,
-  **shortfall** chip and **spend chip**, a watch toggle, the conclusion toggles, the **assay
-  override** and **raise issue**; and a **Recently closed** section marking each PR merged vs
-  closed-unmerged.
-
-  **`raise issue`** is the one control on the row that files into the tracker rather than writing a
-  verdict about the item (`POST /api/issues/:number/bug`, [16](16-http-api.md)). It opens
-  `RaiseBugModal`, which takes the operator's own report — a modal and not an inline field because it
-  is the only control here that wants a paragraph of prose, and that prose is the whole feature: a
-  desk agent writes the bug from it, and it is the one fact about a goal no agent on it can derive.
-  Submit is disabled until the report is non-empty, the same rule the route enforces rather than a
-  second opinion about it, and a failed post keeps the modal open with the text intact.
-
-  It is gated on `config.canFileTickets` — the flag that already hides the finding and work-item
-  filing buttons — and, unlike the two verdict buttons beside it, **not** on the item being open:
-  "the harness closed this and it does not work" is the case it exists for. Each bug already raised
-  draws its own chip from `state.bugFilings`, `raising bug…` while the desk agent works and
-  `→ bug #456` once `link_ticket` reports back, so a filing that never completed stays visible as a
-  filing instead of reading like one that was never made. Several per item is normal.
-
-  The assay override draws on an issue the intake verdict **refused** and nowhere else
-  (`POST /api/issues/:number/assay`, [16](16-http-api.md)). A `workable` verdict blocks nothing, so a
-  button on one would offer to change a reading that changes no behaviour. It is **two buttons and not
-  one toggle**: `work anyway` writes `workable`, while `clear assay` deletes the row — `null` is not
-  `workable`, it is the store's one representation of "nobody has decided", which is also what a
-  crashed assayer leaves behind. The assayer's own summary is quoted into the title and never
-  rewritten. Both titles carry the sentence the buttons cannot say for themselves: the hold **also
-  ends by itself** the moment the ticket's own text fingerprints differently, with no timer and
-  nothing re-asking — an operator who does not know that reaches for the override where editing the
-  goal was the honest fix. It writes the harness's own record and touches no tracker, the same
-  discipline as the conclusion route.
-
-  The shortfall chip (`plan fell short` / `part fell short` / `goal is wrong`, with the assessor's
-  summary in its title) sits **beside** the pickup chip and inside neither it nor the conclusion
-  chip, for the reason `attention` sits beside `health`: pickup answers "would an agent start on this
-  next cycle", and a shortfall's honest answer to that is "yes, and that is the point"
-  ([06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity)). What it adds is _what_
-  fell short, which is the whole of what makes the verdict routable and the one thing an operator has
-  to see before being asked to authorize a replan. A shortfall with no cause draws nothing — the
-  conclusion chip beside it already reads `work left`, and one home per fact.
-
-  The spend chip is one figure — what the goal has cost — with the agent count and the token split in
-  its title, because the count is what makes the figure legible ($18 over seven agents is a decomposed
-  goal working; $18 over one is an agent in trouble) and is the second question, not the first. It
-  draws **only where something was measured**: `spend: null` renders nothing rather than `$0.00`,
-  which would describe a goal three PTY agents had worked as a free one
-  ([18](18-observability.md#per-goal-spend)).
-
-  Rows are filed under three tabs — **Watched** / **Unwatched** / **Ignored** — by the pure
-  `watchBucket` (`web/src/worldBuckets.ts`) over each item's labels, with the server's precedence
-  (ignore wins, then watch, else the type default: PRs opt-out, issues opt-in) and each
-  tab's count on its label. It is deliberately a _three_-way split where `resolveWatchState` is
-  binary: the gate only cares that an untagged issue won't be worked, while the panel has to tell
-  "you tagged this leave-alone" from "you haven't triaged this yet" — the same `ignored`/`unwatched`
-  distinction `issuePickupStatus` reports.
-
-  Three consequences. **The tab bar disappears when both labels are empty** (`labelPrefix: ''`, the
-  gates off): every item then sits on its type default, so two tabs could only ever be empty _and_
-  filtering to Watched would hide every issue — so nothing is filtered at all and the panel reads
-  exactly as it did before. **The chips a tab already states are dropped** — the pickup chip and the
-  `ignored`/`unwatched` chips render in the Watched tab only, which is what stops one identical
-  `no watch label "…"` chip repeating down every untriaged row. Dropping the pickup chip wholesale
-  is safe because the bucket reads _labels_ while the Azure state gate reports through _status_: a
-  watched issue parked by `pickupStates` is filed under Watched, where its `in review` reason still
-  shows. The **plan chip is exempt** and draws on every tab: it states no pickup verdict, and a plan
-  on an issue somebody has since tagged leave-alone is exactly the record worth reading.
-  **"Recently closed" lives in the Watched tab alone**, since it exists so a PR you were
-  following doesn't silently vanish mid-session — a statement to someone monitoring — and bucketing
-  those rows by their own labels would scatter them. Tab counts cover live world items only, so the
-  Watched number doesn't climb as work finishes.
-
-  An issue's `→ PR #n` chip is dimmed and marked `(not open)` when `n` isn't in the open PR list the
-  snapshot ships — the same list `openPrForIssue` is given, so the chip and the harness's `has_pr`
-  reading can't disagree. `linkedPrNumber` is the last PR that ever referenced the issue and never
-  clears, so most of them point at long-closed PRs. It says only "not open", never merged or closed:
-  which of the two it was is not something the harness observed.
-
-### Right column
-
-- **Up next** (`UpNext`) — the last cycle's ranked queue with the headroom cut drawn. Each row shows
-  its rule (expandable into the rule's description from `dispatchRules`), title, branch and status
-  (`dispatching` / `waiting` / `cooldown` / `capped` / `unapproved`), plus **▲/▼ re-order controls**
-  (issue #128). Moving a row sends the whole new order of candidate origins to
-  `POST /api/upnext/order`, which the dispatcher persists as a priority override and reads back into
-  its ranking — so the order survives pulses and restarts while the panel stays a projection. It
-  re-orders only: a held row keeps its held status wherever it lands, and `manual-job` items stay first. New
-  work the harness surfaces later slots in behind the arranged order until you re-arrange.
-- **Decision log** (`DecisionLog`) — the last 100 decisions with outcome, detail and, where present,
-  the rule that fired, expandable into that rule's standing rationale.
-- **Activity** (`ActivityFeed`) — the last 100 world events.
-- **Errors** (`ErrorsPanel`) — the last 100 recorded failures, with the count marked urgent when
-  non-zero.
-
-## The stack panel
-
-Chains of stacked pull requests, from `/api/state`'s `stacks` (see
-[07](07-pull-requests.md) for the fold). Drawn on **the rack** (`Inspection.tsx`), not on the line:
-
-- A stack is a fact about _pull
-  requests_, and the rack is where pull requests are read; a belt would have said it was a fact about
-  scheduling, which is the confusion the plan panel already risks by drawing parts as a stack.
-
-Rungs are listed **top-first**, with the one that merges next at the bottom — `Stack.rungs` is
-bottom-first, which is the order the dispatcher and the reconciler think in, so the reversal happens
-in the view and nowhere else. Each rung names its base, so the chain is legible without the reader
-holding branch names in their head.
-
-The health chip is the one the PR list already shows rather than a new one: a rung _is_ a pull
-request, and an operator reading it in two places must not get two accounts of it. A rung with no
-matching open PR draws no health at all rather than asserting health the snapshot does not carry.
-
-### Stacks on the factory rack
-
-The factory draws a stack **inside** the rack's two groups, as a bracketed run of the rack's own
-rows, and not in a section of its own beneath them. A section beneath was the first arrangement and
-it inverted the panel's job: the rows an operator most needed the ladder, the court chip and the
-watch/ignore toggle on were the only rows with none of the three. A rung is now a `.fx-part` row like
-every other part, plus a position, its base, and the note below.
-
-`rackEntries(prs, stacks)` in `factory/inspection.ts` is the fold, and it replaces `rack`. It returns
-`RackEntry[]` per group — a loose pull request, or a stack with its rungs joined back to their PRs:
-
-- **A stack goes whole to the group of its most urgent rung** — `yours` if any rung's `rackGroup` is
-  `yours`, else `in_hand`. It is never split across the two headings. Splitting would be the honest
-  answer about attention and the wrong answer about the panel's job: a stack is read as an order, and
-  an order broken in half is not one. A rung that landed under _Your court_ without being yours
-  carries the court chip that says so, which is the same sentence its row would have made alone.
-- **A rung never also appears loose.** Ordering is by pull-request number throughout, a cluster
-  sorting on its bottom rung, so clusters and loose rows interleave exactly as rows did before there
-  were clusters.
-- **The headings count pull requests, not entries** (`rackCount`) — a three-rung stack is three parts
-  to read. `FactoryRoot`'s header count is the same fold, so the two cannot disagree.
-- **A rung the snapshot carries no PR for still draws**, from the rung's own fields, with no ladder
-  and a muted chip. `buildStacks` runs on the unfiltered open list precisely so an `-ignore`d rung
-  cannot put a hole in the chain, so the rack must be able to be handed one.
-
-The rung's second line names its base and, when something below it is still holding, `waiting on #N
-below`. That "holding" is read off the same `ladderFor` the row above it draws — anything unmet on
-the ladder, a `muted` scanner excepted, because policy saying a check does not count is policy saying
-it does not hold — so the note and the ladder can never disagree about the same rung. The bottom
-rung, when clear, reads `next to merge`.
-
-`test/factoryFloor.test.ts` asserts both halves: the grouping and blocked-by fold, and that the
-rendered rungs carry a toggle and a ladder apiece with no `Stacked` heading left under the rack.
-
-A stack is drawn whether or not a plan produced it — `from plan` versus `observed` — which is the
-whole point of the model being derived from pull requests rather than from `plan_parts`.
-
-### Land the stack
-
-On the factory rack, a chain's head line carries one control: **land the stack**. It records a
-standing authorization that merges the whole chain bottom-up over the next several cycles — see
-[07](07-pull-requests.md#landing-a-stack) for what it is and why it cannot be a loop.
-
-Its state comes from `/api/state`'s `stackLandings`, one entry per chain, carrying `offer`,
-`blockedBy`, the intent itself and how many of its rungs have landed. **The verdict is the server's**,
-not the floor's, for the reason `attention` is: a client-side second opinion about whether a merge may
-be authorized is exactly the drift that outlives the change introducing it. `POST /api/stacks/:ref/land`
-asks the same function again before recording, because a disabled button is a courtesy and not a gate;
-it refuses an unready chain with a 409 (the request is well-formed — the world is what is wrong).
-
-Four states, and the third is why the control needs any of this:
-
-| State    | Head line                                                     |
-| -------- | ------------------------------------------------------------- |
-| offered  | `#12 Fix intake · 3 PRs · [ land the stack ]`                 |
-| withheld | the button disabled, and `#126 CI failing` beneath it         |
-| landing  | `◆ landing · 1 of 3` and a `[ stop ]`                         |
-| stopped  | `▲ stopped · 1 of 3`, the reason beneath, and the button back |
-
-A click whose effects arrive over the next several cycles must leave a visible state or it reads as
-having done nothing — so the standing chip is not decoration. The count is the **intent's** own
-(`landed` of `landing.rungs.length`): the derived stack shrinks as rungs land, so it cannot supply the
-denominator. The rung spine takes the state's colour, so a chain that has stopped is legible from
-across the panel. `[ stop ]` is offered throughout: an intent that could only be set would make an
-accidental click unrecallable.
-
-The intent is matched to a chain by **rung membership, never by ref** — `Stack.ref` renames itself
-when the bottom rung merges, so a match on the ref would lose the intent at the very moment the
-operator most needs to watch it.
-
 ## The agent drawer
 
-`AgentDrawer` opens over the page for one agent.
+`AgentDrawer` opens over the page for one agent, asked for by `actions.select(id)` from wherever an
+agent is drawn — the Fleet card, a goal page's **On this goal** rows, the escalation card's own way in.
 
 **The transcript pane is HTML, not a terminal.** What reaches the cockpit is already legible text in
-every mode (`renderBlocks` output, or settled PTY session-file text), never raw TUI bytes, so it
-renders into a scrollable `<div>` with `white-space: pre-wrap; overflow-wrap: anywhere`:
+every mode (`renderBlocks` output, or settled PTY session-file text), never raw TUI bytes, so it renders
+into a scrollable `<div>` with `white-space: pre-wrap; overflow-wrap: anywhere`:
 
 - Words wrap on their boundaries and the browser scrolls natively.
-- The pane sticks to the bottom **only when you are already there**, and offers a "New output" jump
-  pill otherwise, so a full-rewrite frame no longer snaps you away from where you were reading.
+- The pane sticks to the bottom **only when you are already there**, and offers a "New output" jump pill
+  otherwise, so a full-rewrite frame no longer snaps you away from where you were reading.
 - The text is selectable.
 
 The one terminal feature it reproduces is SGR colour, via the pure parser in
@@ -1384,86 +732,47 @@ interrupt and kill.
 ## The plan modal
 
 `PlanModal` (`web/src/components/`) is the whole decomposition, on demand — the record of what was
-agreed, not just the question that was asked. Before it, a plan was legible only while it was a
-pending proposal: the approval card rendered a template string and vanished on the click, and the
-Plans panel drew rows whose `scope` was a tooltip. There was no way to say "show me the plan for
-#231" from anywhere, at any time, once or after it was answered.
+agreed, not just the question that was asked. Before it, a plan was legible only while it was a pending
+proposal: the approval card rendered a template string and vanished on the click. There was no way to
+say "show me the plan for #231" at any time, once or after it was answered.
 
 **It is shell-owned**, opened through `viewPlan(planId: string | null)` on `CockpitActions` — the same
-seam `select(agentId)` already uses for "which drawer is open is cockpit state, not floor state", and
-for the same reason: one implementation of the modal, while the floor keeps its own drawing of a plan
-elsewhere (the Goal Floor's assembly machines). `factory/` must not reach `api.js`
-(`test/factoryFloor.test.ts`), so the seam is the only way a floor-side button can open a shared
-modal.
+seam `select(agentId)` uses, and for the same reason: one implementation of the modal, reachable from
+whichever surface mentions the plan.
 
 **Two tabs**, because the decision view has to stay short enough to hold in your head:
 
 - **Plan** — the planner's reason in full; **Risks** and **Deliberately out of scope** side by side
-  when present; every part in dispatch order with its scope, `rationale` (why its own PR),
-  `acceptance` (done when), the stack edge spelled out as a sentence rather than the terse `on <slug>`
-  chip, its status, its PR when it has one, and its "Up next" queue state
-  (`unapproved` / `capped` / `▶ now`). The same amber cut line the Up-next queue and Plans panel
-  already draw.
-- **Full write-up** — `plan.document`, rendered. Absent renders "This planner wrote no write-up",
-  never a hidden tab (see [08](08-planning.md)).
+  when present; every part in dispatch order with its scope, `rationale` (why its own PR), `acceptance`
+  (done when), the stack edge spelled out as a sentence rather than the terse `on <slug>` chip, its
+  status, its PR when it has one, and its "Up next" queue state (`unapproved` / `capped` / `▶ now`).
+- **Full write-up** — `plan.document`, rendered. Absent renders "This planner wrote no write-up", never
+  a hidden tab (see [08](08-planning.md)).
 
 Approve / Reject appear only while the plan is `awaiting_approval`, and route through the same
-`decideProposal` the escalation card uses — one verdict, one implementation, so the "Needs you" card
-clears either way whichever surface you decided from. Replan and Discuss sit apart, because they
-settle nothing. While a plan is being discussed the modal shows the conversation instead — the
-agent's status and last note, and a reply box that posts through `POST /api/agents/:id/respond` — and
-offers **End discussion** instead of a verdict.
+`decideProposal` the escalation card uses — one verdict, one implementation, so the rail's row clears
+either way whichever surface you decided from. Replan and Abandon sit apart, because they settle
+nothing about the proposal in front of you. While a plan is being discussed the modal shows the
+conversation instead — the agent's status and last note, and a reply box that posts through
+`POST /api/agents/:id/respond` — and offers **End discussion** instead of a verdict.
 
-**Markdown rendering is a new pure `web/src/components/markdown.ts`**: a subset — ATX headings,
-unordered and ordered lists, fenced and inline code, blockquotes, paragraphs, and inline `code`,
-`**strong**` and `*emphasis*` — returning React nodes, **never `dangerouslySetInnerHTML`**. It does
-**not** render links: there is no `linkify` call in it, so a URL in a write-up appears as literal
-text. The same precedent as `ansi.ts` being hand-written rather than pulling in a library, and for a
-sharper reason here: `document` is agent-authored text, so a renderer that never interprets HTML has
-no injection surface to reason about at all.
-
-**Entry points** — the button or chip appears wherever a plan is mentioned:
-
-- the approval card in "Needs you" (`EscalationCard`), when `proposal.kind === 'plan'`;
-- the Goal Floor's own plan bar;
-- a **`plan · <status>`** chip on the issue's row in the **shared** `WorldSummary`.
-
-The modal is useful **after** approval too, as the record of what was agreed — which is most of why it
-is a modal reachable from anywhere rather than a section of the approval card that disappears once
-answered. **Every entry point is therefore keyed on the plan existing, and none on what it is doing.**
-That is a correction, not a restatement: two of the three were keyed on a transient condition, and
-between them they left the modal reachable only during the approval window.
-
-- The Goal Floor's controls rode on the **Blueprint plate**, and a plate is a stopped machine's
-  reason — that one draws only while a decomposition is `awaiting_approval`. So the click that
-  approved a plan was also the click that took away the only way to read it back. They now hang off
-  `GoalFloorModel.planId`, which was declared for exactly this and never wired, and `FloorPlate` no
-  longer carries a `planId` at all — one way in, rather than a second answer about when it may be
-  offered. The plate keeps quoting the planner; only the buttons moved.
-- `WorldSummary` made the **pickup chip itself** the button. `pickupChip` returns null for `done` and
-  `has_pr` — precisely where an issue sits once its parts have pull requests — and the whole chip is
-  hidden off the watched tab, so the plan became unreadable at the point it started being worked. A
-  plan's existence is not a pickup verdict, so the chip is now its own, is neither gated on one nor
-  drawn out of one, and names the plan's status because that is the one fact deciding whether opening
-  it is a decision or a reading.
-
-`test/factoryFloor.test.ts` asserts the floor's way in across **every** plan status rather than only
-the one that was broken, so a later attempt to hang it off a plate fails a test.
+**Every entry point is keyed on the plan existing, and none on what it is doing.** That is a
+correction, not a restatement: entry points keyed on a transient condition left the modal reachable
+only during the approval window, so the click that approved a plan was also the click that took away
+the only way to read it back.
 
 ## The notepad modal
 
 `ScratchpadModal` (`web/src/components/`) is a goal's shared scratchpad, on demand: every note every
 agent working it left, oldest first, attributed to the origin that wrote it. It is the testimony the
-retrospective is written _from_ — and until it existed, the write-up was the only account of a run
-that anybody outside the fleet could read. The pad was written by agents (`scratch_append`), read by
-agents (`scratch_read`), and quoted by one retrospective agent, so a claim in the write-up was
-checkable against nothing, and an operator watching a goal go wrong could not read the reasoning as it
-was written.
+retrospective is written _from_ — and until it existed, the write-up was the only account of a run that
+anybody outside the fleet could read. The pad was written by agents (`scratch_append`), read by agents
+(`scratch_read`), and quoted by one retrospective agent, so a claim in the write-up was checkable
+against nothing.
 
-**Shell-owned**, opened through `viewScratchpad(issueRef: string | null)` on `CockpitActions` — the
-plan and retrospective modals' seam, and for their reason: one implementation, and `factory/` may not
-reach `api.js` to open it another way. The trail is fetched on open
-(`GET /api/scratchpads/:ref`); the snapshot carries only the count and the age.
+**Shell-owned**, opened through `viewScratchpad(issueRef: string | null)` — the plan and retrospective
+modals' seam, and for their reason. The trail is fetched on open (`GET /api/scratchpads/:ref`); the
+snapshot carries only the count and the age, which is what the goal page's tail draws its way in from.
 
 **Three states, and the third is the point**: loading, the trail, and an **error** — a fetch that
 failed must not render as "nobody wrote anything". That matters more here than for the write-up,
@@ -1474,24 +783,6 @@ there are entries, so an empty trail on screen means the fetch and the snapshot 
 plan and retrospective documents, which are written to be read as documents. A pad note is one agent's
 testimony, and rendering it would let a stray backtick or hash change what that testimony looks like.
 
-**Entry points**, both keyed on the pad **having entries** and neither on what the goal is doing —
-`planId`/`retroRef`'s lesson, applied rather than relearned:
-
-- a **`notepad · <n>`** chip on the issue's row in the **shared** `WorldSummary`;
-- a **Notepad** button in the Goal Floor's readings cluster, before Retrospective, because the pad is
-  what the write-up was made from — the raw testimony first, the account of it second.
-
-The floor draws it off `GoalFloorModel.padRef`, beside `retroRef` and on the same terms. It appears on
-goals with no retrospective at all, which is the case it exists for: a run still going, or one nobody
-ever wrote up.
-
-**The floor's two readings are a pair of ordinary buttons pinned to the top right**, not a full-width
-plate each. A plate carries something with a sentence to say — a stopped machine's reason, or a plan
-that can also be sent back — while these only open a document, so a bar apiece spent a band of the
-panel to hold one button and read as though each were making a claim. They sit above the patch strip
-rather than in the card's own head, which belongs to the panel and not to whichever goal is picked.
-The Blueprint bar keeps its plate: Replan is an act, not a reading.
-
 ## Links
 
 The cockpit never builds a provider URL. `refUrls` in the state snapshot is a `ref → URL` map, and
@@ -1499,87 +790,81 @@ The cockpit never builds a provider URL. `refUrls` in the state snapshot is a `r
 resolve is absent from the map and renders as plain text — which is what the `fake` provider produces.
 
 `refChip(ref, label, refUrls, title?)` is the third of them, for refs whose canonical shape is
-machinery a human does not read (`issue:12:comment:456`), where `refLink`'s "the token is the label"
-would put a ref string on screen. It renders **nothing at all** unless the provider resolved the ref:
-a caption with no link asserts something exists while giving nobody a way to read it, which is the
-outcome #171 ruled out. So an unwritten comment, an older server that sends none, and a provider that
-builds no URLs are all one silence.
+machinery a human does not read (`issue:12:comment:456`). It renders **nothing at all** unless the
+provider resolved the ref: a caption with no link asserts something exists while giving nobody a way to
+read it.
 
 **Every reference the UI shows is routed through one of the three (#199), with no exceptions.** The
-rule is uniform: a PR/issue number links as `refLink('#'+n, refUrls)`, a colon-form origin/structured
+rule is uniform: a PR/issue number links as `refLink('#'+n, refUrls)`, a colon-form origin or structured
 ref as `refLink(ref, refUrls)`, free text carrying `#n` mentions through `linkify(text, refUrls)`. So
-the decision log, the activity feed (`ActivityFeed`) and its factory twin (`Signals`), the findings
-panel, escalations, the plan panel/modal, the PR and issue rows, the up-next queue, the fleet cards
-(origin ref and branch), the overlap and recovery panels, and the work-tree panel all draw links
-wherever the provider can resolve them.
+the goal page's pull requests, the overview's rack and up-next rows, the backlog's rows, the world
+signals, the findings panel, escalations, the plan modal, the recovery cards, the agent drawer and the
+work-tree panel all draw links wherever the provider can resolve them.
 
-For those link sites to actually resolve, five ref families the item lists do not cover are keyed on
-their own in `buildRefUrls` (see [16](16-http-api.md#refurls)): **world-event refs** (`pr:42`,
-`issue:13` — the structured ref each activity entry draws), **task origin refs** (`pr:142:ci`,
-`issue:13:part:x` — what the fleet/overlap/recovery cards link), **every goal's own canonical ref**
-(`issue:13` for each world issue and each retained run — what the Goal Floor's patch strip and the
-belt's crates speak, and a family keyed only when a task or event happens to name it is one that
-links on a busy world and renders plain on a quiet one), **each decision's subject ref** (below),
-and, on the `/api/work` routes, the **work roots and stacked base refs**. A `job:<id>` origin, or
-anything the provider can't map, is simply omitted and renders plain.
+For those link sites to resolve, five ref families the item lists do not cover are keyed on their own in
+`buildRefUrls` (see [16](16-http-api.md#the-state-snapshot)): **world-event refs** (`pr:42`, `issue:13` — the
+structured ref each signal draws), **task origin refs** (`pr:142:ci`, `issue:13:part:x` — what the
+fleet, overlap and recovery cards link), **every goal's own canonical ref** (`issue:13` for each world
+issue and each retained run — a family keyed only when a task or event happens to name it is one that
+links on a busy world and renders plain on a quiet one), **each decision's subject ref**, and, on the
+`/api/work` routes, the **work roots and stacked base refs**. A `job:<id>` origin, or anything the
+provider cannot map, is simply omitted and renders plain.
 
-### The factory's four late arrivals
-
-Four surfaces were once left as plain text on the grounds that their medium could not host a
-practical link. Each reason was about the medium and each had an answer, so all four now link:
-
-| Surface                    | The medium's answer                                                                                                          |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Line** belt crates       | Ordinary HTML — the crate always printed its origin, so `refLink` keeps the token as the label                               |
-| **Line** SVG bay HUD       | A `foreignObject` (the Goal Floor's PR-chip wrapper), inside a `<g>` that stops the click reaching the bay's own handler     |
-| Goal Floor **patch strip** | Tab and link are **siblings** in `.fx-gf-patch-slot`, never nested — an `<a>` in a `<button>` is invalid interactive content |
-| **Bots in the Field** name | `refChip` on `.fx-job`, so the heading an operator reaches for is the way in; only the name, never `Asking you` / `Idle`     |
-
-The Goal Floor's ore-patch **machine** carries one too — `ticket ↗`, through `Machine.link`, the same
-captioned route the signal post's status comment uses and for the same reason: the meta line under it
-already prints `issue:<n>`, so the corner has room for a word rather than a ref.
-
-The bay HUD is the one that needs the wrapper: the whole bay is a `role="button"` that opens the
-transcript, so without `stopPropagation` on click _and_ keydown the ref would open the drawer as well
-as the tracker. The Goal Floor's SVG `<text>` meta lines stay plain — only what is a _reference_ is
-wrapped.
-
-### What the harness has said on a ticket
-
-Two records carry a comment the harness maintains by itself, and both reach the cockpit as canonical
-refs (see [15](15-integrations.md#comment-refs)):
-
-| Record      | Wire field               | Where it is drawn                                                                             |
-| ----------- | ------------------------ | --------------------------------------------------------------------------------------------- |
-| Plan status | `plan.statusCommentRef`  | `PlanPanel`'s plan head (`status comment ↗`), and the Goal Floor's signal post (`notice ↗`) |
-| Goal assay  | `issue.assay.commentRef` | The shared `WorldSummary` issue row (`comment ↗`), beside the two assay overrides            |
-
-The assay's is the sharper case of the two: that comment is the harness explaining, on somebody else's
-ticket, why it will not act — so it sits **beside** the overrides and not among them. The two buttons
-change the verdict; this only opens what was already said.
+**A decision's subject ref is derived on the server and shipped on the row**, not re-derived in the
+browser from the action bag — [16](16-http-api.md#the-state-snapshot) has why.
 
 ## Agent-authored prose
 
 Text an agent wrote for a human to read is drawn by **structure**, not as one run of characters. Three
 rules, and the split between the first two is the whole of it:
 
-- **Prose is markdown.** `renderMarkdown` (`web/src/components/markdown.ts`) — a hand-written subset,
-  for `ansi.ts`'s reason: the surface needed is small, and it emits React children, so HTML in
-  agent-authored text is escaped rather than interpreted and there is no sanitiser in the path to get
-  wrong. Used by the plan and retro modals, a finding's `detail`, and an escalation's `detail`.
+- **Prose is markdown.** `renderMarkdown` (`web/src/components/markdown.ts`) — a hand-written subset
+  (ATX headings, unordered and ordered lists, fenced and inline code, blockquotes, paragraphs, and
+  inline `code`, `**strong**` and `*emphasis*`), returning React nodes and **never**
+  `dangerouslySetInnerHTML`. It does **not** render links: a URL in a write-up appears as literal text.
+  The same precedent as `ansi.ts` being hand-written rather than pulling in a library, and for a
+  sharper reason here: agent-authored text meets a renderer that never interprets HTML, so there is no
+  injection surface to reason about at all. Used by the goal page's ticket and bench detail, the plan
+  and retro modals, a finding's `detail`, and an escalation's `detail`.
 - **Captured output stays `<pre>`.** An escalation's `recentOutput` and a draft reply are what the
   process emitted, and preformatted is what they _are_. Markdown-rendering them would reflow columns
   that mean something.
 - **A field the operator scans is drawn as one line.** A finding's `summary` is validated to be one
   ([13](13-jobs-and-findings.md#the-three-text-fields)) and clamped to two in CSS regardless, because
-  rows filed before that validation existed hold an entire report in it. The clamp is the honest
-  treatment of those: the card stays a card, and no structure is invented that the text never had.
+  rows filed before that validation existed hold an entire report in it.
 
-`FindingsPanel` is where all three meet. The head line carries the kind, the ref chip, and a `where`
-chip beside it — the two coordinates an operator reads together, which is why neither belongs in the
-summary. The summary is the claim, through `linkify` so an id inside the sentence is still a link.
-`detail` is a collapsed `<details>`: it is what you open when the headline did not settle it, and
-markdown means a stack trace in it is a scrolling code block rather than a paragraph.
+### How an escalation card is laid out
+
+The rule behind it: **`prompt` is the harness speaking to you, and `context.detail` is text the harness
+is _quoting_ from an agent.** Two mechanisms follow, doing two different jobs, and neither subsumes the
+other.
+
+- **The prompt splits at its first blank line.** The first paragraph is the headline; the rest is the
+  body, rendered as markdown. Both halves are the same author's words — a rule writing "here is what
+  happened" and then "here is what accepting does" is writing one message with two paragraphs — so the
+  split is the card's and not the author's. Asking every rule and every operator override to file its
+  second half somewhere else would be a second contract to get wrong.
+- **Quoted text lives in `context.detail`**, never spliced into the prompt. It is up to two thousand
+  characters of someone else's prose; interpolating it is what turned a shortfall card into one
+  unreadable paragraph, and it leaves the cockpit unable to label a block whose edges it cannot see.
+  `renderMarkdown` draws it, with `refUrls`, so a `#142` inside it stays a link.
+- **`context.detailFrom` names who wrote that block, declared by whoever quoted it.** Never derived
+  from `agentId`: the harness quotes an assessor on a shortfall and a planner on a decomposition and
+  both arrive with no agent behind them, so "no agent, therefore an assessor" mislabels every plan
+  approval. Absent, the card names no role.
+- **The body is open and uncapped.** No `<details>`, no `max-height`. It is the thing you opened the
+  band to read. Every block of prose is held to a ~72ch measure. `recentOutput` and `draft` keep their
+  `<pre>` and their 180px cap — they are evidence you glance at, not the thing you are deciding.
+
+A **permission request** (`context.permission`, #130) renders the command and **Allow / Deny** instead
+of the answer box — the agent is blocked in a tool call, so the verdict goes to
+`POST /api/escalations/:id/permission`, not `/answer`. A **questionnaire** (`context.questions`) is the
+third replacement: a count chip and an **Answer N questions →** button opening `QuestionnaireModal`, one
+card per question. The list does not unpack into the band — one ask that becomes three is no longer one
+ask. Its options **fill** the box rather than sending, which is what separates them from the card's
+one-click chips: those settle a question, where here every answer waits for the others. One **Send
+answers** posts the whole array to `/answer`; a question left blank is sent as an explicit non-answer,
+so the agent knows not to wait on it.
 
 ## Chips and verdicts
 
@@ -1587,86 +872,103 @@ Three per-item verdicts are computed **on the server** and merely rendered here,
 disagree with what the dispatcher does:
 
 - **PR health** — `prHealth(pr, allOpenPrs)`, attached per PR. It names an inherited CI failure as
-  `CI failing on base PR #n`, which is the only place an operator sees why no agent came for a red
-  stacked PR.
-- **PR attention** — `prAttentionStatus(pr, ctx)`, attached per PR beside health and rendered by
-  `attentionChip`. The chip names the **court** and nothing else — `your turn`, `harness on it`,
-  `waiting on others`, `settled`, `stalled` — because scanning a list for "what is mine" is what it
-  exists for; the health chip beside it carries the visible detail of _why_, and the full reasons are
-  in the `title`. `done` and `ignored` render nothing: the row already draws a "merged" and an
-  "ignored" chip, and one home per fact. Only `your turn` and `stalled` warn — the two arms actually
-  asking for a person. An older server that ships no verdict renders nothing at all.
-- **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue and rendered by `pickupChip`.
-  `done` and `has_pr` render nothing, because the state chip and the "→ PR" chip already say it; an
-  older server that ships no verdict renders nothing at all. Every other status shows its first reason,
-  with the full list in the `title`. `retained` does render, and calmly: the state chip says `closed`
-  and nothing else on the row says the run is still being kept, which is the whole point of the
-  status — and it is parked on purpose, waiting on a dismissal rather than on anything going wrong,
-  so it joins `active` and `delivered` in taking no warning colour. `container` renders nothing
-  either, and for the oldest reason on the list: the hierarchy chip beside it already names the type
-  and the children, and the verdict's reason is a whole sentence restating them. A **refused assay**
-  is the mirror of that split: `assayHold`'s reason says what happened, and the panel appends the
-  assayer's own words and a relative decision time to the chip's `title` — read off `Issue.assay`,
-  which the row already has. A verdict's prose belongs in a tooltip or on the ticket, never in a chip.
+  `CI failing on base PR #n`.
+- **PR attention** — `prAttentionStatus(pr, ctx)`, attached per PR and drawn as the court chip. The
+  chip names the **court** and nothing else — `you`, `harness`, `elsewhere`, `settled`, `stalled`,
+  `done`, `ignored` — because scanning a list for "what is mine" is what it exists for; the full
+  reasons are in the `title`. Four of the seven take a tone (`courtTone`); the rest print plain.
+- **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue. The backlog draws its first
+  reason as the row's sentence, and its `container` arm is what disables a watch toggle.
 
-## The work-item tree
+**Nothing is derived in the browser that the server decided.** `attention.status`, `ciVerdict`,
+`health.reasons`, `QueueItem.reason`, `pickup.reasons` and the assay summary are quoted, never parsed —
+the rule that keeps the cockpit from holding a second opinion about a decision made elsewhere, drawn
+inches from the first. The **lenses** that produce them — the work graph (`src/graph/`), `buildStacks`,
+`prAttentionStatus`, `findings` and `overlaps` — stay read-only views out of `src/dispatcher/`, asserted
+structurally in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAttention.test.ts`.
 
-Azure Boards items hang in a tree and GitHub issues do not, so the World panel has a second axis
-beside the watch buckets — **what a thing is**, rather than whether the harness may touch it.
-`groupByFeature(visibleIssues, isContainer)` (`web/src/issueGroups.ts`) arranges the rows; it is pure,
-runs **after** the tab filter, and its `null` means "render the flat list", which is the answer for
-every GitHub and fake world. That refusal is what keeps the whole feature invisible on a tracker with
-no tree.
+## What ships and nothing draws
 
-Three kinds of group, and the distinction between the last two is the one that matters:
+Stated rather than left to be discovered, because a snapshot field with no reader is indistinguishable
+from a reader that broke, and because each of these is a decision rather than an omission:
 
-| Kind        | Heading                        | Holds                                                                 |
-| ----------- | ------------------------------ | --------------------------------------------------------------------- |
-| `feature`   | `FEATURE #812 <title>`         | The workable items under it. **Never the feature itself.**            |
-| `untracked` | none — a plain, unindented list | Items whose provider reports no hierarchy (`parent === undefined`).   |
-| `orphans`   | `NO PARENT FEATURE`            | Items the tracker says have no parent (`parent === null`).            |
+- **`CockpitActions.setStackLanding` has no caller.** The console draws pull requests as a **flat
+  rack** — one row per open PR, ordered by the server, with the court chip and the CI ladder — and not
+  as chains. The stack model itself is unaffected and is the server's
+  ([07](07-pull-requests.md#landing-a-stack)); what is absent is a surface that authorizes landing a
+  whole chain. The seam keeps the method because the refusal rules behind it are the server's and a
+  future surface must reach them through here rather than through `api.js`.
+- **File overlaps ship in `/api/state` and no console surface draws the list.** Only
+  `liveOverlapCount` is folded on the view model. [12](12-artifacts-and-files.md#file-overlap-detection)
+  states this from the detector's side; it is not restated here.
+- **`groupByFeature` (`web/src/issueGroups.ts`) is drawn by nothing.** The Azure work-item tree arranged
+  the old flat world panel's rows; the backlog groups by watch state instead, which is the axis triage
+  acts on. The fold is pure and tested (`test/issueGroups.test.ts`) and is what a hierarchy view would
+  be built from.
+- **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
+  Up next is a reading rather than a control; the rail carries only `open` human tasks, so there is no
+  settled tail to dismiss from; and the work graph is shell-owned and reaches its own route directly.
+- **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
+  nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`
+  instead, which is what the agent chose to say rather than whatever its last line happened to be.
+- **`plan.statusCommentRef` and `issue.assay.commentRef` are drawn nowhere.** Both are canonical comment
+  refs the harness maintains on a ticket ([15](15-integrations.md#comment-refs)); the surfaces that
+  captioned them were the old world panel's rows.
 
-**`undefined` is not `null`.** An item whose tracker has no tree is not an orphan, and filing one
-under "no parent feature" accuses a GitHub issue of missing something it never had. Untracked rows
-therefore keep today's rendering exactly — no heading, no indent, no rule — and are drawn first.
-
-**A feature is a heading, never a row.** Nothing is ever dispatched at one, so a row for it would sit
-in the list of workable items pretending otherwise — which is the separation grouping exists to make.
-Its own issue is still carried on the group (`featureIssue`), because it knows the child count that a
-relation summary read off a story does not.
-
-**A heading says both numbers when they differ** (`2 of 3 shown`): the rows beneath are narrowed by
-the watch tab, the feature's children are not, and a heading reporting only one is wrong in a way an
-operator cannot see. A feature the world does not hold reports only what is shown.
-
-**A grouped row drops the chip its position now carries.** `↳ Feature #812` is not drawn under that
-feature's own heading, and `no parent feature` is not drawn inside the parentless group — the same
-one-home-per-fact rule the `done`/`has_pr` chips follow.
+Each of these is a surface's absence, not a wire change: removing the field would make re-adding the
+surface a server change, and the fold under it is what a future one is built from.
 
 ## Demo mode
 
 `npm run web:build:demo` builds with `mode: demo`. `web/src/api.ts` then swaps `api` and `connectWs`
-for `demoApi` / `connectDemoWs` (`web/src/demo/`), which serve a scripted fixture world with no
-server and no real integrations. The top bar shows a `demo` chip.
+for `demoApi` / `connectDemoWs` (`web/src/demo/`), which serve a scripted fixture world with no server
+and no real integrations. The top bar shows a `demo` mark beside the ident.
 
-**The statically hosted Pages build is the only demo there is**, and that is the whole of what the
-demo code has to serve. There is no second demo entry point — no dev-server demo mode, and no
-server-side demo either: the harness has no `/api/inject` route, no `config.injectable` flag and no
-inject panel of its own. Injection lives entirely in the browser fake, reached through
-`injectDemoEvent` in `web/src/api.ts`, which folds on the same `VITE_DEMO` constant `api` does so the
-demo module stays out of the production bundle.
+**The statically hosted Pages build is the only demo there is**, and that is the whole of what the demo
+code has to serve. There is no second demo entry point — no dev-server demo mode, and no server-side
+demo either: the harness has no `/api/inject` route, no `config.injectable` flag and no inject panel of
+its own. Injection lives entirely in the browser fake, reached through `injectDemoEvent` in
+`web/src/api.ts`, which folds on the same `VITE_DEMO` constant `api` does so the demo module stays out
+of the production bundle.
 
 **Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
 and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
-composer does — which is the honest demo of the feature, since what a schedule *does* is queue a job
-and the queue is on the same desk. What is missing is the clock: nothing in the browser drives a pulse,
-and `nextRunAt` is left null rather than computed, for the reason `getPrompts` ships an empty book —
-the cron parser is server code, and a second implementation here would be a copy free to disagree with
-the only one that schedules anything.
+composer does — which is the honest demo of the feature, since what a schedule _does_ is queue a job and
+the queue is on the same panel. What is missing is the clock: nothing in the browser drives a pulse, and
+`nextRunAt` is left null rather than computed, for the reason `getPrompts` ships an empty book — the
+cron parser is server code, and a second implementation here would be a copy free to disagree with the
+only one that schedules anything.
 
 That is the bar for anything under `web/src/demo/`: it earns its place by being something the Pages
 build reaches. What that does **not** license is trimming the constant-answering arms of `demoApi`
 (`getPrompts`, `getConfig`, `getWorkRoots`, `decideRecovery` and the rest). They answer a constant
 because the demo has no server to ask, and they exist because `api` is one seam both halves satisfy
-structurally — a missing arm is a compile error at the call site, not dead weight. The honest reading
-of "unused" here is the panel that never draws, not the method that never runs.
+structurally — a missing arm is a compile error at the call site, not dead weight. The honest reading of
+"unused" here is the panel that never draws, not the method that never runs.
+
+## Tests
+
+Four files, split on what they can see:
+
+- `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
+  inside a component.
+- `test/needsYou.test.ts` — the merged queue and, first among them, its ordering.
+- `test/goalPage.test.ts` — the page's assembly: which parts, PRs, agents and decisions belong to a
+  goal, and the prefix trap `issue:14` versus `issue:1`.
+- `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
+
+The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
+`Date.now()` and the rendered relative times would drift between runs otherwise.
+
+`test/console.test.ts` holds the two structural assertions the layer split rests on — nothing under
+`console/` imports `api.js`, and `console.css` never targets a shared component's class — and pins the
+renders where being wrong would be worse than being absent: the rail carrying every blocking kind in one
+list, its array order surviving the grouping, the holding count agreeing with its noun, an empty queue
+muting rather than removing the rail, a group with no rows drawing no heading, a row with a goal being a
+button and the recovery hold not, the ask drawn above the plan, a goal with no ask drawing no band, the
+goal page answering through the shared card, a held part quoting the reconciler, a goal with no measured
+spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the backlog's four
+groups and its disabled container toggle, the fault log keeping its clear at zero, a panel's two ways
+out, the demo gate on injection, the precedence between a goal, the backlog and the overview, the
+recovery banner outside the situation area, a dropped socket drawing nothing at all, and the shell
+rendering the drawer the console only asks for.

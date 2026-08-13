@@ -211,8 +211,9 @@ support.
 two live agents there are editing one file **on disk**, with no merge anywhere to reconcile them.
 
 Results are sorted live-first (the only ones an operator can still act on), then `sameWorktree`, then
-most recent. Shipped in `/api/state` as `overlaps` and drawn on the findings desk,
-`web/src/factory/components/Desks.tsx`.
+most recent. Shipped in `/api/state` as `overlaps` and folded to `liveOverlapCount` on the cockpit's
+view model. No console surface draws the list itself: the floor's findings desk did, and deleting the
+floor took the only reader with it.
 
 It is **diagnostic only** — nothing in the dispatcher reads it, for the same reason nothing reads
 `findings` — and it is deliberately after-the-fact, which is the trade for being structural.

@@ -7,7 +7,7 @@ import { relTime } from './util.js';
 
 /**
  * A clock face, drawn inline beside the blueprint plate for the same reason that
- * one is: this panel is shared, and the floor's sprite sheet is not. It is
+ * one is: this panel is shared, and a presentation layer's icon set is not. It is
  * `currentColor` — a recurrence is not a *kind* of thing the way a blueprint is,
  * it is the same blueprint on a timer.
  */

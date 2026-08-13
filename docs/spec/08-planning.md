@@ -326,8 +326,8 @@ readiness then decides when the ask becomes actionable, exactly as it does for a
 `PlanReconciler` reads the backing rows once per plan and writes a part whose task is `declined` to
 `blocked`, with `declinedStepReason` on the row. **Not `concluded`**: concluding it would make
 `partSettled` answer true and release every dependent waiting on the thing that was refused — a plan
-completing on work nobody did. The dependents stay `pending`, the Goal Floor draws the stopped
-machine with the reason on its plate, and the ways out are the two already on the panel — Replan, or
+completing on work nobody did. The dependents stay `pending`, the goal page draws the part under
+**Held** with the reason on it, and the ways out are the two on the plan modal — Replan, or
 [abandon the decomposition](#when-the-collision-arrives-after-approval). Nothing escalates: the
 operator is the one who declined, and both buttons are in front of them.
 
@@ -623,8 +623,7 @@ resolved.
 feed — a feed carries news, and a line per pulse for a standing condition is how a feed stops being
 read. But it means a plan blocked yesterday explains itself to nobody today, and to nobody at all
 across a restart. So the feed keeps the news and the reason moves onto the row beside the status it
-explains, where the [Goal Floor](17-cockpit.md#the-goal-floor) draws it as the jammed assembler's
-plate. That was the other half of the gap: a blocked part is never queued, so the queue's held-reason
+explains, where the [goal page](17-cockpit.md#the-plan) quotes it verbatim on the held part. That was the other half of the gap: a blocked part is never queued, so the queue's held-reason
 plate could not speak for it and it had no pull request to be read for one — it drew a red word and
 no reason anywhere.
 
@@ -707,9 +706,9 @@ withdraws any pending plan proposal, and kicks a cycle. That is all it does.
 Clearing `discussing` is not optional when a replan is requested mid-conversation: the flag is what
 picks the template rule `issue-plan` renders from `planning`, so leaving it set would render `discuss-plan` on
 the next dispatch instead of the `issue-replan` this call actually asked for — the two routes would
-disagree about what plain `planning` means. The Goal Floor's plan bar keeps Replan visible during a
-discussion for exactly this reason; the route must be safe to call in that state, not merely
-reachable.
+disagree about what plain `planning` means. The route is **not** gated on `discussing` — it is
+callable throughout, and the cockpit's plan modal gives a running discussion its own footer — so
+clearing the flag has to be the route's own job rather than a caller's.
 
 The withdrawal is not optional under `requireApproval`: a pending verdict holds rule `plan-approval` off the plan,
 so the amended decomposition would never be put to anyone — and the stale card, if accepted, would

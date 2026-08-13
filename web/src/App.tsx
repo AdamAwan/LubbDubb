@@ -1,6 +1,7 @@
 import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
-import { FactoryRoot } from './factory/FactoryRoot.js';
+import { ConsoleRoot } from './console/ConsoleRoot.js';
+import { AgentDrawer } from './components/AgentDrawer.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
@@ -38,25 +39,31 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
 }
 
 /**
- * The cockpit shell, and deliberately nothing more: acquire state, hand the floor
- * a finished view-model. Everything that decides what the operator sees lives in
- * `factory/`; everything that decides what is true lives in `cockpit/` and
- * `view/`.
+ * The cockpit shell, and deliberately nothing more: acquire state, hand the
+ * console a finished view-model. Everything that decides what the operator sees
+ * lives in `console/`; everything that decides what is true lives in `cockpit/`
+ * and `view/`.
  *
- * The two screens below stay here rather than moving onto the floor because
- * neither has a view-model to draw — the floor cannot render a cockpit whose
+ * The two screens below stay here rather than moving into the console because
+ * neither has a view-model to draw — the console cannot render a cockpit whose
  * state never arrived.
  *
  * The work graph hangs off the shell for the same class of reason. It is not in
  * the view-model at all — it has its own routes, fetched on open rather than on
- * every poll — so drawing it below `FactoryRoot` would mean reaching `api.js`
- * from `factory/`, which is exactly what the seam forbids (and
- * `test/factoryFloor.test.ts` asserts).
+ * every poll — so drawing it below `ConsoleRoot` would mean reaching `api.js`
+ * from the presentation layer, which is exactly what the seam forbids (and
+ * `test/console.test.ts` asserts).
  *
  * The prompt book sits beside it on the same argument, reached from the other
  * direction: it is fetched rather than polled because it is read once at boot and
  * cannot change while the harness is up, so it has its own route and no place in
  * the view-model either.
+ *
+ * `AgentDrawer` is here for the first of those reasons: it seeds itself from the
+ * persisted transcript over its own route before the socket's deltas start
+ * arriving, so it reaches `api.js` and cannot live under `console/`. The console
+ * asks for it the way it asks for a plan — `actions.select(id)`, a flag on the
+ * seam — and the shell answers.
  */
 export function App() {
   const status = useCockpit();
@@ -65,7 +72,8 @@ export function App() {
   if (status.kind === 'loading') return <div className="loading">Connecting to the cockpit…</div>;
 
   // The modal hangs off the shell for the same reason `WorkTreePanel` does — it is
-  // shared, and the seam forbids `factory/` reaching `api.js` to open it another way.
+  // shared, and the seam forbids the presentation layer reaching `api.js` to open
+  // it another way.
   const state = status.view.state;
   const viewedPlan = (state.plans ?? []).find((p) => p.id === status.view.viewingPlan) ?? null;
   const planModal = viewedPlan ? (
@@ -93,10 +101,28 @@ export function App() {
     />
   ) : null;
 
+  const openAgent = status.view.selectedAgent;
+
   return (
     <>
-      <FactoryRoot view={status.view} actions={status.actions} />
+      <ConsoleRoot view={status.view} actions={status.actions} />
       {planModal}
+      {openAgent && (
+        <AgentDrawer
+          agent={openAgent}
+          task={status.view.taskFor(openAgent)}
+          refUrls={state.refUrls}
+          live={status.view.selectedOutput}
+          flags={status.view.flagsByAgent.get(openAgent.id)}
+          artifactUrls={state.artifactUrls ?? {}}
+          files={status.view.filesByAgent.get(openAgent.id)}
+          onClose={() => status.actions.select(null)}
+          onRespond={(text) => status.actions.respondAgent(openAgent.id, text)}
+          onKill={() => status.actions.killAgent(openAgent.id)}
+          onComplete={() => status.actions.completeAgent(openAgent.id)}
+          onInterrupt={() => status.actions.interruptAgent(openAgent.id)}
+        />
+      )}
       {status.view.viewingRetro && (
         <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />
       )}
