@@ -6,42 +6,44 @@
  * for `.cn` and touches no shared class.
  */
 :root {
-  /* Cool grey-slate. The orange accent is meant to be the only warm thing in the
-     frame, so the ground stays cool: on a warm one it competed with the surface
-     it sits on rather than sitting on it. */
-  --bg: #191b1c;
-  --panel: #313436;
-  --panel-2: #292c2e;
-  --border: #3d4144;
-  --text: #e9e7e1;
-  /* One step lighter than the sampled value: a cooler ground is darker in
-     perceived value, and the warm grey carried straight over landed at 4.44
-     against `--panel` — under AA, where it had been over it. */
-  --muted: #9e9e99;
-  --accent: #ff9c1a;
-  --blue: #5b9ec9;
-  --green: #6fbf5a;
-  --amber: #f2c14e;
-  --red: #d9483b;
-  --grey: #6a6d6f;
+  /* Ember, the same palette `console/console.css` carries: a near-black ground,
+     panels lifted off it by barely a value step, copper as the one accent. The
+     ground is neutral rather than cool — at this darkness a cast reads as a
+     tint on the whole frame, and the copper is meant to be the only thing in
+     the room with a temperature. */
+  --bg: #0b0b0c;
+  --panel: #1a1a1c;
+  --panel-2: #131314;
+  --border: #2a2a2d;
+  --text: #f2efe9;
+  --muted: #9b9791;
+  --accent: #e07a3f;
+  --blue: #5f93b8;
+  --green: #5cb85c;
+  --amber: #eab308;
+  --red: #ef4444;
+  --grey: #6a6763;
 
-  /* Tints of the semantic colours above, previously written as literals at each
-     use site. Named so they move together with the hue they belong to. */
-  --amber-line: #5a4413;
-  --amber-fill: #241d0c;
-  --amber-fill-2: #2b220e;
-  --red-line: #5a231d;
-  --red-fill: #2a1512;
-  --accent-fill: #33230d;
-  --blue-line: #2a4a5e;
-  --blue-line-2: #37607a;
-  --blue-fill: #17242c;
-  --green-fill: #16240f;
-  /* Ink on a light or warm fill: the ground colour, not near-black — a panel's
-     lettering is the panel's own shadow, not ink from somewhere else. */
-  --on-light: #1c1b1a;
-  --on-warm: #1c1b1a;
-  --well: #16181a;
+  /* Tints, derived rather than sampled: each is its hue mixed with the surface
+     it sits on, so moving a hue above moves its border, its fill and its
+     lettering together. A literal here is a separate opinion about how far a
+     red sits off the ground, and they drift apart one edit at a time. */
+  --amber-line: color-mix(in srgb, var(--amber) 40%, var(--panel));
+  --amber-fill: color-mix(in srgb, var(--amber) 13%, var(--bg));
+  --amber-fill-2: color-mix(in srgb, var(--amber) 22%, var(--bg));
+  --red-line: color-mix(in srgb, var(--red) 40%, var(--panel));
+  --red-fill: color-mix(in srgb, var(--red) 13%, var(--bg));
+  --accent-fill: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  --blue-line: color-mix(in srgb, var(--blue) 40%, var(--panel));
+  --blue-line-2: color-mix(in srgb, var(--blue) 58%, var(--panel));
+  --blue-fill: color-mix(in srgb, var(--blue) 13%, var(--bg));
+  --green-line: color-mix(in srgb, var(--green) 40%, var(--panel));
+  --green-fill: color-mix(in srgb, var(--green) 13%, var(--bg));
+  /* Ink on a light or warm fill. Near-black rather than the ground itself: a
+     copper fill is light enough that the ground reads as grey on it. */
+  --on-light: #140a04;
+  --on-warm: #140a04;
+  --well: #060607;
 
   /* Square, everywhere. A rounded corner is a soft edge on an instrument. */
   --r-sm: 0;
@@ -56,9 +58,11 @@
      to say the same thing would cost a data URI and a licence audit. */
   --font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
 
-  /* Extruded, not flat: 1px light top/left, 1px dark bottom/right. */
-  --border-hi: #474b4e;
-  --border-lo: #0f1112;
+  /* Extruded, not flat: 1px light top/left, 1px dark bottom/right. The dark side
+     is near-black now that the ground is — an extrusion reads by the gap between
+     the two edges, and on Ember the ground has no room left below it. */
+  --border-hi: #3a3a3d;
+  --border-lo: #000000;
 }
 
 * {
@@ -105,7 +109,7 @@ body {
 }
 .chip.ok {
   color: var(--green);
-  border-color: #1e4d33;
+  border-color: var(--green-line);
 }
 .chip.bad {
   color: var(--red);
@@ -1003,7 +1007,7 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: normal;
-  color: #b9c6e0;
+  color: var(--text);
 }
 /* SGR colours renderBlocks emits for tool labels (see components/ansi.ts). */
 .terminal .ansi-cyan {
@@ -1088,7 +1092,7 @@ body {
   font-size: 13.5px;
 }
 .origin-summary {
-  color: #8fa0bf;
+  color: var(--muted);
   font-size: 12.5px;
   line-height: 1.45;
   white-space: pre-wrap;

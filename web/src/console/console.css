@@ -11,30 +11,72 @@
  * the shared component stop being separable, and a change to one silently
  * redraws the other.
  *
- * The mockup's dark palette is a placeholder — a visual theme is chosen
- * separately later — so every colour is a custom property here rather than a
- * literal at each use site, and the properties are `--cn-*` so they cannot
- * collide with the shared-component tokens in `styles.css` while both sheets are
- * loaded together.
+ * Every colour is a custom property, never a literal at a use site, and the
+ * properties are `--cn-*` so they cannot collide with the shared-component
+ * tokens in `styles.css` while both sheets are loaded together.
+ *
+ * The palette is **Ember**: a near-black ground, panels lifted off it by barely
+ * a value step, and copper as the one accent. The chrome is deliberately close
+ * to invisible — a page of rows carrying nothing should read as almost unlit, so
+ * that the row which *is* carrying a status is the only bright thing on it.
+ *
+ * Two layers, and the split is what makes a theme a swap rather than a rewrite:
+ * the **palette** below is the ground, three foreground steps and five hues —
+ * nothing else. Every tint the sheet uses is then **derived** from those by
+ * `color-mix`, so a hue moves and its border, its fill and its lettering move
+ * with it. Writing a tint as a literal at the use site is the drift this
+ * replaced: sixty of them, each a separate opinion about how far a red sits off
+ * the ground, and re-theming meant finding all sixty.
  */
 :root {
-  --cn-bg: #0d0e11;
-  --cn-panel: #15171b;
-  --cn-panel-2: #1b1e23;
-  --cn-line: #24272e;
-  --cn-line-soft: #1e2126;
-  --cn-fg: #e7e9ec;
-  --cn-fg-dim: #9aa1ab;
-  --cn-fg-faint: #6b727c;
-  --cn-accent: #5b8cff;
-  --cn-red: #ff5f5f;
-  --cn-amber: #f5a524;
-  --cn-green: #3ecf8e;
+  --cn-bg: #0b0b0c;
+  --cn-panel: #131314;
+  --cn-panel-2: #1a1a1c;
+  --cn-line: #2a2a2d;
+  --cn-line-soft: #1f1f22;
+  --cn-fg: #f2efe9;
+  --cn-fg-dim: #9b9791;
+  --cn-fg-faint: #6a6763;
+  --cn-accent: #e07a3f;
+  --cn-red: #ef4444;
+  --cn-amber: #eab308;
+  --cn-green: #5cb85c;
   --cn-violet: #a78bfa;
-  --cn-r: 8px;
-  --cn-r-sm: 6px;
+  /* Ink for lettering *on* a filled hue — the count badge, the primary button.
+     Near-black rather than the ground itself: a copper fill is light enough that
+     the ground reads as grey on it. */
+  --cn-on-hue: #140a04;
+  --cn-r: 2px;
+  --cn-r-sm: 2px;
   --cn-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --cn-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+
+  /* Derived. `lift` is a surface raised off its panel — hover, a track, a dead
+     lamp; `line-hi` is a border under the pointer. The hue trio is the same
+     shape every time: `line` reads as a border against the panel, `fill` as a
+     wash over the ground, `ink` as lettering that stays legible on that wash.
+     `fill-2` is the heavier wash a header takes over its own card. */
+  --cn-lift: color-mix(in srgb, var(--cn-fg) 7%, var(--cn-panel));
+  --cn-lift-2: color-mix(in srgb, var(--cn-fg) 14%, var(--cn-panel));
+  --cn-lift-3: color-mix(in srgb, var(--cn-fg) 28%, var(--cn-panel));
+  --cn-line-hi: color-mix(in srgb, var(--cn-fg) 18%, var(--cn-line));
+
+  --cn-accent-line: color-mix(in srgb, var(--cn-accent) 42%, var(--cn-panel));
+  --cn-accent-fill: color-mix(in srgb, var(--cn-accent) 14%, var(--cn-bg));
+  --cn-accent-ink: color-mix(in srgb, var(--cn-accent) 74%, var(--cn-fg));
+
+  --cn-red-line: color-mix(in srgb, var(--cn-red) 40%, var(--cn-panel));
+  --cn-red-fill: color-mix(in srgb, var(--cn-red) 13%, var(--cn-bg));
+  --cn-red-fill-2: color-mix(in srgb, var(--cn-red) 22%, var(--cn-bg));
+  --cn-red-ink: color-mix(in srgb, var(--cn-red) 74%, var(--cn-fg));
+
+  --cn-amber-line: color-mix(in srgb, var(--cn-amber) 40%, var(--cn-panel));
+  --cn-amber-fill: color-mix(in srgb, var(--cn-amber) 13%, var(--cn-bg));
+  --cn-amber-fill-2: color-mix(in srgb, var(--cn-amber) 22%, var(--cn-bg));
+  --cn-amber-ink: color-mix(in srgb, var(--cn-amber) 74%, var(--cn-fg));
+
+  --cn-green-line: color-mix(in srgb, var(--cn-green) 40%, var(--cn-panel));
+  --cn-green-fill: color-mix(in srgb, var(--cn-green) 13%, var(--cn-bg));
 }
 
 .cn {
@@ -119,8 +161,8 @@
   letter-spacing: 0.6px;
 }
 .cn-read.cn-act:hover {
-  border-color: #333842;
-  background: #20242a;
+  border-color: var(--cn-line-hi);
+  background: var(--cn-lift);
 }
 .cn-read .cn-chev {
   color: var(--cn-fg-faint);
@@ -132,8 +174,8 @@
   color: var(--cn-fg-faint);
 }
 .cn-scan {
-  border-color: #2b3a5c;
-  background: #161c2b;
+  border-color: var(--cn-accent-line);
+  background: var(--cn-accent-fill);
 }
 .cn-cap {
   display: flex;
@@ -182,7 +224,7 @@
   margin-left: auto;
   font: 600 11px/1 var(--cn-mono);
   background: var(--cn-red);
-  color: #180404;
+  color: var(--cn-on-hue);
   padding: 3px 7px;
   border-radius: 99px;
 }
@@ -213,11 +255,11 @@
   width: 100%;
 }
 .cn-q:hover {
-  border-color: #343943;
+  border-color: var(--cn-line-hi);
 }
 .cn-q[aria-current='true'] {
   border-color: var(--cn-accent);
-  background: #171c28;
+  background: var(--cn-accent-fill);
 }
 .cn-q .cn-stripe {
   background: var(--cn-amber);
@@ -240,11 +282,11 @@
   text-transform: uppercase;
   padding: 3px 6px;
   border-radius: 4px;
-  background: #2a2118;
+  background: var(--cn-amber-fill-2);
   color: var(--cn-amber);
 }
 .cn-urgent .cn-tag {
-  background: #2b1517;
+  background: var(--cn-red-fill-2);
   color: var(--cn-red);
 }
 .cn-qage {
@@ -337,32 +379,32 @@
   flex-wrap: wrap;
 }
 .cn-needs {
-  border: 1px solid #4a2226;
-  background: #1a1214;
+  border: 1px solid var(--cn-red-line);
+  background: var(--cn-red-fill);
   border-radius: var(--cn-r);
   margin-bottom: 14px;
   overflow: hidden;
 }
 .cn-needs.cn-soft {
-  border-color: #4a3a1c;
-  background: #1a1610;
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
 }
 .cn-needs > header {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 9px 13px;
-  background: #241417;
-  border-bottom: 1px solid #4a2226;
+  background: var(--cn-red-fill-2);
+  border-bottom: 1px solid var(--cn-red-line);
   font: 600 11px var(--cn-mono);
   letter-spacing: 0.9px;
   text-transform: uppercase;
-  color: #ff8f8f;
+  color: var(--cn-red-ink);
 }
 .cn-needs.cn-soft > header {
-  background: #241d10;
-  border-bottom-color: #4a3a1c;
-  color: #e8c37a;
+  background: var(--cn-amber-fill-2);
+  border-bottom-color: var(--cn-amber-line);
+  color: var(--cn-amber-ink);
 }
 .cn-needs > header .cn-age {
   margin-left: auto;
@@ -448,21 +490,21 @@
    landed, blue for what is moving, red for what is stuck, dimmed for what has
    not started. */
 .cn-part.cn-merged {
-  border-color: #1e4733;
+  border-color: var(--cn-green-line);
 }
 .cn-part.cn-now {
-  border-color: #26456f;
-  background: #141d2e;
+  border-color: var(--cn-accent-line);
+  background: var(--cn-accent-fill);
 }
 .cn-part.cn-held {
-  border-color: #4a2226;
-  background: #1e1315;
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
 }
 .cn-part.cn-waiting {
   opacity: 0.55;
 }
 .cn-part .cn-why {
-  color: #ff8f8f;
+  color: var(--cn-red-ink);
 }
 
 /* plan approval */
@@ -512,17 +554,17 @@
   width: 26px;
   display: grid;
   place-items: center;
-  color: #3a3f48;
+  color: var(--cn-lift-3);
   font-size: 15px;
 }
 .cn-warnbox {
-  border: 1px solid #4a3a1c;
-  background: #1c1710;
+  border: 1px solid var(--cn-amber-line);
+  background: var(--cn-amber-fill);
   border-radius: var(--cn-r);
   padding: 11px 13px;
   margin-bottom: 12px;
   font-size: 12.5px;
-  color: #e8c37a;
+  color: var(--cn-amber-ink);
 }
 .cn-criteria {
   padding: 12px 13px;
@@ -600,13 +642,13 @@
   white-space: nowrap;
 }
 .cn-tgl:hover {
-  border-color: #39404c;
+  border-color: var(--cn-line-hi);
   color: var(--cn-fg);
 }
 .cn-tgl.cn-watch {
-  border-color: #26456f;
-  color: #7fa8ff;
-  background: #141d2e;
+  border-color: var(--cn-accent-line);
+  color: var(--cn-accent-ink);
+  background: var(--cn-accent-fill);
 }
 .cn-lbl {
   font: 11px var(--cn-mono);
@@ -632,7 +674,7 @@
 }
 .cn-pill.cn-on {
   color: var(--cn-fg);
-  border-color: #39404c;
+  border-color: var(--cn-line-hi);
   background: var(--cn-panel-2);
 }
 
@@ -716,7 +758,7 @@
   border-bottom: 0;
 }
 .cn-row:hover {
-  background: #181b20;
+  background: var(--cn-lift);
 }
 /* A row that is also a way in — the button reset above strips the chrome, so only
    the box model is restated here. */
@@ -782,7 +824,7 @@ button.cn-row {
   background: var(--cn-amber);
 }
 .cn-lamp.cn-off {
-  background: #3a3f48;
+  background: var(--cn-lift-3);
 }
 
 .cn-chip {
@@ -796,23 +838,23 @@ button.cn-row {
   white-space: nowrap;
 }
 .cn-chip.cn-you {
-  background: #2b1517;
-  border-color: #4a2226;
+  background: var(--cn-red-fill-2);
+  border-color: var(--cn-red-line);
   color: var(--cn-red);
 }
 .cn-chip.cn-harness {
-  background: #12212e;
-  border-color: #1f3b52;
-  color: #63b3ed;
+  background: var(--cn-accent-fill);
+  border-color: var(--cn-accent-line);
+  color: var(--cn-accent-ink);
 }
 .cn-chip.cn-stall {
-  background: #2a2118;
-  border-color: #4a3a1c;
+  background: var(--cn-amber-fill-2);
+  border-color: var(--cn-amber-line);
   color: var(--cn-amber);
 }
 .cn-chip.cn-ok {
-  background: #122a1e;
-  border-color: #1e4733;
+  background: var(--cn-green-fill);
+  border-color: var(--cn-green-line);
   color: var(--cn-green);
 }
 
@@ -834,7 +876,7 @@ button.cn-row {
   width: 16px;
   height: 6px;
   border-radius: 2px;
-  background: #2a2f37;
+  background: var(--cn-lift-2);
 }
 .cn-seg.cn-done {
   background: var(--cn-green);
@@ -858,13 +900,13 @@ button.cn-row {
   width: 6px;
   height: 6px;
   border-radius: 2px;
-  background: #2a2f37;
+  background: var(--cn-lift-2);
 }
 .cn-cd.cn-pass {
   background: var(--cn-green);
 }
 .cn-cd.cn-fail {
-  background: #4a4f58;
+  background: var(--cn-lift-3);
 }
 .cn-cd.cn-notours {
   background: var(--cn-amber);
@@ -874,7 +916,7 @@ button.cn-row {
 }
 .cn-cd.cn-mute {
   background: transparent;
-  border: 1px dashed #3a3f48;
+  border: 1px dashed var(--cn-lift-3);
 }
 
 .cn-empty {
@@ -907,8 +949,8 @@ button.cn-row {
   color: var(--cn-fg-faint);
 }
 .cn-ask {
-  border: 1px solid #4a2226;
-  background: #1a1214;
+  border: 1px solid var(--cn-red-line);
+  background: var(--cn-red-fill);
   border-radius: var(--cn-r);
   padding: 14px;
   margin-bottom: 12px;
@@ -925,14 +967,14 @@ button.cn-row {
   margin-bottom: 10px;
 }
 .cn-opt {
-  border: 1px solid #39404c;
+  border: 1px solid var(--cn-line-hi);
   background: var(--cn-panel-2);
   border-radius: var(--cn-r-sm);
   padding: 7px 12px;
 }
 .cn-opt:hover {
   border-color: var(--cn-accent);
-  background: #1a2030;
+  background: var(--cn-accent-fill);
 }
 .cn textarea {
   width: 100%;
@@ -960,11 +1002,11 @@ button.cn-row {
 .cn-btn.cn-primary {
   background: var(--cn-accent);
   border-color: var(--cn-accent);
-  color: #08122b;
+  color: var(--cn-on-hue);
   font-weight: 600;
 }
 .cn-btn:hover {
-  border-color: #39404c;
+  border-color: var(--cn-line-hi);
 }
 
 .cn-ctx {
@@ -1012,16 +1054,16 @@ button.cn-row {
   font-size: 17px;
 }
 .cn-box.cn-done {
-  border-color: #1e4733;
-  background: #102a1e;
+  border-color: var(--cn-green-line);
+  background: var(--cn-green-fill);
 }
 .cn-box.cn-live {
-  border-color: #26456f;
-  background: #141d2e;
+  border-color: var(--cn-accent-line);
+  background: var(--cn-accent-fill);
 }
 .cn-box.cn-ask {
-  border-color: #4a2226;
-  background: #1e1315;
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
 }
 .cn-box.cn-todo {
   opacity: 0.45;
@@ -1039,7 +1081,7 @@ button.cn-row {
   min-width: 18px;
 }
 .cn-link.cn-done {
-  background: #1e4733;
+  background: var(--cn-green-line);
 }
 
 /* ---------- off the air ---------- */
