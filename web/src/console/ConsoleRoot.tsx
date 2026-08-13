@@ -2,7 +2,8 @@ import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
 import { TopBar } from './TopBar.js';
-import { QueueRail } from './QueueRail.js';
+import { KIND_LABEL, QueueRail } from './QueueRail.js';
+import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { Overview } from './Overview.js';
 import { Backlog, backlogGroups } from './Backlog.js';
@@ -68,12 +69,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       tabBody(view.tab, view, actions)
     );
 
-  const panel =
-    view.consolePanel === null ? null : (
-      <Panel title={PANEL_TITLE[view.consolePanel]} onClose={() => actions.openPanel(null)}>
-        <div className="cn-pbody">{panelBody(view.consolePanel, view, actions)}</div>
-      </Panel>
-    );
+  const panel = renderPanel(view, actions);
 
   return (
     <div className="cn">
@@ -166,14 +162,51 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
 }
 
 /** What each panel calls itself — the same word as the reading that opens it. */
-const PANEL_TITLE: Record<NonNullable<ConsolePanel>, string> = {
+const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
   findings: 'Findings',
   faults: 'Faults',
   output: 'Output',
   launch: 'Launch',
 };
 
-function panelBody(panel: NonNullable<ConsolePanel>, view: CockpitView, actions: CockpitActions): ReactNode {
+/**
+ * Whichever panel is in front, or nothing.
+ *
+ * The **ask** panel is the destination for a queue row with no goal page to be
+ * answered on ({@link NeedRow.opens}), and it closes itself: answering settles
+ * the row, the next snapshot drops it from `needsYou`, and a panel with no row
+ * left draws nothing. That is why the row is looked up here rather than held —
+ * a panel that outlived its ask would offer a second verdict on a settled one.
+ */
+function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | null {
+  const panel = view.consolePanel;
+  if (panel === null) return null;
+  const close = () => actions.openPanel(null);
+
+  if (typeof panel === 'object') {
+    const row = view.needsYou.find((r) => r.id === panel.ask);
+    if (!row) return null;
+    const body = needBody(row, view, actions);
+    if (body === null) return null;
+    return (
+      <Panel title={`Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
+        <div className="cn-pbody">{body}</div>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel title={PANEL_TITLE[panel]} onClose={close}>
+      <div className="cn-pbody">{panelBody(panel, view, actions)}</div>
+    </Panel>
+  );
+}
+
+function panelBody(
+  panel: Exclude<ConsolePanel, null | { ask: string }>,
+  view: CockpitView,
+  actions: CockpitActions,
+): ReactNode {
   const { state } = view;
   switch (panel) {
     case 'findings':

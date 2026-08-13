@@ -197,10 +197,27 @@ goal page and the count cannot disagree; the sentence is worded once too, by `ho
 part" and "3 parts" agree with their noun on both surfaces. **A row holding nothing draws no count
 rather than a zero.**
 
-**A row is a link to a goal, not to a modal.** Clicking one calls `selectGoal(row.goalRef)` and opens
-that goal's page with the ask pinned at the top of it. The recovery hold has no `goalRef` — it is
-harness-wide — so it renders as a `div` rather than a `button`: there is nowhere for a click to go, and
-it is answered on the banner above. `test/console.test.ts` asserts both shapes.
+**Every row that can be answered opens somewhere, and `row.opens` says where.** A row is a link to a
+goal wherever there is one: `opens: 'goal'` calls `selectGoal(row.goalRef)` and draws that goal's page
+with the ask pinned at the top of it, which is the console's whole claim about asks. The other two
+values are the cases where that is not possible:
+
+- **`'ask'` — the ask panel**, a full-surface panel drawing the same `NeedsBand` the goal page draws,
+  through the same shared components. It is the destination for an ask with **no goal page to be
+  answered on**: an escalation raised on a pull request (`originRef: 'pr:142'`, which is most rebase
+  and CI asks), a bench task with no ticket, or a goal-shaped ref the world no longer carries. The
+  panel closes itself — answering settles the row, the next snapshot drops it from `needsYou`, and a
+  panel whose row is gone draws nothing rather than offering a second verdict on a settled ask.
+- **`null` — the recovery hold alone**, which is harness-wide and is answered on the banner above the
+  console. It renders as a `div` rather than a `button`, because it is the one row with nowhere to go.
+
+**The destination is decided in `buildNeedsYou`, never in the rail**, and this is the load-bearing
+part: only the derivation can tell a `goalRef` that _has_ a page from one that merely looks like it
+does, which it asks through `goalIssue` — the same lookup `buildGoalPage` returns null on, so the two
+cannot drift. A rail that routed on `goalRef` alone drew every PR-origin escalation as an inert `div`
+and every ref the world had dropped as a click that landed nowhere; both read, to an operator, as a
+console that is broken. `test/console.test.ts` asserts all three shapes and that the ask panel closes
+on the row settling; `test/needsYou.test.ts` asserts the routing itself.
 
 **At zero the rail keeps its place and says so** ("Nothing is waiting on you"). A surface that vanishes
 when quiet is indistinguishable from one that broke, and a column that came and went would reflow the
@@ -236,7 +253,10 @@ Order on the page, top to bottom:
    asks blocking an agent, amber for the operator's own, the rail's own split carried over so a row
    and the band it opens read the same. **A goal with no ask draws no band at all** — a band that is
    sometimes furniture stops being read as a demand — and `test/console.test.ts` asserts that from both
-   sides.
+   sides. The band is `NeedsBand` (`web/src/console/NeedsBand.tsx`), its own module rather than the
+   goal page's private component, because the goal page is not the only place an ask is read: the ask
+   panel draws the same band for a row with no goal page. One band, two placements — a second wiring
+   is a second set of verdicts to keep in step.
 3. **The plan**, left to right in dispatch order.
 4. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against, drawn
    through `renderRichText` because the body is the _tracker's_ prose and Azure DevOps writes it as
@@ -486,10 +506,13 @@ Four rules hold them:
 
 **Which panel is in front is one value**, `ConsolePanel`, not a boolean each: a boolean per panel
 admits far more states than there are, and two panels in front at once is not something this layout can
-draw. A `Panel` has **three ways out** — the backdrop, the button and Escape — because a thing that
-covers the console must not have exactly one exit; `test/console.test.ts` pins them.
+draw. The **ask** panel rides in that same value as `{ ask: <row id> }` rather than beside it, for that
+reason exactly: a second field would let an ask and the fault log both be in front, which is the state
+the type exists to rule out. A `Panel` has **three ways out** — the backdrop, the button and Escape —
+because a thing that covers the console must not have exactly one exit; `test/console.test.ts` pins
+them.
 
-Four panels open from the bar, and Settings, Spend and Yield are shell-owned modals beside them:
+Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings, Spend and Yield are shell-owned modals beside them:
 
 - **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
   `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in

@@ -43,9 +43,11 @@ export function holdingLabel(holding: number): string {
  * is parked on this, not merely queued for the operator — so it alone earns the
  * urgent stripe and tag.
  *
- * A row with a `goalRef` opens that goal; the recovery hold has none and is
- * answered on the banner above, so it renders as a `div`, not a `button` —
- * there is nowhere for a click on it to go.
+ * **Where a click goes is `row.opens`, never `row.goalRef`** — the derivation
+ * decides it, because it is the only place that can tell a goal with a page from
+ * a ref that merely looks like one. Only the recovery hold opens nothing, and it
+ * renders as a `div` rather than a `button` so that every button on this rail
+ * leads somewhere.
  */
 function Row({ row, now, actions }: { row: NeedRow; now: number; actions: CockpitActions }): JSX.Element {
   const urgent = row.group === 'blocking';
@@ -69,12 +71,14 @@ function Row({ row, now, actions }: { row: NeedRow; now: number; actions: Cockpi
     </>
   );
 
-  if (row.goalRef === null) {
+  if (row.opens === null) {
     return <div className={`cn-q ${urgent ? 'cn-urgent' : ''}`}>{inner}</div>;
   }
   const ref = row.goalRef;
+  const open =
+    row.opens === 'goal' && ref !== null ? () => actions.selectGoal(ref) : () => actions.openPanel({ ask: row.id });
   return (
-    <button type="button" className={`cn-q ${urgent ? 'cn-urgent' : ''}`} onClick={() => actions.selectGoal(ref)}>
+    <button type="button" className={`cn-q ${urgent ? 'cn-urgent' : ''}`} onClick={open}>
       {inner}
     </button>
   );
