@@ -257,7 +257,7 @@ export interface CockpitDecision extends Decision {
  * that introduces it. The route asks the same function again before recording,
  * because a disabled button is a courtesy and not a gate.
  */
-export interface StackLandingView {
+interface StackLandingView {
   /** The stack this concerns, as `/api/state` is currently deriving it. */
   ref: string;
   /** Whether every rung is clear, so the click may be offered at all. */
