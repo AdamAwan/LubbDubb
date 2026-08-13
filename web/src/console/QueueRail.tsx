@@ -4,7 +4,8 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
 
-const KIND_LABEL: Record<NeedKind, string> = {
+/** One word per kind, shared with the goal page so a row and the band it opens name the ask the same. */
+export const KIND_LABEL: Record<NeedKind, string> = {
   recovery: 'Recovery',
   escalation: 'Escalation',
   permission: 'Permission',

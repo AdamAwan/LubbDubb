@@ -1198,7 +1198,11 @@ export function buildDemoState(): DemoSeed {
       // Note the shape: a one-line prompt, and every word the assessor wrote in
       // `detail`, quoted rather than spliced into the harness's sentence.
       {
-        id: 'esc-4',
+        // `esc-5`, not a second `esc-4`: the goal page resolves a queue row back to
+        // its escalation by id, so two open rows sharing one id would pin this
+        // assessment to the wrong goal's page — and the rail would key two rows the
+        // same.
+        id: 'esc-5',
         type: 'resolve_ambiguity',
         status: 'open',
         prompt:

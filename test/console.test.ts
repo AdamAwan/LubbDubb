@@ -7,6 +7,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
+import type { GoalPartView } from '../web/src/view/goalPage.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
@@ -300,4 +301,106 @@ test('a row with a goalRef is a button; the recovery hold (no goalRef) is not', 
     'div',
     'the recovery row has no goalRef and must not be wrapped in a button',
   );
+});
+
+/**
+ * The demo goal to open: the first ask that names one. Asserted rather than
+ * defaulted to an arbitrary issue — a fixture set with no goal-scoped ask would
+ * make every assertion below vacuous instead of failing.
+ */
+function goalRef(): string {
+  const ref = view().needsYou.find((n) => n.goalRef !== null)?.goalRef;
+  assert.ok(ref, 'the demo fixtures must carry at least one ask that names a goal');
+  return ref;
+}
+
+function goalView(): CockpitView {
+  const state = buildDemoState().state;
+  return buildViewModel({
+    state,
+    now: Date.now(),
+    connected: true,
+    demo: true,
+    selected: null,
+    liveOutput: new Map(),
+    tails: new Map(),
+    lastPulseAt: Date.now(),
+    viewingPlan: null,
+    viewingRetro: null,
+    viewingScratchpad: null,
+    settingsOpen: false,
+    spendOpen: false,
+    reliabilityOpen: false,
+    selectedGoal: goalRef(),
+    consolePanel: null,
+    backlogOpen: false,
+  });
+}
+
+test('a selected goal draws its page instead of the overview', () => {
+  const v = goalView();
+  const html = render(v);
+  assert.ok(html.includes('cn-goal'));
+  assert.ok(v.goalPage !== null);
+  assert.ok(decode(html).includes(String(v.goalPage!.issue.title)));
+});
+
+test('the ask is drawn above the plan, which is the whole point of the page', () => {
+  const v = goalView();
+  if ((v.goalPage?.needs.length ?? 0) === 0) return; // fixtures carry no ask on this goal
+  const html = render(v);
+  assert.ok(html.indexOf('cn-needs') < html.indexOf('cn-waves'));
+});
+
+test('a goal with no ask draws no band at all', () => {
+  const v = goalView();
+  const html = render({ ...v, goalPage: { ...v.goalPage!, needs: [] } });
+  assert.ok(!html.includes('cn-needs'), 'a band with nothing in it is not a band');
+});
+
+test('a held part quotes the reconciler’s own reason rather than inventing one', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const first = page.parts[0];
+  if (!first) return; // the fixture goal has no plan; the grouping tests cover this
+
+  const parts: GoalPartView[] = [
+    {
+      part: { ...first.part, status: 'blocked', blockedReason: 'waits on staging credentials' },
+      group: 'held',
+      agentId: null,
+    },
+  ];
+
+  const html = render({ ...v, goalPage: { ...page, parts } });
+  assert.ok(html.includes('waits on staging credentials'));
+});
+
+test('a goal with no measured spend draws no spend row rather than $0.00', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+
+  const measured = render({
+    ...v,
+    goalPage: {
+      ...page,
+      issue: {
+        ...page.issue,
+        spend: {
+          originRef: `issue:${page.issue.number}`,
+          issueNumber: page.issue.number,
+          costUsd: 6.4,
+          inputTokens: 0,
+          outputTokens: 0,
+          agents: 7,
+        },
+      },
+    },
+  });
+  assert.ok(measured.includes('$6.40'), 'a measured goal states what it cost');
+
+  const unmeasured = render({ ...v, goalPage: { ...page, issue: { ...page.issue, spend: null } } });
+  assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
 });
