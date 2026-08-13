@@ -193,6 +193,24 @@ export function buildDemoState(): DemoSeed {
           health: { blocked: true, reasons: ['CI failing on base PR #143'] },
           attention: { status: 'elsewhere', reasons: ['waiting on PR #143'] },
         }),
+        // The ignore tag as a *state*, so the demo shows the one row the harness
+        // will never touch: tagged, still listed with its health, drawn spent.
+        demoPr({
+          id: 'pr-137',
+          number: 137,
+          title: 'Spike: swap the queue for a work-stealing pool',
+          branch: 'spike/work-stealing',
+          ciStatus: 'failing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'main',
+          mergeableState: 'clean',
+          merged: false,
+          labels: ['lubbdubb-ignore'],
+          health: { blocked: true, reasons: ['CI failing'] },
+          attention: { status: 'ignored', reasons: ['tagged "lubbdubb-ignore" — the harness is leaving it alone'] },
+        }),
       ],
       // What the World panel used to lose: a PR you were watching disappears when
       // it leaves the open set, with nothing to say whether it landed.

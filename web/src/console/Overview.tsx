@@ -228,10 +228,15 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
       <div className="cn-rows">
         {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
         {open.map((pr) => {
-          const excluded = (pr.labels ?? []).includes(ignoreLabel);
+          // The server's verdict, not a second reading of the labels: `ignored` is
+          // the first arm `prAttentionStatus` takes, so on an open PR it *is* the
+          // tag. Drawn as a spent row for the reason the backlog dims an ignored
+          // goal — the chip alone leaves a row the harness will never touch
+          // sitting at the same weight as the ones it is working.
+          const excluded = pr.attention.status === 'ignored';
           const goal = goalOf.get(pr.number);
           return (
-            <div className="cn-row" key={pr.number}>
+            <div className={`cn-row ${excluded ? 'cn-spent' : ''}`} key={pr.number}>
               <span className="cn-grow">
                 <b className="cn-name">
                   {refLink(`#${pr.number}`, refUrls)} {pr.title}

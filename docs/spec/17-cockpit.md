@@ -448,6 +448,10 @@ vanishes when quiet is indistinguishable from one that broke.
   **court chip read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
   about it. Anything else would let a chip say "you" with nothing to answer.
 - **Pull requests** — every open PR with its court chip, its CI ladder, and the watch/ignore toggle.
+  An **ignored** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
+  closed PR and an ignored backlog goal take, off `attention.status === 'ignored'` rather than a
+  second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
+  same weight as the ones being worked, which is the whole thing the tag is meant to say.
   A PR is joined to its goal through the **plan parts** rather than guessed from the branch name; a PR
   nobody's plan claims is left out of that map and draws its branch instead, which is honest about what
   is known. The toggle is **disabled rather than absent** with no ignore label configured: the gate
@@ -1097,7 +1101,9 @@ disagree with what the dispatcher does:
 - **PR attention** — `prAttentionStatus(pr, ctx)`, attached per PR and drawn as the court chip. The
   chip names the **court** and nothing else — `you`, `harness`, `elsewhere`, `settled`, `stalled`,
   `done`, `ignored` — because scanning a list for "what is mine" is what it exists for; the full
-  reasons are in the `title`. Four of the seven take a tone (`courtTone`); the rest print plain.
+  reasons are in the `title`. Four of the seven take a tone (`courtTone`); the rest print plain —
+  `ignored` says which arm it is in the chip and dims its whole row instead, since it is the one arm
+  that is a standing instruction rather than a reading of where the work got to.
 - **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue. The backlog draws its first
   reason as the row's sentence, and its `container` arm is what disables a watch toggle.
 
