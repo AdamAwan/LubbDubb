@@ -657,7 +657,7 @@ export function buildDemoState(): DemoSeed {
       // The step a person owns, and the part waiting behind it. Two rows rather
       // than one because the *point* of a human step is what it holds up: a
       // `cutover` nobody is waiting on and one stopping a verification look
-      // identical on a list, and the floor's bench exists to tell them apart.
+      // identical on a list, and the queue's holding count exists to tell them apart.
       demoPart({
         id: 'plan-212:cutover',
         planId: 'plan-212',
@@ -1166,8 +1166,8 @@ export function buildDemoState(): DemoSeed {
             { question: 'Rename `PartExpectedKind` to `expectedKind` in the part-two file list?' },
           ],
         },
-        // Deskbound, like the plan approval above: the floor draws one question per
-        // bot, and a second on `agent-a2` would shadow its rebase conflict there.
+        // Agentless, like the plan approval above: an ask with no agent is the
+        // operator's alone, and the queue groups it as `yours` rather than blocking.
         agentId: null,
         taskId: null,
         response: null,
@@ -1378,8 +1378,8 @@ export function buildDemoState(): DemoSeed {
       // builds them. Absent from this map ⇒ the cockpit draws no way in at all.
       'issue:212:comment:8391': 'https://github.com/example/lubbdubb/issues/212#issuecomment-8391',
       'issue:219:comment:8402': 'https://github.com/example/lubbdubb/issues/219#issuecomment-8402',
-      // The colon form, which is what the factory speaks: a patch's ref, a crate's
-      // origin, a bot's origin and a decision's subject are all structured refs,
+      // The colon form, which is what the harness speaks: a part's ref, a job's
+      // origin, an agent's origin and a decision's subject are all structured refs,
       // and the `#n` keys above answer none of them. The server keys both families
       // for the same items (see `buildRefUrls`), so the demo does too — otherwise
       // the Pages build is the one place every new link renders as plain text.
@@ -1458,7 +1458,7 @@ export function buildDemoState(): DemoSeed {
       unattributedCostUsd: 0.86,
     },
     // The Yield gauge's reading. Not every run finishes in the demo either: a
-    // floor that has never lost one is a floor whose gauge nobody would click.
+    // fleet that has never lost one is a fleet whose gauge nobody would click.
     runOutcomes: { settled: 24, live: 3, completed: 20, lost: 3, stopped: 1, completionRate: 20 / 24 },
   };
 

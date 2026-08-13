@@ -6,16 +6,16 @@ import type { GoalPageView } from './goalPage.js';
 import type { ConsolePanel } from '../cockpit/actions.js';
 
 /**
- * Everything the floor draws, derived once per render and handed over as plain data.
+ * Everything the console draws, derived once per render and handed over as plain data.
  *
  * This is deliberately a pure function of the snapshot rather than a set of hooks:
  * the drawing code must not be able to reach the network, and the derivations below
  * (which lived inside `App`'s body until the view model split them out) are the part
- * worth testing. No field here is a function or a promise — anything the floor can
- * *do* lives on `CockpitActions` instead, so the two halves stay separable.
+ * worth testing. No field here is a function or a promise — anything the console
+ * can *do* lives on `CockpitActions` instead, so the two halves stay separable.
  */
 export interface CockpitView {
-  /** The raw snapshot. The floor reads config/world/refUrls straight off it. */
+  /** The raw snapshot. The console reads config/world/refUrls straight off it. */
   state: AppState;
   /** Wall clock for relative-time rendering, ticking once a second. */
   now: number;
@@ -68,8 +68,8 @@ export interface CockpitView {
   agentById: ReadonlyMap<string, Agent>;
   /**
    * The open question an agent is waiting on an answer to, keyed by agent id —
-   * the join that lets the floor draw the ask *on the bot* rather than only in an
-   * inbox. One escalation rather than a list because the harness parks an agent
+   * the join that lets the console draw the ask *on the agent* rather than only in
+   * an inbox. One escalation rather than a list because the harness parks an agent
    * at most once at a time (`system.ts`'s `waiting` handler returns early while
    * one is open), so a list would promise a plurality that cannot occur.
    *

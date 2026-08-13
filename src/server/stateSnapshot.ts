@@ -245,7 +245,7 @@ export function buildStateSnapshot(
       // `job:<id>` origin resolves to nothing and is simply omitted.
       ...tasks.map((t) => t.originRef),
       // Every goal's own canonical ref. The `#n` keys above cover the same
-      // tickets, but the factory's Goal Floor and the belt speak in the
+      // tickets, but a goal's plan and its queue speak in the
       // colon form (`issue:13` is the patch's ref, and a crate's origin), and a
       // family that is only keyed when a task or a world event happens to name it
       // is one that links on a busy world and renders plain on a quiet one.

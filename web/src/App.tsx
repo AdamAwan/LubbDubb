@@ -1,6 +1,7 @@
 import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
 import { ConsoleRoot } from './console/ConsoleRoot.js';
+import { AgentDrawer } from './components/AgentDrawer.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
@@ -57,6 +58,12 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
  * direction: it is fetched rather than polled because it is read once at boot and
  * cannot change while the harness is up, so it has its own route and no place in
  * the view-model either.
+ *
+ * `AgentDrawer` is here for the first of those reasons: it seeds itself from the
+ * persisted transcript over its own route before the socket's deltas start
+ * arriving, so it reaches `api.js` and cannot live under `console/`. The console
+ * asks for it the way it asks for a plan — `actions.select(id)`, a flag on the
+ * seam — and the shell answers.
  */
 export function App() {
   const status = useCockpit();
@@ -94,10 +101,28 @@ export function App() {
     />
   ) : null;
 
+  const openAgent = status.view.selectedAgent;
+
   return (
     <>
       <ConsoleRoot view={status.view} actions={status.actions} />
       {planModal}
+      {openAgent && (
+        <AgentDrawer
+          agent={openAgent}
+          task={status.view.taskFor(openAgent)}
+          refUrls={state.refUrls}
+          live={status.view.selectedOutput}
+          flags={status.view.flagsByAgent.get(openAgent.id)}
+          artifactUrls={state.artifactUrls ?? {}}
+          files={status.view.filesByAgent.get(openAgent.id)}
+          onClose={() => status.actions.select(null)}
+          onRespond={(text) => status.actions.respondAgent(openAgent.id, text)}
+          onKill={() => status.actions.killAgent(openAgent.id)}
+          onComplete={() => status.actions.completeAgent(openAgent.id)}
+          onInterrupt={() => status.actions.interruptAgent(openAgent.id)}
+        />
+      )}
       {status.view.viewingRetro && (
         <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />
       )}

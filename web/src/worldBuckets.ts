@@ -11,7 +11,7 @@
  * precedence is the server's, though: ignore wins, then watch, else the type
  * default (PRs opt-out, issues opt-in).
  */
-export type WatchBucket = 'watched' | 'unwatched' | 'ignored';
+type WatchBucket = 'watched' | 'unwatched' | 'ignored';
 
 interface WatchBucketOpts {
   watchLabel: string;

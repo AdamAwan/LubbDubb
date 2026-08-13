@@ -26,7 +26,7 @@ export function HumanTaskActions({
   onDecline,
 }: {
   task: HumanTask;
-  /** The station's button modifiers — `fx-btn` on the floor, `ghost` in a modal. */
+  /** The caller's button modifiers — `cn-tgl` on a goal page, `ghost` in a modal. */
   buttonClass?: string;
   onDone: (id: string) => Promise<unknown> | unknown;
   onDecline: (id: string, note: string) => Promise<unknown> | unknown;

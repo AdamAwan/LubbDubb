@@ -16,7 +16,7 @@ const BUCKETS = 6;
 
 export type SeriesKey = 'dispatches' | 'merges' | 'escalations';
 
-export interface ProductionSeries {
+interface ProductionSeries {
   key: SeriesKey;
   label: string;
   /** Counts per bucket, oldest first. */
@@ -136,23 +136,4 @@ export function productionReading(input: {
     costPerHour: input.fiveHourCostUsd === null ? null : input.fiveHourCostUsd / 5,
     truncated: oldest !== null && oldest > start,
   };
-}
-
-/**
- * The belt's tier, read as queue pressure against the cap.
- *
- * Against the cap rather than an absolute count: four items behind a cap of two is
- * congestion and behind a cap of eight is a normal cycle, so an absolute threshold
- * would call a healthy fleet saturated. Yellow up to one full pulse of work, red to
- * two, blue past that — the game's own hierarchy, so a player reads it with no
- * legend.
- *
- * A cap of zero is a paused-to-nothing fleet, where any queued item is saturation.
- */
-export function beltTier(queued: number, cap: number): 'yellow' | 'red' | 'blue' {
-  if (queued === 0) return 'yellow';
-  if (cap <= 0) return 'blue';
-  if (queued <= cap) return 'yellow';
-  if (queued <= cap * 2) return 'red';
-  return 'blue';
 }

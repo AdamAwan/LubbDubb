@@ -20,7 +20,7 @@ import type { Plan, PlanPart, PullRequest } from '../types.js';
  * near the rule it duplicates. `test/stacks.test.ts` asserts that structurally.
  */
 
-export interface StackRung {
+interface StackRung {
   prNumber: number;
   title: string;
   branch: string;

@@ -333,8 +333,9 @@ function goalRef(): string {
   return ref;
 }
 
-function goalView(): CockpitView {
+function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref: string = goalRef()): CockpitView {
   const state = buildDemoState().state;
+  mutate(state);
   return buildViewModel({
     state,
     now: Date.now(),
@@ -350,11 +351,45 @@ function goalView(): CockpitView {
     settingsOpen: false,
     spendOpen: false,
     reliabilityOpen: false,
-    selectedGoal: goalRef(),
+    selectedGoal: ref,
     consolePanel: null,
     backlogOpen: false,
   });
 }
+
+/**
+ * The shared card is embedded rather than reimplemented compactly, and this is
+ * what that buys: the options an agent offered through `escalate` stay one click
+ * on the goal page, and a proposal arrives with its verdict buttons instead of a
+ * reply box that cannot be branched on. A second implementation would be a second
+ * set of refusal rules to keep right — the reason `EscalationCard` has one.
+ */
+test('the goal page answers with the shared card’s rules rather than its own', () => {
+  const row = view().needsYou.find((n) => n.goalRef !== null && n.kind === 'escalation');
+  assert.ok(row, 'the demo fixtures must carry a goal-scoped question an agent is parked on');
+  const ref = row.goalRef!;
+
+  const withOptions = render(
+    goalView((s) => {
+      const asked = s.escalations.find((e) => e.id === row.id)!;
+      asked.context = { ...asked.context, options: ['Take ours', 'Take theirs'] };
+    }, ref),
+  );
+  assert.match(withOptions, /class="esc-quick"/, 'offered choices stay one click in the band');
+  assert.match(withOptions, />Take theirs</);
+
+  // This question alone, turned into a decision — so the absence of a reply box
+  // below is this card's, and not read off a second band on the same page.
+  const proposal = render(
+    goalView((s) => {
+      s.escalations = s.escalations.filter((e) => e.id === row.id);
+      s.proposals = [{ ...s.proposals![0]!, id: 'p-band', kind: 'merge', status: 'pending', escalationId: row.id }];
+    }, ref),
+  );
+  assert.match(proposal, /needs your decision/, 'a decision must read as one in the band');
+  assert.match(proposal, />Approve merge</);
+  assert.doesNotMatch(proposal, /placeholder="Your answer…"/, 'a proposal is never answered with free text');
+});
 
 test('a selected goal draws its page instead of the overview', () => {
   const v = goalView();
@@ -571,8 +606,11 @@ test('the backlog replaces the overview, and a selected goal outranks both', () 
   assert.ok(render({ ...v, backlogOpen: true }).includes('cn-goal'));
 });
 
-test('the shell renders the console and no longer names the floor', () => {
+test('the shell renders the console, and the drawer that the console only asks for', () => {
   const src = readFileSync(new URL('../web/src/App.tsx', import.meta.url).pathname, 'utf8');
   assert.ok(src.includes('ConsoleRoot'), 'the shell must render the console');
-  assert.ok(!src.includes('factory/'), 'the shell must not still reach into the floor');
+  // `AgentDrawer` seeds itself over its own route, so it cannot live under
+  // `console/`. The console asks with `actions.select(id)` and the shell answers —
+  // without this the three call sites that open an agent do nothing at all.
+  assert.ok(src.includes('AgentDrawer'), 'the shell must answer the console’s request for a drawer');
 });

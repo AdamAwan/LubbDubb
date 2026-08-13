@@ -14,8 +14,8 @@
  * The mockup's dark palette is a placeholder — a visual theme is chosen
  * separately later — so every colour is a custom property here rather than a
  * literal at each use site, and the properties are `--cn-*` so they cannot
- * collide with the Factory Floor's own tokens in `styles.css` while both sheets
- * are loaded together.
+ * collide with the shared-component tokens in `styles.css` while both sheets are
+ * loaded together.
  */
 :root {
   --cn-bg: #0d0e11;

@@ -64,9 +64,9 @@ function readToken(): string {
     // from this page load still works; only persistence is lost.
     //
     // This also catches the no-browser case: `location` is simply undefined when
-    // the cockpit is imported under node, which is how `test/factoryFloor.test.ts`
-    // renders the floor to static markup. There is no token to find there, nothing will be
-    // fetched, so an empty one is the right answer rather than a crash at import.
+    // the cockpit is imported under node, which is how `test/console.test.ts`
+    // renders the console to static markup. There is no token to find there, nothing will
+    // be fetched, so an empty one is the right answer rather than a crash at import.
     return typeof location === 'undefined' ? '' : (/[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1] ?? '');
   }
 }
@@ -217,8 +217,8 @@ const realApi = {
   // the bug is its own work item and carries the work.
   raiseBug: (issueNumber: number, summary: string, title?: string) =>
     post<{ ok: true; filing: BugFiling }>(`/api/issues/${issueNumber}/bug`, { summary, title }),
-  // End the harness's run at a goal (issues #203, #234). A run is retained on the
-  // floor so its report stays reachable; this is the one thing that ends it, it
+  // End the harness's run at a goal (issues #203, #234). A run is retained so its
+  // report stays reachable; this is the one thing that ends it, it
   // persists across a restart, and it stops the dispatcher acting on the goal.
   dismissRun: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
@@ -409,7 +409,7 @@ function connectRealWs(onEvent: (ev: unknown) => void, onStatus?: (connected: bo
 //
 // The `typeof` guard is for node, not the browser: under `tsx` there is no
 // `import.meta.env` at all, so the bare access threw at import — which put the
-// whole cockpit out of reach of a test, and so out of reach of the floor tests
+// whole cockpit out of reach of a test, and so out of reach of the console tests
 // that render it to static markup.
 //
 // If you change the shape of this expression, check both build directions, and

@@ -46,8 +46,8 @@ function Read({
 /**
  * The pulse countdown, and the way to force one. Wears the same raised chrome
  * as the other readings but acts rather than opening a panel, so it carries no
- * chevron — the same distinction `factory/components/StatusBar.tsx` draws
- * between its gauges and its `ScanRead`.
+ * chevron: a reading that opens something and a reading that does something are
+ * different promises, and the chevron is the only thing that says which.
  */
 function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const stopped = view.pulseHeld || view.state.control.paused;
@@ -75,8 +75,8 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
  * The control-room strip: ident, the pulse, the fleet cap, and six readings.
  *
  * Each reading is one subject stated once, mirroring `StatusBar`'s rule but
- * with the mockup's plain text-and-number face rather than the Factory's icon
- * sprites — the console has no sprite sheet of its own to draw from. Spend,
+ * with the mockup's plain text-and-number face — the console has no icon set of
+ * its own to draw from. Spend,
  * Yield, Output, Findings and Faults open a panel or a full-surface view;
  * Settings does too. None reaches `api.js` — every one of these is a method on
  * `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is
@@ -86,10 +86,9 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
  * derivation the production graph itself is built on — rather than a
  * differently-shaped count of the same events: a gauge and the panel it opens
  * must agree from the first paint, and only sharing the one function keeps
- * that true by construction. That module used to live under `factory/`; it
- * moved to `view/` (a pure, React-free derivation, same as `viewModel.ts` and
- * `goalPage.ts`) precisely so a consumer outside the Factory Floor could use
- * it without reaching into a presentation directory that is going away.
+ * that true by construction. It sits in `view/` — a pure, React-free derivation,
+ * same as `viewModel.ts` and `goalPage.ts` — so that a gauge and the panel behind
+ * it can share it without either reaching into the other's presentation.
  */
 export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { state } = view;

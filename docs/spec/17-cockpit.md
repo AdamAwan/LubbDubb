@@ -1,5 +1,13 @@
 # 17 — The cockpit
 
+> **This document is stale and is rewritten in the next commit.** The Factory Floor it describes
+> below — the belt, the bays, the silos, the rack — has been deleted, along with its presentation
+> directory and its own test file. The presentation layer is now `web/src/console/`, asserted in
+> `test/console.test.ts`, and every path token below has been repointed there so the documented
+> paths resolve. **The prose around them has not been re-argued yet**: where a sentence claims
+> something about a belt, a bay or a gauge, read it as history, not as a statement about the
+> console.
+
 `web/` is a React 18 + Vite SPA with its own `web/tsconfig.json`, so `npm run typecheck` and
 `npm run typecheck:web` are separate passes.
 
@@ -20,7 +28,7 @@ The cockpit is three layers, split so that how it _looks_ stays separable from h
 | ------------ | --------------------------- | ---------------------------------------------------------------------------------------------- |
 | Wiring       | `web/src/cockpit/`          | fetch, websocket, coalesced refresh, which drawer is open, the bound `CockpitActions`. No JSX. |
 | Derivation   | `web/src/view/viewModel.ts` | the pure `buildViewModel` → `CockpitView`. No React.                                           |
-| Presentation | `web/src/factory/`          | the Factory Floor — the whole drawn surface, rooted at `FactoryRoot`.                          |
+| Presentation | `web/src/console/`          | the Factory Floor — the whole drawn surface, rooted at `FactoryRoot`.                          |
 
 `App.tsx` is only the shell: acquire state, render `FactoryRoot`. The two screens it still owns —
 "Connecting…" and the locked-out page — stay there because neither has a view-model to draw.
@@ -36,13 +44,13 @@ What keeps that from swallowing the cockpit's rules is the split on **behaviour 
   `FindingsPanel`, `SchedulePanel`, `WorldSummary`, the buttons, and the leaf helpers. The escalation 409 rules and
   the recovery verdicts get exactly one implementation, and the floor embeds them and tints them
   through the tokens.
-- **Drawn** (`web/src/factory/`) — anything that draws over data it was handed: the belt, the bays,
+- **Drawn** (`web/src/console/`) — anything that draws over data it was handed: the belt, the bays,
   the desks, the gauges, the chips, the status bar.
 
 **One panel hangs off the shell rather than off the floor**, below it: the work graph
 (`WorkTreePanel`). It is absent from the view-model because it rides its own route, **fetched on
 open, never polled**, since it only ever grows. Drawing it from `factory/` would mean reaching
-`api.js` directly, which is exactly what the seam forbids and `test/factoryFloor.test.ts` asserts.
+`api.js` directly, which is exactly what the seam forbids and `test/console.test.ts` asserts.
 
 The prompt book hung there too until #244 and is now a **tab of the settings modal** below — same
 fetched-on-open route, same shell ownership, a findable place. It lists the prompt ids (each with the
@@ -63,7 +71,7 @@ un-block an issue from.
 
 **Nothing under `factory/` imports `api.js`.** Every mutation is enumerated on `CockpitActions`,
 pre-bound, so drawing code cannot grow a capability with no refusal rule behind it — it would surface
-only as a button nobody wrote a rule for. Asserted structurally in `test/factoryFloor.test.ts`.
+only as a button nobody wrote a rule for. Asserted structurally in `test/console.test.ts`.
 
 ### Tokens
 
@@ -77,12 +85,12 @@ a factory floor is rounded), `--font-ui|mono|display`, and `--border-hi`/`--bord
 pair that makes the bevel expressible.
 
 `factory.css` is imported from `main.tsx`, not from a module under `factory/`. A `.css` import there
-would be invisible to `tsx`, which has no CSS loader and would throw when `test/factoryFloor.test.ts`
+would be invisible to `tsx`, which has no CSS loader and would throw when `test/console.test.ts`
 pulls those modules in.
 
 ### The floor
 
-**Factory Floor** (`web/src/factory/`) — the dispatcher's decision drawn as a production line. The
+**Factory Floor** (`web/src/console/`) — the dispatcher's decision drawn as a production line. The
 fleet cap is a roboport with a pad per slot, each slot is a machine bay, the "Up next" queue is a
 belt of crates, and the headroom cut is a hazard-striped gate the belt backs up behind. It exists to
 make one claim visible that a column-per-subject layout makes you assemble by eye: **a bay runs only
@@ -97,11 +105,11 @@ it:
 - **The rocket means one thing: a goal closing.** `iconForStage('launch')` and
   `iconForEventKind('issue_closed')` are the only two places it appears. It used to be spent on
   `pr_merged` as well, which double-booked it and left the one event that _is_ a launch falling
-  through to a flask; `test/factoryFloor.test.ts` now asserts that nothing about a pull request wears
+  through to a flask; `test/console.test.ts` now asserts that nothing about a pull request wears
   it.
 - **The belt is the harness running, so it stops when the harness does** (paused, or held on
   recovery), as does the radar sweep. A belt still moving while no cycle will run is the one
-  genuinely misleading thing this layout could draw, so `test/factoryFloor.test.ts` asserts it rather
+  genuinely misleading thing this layout could draw, so `test/console.test.ts` asserts it rather
   than trusting the CSS. The same test pins the gate to the dispatching prefix — a gate that drifted
   off the cut would be confidently wrong, which is worse than no picture.
 - **The vocabulary is stated once**, in the pure `factory/vocabulary.ts`, so the belt and the bay
@@ -149,7 +157,7 @@ Four consequences to preserve:
 
 - **Document order is reading order**, so no panel carries an `order`. The `order` values that used
   to restore the reading order when the rails dissolved are gone with them; a panel moved in
-  `FactoryRoot` moves on the floor, which is the point. `test/factoryFloor.test.ts` pins the sequence
+  `FactoryRoot` moves on the floor, which is the point. `test/console.test.ts` pins the sequence
   and pins every panel as a _direct_ child of the grid — a wrapper re-introduced round any of them
   takes it out of the grid and its span rule then does nothing.
 - **The goal floor and the yard span the full width, and the goal floor's drawing grows into it.**
@@ -172,7 +180,7 @@ Four consequences to preserve:
   read across the top of the floor, and halving it would put the work you are the blocker for in a
   column beside the work you are not. It is drawn **only when something is on it** — a panel with
   nothing in it is not a panel — so a floor with an empty bench has no `bench` tile at all, which
-  `test/factoryFloor.test.ts` asserts from both sides along with the reading order.
+  `test/console.test.ts` asserts from both sides along with the reading order.
 
   It is a **panel and not a desk**. The three desks are counts in the status bar you open when you
   want them, which is right for things read as "how many"; this is a list you work through, and a
@@ -222,7 +230,7 @@ Four consequences to preserve:
   draws.** Open first, then at most four settled, dismissed ones on neither. The floor asks that
   question twice — a panel with nothing in it is not a panel — and deriving the visibility from the
   raw `humanTasks` instead is exactly how a bench of four dismissed rows draws as an empty panel.
-  `test/factoryFloor.test.ts` asserts both sides. The rows themselves keep arriving in the snapshot:
+  `test/console.test.ts` asserts both sides. The rows themselves keep arriving in the snapshot:
   the goal floor's close-out station reads one, so filtering them off the wire would silently turn a
   dismissed decline into "nothing was owed".
 
@@ -300,7 +308,7 @@ Five rules hold them:
   (`alert`, `gear`, `chest`, `blueprint`, `lamp`, `battery`, `flask`) so seven adjacent buttons stay
   legible. **The chevron is the narrower word** — it says _there is a panel behind this_ — so all seven carry
   one and `Scan`, which runs a pulse rather than opening anything, does not (`.fx-run`).
-  `test/factoryFloor.test.ts` counts the ways in by chevron for that reason.
+  `test/console.test.ts` counts the ways in by chevron for that reason.
 - **Only Alerts is ever red**, and that is the floor's existing rule rather than a new one: red means
   an agent is parked on a question only you can answer. A recorded fault blocks nothing (amber), a
   finding is something a bot noticed on its way past rather than something it is stuck on (amber),
@@ -318,7 +326,7 @@ Five rules hold them:
 - **A zero count mutes a gauge; it never removes it.** Faults is the only way to the fault log, which
   carries the two-step `clear` — a control that must not become unreachable because the log happens
   to be empty — and a gauge that vanished would reflow the bar every time its number left zero.
-  `test/factoryFloor.test.ts` asserts they survive a zero, counting the ways in by chevron. Power
+  `test/console.test.ts` asserts they survive a zero, counting the ways in by chevron. Power
   extends this from a muted count to an **absent reading**: no usage reported at all still draws the
   gauge and its way in.
 - **The alert bay is deleted, not relocated.** It was a one-line summary sitting above the panel that
@@ -367,7 +375,7 @@ fix, one level up. So a dropped socket **empties the floor**: the bar is the ide
 `Link · offline` reading, and the rails, the recovery banner, the modals and the drawer are not
 rendered at all — one `Off the air` card in their place. Nothing is being polled into a lie, the
 harness is unaffected and says so, and the reconnect brings the floor back by itself.
-`test/factoryFloor.test.ts` asserts both halves: one fleet reading and no second scan button while
+`test/console.test.ts` asserts both halves: one fleet reading and no second scan button while
 connected, and no gauge at all while not.
 
 #### What the floor draws beyond the queue
@@ -697,7 +705,7 @@ Seven properties, and they are what to preserve:
 - **The belt is the harness running.** A lit belt animates only while cycles run; paused or held on
   recovery, they all stop. `cold` is a different fact and a different class — an edge nothing can
   travel yet, because the machine behind it has not produced anything. Asserted in
-  `test/factoryFloor.test.ts` rather than trusted to the CSS.
+  `test/console.test.ts` rather than trusted to the CSS.
 
 **Two sources, with different jobs.** `/api/state` is the live reading and wins wherever both speak;
 `GET /api/work/issue:<n>` is fetched **once** when a floor is opened, never on a poll, and may only
@@ -819,7 +827,7 @@ while the machine's `link` — captioned `notice ↗`, never printing the ref, w
 appears only when `refUrls` has a URL for it. Keeping them apart is what lets a plan under a provider
 that builds no URLs still say a notice went out, without offering a way in that goes nowhere.
 `signalPostStatus` is a closed fold with a word per combination of the two signals, asserted arm by
-arm in `test/factoryFloor.test.ts`.
+arm in `test/console.test.ts`.
 
 `Machine.link` is `{ref, label} | null` and is **never set beside `prNumber`**: they share one corner
 of the node, so a machine claiming two ways out would draw one over the other. The test asserts that
@@ -911,13 +919,13 @@ hide a useful value while implying the invariant is not real.
 ### Tests
 
 `test/cockpitViewModel.test.ts` covers the derivations (untestable while they lived inside a
-component). `test/factoryFloor.test.ts` holds the structural no-`api` rule, and renders the floor
+component). `test/console.test.ts` holds the structural no-`api` rule, and renders the floor
 against the demo fixtures.
 
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative
 to `Date.now()` and the rendered relative times would drift between runs otherwise.
 
-`test/factoryFloor.test.ts` covers the floor's pure vocabulary exhaustively (every `QueueItem.status`
+`test/console.test.ts` covers the floor's pure vocabulary exhaustively (every `QueueItem.status`
 and every Goal Floor stage has a machine word; only `waiting` reads as jammed; the two `waiting`s do
 not read alike; a paused floor outranks every other diagnosis; every `StatusTone` resolves to a
 colour) plus each derivation added beside it: the floor's longest-path columns, lanes, fixtures,
@@ -1294,7 +1302,7 @@ the ladder, a `muted` scanner excepted, because policy saying a check does not c
 it does not hold — so the note and the ladder can never disagree about the same rung. The bottom
 rung, when clear, reads `next to merge`.
 
-`test/factoryFloor.test.ts` asserts both halves: the grouping and blocked-by fold, and that the
+`test/console.test.ts` asserts both halves: the grouping and blocked-by fold, and that the
 rendered rungs carry a toggle and a ladder apiece with no `Stacked` heading left under the rack.
 
 A stack is drawn whether or not a plan produced it — `from plan` versus `observed` — which is the
@@ -1393,7 +1401,7 @@ Plans panel drew rows whose `scope` was a tooltip. There was no way to say "show
 seam `select(agentId)` already uses for "which drawer is open is cockpit state, not floor state", and
 for the same reason: one implementation of the modal, while the floor keeps its own drawing of a plan
 elsewhere (the Goal Floor's assembly machines). `factory/` must not reach `api.js`
-(`test/factoryFloor.test.ts`), so the seam is the only way a floor-side button can open a shared
+(`test/console.test.ts`), so the seam is the only way a floor-side button can open a shared
 modal.
 
 **Two tabs**, because the decision view has to stay short enough to hold in your head:
@@ -1447,7 +1455,7 @@ between them they left the modal reachable only during the approval window.
   drawn out of one, and names the plan's status because that is the one fact deciding whether opening
   it is a decision or a reading.
 
-`test/factoryFloor.test.ts` asserts the floor's way in across **every** plan status rather than only
+`test/console.test.ts` asserts the floor's way in across **every** plan status rather than only
 the one that was broken, so a later attempt to hang it off a plate fails a test.
 
 ## The notepad modal

@@ -39,9 +39,9 @@ export function holdingLabel(holding: number): string {
 }
 
 /**
- * One row. `group === 'blocking'` is the same red/amber split the Factory
- * Floor draws — an agent is parked on this, not merely queued for the
- * operator — so it alone earns the urgent stripe and tag.
+ * One row. `group === 'blocking'` is the red half of a red/amber split — an agent
+ * is parked on this, not merely queued for the operator — so it alone earns the
+ * urgent stripe and tag.
  *
  * A row with a `goalRef` opens that goal; the recovery hold has none and is
  * answered on the banner above, so it renders as a `div`, not a `button` —

@@ -19,10 +19,11 @@ type CockpitStatus =
   | { kind: 'ready'; view: CockpitView; actions: CockpitActions };
 
 /**
- * Everything between the harness and the floor: the snapshot fetch, the websocket,
- * the coalescing refresh, and which drawer is open. The floor receives its output and never
- * see any of this — which is the point, since it is the half that must behave
- * identically whatever the cockpit looks like.
+ * Everything between the harness and the drawn surface: the snapshot fetch, the
+ * websocket, the coalescing refresh, and which drawer is open. The presentation
+ * layer receives its output and never sees any of this — which is the point,
+ * since it is the half that must behave identically whatever the cockpit looks
+ * like.
  */
 export function useCockpit(): CockpitStatus {
   const [state, setState] = useState<AppState | null>(null);

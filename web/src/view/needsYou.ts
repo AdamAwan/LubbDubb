@@ -12,8 +12,8 @@ export type NeedKind = 'recovery' | 'escalation' | 'permission' | 'proposal' | '
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
  * `yours` means the obligation is the operator's and nothing is waiting inside
- * the fleet. This is the floor's red/amber rule carried over intact — red means
- * an agent is parked on a question only you can answer, and nothing else.
+ * the fleet. Red/amber, and the split is strict — red means an agent is parked on
+ * a question only you can answer, and nothing else.
  */
 export type NeedGroup = 'blocking' | 'yours';
 

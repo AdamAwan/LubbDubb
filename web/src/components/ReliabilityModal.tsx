@@ -13,8 +13,8 @@ import { fmtUsd, relTime } from './util.js';
  * same phase vocabulary. Read side by side, one says where the money went and the
  * other says what it bought.
  *
- * **It lives here rather than under `factory/` because it fetches** — the floor
- * may not reach `api.js`, so the control is floor-side and `openReliability` on
+ * **It lives here rather than under `console/` because it fetches** — the console
+ * may not reach `api.js`, so the reading is console-side and `openReliability` on
  * the seam is the whole of what passes between them. Exactly the route the spend
  * panel, the retrospective and the notepad take.
  *

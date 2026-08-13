@@ -287,7 +287,7 @@ interface CockpitConfig {
 }
 
 /** Account-level Claude usage: the rolling cost windows, plus real limits when captured. */
-export interface CockpitUsage {
+interface CockpitUsage {
   windows: { fiveHourCostUsd: number; sevenDayCostUsd: number };
   /** Pro/Max only, via the PTY status-line capture. Null => the UI falls back to cost. */
   rateLimits: AccountRateLimits | null;
@@ -566,4 +566,4 @@ export type {
   RunTally,
 } from './reliabilityInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
-export type { Stack, StackRung } from './stacks/stack.js';
+export type { Stack } from './stacks/stack.js';

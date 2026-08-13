@@ -24,8 +24,8 @@ import { KIND_LABEL, holdingLabel } from './QueueRail.js';
  *
  * Every band embeds the *shared* component that owns its refusal rules —
  * `EscalationCard` for a question, a permission or a proposal, `HumanTaskActions`
- * for a bench task — wired exactly as the Factory Floor wires them. A second
- * wiring is a second way to answer a proposal with free text on one surface only.
+ * for a bench task — embedded, never redrawn. A second wiring is a second way to
+ * answer a proposal with free text on one surface only.
  *
  * What is deliberately not here: this goal's slice of the decision log. The
  * snapshot ships the last hundred audit rows fleet-wide and a cycle spends one of

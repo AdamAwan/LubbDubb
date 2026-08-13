@@ -1,7 +1,4 @@
 import { test } from 'node:test';
-import * as React from 'react';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,8 +9,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
-import type { PullRequest, StackLanding } from '../src/types.js';
-import type { StackLandingView } from '../src/wire.js';
+import type { PullRequest } from '../src/types.js';
 import { landingReadiness, rungFault, settleLandings } from '../src/stacks/landing.js';
 
 /**
@@ -317,104 +313,4 @@ test('a second click supersedes the first rather than racing it', () => {
   const standing = system.store.listStandingLandings();
   assert.equal(standing.length, 1, 'exactly one authorization covers a chain');
   assert.deepEqual(standing[0]?.rungs, [1, 2, 3]);
-});
-
-// ---------------------------------------------------------------------------
-// The rack states. A click whose effects arrive over the next several cycles
-// must leave a visible state, or it reads as having done nothing.
-// ---------------------------------------------------------------------------
-
-(globalThis as { React?: typeof React }).React = React;
-const { Inspection } = await import('../web/src/factory/components/Inspection.js');
-
-const STACK = {
-  ref: 'stack:1',
-  issueNumber: 12,
-  issueTitle: 'Fix the intake path',
-  planId: 'plan-12',
-  rungs: [
-    { prNumber: 1, title: 'store: schema', branch: 'issue/12/r1', base: 'main', position: 1, partSlug: null },
-    {
-      prNumber: 2,
-      title: 'thread the cursor',
-      branch: 'issue/12/r2',
-      base: 'issue/12/r1',
-      position: 2,
-      partSlug: null,
-    },
-    {
-      prNumber: 3,
-      title: 'refactor the reader',
-      branch: 'issue/12/r3',
-      base: 'issue/12/r2',
-      position: 3,
-      partSlug: null,
-    },
-  ],
-};
-
-function renderStack(view: StackLandingView): string {
-  return renderToStaticMarkup(
-    createElement(Inspection, {
-      prs: [],
-      closed: [],
-      stacks: [STACK],
-      stackLandings: [view],
-      refUrls: {},
-      ignoreLabel: '',
-      onToggleExclude: () => {},
-      onLandStack: () => {},
-    }),
-  );
-}
-
-/** A standing (or stopped) intent over the three rungs above. */
-function intent(status: 'standing' | 'stopped', reason: string | null): StackLanding {
-  return { id: 'land_1', ref: 'stack:1', rungs: [1, 2, 3], status, reason, createdAt: 'now', updatedAt: 'now' };
-}
-
-test('the rack offers the button when every rung is clear', () => {
-  const html = renderStack({ ref: 'stack:1', offer: true, blockedBy: null, landing: null, landed: 0 });
-  assert.match(html, /land the stack/);
-  assert.doesNotMatch(html, /disabled/, 'a clear chain is clickable');
-  assert.doesNotMatch(html, /landing ·/, 'nothing is in flight yet');
-});
-
-test('the rack withholds the button, and says which rung is holding it', () => {
-  const html = renderStack({ ref: 'stack:1', offer: false, blockedBy: '#3 CI failing', landing: null, landed: 0 });
-  assert.match(html, /land the stack/);
-  assert.match(html, /disabled/, 'the gate is the button, not a warning beside it');
-  // Named, not merely refused: a disabled control that says nothing is one an
-  // operator can only guess at.
-  assert.match(html, /#3 CI failing/);
-});
-
-test('the rack shows a landing in progress, with a way to stop it', () => {
-  const html = renderStack({
-    ref: 'stack:1',
-    offer: false,
-    blockedBy: '#2 checks not reported yet',
-    landing: intent('standing', null),
-    landed: 1,
-  });
-  assert.match(html, /landing · 1 of 3/, 'the count comes from the intent, not the shrinking stack');
-  assert.match(html, />stop</);
-  assert.doesNotMatch(html, /land the stack/, 'a chain already landing is not offered again');
-  // Mid-flight readiness is not a complaint: a rung whose checks are re-running
-  // after a retarget must not read as a problem on a chain that is working.
-  assert.doesNotMatch(html, /checks not reported yet/);
-});
-
-test('the rack shows a stopped chain, why, and offers the click again', () => {
-  const html = renderStack({
-    ref: 'stack:1',
-    offer: true,
-    blockedBy: null,
-    landing: intent('stopped', '#3 CI failing'),
-    landed: 1,
-  });
-  assert.match(html, /stopped · 1 of 3/);
-  assert.match(html, /#3 CI failing/, 'the reason survives on the rack, not only in the inbox');
-  assert.match(html, /land the stack/, 'looking again and clicking again is the re-authorization');
-  assert.doesNotMatch(html, /disabled/);
 });
