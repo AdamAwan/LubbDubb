@@ -3,6 +3,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import { TopBar } from './TopBar.js';
 import { QueueRail } from './QueueRail.js';
 import { GoalPage } from './GoalPage.js';
+import { Overview } from './Overview.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 
 /**
@@ -51,13 +52,20 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       <TopBar view={view} actions={actions} />
       {recovery}
       <div className="cn-body">
-        {/* The overview and the backlog fill in Tasks 7–8; a goal that resolves to
-            no page leaves the area empty here on purpose. */}
+        {/* The situation area has exactly two occupants today: a goal's page, or
+            the overview when none is selected. The backlog joins this choice in
+            Task 8 — until it does, `backlogOpen` is not consulted here, because a
+            surface drawn blank while a flag is set is worse than one not yet
+            reachable. */}
         <aside className="cn-rail">
           <QueueRail view={view} actions={actions} />
         </aside>
         <main className="cn-sit">
-          {view.goalPage !== null && <GoalPage page={view.goalPage} view={view} actions={actions} />}
+          {view.goalPage !== null ? (
+            <GoalPage page={view.goalPage} view={view} actions={actions} />
+          ) : (
+            <Overview view={view} actions={actions} />
+          )}
         </main>
       </div>
     </div>

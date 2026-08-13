@@ -415,7 +415,12 @@ const COURT_TONE: Record<string, string> = {
   done: 'cn-ok',
 };
 
-function courtTone(pr: OpenPullRequest): string {
+/**
+ * Exported for the overview's rack, which draws the same rows: whose court a PR
+ * is in must read identically on both surfaces, and two lookups of one map is
+ * how they come to differ by a tone nobody chose.
+ */
+export function courtTone(pr: OpenPullRequest): string {
   return COURT_TONE[pr.attention.status] ?? '';
 }
 
@@ -424,8 +429,12 @@ function courtTone(pr: OpenPullRequest): string {
  * categories, and the aggregate under its generic name when the provider reported
  * no per-check detail at all. No check name is written here — every one comes off
  * the verdict.
+ *
+ * Exported for the overview's rack for `courtTone`'s reason: the ladder is a
+ * reading of `ciVerdict`, and a second one written beside it would be a second
+ * chance to classify a check the policy already classified.
  */
-function CiLadder({ pr }: { pr: PullRequest }): JSX.Element | null {
+export function CiLadder({ pr }: { pr: PullRequest }): JSX.Element | null {
   const verdict = pr.ciVerdict;
   const dots: { name: string; tone: string }[] = [
     ...(verdict?.dispatch ?? []).map((m) => ({ name: m.name, tone: 'cn-fail' })),

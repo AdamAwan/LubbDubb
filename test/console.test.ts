@@ -404,3 +404,31 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
   const unmeasured = render({ ...v, goalPage: { ...page, issue: { ...page.issue, spend: null } } });
   assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
 });
+
+test('with no goal selected the overview draws its five cards', () => {
+  const html = render(view());
+  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'Up next', 'World signals']) {
+    assert.ok(html.includes(title), `the overview is missing ${title}`);
+  }
+});
+
+test('a queued item states why it is held, in the queue’s own words', () => {
+  const v = view();
+  const held = v.state.upcoming?.items.filter((i) => i.reason !== '');
+  if (!held?.length) return;
+  // Decoded: a queue reason quotes a part slug, and React escapes the quotes in
+  // the text node — the assertion is about the sentence, not its encoding.
+  const html = decode(render(v));
+  for (const item of held) assert.ok(html.includes(item.reason), `the queue dropped: ${item.reason}`);
+});
+
+test('an empty rack still draws — a surface that vanishes reads as one that broke', () => {
+  const v = view();
+  const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, pullRequests: [] } } });
+  assert.ok(html.includes('Pull requests'));
+});
+
+test('a goal row is a way into its page', () => {
+  const html = render(view());
+  assert.ok(html.includes('cn-goal-row'));
+});

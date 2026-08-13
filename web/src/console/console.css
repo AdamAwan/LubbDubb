@@ -668,6 +668,11 @@
   text-transform: none;
   letter-spacing: 0;
 }
+/* A zero mutes the reading rather than removing it — the way in to the ended
+   shifts stays exactly where an operator learned to look for it. */
+.cn-card > h3 .cn-more.cn-quiet {
+  opacity: 0.5;
+}
 .cn-rows {
   display: flex;
   flex-direction: column;
@@ -713,6 +718,17 @@ button.cn-row {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* The queue's reason is a whole sentence the server wrote, and the half that says
+   what is holding the item is usually the tail of it — so it wraps rather than
+   taking the row's ellipsis, which would hide exactly that half. */
+.cn-sub.cn-wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.cn-sub.cn-held {
+  color: var(--cn-amber);
 }
 .cn-num {
   font: 12px var(--cn-mono);
@@ -778,6 +794,14 @@ button.cn-row {
   display: flex;
   gap: 3px;
   align-items: center;
+}
+/* A goal row's own two readings sit at its end and keep their size: the track is
+   a count of parts, so it must not stretch with the title beside it. */
+.cn-goal-row .cn-track {
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 40%;
 }
 .cn-seg {
   width: 16px;
