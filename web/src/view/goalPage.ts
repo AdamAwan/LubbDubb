@@ -2,6 +2,7 @@ import type {
   Agent,
   AppState,
   CockpitDecision,
+  HumanTask,
   Issue,
   OpenPullRequest,
   Plan,
@@ -43,6 +44,17 @@ export interface GoalPageView {
   openPullRequests: OpenPullRequest[];
   closedPullRequests: PullRequest[];
   agents: Agent[];
+  /**
+   * Settled asks nobody has cleared off the bench yet — the page's settled tail.
+   *
+   * Open tasks are deliberately absent: those are `needs`, pinned above the page,
+   * and a second copy down here would be a second place to answer one. The filter
+   * is the dismiss route's own precondition (`status !== 'open'` and never
+   * dismissed), so every row drawn is a row the click can actually settle — the
+   * alternative is a control that 409s on exactly the rows an operator reaches
+   * for first.
+   */
+  settledTasks: HumanTask[];
   /** This goal's own slice of the decision log, newest first as the server ordered it. */
   decisions: CockpitDecision[];
 }
@@ -107,6 +119,9 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     openPullRequests: state.world.pullRequests.filter((pr) => partPrs.has(pr.number)),
     closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => partPrs.has(pr.number)),
     agents: state.agents.filter((a) => belongsToGoal(state.tasks.find((t) => t.id === a.taskId)?.originRef, ref)),
+    settledTasks: (state.humanTasks ?? []).filter(
+      (t) => t.status !== 'open' && t.dismissedAt === null && belongsToGoal(t.originRef, ref),
+    ),
     decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
   };
 }

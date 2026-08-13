@@ -18,21 +18,43 @@ import { AsyncButton } from './AsyncButton.js';
  * it, and posting first to report the same rule back would be that rule stated
  * twice, in the wrong place. The note is not ceremony: a planner shown only
  * "declined" has no reason to decide differently to the way it just decided.
+ *
+ * **Dismiss is the third control and the only one a settled row gets**, which is
+ * the route's own rule: an open obligation has two answers and neither of them is
+ * "hide it", so the verdicts and the clear-away are mutually exclusive here for
+ * the same reason they are in the store. It says nothing about the work — only
+ * that the operator has read the record — so it takes no note. A caller that
+ * passes no `onDismiss` draws nothing on a settled task rather than a dead button.
  */
 export function HumanTaskActions({
   task,
   buttonClass = 'ghost',
   onDone,
   onDecline,
+  onDismiss,
 }: {
   task: HumanTask;
   /** The caller's button modifiers — `cn-tgl` on a goal page, `ghost` in a modal. */
   buttonClass?: string;
   onDone: (id: string) => Promise<unknown> | unknown;
   onDecline: (id: string, note: string) => Promise<unknown> | unknown;
+  /** Clear a **settled** row off the bench. Absent on a surface that draws only open tasks. */
+  onDismiss?: (id: string) => Promise<unknown> | unknown;
 }) {
   const [note, setNote] = useState('');
   const [declining, setDeclining] = useState(false);
+  if (task.status !== 'open') {
+    if (!onDismiss) return null;
+    return (
+      <AsyncButton
+        className={buttonClass}
+        onClick={() => onDismiss(task.id)}
+        title="You have read this — clear it off the bench. It settles nothing and reopens nothing."
+      >
+        Dismiss
+      </AsyncButton>
+    );
+  }
   return (
     <>
       <span className="human-task-actions">
