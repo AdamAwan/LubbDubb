@@ -1,8 +1,9 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, Issue, QueueItem, WorldEvent } from '../types.js';
+import type { Agent, Issue, OpenPullRequest, QueueItem, WorldEvent } from '../types.js';
 import { buildGoalPage, buildGoalTrack, type GoalTrack } from '../view/goalPage.js';
+import { buildRack, type RackChain } from '../view/rack.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, linkify, refLink, relTime } from '../components/util.js';
 import { CiLadder, courtTone } from './GoalPage.js';
@@ -201,23 +202,28 @@ function Track({ track }: { track: GoalTrack }): JSX.Element {
 }
 
 /**
- * Every open pull request, and the toggle that takes one off the harness's books.
+ * Every open pull request — chains first, then what stands alone — and the two
+ * controls over them: the ignore toggle on a row, and landing on a chain.
  *
- * The toggle is **disabled rather than absent** with no ignore label configured:
- * the gate being off is a fact about the deployment worth seeing, and a control
- * that comes and goes with a config key reads as a bug in the page.
+ * Chains lead because a rung is not readable on its own: "behind" and a base
+ * branch nobody recognises are facts about the rung beneath it, and a flat list
+ * asks the operator to reassemble the chain from branch names on every read.
+ * Within a chain the order is `Stack.rungs`' — bottom-first, which is merge order.
+ *
+ * The ignore toggle is **disabled rather than absent** with no ignore label
+ * configured: the gate being off is a fact about the deployment worth seeing, and
+ * a control that comes and goes with a config key reads as a bug in the page.
  *
  * The merged count is drawn only where the snapshot carries a closed list at all.
  * Absent means the retention window is off — nothing was counted, which is not
  * the same claim as none merged.
  */
 function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const { refUrls, config } = view.state;
   const open = view.state.world.pullRequests;
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
   const goalOf = goalByPr(view);
-  const { ignoreLabel } = config;
+  const rack = buildRack(view.state);
 
   return (
     <section className="cn-card cn-span2">
@@ -227,43 +233,154 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
       </h3>
       <div className="cn-rows">
         {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
-        {open.map((pr) => {
-          const excluded = (pr.labels ?? []).includes(ignoreLabel);
-          const goal = goalOf.get(pr.number);
-          return (
-            <div className="cn-row" key={pr.number}>
-              <span className="cn-grow">
-                <b className="cn-name">
-                  {refLink(`#${pr.number}`, refUrls)} {pr.title}
-                </b>
-                <span className="cn-sub">
-                  {goal !== undefined && `${goalLabel(goal)} · `}
-                  {pr.branch}
-                </span>
-              </span>
-              <CiLadder pr={pr} />
-              <i className={`cn-chip ${courtTone(pr)}`} title={pr.attention.reasons.join(' · ')}>
-                {pr.attention.status}
-              </i>
-              <AsyncButton
-                className="ghost"
-                disabled={ignoreLabel === ''}
-                onClick={() => actions.setPrExcluded(pr.number, !excluded)}
-                title={
-                  ignoreLabel === ''
-                    ? 'No ignore label configured — the watch/ignore gate is off'
-                    : excluded
-                      ? `Remove the "${ignoreLabel}" tag and let the harness work this PR again`
-                      : `Tag this PR "${ignoreLabel}" so the harness leaves it alone`
-                }
-              >
-                {excluded ? 'watch' : 'ignore'}
-              </AsyncButton>
-            </div>
-          );
-        })}
+        {rack.chains.map((chain) => (
+          <Chain key={chain.stack.ref} chain={chain} view={view} actions={actions} goalOf={goalOf} />
+        ))}
+        {rack.loose.map((pr) => (
+          <PrRow key={pr.number} pr={pr} view={view} actions={actions} goal={goalOf.get(pr.number)} />
+        ))}
       </div>
     </section>
+  );
+}
+
+/**
+ * One chain, and the standing authorization over it.
+ *
+ * **`offer` decides whether the button may be clicked, and it is disabled rather
+ * than hidden**, carrying `blockedBy` as its title — the server's own first
+ * reason, quoted. Offering it while a rung above the bottom is unread would
+ * authorize merging code whose ladder the operator cannot see; hiding it would
+ * leave them with no account of why.
+ *
+ * A standing intent draws its progress off `landed` rather than counting merged
+ * rungs here: the intent's scope is the rung numbers captured at the click, so a
+ * rung stacked on afterwards is not in it, and a count taken from the chain as it
+ * reads *now* would silently claim otherwise. A stopped intent says so and offers
+ * the click again — `settleLandings` does not resume one, so re-authorizing is
+ * the only way back.
+ */
+function Chain({
+  chain,
+  view,
+  actions,
+  goalOf,
+}: {
+  chain: RackChain;
+  view: CockpitView;
+  actions: CockpitActions;
+  goalOf: Map<number, string>;
+}): JSX.Element {
+  const { stack, landing } = chain;
+  const intent = landing?.landing ?? null;
+  const standing = intent !== null && intent.status === 'standing';
+  const stopped = intent !== null && intent.status === 'stopped';
+  const blocked = landing === null || (!landing.offer && !standing);
+  const landed = landing?.landed ?? 0;
+
+  return (
+    <div className="cn-chain">
+      <div className="cn-chainhd">
+        <span className="cn-grow">
+          <b className="cn-name">
+            Stack of {chain.prs.length}
+            {stack.issueNumber !== null && ` · #${stack.issueNumber} ${stack.issueTitle ?? ''}`}
+          </b>
+          <span className="cn-sub">
+            {standing && `landing ${landed} of ${intent.rungs.length} · `}
+            {stopped && `landing stopped — ${intent.reason ?? 'a rung went red'} · `}
+            {!standing && !stopped && (landing?.blockedBy ?? 'every rung is clear')} ·{' '}
+            {stack.rungs.map((r) => `#${r.prNumber}`).join(' → ')}
+          </span>
+        </span>
+        <AsyncButton
+          className="ghost"
+          disabled={blocked}
+          onClick={() => actions.setStackLanding(stack.ref, !standing)}
+          title={
+            standing
+              ? 'Call the authorization off — the harness stops accepting this chain’s merges on its own'
+              : blocked
+                ? `Not ready to land: ${landing?.blockedBy ?? 'the harness has no readiness for this chain'}`
+                : 'Authorize the whole chain: each rung merges as the harness proposes it, bottom-first, over the pulses that follow'
+          }
+        >
+          {standing ? 'Landing' : 'Land the stack'}
+        </AsyncButton>
+      </div>
+      {chain.prs.map((pr, i) => (
+        <PrRow
+          key={pr.number}
+          pr={pr}
+          view={view}
+          actions={actions}
+          goal={goalOf.get(pr.number)}
+          rung={i + 1}
+          landed={standing && i < landed}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One pull request, drawn the same whether it stands alone or is a rung — the
+ * rung number and the landed mark are the only difference, because whose court it
+ * is in and which check is red are the same two verdicts either way.
+ */
+function PrRow({
+  pr,
+  view,
+  actions,
+  goal,
+  rung,
+  landed = false,
+}: {
+  pr: OpenPullRequest;
+  view: CockpitView;
+  actions: CockpitActions;
+  goal: string | undefined;
+  rung?: number;
+  landed?: boolean;
+}): JSX.Element {
+  const { refUrls, config } = view.state;
+  const { ignoreLabel } = config;
+  const excluded = (pr.labels ?? []).includes(ignoreLabel);
+  return (
+    <div className={`cn-row ${rung !== undefined ? 'cn-rung' : ''}`}>
+      {rung !== undefined && (
+        <i className="cn-rungn" title={landed ? 'Merged under the standing authorization' : `Rung ${rung}`}>
+          {landed ? '✓' : rung}
+        </i>
+      )}
+      <span className="cn-grow">
+        <b className="cn-name">
+          {refLink(`#${pr.number}`, refUrls)} {pr.title}
+        </b>
+        <span className="cn-sub">
+          {goal !== undefined && `${goalLabel(goal)} · `}
+          {pr.branch}
+        </span>
+      </span>
+      <CiLadder pr={pr} />
+      <i className={`cn-chip ${courtTone(pr)}`} title={pr.attention.reasons.join(' · ')}>
+        {pr.attention.status}
+      </i>
+      <AsyncButton
+        className="ghost"
+        disabled={ignoreLabel === ''}
+        onClick={() => actions.setPrExcluded(pr.number, !excluded)}
+        title={
+          ignoreLabel === ''
+            ? 'No ignore label configured — the watch/ignore gate is off'
+            : excluded
+              ? `Remove the "${ignoreLabel}" tag and let the harness work this PR again`
+              : `Tag this PR "${ignoreLabel}" so the harness leaves it alone`
+        }
+      >
+        {excluded ? 'watch' : 'ignore'}
+      </AsyncButton>
+    </div>
   );
 }
 

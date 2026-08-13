@@ -24,7 +24,7 @@ import type { Issue, IssueRelative } from './types.js';
 type IssueGroupKind = 'feature' | 'orphans' | 'untracked';
 
 /** One feature and the visible items under it. */
-interface IssueGroup {
+export interface IssueGroup {
   kind: IssueGroupKind;
   /**
    * The feature these items hang under, or null for the trailing group of items

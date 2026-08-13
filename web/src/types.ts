@@ -68,6 +68,7 @@ export type {
   SpendRun,
   Stack,
   StackLanding,
+  StackLandingView,
   Task,
   UpcomingPlan,
   WorldEvent,

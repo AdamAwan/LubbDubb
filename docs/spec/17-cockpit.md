@@ -302,6 +302,24 @@ that nothing has run — "not reached yet" is a fact about the goal worth seeing
 The write-up and the notepad carry a way in, each keyed on the document **existing** and on nothing the
 page is doing.
 
+### The settled tail
+
+**Settled asks**, behind a disclosure, below the tail: the goal's human tasks that are answered and
+that nobody has cleared off the bench. `buildGoalPage` folds them as `settledTasks` — `status !== 'open'`
+and `dismissedAt === null`, which is the dismiss route's own precondition, so every row drawn is a row
+the click can actually settle rather than one that 409s.
+
+**Open tasks are deliberately not here.** They are `needs`, pinned above the page, and a second copy
+below would be a second place to answer one. That split is the same rule the store states from its own
+side: an open obligation has two answers, and neither of them is "hide it"
+([16](16-http-api.md)) — so `HumanTaskActions` draws **Done/Decline on an open task and Dismiss on a
+settled one, never both**. Dismiss takes no note and says nothing about the work, only that the
+operator has read the record.
+
+Behind a disclosure rather than open, because an answered ask competing for the same eye as an open one
+is how the bands above stop reading as demands; the count stays in the header at zero, muted, so the
+way in does not move — the fleet's ended shifts follow the same rule.
+
 ### What the goal page deliberately does not draw
 
 **This goal's slice of the decision log.** `buildGoalPage` computes `decisions` — the rows whose
@@ -333,13 +351,15 @@ vanishes when quiet is indistinguishable from one that broke.
   folded into one. Each row is a way into that goal's page, carries its segment track, and takes a
   **court chip read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
   about it. Anything else would let a chip say "you" with nothing to answer.
-- **Pull requests** — every open PR with its court chip, its CI ladder, and the watch/ignore toggle.
-  A PR is joined to its goal through the **plan parts** rather than guessed from the branch name; a PR
-  nobody's plan claims is left out of that map and draws its branch instead, which is honest about what
-  is known. The toggle is **disabled rather than absent** with no ignore label configured: the gate
-  being off is a fact about the deployment worth seeing, and a control that comes and goes with a
-  config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a
-  closed list at all — absent means the retention window is off, which is not the claim "none merged".
+- **Pull requests** — the rack: chains first, then every PR that stands alone, each with its court
+  chip, its CI ladder, and the watch/ignore toggle. A PR is joined to its goal through the **plan
+  parts** rather than guessed from the branch name; a PR nobody's plan claims is left out of that map
+  and draws its branch instead, which is honest about what is known. The toggle is **disabled rather
+  than absent** with no ignore label configured: the gate being off is a fact about the deployment
+  worth seeing, and a control that comes and goes with a config key reads as a bug in the page. The
+  merged count is drawn only where the snapshot carries a closed list at all — absent means the
+  retention window is off, which is not the claim "none merged". The chains are
+  [below](#chains-and-landing-one).
 - **Up next** — the last pulse's ranked queue, each row carrying `QueueItem.reason` verbatim. The
   reason is the whole point of the card, being the direct answer to "are we working on the right
   thing", so it wraps rather than being clipped and nothing here re-words it. A held item is toned off
@@ -348,6 +368,39 @@ vanishes when quiet is indistinguishable from one that broke.
   comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
   first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
   again.
+
+### Chains and landing one
+
+`buildRack` (`web/src/view/rack.ts`) folds the open list into chains and what stands alone, off
+`state.stacks` and `state.stackLandings` — the server's own lens and its own readiness verdict. Walking
+`baseBranch` here would be a client-side second opinion about what stacks on what.
+
+**Chains lead, and a chain is one bordered block with its rungs numbered.** A rung is not readable on
+its own: `behind`, and a base branch nobody recognises, are facts about the rung beneath it, and a flat
+list asks the operator to reassemble the chain from branch names on every read. Order inside a chain is
+`Stack.rungs`' — bottom-first, which is merge order ([07](07-pull-requests.md#landing-a-stack)).
+
+**A chain the open list no longer holds whole is not drawn as one.** A header reading "stack of 3" over
+two rows claims a rung the operator cannot see, and the missing one is exactly the case worth not
+misreporting; its rungs fall back to being drawn beside the loose PRs, so nothing disappears.
+
+**The land button is disabled rather than hidden**, carrying `blockedBy` — the server's own first
+reason — as its title. `offer` decides it, and nothing here re-derives readiness: offering the click
+while a rung above the bottom is unread would authorize merging code whose ladder the operator cannot
+see, and hiding it would leave them with no account of why. The button posts through
+`CockpitActions.setStackLanding`, and the route asks `landingReadiness` again before recording, because
+a disabled button is a courtesy and not a gate.
+
+**A standing intent reports progress against its own scope** — `landed` of `landing.rungs.length`, not
+of the chain as it now reads. The authorization is the rung numbers captured at the click, so a rung
+stacked on afterwards is not in it, and a count taken from the chain today would silently claim
+otherwise. A **stopped** intent says so with its reason and offers the click again: `settleLandings`
+does not resume one, so re-authorizing is the only way back.
+
+Matching an intent to a chain by `ref` is safe **here** and nowhere else: the server has already done
+the rung-overlap join by the time the snapshot ships, so `stackLandings[i]` is that pulse's answer for
+the chain it derived under that ref rather than a fresh guess against a ref that moves on the first
+merge.
 
 ## The backlog
 
@@ -397,6 +450,30 @@ either direction, and a button that writes nothing is worse than one that says w
 
 Assignment filtering is a server-side concern (`workItemAssignedTo` for Azure; GitHub has no issue
 assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
+
+### The second axis
+
+**Watch state is the default and stays it** — it is the axis triage acts on, and every control on a row
+changes a value along it. The other question a backlog gets asked is _what is this part of_, and
+`groupByFeature` (`web/src/issueGroups.ts`) answers it: features as headings, their items beneath, the
+parentless group last.
+
+**The toggle is absent, not disabled, where the tracker reports no hierarchy.** `groupByFeature`
+returning `null` _is_ that check — no item reports a type or a parent, so there is no tree — and an axis
+with one possible arrangement is not a choice. This is the one control in the console that comes and
+goes, and it does so on a fact about the **tracker** rather than about the moment, which is the
+distinction that keeps it from reading as a bug in the page. Every GitHub-shaped world sees exactly the
+four watch groups and no switch at all.
+
+**A container is `pickup.status === 'container'`**, the dispatcher's own refusal, never a guess from
+`issueType`. A heading whose feature the world holds as an issue carries that row's own watch toggle; a
+heading reconstructed from a child's `parent` carries none, because there is nothing to operate on. The
+count states **both** numbers when they differ (`groupProgress`): "3 children" over two rows reads as a
+missing row, and "2" over a feature with three hides one.
+
+`Backlog` owns the axis as local state and renders `BacklogBody`, which takes it as a prop — the split
+exists so the tests can render both arrangements, and so that _how one operator is reading the backlog_
+never becomes part of the snapshot's derivation.
 
 ## The top bar and the panels
 
@@ -892,22 +969,11 @@ structurally in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAtte
 Stated rather than left to be discovered, because a snapshot field with no reader is indistinguishable
 from a reader that broke, and because each of these is a decision rather than an omission:
 
-- **`CockpitActions.setStackLanding` has no caller.** The console draws pull requests as a **flat
-  rack** — one row per open PR, ordered by the server, with the court chip and the CI ladder — and not
-  as chains. The stack model itself is unaffected and is the server's
-  ([07](07-pull-requests.md#landing-a-stack)); what is absent is a surface that authorizes landing a
-  whole chain. The seam keeps the method because the refusal rules behind it are the server's and a
-  future surface must reach them through here rather than through `api.js`.
 - **File overlaps ship in `/api/state` and no console surface draws the list.** Only
   `liveOverlapCount` is folded on the view model. [12](12-artifacts-and-files.md#file-overlap-detection)
   states this from the detector's side; it is not restated here.
-- **`groupByFeature` (`web/src/issueGroups.ts`) is drawn by nothing.** The Azure work-item tree arranged
-  the old flat world panel's rows; the backlog groups by watch state instead, which is the axis triage
-  acts on. The fold is pure and tested (`test/issueGroups.test.ts`) and is what a hierarchy view would
-  be built from.
-- **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
-  Up next is a reading rather than a control; the rail carries only `open` human tasks, so there is no
-  settled tail to dismiss from; and the work graph is shell-owned and reaches its own route directly.
+- **`reorderUpNext` and `fetchWorkSubtree` have no caller.** The overview's Up next is a reading rather
+  than a control, and the work graph is shell-owned and reaches its own route directly.
 - **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
   nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`
   instead, which is what the agent chose to say rather than whatever its last line happened to be.
@@ -948,13 +1014,15 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Four files, split on what they can see:
+Five files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
 - `test/needsYou.test.ts` — the merged queue and, first among them, its ordering.
 - `test/goalPage.test.ts` — the page's assembly: which parts, PRs, agents and decisions belong to a
   goal, and the prefix trap `issue:14` versus `issue:1`.
+- `test/rack.test.ts` — the chain fold: every open PR drawn exactly once, the server's readiness carried
+  through untouched, a partial chain refused without losing its rungs, and bottom-first order kept.
 - `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
 
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
@@ -972,3 +1040,10 @@ groups and its disabled container toggle, the fault log keeping its clear at zer
 out, the demo gate on injection, the precedence between a goal, the backlog and the overview, the
 recovery banner outside the situation area, a dropped socket drawing nothing at all, and the shell
 rendering the drawer the console only asks for.
+
+The three surfaces added for capabilities that had shipped with no reader are pinned the same way: a
+chain drawn as one block with its rungs bottom-first, the land button disabled while quoting the
+server's own reason, a standing intent counted against its **own** rungs rather than the chain as it
+now reads, a partial chain not drawn as one, the second axis offered only where the tracker reports a
+hierarchy and never both axes at once, and Dismiss on a settled task with neither verdict beside it —
+nor Dismiss on an open one, which is the store's 409 stated on this side of the wire.

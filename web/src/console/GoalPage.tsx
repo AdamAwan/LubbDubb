@@ -59,6 +59,7 @@ export function GoalPage({
           <OnThisGoal page={page} view={view} actions={actions} />
           <Spend issue={page.issue} />
           <Tail issue={page.issue} actions={actions} />
+          <SettledAsks page={page} view={view} actions={actions} />
         </div>
       </div>
     </div>
@@ -515,6 +516,72 @@ function OnThisGoal({
           </button>
         ))}
       </div>
+    </section>
+  );
+}
+
+/**
+ * What this goal asked of you and got — the settled rows, behind a disclosure,
+ * each with the one control a settled row has.
+ *
+ * Behind a disclosure rather than open, and **below the tail rather than above
+ * the plan**: these are answered, and an answered ask competing for the same eye
+ * as an open one is how the bands above stop reading as demands. The count stays
+ * in the header at zero, muted, so the way in does not move — the same rule the
+ * fleet's ended shifts follow.
+ *
+ * Each row states the operator's own note where they left one. `resolution` is
+ * required on a decline and the planner is handed it verbatim, so a paraphrase
+ * here would be a second account of a decision that already has one.
+ */
+function SettledAsks({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const tasks = page.settledTasks;
+  return (
+    <section className="cn-card">
+      <h3>
+        Settled asks <i className="cn-n">{tasks.length}</i>
+        <button
+          type="button"
+          className={`cn-more ${tasks.length === 0 ? 'cn-quiet' : ''}`}
+          onClick={() => setOpen(!open)}
+          title="Asks on this goal that are already answered — dismiss clears one off the bench"
+        >
+          {open ? 'hide ⌄' : 'show ›'}
+        </button>
+      </h3>
+      {open && (
+        <div className="cn-rows">
+          {tasks.length === 0 && <p className="cn-empty">Nothing settled is still on the bench.</p>}
+          {tasks.map((task) => (
+            <div className="cn-row cn-spent" key={task.id}>
+              <span className="cn-grow">
+                <b className="cn-name">{task.title}</b>
+                <span className="cn-sub">
+                  {task.status}
+                  {task.resolvedAt !== null && ` · ${relTime(task.resolvedAt, view.now)}`}
+                  {task.resolution !== null && ` · “${task.resolution}”`}
+                </span>
+              </span>
+              <HumanTaskActions
+                task={task}
+                buttonClass="cn-btn"
+                onDone={(id) => actions.completeHumanTask(id)}
+                onDecline={(id, note) => actions.declineHumanTask(id, note)}
+                onDismiss={(id) => actions.dismissHumanTask(id)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

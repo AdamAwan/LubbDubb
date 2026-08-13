@@ -1108,6 +1108,54 @@ button.cn-row {
 .cn-backlog {
   max-width: 1100px;
 }
+/* The axis switch sits above the first heading rather than inside a card: it
+   arranges the cards, so it cannot live in one of them. */
+.cn-axis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  font-size: 11.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+}
+/* ---------- the rack's chains ---------- */
+/* A chain is one bordered block so a rung cannot be read as a standalone PR: the
+   indent alone survives neither a narrow viewport nor a scroll that puts the
+   header off-screen. */
+.cn-chain {
+  border-bottom: 1px solid var(--cn-line-soft);
+}
+.cn-chain:last-child {
+  border-bottom: 0;
+}
+.cn-chainhd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--cn-panel-2);
+  min-width: 0;
+}
+.cn-chain .cn-row {
+  padding-left: 26px;
+}
+.cn-chain .cn-row:last-child {
+  border-bottom: 0;
+}
+/* Merge order, stated as a number rather than only as position — the rows scroll,
+   and "bottom-first" is unreadable once the header is gone. */
+.cn-rungn {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font: 600 10.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  border: 1px solid var(--cn-line);
+  border-radius: 99px;
+  padding: 1px 0;
+}
 
 /* ---------- production graph ---------- */
 .cn-prod svg {

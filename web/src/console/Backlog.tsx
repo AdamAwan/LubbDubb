@@ -1,9 +1,10 @@
-import type { JSX } from 'react';
+import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { refLink } from '../components/util.js';
+import { groupByFeature, groupProgress, type IssueGroup } from '../issueGroups.js';
 import { watchBucket } from '../worldBuckets.js';
 
 /**
@@ -101,14 +102,166 @@ export function backlogGroups(view: CockpitView): BacklogGroups {
   return groups;
 }
 
+/**
+ * The tracker's own answer to "is this a thing work happens at", never a guess
+ * from `issueType`: the dispatcher already refuses to pick a container up and says
+ * so on `pickup.status`, and a second predicate here — a name list, a type match —
+ * would be a different answer to the same question on the same screen.
+ */
+function isContainer(issue: Issue): boolean {
+  return issue.pickup.status === 'container';
+}
+
+/**
+ * Every open item, in tracker order — what the feature axis arranges, before any
+ * grouping. `backlogGroups` narrows the same rows on the watch axis.
+ */
+function openIssues(view: CockpitView): Issue[] {
+  return view.state.world.issues.filter((issue) => issue.state === 'open');
+}
+
+/**
+ * The two axes the backlog can be read on, and the rule for offering the second.
+ *
+ * **Watch state is the default and stays it**: it is the axis triage acts on, and
+ * every control on a row changes a value along it. The feature axis answers the
+ * other question — what is this part of — which only a tracker with a hierarchy
+ * can answer at all.
+ *
+ * `groupByFeature` returning null *is* that check, so the toggle is absent rather
+ * than disabled on GitHub-shaped worlds: an axis with one possible arrangement is
+ * not a choice, and a control offering it would promise a view the tracker cannot
+ * produce. This is the one place in the console where a control comes and goes,
+ * and it does so on a fact about the tracker rather than about the moment.
+ */
 export function Backlog({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const [byFeature, setByFeature] = useState(false);
+  return <BacklogBody byFeature={byFeature} onAxis={setByFeature} view={view} actions={actions} />;
+}
+
+/**
+ * The backlog with its axis handed in — the whole surface, minus the one piece of
+ * state.
+ *
+ * Split out for the test, which renders to static markup and so can hold a switch
+ * but never throw one. The alternative was carrying the axis on the view model,
+ * which would make how one operator is *reading* the backlog part of the
+ * snapshot's derivation.
+ *
+ * @public rendered by {@link Backlog}, and by `test/console.test.ts` on both axes
+ */
+export function BacklogBody({
+  byFeature,
+  onAxis,
+  view,
+  actions,
+}: {
+  byFeature: boolean;
+  onAxis: (byFeature: boolean) => void;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
   const groups = backlogGroups(view);
+  const features = groupByFeature(openIssues(view), isContainer);
+
   return (
     <div className="cn-backlog">
-      {GROUP_ORDER.map((group) => (
-        <Group key={group} group={group} issues={groups[group]} view={view} actions={actions} />
-      ))}
+      {features !== null && (
+        <div className="cn-axis">
+          Group by
+          <button
+            type="button"
+            className={`cn-tgl ${byFeature ? '' : 'cn-watch'}`}
+            onClick={() => onAxis(false)}
+            title="Arrange by what the harness will do with each item — the axis every control on a row changes"
+          >
+            Watch state
+          </button>
+          <button
+            type="button"
+            className={`cn-tgl ${byFeature ? 'cn-watch' : ''}`}
+            onClick={() => onAxis(true)}
+            title="Arrange under the features these items hang from, as the tracker reports them"
+          >
+            Feature
+          </button>
+        </div>
+      )}
+      {byFeature && features !== null
+        ? features.map((group, i) => (
+            <FeatureGroup
+              key={group.feature?.number ?? `${group.kind}-${i}`}
+              group={group}
+              view={view}
+              actions={actions}
+            />
+          ))
+        : GROUP_ORDER.map((group) => (
+            <Group key={group} group={group} issues={groups[group]} view={view} actions={actions} />
+          ))}
     </div>
+  );
+}
+
+/**
+ * One feature and the items under it.
+ *
+ * The heading states **both** numbers when they differ, which is
+ * {@link groupProgress}'s whole reason: "3 children" over two rows reads as a
+ * missing row, and "2" over a feature with three hides one.
+ *
+ * A heading with a `featureIssue` carries that item's own watch toggle — the
+ * feature is a row the world holds, and it is watchable like any other even
+ * though nothing is ever dispatched at it. A reconstructed heading carries none:
+ * there is no row to operate on, and a control that wrote nothing would be worse
+ * than its absence.
+ */
+function FeatureGroup({
+  group,
+  view,
+  actions,
+}: {
+  group: IssueGroup;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const { watchLabel, ignoreLabel } = view.state.config;
+  const { shown, children } = groupProgress(group);
+  const feature = group.featureIssue;
+
+  return (
+    <>
+      {group.kind !== 'untracked' && (
+        <div className="cn-grpname">
+          {group.kind === 'orphans' ? 'No parent feature' : `#${group.feature?.number} ${group.feature?.title ?? ''}`}
+          <i className="cn-n">{children !== null && children !== shown ? `${shown} of ${children}` : shown}</i>
+          {feature !== null && (
+            <span className="cn-hint">
+              <WatchToggle
+                issue={feature}
+                group={groupOf(feature, watchLabel, ignoreLabel)}
+                view={view}
+                actions={actions}
+              />
+            </span>
+          )}
+        </div>
+      )}
+      <section className="cn-card">
+        <div className="cn-rows">
+          {group.issues.length === 0 && <p className="cn-empty">Nothing open under this feature.</p>}
+          {group.issues.map((issue) => (
+            <Row
+              key={issue.id}
+              issue={issue}
+              group={groupOf(issue, watchLabel, ignoreLabel)}
+              view={view}
+              actions={actions}
+            />
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
 
