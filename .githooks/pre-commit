@@ -1,0 +1,74 @@
+#!/bin/sh
+#
+# Prettier gate, run against the *index* rather than the working tree.
+#
+# That distinction is the whole point. On a Windows checkout with
+# `core.autocrlf=true` every working-tree file has CRLF line endings, and
+# Prettier's `endOfLine: "lf"` default calls all of them unformatted — so a hook
+# that ran `prettier --check` over the files on disk would fail every commit for
+# a reason CI never sees. `git show :<path>` hands back the blob as it will be
+# committed (LF-normalised), which is byte-for-byte what CI checks out.
+#
+# Installed by the `prepare` script in package.json, which points
+# `core.hooksPath` at this directory. `git commit --no-verify` skips it.
+
+set -e
+
+# Resolved once, through node's own lookup rather than `node_modules/.bin/`.
+# An agent worktree under `.claude/worktrees/` has no `node_modules` of its own
+# and borrows the parent checkout's, where the `.bin/` shim does not reach — and
+# `npx` costs about a second per file, which is the difference between a hook
+# people keep and one they disable.
+prettier_cjs=$(node -e "const{dirname,join}=require('path');process.stdout.write(join(dirname(require.resolve('prettier/package.json')),'bin','prettier.cjs'))" 2>/dev/null || true)
+if [ -f "$prettier_cjs" ]; then
+  prettier="node $prettier_cjs"
+else
+  prettier='npx --no-install prettier'
+fi
+
+# The same set format:check covers. Anything outside it is not CI's business.
+globs='^(src|test)/.*\.ts$|^web/.*\.tsx?$|^scripts/[^/]*\.ts$|^[^/]*\.(json|md)$'
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "$globs" || true)
+[ -n "$staged" ] || exit 0
+
+blob=$(mktemp)
+trap 'rm -f "$blob"' EXIT
+
+# Partial staging is decided here, before anything is rewritten — once Prettier
+# has touched the working tree every file looks partially staged. A file staged
+# whole can be re-staged after formatting; one with unstaged edits beside it
+# cannot, or the commit sweeps in work the author deliberately left out.
+unformatted=''
+partial=''
+restage=''
+for file in $staged; do
+  git show ":$file" > "$blob"
+  if $prettier --stdin-filepath "$file" < "$blob" | diff -q "$blob" - > /dev/null 2>&1; then
+    continue
+  fi
+  unformatted="$unformatted $file"
+  if [ -n "$(git diff --name-only -- "$file")" ]; then
+    partial="$partial $file"
+  else
+    restage="$restage $file"
+  fi
+done
+
+[ -n "$unformatted" ] || exit 0
+
+echo "pre-commit: reformatting$unformatted"
+# shellcheck disable=SC2086
+$prettier --write --log-level warn $unformatted
+
+if [ -n "$restage" ]; then
+  # shellcheck disable=SC2086
+  git add -- $restage
+  echo "pre-commit: re-staged$restage"
+fi
+
+if [ -n "$partial" ]; then
+  echo "pre-commit: formatted but NOT staged, because these are partially staged:$partial" >&2
+  echo "pre-commit: review them, 'git add' what you want, then commit again." >&2
+  exit 1
+fi

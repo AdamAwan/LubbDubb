@@ -3,3 +3,7 @@
 # and the test fails for a reason that has nothing to do with the cockpit. The
 # test normalises too — this just stops the working copy diverging in the first
 # place.
+
+# Hook scripts must stay LF: git runs them through sh, and CRLF makes the
+# shebang unparseable on any non-Windows checkout.
+.githooks/* text eol=lf

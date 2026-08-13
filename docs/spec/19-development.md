@@ -122,9 +122,38 @@ AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@p
   one to fix. One abandoned worktree was enough to bury `src/`, `test/` and `web/` under 2,644
   duplicate errors — the gate stays useful only while its output is about the checkout you are in.
 - **format:check** is Prettier in check mode over `src/**/*.ts`, `test/**/*.ts`, `web/**/*.{ts,tsx}`,
-  `scripts/*.ts` and root-level `*.{json,md}`. Run `npm run format` to fix; do not hand-format.
+  `scripts/*.ts` and root-level `*.{json,md}`. Run `npm run format` to fix; do not hand-format. The
+  pre-commit hook below normally means it never fails.
 
 CI additionally runs `npm run smoke` and coverage, and there are CodeQL and security workflows.
+
+## The pre-commit hook
+
+`.githooks/pre-commit` formats what you are about to commit, so that formatting is not something CI
+tells you about ten minutes later. `package.json`'s `prepare` script points `core.hooksPath` at
+`.githooks/`, so `npm ci` installs it; `git commit --no-verify` skips it. It is deliberately the one
+stage of the gate that runs here — the others are whole-tree analyses that a per-commit hook cannot
+run cheaply, and a slow hook is a hook people disable.
+
+Two decisions in it are not obvious:
+
+- **It reads the index, not the working tree.** Each staged path is fetched with `git show :<path>`
+  and piped through `prettier --stdin-filepath`. That blob is LF-normalised — byte-for-byte what CI
+  checks out — whereas the file on disk in a Windows checkout with `core.autocrlf=true` has CRLF
+  endings, which Prettier's `endOfLine: "lf"` default reports as unformatted. A hook checking the
+  working tree would fail every commit on a Windows machine over a difference CI never sees.
+- **A partially staged file is formatted but not re-staged.** The hook re-stages only files with no
+  unstaged edits beside them, and the partial/whole split is computed _before_ Prettier writes
+  anything — afterwards everything looks partially staged. Files it cannot re-stage are named and
+  the commit is refused, rather than quietly committing work you left out of `git add -p`.
+
+Prettier is located once per run through node's own resolution, not `node_modules/.bin/`. A worktree
+under `.claude/worktrees/` has no `node_modules` of its own and borrows the parent checkout's, where
+the `.bin/` shim does not reach; the honest fallback is `npx`, which costs about a second per file
+and is the difference between a hook people keep and one they disable.
+
+`.gitattributes` pins `.githooks/*` to `eol=lf`: git runs hooks through `sh`, and a CRLF shebang
+line is unparseable on any non-Windows checkout.
 
 ## What holds the documentation honest
 
