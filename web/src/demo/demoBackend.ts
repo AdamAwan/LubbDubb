@@ -477,6 +477,10 @@ class DemoServer {
       check.resultAt = act.kind === 'reset' ? null : new Date().toISOString();
       check.deferUntil = null;
       check.handbackNote = null;
+      // The reading is in, so the run is over — the same clearing the store does,
+      // and without it the demo would draw "running at …" beside a settled check.
+      check.claimedBy = null;
+      check.claimedAt = null;
       this.dirty();
     }
     return { ok: true };

@@ -31,6 +31,7 @@ import { ProposalDesk } from './proposals/proposalDesk.js';
 import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
+import { McpDesktopServer } from './mcp/desktop.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
@@ -126,6 +127,14 @@ export interface System {
    * is the same entry point an agent's bridge lands on.
    */
   mcp: McpBridgeServer;
+  /**
+   * The operator's own Claude Code channel — validation checks run at their
+   * keyboard, on a machine that can reach what the fleet cannot. Always present
+   * and always constructed, but it binds nothing and writes no credential until
+   * `listen()` is called, which `main.ts` only does when
+   * `config.validation.desktop` is on.
+   */
+  desktop: McpDesktopServer;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
 }
@@ -327,6 +336,23 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       defaultBranch: config.defaultBranch,
       prompts,
     }),
+    errors,
+  });
+
+  // The desktop channel (the operator's own Claude Code). Constructed
+  // unconditionally so `system.desktop` is addressable, and inert until
+  // `listen()` — which is the only thing that binds the stable socket or writes
+  // a credential into the operator's home directory. Neither should happen
+  // because a deployment took the defaults, which is why `validation.desktop`
+  // is off by default and `main.ts` reads it before calling.
+  const desktop = new McpDesktopServer({
+    store,
+    validationEnabled: config.validation.enabled,
+    claimMinutes: config.validation.desktopClaimMinutes,
+    validationRoot: config.validationRoot,
+    now: () => new Date().toISOString(),
+    socketPath: config.validation.desktopSocketPath,
+    credentialPath: config.validation.desktopCredentialPath,
     errors,
   });
 
@@ -598,6 +624,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fileEvents,
     attachments,
     mcp,
+    desktop,
     errors,
   };
 }

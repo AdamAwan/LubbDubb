@@ -135,6 +135,12 @@ The hand-over is what that person does with the nomination, and it is offered on
 check rather than only on a nominated one: an operator who knows their own deployment does not need
 the planner's permission to use it.
 
+There is a **third** runner, and it is the answer to the same problem from the other side: the
+operator's own Claude Code, on the operator's own machine, which has the browser and the login the
+fleet does not. See [the desktop channel](#the-desktop-channel). It is not an `actor` — nobody
+dispatches it and it runs whatever it is pointed at — so what it writes on the row is a **claim**
+while it runs and a `desktop` attribution on the reading afterwards.
+
 ### `covers`, and what one optional field buys
 
 Validation is **goal-level**, not per part — a check usually spans parts, and the question it answers
@@ -296,7 +302,7 @@ other rule ([05](05-dispatcher.md#the-rule-book)). A **code** agent — a check 
 branch namespace is `assess/issue/<n>`'s: git stores refs as files, so nothing bare is ever cut, and
 the check id is on both the branch and the origin so two handed-over checks get two worktrees.
 
-Four conditions, and each is somebody's decision rather than the harness's:
+Five conditions, and each is somebody's decision rather than the harness's:
 
 - The issue passes the watch gate.
 - **The goal is parked as delivered.** A check is executed against the delivered goal; run mid-flight
@@ -306,6 +312,11 @@ Four conditions, and each is somebody's decision rather than the harness's:
 - `actor` is `fleet`.
 - `state` is `unrun`. A settled check carries somebody's answer, and re-running one behind the person
   who settled it would overwrite their reading with an agent's.
+- **No live claim.** A desktop session takes a check before it runs it; dispatching underneath one
+  would put two things in the same environment against the same procedure, with the second reading
+  overwriting the first and neither knowing the other existed. Read through `claimIsLive`, never off
+  `claimed_by`, so a claim whose session died means the same thing here as it does to a person trying
+  to take one — otherwise a killed session blocks a check from the fleet forever.
 
 **One origin per check, not one per goal.** The origin is what the cooldown and the three-attempt cap
 are keyed on, so a shared one would let a check that can never be run spend the attempts of the four
@@ -373,6 +384,82 @@ flight would describe the wrong attempt.
 Off the cockpit, `outstandingChecks` says which of the two a check is in — `(handed to the fleet)` or
 `(the fleet handed this back — …)`. Without them both render as a bare `unrun`, which is the same
 word for "nobody has got to it", "an agent is about to" and "an agent tried and could not".
+
+## The desktop channel
+
+A check that needs a browser, a login and a real environment is a check the fleet cannot run — and
+`handback` is the honest answer to it, not a fix. The fix is that the operator's **own** Claude Code
+can run it, on the machine that has all three, and report the reading onto the same row.
+
+So the harness listens on a second MCP socket (`src/mcp/desktop.ts`,
+[11](11-mcp-tools.md#the-desktop-channel)) that the operator registers in Claude Code **once**. Off
+by default (`validation.desktop`), because unlike everything else in this document it has a footprint
+outside the harness: a credential in a home directory, a skill installed into their Claude Code, and
+a socket at a fixed path.
+
+### The three tools
+
+`validation_read` a goal's plan, `validation_claim` the one check you are going to run,
+`validation_report` what you saw. Three and no more, and narrowed by construction rather than by a
+filter over the fleet's set — this credential is long-lived and lives in a home directory, so the
+guarantee has to be that there is no code path from a desktop connection to `conclude_work` at all,
+not that a list is currently short.
+
+`validation_report` exists in both channels and is two tools sharing one schema, one set of store
+writes and one hand-back wording. What differs is where the check comes from: the fleet's from the
+origin it was dispatched on, the desktop's from what the session claimed. Both are the same rule —
+**which check a report is about is settled before the report rather than by it.**
+
+### The claim
+
+**One check at a time, across the whole harness.** Not one lock per check, and that is the operator's
+own constraint rather than a limit invented here: there is one working copy, and two things reaching
+for it is the failure. A per-check lock would happily let two sessions take two checks and fight over
+the same checkout, which is exactly what was ruled out when a priority-and-bench design was rejected.
+A second claim is refused by name, pointing at the check that holds it.
+
+A claim is released three ways, and needs all three:
+
+- **The report lands.** The reading is in, so the run is over — including a hand-back.
+- **The session's socket closes.** Closing the terminal is how a desktop run normally ends. The
+  release is per **connection**, not per credential: two terminals share one token, and a claim that
+  belonged to the credential would let the second release the first one's check.
+- **It expires**, after `validation.desktopClaimMinutes`. The case neither of the others can cover is
+  a harness killed between the claim and the release, and without an expiry that leaves a check
+  blocked from the fleet forever with no way back short of editing the database.
+
+An **amendment that rewords a claimed check releases the claim**, by exactly the predicate that drops
+the result and the hand-over. Somebody is running that check right now against wording that no longer
+exists, and the amber band is now in front of the operator saying so.
+
+### What a desktop reading is worth
+
+`result_by` is `desktop`, which is neither of the other two and says so wherever the reading is
+drawn. `operator` means a person carried the steps out — what a validation checklist already means,
+which is why it is the one that draws no marker. `agent` means the fleet ran it unattended. `desktop`
+means the operator's own Claude ran it at their keyboard: stronger than the fleet's, because it
+reached the real environment, and weaker than a person's, because no person did the steps. A reader
+deciding whether to re-run a check before closing a goal is deciding on exactly that difference.
+
+### The skill
+
+`/lubbdubb 284:C`. Installed to `validation.desktopSkillPath` when the channel starts, from
+`DESKTOP_SKILL` in `src/validation/desktopSkill.ts` — a string in a `.ts` module rather than a `.md`
+asset, the prompt templates' reason: the build emits `.ts` and nothing copies a stray `.md` into
+`dist`, so an asset works in development and is missing in a deployment. There is no second copy
+under `docs/` for the same reason: one of them would be the stale one.
+
+The skill is the interface, not a convenience. Without it the operator types the same six sentences
+at their Claude every time — which is the friction the whole channel exists to remove, and the reason
+the bench design was rejected. It says what the three answers mean, that `handback` is a right
+answer, and the two things a session with the repository open is most able to do wrong: report
+`passed` from evidence it did not gather, and change code to make a check pass. Everything about
+_how_ to run a given check comes back from the tools, which read the live plan; a skill that restated
+any of it would be a second copy of the procedure, drifting.
+
+It is always overwritten, and says so in its own body — telling an operator's edits from a stale copy
+has no honest implementation, and a skill that silently stopped being refreshed would describe a
+channel that had since changed. `validation.desktopSkill` turns the writing off.
 
 ## Deferral and waiving
 
@@ -464,8 +551,8 @@ saying nothing.
 delegated to under the same method names ([14](14-persistence.md#shape)).
 
 - **`validation_checks`** — `plan_id`, `id`, `letter`, `seq`, `title`, `check_do`, `check_expect`,
-  `uses`, `covers`, `fleet_candidate`, `candidate_why`, `actor`, `handback_note`, `state`,
-  `result_note`, `result_by`,
+  `uses`, `covers`, `fleet_candidate`, `candidate_why`, `actor`, `handback_note`, `claimed_by`,
+  `claimed_at`, `state`, `result_note`, `result_by`,
   `result_at`, `defer_until`, `superseded_reason`, `created_at`, `updated_at`. `check_do` rather than
   `do` because DO is a SQLite keyword; `check_expect` follows it so the pair reads as a pair.
   `revision` is JSON — the wording an amendment replaced and the reading it withdrew, kept as one
@@ -479,9 +566,18 @@ them every database from before `validation_amend` would have read `undefined` f
 silently drawn no band at all ([14](14-persistence.md#migrations)). `actor` and `handback_note`
 arrived the change after that and fail the same way, more quietly still: a column whose absence
 reads as `human` is one whose absence is invisible, and the hand-over control would simply never
-take. `issue_runs` gained `dismiss_note` the same way.
+take. `claimed_by` and `claimed_at` arrived with the desktop channel and are quieter still: their
+absence reads as "nothing is claimed", which is true of every database that predates them and stays
+true forever afterwards — the claim would never be written, so the fleet would keep dispatching
+checks a person was in the middle of running, on precisely the deployments that upgraded rather than
+started fresh. `issue_runs` gained `dismiss_note` the same way.
 
-`result_by` needed no migration — the column existed and only gained a value it may hold. `rowToCheck`
+A row carrying one half of a claim without the other reads as claimed by nobody, which is the safe
+direction here for `actor`'s reason inverted: an unreadable claim becoming live would block the fleet
+from a check forever.
+
+`result_by` needed no migration when it gained `agent`, nor again when it gained `desktop` — the
+column existed and only gained values it may hold. `rowToCheck`
 narrows it, `checkStateOf`'s sharp edge: a reading attributed to something this does not recognise
 reads as attributed to nobody, and `actor` narrows the same way, to `human`, because an unreadable
 column becoming a hand-over would dispatch an agent nobody asked for.
@@ -492,6 +588,13 @@ The plan sheet gains a **Validation** section (`web/src/components/ValidationSec
 parts and the caveats, with a rail entry carrying the settled count — the reading order is answer,
 then work, then how anyone knows it worked. Each row draws its letter in the gutter where a part's
 sequence number sits, because it is the same kind of handle.
+
+Three markers say who, and each exists because its absence would be read as something else: **with
+the fleet** on a handed-over check, **running at ‹label›** while a desktop session holds a claim (the
+timestamp on the hover, because a claim sitting there since yesterday has expired and only the
+operator is placed to notice), and beside a reading, **recorded by an agent** or **recorded from a
+desktop session**. A reading by a person draws nothing, because that is what a checklist already
+means.
 
 Every control writes an operator's reading and derives nothing: there is no "mark all", and no state
 is inferred from a merged part or a green build. Superseded checks are drawn folded, as the record of
@@ -505,8 +608,11 @@ assay and the conclusion, inside neither.
 somebody has run), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
 notes, and that a flagged goal still blocks nothing), `test/validationAmend.test.ts` (the
 tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
-the band), and `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in
-the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over).
+the band), `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in
+the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over), and
+`test/validationDesktop.test.ts` (the desktop channel: that no fleet tool is reachable from it, the
+credential's mode, that a second harness cannot take the stable socket, one claim at a time, the
+three ways a claim is released, and that a reading is attributed to `desktop`).
 
 The verdict tests assert **both** directions, `planApproval.test.ts`'s discipline: a verdict that
 counts `deferred` as clear and one that does not are one edit apart, and only one of them is honest.

@@ -68,6 +68,8 @@ function demoCheck(
     candidateWhy: null,
     actor: 'human',
     handbackNote: null,
+    claimedBy: null,
+    claimedAt: null,
     state: 'unrun',
     resultNote: null,
     resultBy: null,
@@ -954,8 +956,10 @@ export function buildDemoState(): DemoSeed {
     ],
     // A validation plan on the plan awaiting approval, so the sheet's section and
     // the flag are both reachable in the demo rather than only in a real
-    // deployment that has written one. Three checks, one of each interesting
-    // state: one passed, one nobody has got to, and one nominated for the fleet.
+    // deployment that has written one. Six checks, one of each interesting state:
+    // passed by hand, amended out from under a reading, claimed by a desktop
+    // session right now, run by the fleet, handed back, and reported from a
+    // desktop session.
     validationChecks: [
       demoCheck({
         id: 'chip-opens-in-a-new-tab',
@@ -1009,6 +1013,12 @@ export function buildDemoState(): DemoSeed {
         covers: ['signer'],
         fleetCandidate: true,
         candidateWhy: 'a plain HTTP request against a running harness; needs no login and no browser',
+        // Claimed right now by a desktop session. In the demo because the chip is
+        // otherwise unreachable by clicking — nothing in the cockpit takes a
+        // claim, and the one thing an operator needs to be able to read off this
+        // row is that the fleet is not going to touch it while this stands.
+        claimedBy: 'desktop (studio)',
+        claimedAt: ago(0.2),
       }),
       // The two ends of a hand-over, both in the demo because neither is
       // reachable by clicking around: one check is with the fleet right now and
@@ -1049,6 +1059,24 @@ export function buildDemoState(): DemoSeed {
         // are three: this agent found nothing out about the goal, so recording
         // `failed` would have flagged it for something that is not about the code.
         handbackNote: 'An agent could not run this check: it needs a browser at a set viewport, and I have none.',
+      }),
+      // The hand-back's other ending: the operator's own Claude picked the same
+      // kind of check up on a machine that *does* have a browser, and the row
+      // says which of the three kinds of reader took the reading.
+      demoCheck({
+        id: 'sheet-scrolls-on-a-phone',
+        createdAt: ago(12),
+        updatedAt: ago(1),
+        letter: 'F',
+        seq: 6,
+        title: 'The plan sheet scrolls cleanly on a phone',
+        do: 'Open a goal with a nine-part plan at 380px wide and scroll to the validation section.',
+        expect: 'No horizontal scroll, and every check row is readable.',
+        covers: ['route'],
+        state: 'passed',
+        resultNote: 'Drove it at 380px in Chrome: no horizontal overflow, all six check rows legible.',
+        resultBy: 'desktop',
+        resultAt: ago(1),
       }),
     ],
     validationResources: [],

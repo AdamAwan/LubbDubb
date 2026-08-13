@@ -663,9 +663,11 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   candidate_why   TEXT,               -- why an agent could run it; kept only with the nomination
   actor       TEXT,                   -- human | fleet — the operator's hand-over; never the planner's
   handback_note TEXT,                 -- why the fleet gave it back; cleared by the next reading
+  claimed_by  TEXT,                   -- desktop session holding this check; one live claim harness-wide
+  claimed_at  TEXT,                   -- when it was taken; a claim past desktopClaimMinutes holds nothing
   state       TEXT NOT NULL,          -- unrun | passed | failed | waived | deferred
   result_note TEXT,                   -- the one current reading: a result, a deferral's reason, a waiver's
-  result_by   TEXT,                   -- operator | agent; null while unrun
+  result_by   TEXT,                   -- operator | agent | desktop; null while unrun
   result_at   TEXT,
   defer_until TEXT,                   -- when a deferral says it comes back; null is "not saying"
   superseded_reason TEXT,             -- set when an amendment stopped declaring it; null is live

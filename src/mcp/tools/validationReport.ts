@@ -61,7 +61,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     const { result, note } = parsed.report;
 
     if (result === 'handback') {
-      const next = deps.store.recordValidationHandback(plan.id, check.id, handbackReason(note));
+      const next = deps.store.recordValidationHandback(plan.id, check.id, handbackReason(note, 'agent'));
       return ok({
         reported: 'handback',
         check: `${check.letter}. ${check.id}`,

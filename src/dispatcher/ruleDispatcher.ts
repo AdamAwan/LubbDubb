@@ -11,7 +11,7 @@ import { deliveryHold } from '../delivery/delivery.js';
 import { candidateParents } from '../issueRelations.js';
 import { assayHold, type AssayPolicy } from '../intake/assay.js';
 import { type RetrospectivePolicy } from '../retro/retro.js';
-import { type ValidationPolicy } from '../validation/policy.js';
+import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
 import { type AssessmentPolicy } from '../delivery/assessment.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import {
@@ -114,7 +114,8 @@ export class RuleDispatcher implements Dispatcher {
   private readonly assessment: AssessmentPolicy;
   private readonly assay: AssayPolicy;
   private readonly retrospective: RetrospectivePolicy;
-  private readonly validation: ValidationPolicy;
+  /** Only the two fields any rule reads — see the constructor's narrowing below. */
+  private readonly validation: Pick<ValidationPolicy, 'enabled' | 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
   private readonly ci: CiPolicy;
 
@@ -162,7 +163,12 @@ export class RuleDispatcher implements Dispatcher {
     // caller is asking for the rule not to fire.
     this.assay = { enabled: assay.enabled ?? false };
     this.retrospective = { enabled: retrospective.enabled ?? false };
-    this.validation = { enabled: validation.enabled ?? false };
+    this.validation = {
+      enabled: validation.enabled ?? false,
+      // Not `?? false`'s treatment: an omitted *duration* is not a feature being
+      // switched off, and zero would expire every claim the instant it was taken.
+      desktopClaimMinutes: validation.desktopClaimMinutes ?? DEFAULT_VALIDATION.desktopClaimMinutes,
+    };
     this.validationRoot = validationRoot;
     this.defaultBranch = defaultBranch;
     this.ci = { checks: ci.checks ?? [] };
@@ -460,6 +466,7 @@ export class RuleDispatcher implements Dispatcher {
       ci: this.ci,
       defaultBranch: this.defaultBranch,
       validationRoot: this.validationRoot,
+      validationClaimMinutes: this.validation.desktopClaimMinutes,
       // `workItemStates` narrows both work-item rules' config to non-null. Narrowed
       // once, here, so each stage reads it off a value the type system already
       // knows is present — and the same predicate is what the registry's `enabled`
