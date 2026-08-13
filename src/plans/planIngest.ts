@@ -3,6 +3,7 @@ import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planNarrative, planPartInputs } from './planDocument.js';
 import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
+import { fileResourceAsks } from '../validation/ask.js';
 import {
   amendedPlanStatus,
   partHasWork,
@@ -18,6 +19,18 @@ const RETIRED_PART_RESOLUTION = 'An amended plan no longer includes this step.';
 
 /** The same settlement, one layer down: a check an amended plan stopped declaring. */
 const SUPERSEDED_CHECK_REASON = 'An amended plan no longer includes this check.';
+
+/**
+ * What the band on an amended check says when the amendment came from a replan
+ * rather than from an agent's correction.
+ *
+ * Deliberately not the plan's own `reason`: that field is about the *shape* of the
+ * work — why this split rather than another — and an operator reading "three parts
+ * keeps the migration reviewable" over a check whose expectation just changed
+ * would be told nothing about the check. Saying only what is certainly true is
+ * better than borrowing a sentence written about something else.
+ */
+const AMENDED_CHECK_NOTE = 'A replan changed this check. Re-read it before you rely on the result you had.';
 
 /** What an ingestion did, so either caller can report it in its own idiom. */
 interface PlanIngestResult {
@@ -141,25 +154,13 @@ export function ingestPlanDocument(
         doc.validation,
         written.map((p) => p.slug),
       ),
-      resources: validationResourceInputs(doc.validation),
+      resources: validationResourceInputs(doc.validation.resources),
       supersededReason: SUPERSEDED_CHECK_REASON,
+      amendNote: AMENDED_CHECK_NOTE,
     });
     // A resource the planner says it cannot produce is an ask, not a check that
-    // mysteriously never runs. `recordHumanTask` refreshes on a repeat, so a
-    // replan that re-declares the same resource does not file it twice — and one
-    // that re-declares a resource the operator already settled leaves that
-    // settlement standing.
-    for (const resource of store.listValidationResources(plan.id)) {
-      if (resource.provided) continue;
-      const { task } = store.recordHumanTask({
-        title: `Provide "${resource.name}" for validating ${originRef}`,
-        detail: resourceAskDetail(resource.name, resource.note),
-        originRef,
-        agentId: null,
-        taskId: null,
-      });
-      store.linkValidationResourceTask(plan.id, resource.name, task.id);
-    }
+    // mysteriously never runs.
+    fileResourceAsks(store, plan.id, originRef);
   }
 
   // An amended plan is what *ends* a discussion — the agent has said its piece and
@@ -181,21 +182,6 @@ export function ingestPlanDocument(
       ? { liveParts: surviving.filter(partHasWork).length }
       : null,
   };
-}
-
-/**
- * What the ask for an unprovided resource says. The planner's own note when it
- * left one — it is the only thing that says *which* fixture or *whose* account —
- * and never empty, because a bench row reading only "provide it" is a row nobody
- * can act on.
- */
-function resourceAskDetail(name: string, note: string | null): string {
-  return [
-    `The validation plan needs **${name}**, and the planner could not produce it.`,
-    ...(note === null ? [] : ['', note]),
-    '',
-    'Put it where the harness keeps validation resources for this goal, then mark this done. Nothing is blocked by it — the checks that use it simply cannot be run yet.',
-  ].join('\n');
 }
 
 /** The operator-facing explanation for an overridden `single` verdict. Pure. */

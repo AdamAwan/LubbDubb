@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ValidationCheckInput, ValidationResourceInput } from '../types.js';
+import type { ValidationCheckAmendment, ValidationCheckInput, ValidationResourceInput } from '../types.js';
 
 /**
  * The `validation` block of a plan document: how anyone checks the *goal* was
@@ -20,7 +20,13 @@ const MAX_CHECKS = 40;
 /** Same bound, same argument, for the resources they name. */
 const MAX_RESOURCES = 20;
 
-const ResourceSchema = z.object({
+/**
+ * Exported so `validation_amend` refuses exactly what a plan document refuses.
+ * A second copy of this shape would be a second opinion about what a resource
+ * name may contain, and the two would drift apart on the day one of them learned
+ * a new `kind`.
+ */
+export const ValidationResourceSchema = z.object({
   /**
    * A file name, and only a file name. Refused rather than sanitised, because
    * this is the string `validationResourcePath` joins onto the goal's directory:
@@ -45,7 +51,8 @@ const ResourceSchema = z.object({
   provided: z.boolean().default(true),
 });
 
-const CheckSchema = z
+/** Exported for {@link ValidationResourceSchema}'s reason — one shape, both writers. */
+export const ValidationCheckSchema = z
   .object({
     /** Stable and author-chosen: an amendment merges on it, so it must survive a replan. */
     id: z
@@ -84,11 +91,11 @@ const CheckSchema = z
 export const ValidationSchema = z
   .object({
     resources: z
-      .array(ResourceSchema)
+      .array(ValidationResourceSchema)
       .default([])
       .transform((list) => (list.length > MAX_RESOURCES ? list.slice(0, MAX_RESOURCES) : list)),
     checks: z
-      .array(CheckSchema)
+      .array(ValidationCheckSchema)
       .default([])
       .transform((list) => (list.length > MAX_CHECKS ? list.slice(0, MAX_CHECKS) : list)),
   })
@@ -114,6 +121,12 @@ export const ValidationSchema = z
 
 type ValidationBlock = z.infer<typeof ValidationSchema>;
 
+/** One check as either writer's schema parses it, before the store gives it a position. */
+type DeclaredCheck = z.infer<typeof ValidationCheckSchema>;
+
+/** One resource, likewise. */
+type DeclaredResource = z.infer<typeof ValidationResourceSchema>;
+
 /**
  * The declared checks as store input, sequenced by their order in the document
  * and with their bibliographies pruned.
@@ -126,9 +139,38 @@ type ValidationBlock = z.infer<typeof ValidationSchema>;
 export function validationCheckInputs(block: ValidationBlock, partSlugs: readonly string[]): ValidationCheckInput[] {
   const names = new Set(block.resources.map((r) => r.name));
   const slugs = new Set(partSlugs);
-  return block.checks.map((check, index) => ({
+  return block.checks.map((check, index) => ({ ...checkAmendment(check, names, slugs), seq: index + 1 }));
+}
+
+/**
+ * The same conversion for an amendment, which has **no document order to number
+ * from** — it names only the checks it is changing, so a position taken from its
+ * own list would file a two-check correction at the top of a nine-check plan. The
+ * store assigns the sequence instead.
+ *
+ * `resourceNames` is what the plan knows about after this amendment, not just what
+ * the amendment declares: an agent adding a check that uses a fixture the planner
+ * already declared has named a resource that exists, and dropping it would prune a
+ * live reference.
+ */
+export function validationCheckAmendments(
+  checks: readonly DeclaredCheck[],
+  resourceNames: readonly string[],
+  partSlugs: readonly string[],
+): ValidationCheckAmendment[] {
+  const names = new Set(resourceNames);
+  const slugs = new Set(partSlugs);
+  return checks.map((check) => checkAmendment(check, names, slugs));
+}
+
+/** One declared check as store input, minus the sequence its writer assigns. */
+function checkAmendment(
+  check: DeclaredCheck,
+  names: ReadonlySet<string>,
+  slugs: ReadonlySet<string>,
+): ValidationCheckAmendment {
+  return {
     id: check.id,
-    seq: index + 1,
     title: check.title,
     do: check.do,
     expect: check.expect,
@@ -139,12 +181,12 @@ export function validationCheckInputs(block: ValidationBlock, partSlugs: readonl
     // agent could run this" left standing beside `fleetCandidate: false` reads as
     // a nomination the sheet is failing to draw.
     candidateWhy: check.fleetCandidate ? (check.why ?? null) : null,
-  }));
+  };
 }
 
-/** The declared resources as store input. */
-export function validationResourceInputs(block: ValidationBlock): ValidationResourceInput[] {
-  return block.resources.map((resource) => ({
+/** The declared resources as store input. Takes the list rather than the block, so an amendment's reaches it too. */
+export function validationResourceInputs(resources: readonly DeclaredResource[]): ValidationResourceInput[] {
+  return resources.map((resource) => ({
     name: resource.name,
     kind: resource.kind ?? null,
     note: resource.note ?? null,

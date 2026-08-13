@@ -2518,6 +2518,35 @@ body {
   font-size: 12px;
   color: var(--amber);
 }
+/* An amendment changed this check. The same amber as the flag above it, because
+   it is the same kind of news — something is owed here — and a second warning
+   colour would only invite a reader to rank them. */
+.pm-vamend {
+  margin: 6px 0 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--amber);
+  border-left-width: 3px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--amber);
+}
+.pm-vamend-head i {
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pm-vamend summary {
+  cursor: pointer;
+  margin-top: 4px;
+}
+/* The withdrawn wording, drawn quieter than the check that replaced it: it is the
+   record of what was asked before, not a second thing to do. */
+.pm-vamend-prior {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+}
 .pm-vgone {
   margin-top: 10px;
   font-size: 12px;

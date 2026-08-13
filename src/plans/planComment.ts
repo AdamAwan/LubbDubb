@@ -62,8 +62,25 @@ function validation(checks: ValidationCheck[]): string {
     verdict.state === 'clear'
       ? `**Validation** — all ${verdict.total} check${verdict.total === 1 ? '' : 's'} settled.`
       : `**Validation** — ${verdict.passed + verdict.waived}/${verdict.total} settled.`;
-  const lines = live.map((c) => `- ${checkMark(c)} **${c.title}**${c.resultNote === null ? '' : ` — ${c.resultNote}`}`);
+  const lines = live.map(
+    (c) => `- ${checkMark(c)} **${c.title}**${c.resultNote === null ? '' : ` — ${c.resultNote}`}${amended(c)}`,
+  );
   return `\n\n${heading}\n\n${lines.join('\n')}`;
+}
+
+/**
+ * That an amendment took a reading back, said on the ticket as well as in the
+ * cockpit.
+ *
+ * Only when one was actually withdrawn — an amendment to a check nobody had run
+ * cost nothing. Without it, a check somebody passed and an amendment then rewrote
+ * renders here as a plain `⬜`, which reads as one the operator never got round
+ * to. That is the single most misleading line this comment could carry, because it
+ * is the case where somebody *did* the work.
+ */
+function amended(check: ValidationCheck): string {
+  const withdrawn = check.revision?.state;
+  return withdrawn == null ? '' : ` _(amended after it was ${withdrawn} — needs running again)_`;
 }
 
 /** The one-glyph reading of a check's state, `statusMark`'s convention. */

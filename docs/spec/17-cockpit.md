@@ -1024,7 +1024,15 @@ layer up. Checks an amendment withdrew are drawn folded, as the record of what t
 for: filtering them would leave a reader unable to tell a dropped check from one nobody wrote. The
 count of what is not settled is stated once at the top in amber, with what closing the goal will ask
 for — amber and not red, because it blocks nothing. A plan with no checks says so rather than drawing
-nothing, the write-up section's rule. → [20](20-validation.md)
+nothing, the write-up section's rule.
+
+A check an amendment changed carries a **band** in the same amber, above its body: what the amendment
+said, and — when it reworded a check somebody had already run — that their reading was withdrawn,
+with the previous wording folded behind _What it used to say_. The amendments are also counted once
+at the top with their letters, because a sheet of nine checks with one rewritten is exactly where a
+per-row band gets scrolled past. The band clears when the operator records a reading against the new
+wording and by nothing else: a dismiss button would clear it for somebody who had merely seen it.
+→ [20](20-validation.md)
 
 ### The caveats
 
