@@ -1,8 +1,63 @@
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
-import type { CockpitActions } from '../cockpit/actions.js';
+import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
+import { backlogGroups } from './Backlog.js';
 import { productionReading } from '../view/production.js';
+
+/** The nav's destinations, in reading order — the order the tabs are drawn in. */
+const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work'];
+
+export const TAB_LABEL: Record<ConsoleTab, string> = {
+  overview: 'Overview',
+  backlog: 'Backlog',
+  work: 'Work',
+};
+
+/**
+ * Where you are, and the other places you can be.
+ *
+ * It sits in the top bar rather than at the head of the situation area, which
+ * scrolls: the primary navigation of a page must not be a thing you scroll away
+ * from, and the bar is the one row of the shell that is always on screen.
+ *
+ * A click clears *both* pieces of state, because a nav click means "go here" and
+ * either half left standing would land somewhere else. The backlog carries its
+ * triage count — the one number that says whether it is worth opening; the other
+ * two carry none, since neither has a number that decides whether to look.
+ *
+ * Three tabs and nothing else: the open goal's crumb is drawn at the head of the
+ * situation area instead ({@link ConsoleRoot}). A title is as long as whoever
+ * filed it made it, and one in here widens the nav by whatever that is — pushing
+ * the readings onto a second line on the act of opening a goal. The bar is the
+ * row an operator glances at without looking; it has to be the same shape every
+ * time they do.
+ */
+function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const goal = view.goalPage;
+  const unwatched = backlogGroups(view).unwatched.length;
+  const go = (tab: ConsoleTab) => () => {
+    actions.selectGoal(null);
+    actions.openTab(tab);
+  };
+
+  return (
+    <nav className="cn-nav">
+      {TABS.map((tab) => (
+        <button key={tab} type="button" className={goal === null && view.tab === tab ? 'cn-on' : ''} onClick={go(tab)}>
+          {TAB_LABEL[tab]}
+          {/* The space is the gap: `.cn-n` carries no margin of its own. */}
+          {tab === 'backlog' && (
+            <>
+              {' '}
+              <i className="cn-n">{unwatched} unwatched</i>
+            </>
+          )}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 /**
  * One reading: a label and a value, optionally a button that opens something.
@@ -72,7 +127,9 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
 }
 
 /**
- * The control-room strip: ident, the pulse, the fleet cap, and six readings.
+ * The control-room strip: ident, the nav, the pulse, the fleet cap, and seven
+ * readings. The nav is here because this is the only row of the shell that never
+ * scrolls — everything else lives inside `.cn-sit`, which does.
  *
  * Each reading is one subject stated once, mirroring `StatusBar`'s rule but
  * with the mockup's plain text-and-number face — the console has no icon set of
@@ -134,6 +191,10 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
         LubbDubb
         {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
       </div>
+      <div className="cn-sep" />
+
+      <Nav view={view} actions={actions} />
+
       <div className="cn-sep" />
 
       <Scan view={view} actions={actions} />

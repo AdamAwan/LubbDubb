@@ -1,12 +1,12 @@
 import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
-import { TopBar } from './TopBar.js';
+import { TAB_LABEL, TopBar } from './TopBar.js';
 import { KIND_LABEL, QueueRail } from './QueueRail.js';
 import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { Overview } from './Overview.js';
-import { Backlog, backlogGroups } from './Backlog.js';
+import { Backlog } from './Backlog.js';
 import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { WorkTreePanel } from '../components/WorkTreePanel.js';
@@ -64,7 +64,10 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
   // on a triage list, or on the record, instead of on the ask.
   const situation =
     view.goalPage !== null ? (
-      <GoalPage page={view.goalPage} view={view} actions={actions} />
+      <>
+        <Crumb goal={view.goalPage.issue} tab={view.tab} actions={actions} />
+        <GoalPage page={view.goalPage} view={view} actions={actions} />
+      </>
     ) : (
       tabBody(view.tab, view, actions)
     );
@@ -79,10 +82,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
         <aside className="cn-rail">
           <QueueRail view={view} actions={actions} />
         </aside>
-        <main className="cn-sit">
-          <Nav view={view} actions={actions} />
-          {situation}
-        </main>
+        <main className="cn-sit">{situation}</main>
       </div>
       {panel}
     </div>
@@ -108,55 +108,34 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
   }
 }
 
-/** The nav's destinations, in reading order — the order the tabs are drawn in. */
-const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work'];
-
-const TAB_LABEL: Record<ConsoleTab, string> = {
-  overview: 'Overview',
-  backlog: 'Backlog',
-  work: 'Work',
-};
-
 /**
- * Where you are, and the other places you can be.
+ * The trail back out of a goal — the tab you left, and the goal you are on.
  *
- * A click clears *both* pieces of state, because a nav click means "go here" and
- * either half left standing would land somewhere else. The backlog carries its
- * triage count — the one number that says whether it is worth opening; the other
- * two carry none, since neither has a number that decides whether to look. And a
- * goal draws its crumb, which is the only thing on the page naming what the
- * situation area is currently about.
+ * It is here rather than in the bar's nav for two reasons that are the same
+ * reason: a title has no length limit, so in the bar it reflows the readings
+ * every time a goal opens; and it names what the *situation area* is showing, so
+ * it belongs at the head of the situation area. `selectGoal(null)` alone is the
+ * whole of the way back — the tab was never cleared, so there is nothing to
+ * restore, and naming it is what makes the trail a trail rather than a label.
  */
-function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const goal = view.goalPage;
-  const unwatched = backlogGroups(view).unwatched.length;
-  const go = (tab: ConsoleTab) => () => {
-    actions.selectGoal(null);
-    actions.openTab(tab);
-  };
-
+function Crumb({
+  goal,
+  tab,
+  actions,
+}: {
+  goal: { number: number; title: string };
+  tab: ConsoleTab;
+  actions: CockpitActions;
+}): JSX.Element {
   return (
-    <nav className="cn-nav">
-      {TABS.map((tab) => (
-        <button key={tab} type="button" className={goal === null && view.tab === tab ? 'cn-on' : ''} onClick={go(tab)}>
-          {TAB_LABEL[tab]}
-          {/* The space is the gap: `.cn-n` carries no margin of its own. */}
-          {tab === 'backlog' && (
-            <>
-              {' '}
-              <i className="cn-n">{unwatched} unwatched</i>
-            </>
-          )}
-        </button>
-      ))}
-      {goal !== null && (
-        <>
-          <span className="cn-navsep">/</span>
-          <span className="cn-on">
-            #{goal.issue.number} {goal.issue.title}
-          </span>
-        </>
-      )}
+    <nav className="cn-crumb">
+      <button type="button" onClick={() => actions.selectGoal(null)}>
+        ‹ {TAB_LABEL[tab]}
+      </button>
+      <span className="cn-crumbsep">/</span>
+      <span className="cn-crumbnow">
+        #{goal.number} {goal.title}
+      </span>
     </nav>
   );
 }
