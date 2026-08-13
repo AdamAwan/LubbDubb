@@ -59,12 +59,16 @@
 }
 
 /* ---------- top bar ---------- */
+/* `min-height`, not `height`: the readings wrap once the bar runs out of room at
+   laptop widths, and a fixed strip pushed the last one out through its own
+   border. The bar is the row that says what the fleet is doing — it grows by a
+   line rather than cropping one. */
 .cn-bar {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 0 14px;
-  height: 46px;
+  min-height: 46px;
   border-bottom: 1px solid var(--cn-line);
   background: var(--cn-panel);
 }
@@ -188,6 +192,12 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+/* A queue longer than the rail is tall must scroll, not squash: flex items
+   shrink by default, and a row shorter than its text hides the ask's goal and
+   age behind `overflow: hidden` with no scrollbar to say anything is missing. */
+.cn-rail-list > * {
+  flex-shrink: 0;
 }
 
 .cn-q {
@@ -425,9 +435,13 @@
   padding: 13px;
 }
 @media (min-width: 1500px) {
+  /* Wrapping tracks rather than one implicit row per wave: how many waves fit is
+     a question about the card, not the viewport — the same 1500px that turns the
+     waves sideways also halves the card by giving the goal its right-hand
+     column, so a plan of three waves spilled past the card's edge and under that
+     column until roughly 1680px wide. */
   .cn-waves {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(250px, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   }
 }
 /* One tone per group, and the same four the segment track uses: green for what

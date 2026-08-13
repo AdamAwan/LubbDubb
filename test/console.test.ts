@@ -551,3 +551,9 @@ test('the backlog replaces the overview, and a selected goal outranks both', () 
   const v = goalView();
   assert.ok(render({ ...v, backlogOpen: true }).includes('cn-goal'));
 });
+
+test('the shell renders the console and no longer names the floor', () => {
+  const src = readFileSync(new URL('../web/src/App.tsx', import.meta.url).pathname, 'utf8');
+  assert.ok(src.includes('ConsoleRoot'), 'the shell must render the console');
+  assert.ok(!src.includes('factory/'), 'the shell must not still reach into the floor');
+});
