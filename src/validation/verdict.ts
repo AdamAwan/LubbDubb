@@ -57,6 +57,21 @@ export function outstandingChecks(checks: readonly ValidationCheck[]): string[] 
     .filter((c) => c.state !== 'passed' && c.state !== 'waived')
     .map((c) => {
       const why = c.resultNote === null ? '' : ` — ${c.resultNote}`;
-      return `${c.letter}. **${c.title}** — ${c.state}${why}`;
+      return `${c.letter}. **${c.title}** — ${c.state}${why}${amendmentCost(c)}`;
     });
+}
+
+/**
+ * What an amendment cost this check, said on the line rather than left to the
+ * cockpit.
+ *
+ * Only when a reading was actually withdrawn — an amendment to a check nobody had
+ * run took nothing away, and a goal is not owed a sentence about it. This is where
+ * "the plan changed under you" reaches somebody who is not at the cockpit: the
+ * close-out obligation and the ticket comment are read by a person about to close
+ * a goal, and "unrun" alone would look like a check they simply never got to.
+ */
+function amendmentCost(check: ValidationCheck): string {
+  const withdrawn = check.revision?.state;
+  return withdrawn == null ? '' : ` (amended since you recorded **${withdrawn}** — the wording changed)`;
 }

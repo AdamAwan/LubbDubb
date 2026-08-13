@@ -64,6 +64,8 @@ import type {
   StackLandingStatus,
   Task,
   UsageEvent,
+  ValidationAmendment,
+  ValidationAmendResult,
   ValidationCheck,
   ValidationCheckState,
   ValidationResource,
@@ -405,6 +407,9 @@ export class Store {
 
   ingestValidation(planId: string, input: Parameters<ValidationStore['ingestValidation']>[1]): ValidationCheck[] {
     return this.validation.ingestValidation(planId, input);
+  }
+  amendValidation(planId: string, amendment: ValidationAmendment): ValidationAmendResult {
+    return this.validation.amendValidation(planId, amendment);
   }
   linkValidationResourceTask(planId: string, name: string, humanTaskId: string): void {
     this.validation.linkValidationResourceTask(planId, name, humanTaskId);

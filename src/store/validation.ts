@@ -1,26 +1,28 @@
 import { nextCheckLetter } from '../validation/checkDocument.js';
 import type {
+  ValidationAmendment,
+  ValidationAmendResult,
   ValidationCheck,
   ValidationCheckInput,
   ValidationCheckState,
   ValidationResource,
   ValidationResourceInput,
   ValidationResourceKind,
+  ValidationRevision,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
- * Both tables are fresh `CREATE TABLE`s, so `CREATE TABLE IF NOT EXISTS` is the
- * whole migration and neither needs an entry — **today**. The entry is declared
- * empty anyway, because a table being new *once* does not keep it exempt: the
- * next column added to either is invisible on every database from before it
- * existed, with nothing erroring, and the place to notice that is here rather
- * than in the reader that silently reads `undefined`. That is the `human_tasks`
- * lesson, written down before it costs anything.
+ * `validation_checks` gained the revision band — the wording an amendment
+ * replaced, the reading it withdrew and why — after both tables shipped, which
+ * is exactly the case the empty declaration here was written for: `CREATE TABLE
+ * IF NOT EXISTS` never alters an existing table, so without these three entries
+ * every database from before the amendment tool would read `undefined` for all
+ * of them and silently draw no band at all.
  */
 export const VALIDATION_COLUMNS: ColumnMigrations = {
-  validation_checks: {},
+  validation_checks: { revision: 'TEXT', amended_at: 'TEXT', amend_note: 'TEXT' },
   validation_resources: {},
 };
 
@@ -38,6 +40,18 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
  * or a route call in the record beside it. Exactly one current reading is kept,
  * `note_progress`'s argument — and a re-run overwrites, which is what a re-run
  * means.
+ *
+ * Two writers fold a change onto these rows, and the difference between them is
+ * the load-bearing one:
+ *
+ * - {@link ValidationStore.ingestValidation} reads a plan document, which declares
+ *   the **whole** check set. A check it omits was withdrawn.
+ * - {@link ValidationStore.amendValidation} reads one agent's correction, which
+ *   declares **only what it is changing**. A check it omits is untouched, and a
+ *   withdrawal is said out loud with a reason.
+ *
+ * Collapsing them would mean an agent sending a two-check correction silently
+ * supersedes the other six.
  */
 export class ValidationStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -64,48 +78,29 @@ export class ValidationStore {
    */
   ingestValidation(
     planId: string,
-    input: { checks: ValidationCheckInput[]; resources: ValidationResourceInput[]; supersededReason: string },
+    input: {
+      checks: ValidationCheckInput[];
+      resources: ValidationResourceInput[];
+      supersededReason: string;
+      /** What the band says when this ingestion is a *re*-reading rather than the plan's first. */
+      amendNote: string;
+    },
   ): ValidationCheck[] {
     const ts = this.ctx.now();
     const existing = this.listValidationChecks(planId);
     const byId = new Map(existing.map((c) => [c.id, c]));
     const taken = existing.map((c) => c.letter);
     const declared = new Set(input.checks.map((c) => c.id));
+    // A plan's *first* validation block is a declaration, not an amendment: every
+    // check in it is new, and banding all of them would make the one signal that
+    // says "this is not the check you read" fire on a plan nobody has read yet.
+    const amendNote = existing.length === 0 ? null : input.amendNote;
 
     const rows = input.checks.map((check) => {
       const prev = byId.get(check.id);
       const letter = prev?.letter ?? nextCheckLetter(taken);
       if (!prev) taken.push(letter);
-      // Deliberately not `uses`/`covers`/`fleetCandidate`: those are references
-      // and a suggestion, and a plan that fixed a mistyped resource name has not
-      // changed what running the check involves.
-      const reworded =
-        prev !== undefined && (prev.title !== check.title || prev.do !== check.do || prev.expect !== check.expect);
-      const keep = prev !== undefined && !reworded;
-      const row: ValidationCheck = {
-        planId,
-        id: check.id,
-        letter,
-        seq: check.seq,
-        title: check.title,
-        do: check.do,
-        expect: check.expect,
-        uses: check.uses,
-        covers: check.covers,
-        fleetCandidate: check.fleetCandidate,
-        candidateWhy: check.candidateWhy,
-        state: keep ? prev.state : 'unrun',
-        resultNote: keep ? prev.resultNote : null,
-        resultBy: keep ? prev.resultBy : null,
-        resultAt: keep ? prev.resultAt : null,
-        deferUntil: keep ? prev.deferUntil : null,
-        // A re-declared check is being asked for again, whatever an earlier
-        // amendment did with it.
-        supersededReason: null,
-        createdAt: prev?.createdAt ?? ts,
-        updatedAt: ts,
-      };
-      return row;
+      return this.mergeCheck({ planId, prev, input: check, letter, ts, amendNote });
     });
 
     const write = this.ctx.db.transaction((all: ValidationCheck[]) => {
@@ -123,6 +118,138 @@ export class ValidationStore {
   }
 
   /**
+   * Apply one agent's correction to a plan's validation block.
+   *
+   * **Nothing is withdrawn by omission.** That is the one rule, and it is what
+   * makes this safe to hand to an agent that has not read the whole plan: a
+   * correction names the checks it is changing, and every check it does not name
+   * is left exactly as it is. `ingestValidation` reads a document that speaks for
+   * the whole set and may therefore supersede by silence; an agent halfway
+   * through a part cannot, because it would only have to be terse to delete the
+   * validation plan it is failing.
+   *
+   * A withdrawal is therefore explicit and carries its own reason, and it
+   * supersedes rather than deletes for `ingestValidation`'s reason: **an agent
+   * that cannot pass a check must not be able to make it disappear.**
+   */
+  amendValidation(planId: string, amendment: ValidationAmendment): ValidationAmendResult {
+    const ts = this.ctx.now();
+    const existing = this.listValidationChecks(planId);
+    const byId = new Map(existing.map((c) => [c.id, c]));
+    const taken = existing.map((c) => c.letter);
+    const declared = new Set(amendment.checks.map((c) => c.id));
+    let lastSeq = existing.reduce((max, c) => Math.max(max, c.seq), 0);
+
+    const result: ValidationAmendResult = { added: [], reworded: [], unchanged: [], withdrawn: [], unknown: [] };
+    const rows = amendment.checks.map((check) => {
+      const prev = byId.get(check.id);
+      const letter = prev?.letter ?? nextCheckLetter(taken);
+      if (!prev) taken.push(letter);
+      // A re-declared check keeps its position; a new one goes after the last.
+      // Reading the position off the amendment's own order instead would file a
+      // two-check correction at the top of a nine-check plan.
+      const seq = prev?.seq ?? (lastSeq += 1);
+      const row = this.mergeCheck({
+        planId,
+        prev,
+        input: { ...check, seq },
+        letter,
+        ts,
+        amendNote: amendment.note,
+      });
+      // "Now live and was not" covers both a new id and one an earlier amendment
+      // had withdrawn: from the operator's side those are the same news, and the
+      // restored check keeps its letter either way.
+      if (prev === undefined || prev.supersededReason !== null) result.added.push(row);
+      else if (isReworded(prev, check)) result.reworded.push(row);
+      else result.unchanged.push(row.id);
+      return row;
+    });
+
+    const write = this.ctx.db.transaction(() => {
+      for (const row of rows) this.writeCheck(row);
+      for (const { id, reason } of amendment.withdraw) {
+        const prev = byId.get(id);
+        // Reported rather than silently ignored: an agent that withdrew a check
+        // by a name this plan has never held would otherwise believe it landed.
+        // Re-declaring and withdrawing the same id in one call is refused at the
+        // schema, so this arm cannot contradict the loop above.
+        if (!prev || prev.supersededReason !== null || declared.has(id)) {
+          result.unknown.push(id);
+          continue;
+        }
+        this.ctx.db
+          .prepare(
+            `UPDATE validation_checks SET superseded_reason=?, amend_note=?, amended_at=?, updated_at=?
+             WHERE plan_id=? AND id=?`,
+          )
+          .run(reason, amendment.note, ts, ts, planId, id);
+        result.withdrawn.push(id);
+      }
+    });
+    write();
+    this.upsertValidationResources(planId, amendment.resources);
+    return result;
+  }
+
+  /**
+   * One check as an ingestion or an amendment leaves it — the merge both writers
+   * share, so neither can develop its own opinion about what rewording costs.
+   *
+   * `amendNote` null means "this reading is the first", and is what keeps a
+   * plan's opening declaration from banding every check it contains.
+   */
+  private mergeCheck(args: {
+    planId: string;
+    prev: ValidationCheck | undefined;
+    input: ValidationCheckInput;
+    letter: string;
+    ts: string;
+    amendNote: string | null;
+  }): ValidationCheck {
+    const { planId, prev, input, letter, ts, amendNote } = args;
+    const reworded = prev !== undefined && isReworded(prev, input);
+    const keep = prev !== undefined && !reworded;
+    // What the operator is owed a word about: a check that appeared, one that came
+    // back, and one that no longer says what it said. A re-declaration with
+    // identical wording is none of those, and banding it would make a replan that
+    // changed one check shout about all nine.
+    const changed = prev === undefined || reworded || prev.supersededReason !== null;
+    const band = amendNote !== null && changed;
+    return {
+      planId,
+      id: input.id,
+      letter,
+      seq: input.seq,
+      title: input.title,
+      do: input.do,
+      expect: input.expect,
+      uses: input.uses,
+      covers: input.covers,
+      fleetCandidate: input.fleetCandidate,
+      candidateWhy: input.candidateWhy,
+      state: keep ? prev.state : 'unrun',
+      resultNote: keep ? prev.resultNote : null,
+      resultBy: keep ? prev.resultBy : null,
+      resultAt: keep ? prev.resultAt : null,
+      deferUntil: keep ? prev.deferUntil : null,
+      // A re-declared check is being asked for again, whatever an earlier
+      // amendment did with it.
+      supersededReason: null,
+      // Only a *reworded* check has wording to keep; an added one has none, and
+      // its band says so by carrying no revision.
+      revision: band ? (reworded && prev !== undefined ? priorWording(prev) : null) : (prev?.revision ?? null),
+      // Carried rather than cleared on an untouched check: an operator who has not
+      // yet seen the last amendment must not have it wiped by the next replan that
+      // happens to re-state the same words.
+      amendedAt: band ? ts : (prev?.amendedAt ?? null),
+      amendNote: band ? amendNote : (prev?.amendNote ?? null),
+      createdAt: prev?.createdAt ?? ts,
+      updatedAt: ts,
+    };
+  }
+
+  /**
    * Replace a plan's declared resources wholesale.
    *
    * A replace rather than a merge, unlike the checks above, because a resource
@@ -135,22 +262,47 @@ export class ValidationStore {
     const existing = new Map(this.listValidationResources(planId).map((r) => [r.name, r]));
     const write = this.ctx.db.transaction(() => {
       this.ctx.db.prepare(`DELETE FROM validation_resources WHERE plan_id=?`).run(planId);
-      const stmt = this.ctx.db.prepare(
-        `INSERT INTO validation_resources (plan_id, name, kind, note, provided, human_task_id)
-         VALUES (@planId, @name, @kind, @note, @provided, @humanTaskId)`,
-      );
       for (const resource of resources) {
-        stmt.run({
-          planId,
-          name: resource.name,
-          kind: resource.kind,
-          note: resource.note,
-          provided: resource.provided ? 1 : 0,
-          humanTaskId: existing.get(resource.name)?.humanTaskId ?? null,
-        });
+        this.writeResource(planId, resource, existing.get(resource.name)?.humanTaskId ?? null);
       }
     });
     write();
+  }
+
+  /**
+   * Merge an amendment's resources by name, adding and updating but never
+   * removing — an amendment speaks only for what it names, `amendValidation`'s
+   * rule, and here it is load-bearing twice over: a resource dropped by omission
+   * would be dropped out from under whichever *other* check still lists it in
+   * `uses`, and that check would then render with no fixture and no explanation.
+   */
+  private upsertValidationResources(planId: string, resources: ValidationResourceInput[]): void {
+    if (resources.length === 0) return;
+    const existing = new Map(this.listValidationResources(planId).map((r) => [r.name, r]));
+    const write = this.ctx.db.transaction(() => {
+      for (const resource of resources) {
+        this.writeResource(planId, resource, existing.get(resource.name)?.humanTaskId ?? null);
+      }
+    });
+    write();
+  }
+
+  private writeResource(planId: string, resource: ValidationResourceInput, humanTaskId: string | null): void {
+    this.ctx.db
+      .prepare(
+        `INSERT INTO validation_resources (plan_id, name, kind, note, provided, human_task_id)
+         VALUES (@planId, @name, @kind, @note, @provided, @humanTaskId)
+         ON CONFLICT(plan_id, name) DO UPDATE SET kind=excluded.kind, note=excluded.note,
+           provided=excluded.provided, human_task_id=excluded.human_task_id`,
+      )
+      .run({
+        planId,
+        name: resource.name,
+        kind: resource.kind,
+        note: resource.note,
+        provided: resource.provided ? 1 : 0,
+        humanTaskId,
+      });
   }
 
   /** Remember the ask filed for an unprovided resource, so a replan does not file it twice. */
@@ -228,6 +380,13 @@ export class ValidationStore {
       // carrying a timestamp reads as one that was run and forgotten.
       resultAt: input.state === 'unrun' ? null : ts,
       deferUntil: input.state === 'deferred' ? (input.until ?? null) : null,
+      // The band is answered, not just seen. It exists to say "this is not the
+      // check you ran", and somebody who has just recorded a reading against the
+      // current wording has been told — including on a reset, which is still an
+      // operator act on the check as it now reads.
+      revision: null,
+      amendedAt: null,
+      amendNote: null,
       updatedAt: ts,
     };
     this.writeCheck(next);
@@ -242,24 +401,58 @@ export class ValidationStore {
         // `check_expect` follows it so the pair reads as a pair.
         `INSERT INTO validation_checks (plan_id, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, state, result_note, result_by, result_at, defer_until,
-           superseded_reason, created_at, updated_at)
+           superseded_reason, revision, amended_at, amend_note, created_at, updated_at)
          VALUES (@planId, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @fleetCandidate, @candidateWhy, @state, @resultNote, @resultBy, @resultAt, @deferUntil,
-           @supersededReason, @createdAt, @updatedAt)
+           @supersededReason, @revision, @amendedAt, @amendNote, @createdAt, @updatedAt)
          ON CONFLICT(plan_id, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
            candidate_why=excluded.candidate_why, state=excluded.state, result_note=excluded.result_note,
            result_by=excluded.result_by, result_at=excluded.result_at, defer_until=excluded.defer_until,
-           superseded_reason=excluded.superseded_reason, updated_at=excluded.updated_at`,
+           superseded_reason=excluded.superseded_reason, revision=excluded.revision,
+           amended_at=excluded.amended_at, amend_note=excluded.amend_note, updated_at=excluded.updated_at`,
       )
       .run({
         ...check,
         uses: JSON.stringify(check.uses),
         covers: JSON.stringify(check.covers),
         fleetCandidate: check.fleetCandidate ? 1 : 0,
+        revision: check.revision === null ? null : JSON.stringify(check.revision),
       });
   }
+}
+
+/**
+ * Whether an amendment changed **what running this check involves**.
+ *
+ * Deliberately not `uses`/`covers`/`fleetCandidate`: those are references and a
+ * suggestion, and a plan that fixed a mistyped resource name has not changed what
+ * a pass means. Widening this would withdraw a result every time a planner
+ * tidied a bibliography.
+ */
+function isReworded(prev: ValidationCheck, next: ValidationCheckAmendmentLike): boolean {
+  return prev.title !== next.title || prev.do !== next.do || prev.expect !== next.expect;
+}
+
+/** The wording half of {@link isReworded}'s comparison — every writer of a check has these. */
+interface ValidationCheckAmendmentLike {
+  title: string;
+  do: string;
+  expect: string;
+}
+
+/** What a check said, and what somebody had concluded from it, at the moment it was rewritten. */
+function priorWording(prev: ValidationCheck): ValidationRevision {
+  return {
+    title: prev.title,
+    do: prev.do,
+    expect: prev.expect,
+    // `unrun` is not a reading, so an amendment to one withdrew nothing and the
+    // band must not claim it did.
+    state: prev.state === 'unrun' ? null : prev.state,
+    note: prev.resultNote,
+  };
 }
 
 interface ValidationCheckRow {
@@ -280,6 +473,10 @@ interface ValidationCheckRow {
   result_at: string | null;
   defer_until: string | null;
   superseded_reason: string | null;
+  /** Added after the table shipped — `undefined` on a database that predates `VALIDATION_COLUMNS`' entry. */
+  revision: string | null | undefined;
+  amended_at: string | null | undefined;
+  amend_note: string | null | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -312,6 +509,9 @@ function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     resultAt: r.result_at,
     deferUntil: r.defer_until,
     supersededReason: r.superseded_reason,
+    revision: parseRevision(r.revision ?? null),
+    amendedAt: r.amended_at ?? null,
+    amendNote: r.amend_note ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -342,6 +542,34 @@ function rowToResource(r: ValidationResourceRow): ValidationResource {
     provided: r.provided === 1,
     humanTaskId: r.human_task_id,
   };
+}
+
+/**
+ * The revision column, degrading to null rather than throwing — `parseStringArray`'s
+ * rule. A band nobody can draw is a band that is not drawn; a throw here would take
+ * the whole plan sheet with it.
+ */
+function parseRevision(raw: string | null): ValidationRevision | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const r = parsed as Record<string, unknown>;
+    if (typeof r.title !== 'string' || typeof r.do !== 'string' || typeof r.expect !== 'string') return null;
+    // `unrun` is not a reading, so it is not one this can read back either —
+    // {@link priorWording} never writes it, and normalising rather than trusting
+    // the column keeps the invariant true of rows however they got there.
+    const state = typeof r.state === 'string' ? checkStateOf(r.state) : null;
+    return {
+      title: r.title,
+      do: r.do,
+      expect: r.expect,
+      state: state === 'unrun' ? null : state,
+      note: typeof r.note === 'string' ? r.note : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** A JSON string array column, degrading to empty rather than throwing — `parseStringArray`'s rule. */

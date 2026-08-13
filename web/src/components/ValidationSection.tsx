@@ -39,6 +39,7 @@ export function ValidationSection({
   const live = checks.filter((c) => c.supersededReason === null);
   const withdrawn = checks.filter((c) => c.supersededReason !== null);
   const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
+  const amended = live.filter((c) => c.amendedAt !== null);
   const byName = new Map(resources.map((r) => [r.name, r]));
 
   if (checks.length === 0) {
@@ -64,6 +65,16 @@ export function ValidationSection({
       {live.length > 0 && settled < live.length && (
         <div className="pm-vflag">
           {live.length - settled} of {live.length} not settled — closing this goal will ask you to say why.
+        </div>
+      )}
+      {/* The amendments, counted once at the top as well as banded per row: a
+          sheet of nine checks with one rewritten is exactly where a per-row band
+          gets scrolled past, and this is the change an operator most needs not to
+          miss. */}
+      {amended.length > 0 && (
+        <div className="pm-vamend">
+          {amended.length === 1 ? 'One check has' : `${amended.length} checks have`} changed since the plan was written
+          — {amended.map((c) => c.letter).join(', ')}.
         </div>
       )}
       {resources.length > 0 && (
@@ -182,6 +193,7 @@ function CheckBlock({
             </span>
           ))}
         </div>
+        {check.amendedAt !== null && <AmendBand check={check} refUrls={refUrls} />}
         <div className="pm-vbody">
           <div>
             <b>Do</b>
@@ -268,6 +280,63 @@ function CheckBlock({
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * What an amendment changed, drawn above the check it changed.
+ *
+ * **This is the whole of "you are told when the plan changes".** A validation plan
+ * is written by the one agent that has not done the work yet, so it has to be
+ * correctable — and a check that can be quietly rewritten under an operator who
+ * already ran it is worse than one that cannot change at all: they would go on
+ * believing they had checked something the plan no longer asks for. So the band is
+ * loud, it says what the check used to say, and it says what the change cost.
+ *
+ * It clears itself when the operator records a reading against the new wording,
+ * which is the only acknowledgement worth having — a dismiss button would clear it
+ * for somebody who had merely seen it.
+ */
+function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record<string, string> }) {
+  const prior = check.revision;
+  return (
+    <div className="pm-vamend">
+      <div className="pm-vamend-head">
+        {prior === null ? (
+          // No prior wording: this check was *added* after the plan was read. Not
+          // a withdrawal of anything, and saying "amended" would imply one.
+          <b>Added by an amendment</b>
+        ) : prior.state === null ? (
+          <b>Reworded by an amendment</b>
+        ) : (
+          // The case the band exists for, stated in the operator's own terms: they
+          // did the work, and it no longer counts for the check as it now reads.
+          <b>
+            Reworded after you recorded <i>{prior.state}</i> — that reading was withdrawn
+          </b>
+        )}
+        {check.amendNote !== null && <span className="muted"> {check.amendNote}</span>}
+      </div>
+      {prior !== null && (
+        <details>
+          <summary>What it used to say</summary>
+          <div className="pm-vamend-prior">
+            <div className="pm-vtitle">{prior.title}</div>
+            <div className="pm-vbody">
+              <div>
+                <b>Do</b>
+                {renderMarkdown(prior.do, refUrls)}
+              </div>
+              <div>
+                <b>Expect</b>
+                {renderMarkdown(prior.expect, refUrls)}
+              </div>
+            </div>
+            {prior.note !== null && <div className="pm-vnote">{prior.note}</div>}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

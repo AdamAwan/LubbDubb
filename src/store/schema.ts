@@ -667,6 +667,9 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   result_at   TEXT,
   defer_until TEXT,                   -- when a deferral says it comes back; null is "not saying"
   superseded_reason TEXT,             -- set when an amendment stopped declaring it; null is live
+  revision    TEXT,                   -- JSON: the wording an amendment replaced, and the reading it withdrew
+  amended_at  TEXT,                   -- when an amendment last changed it; cleared by the next reading
+  amend_note  TEXT,                   -- why it changed, in the amender's words
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   PRIMARY KEY (plan_id, id)

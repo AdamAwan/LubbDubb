@@ -165,9 +165,28 @@ across by name, so a replan re-declaring the same resource does not file it twic
 
 ## Amendment
 
-A validation plan written at planning time is written by the one agent that has not done the work
-yet, so a check set that cannot change goes stale by the first merge. A replan amends it through the
-same document, and `ingestValidation` folds it on the same terms `upsertPlanParts` folds the parts:
+A validation plan written at planning time is written by the one agent that has **not done the work
+yet**. A planner reading the repository writes a check against the code it expects to exist, and by
+the second part that check may describe a screen that moved, a command that was renamed, or a
+behaviour the plan decided against. A check set that cannot change is therefore worse than none: a
+stale check that fails reads as a broken goal.
+
+Two writers fold a change onto the rows, and the difference between them is load-bearing:
+
+|          | `ingestValidation` (a plan document)        | `amendValidation` (`validation_amend`)      |
+| -------- | -------------------------------------------- | --------------------------------------------- |
+| Speaks for | The **whole** check set                    | Only the checks it names                      |
+| Omission | A withdrawal                                 | Nothing at all                                |
+| Written by | The planner, through `plan_submit` or `plan.json` | Any agent working the goal              |
+| Withdrawal | By silence                                 | Said out loud, with a reason                  |
+
+Collapsing them would mean an agent sending a correct two-check correction silently supersedes the
+other six — a validation plan an agent can delete by being terse. That is why `validation_amend` is a
+separate tool rather than a second way into `plan_submit`, the same split `note_progress` makes
+against `conclude_work`: a narrow, frequent, additive act kept apart from the one that speaks for
+everything.
+
+Both writers merge on the check id, on the same terms `upsertPlanParts` folds the parts:
 
 | Operation      | Effect                                                                                           | Why                                                                                                                                                                                |
 | -------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -183,6 +202,75 @@ references and a suggestion, and a result is not about them.
 reading: an operator override that never learned the block produces plans without one, and treating
 that as "the planner withdrew every check" would supersede a validation plan somebody is halfway
 through. Withdrawing every check is `"validation": {"checks": []}`, said explicitly.
+
+### `validation_amend`
+
+`src/validation/amend.ts` (pure) and `src/mcp/tools/validationAmend.ts`. Takes a required `note`,
+`checks` to add or amend, `withdraw` entries each with their own reason, and `resources` merged by
+name. `checks` and `resources` are parsed by **the plan document's own schemas**
+(`ValidationCheckSchema`, `ValidationResourceSchema`), so the two transports refuse the same things —
+including `actor`, which both refuse rather than drop. A second copy of those shapes would have
+drifted the first time either learned a field.
+
+Three refusals are the tool's own:
+
+- **No note, no amendment.** `conclude_work`'s rule: the note is the whole of what an operator sees
+  when a check they read yesterday says something else today.
+- **An amendment that changes nothing** is refused rather than accepted quietly — the caller believes
+  it corrected something and would go on believing it.
+- **An id both declared and withdrawn** is refused rather than resolved. Both readings are
+  defensible and the caller means one of them; the store's withdrawal arm relies on this, and may
+  then assume a declared id is never also a withdrawn one.
+
+The origin fence is deliberately **wider than the others**. `conclusionOrigin` and
+`partConclusionOrigin` refuse every caller but one because a conclusion is a verdict only one party
+is entitled to cast. A check is not a verdict — it is a note about how the goal gets checked, and the
+agent best placed to notice one is wrong is whoever is looking at the code. So the whole-issue agent,
+a part agent and the assessor all qualify. The fence that matters is unchanged and structural: the
+origin comes off the credential, so an agent working goal A cannot amend goal B by asking.
+
+**The planner is the one refusal, and by name**: it already has a transport that declares the entire
+block, and two ways to say one thing that disagree about what an omission means is the drift the
+split exists to prevent.
+
+Two shapes are refused for reasons that are not the caller's fault, and say so plainly:
+`validation.enabled` off, and a goal with **no plan** — the checks hang off the plan row, so a
+deployment running without the planning funnel has nowhere to put one.
+
+### The band
+
+An amendment leaves the check carrying `amendedAt`, the amender's `amendNote`, and — when it
+reworded rather than added — a `revision` holding what the check used to say and the reading that was
+withdrawn with it. That is the executable form of "you are told when the plan changes", and it is
+the half that makes correctability safe: a check quietly rewritten under an operator who already ran
+it is worse than one that cannot change at all, because they would go on believing they had checked
+something the plan no longer asks for.
+
+| Case                             | `amendedAt` | `revision` |
+| -------------------------------- | ----------- | ---------- |
+| A plan's **first** check set     | unset       | null       |
+| Added by an amendment            | set         | null       |
+| Reworded, check was `unrun`      | set         | `state: null` |
+| Reworded over a recorded reading | set         | the wording and the withdrawn reading |
+| Re-declared word for word        | carried, never cleared | carried |
+
+A plan's opening declaration bands nothing: every check in it is new, and banding all of them would
+fire the one signal that means "this is not the check you read" on a plan nobody has read yet. A
+re-declaration with identical wording carries the previous band forward rather than clearing it —
+an operator who has not yet seen the last amendment must not have it wiped by the next replan that
+happens to restate the same words.
+
+**The band clears when the operator records a reading against the new wording**, in
+`recordValidationResult`, and by nothing else. That is the only acknowledgement worth having: a
+dismiss button would clear it for somebody who had merely seen it. A reset counts, because it is
+still an operator act on the check as it now reads.
+
+Because the amendment reaches people who are not at the cockpit, it is stated in two more places:
+`outstandingChecks` appends what the change cost to the close-out line, and the ticket comment marks
+the check `_(amended after it was passed — needs running again)_`. Both only when a reading was
+actually withdrawn — an amendment to a check nobody ran took nothing away. Without them a check
+somebody passed and an amendment then rewrote renders as a plain `unrun`, indistinguishable from one
+they never got to, which is the single most misleading line either could carry.
 
 ## Deferral and waiving
 
@@ -270,13 +358,16 @@ delegated to under the same method names ([14](14-persistence.md#shape)).
   `uses`, `covers`, `fleet_candidate`, `candidate_why`, `state`, `result_note`, `result_by`,
   `result_at`, `defer_until`, `superseded_reason`, `created_at`, `updated_at`. `check_do` rather than
   `do` because DO is a SQLite keyword; `check_expect` follows it so the pair reads as a pair.
+  `revision` is JSON — the wording an amendment replaced and the reading it withdrew, kept as one
+  record because it is read as one.
 - **`validation_resources`** — `plan_id`, `name`, `kind`, `note`, `provided`, `human_task_id`.
 
-Both are fresh `CREATE TABLE`s and both declare an **empty `ColumnMigrations` anyway**: a table being
-new once does not keep it exempt, and the next column added to one is invisible on every database
-from before it existed, with nothing erroring. That is the `human_tasks` lesson
-([14](14-persistence.md#migrations)). `issue_runs` gained `dismiss_note` in the same change and has a
-real entry for it, which is the same lesson collected.
+Both tables shipped as fresh `CREATE TABLE`s and both declared an **empty `ColumnMigrations`
+anyway**, on the argument that a table being new once does not keep it exempt. The band collected
+that debt one change later: `revision`, `amended_at` and `amend_note` have real entries, and without
+them every database from before `validation_amend` would have read `undefined` for all three and
+silently drawn no band at all ([14](14-persistence.md#migrations)). `issue_runs` gained
+`dismiss_note` the same way.
 
 ## The cockpit
 
@@ -294,8 +385,12 @@ assay and the conclusion, inside neither.
 ## Tests
 
 `test/validation.test.ts` (the schema's refusals, letters, and what an amendment may do to a check
-somebody has run) and `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
-notes, and that a flagged goal still blocks nothing).
+somebody has run), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
+notes, and that a flagged goal still blocks nothing), and `test/validationAmend.test.ts` (the
+tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
+the band).
 
 The verdict tests assert **both** directions, `planApproval.test.ts`'s discipline: a verdict that
 counts `deferred` as clear and one that does not are one edit apart, and only one of them is honest.
+The amendment tests do the same with the rewording rule, which has the same shape: a check whose
+wording changed loses the result, and one re-declared word for word keeps it.

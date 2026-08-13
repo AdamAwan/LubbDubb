@@ -72,6 +72,9 @@ function demoCheck(
     resultAt: null,
     deferUntil: null,
     supersededReason: null,
+    revision: null,
+    amendedAt: null,
+    amendNote: null,
     ...seed,
   };
 }
@@ -977,6 +980,20 @@ export function buildDemoState(): DemoSeed {
         do: 'Set `auth.enabled` to false, restart, and open the same chip.',
         expect: 'The file renders with no capability in the URL at all.',
         covers: ['route'],
+        // The case the amber band exists for, and the reason it is in the demo
+        // rather than only in a test: somebody ran this, and then the check
+        // stopped being the check they ran.
+        amendedAt: ago(3),
+        amendNote:
+          'An agent working this goal amended the validation plan: the unsigned path now redirects rather ' +
+          'than serving inline, so "no capability in the URL" was no longer the thing to look at.',
+        revision: {
+          title: 'With auth off, artifacts still serve',
+          do: 'Set `auth.enabled` to false, restart, and open the same chip.',
+          expect: 'The file renders inline.',
+          state: 'passed',
+          note: 'Rendered inline with auth off, as expected.',
+        },
       }),
       demoCheck({
         id: 'tampered-capability-refused',

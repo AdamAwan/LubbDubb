@@ -1515,8 +1515,44 @@ export interface ValidationCheck {
    * settlement an amended plan gives a part it dropped.
    */
   supersededReason: string | null;
+  /**
+   * What an amendment replaced, and the reading it cost. Null on a check nothing
+   * has amended, and on one whose new reading has since been recorded — see
+   * {@link ValidationCheck.amendedAt}.
+   */
+  revision: ValidationRevision | null;
+  /**
+   * When an amendment last changed this check, and the flag the cockpit draws its
+   * band from. **Cleared by the next recorded reading**, because the band exists
+   * to say "this is not the check you ran" and an operator who has just run it has
+   * been told. Set with no {@link ValidationCheck.revision} on a check an
+   * amendment *added*: there is no prior wording, and the operator still needs to
+   * know it appeared after they read the plan.
+   */
+  amendedAt: string | null;
+  /** Why it changed, in the amender's words. Required of every amendment. */
+  amendNote: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * The wording an amendment replaced, and the reading that was withdrawn with it.
+ *
+ * Kept as one record rather than as loose columns because it is read as one — a
+ * band saying "you passed this, and then it changed to say something else" is
+ * only meaningful with both halves. `state` is null when the check had not been
+ * run: an amendment to an `unrun` check costs nothing, and saying it withdrew a
+ * reading nobody took would be an invention.
+ */
+export interface ValidationRevision {
+  title: string;
+  do: string;
+  expect: string;
+  /** The withdrawn reading, or null when the check was `unrun` at the time. */
+  state: ValidationCheckState | null;
+  /** The withdrawn reading's note. */
+  note: string | null;
 }
 
 /**
@@ -1539,6 +1575,54 @@ export interface ValidationCheckInput {
   covers: string[];
   fleetCandidate: boolean;
   candidateWhy: string | null;
+}
+
+/**
+ * One check of an amendment: the same declaration, minus the sequence number.
+ *
+ * An amendment names the checks it is changing and says nothing about the rest,
+ * so there is no document order to take a `seq` from — the store assigns one
+ * after the last, which is also the only honest place for it. A caller that had
+ * to compute the number would have to read the plan's checks first, and would
+ * then be one race away from two checks claiming the same position.
+ */
+export type ValidationCheckAmendment = Omit<ValidationCheckInput, 'seq'>;
+
+/**
+ * What one amendment does to a plan's validation block.
+ *
+ * **Merge-only, and that is the whole difference from an ingestion.**
+ * `ingestValidation` reads a document that declares the *entire* check set, so a
+ * check it omits was withdrawn. An amendment declares only what it is changing:
+ * an omitted check is untouched, and withdrawing one is said out loud in
+ * {@link ValidationAmendment.withdraw}, with a reason. The alternative — letting
+ * an agent send a short list and having the harness read the omissions as
+ * withdrawals — is a validation plan an agent can delete by being terse.
+ */
+export interface ValidationAmendment {
+  /** Added when the id is new, merged onto the row when it is not. */
+  checks: ValidationCheckAmendment[];
+  /** Superseded, never deleted — the row stays, and so does its letter. */
+  withdraw: { id: string; reason: string }[];
+  /** Merged by name; nothing here removes a resource another check may still use. */
+  resources: ValidationResourceInput[];
+  /** Why the plan is changing. Goes on every check this amendment touches. */
+  note: string;
+}
+
+/** What an amendment did, so the caller can be told what it cost. */
+export interface ValidationAmendResult {
+  added: ValidationCheck[];
+  /**
+   * Checks whose wording changed. Each carries the {@link ValidationRevision} it
+   * cost, which is how an agent learns that its rewording withdrew a pass.
+   */
+  reworded: ValidationCheck[];
+  /** Ids re-declared with identical wording — a no-op, reported rather than hidden. */
+  unchanged: string[];
+  withdrawn: string[];
+  /** Ids named for withdrawal that this plan does not have, or had already withdrawn. */
+  unknown: string[];
 }
 
 /** A resource as a document declares it. */
