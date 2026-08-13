@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Agent, CockpitDecision, Plan, PlanPart, Task } from '../web/src/types.js';
+import type { Agent, CockpitDecision, OpenPullRequest, Plan, PlanPart, PullRequest, Task } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
 import { buildGoalPage, buildGoalTrack } from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
@@ -111,7 +111,7 @@ test('an unknown goal ref yields null rather than an empty page', () => {
   assert.equal(buildGoalPage(state, 'issue:99999', []), null);
 });
 
-test('parts group by status, and a retired part is on no page at all', () => {
+test('parts group by status, and a retired part joins none of the groups', () => {
   const parts = [
     part({ id: 'p:1', slug: 'one', status: 'merged' }),
     part({ id: 'p:2', slug: 'two', status: 'in_review' }),
@@ -199,4 +199,121 @@ test('a goal whose number is a prefix of another does not inherit that goal’s 
 
   assert.ok(!page?.agents.some((a) => a.id === otherAgent.id));
   assert.ok(!page?.decisions.some((d) => d.id === otherDecision.id));
+});
+
+/**
+ * The pull requests a goal owns, and why the part rows are only one of three ways.
+ *
+ * A goal delivered **whole** has no parts at all — the single-PR arm is exactly
+ * "no live parts" — so a page keyed on `prNumber` drew no pull request for any
+ * goal the harness worked in one, which is most finished goals.
+ */
+test('a goal worked whole owns its pull requests by branch, and a merged one is still shown', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const open: OpenPullRequest = {
+    id: 'pr-901',
+    number: 901,
+    title: 'the one PR',
+    branch: `issue/${issue.number}`,
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    merged: false,
+    health: { blocked: false, reasons: [] },
+    attention: { status: 'you', reasons: [] },
+    ciVerdict: { actionable: true, dispatch: [], escalate: [], ignored: [], urgent: false },
+  };
+  const closed: PullRequest = {
+    id: 'pr-902',
+    number: 902,
+    title: 'an earlier attempt, merged',
+    branch: `issue/${issue.number}/first`,
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    merged: true,
+    state: 'merged',
+  };
+  // Shares the goal's digits as a branch prefix without being its branch — what a
+  // bare `startsWith` would wrongly admit.
+  const other: PullRequest = { ...closed, id: 'pr-903', number: 903, branch: `issue/${issue.number}9` };
+
+  const page = buildGoalPage(
+    {
+      ...state,
+      plans: [],
+      planParts: [],
+      world: { ...state.world, pullRequests: [open], closedPullRequests: [closed, other] },
+    },
+    ref,
+    [],
+  );
+
+  assert.deepEqual(
+    page?.openPullRequests.map((pr) => pr.number),
+    [901],
+  );
+  assert.deepEqual(
+    page?.closedPullRequests.map((pr) => pr.number),
+    [902],
+  );
+});
+
+test('a PR the provider linked is the goal’s, whatever its branch is called', () => {
+  const state = buildDemoState().state;
+  const issue = { ...state.world.issues[0]!, linkedPrNumber: 904 };
+  const linked: PullRequest = {
+    id: 'pr-904',
+    number: 904,
+    title: 'opened by hand off an unconventional branch',
+    branch: 'fix/whatever',
+    ciStatus: 'unknown',
+    unresolvedComments: [],
+    merged: true,
+    state: 'merged',
+  };
+
+  const page = buildGoalPage(
+    {
+      ...state,
+      plans: [],
+      planParts: [],
+      world: { ...state.world, issues: [issue], pullRequests: [], closedPullRequests: [linked] },
+    },
+    `issue:${issue.number}`,
+    [],
+  );
+
+  assert.deepEqual(
+    page?.closedPullRequests.map((pr) => pr.number),
+    [904],
+  );
+});
+
+/**
+ * Retired parts are held apart from `parts` rather than folded in: every count on
+ * the page and the overview's track reads `parts`, and what a plan *proposed* is
+ * not what the goal is made of. They are still carried, because "the plan has no
+ * live parts" without them is a sentence about a plan the operator cannot read.
+ */
+test('a plan with no live parts still carries what it proposed', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const parts = [
+    part({ id: 'p:1', slug: 'one', seq: 2, status: 'retired' }),
+    part({ id: 'p:2', slug: 'two', seq: 1, status: 'retired' }),
+  ];
+  const page = buildGoalPage(
+    { ...state, planParts: parts, plans: [plan(`issue:${issue.number}`)] },
+    `issue:${issue.number}`,
+    [],
+  );
+
+  assert.deepEqual(page?.parts, [], 'a retired part is in no group and in no count');
+  assert.deepEqual(
+    page?.retiredParts.map((p) => p.slug),
+    ['two', 'one'],
+    'in the order the plan declared them',
+  );
+  assert.deepEqual(buildGoalTrack(page?.parts ?? []), { merged: 0, now: 0, held: 0, waiting: 0, total: 0 });
 });

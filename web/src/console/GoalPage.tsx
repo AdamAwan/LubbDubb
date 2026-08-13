@@ -1,13 +1,14 @@
 import { useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { GoalPageView, GoalPartView, PartGroup } from '../view/goalPage.js';
+import type { GoalPageView, PartGroup } from '../view/goalPage.js';
 import type { NeedRow } from '../view/needsYou.js';
-import type { Issue, OpenPullRequest, PullRequest } from '../types.js';
+import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { renderMarkdown } from '../components/markdown.js';
+import { renderRichText } from '../components/richText.js';
 import { fmtUsd, refLink, relTime } from '../components/util.js';
 import { watchBucket } from '../worldBuckets.js';
 import { KIND_LABEL, holdingLabel } from './QueueRail.js';
@@ -310,59 +311,95 @@ const GROUP_LABEL: Record<PartGroup, string> = {
  * status nothing else in the world explains — a blocked part has no branch, no PR
  * and no agent to read — so a paraphrase here would be the only account there is,
  * and wrong.
+ *
+ * **Retired parts are drawn too, in a column of their own.** "The plan has no live
+ * parts" is the single-PR arm, and a plan reaches it by having *proposed* a
+ * decomposition that was then retired — so the sentence alone leaves the operator
+ * told about a plan they cannot read. They sit outside the four groups because
+ * they are outside every count on this page: what the plan proposed is not what
+ * the goal is made of.
  */
 function PlanWaves({ page }: { page: GoalPageView }): JSX.Element {
   const groups = GROUP_ORDER.map((group) => ({
     group,
     parts: page.parts.filter((p) => p.group === group),
   })).filter((g) => g.parts.length > 0);
+  const retired = page.retiredParts;
 
   return (
     <section className="cn-card">
       <h3>
         The plan
         {page.parts.length > 0 && <i className="cn-n">{page.parts.length} parts</i>}
+        {page.parts.length === 0 && retired.length > 0 && <i className="cn-n">{retired.length} retired</i>}
         <span className="cn-more">left to right is dispatch order</span>
       </h3>
       <div className="cn-waves">
-        {groups.length === 0 ? (
+        {groups.length === 0 && (
           <p className="cn-empty">
-            {page.plan === null ? 'No plan has been drawn for this goal.' : 'The plan has no live parts.'}
+            {page.plan === null
+              ? 'No plan has been drawn for this goal.'
+              : retired.length > 0
+                ? 'The plan has no live parts — this goal is worked as one pull request. What it proposed is below.'
+                : 'The plan has no live parts.'}
           </p>
-        ) : (
-          groups.map(({ group, parts }) => (
-            <div className="cn-col" key={group}>
-              <div className="cn-coln">{GROUP_LABEL[group]}</div>
-              {parts.map((p) => (
-                <Part key={p.part.id} view={p} />
-              ))}
-            </div>
-          ))
+        )}
+        {groups.map(({ group, parts }) => (
+          <div className="cn-col" key={group}>
+            <div className="cn-coln">{GROUP_LABEL[group]}</div>
+            {parts.map((p) => (
+              <Part key={p.part.id} part={p.part} group={p.group} agentId={p.agentId} />
+            ))}
+          </div>
+        ))}
+        {retired.length > 0 && (
+          <div className="cn-col">
+            <div className="cn-coln">Retired</div>
+            {retired.map((part) => (
+              <Part key={part.id} part={part} group="retired" agentId={null} />
+            ))}
+          </div>
         )}
       </div>
     </section>
   );
 }
 
-function Part({ view }: { view: GoalPartView }): JSX.Element {
-  const { part } = view;
+function Part({
+  part,
+  group,
+  agentId,
+}: {
+  part: PlanPart;
+  /** The four the page groups by, plus the one that is drawn beside them and counted in none of them. */
+  group: PartGroup | 'retired';
+  agentId: string | null;
+}): JSX.Element {
   return (
-    <div className={`cn-part cn-${view.group}`}>
+    <div className={`cn-part cn-${group}`}>
       <b>
         {part.seq} · {part.title}
       </b>
-      {view.group === 'held' && part.blockedReason !== null && <p className="cn-why">{part.blockedReason}</p>}
+      {group === 'held' && part.blockedReason !== null && <p className="cn-why">{part.blockedReason}</p>}
       {part.scope !== '' && <p>{part.scope}</p>}
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}
         {part.prNumber !== null && ` · PR #${part.prNumber}`}
-        {view.agentId !== null && ` · ${view.agentId}`}
+        {agentId !== null && ` · ${agentId}`}
       </span>
     </div>
   );
 }
 
-/** The ticket as it stood at pickup — what a plan, an assay or an ask is judged against. */
+/**
+ * The ticket as it stood at pickup — what a plan, an assay or an ask is judged
+ * against.
+ *
+ * Through `renderRichText`, not `renderMarkdown`: Azure DevOps stores a
+ * description as HTML, and markdown-rendering it printed the `<p>` and `<br>` as
+ * text. This is the one field on the page the *tracker* wrote rather than an
+ * agent, which is why it is the one that sniffs.
+ */
 function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, string> }): JSX.Element {
   return (
     <section className="cn-card">
@@ -371,7 +408,7 @@ function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, stri
       </h3>
       <div className="cn-tick">
         {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
-        {renderMarkdown(issue.body, refUrls)}
+        {renderRichText(issue.body, refUrls)}
       </div>
     </section>
   );

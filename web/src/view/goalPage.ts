@@ -40,6 +40,18 @@ export interface GoalPageView {
   needs: NeedRow[];
   plan: Plan | null;
   parts: GoalPartView[];
+  /**
+   * The parts the plan no longer schedules, in the order it declared them.
+   *
+   * Held apart from `parts` rather than folded in as a fifth group, because every
+   * count on the page and the overview's segment track are reads of `parts` and a
+   * retired part is not one of the goal's: it is what the plan *proposed*. Drawn
+   * all the same — "the plan has no live parts" is the single-PR arm
+   * ([08](../../../docs/spec/08-planning.md#shape-is-the-parts)), and stating that
+   * without showing what was decomposed and then retired leaves the operator with
+   * a sentence about a plan they cannot read.
+   */
+  retiredParts: PlanPart[];
   openPullRequests: OpenPullRequest[];
   closedPullRequests: PullRequest[];
   agents: Agent[];
@@ -55,6 +67,30 @@ export interface GoalPageView {
  */
 function belongsToGoal(candidate: string | null | undefined, ref: string): boolean {
   return candidate === ref || (candidate?.startsWith(`${ref}:`) ?? false);
+}
+
+/**
+ * Whether this pull request is one of the goal's.
+ *
+ * Three ways, and the part rows are only the first of them. A goal delivered
+ * **whole** has no parts at all — the single-PR arm is exactly "no live parts"
+ * ([08](../../../docs/spec/08-planning.md#shape-is-the-parts)) — so a page keyed on
+ * `prNumber` alone drew no pull request for any goal the harness worked in one,
+ * which is most finished goals. The other two are the server's own matching, in
+ * `resolveIssuePr`: the branch convention (`issue/<n>`, and `issue/<n>/<slug>` for
+ * a part whose row has not caught up), and `linkedPrNumber` for a PR the provider
+ * linked itself. The convention is restated here rather than imported because the
+ * cockpit names `src/wire.ts` and nothing else; it is a *string shape*, not a
+ * verdict, and the pair is pinned by `test/goalPage.test.ts`.
+ */
+function ownsPr(pr: PullRequest, issue: Issue, partPrs: ReadonlySet<number>): boolean {
+  const branch = `issue/${issue.number}`;
+  return (
+    partPrs.has(pr.number) ||
+    pr.number === issue.linkedPrNumber ||
+    pr.branch === branch ||
+    pr.branch.startsWith(`${branch}/`)
+  );
 }
 
 const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
@@ -97,15 +133,22 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     })
     .sort((a, b) => a.part.seq - b.part.seq);
 
-  const partPrs = new Set(parts.flatMap((p) => (p.part.prNumber === null ? [] : [p.part.prNumber])));
+  const retiredParts = (state.planParts ?? [])
+    .filter((p) => plan !== null && p.planId === plan.id && p.status === 'retired')
+    .sort((a, b) => a.seq - b.seq);
+
+  const partPrs = new Set(
+    [...parts.map((p) => p.part), ...retiredParts].flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])),
+  );
 
   return {
     issue,
     needs: needs.filter((n) => n.goalRef === ref),
     plan,
     parts,
-    openPullRequests: state.world.pullRequests.filter((pr) => partPrs.has(pr.number)),
-    closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => partPrs.has(pr.number)),
+    retiredParts,
+    openPullRequests: state.world.pullRequests.filter((pr) => ownsPr(pr, issue, partPrs)),
+    closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => ownsPr(pr, issue, partPrs)),
     agents: state.agents.filter((a) => belongsToGoal(state.tasks.find((t) => t.id === a.taskId)?.originRef, ref)),
     decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
   };
