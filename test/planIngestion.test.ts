@@ -373,6 +373,8 @@ test('the widened plan document round-trips through ingestion', () => {
       version: 1,
       verdict: 'parts',
       reason: 'the signer must exist before the route verifies one',
+      diagnosis: 'the route sits inside the prefix guard, and a navigation cannot carry the header',
+      approach: 'move it out and gate it on a signed capability minted into the snapshot',
       risks: 'part 2 briefly serves artifacts with no guard',
       outOfScope: 'capability revocation',
       document: '# Why\n\nBecause the guard is a prefix, not a per-route opt-in.',
@@ -395,6 +397,11 @@ test('the widened plan document round-trips through ingestion', () => {
     title: 'Serve artifacts outside /api',
   });
 
+  // The two the plan modal leads with, and the reason they are not folded into
+  // `reason`: all three are present here and each says a different thing.
+  assert.equal(plan.diagnosis, 'the route sits inside the prefix guard, and a navigation cannot carry the header');
+  assert.equal(plan.approach, 'move it out and gate it on a signed capability minted into the snapshot');
+  assert.equal(plan.reason, 'the signer must exist before the route verifies one');
   assert.equal(plan.risks, 'part 2 briefly serves artifacts with no guard');
   assert.equal(plan.outOfScope, 'capability revocation');
   assert.match(plan.document!, /^# Why/);
@@ -405,10 +412,10 @@ test('the widened plan document round-trips through ingestion', () => {
 });
 
 test('a document from an older planner still validates, and reads as absent', () => {
-  // The five fields are optional precisely so a planner that has never heard of
-  // them — or an operator-overridden prompt that does not mention them — keeps
-  // working. Absent must read as null, never as an empty string, or the cockpit
-  // cannot tell "wrote nothing" from "wrote ''".
+  // Every field added after v1 is optional precisely so a planner that has never
+  // heard of them — or an operator-overridden prompt that does not mention them —
+  // keeps working. Absent must read as null, never as an empty string, or the
+  // cockpit cannot tell "wrote nothing" from "wrote ''".
   const parsed = parsePlanDocument(
     JSON.stringify({
       version: 1,
@@ -420,6 +427,8 @@ test('a document from an older planner still validates, and reads as absent', ()
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   const store = new Store(':memory:');
   const { plan } = ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:9', title: 'Old' });
+  assert.equal(plan.diagnosis, null);
+  assert.equal(plan.approach, null);
   assert.equal(plan.risks, null);
   assert.equal(plan.document, null);
   assert.equal(store.listPlanParts(plan.id)[0]!.rationale, null);

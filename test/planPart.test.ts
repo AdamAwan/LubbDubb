@@ -42,6 +42,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     title: 'Big thing',
     status: 'active',
     reason: 'Schema must land before the code that reads it.',
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

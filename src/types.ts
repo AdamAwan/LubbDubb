@@ -1328,7 +1328,20 @@ export interface Plan {
   originRef: string;
   title: string;
   status: PlanStatus;
-  /** The planner's own justification for its verdict. Null when it gave none. */
+  /**
+   * What is actually wrong — the root cause the planner found in the code, not a
+   * restatement of the issue. Null when it said nothing, and legitimately null on
+   * work that is not a defect: there is no root cause of a feature.
+   */
+  diagnosis: string | null;
+  /**
+   * What is going to be done about it, in a few sentences. The summary an operator
+   * approves on, kept separate from {@link reason} because that one answers a
+   * different question — a shape justification is not a description of the work,
+   * and one field asked to be both is reliably neither.
+   */
+  approach: string | null;
+  /** The planner's own justification for its verdict — why *this shape*. Null when it gave none. */
   reason: string | null;
   /** What could go wrong with this split, as the planner saw it. Null when it said nothing. */
   risks: string | null;

@@ -68,11 +68,13 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Submit your verdict with the plan_submit tool if you have it — it validates on the spot, so a ' +
       'rejected plan comes back with the reason and you can fix it and call again. Otherwise write the ' +
       'same document to {planFile} in this worktree, creating the directory if needed. For one PR:\n\n' +
-      '  {"version": 1, "verdict": "single", "reason": "<one sentence>",\n' +
+      '  {"version": 1, "verdict": "single", "reason": "<one sentence: why this shape>",\n' +
+      '   "diagnosis": "<what is actually wrong>", "approach": "<what you are going to do about it>",\n' +
       '   "risks": "<what could go wrong>", "outOfScope": "<what you are not doing>",\n' +
       '   "document": "<the full write-up, markdown>"}\n\n' +
       'For several, each part being one reviewable PR:\n\n' +
-      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>",\n' +
+      '  {"version": 1, "verdict": "parts", "reason": "<one sentence: why this shape>",\n' +
+      '   "diagnosis": "...", "approach": "...",\n' +
       '   "risks": "...", "outOfScope": "...", "document": "...", "parts": [\n' +
       '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [],\n' +
       '     "rationale": "why this is its own PR", "acceptance": "what makes it done"},\n' +
@@ -92,13 +94,20 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '"report" when the deliverable is a write-up or a measurement, and "determination" when the part ' +
       'decides whether anything needs building at all. They exist so investigative work can be decomposed ' +
       'honestly instead of inventing pull requests for it; do not reach for them when the work is code.\n\n' +
+      '"diagnosis" and "approach" are the two the operator reads first, and they are the two nobody can ' +
+      'reconstruct from the rest: **diagnosis** is what is actually wrong — the root cause you found in the ' +
+      'code, named precisely, not a restatement of the issue text you were given; **approach** is what you ' +
+      'are going to do about it, in two or three sentences. Neither one is about how the work is split. ' +
+      'Leave "diagnosis" out only when the work is not a defect and there is genuinely nothing to diagnose. ' +
+      '"reason" is the narrow question of shape — why one PR, or why these parts — and is not the place ' +
+      'for either of the above.\n\n' +
       '"document" is not optional in practice: a human reads it and decides whether this work happens. ' +
       'Write it for them, in markdown — why the work is shaped this way, what you considered and rejected, ' +
       'and a section naming whatever you are least sure about. A plan with no write-up is one they have to ' +
       'take on trust.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you ' +
       'are on branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its verdict to the plan file; nothing else it does is read. Asks for the write-up (`risks`, `outOfScope`, `document`) and per-part `rationale`/`acceptance` — all optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
+    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its verdict to the plan file; nothing else it does is read. Asks for the headline pair (`diagnosis`, `approach` — the root cause and the fix, which is what the plan modal leads with), the write-up (`risks`, `outOfScope`, `document`) and per-part `rationale`/`acceptance` — all optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -108,7 +117,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Read the repository and the state above, then submit the amended plan with the plan_submit tool if you ' +
       'have it (it validates on the spot and tells you why if it rejects), otherwise write it to {planFile} in ' +
       'this worktree. Either way it is the same document as the original:\n\n' +
-      '  {"version": 1, "verdict": "parts", "reason": "<one sentence>",\n' +
+      '  {"version": 1, "verdict": "parts", "reason": "<one sentence: why this shape>",\n' +
+      '   "diagnosis": "<what is actually wrong>", "approach": "<what you are going to do about it>",\n' +
       '   "risks": "...", "outOfScope": "...", "document": "...", "parts": [\n' +
       '    {"slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [],\n' +
       '     "rationale": "...", "acceptance": "..."}\n' +
@@ -125,12 +135,13 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'one (it stacks on that branch and starts once that sibling has pushed), or several (the lanes rejoin — it ' +
       'starts only once every one of them has merged, and is cut from the integration branch). A cycle is refused.\n' +
       '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n' +
-      '- **Re-state the write-up.** `document`, `risks` and `outOfScope` are replaced by what you submit, not ' +
-      'merged — an amendment that omits them leaves the previous ones standing, which will read as though the ' +
-      'old reasoning still applies.\n\n' +
+      '- **Re-state the write-up.** `diagnosis`, `approach`, `document`, `risks` and `outOfScope` are replaced by ' +
+      'what you submit, not merged — an amendment that omits them leaves the previous ones standing, which will ' +
+      'read as though the old reasoning still applies. `diagnosis` is the root cause in the code and `approach` ' +
+      'is what you are going to do about it; neither is about how the work is split, which is `reason`.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
       'branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule `issue-plan`, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the write-up (`document`/`risks`/`outOfScope`) is replaced rather than merged. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+    doc: 'Sent to a code agent when an operator hits Replan on an existing plan (rule `issue-plan`, with the plan row back in `planning`). Unlike {issue-plan} it amends rather than plans cold: {current} is the plan and its parts as they stand, and the prompt spells out that slugs are the merge key, that in-flight parts must be re-declared, and that the write-up (`diagnosis`/`approach`/`document`/`risks`/`outOfScope`) is replaced rather than merged. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
   },
   'discuss-plan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -147,8 +158,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '- Escalate again each time you need them, and keep going until they are satisfied.\n' +
       '- When they are, submit the amended plan with the plan_submit tool (or write it to {planFile}), exactly as ' +
       'a replan would: slugs are the merge key, re-declare every part that is already merged, dispatched or in ' +
-      'review, and a part you leave out is retired only if nothing was started for it. Re-state "document", ' +
-      '"risks" and "outOfScope" — they are replaced by what you submit, not merged.\n' +
+      'review, and a part you leave out is retired only if nothing was started for it. Re-state "diagnosis", ' +
+      '"approach", "document", "risks" and "outOfScope" — they are replaced by what you submit, not merged.\n' +
       '- If they end up wanting no change at all, submit the plan unchanged. Submitting is what ends the ' +
       'conversation and puts the plan back in front of them for approval.\n\n' +
       'Do not implement anything and do not open a pull request. You are on branch {branch} only so you have the ' +

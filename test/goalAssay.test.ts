@@ -167,6 +167,8 @@ test('an issue that already has a plan is past this gate', async () => {
     title: 'Split it',
     status,
     reason: 'because',
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

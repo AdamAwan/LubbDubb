@@ -42,6 +42,8 @@ test('the dossier reports the plan, its parts, the decisions and what was spent'
       title: 'Add a widget',
       status: 'complete',
       reason: 'three lanes',
+      diagnosis: null,
+      approach: null,
       risks: null,
       outOfScope: null,
       document: null,

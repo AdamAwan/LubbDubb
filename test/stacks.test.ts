@@ -101,6 +101,8 @@ function plan(over: Partial<Plan> & { id: string; originRef: string }): Plan {
     title: 'Ticket sync rewrite',
     status: 'active',
     reason: null,
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

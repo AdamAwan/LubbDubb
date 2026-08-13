@@ -102,7 +102,9 @@ with no hierarchy, so the GitHub prompt is unchanged.
 {
   "version": 1,
   "verdict": "single" | "parts",
-  "reason": "<one sentence>",
+  "reason": "<one sentence: why this shape>",
+  "diagnosis": "<what is actually wrong>",
+  "approach": "<what is going to be done about it>",
   "parts": [{ "slug": "schema", "title": "...", "scope": "src/store/...", "dependsOn": [] }]
 }
 ```
@@ -134,18 +136,33 @@ already-decoded object. The `plan_submit` tool enters at the second, the file pa
 The difference is only that the tool can hand the reason back instead of burning an attempt to
 discover it.
 
-### The five narrative fields
+### The seven narrative fields
 
-Five additive, **optional** fields, so a document from an older planner still validates and neither
+Seven additive, **optional** fields, so a document from an older planner still validates and neither
 transport changes shape:
 
 | Field        | Level | What it is                                                   |
 | ------------ | ----- | ------------------------------------------------------------ |
 | `rationale`  | part  | Why this is its **own** PR rather than folded into a sibling |
 | `acceptance` | part  | What makes this part done                                    |
+| `diagnosis`  | plan  | What is actually wrong — the root cause, found in the code   |
+| `approach`   | plan  | What is going to be done about it                            |
 | `risks`      | plan  | What could go wrong with this split                          |
 | `outOfScope` | plan  | What the planner deliberately left out                       |
 | `document`   | plan  | The full narrative, markdown — the read-in-depth version     |
+
+**`diagnosis` and `approach` are separate from `reason` because they answer different questions, and
+one field asked all three answered whichever the planner reached for.** `reason` is the verdict's own
+justification — why _this shape_, one PR or these parts — and it is what the approval card, the
+provider status comment and `currentPlanSummary` have always quoted. Nothing asked what was broken or
+what would be done about it, so a planner supplied a diagnosis only when it happened to feel like one,
+and the plan modal led with a paragraph about splitting on an issue whose reader wanted the fix. The
+prompts now ask for all three by name and say what each is not.
+
+`diagnosis` is legitimately absent on work that is not a defect — there is no root cause of a feature —
+and the modal simply omits the section. `approach` is not: every plan is a plan to do something. Both
+are optional in the _schema_ for the reason every post-v1 field is, which is that an operator-overridden
+prompt that never learned them must keep validating.
 
 **The narrative lives on the plan row, not in an artifact chip.** The obvious alternative — the
 planner writes `docs/plan.md` and the file-events hook promotes it to a flag chip — is broken by a
@@ -162,7 +179,8 @@ trim reported**, never refused: refusing would reject the whole plan submission 
 `note_progress` trade-off (cheap and frequent beats strict) rather than the `report_finding` one
 (testimony, so refuse what cannot be attributed).
 
-`plans` carries `risks`/`out_of_scope`/`document` and `plan_parts` carries `rationale`/`acceptance` —
+`plans` carries `diagnosis`/`approach`/`risks`/`out_of_scope`/`document` and `plan_parts` carries
+`rationale`/`acceptance` —
 see [14](14-persistence.md). `Store.upsertPlan` **preserves each on absence** rather than clearing it,
 the same discipline it already applies to `statusCommentRef`: a caller updating only what it knows
 about must not erase a narrative some other write put there.

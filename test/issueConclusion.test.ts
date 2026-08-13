@@ -36,6 +36,8 @@ function plan(status: Plan['status']): Plan {
     title: 'x',
     status,
     reason: null,
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,

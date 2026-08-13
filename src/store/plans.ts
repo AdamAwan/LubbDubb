@@ -11,6 +11,8 @@ export const PLAN_COLUMNS: ColumnMigrations = {
   // never alters an existing table, so without these the fields are invisible
   // on every database that predates them.
   plans: {
+    diagnosis: 'TEXT',
+    approach: 'TEXT',
     risks: 'TEXT',
     out_of_scope: 'TEXT',
     document: 'TEXT',
@@ -46,6 +48,8 @@ export class PlanStore {
     originRef: string;
     title: string;
     status: PlanStatus;
+    diagnosis?: string | null;
+    approach?: string | null;
     reason?: string | null;
     risks?: string | null;
     outOfScope?: string | null;
@@ -62,6 +66,8 @@ export class PlanStore {
       reason: input.reason ?? null,
       // Preserved on absence for the same reason `statusCommentRef` is: a caller
       // that writes a status without re-stating the narrative must not erase it.
+      diagnosis: input.diagnosis ?? existing?.diagnosis ?? null,
+      approach: input.approach ?? existing?.approach ?? null,
       risks: input.risks ?? existing?.risks ?? null,
       outOfScope: input.outOfScope ?? existing?.outOfScope ?? null,
       document: input.document ?? existing?.document ?? null,
@@ -76,9 +82,10 @@ export class PlanStore {
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO plans (id, origin_ref, title, status, reason, risks, out_of_scope, document, discussing, status_comment_ref, created_at, updated_at)
-         VALUES (@id, @originRef, @title, @status, @reason, @risks, @outOfScope, @document, @discussing, @statusCommentRef, @createdAt, @updatedAt)
+        `INSERT INTO plans (id, origin_ref, title, status, diagnosis, approach, reason, risks, out_of_scope, document, discussing, status_comment_ref, created_at, updated_at)
+         VALUES (@id, @originRef, @title, @status, @diagnosis, @approach, @reason, @risks, @outOfScope, @document, @discussing, @statusCommentRef, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET title=excluded.title, status=excluded.status,
+           diagnosis=excluded.diagnosis, approach=excluded.approach,
            reason=excluded.reason, risks=excluded.risks, out_of_scope=excluded.out_of_scope,
            document=excluded.document, status_comment_ref=excluded.status_comment_ref, updated_at=excluded.updated_at`,
       )
@@ -372,6 +379,8 @@ interface PlanRow {
   status: string;
   reason: string | null;
   /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  diagnosis: string | null | undefined;
+  approach: string | null | undefined;
   risks: string | null | undefined;
   out_of_scope: string | null | undefined;
   document: string | null | undefined;
@@ -411,6 +420,8 @@ function rowToPlan(r: PlanRow): Plan {
     originRef: r.origin_ref,
     title: r.title,
     status: r.status as PlanStatus,
+    diagnosis: r.diagnosis ?? null,
+    approach: r.approach ?? null,
     reason: r.reason,
     risks: r.risks ?? null,
     outOfScope: r.out_of_scope ?? null,

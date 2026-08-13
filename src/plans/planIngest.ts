@@ -82,6 +82,8 @@ export function ingestPlanDocument(
     title,
     status,
     reason: doc.reason,
+    diagnosis: doc.diagnosis ?? null,
+    approach: doc.approach ?? null,
     risks: doc.risks ?? null,
     outOfScope: doc.outOfScope ?? null,
     document: doc.document ?? null,

@@ -99,7 +99,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 | `findings`                             | `findings.ts`      | `ticket_ref`, `where_at`, `detail`                                                                             |
 | `human_tasks`                          | `humanTasks.ts`    | `kind` (`'ask'` default, so every row from before the close-out reads as one), `dismissed_at`                  |
 | `issue_deliveries`, `issue_shortfalls` | `issueVerdicts.ts` | `detail` on **both** (the assessor's account beside its headline)                                              |
-| `plans`                                | `plans.ts`         | `risks`, `out_of_scope`, `document`, `discussing`                                                              |
+| `plans`                                | `plans.ts`         | `diagnosis`, `approach`, `risks`, `out_of_scope`, `document`, `discussing`                                     |
 | `plan_parts`                           | `plans.ts`         | `rationale`, `acceptance`, `expected_kind`, `outcome_kind`, `outcome_ref`, `outcome_summary`, `blocked_reason` |
 | `jobs`                                 | `jobs.ts`          | `origin_ref`                                                                                                   |
 
@@ -368,7 +368,7 @@ answer, read off the live `plan_parts` rows ([08](08-planning.md#shape-is-the-pa
 a _value_, not a column, so adding one needs no migration: an existing row simply never holds the new
 one. `awaiting_approval` is the approval gate itself — see [08](08-planning.md#the-approval-gate).
 
-`upsertPlan` **preserves `risks`/`outOfScope`/`document` on absence** rather than clearing them, the
+`upsertPlan` **preserves `diagnosis`/`approach`/`risks`/`outOfScope`/`document` on absence** rather than clearing them, the
 same discipline it already applies to `statusCommentRef`: a caller that writes a status without
 re-stating the narrative must not erase it. `discussing` is deliberately **not** settable through
 `upsertPlan` at all — it is its own one-way transition via `setPlanDiscussing`, so an ingestion can

@@ -70,6 +70,19 @@ const PlanDocumentSchema = z
     version: z.literal(1),
     verdict: z.enum(['single', 'parts']),
     reason: z.string().min(1),
+    /**
+     * The root cause, and what is going to be done about it. Optional for the
+     * reason every field added after v1 is: an older plan, and an operator
+     * override that never learned them, must keep validating — the alternative is
+     * a schema bump that fails every submission from a customised deployment.
+     *
+     * Separate from {@link reason} rather than folded into it because they answer
+     * different questions, and the field that had to answer all three answered
+     * whichever one the planner reached for. `diagnosis` is also legitimately
+     * absent on work that is not a defect; `approach` is not.
+     */
+    diagnosis: z.string().min(1).optional(),
+    approach: z.string().min(1).optional(),
     /** What could go wrong with this split. */
     risks: z.string().min(1).optional(),
     /** What the planner deliberately left out. */

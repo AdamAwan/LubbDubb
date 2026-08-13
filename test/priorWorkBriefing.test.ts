@@ -33,6 +33,8 @@ function planRow(fields: Partial<Plan> = {}): Plan {
     title: 'Add a widget',
     status: 'active',
     reason: null,
+    diagnosis: null,
+    approach: null,
     risks: null,
     outOfScope: null,
     document: null,
@@ -86,11 +88,17 @@ test("the planner's write-up reaches the agent, and its one-line reason delibera
     ...bare(),
     plan: planRow({
       reason: 'three lanes',
+      diagnosis: 'the seeding proc skips IMS-only groups',
+      approach: 'add the seeding rule and repair the rows already wrong',
       risks: 'the migration is the risky half',
       outOfScope: 'the cockpit panel is not in this',
       document: '## Why\n\nBecause the schema has to land first.',
     }),
   });
+  // The root cause and the fix reach an agent through here and nowhere else: on a
+  // `single` verdict there is no `currentPlanSummary` in the prompt at all.
+  assert.match(text, /the seeding proc skips IMS-only groups/);
+  assert.match(text, /add the seeding rule and repair the rows already wrong/);
   assert.match(text, /the migration is the risky half/);
   assert.match(text, /the cockpit panel is not in this/);
   assert.match(text, /the schema has to land first/);

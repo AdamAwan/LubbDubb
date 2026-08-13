@@ -37,6 +37,8 @@ const plan: Plan = {
   title: 'Ticket sync rewrite',
   status: 'active',
   reason: null,
+  diagnosis: null,
+  approach: null,
   risks: null,
   outOfScope: null,
   document: null,

@@ -32,10 +32,10 @@ import type {
  * Every field below is prose an agent wrote and no template renders:
  *
  * - **the pad**, read by `retroBriefing` alone until now;
- * - **`document` / `risks` / `outOfScope`** — the planner's write-up, which reaches
- *   the plan modal and no agent. On a `single` verdict that write-up is the *entire*
- *   product of a code agent that read the whole repository, and rule `issue-pickup`'s
- *   prompt is the issue title and body;
+ * - **`diagnosis` / `approach` / `document` / `risks` / `outOfScope`** — the planner's
+ *   write-up, which reaches the plan modal and no agent. On a `single` verdict that
+ *   write-up is the *entire* product of a code agent that read the whole repository,
+ *   and rule `issue-pickup`'s prompt is the issue title and body;
  * - **a part's `rationale` / `acceptance`** — declared by the planner, stored, and
  *   rendered nowhere at all;
  * - **the verdicts' prose** — an assay's summary, a conclusion's note, an
@@ -132,6 +132,11 @@ function padSection(entries: ScratchEntry[]): string {
 function planSection(plan: Plan | null): string {
   if (!plan) return '';
   const lines: string[] = [];
+  // The two the planner read the whole repository to write, and the two no prompt
+  // renders — `currentPlanSummary` carries `reason` and stops there. On a `single`
+  // verdict the agent picking the issue up is otherwise told only its title and body.
+  if (plan.diagnosis) lines.push(`**What the planner found was actually wrong:** ${plan.diagnosis}`);
+  if (plan.approach) lines.push(`**What the planner said would be done about it:** ${plan.approach}`);
   if (plan.risks) lines.push(`**What the planner thought could go wrong:** ${plan.risks}`);
   if (plan.outOfScope) lines.push(`**What the planner deliberately left out:** ${plan.outOfScope}`);
   if (plan.document) {
