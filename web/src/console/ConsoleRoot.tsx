@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
-import type { CockpitActions, ConsolePanel } from '../cockpit/actions.js';
+import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
 import { TopBar } from './TopBar.js';
 import { QueueRail } from './QueueRail.js';
 import { GoalPage } from './GoalPage.js';
@@ -8,6 +8,7 @@ import { Overview } from './Overview.js';
 import { Backlog, backlogGroups } from './Backlog.js';
 import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
+import { WorkTreePanel } from '../components/WorkTreePanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
@@ -57,16 +58,14 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       </div>
     ) : null;
 
-  // A selected goal outranks the backlog. Selecting one is what a queue row does,
-  // and it does not close whatever the nav left open — so with the backlog
-  // winning, clicking an ask would land on a triage list instead of on the ask.
+  // A selected goal outranks the nav. Selecting one is what a queue row does, and
+  // it does not move the nav — so with a tab winning, clicking an ask would land
+  // on a triage list, or on the record, instead of on the ask.
   const situation =
     view.goalPage !== null ? (
       <GoalPage page={view.goalPage} view={view} actions={actions} />
-    ) : view.backlogOpen ? (
-      <Backlog view={view} actions={actions} />
     ) : (
-      <Overview view={view} actions={actions} />
+      tabBody(view.tab, view, actions)
     );
 
   const panel =
@@ -94,33 +93,66 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
   );
 }
 
+/** What the situation area draws for a tab, when no goal outranks it. */
+function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): JSX.Element {
+  switch (tab) {
+    case 'overview':
+      return <Overview view={view} actions={actions} />;
+    case 'backlog':
+      return <Backlog view={view} actions={actions} />;
+    case 'work':
+      // The shared panel, embedded exactly as the launch desk is: it reaches its
+      // own routes, which `console/` may not, but rendering one that does is not
+      // reaching — the import ban is on `api.js`, and it still holds here.
+      return (
+        <section className="work-panel">
+          <WorkTreePanel now={view.now} canFileTickets={view.state.config.canFileTickets} />
+        </section>
+      );
+  }
+}
+
+/** The nav's destinations, in reading order — the order the tabs are drawn in. */
+const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work'];
+
+const TAB_LABEL: Record<ConsoleTab, string> = {
+  overview: 'Overview',
+  backlog: 'Backlog',
+  work: 'Work',
+};
+
 /**
- * Where you are, and the two other places you can be.
+ * Where you are, and the other places you can be.
  *
- * Both items clear *both* pieces of state, because a nav click means "go here"
- * and either half left standing would land somewhere else. The backlog carries
- * its triage count — the one number that says whether it is worth opening — and a
+ * A click clears *both* pieces of state, because a nav click means "go here" and
+ * either half left standing would land somewhere else. The backlog carries its
+ * triage count — the one number that says whether it is worth opening; the other
+ * two carry none, since neither has a number that decides whether to look. And a
  * goal draws its crumb, which is the only thing on the page naming what the
  * situation area is currently about.
  */
 function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goal = view.goalPage;
-  const onBacklog = goal === null && view.backlogOpen;
-  const onOverview = goal === null && !view.backlogOpen;
-  const go = (backlog: boolean) => () => {
-    actions.selectGoal(null);
-    actions.openBacklog(backlog);
-  };
   const unwatched = backlogGroups(view).unwatched.length;
+  const go = (tab: ConsoleTab) => () => {
+    actions.selectGoal(null);
+    actions.openTab(tab);
+  };
 
   return (
     <nav className="cn-nav">
-      <button type="button" className={onOverview ? 'cn-on' : ''} onClick={go(false)}>
-        Overview
-      </button>
-      <button type="button" className={onBacklog ? 'cn-on' : ''} onClick={go(true)}>
-        Backlog <i className="cn-n">{unwatched} unwatched</i>
-      </button>
+      {TABS.map((tab) => (
+        <button key={tab} type="button" className={goal === null && view.tab === tab ? 'cn-on' : ''} onClick={go(tab)}>
+          {TAB_LABEL[tab]}
+          {/* The space is the gap: `.cn-n` carries no margin of its own. */}
+          {tab === 'backlog' && (
+            <>
+              {' '}
+              <i className="cn-n">{unwatched} unwatched</i>
+            </>
+          )}
+        </button>
+      ))}
       {goal !== null && (
         <>
           <span className="cn-navsep">/</span>

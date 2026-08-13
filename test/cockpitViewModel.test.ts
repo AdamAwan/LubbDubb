@@ -47,7 +47,7 @@ function build(state: AppState, over: Partial<Parameters<typeof buildViewModel>[
     reliabilityOpen: false,
     selectedGoal: null,
     consolePanel: null,
-    backlogOpen: false,
+    tab: 'overview',
     ...over,
   });
 }

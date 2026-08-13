@@ -8,6 +8,17 @@ import type { RecoveryVerdict, WorkNodeView } from '../types.js';
 export type ConsolePanel = 'findings' | 'faults' | 'output' | 'launch' | null;
 
 /**
+ * Which destination the situation area is on. One value rather than a boolean
+ * per destination for `ConsolePanel`'s reason exactly — and it is why the nav is
+ * a list rather than a hand-written pair: a third tab that has to be remembered
+ * in two booleans and four call sites is a third tab that arrives half-wired.
+ *
+ * A selected goal outranks all three, so this says where the nav last was, never
+ * what is drawn.
+ */
+export type ConsoleTab = 'overview' | 'backlog' | 'work';
+
+/**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
  *
  * This exists so that **nothing under `console/` imports `api.js`**. Drawing code
@@ -93,8 +104,8 @@ export interface CockpitActions {
   selectGoal(ref: string | null): void;
   /** Bring a full-surface panel in front, or dismiss it with null. */
   openPanel(panel: ConsolePanel): void;
-  /** Open the backlog view in place of the overview, or return to it. */
-  openBacklog(open: boolean): void;
+  /** Move the nav to a destination. A selected goal still outranks it. */
+  openTab(tab: ConsoleTab): void;
   discussPlan(planId: string): Promise<void>;
   endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;
