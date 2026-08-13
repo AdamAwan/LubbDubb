@@ -307,7 +307,9 @@ either settles the row and the next snapshot clears both, with nothing kept in s
 Order on the page, top to bottom:
 
 1. **The goal header** — number, title, item type, workflow state, the assay verdict with the
-   assayer's own summary in its title, the conclusion verdict, when the run started, the agent count,
+   assayer's own summary in its title, the conclusion verdict, the validation verdict as a settled
+   count (absent when the goal has no checks — "no plan" is a third reading and not a synonym for
+   clear, [20](20-validation.md)), when the run started, the agent count,
    what it has cost, and how many parts have merged. Every chip quotes a reading the server already
    made; nothing here is a second opinion. A `null` spend draws no reading at all, because nothing
    was ever measured and `$0.00` would report a goal that cost nothing
@@ -948,9 +950,9 @@ surface mentions the plan.
 
 **One scroll with an anchor rail**, not tabs. It was two tabs, and a tab is a thing a reader has to
 know to click: the write-up sat behind one, so the most considered thing a planner wrote was the part
-least likely to be read. The rail jumps to Verdict / The shape / Parts / Caveats / Write-up, and
+least likely to be read. The rail jumps to Verdict / The shape / Parts / Validation / Caveats / Write-up, and
 scrolling reaches all of them anyway. The head, the rail and the decision bar are fixed and the middle
-scrolls between them, because a plan is read *while* deciding and the verdict buttons must not scroll
+scrolls between them, because a plan is read _while_ deciding and the verdict buttons must not scroll
 away from the part being read.
 
 ### The verdict band
@@ -981,14 +983,14 @@ from. It is the cockpit's only drawing.
 - **Two edge kinds, drawn differently because they mean different things.** One dependency is a
   **stack** — solid, work flowing along it, the part starting as soon as that sibling pushes. Several
   is a **rejoin** — dashed, because nothing flows down any single one of them and the part waits for
-  every one to *merge*. An operator who reads a rejoin as a stack expects work to start far earlier
+  every one to _merge_. An operator who reads a rejoin as a stack expects work to start far earlier
   than it will.
 - **An edge that skips a wave is routed along a bus below the diagram.** Drawn directly it would pass
-  through whatever sits between its ends, and a line crossing a node reads as an edge *to* that node —
+  through whatever sits between its ends, and a line crossing a node reads as an edge _to_ that node —
   exactly the wrong reading on the rejoin that needs it.
 - A **human step** has a dashed amber border and no status stripe. Status is a 3px stripe rather than a
   fill: a fill dark enough to read on is a fill too dark to tell apart.
-- Clicking a node scrolls to that part's card and marks it, which is what makes the map a way *in*
+- Clicking a node scrolls to that part's card and marks it, which is what makes the map a way _in_
   rather than a second place the same facts are stated.
 
 ### The parts
@@ -996,13 +998,33 @@ from. It is the cockpit's only drawing.
 Each part carries its `touches` as path chips, its prose `scope` below them (suppressed when the
 planner answered both with the same thing), `size`, `rationale` (why its own PR), its `acceptance` as a
 **checklist**, its status, its PR, its "Up next" queue state (`unapproved` / `capped` / `▶ now`), and
-the stack edge spelled out as a sentence — a rejoin says *both* out loud, which the old
+the stack edge spelled out as a sentence — a rejoin says _both_ out loud, which the old
 `dependsOn[0]` rendering structurally could not.
 
 **Acceptance is ticked by the reviewer**, through `POST /api/plans/:id/acceptance`; nothing derives it
 ([08](08-planning.md#acceptance-ticked)). **Scope drift** draws under a part in red when its agents
 wrote outside what it declared — the plan disagreeing with reality, which is the thing the surface
 exists to surface.
+
+### Validation
+
+`ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, between the parts
+and the caveats, because the reading order is answer, then work, then how anyone knows it worked. Each
+row draws its **letter** in the gutter where a part's sequence number sits: it is the same kind of
+handle, and it is the one that stays put across an amendment.
+
+A row carries its `do` and `expect` side by side, the resources it names with a present/missing fact
+resolved server-side, the parts it `covers`, and the planner's "an agent could run this" nomination
+where there is one. The controls are Passed / Failed / Defer / Waive, each opening a one-line note the
+server also requires, and one way back to `unrun` from any settled state.
+
+**Every control writes an operator's reading and derives nothing** — there is no "mark all", and no
+state is inferred from a merged part or a green build, which is the acceptance checklist's rule one
+layer up. Checks an amendment withdrew are drawn folded, as the record of what the plan stopped asking
+for: filtering them would leave a reader unable to tell a dropped check from one nobody wrote. The
+count of what is not settled is stated once at the top in amber, with what closing the goal will ask
+for — amber and not red, because it blocks nothing. A plan with no checks says so rather than drawing
+nothing, the write-up section's rule. → [20](20-validation.md)
 
 ### The caveats
 
@@ -1030,7 +1052,7 @@ person, parts that are large to review, and what the goal has cost so far.
 estimate what work will cost, and a made-up number on the button that authorises spending is worse than
 no number. The spend shown is spend already made.
 
-**Objection pins compose the note.** A part can be pinned *question* or *drop* while reading, and the
+**Objection pins compose the note.** A part can be pinned _question_ or _drop_ while reading, and the
 pins are joined into the free-text note the accept and reject verdicts already carry — no new verdict,
 no new route, nothing the server has to learn. Reading a five-part plan and disagreeing with one of
 them is the ordinary case, and the only way to say so used to be to remember the slug and type it into

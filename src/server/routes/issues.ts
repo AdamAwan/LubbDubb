@@ -4,6 +4,8 @@ import { issueConclusionOrigin } from '../../issueConclusion.js';
 import { bugTicketFields, bugTrackerCoordinates } from '../../bugFiling.js';
 import { goalFingerprint } from '../../intake/assay.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
+import { validationHeadline } from '../../delivery/closeOut.js';
+import { goalValidation } from '../../validation/goal.js';
 import { watchLabelsFor } from '../../watchLabels.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -241,10 +243,25 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // back into the issue list, so nothing is scheduled for it again. Idempotent:
   // dismissing an already-dismissed or unrecorded run is a no-op 409, not an error
   // state. One-way; how it ended (`judged` / `abandoned`) is stamped from the row.
+  //
+  // **A flagged validation plan costs a sentence here**, and this is the sharper
+  // of the two places it does: the close-out obligation is an ask an operator may
+  // never open, but this is the button that ends the harness's run at a goal, it
+  // is one-way, and it is exactly the "close the goal and move on" it is named
+  // after. It still blocks nothing — the note is the whole of the requirement,
+  // and it is kept on the run so what the goal owed and what was said about it
+  // survive together.
+  const DismissRunBody = z.object({ note: optionalText('note') });
   app.post(
     '/api/issues/:number/dismiss-run',
-    checked({ params: IssueNumberParams }, async ({ params, reply }) => {
-      const dismissed = store.dismissIssueRun(issueConclusionOrigin(params.number));
+    checked({ params: IssueNumberParams, body: DismissRunBody }, async ({ params, body, reply }) => {
+      const origin = issueConclusionOrigin(params.number);
+      const validation = goalValidation(store, origin);
+      if (validation && validation.verdict.state === 'flagged' && body.note === undefined)
+        return reply.code(400).send({
+          error: `note is required — ${validationHeadline(validation.verdict)} Say what you are doing about them, or waive them first.`,
+        });
+      const dismissed = store.dismissIssueRun(origin, body.note ?? null);
       if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
       hub.broadcast({ type: 'dirty' });
       return { ok: true };

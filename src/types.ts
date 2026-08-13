@@ -1051,6 +1051,12 @@ export interface IssueRun {
   outcome: IssueRunOutcome | null;
   /** Null until the operator dismisses it — the one thing that ends a run. */
   dismissedAt: string | null;
+  /**
+   * What the operator said when they ended a run whose validation plan was not
+   * clear. Required only in that case, so null is the ordinary reading and not a
+   * gap: nobody was asked.
+   */
+  dismissNote: string | null;
   updatedAt: string;
 }
 
@@ -1438,6 +1444,152 @@ export interface PlanEvidence {
   path: string;
   line: number | null;
   note: string | null;
+}
+
+/**
+ * Where one validation check stands.
+ *
+ * `unrun` is the state everything starts in and the one the flag is loudest
+ * about: with every check a person's by default, the realistic failure is the set
+ * nobody got to, so silence is counted as a finding rather than as an absence —
+ * the same refusal `undeclared` makes about a conclusion nobody declared.
+ *
+ * `waived` and `deferred` are two operator acts with opposite effects on the
+ * flag, and they are kept apart because collapsing them would make one of them
+ * dishonest: "the test environment is rebuilt on Thursday" is not "I am not going
+ * to check this".
+ */
+export type ValidationCheckState = 'unrun' | 'passed' | 'failed' | 'waived' | 'deferred';
+
+/**
+ * One executable step in a goal's validation plan: what to do, what a pass looks
+ * like, and what anyone concluded from running it.
+ *
+ * Validation is **per goal**, not per part. A check usually spans several parts —
+ * the question it answers is whether the goal works — and {@link
+ * ValidationCheck.covers} only lets it say which parts it exercises.
+ */
+export interface ValidationCheck {
+  planId: string;
+  /**
+   * The author's own kebab-case slug, and **the merge key**: an amended plan
+   * merges onto this row rather than replacing it, so it has to survive a replan
+   * exactly as a part's slug does.
+   */
+  id: string;
+  /**
+   * `A`, `B`, `C`… — the handle a person types. Assigned at ingestion, stored,
+   * and never reused or reassigned, so a check named in a note yesterday is the
+   * same check today. Derived from position instead, it would silently move under
+   * the next amendment.
+   */
+  letter: string;
+  /** Declaration order within the document, for rendering. Not the letter. */
+  seq: number;
+  title: string;
+  /** The procedure, markdown. */
+  do: string;
+  /** What a pass looks like. A check that cannot say this is not a check. */
+  expect: string;
+  /** Names of the declared resources this check needs — never paths. */
+  uses: string[];
+  /** Part slugs this check exercises. Any number, including none. */
+  covers: string[];
+  /**
+   * The planner's nomination that an agent could run this, with {@link
+   * ValidationCheck.candidateWhy}. A suggestion and nothing else: whether an
+   * agent *can* run a check is a property of the deployment, not of the check.
+   */
+  fleetCandidate: boolean;
+  candidateWhy: string | null;
+  state: ValidationCheckState;
+  /** Required with every result, and with a deferral or a waiver. */
+  resultNote: string | null;
+  resultBy: 'operator' | null;
+  resultAt: string | null;
+  /** When a deferral says it comes back. Null is "not yet, and I am not saying when". */
+  deferUntil: string | null;
+  /**
+   * Why an amendment stopped declaring this check. Null is a live check; set is
+   * one kept for its record, greyed, and outside the verdict — the same
+   * settlement an amended plan gives a part it dropped.
+   */
+  supersededReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A check as a document declares it — everything the author writes, and nothing
+ * the harness or an operator later records about it.
+ *
+ * The split is the same one {@link PlanPartInput} makes against {@link PlanPart},
+ * and it is what lets an amendment re-declare a check without wiping a result:
+ * the fields here are refreshed, the rest are progress and are left alone.
+ * **There is no `state` and no actor** — a document cannot say who runs a check
+ * or how it went.
+ */
+export interface ValidationCheckInput {
+  id: string;
+  seq: number;
+  title: string;
+  do: string;
+  expect: string;
+  uses: string[];
+  covers: string[];
+  fleetCandidate: boolean;
+  candidateWhy: string | null;
+}
+
+/** A resource as a document declares it. */
+export interface ValidationResourceInput {
+  name: string;
+  kind: ValidationResourceKind | null;
+  note: string | null;
+  provided: boolean;
+}
+
+/** What kind of thing a validation resource is. Null is "the planner did not say". */
+export type ValidationResourceKind = 'fixture' | 'access' | 'reference' | 'data';
+
+/**
+ * Something a check needs that is not in the repository: a seeded fixture, a
+ * reference screenshot, an account on an environment.
+ *
+ * Named rather than pathed. The path an agent sees, the path the cockpit serves
+ * and the path an operator opens are three different strings, and a stored
+ * absolute path is wrong for two of them the moment `validationRoot` moves.
+ */
+export interface ValidationResource {
+  planId: string;
+  name: string;
+  kind: ValidationResourceKind | null;
+  note: string | null;
+  /**
+   * False is the planner saying it needs something it cannot produce, and
+   * ingestion files a `human_tasks` row asking for it — so a missing resource is
+   * an ask rather than a check that mysteriously never runs.
+   */
+  provided: boolean;
+  /** The ask that was filed for an unprovided resource. Null when none was. */
+  humanTaskId: string | null;
+}
+
+/**
+ * Whether a goal's validation plan is settled, and by how much it is not.
+ *
+ * `flagged` **blocks nothing** — no merge, no dispatch, no conclusion. It changes
+ * exactly one thing: what closing the goal looks like.
+ */
+export interface ValidationVerdict {
+  state: 'clear' | 'flagged';
+  /** Live checks only — a superseded one is out of the count as well as out of the sheet. */
+  total: number;
+  passed: number;
+  failed: number;
+  unrun: number;
+  deferred: number;
+  waived: number;
 }
 
 /**

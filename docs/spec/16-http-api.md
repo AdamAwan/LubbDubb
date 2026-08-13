@@ -28,6 +28,7 @@ is about.
 | `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                 |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                    |
 | `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                       |
+| `routes/validation.ts`  | One validation check's current reading: result, defer, waive, reset                         |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                          |
 | `routes/spend.ts`       | `/api/spend` — the breakdown behind the cost indicators                                     |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
@@ -360,6 +361,13 @@ or one already dismissed, is a **409** rather than an error state, and the dismi
 restart. The report itself is untouched — the row is the run, not the write-up. 400 on a non-integer
 issue number.
 
+Body `{note?}`, and **required when the goal's validation plan is flagged** — this is the button that
+ends the harness's run at a goal, it is one-way, and it is exactly the "close the goal and move on"
+it is named after. The 400 states the counts. It blocks nothing else: the note is the whole of the
+requirement, and it is kept on the run as `dismissNote` so what the goal owed and what was said about
+it survive together. A clear goal, or one with no checks at all, is dismissed with no body as before.
+→ [20](20-validation.md)
+
 ### `GET /api/work`
 
 The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did
@@ -668,6 +676,13 @@ task an operator can see, where the other order would leave a concluded part not
 and a cycle is run so the dependents it releases are dispatchable immediately. Returns
 `{ ok: true, humanTask, part, report }`.
 
+**A `close_out` task on a goal whose validation is flagged refuses without a note** (400, stating the
+counts), and the note lands on the row as its resolution. Only that kind, only while open, and only
+when flagged: asking a note of somebody ticking off "plug the cable in" is the friction that gets the
+whole flag ignored. The harness's own settlement of the same task, when it observes the ticket
+closed, is unaffected — that is not an operator deciding to move on.
+→ [20](20-validation.md)
+
 ### `POST /api/human-tasks/:id/decline`
 
 Body `{note}`, **required and non-empty**: a planner shown only "declined" has no reason to decide
@@ -696,7 +711,7 @@ first, and the last amendment read as a change (`latestPlanDiff`, null on a plan
 retrospective have theirs: it is read when a plan sheet is opened rather than on every poll, and the
 write-ups it carries are the largest prose the store holds — a plan replanned three times would put
 three of them into each snapshot. The diff is computed here rather than in the browser because it is a
-*reading of the plan*, and a second derivation in the cockpit would be a second answer to a question
+_reading of the plan_, and a second derivation in the cockpit would be a second answer to a question
 the server already answers. → [08](08-planning.md#revisions)
 
 ### `POST /api/plans/:id/acceptance`
@@ -707,6 +722,21 @@ nobody would see. Keyed on the criterion's **text**, which is what the store hol
 criterion loses its tick. Broadcasts `dirty` and **runs no cycle**: a reviewer's note about finished
 work schedules nothing, and a pulse per checkbox is a pulse per checkbox. Returns `{ ok: true, part }`.
 → [08](08-planning.md#acceptance-ticked)
+
+### `POST /api/plans/:id/validation/:checkId/{result,defer,waive,reset}`
+
+Four routes, one write. `result` takes `{result: 'passed'|'failed', note}`, `defer` takes
+`{reason, until?}`, `waive` takes `{reason}`, and `reset` takes no body and undoes any of them. The
+note is **required and non-empty on all three that carry one**, `/decline`'s discipline: a reading an
+operator acts on in a month must not be a state with no account of itself.
+
+`:checkId` is the check's author-chosen id, never its letter — the letter is what a person types, the
+id is what the store is keyed on. **409** when the plan has no such check _or has superseded it_: the
+commonest cause is not a typo but an amendment landing between the sheet being drawn and the click.
+
+Each writes the check's whole current reading, clearing whatever the last one left behind, and
+broadcasts `world:changed`. **None of them runs a cycle** — nothing here schedules work, and a pulse
+per checkbox is a pulse per checkbox. Returns `{ ok: true, check }`. → [20](20-validation.md)
 
 ### `POST /api/plans/:id/replan`
 

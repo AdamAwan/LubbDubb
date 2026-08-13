@@ -221,6 +221,7 @@ function run(over: Partial<IssueRun> = {}): IssueRun {
     completedAt: null,
     outcome: null,
     dismissedAt: null,
+    dismissNote: null,
     updatedAt: NOW,
     ...over,
   };

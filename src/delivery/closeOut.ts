@@ -1,4 +1,4 @@
-import type { HumanTask, Issue, IssueDelivery, IssueShortfall } from '../types.js';
+import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationVerdict } from '../types.js';
 
 /**
  * The step after the launch: the ticket is still open, and closing it is work
@@ -58,6 +58,16 @@ interface CloseOutInput {
   shortfalls: readonly IssueShortfall[];
   /** The `close_out` tasks already on these origins, settled ones included. */
   existing: readonly HumanTask[];
+  /**
+   * Each goal's validation verdict and what it still owes, keyed on the issue
+   * origin — absent for a goal with no checks, which is not the same as clear.
+   *
+   * Carried in rather than looked up, so every decision this file makes stays
+   * testable without a store. What it buys is the one moment the flag has to
+   * land: the row that says "close this ticket" is exactly where an operator is
+   * about to close a goal and move on.
+   */
+  validation: ReadonlyMap<string, { verdict: ValidationVerdict; outstanding: readonly string[] }>;
 }
 
 /**
@@ -90,7 +100,7 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
         kind: 'file',
         originRef,
         title: closeOutTitle(issue.number),
-        detail: closeOutDetail(issue, delivery),
+        detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null),
       });
       continue;
     }
@@ -133,16 +143,55 @@ function closeOutTitle(issueNumber: number): string {
   return `Close issue #${issueNumber} in the tracker`;
 }
 
-/** Which tracker, in the only terms that survive a provider swap: the item's own link. */
-function closeOutDetail(issue: Issue, delivery: IssueDelivery): string {
+/**
+ * Which tracker, in the only terms that survive a provider swap: the item's own
+ * link — and, when the goal's validation plan is not clear, what it still owes.
+ *
+ * The flag lands here because this is the moment. Everywhere else it is a chip on
+ * a screen somebody may not be looking at; this row is put in front of the
+ * operator at the point they are about to close the ticket, and the detail is
+ * refreshed on every pulse (`recordHumanTask` updates it on a repeat), so it
+ * states what is outstanding *now* rather than at the instant the row was filed.
+ *
+ * **It blocks nothing.** The task can still be marked done, and closing the
+ * ticket still settles it. What changes is that doing so is a decision made in
+ * front of the count rather than past it.
+ */
+function closeOutDetail(
+  issue: Issue,
+  delivery: IssueDelivery,
+  validation: { verdict: ValidationVerdict; outstanding: readonly string[] } | null,
+): string {
   const by = delivery.by === 'operator' ? 'You' : 'The assessor';
   const lines = [
     `${by} marked **${issue.title}** delivered${delivery.summary ? ` — "${delivery.summary}"` : ''}.`,
     '',
     'The item is still open in the tracker. Close it there and this settles itself on the next pulse — or mark it done here, or decline it and say why.',
   ];
+  if (validation && validation.verdict.state === 'flagged') {
+    lines.push(
+      '',
+      `⚠️ **${validationHeadline(validation.verdict)}**`,
+      '',
+      ...validation.outstanding.map((c) => `- ${c}`),
+    );
+  }
   if (issue.url) lines.push('', issue.url);
   return lines.join('\n');
+}
+
+/**
+ * The count, in words, on the terms the verdict counts in: `unrun` and `deferred`
+ * are named as outstanding rather than folded into a single "not passed", because
+ * the two are the ones an operator is most likely to believe are fine.
+ */
+export function validationHeadline(verdict: ValidationVerdict): string {
+  const parts: string[] = [];
+  if (verdict.failed > 0) parts.push(`${verdict.failed} failed`);
+  if (verdict.unrun > 0) parts.push(`${verdict.unrun} never run`);
+  if (verdict.deferred > 0) parts.push(`${verdict.deferred} deferred`);
+  const owed = parts.length > 0 ? parts.join(', ') : 'checks outstanding';
+  return `Validation is not clear on this goal — ${owed}, of ${verdict.total}.`;
 }
 
 function issueNumber(originRef: string): number | null {

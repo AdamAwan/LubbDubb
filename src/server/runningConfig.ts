@@ -77,7 +77,17 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   },
   {
     title: 'Features',
-    keys: ['planning', 'assessment', 'assay', 'retrospective', 'mcp', 'autoSend', 'ci', 'reapMergedBranches'],
+    keys: [
+      'planning',
+      'assessment',
+      'assay',
+      'retrospective',
+      'validation',
+      'mcp',
+      'autoSend',
+      'ci',
+      'reapMergedBranches',
+    ],
   },
   {
     title: 'Paths',
@@ -87,6 +97,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'worktreeRoot',
       'deskRoot',
       'attachmentRoot',
+      'validationRoot',
       'promptTemplatesDir',
       'docsFolderPrefix',
       'dbPath',

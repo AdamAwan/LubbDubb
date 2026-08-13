@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type { Store } from '../../store/store.js';
 import { validateHumanTask } from '../../mcp/humanTasks.js';
+import { validationHeadline } from '../../delivery/closeOut.js';
+import { goalValidation } from '../../validation/goal.js';
 import { checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -50,6 +53,23 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/human-tasks/:id/done',
     checked({ params: IdParams, body: DoneBody }, async ({ params, body, reply }) => {
+      // Closing out a goal whose validation is not clear costs a sentence.
+      //
+      // The only place a validation verdict changes what an operator may do, and
+      // it still blocks nothing: it refuses a *silent* close, not the close. The
+      // discipline is `/decline`'s, for its reason — there must be no way out
+      // that costs nothing to say — and the note goes on the row, which is what
+      // a reader of this goal in a month actually finds.
+      //
+      // Read here rather than folded into the settle, because the harness settles
+      // this kind of task itself when the tracker closes the item. That path is
+      // not an operator deciding to move on, and putting the guard in the store
+      // would either stop the sweep or make its resolution the excuse.
+      const owed = closeOutValidation(store, params.id);
+      if (owed && body.note === undefined)
+        return reply.code(400).send({
+          error: `note is required — ${owed.headline} Say what you are doing about them, or waive them first.`,
+        });
       const task = store.settleHumanTask(params.id, 'done', body.note ?? null);
       if (!task) return reply.code(409).send({ error: 'human task not found or already settled' });
       // Settle the task first, then the part: a failed part write leaves a settled
@@ -101,6 +121,23 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, humanTask: task };
     }),
   );
+}
+
+/**
+ * What a `close_out` task's goal still owes, or null when nothing does.
+ *
+ * Narrow on purpose, and each narrowing is deliberate. Only `close_out` — an
+ * ordinary ask has nothing to do with a goal's validation plan, and asking a note
+ * of somebody ticking off "plug the cable in" would be the friction that gets the
+ * whole flag ignored. Only an open task, only one with an origin, and only a
+ * flagged verdict.
+ */
+function closeOutValidation(store: Store, taskId: string): { headline: string } | null {
+  const task = store.getHumanTask(taskId);
+  if (!task || task.kind !== 'close_out' || task.status !== 'open' || task.originRef === null) return null;
+  const validation = goalValidation(store, task.originRef);
+  if (!validation || validation.verdict.state === 'clear') return null;
+  return { headline: validationHeadline(validation.verdict) };
 }
 
 /**

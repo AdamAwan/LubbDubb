@@ -1,5 +1,6 @@
 import type { Store } from '../store/store.js';
 import type { Issue } from '../types.js';
+import { goalValidation, type GoalValidation } from '../validation/goal.js';
 import { closeOutPass } from './closeOut.js';
 
 /** The world a close-out pass is judged against — the pulse's own snapshot. */
@@ -29,6 +30,7 @@ export class DeliveryCloseOutDesk {
       deliveries,
       shortfalls: this.store.listShortfalls(),
       existing: this.store.listHumanTasksOfKind('close_out'),
+      validation: this.validationByOrigin(),
     });
     for (const step of steps) {
       if (step.kind === 'file')
@@ -42,5 +44,23 @@ export class DeliveryCloseOutDesk {
         });
       else this.store.settleHumanTask(step.taskId, step.status, step.resolution);
     }
+  }
+
+  /**
+   * Each planned goal's validation verdict, keyed on the issue origin the
+   * close-out pass works in.
+   *
+   * Through the plan rather than against the origin directly because a plan *is*
+   * the per-goal record the checks hang off — the same join the snapshot makes,
+   * so the chip on the goal row and the sentence on the obligation cannot
+   * disagree about what a goal owes.
+   */
+  private validationByOrigin(): Map<string, GoalValidation> {
+    const out = new Map<string, GoalValidation>();
+    for (const plan of this.store.listPlans()) {
+      const validation = goalValidation(this.store, plan.originRef);
+      if (validation) out.set(plan.originRef, validation);
+    }
+    return out;
   }
 }

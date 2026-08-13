@@ -1,6 +1,18 @@
 import type Database from 'better-sqlite3';
 import type { IssueRun } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
+
+/**
+ * `issue_runs` was a fresh `CREATE TABLE` and needed no entry — **once**. It has
+ * one now: `dismiss_note` is what the operator said when they ended a run whose
+ * validation was not clear, and without this it is invisible on every database
+ * that predates it, with nothing erroring. Null is the right answer for every row
+ * from before it existed: nobody was asked.
+ */
+export const FLOOR_COLUMNS: ColumnMigrations = {
+  issue_runs: { dismiss_note: 'TEXT' },
+};
 
 /**
  * The `issue_runs` table: the harness's run at a goal, from the first pulse that
@@ -83,15 +95,16 @@ export class FloorStore {
    * an accidental dismissal is undone by the goal being worked again, not by an
    * un-dismiss.
    */
-  dismissIssueRun(originRef: string): boolean {
+  dismissIssueRun(originRef: string, note: string | null = null): boolean {
     const ts = this.ctx.now();
     const info = this.ctx.db
       .prepare(
         `UPDATE issue_runs
-            SET dismissed_at=?, updated_at=?, outcome=CASE WHEN completed_at IS NULL THEN 'abandoned' ELSE 'judged' END
+            SET dismissed_at=?, updated_at=?, dismiss_note=?,
+                outcome=CASE WHEN completed_at IS NULL THEN 'abandoned' ELSE 'judged' END
           WHERE origin_ref=? AND dismissed_at IS NULL`,
       )
-      .run(ts, ts, originRef);
+      .run(ts, ts, note, originRef);
     return info.changes > 0;
   }
 
@@ -165,6 +178,8 @@ interface IssueRunRow {
   completed_at: string | null;
   outcome: string | null;
   dismissed_at: string | null;
+  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  dismiss_note: string | null | undefined;
   updated_at: string;
 }
 
@@ -183,6 +198,7 @@ function rowToIssueRun(r: IssueRunRow): IssueRun {
     completedAt: r.completed_at,
     outcome: r.outcome === 'judged' || r.outcome === 'abandoned' ? r.outcome : null,
     dismissedAt: r.dismissed_at,
+    dismissNote: r.dismiss_note ?? null,
     updatedAt: r.updated_at,
   };
 }

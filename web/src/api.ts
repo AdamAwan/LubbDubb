@@ -232,6 +232,25 @@ const realApi = {
   // re-worded list and carry the tick onto something nobody looked at.
   setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
     post<{ ok: true }>(`/api/plans/${planId}/acceptance`, { slug, criterion, met }),
+  // What an operator concluded about one validation check — a result, a deferral,
+  // a waiver, or the reset that withdraws any of them. One call rather than four
+  // methods because there is one thing being said: this is the check's current
+  // reading, and the server clears whatever the last one left behind.
+  setValidation: (
+    planId: string,
+    checkId: string,
+    act:
+      | { kind: 'result'; result: 'passed' | 'failed'; note: string }
+      | { kind: 'defer'; reason: string }
+      | { kind: 'waive'; reason: string }
+      | { kind: 'reset' },
+  ) => {
+    const base = `/api/plans/${planId}/validation/${encodeURIComponent(checkId)}`;
+    if (act.kind === 'result') return post<{ ok: true }>(`${base}/result`, { result: act.result, note: act.note });
+    if (act.kind === 'defer') return post<{ ok: true }>(`${base}/defer`, { reason: act.reason });
+    if (act.kind === 'waive') return post<{ ok: true }>(`${base}/waive`, { reason: act.reason });
+    return post<{ ok: true }>(`${base}/reset`);
+  },
   // Collapse a released decomposition back to one pull request. 409s unless the
   // plan is `active` with nothing started — the server owns that rule.
   abandonPlan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/abandon`),

@@ -72,7 +72,7 @@ function task(over: Partial<HumanTask> = {}): HumanTask {
 }
 
 const pass = (over: Partial<Parameters<typeof closeOutPass>[0]> = {}) =>
-  closeOutPass({ issues: [], deliveries: [], shortfalls: [], existing: [], ...over });
+  closeOutPass({ issues: [], deliveries: [], shortfalls: [], existing: [], validation: new Map(), ...over });
 
 // -- filing -------------------------------------------------------------------
 

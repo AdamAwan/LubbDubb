@@ -11,6 +11,7 @@ import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, PlanStore, PLAN_COLUMNS } from './plans.js';
+import { ValidationStore, VALIDATION_COLUMNS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
@@ -23,7 +24,7 @@ import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
 import { GraphStore } from './graph.js';
 import { BugFilingStore } from './bugFilings.js';
-import { adoptFloorCompletions, FloorStore } from './floor.js';
+import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
 import type {
   Agent,
   AgentFile,
@@ -63,6 +64,9 @@ import type {
   StackLandingStatus,
   Task,
   UsageEvent,
+  ValidationCheck,
+  ValidationCheckState,
+  ValidationResource,
   WorkNode,
   WorkNodeObservation,
   WorkItemFiling,
@@ -101,6 +105,7 @@ export class Store {
   private readonly findings: FindingStore;
   private readonly humanTasks: HumanTaskStore;
   private readonly plans: PlanStore;
+  private readonly validation: ValidationStore;
   private readonly verdicts: IssueVerdictStore;
   private readonly scratch: ScratchStore;
   private readonly agents: AgentStore;
@@ -130,9 +135,11 @@ export class Store {
       FINDING_COLUMNS,
       HUMAN_TASK_COLUMNS,
       PLAN_COLUMNS,
+      VALIDATION_COLUMNS,
       JOB_COLUMNS,
       JOB_SCHEDULE_COLUMNS,
       ISSUE_VERDICT_COLUMNS,
+      FLOOR_COLUMNS,
     ]) {
       ensureColumns(this.db, columns);
     }
@@ -156,6 +163,7 @@ export class Store {
     this.findings = new FindingStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);
+    this.validation = new ValidationStore(ctx);
     this.verdicts = new IssueVerdictStore(ctx);
     this.scratch = new ScratchStore(ctx);
     this.agents = new AgentStore(ctx);
@@ -391,6 +399,34 @@ export class Store {
   }
   rollUpPlanStatus(planId: string): Plan | null {
     return this.plans.rollUpPlanStatus(planId);
+  }
+
+  // -- Validation (how anyone checks the goal was met) -----------------------
+
+  ingestValidation(planId: string, input: Parameters<ValidationStore['ingestValidation']>[1]): ValidationCheck[] {
+    return this.validation.ingestValidation(planId, input);
+  }
+  linkValidationResourceTask(planId: string, name: string, humanTaskId: string): void {
+    this.validation.linkValidationResourceTask(planId, name, humanTaskId);
+  }
+  listValidationChecks(planId: string): ValidationCheck[] {
+    return this.validation.listValidationChecks(planId);
+  }
+  listAllValidationChecks(): ValidationCheck[] {
+    return this.validation.listAllValidationChecks();
+  }
+  listValidationResources(planId: string): ValidationResource[] {
+    return this.validation.listValidationResources(planId);
+  }
+  listAllValidationResources(): ValidationResource[] {
+    return this.validation.listAllValidationResources();
+  }
+  recordValidationResult(
+    planId: string,
+    checkId: string,
+    input: { state: ValidationCheckState; note: string | null; by: 'operator' | null; until?: string | null },
+  ): ValidationCheck | null {
+    return this.validation.recordValidationResult(planId, checkId, input);
   }
 
   // -- Issue verdicts (conclusion / delivery / shortfall / assay) ------------
@@ -713,8 +749,8 @@ export class Store {
   recordIssueRun(input: Parameters<FloorStore['recordIssueRun']>[0]): void {
     this.floor.recordIssueRun(input);
   }
-  dismissIssueRun(originRef: string): boolean {
-    return this.floor.dismissIssueRun(originRef);
+  dismissIssueRun(originRef: string, note: string | null = null): boolean {
+    return this.floor.dismissIssueRun(originRef, note);
   }
   listIssueRuns(): IssueRun[] {
     return this.floor.listIssueRuns();

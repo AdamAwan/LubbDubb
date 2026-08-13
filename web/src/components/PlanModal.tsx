@@ -11,11 +11,14 @@ import type {
   PlanningPolicy,
   Proposal,
   QueueItem,
+  ValidationCheck,
+  ValidationResourceView,
 } from '../types.js';
 import { api } from '../api.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
+import { ValidationSection } from './ValidationSection.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 
 /**
@@ -46,6 +49,8 @@ import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 export function PlanModal({
   plan,
   parts,
+  checks,
+  resources,
   upcoming,
   proposal,
   agent,
@@ -62,9 +67,14 @@ export function PlanModal({
   onOpenAgent,
   onRespond,
   onAcceptance,
+  onValidation,
 }: {
   plan: Plan;
   parts: PlanPartView[];
+  /** This plan's validation checks, superseded ones included. */
+  checks: ValidationCheck[];
+  /** Its declared resources, each already resolved to a path and a present/missing fact. */
+  resources: ValidationResourceView[];
   /** The last pulse's ranked plan, joined per part by origin — the dispatch cut. */
   upcoming: QueueItem[];
   /** The pending approval this plan is waiting on, when it is waiting on one. */
@@ -86,6 +96,15 @@ export function PlanModal({
   onOpenAgent: (agentId: string) => void;
   onRespond: (agentId: string, text: string) => Promise<unknown> | unknown;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
+  onValidation: (
+    planId: string,
+    checkId: string,
+    act:
+      | { kind: 'result'; result: 'passed' | 'failed'; note: string }
+      | { kind: 'defer'; reason: string }
+      | { kind: 'waive'; reason: string }
+      | { kind: 'reset' },
+  ) => Promise<unknown> | unknown;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
   const [note, setNote] = useState('');
@@ -106,6 +125,8 @@ export function PlanModal({
   // control here is the rule the Discuss button already follows: a control must
   // not offer what the route refuses.
   const started = live.some((p) => ['dispatched', 'in_review', 'merged', 'concluded'].includes(p.status));
+  const liveChecks = checks.filter((c) => c.supersededReason === null);
+  const settledChecks = liveChecks.filter((c) => c.state === 'passed' || c.state === 'waived').length;
   const issueNumber = planIssueOf(plan.originRef);
   const queued = new Map(upcoming.map((q) => [q.origin, q]));
   // A verdict is only on offer while the plan is still the thing that was
@@ -202,6 +223,9 @@ export function PlanModal({
           )}
           <button className="pm-jump" onClick={() => jump('parts')}>
             Parts <i className="k">{live.length > 0 ? live.length : 'one PR'}</i>
+          </button>
+          <button className="pm-jump" onClick={() => jump('validation')}>
+            Validation <i className="k">{liveChecks.length > 0 ? `${settledChecks}/${liveChecks.length}` : 'none'}</i>
           </button>
           <button className="pm-jump" onClick={() => jump('caveats')}>
             Caveats
@@ -339,6 +363,22 @@ export function PlanModal({
                     ))}
                   </>
                 )}
+              </section>
+
+              <section
+                ref={(el) => {
+                  sections.current.validation = el;
+                }}
+              >
+                <ValidationSection
+                  checks={checks}
+                  resources={resources}
+                  refUrls={refUrls}
+                  onResult={(checkId, result, note) => onValidation(plan.id, checkId, { kind: 'result', result, note })}
+                  onDefer={(checkId, reason) => onValidation(plan.id, checkId, { kind: 'defer', reason })}
+                  onWaive={(checkId, reason) => onValidation(plan.id, checkId, { kind: 'waive', reason })}
+                  onReset={(checkId) => onValidation(plan.id, checkId, { kind: 'reset' })}
+                />
               </section>
 
               <section

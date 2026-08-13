@@ -1,4 +1,5 @@
-import type { Plan, PlanPart } from '../types.js';
+import type { Plan, PlanPart, ValidationCheck } from '../types.js';
+import { liveChecks, validationVerdict } from '../validation/verdict.js';
 import { partOutcomeKind, planProgress } from './parts.js';
 
 /**
@@ -14,7 +15,7 @@ import { partOutcomeKind, planProgress } from './parts.js';
  * {@link narrative}. The two belong in one comment because they are one thing from
  * the thread's point of view: what the harness is doing here, and why.
  */
-export function renderPlanComment(plan: Plan, parts: PlanPart[]): string {
+export function renderPlanComment(plan: Plan, parts: PlanPart[], checks: ValidationCheck[] = []): string {
   const { settled, total } = planProgress(parts);
   // The single-PR arm has no rows, and rendering it through the count below said
   // "0/0 parts done" — a progress report on work that was never split. What it has
@@ -22,7 +23,7 @@ export function renderPlanComment(plan: Plan, parts: PlanPart[]): string {
   // is on the issue's own timeline, where the reader already is.
   if (total === 0) {
     const why = plan.reason ? `\n\n${plan.reason}` : '';
-    return `${MARKER}\n\n**One pull request** — this issue is being delivered whole, not decomposed.${why}${narrative(plan)}`;
+    return `${MARKER}\n\n**One pull request** — this issue is being delivered whole, not decomposed.${why}${validation(checks)}${narrative(plan)}`;
   }
   // "merged" was the only terminal when this was written, and is not any more. An
   // operator reading "3/4 parts merged" on a plan whose fourth part was a write-up
@@ -37,7 +38,50 @@ export function renderPlanComment(plan: Plan, parts: PlanPart[]): string {
   // than review, and whether the issue is done is a human's call.
   const tail =
     plan.status === 'complete' ? '\n\nNothing further is scheduled for this item. Closing it is a human decision.' : '';
-  return `${MARKER}\n\n${heading}${why}\n\n${lines.join('\n')}${narrative(plan)}${tail}`;
+  return `${MARKER}\n\n${heading}${why}\n\n${lines.join('\n')}${validation(checks)}${narrative(plan)}${tail}`;
+}
+
+/**
+ * The validation plan, as a checklist in the same one living comment.
+ *
+ * **Open rather than folded**, unlike {@link narrative} — and that is the whole
+ * decision. The reasoning is what a reader reads once; this is what a reader of
+ * the thread next month is trying to find out, and a goal closed with two checks
+ * never run should say so on the ticket rather than only in a cockpit nobody
+ * outside the operator's machine can open.
+ *
+ * Live checks only: a check an amendment withdrew is kept in the harness for its
+ * record, and publishing it here would ask the thread about work the plan has
+ * stopped asking for.
+ */
+function validation(checks: ValidationCheck[]): string {
+  const live = liveChecks(checks);
+  if (live.length === 0) return '';
+  const verdict = validationVerdict(live);
+  const heading =
+    verdict.state === 'clear'
+      ? `**Validation** — all ${verdict.total} check${verdict.total === 1 ? '' : 's'} settled.`
+      : `**Validation** — ${verdict.passed + verdict.waived}/${verdict.total} settled.`;
+  const lines = live.map((c) => `- ${checkMark(c)} **${c.title}**${c.resultNote === null ? '' : ` — ${c.resultNote}`}`);
+  return `\n\n${heading}\n\n${lines.join('\n')}`;
+}
+
+/** The one-glyph reading of a check's state, `statusMark`'s convention. */
+function checkMark(check: ValidationCheck): string {
+  switch (check.state) {
+    case 'passed':
+      return '✅';
+    case 'failed':
+      return '❌';
+    // Said out loud, with a reason, and settled — so it is marked settled rather
+    // than outstanding. `deferred` deliberately is not: it is a check still owed.
+    case 'waived':
+      return '➖';
+    case 'deferred':
+      return '⏸️';
+    default:
+      return '⬜';
+  }
 }
 
 /**

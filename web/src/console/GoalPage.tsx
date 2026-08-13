@@ -121,6 +121,22 @@ function Header({
               {issue.conclusion.verdict.replace(/_/g, ' ')}
             </i>
           )}
+          {/* Whether the goal's validation plan is settled, beside the other
+              verdicts and inside none of them. Absent when there are no checks —
+              a goal nobody wrote a plan for is not "clear", and a chip claiming
+              it was would be the one lie this whole surface exists to prevent. */}
+          {issue.validation !== null && (
+            <i
+              className={`cn-chip ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
+              title={
+                issue.validation.state === 'clear'
+                  ? `All ${issue.validation.total} validation checks are settled`
+                  : `${issue.validation.failed} failed, ${issue.validation.unrun} never run, ${issue.validation.deferred} deferred`
+              }
+            >
+              Validation: {issue.validation.passed + issue.validation.waived}/{issue.validation.total}
+            </i>
+          )}
           {issue.run !== undefined && <span>started {relTime(issue.run.startedAt, view.now)}</span>}
           <span>
             {page.agents.length} agent{page.agents.length === 1 ? '' : 's'}

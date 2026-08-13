@@ -1,6 +1,17 @@
 import type { RecoveryVerdict, WorkNodeView } from '../types.js';
 
 /**
+ * What an operator concluded about one validation check. A union rather than four
+ * methods because there is one thing being said — this is the check's current
+ * reading — and the server clears whatever the last one left behind.
+ */
+export type ValidationAct =
+  | { kind: 'result'; result: 'passed' | 'failed'; note: string }
+  | { kind: 'defer'; reason: string }
+  | { kind: 'waive'; reason: string }
+  | { kind: 'reset' };
+
+/**
  * Which full-surface panel is in front. One value rather than a boolean each: a
  * boolean per panel admits far more states than there are, and two panels in
  * front at once is not something this layout can draw.
@@ -72,6 +83,8 @@ export interface CockpitActions {
    * looked at.
    */
   setAcceptance(planId: string, slug: string, criterion: string, met: boolean): Promise<void>;
+  /** One validation check's current reading — see `api.setValidation`. */
+  setValidation(planId: string, checkId: string, act: ValidationAct): Promise<void>;
   /**
    * Which plan's modal is open. UI state, on the seam for the same reason
    * `select` is: the console cannot own it (the modal is shared and the triggers

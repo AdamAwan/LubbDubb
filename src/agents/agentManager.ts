@@ -141,6 +141,11 @@ interface AgentManagerOptions {
    */
   requirePlanApproval?: boolean;
   /**
+   * `validation.enabled` — the same pass-through, one field down, so the file
+   * transport and the tool transport ingest the same validation block.
+   */
+  validationEnabled?: boolean;
+  /**
    * The disk half of a blueprint's attachments (issue #249). Present so
    * {@link AgentManager.linkTicket} can move an operator's images off the filing
    * job and onto the ticket that filing created; unset in tests and runtimes that
@@ -1194,6 +1199,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       originRef: origin,
       title: task.originTitle ?? task.title,
       requireApproval: this.opts.requirePlanApproval,
+      validationEnabled: this.opts.validationEnabled,
     });
     if (result.overriddenSingle) {
       // Not silently overridden: the planner asked for something the world no

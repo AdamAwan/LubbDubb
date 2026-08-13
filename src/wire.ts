@@ -87,6 +87,9 @@ import type {
   ShortfallCause,
   StackLanding,
   Task,
+  ValidationCheck,
+  ValidationResource,
+  ValidationVerdict,
   WorkNode,
   WorldEvent,
   WorldSnapshot,
@@ -197,6 +200,18 @@ export interface Issue extends WorldIssue {
    */
   run?: { startedAt: string; completedAt: string | null; outcome: IssueRunOutcome | null; dismissed: boolean };
   /**
+   * Whether this goal's validation plan is settled (`validationVerdict`), and by
+   * how much it is not. **Null is "no checks", not "clear"** — a goal nobody wrote
+   * a validation plan for is drawn with no chip at all, where a clear verdict is
+   * drawn as one that was earned.
+   *
+   * Folded on the server rather than counted in the browser for the reason the CI
+   * verdict is: the close-out obligation, the ticket comment and this chip all
+   * read one function, and a second count is a second opinion about what `unrun`
+   * and `deferred` mean.
+   */
+  validation: ValidationVerdict | null;
+  /**
    * What this goal has cost so far, over every agent under it — its planner, its
    * assay, its parts, and the agents its pull requests pulled in (`rollUpIssueSpend`).
    *
@@ -246,6 +261,22 @@ export interface PlanPartView extends PlanPart {
    * empty when it declared none — an undeclared part has not been contradicted.
    */
   outsideScope: string[];
+}
+
+/**
+ * A validation resource with the one reading the row cannot carry: where it
+ * actually is on this machine.
+ *
+ * Resolved on the server because the path is `validationRoot` joined with the
+ * goal's directory, and `validationRoot` is config the browser does not hold —
+ * and because "is it there" is a filesystem question. Both are shipped so a
+ * missing fixture is a stated fact rather than a check that fails for a reason
+ * nobody can see.
+ */
+export interface ValidationResourceView extends ValidationResource {
+  /** Absolute, on the machine the harness runs on — which is the operator's own. */
+  path: string;
+  present: boolean;
 }
 
 /**
@@ -381,6 +412,17 @@ export interface CockpitState {
   /** The multi-PR plan graph: one plan per planned issue, and every plan's parts. */
   plans: Plan[];
   planParts: PlanPartView[];
+  /**
+   * Every plan's validation checks and the resources they name, keyed to a plan
+   * by `planId` exactly as the parts are.
+   *
+   * Superseded checks ride along rather than being filtered here: the sheet draws
+   * them greyed as the record of what a plan withdrew, and a filter on the wire
+   * would leave the browser unable to say the difference between a check that was
+   * dropped and one that was never written.
+   */
+  validationChecks: ValidationCheck[];
+  validationResources: ValidationResourceView[];
   /**
    * The funnel's policy, as the harness is actually running it.
    *
@@ -606,6 +648,11 @@ export type {
   ScratchEntry,
   StackLanding,
   Task,
+  ValidationCheck,
+  ValidationCheckState,
+  ValidationResource,
+  ValidationResourceKind,
+  ValidationVerdict,
   WorkNode,
   WorldEvent,
   WorldEventKind,
@@ -634,3 +681,4 @@ export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';
 export type { AcceptanceCriterion } from './plans/parts.js';
 export type { PlanningPolicy } from './plans/planning.js';
+export type { ValidationPolicy } from './validation/policy.js';

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import type { System } from '../system.js';
 import type {
   Issue,
@@ -8,7 +9,7 @@ import type {
   ScratchPadSummary,
   WorldSnapshot,
 } from '../types.js';
-import type { CockpitState, PlanPartView } from '../wire.js';
+import type { CockpitState, PlanPartView, ValidationResourceView } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -29,6 +30,8 @@ import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
+import { validationVerdict } from '../validation/verdict.js';
+import { validationResourcePath } from '../validation/resources.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
 /**
@@ -149,6 +152,27 @@ export function buildStateSnapshot(
     acceptanceCriteria: acceptanceCriteria(part),
     outsideScope: drift.get(part.id) ?? [],
   }));
+  // The validation plan, read once and joined two ways: to a plan by id for the
+  // sheet, and to a goal by the plan's origin for the chip and the flag. Keyed
+  // through the plan rather than stored against the origin because a plan *is*
+  // the per-goal record — the same join `planPartsOf` makes one line up.
+  const validationChecks = store.listAllValidationChecks();
+  const checksByPlan = new Map<string, typeof validationChecks>();
+  for (const check of validationChecks) {
+    const list = checksByPlan.get(check.planId);
+    if (list) list.push(check);
+    else checksByPlan.set(check.planId, [check]);
+  }
+  const planByOrigin = new Map(plans.map((p) => [p.originRef, p]));
+  // Resolved here rather than in the browser: the path is `validationRoot` joined
+  // with the goal's directory, which is config the cockpit does not hold, and
+  // "is it there" is a filesystem question only this side can answer.
+  const originByPlan = new Map(plans.map((p) => [p.id, p.originRef]));
+  const wireValidationResources: ValidationResourceView[] = store.listAllValidationResources().map((resource) => {
+    const origin = originByPlan.get(resource.planId) ?? resource.planId;
+    const path = validationResourcePath(config.validationRoot, origin, resource.name);
+    return { ...resource, path, present: existsSync(path) };
+  });
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
   // same rows rule `work-item-back-to-pickup` reads, so the chip and the rule can't disagree.
   const conclusions = new Map(store.listIssueConclusions().map((c) => [c.originRef, c]));
@@ -298,6 +322,11 @@ export function buildStateSnapshot(
   // completion synthesized below go through one path — the reasons the pickup and
   // conclusion verdicts are computed here rather than in the browser apply to both,
   // and two enrichment paths would drift exactly on a finished goal.
+  const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
+    const plan = planByOrigin.get(origin);
+    const checks = plan ? (checksByPlan.get(plan.id) ?? []) : [];
+    return checks.length === 0 ? null : validationVerdict(checks);
+  };
   const enrichIssue = (issue: Issue) => {
     const origin = issueConclusionOrigin(issue.number);
     const run = runByOrigin.get(origin);
@@ -344,6 +373,10 @@ export function buildStateSnapshot(
       // ever reported usage for this goal", which PTY mode makes the normal case;
       // it is not zero, and the cockpit draws nothing rather than "$0.00".
       spend: spend.byIssue.get(origin) ?? null,
+      // Whether this goal's validation plan is settled. Null is "no checks",
+      // which is a third reading and not a synonym for clear: a goal nobody wrote
+      // a plan for draws no chip, where a clear one draws a chip it earned.
+      validation: validationChecksFor(origin),
     };
   };
   return {
@@ -422,6 +455,11 @@ export function buildStateSnapshot(
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
     plans: wirePlans,
     planParts: wirePlanParts,
+    // The validation plan beside the plan graph it hangs off — the checks whole,
+    // superseded ones included, because "this check was withdrawn" is a thing the
+    // sheet has to be able to say.
+    validationChecks,
+    validationResources: wireValidationResources,
     // The funnel's policy as the harness is running it: approving a decomposition
     // is agreeing to a rate as well as a shape, and the sheet states that rate on
     // the button that performs the approval.

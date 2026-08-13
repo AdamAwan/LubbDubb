@@ -40,6 +40,8 @@ interface McpBridgeServerOptions {
    * the property the shared `ingestPlanDocument` exists to keep.
    */
   requirePlanApproval?: boolean;
+  /** `validation.enabled`, passed through for {@link requirePlanApproval}'s reason. */
+  validationEnabled?: boolean;
   /**
    * The permission backstop (issue #130 phase B), resolved lazily for the same
    * reason as {@link agents}: it is built after this server (it needs the
@@ -258,6 +260,7 @@ export class McpBridgeServer {
         store: this.opts.store,
         agents: this.opts.agents(),
         requirePlanApproval: this.opts.requirePlanApproval,
+        validationEnabled: this.opts.validationEnabled,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),
         errors: this.opts.errors,
