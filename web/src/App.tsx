@@ -70,7 +70,7 @@ export function App() {
   if (status.kind === 'denied') return <LockedOut error={status.error} />;
   if (status.kind === 'loading') return <div className="loading">Connecting to the cockpit…</div>;
 
-  // The modal hangs off the shell for the same reason `WorkTreePanel` does — it is
+  // The modal hangs off the shell for the same reason the drawer does — it is
   // shared, and the seam forbids the presentation layer reaching `api.js` to open
   // it another way.
   const state = status.view.state;
