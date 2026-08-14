@@ -285,6 +285,25 @@ test('resuming a limit-parked agent re-opens the same session in the same worktr
   system.store.close();
 });
 
+test('a park whose process survived is resumed down the stdin it already has', async () => {
+  const { system, agent, child, children } = await fleet();
+  child.rateLimit(REJECTED);
+  child.result('error_during_execution', true);
+  // No exit: `claude` kept the session open awaiting input. The park is the same.
+  assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
+  assert.equal(system.agents.isLive(agent.id), true);
+
+  const { app } = await buildApp(system);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/resume` })).statusCode, 200);
+
+  assert.equal(children.length, 1, 'a live session is not relaunched underneath itself');
+  assert.ok(child.writes.some((w) => w.includes('Continue the task')));
+  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
+  assert.deepEqual(system.agents.limitedAgentIds(), []);
+  await app.close();
+  system.store.close();
+});
+
 test('resume refuses anything that is not a limit park, and says which', async () => {
   const { system, agent, child } = await fleet();
   const { app } = await buildApp(system);

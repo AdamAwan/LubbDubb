@@ -107,12 +107,12 @@ Points that are load-bearing:
   written, and `test/agentProtocol.test.ts` asserts both builders emit exactly one of them.
 - **Headless resume is a verified property, not an assumption** (probed against `claude` 2.1.223 for
   #318): a pinned id is honoured under `-p` and echoed on every event, its transcript lands at
-  `~/.claude/projects/<slugified-cwd>/<id>.jsonl`, `--resume` re-opens *that* file and appends rather
+  `~/.claude/projects/<slugified-cwd>/<id>.jsonl`, `--resume` re-opens _that_ file and appends rather
   than forking, the resumed session stays alive across turns exactly as a fresh one does, and a
   SIGKILL mid-assistant-turn still resumes off the half-written transcript. It also **replays
   nothing** — a resume emits `system`/`init`, the assistant turn for the new input, then `result` —
   so `StreamJsonSession` needs no swallow and the drawer's transcript continues instead of doubling.
-  (`system`/`init` is emitted at the start of *every* turn, fresh or resumed, so nothing may key off
+  (`system`/`init` is emitted at the start of _every_ turn, fresh or resumed, so nothing may key off
   it as a resume marker.) `--resume` on an id with no transcript fails cleanly: exit 1, and a
   well-formed `result` of subtype `error_during_execution` on stdout.
 - `--settings` has no array form, so the status-line, file-events and `permissions` fragments
@@ -198,6 +198,37 @@ Labels carry SGR colour, which the cockpit's drawer renders through the pure par
 so escapes never show as literal text there.
 
 **Detection still scans the raw turn text**, so the raw-vs-display split must stay intact.
+
+### The usage-limit park (issue #318)
+
+A turn can end for a reason that is neither a sentinel nor a fault: the **account** ran out. `claude`
+says so in structure rather than prose — a `rate_limit_event` carrying `rate_limit_info`, whose
+`status` and `overageStatus` are the enum `allowed | allowed_warning | rejected`, with `resetsAt` in
+whole unix seconds and `rateLimitType` one of `five_hour`, `seven_day`, `seven_day_opus`,
+`seven_day_sonnet`, `seven_day_overage_included`, `overage`. (Verified against the 2.1.223 payload
+schema, the binary this deployment launches; every field but `status` is optional there, so a park
+must survive a reading that names neither window nor reset.)
+
+`rejected` is the only spelling of "spent". `allowed_warning` is the near-the-line warning and parks
+nobody — an account with room left must keep working. An account **on overage** reports
+`status: "allowed"` with the exhaustion in `overageStatus`, so both are read. The latest reading wins,
+including one that says the limit came back: a five-hour window can turn over mid-run, and a stale
+rejection would park an agent that is allowed to work.
+
+Nothing is announced when the event lands, because the exhaustion rides _beside_ the turn. The park is
+declared at the **turn end** — after the done sentinel, so an agent that finished the work and then
+hit the limit is `done` and not resurrected as a park — or, if `claude` gives up first, at **process
+exit**, which is what makes this not a crash: an exit code alone would be `failed`. Either way it is
+announced once, as `limited`(`RateLimitPark`), and never as `waiting` or `failed`.
+
+`RateLimitPark` is `{limitType, resetsAt, overage}` — facts, not wording. The sentence an operator
+reads is composed in `AgentManager` ([below](#the-limit-park)), where the rest of the harness's rows
+are worded. The enum members are carried as plain strings rather than re-declared unions: this is
+someone else's wire format, and a narrower type here would read a value the CLI adds tomorrow as "not
+exhausted".
+
+The PTY runtime emits none of this. The same exhaustion there arrives as screen text, and a park off a
+scraped sentence is one an ordinary line of prose can forge.
 
 ## `PtySession`
 
@@ -341,7 +372,7 @@ in `starting`.
 ### Events emitted
 
 `output`, `waiting`, `autoAnswered`, `done`, `reaped`, `status`, `usage`, `flag`, `finding`,
-`progress`, `files`, `resumed` — all typed via `emit`/`on` overrides.
+`progress`, `files`, `resumed`, `limited` — all typed via `emit`/`on` overrides.
 
 ### Waiting
 
@@ -379,6 +410,53 @@ dispatcher reads it; the cockpit joins it to an open escalation by `agentId` and
 `releasePark(agentId)` drops the latch without typing anything into the agent — what
 `POST /api/escalations/:id/dismiss` calls. Releasing it is the point rather than a detail: while it is
 held `handleWaiting` early-returns, so an agent whose alert was dismissed could never raise another.
+
+### The limit park
+
+`handleLimited(agentId, task, park)` is the other park: the account ran out, not the agent
+([above](#the-usage-limit-park-issue-318)). It is the same latch and the same three store writes as
+`handleWaiting`, and deliberately **not** the same event.
+
+- The row's `waitingReason` becomes a sentence naming what ran out and when it resets —
+  `Parked on a usage limit: this account's five-hour usage limit is spent, and it resets at …`. An
+  unknown window name is printed verbatim rather than dropped: a park that names no limit is the
+  failure the wording exists to prevent.
+- **No escalation.** `waiting` is what `src/system.ts` turns into an inbox item, and an inbox item is a
+  question put to a human; this one has no answer. It would sit in the queue as a message nobody can
+  reply to, under a heading that says somebody must. The park is drawn on the _agent_ instead — the
+  fleet row, the drawer, and a `limit` row in "Needs you" built from the fleet rather than from an
+  escalation ([17](17-cockpit.md#the-queue-rail--needs-you)).
+- An agent that had **already** parked on a question keeps that question on its row. The escalation it
+  raised is still open and still the thing a human must answer; overwriting the reason would leave that
+  inbox row pointing at a sentence about a limit.
+- **Nothing is settled.** The row keeps its session id, `endedAt` stays null, the task stays `waiting`
+  (outstanding, so the work is neither lost nor re-dispatched on top) and the worktree stays on disk.
+  All three are what the resume needs, and all three are what recording this as `failed` threw away.
+
+The park is held in memory (`limited`, agentId → reason), because it describes a park _this process_ is
+holding. A restart drops it, at which point the same rows — `waiting` agent, outstanding task — are
+ordinary orphans and the recovery desk asks the wider question.
+
+When the process exits under a park, `shedLimitedSession` gives back what the launch held — the spool,
+the MCP credential, the session map entry, the pid — **without** a terminal transition. Leaving the
+credential bound would keep a live bearer token for the length of a park, which can be hours. The
+`exited`/`exitCodes` entries are dropped for `kill`'s reason: no reap is owed for a process whose work
+is unfinished, and a stale `exited` would make the _resumed_ run's first terminal reap a worktree out
+from under a live agent.
+
+`resumeParked(agentId)` ends it, and is the only thing that does: `POST /api/agents/:id/resume`
+([16](16-http-api.md#post-apiagentsidresume)). If the session somehow survived, one message goes down
+the stdin that is already open; otherwise the conversation is re-opened through `resume`, which is why
+the park keeps the session id. The reason is cleared _before_ either arm, since `resume` reads the row
+to decide whether the agent was parked on a question — and this park is the one it must not put back.
+The message is the limit's own, not `buildResumeMessage`'s "you were resumed after a server restart":
+nothing restarted, and an agent that believes otherwise re-reads its branch looking for work it did
+itself minutes ago. Any failure puts the park back, so a refused resume leaves the operator where they
+were rather than with an agent that is neither parked nor running.
+
+Only an agent this process parked is a candidate; anything else is refused by name. `kill` is the one
+other verdict available on a limit park, and it is available _because_ the session is gone: a park that
+outlives its process would otherwise have "resume" as the only thing anyone could ever say to it.
 
 ### Terminal, exit and reap
 
@@ -429,7 +507,7 @@ way, and nothing in the harness could have said why.
 
 Two things about it are load-bearing:
 
-- **It runs before the root is signalled.** Both mechanisms resolve descendants *through* the root
+- **It runs before the root is signalled.** Both mechanisms resolve descendants _through_ the root
   pid, so reaping after `child.kill()` finds a tree that no longer has a root — the children have been
   reparented and cannot be reached from here. In `PtySession.kill` this sits between the `killed`
   status and `proc.kill`, inside the ordering rule above.
@@ -438,7 +516,7 @@ Two things about it are load-bearing:
   the caller carries on.
 
 Reached from `kill`, `complete`, `interruptAll`, and the PTY `exitOnDone` teardown's forced arm: every
-path by which the *harness* stops an agent. **An agent that exits by itself is not covered** and
+path by which the _harness_ stops an agent. **An agent that exits by itself is not covered** and
 cannot be — once the root pid is gone there is nothing left to walk from. That residue is why
 `reclaim` must survive a held directory and say so rather than treat the lock as permanent
 ([09](09-execution.md#reclaiming-an-orphaned-directory)).
@@ -533,11 +611,11 @@ moment the last decision lands; there is no un-hold to remember.
 identity** — the route, the cockpit's card key and the verdict all key on it, because it is the only
 thing every candidate has; `OrphanedWork.agentId` is null for an orphan that never had one.
 
-| Verdict   | Effect                                                                                                                |
-| --------- | --------------------------------------------------------------------------------------------------------------------- |
-| `restore` | `agents.resume(agent, task)` — re-attach to the same session in the same worktree. Offered only when `restorable`.    |
+| Verdict   | Effect                                                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `restore` | `agents.resume(agent, task)` — re-attach to the same session in the same worktree. Offered only when `restorable`.                                                              |
 | `requeue` | Retire agent (`interrupted`) and task (`interrupted`), dismiss its escalations, and file a **job** carrying the work — unless the job it came from never left the queue, below. |
-| `remove`  | Retire agent and task, dismiss its escalations. Nothing is queued; the branch and worktree are kept.                  |
+| `remove`  | Retire agent and task, dismiss its escalations. Nothing is queued; the branch and worktree are kept.                                                                            |
 
 Settling the **task** is the load-bearing half of the last two, and the only half an agentless orphan
 has: `interrupted` is what releases the origin and branch the `queued` row was holding shut. Such an
@@ -569,7 +647,7 @@ alike, so parking the work there would wedge its origin and branch shut for good
 hypothetical, it is the state arm two exists to find. The job (`requeueJobRequest(task, prior)`, pure)
 carries the original prompt verbatim, plus a preamble naming the origin.
 
-Its *dispatch* origin is `job:<id>`, and the original origin rides on `Job.originRef` — the work the
+Its _dispatch_ origin is `job:<id>`, and the original origin rides on `Job.originRef` — the work the
 job **stands in for**. The gates read that field while the job is queued and while the task it became
 is live, so the rule that produced the original does not staff the same work a second time; without
 it, a requeued retro and a freshly dispatched `issue:249:retro` ran at once (#249). See
@@ -580,7 +658,7 @@ The preamble still names the origin in words, because a fresh agent needs to kno
 leaves the queue only through `markJobDispatched`, which runs after the spawn succeeds — so a
 predecessor still `queued` means no agent ever ran and the queue is already holding the request
 unchanged. A second job for it would not be a requeue but a duplicate, and a duplicate that locks the
-queue: its `originRef` is the task's `job:<predecessor>`, which makes it *stand in* for the
+queue: its `originRef` is the task's `job:<predecessor>`, which makes it _stand in_ for the
 predecessor and skips it in `manual-job` for as long as the duplicate is queued. Chains of three were
 observed. See [13](13-jobs-and-findings.md#why-a-requeue-never-stands-in-for-a-queued-job) for the
 gate this protects and why it is not the thing being changed.
