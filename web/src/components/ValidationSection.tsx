@@ -25,6 +25,7 @@ import { renderMarkdown } from './markdown.js';
  */
 export function ValidationSection({
   checks,
+  issueNumber,
   resources,
   refUrls,
   buttonClass = 'ghost small',
@@ -36,6 +37,8 @@ export function ValidationSection({
 }: {
   /** Superseded checks included — drawing what a plan withdrew is half the point. */
   checks: ValidationCheck[];
+  /** The goal these checks hang off, for the desktop prompt's `<issue>:<letter>`. */
+  issueNumber: number;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
   /**
@@ -119,6 +122,7 @@ export function ValidationSection({
           })}
           refUrls={refUrls}
           buttonClass={buttonClass}
+          issueNumber={issueNumber}
           onResult={(result, note) => onResult(check.id, result, note)}
           onDefer={(reason) => onDefer(check.id, reason)}
           onWaive={(reason) => onWaive(check.id, reason)}
@@ -272,6 +276,7 @@ function CheckBlock({
   resources,
   refUrls,
   buttonClass,
+  issueNumber,
   onResult,
   onDefer,
   onWaive,
@@ -282,6 +287,7 @@ function CheckBlock({
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
   buttonClass: string;
+  issueNumber: number;
   onResult: (result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (reason: string) => Promise<unknown> | unknown;
   onWaive: (reason: string) => Promise<unknown> | unknown;
@@ -292,6 +298,7 @@ function CheckBlock({
   const [verb, setVerb] = useState<Verb | null>(null);
   const [note, setNote] = useState('');
   const send = useAsyncAction();
+  const promptText = desktopPrompt(issueNumber, check.letter);
 
   const submit = (): void => {
     const text = note.trim();
@@ -452,6 +459,19 @@ function CheckBlock({
                       Hand to the fleet
                     </AsyncButton>
                   )}
+                  {/* The third runner, and the only one with no control of its own:
+                      a desktop session claims a check from the operator's own
+                      Claude Code, so the cockpit cannot start one — it can only
+                      hand over the line that does. The command is in the title as
+                      well as on the clipboard, because a copy that silently did
+                      nothing and a command nobody can read are the same dead end. */}
+                  <AsyncButton
+                    className={buttonClass}
+                    title={`Copies "${promptText}". Paste it into your own Claude Code to run this check at the keyboard — with the browser and the logins the fleet has not — and it reports the reading back here.`}
+                    onClick={() => navigator.clipboard.writeText(promptText)}
+                  >
+                    Copy desktop prompt
+                  </AsyncButton>
                 </>
               ) : (
                 // One way back from every settled state, and it takes no note for a
@@ -551,6 +571,21 @@ function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record
       )}
     </div>
   );
+}
+
+/**
+ * What an operator pastes into their own Claude Code to run one check there —
+ * `/lubbdubb 249:A`, the `/lubbdubb` skill's own argument form.
+ *
+ * **The goal's number and the check's stored letter, never a row's position.**
+ * That pair is what the skill resolves the check by, and a letter derived from
+ * where a row currently sits would address a different check after the next
+ * amendment — the failure the stored letter exists to prevent, one layer up.
+ *
+ * @public the copy control, and the test that pins the address form
+ */
+export function desktopPrompt(issueNumber: number, letter: string): string {
+  return `/lubbdubb ${issueNumber}:${letter}`;
 }
 
 /** The chip's tone. `deferred` is deliberately not `ok`: it is a check still owed. */

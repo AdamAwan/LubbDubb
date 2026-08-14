@@ -449,8 +449,14 @@ of handle, and it is the one that stays put across an amendment. **A row is coll
 letter, title, state, and who is on it — because six checks at full height is most of a screen and
 the card sits above the plan. Opening one reveals the `do` and `expect` side by side, the resources it
 names with a present/missing fact resolved server-side, and the controls: Passed / Failed / Defer /
-Waive, each opening a one-line note the server also requires, the hand-over, and one way back to
-`unrun` from any settled state.
+Waive, each opening a one-line note the server also requires, the hand-over, **Copy desktop prompt**,
+and one way back to `unrun` from any settled state.
+
+**Copy desktop prompt** is the odd one out and is the reason it exists: it writes nothing. A desktop
+session is started from the operator's own Claude Code, not from here, so the button copies the line
+that starts one — `/lubbdubb <issue>:<letter>` — and the cockpit's part in that run ends there.
+Without it the third runner is the only one with no trace on the surface managing the other two.
+→ [20](20-validation.md#starting-a-run-from-the-cockpit)
 
 **Two things stay on a closed row.** The bands — an amendment, and a hand-back — because they are
 what a reader must not be able to scroll past without seeing, and a collapsed row that hid them would

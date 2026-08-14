@@ -471,6 +471,33 @@ It is always overwritten, and says so in its own body — telling an operator's 
 has no honest implementation, and a skill that silently stopped being refreshed would describe a
 channel that had since changed. `validation.desktopSkill` turns the writing off.
 
+### Starting a run from the cockpit
+
+Every other runner of a check is started from the check's own row: a reading is recorded there, and
+the hand-over puts an agent on it. A desktop session is not, and cannot be — the claim is taken from
+the operator's own Claude Code over a socket a browser has no reach into, so the cockpit has no way
+to begin one. Left at that, the third runner is the only one with no trace on the surface that
+manages the other two, and an operator reads a validation plan that offers a hand-over to the fleet
+and says nothing about the machine in front of them.
+
+So an unrun check draws **Copy desktop prompt** beside the fleet hand-over, which copies
+`/lubbdubb <issue>:<letter>` — `desktopPrompt` in `web/src/components/ValidationSection.tsx`. It
+records nothing, claims nothing and reaches no socket; it is one string on a clipboard, and the run
+begins when that string is pasted. Two properties, both asserted in
+`test/validationDesktopPrompt.test.ts`:
+
+- **The address is the goal's number and the check's stored letter**, which is the pair the skill
+  resolves a check by. Derived from a row's position it would render correctly and address a
+  different check after the next amendment — the failure [the letter](#the-letter-is-assigned-never-positional)
+  exists to prevent, one layer up.
+- **The command is in the button's title as well as on the clipboard.** A clipboard write can be
+  refused, and a command living only in a click handler leaves an operator with a button that did
+  nothing and nothing to type instead.
+
+It is offered on every unrun check rather than only a nominated one, the hand-over's rule for the
+hand-over's reason: `fleetCandidate` is an argument about the fleet and says nothing about the
+machine the operator is sitting at.
+
 ## Deferral and waiving
 
 Two operator acts with opposite effects on the flag, kept apart because collapsing them would make
