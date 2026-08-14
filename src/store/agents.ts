@@ -13,6 +13,7 @@ export const AGENT_COLUMNS: ColumnMigrations = {
     note: 'TEXT',
     noted_at: 'TEXT',
     resumed_at: 'TEXT',
+    resume_attempts: 'INTEGER',
   },
 };
 
@@ -52,6 +53,7 @@ export class AgentStore {
       note: null,
       notedAt: null,
       resumedAt: null,
+      resumeAttempts: 0,
     };
     this.ctx.db
       .prepare(
@@ -81,6 +83,23 @@ export class AgentStore {
    */
   setAgentResumed(id: string, at: string | null): void {
     this.ctx.db.prepare(`UPDATE agents SET resumed_at=? WHERE id=?`).run(at, id);
+  }
+
+  /**
+   * Count one automatic re-attach after a mid-run crash, returning the new total
+   * (issue #318). Incremented in SQL over a `COALESCE`, so a row written before
+   * the column existed counts from zero rather than staying null forever.
+   *
+   * Never cleared. The budget is the agent's whole life, not its current launch:
+   * a reset on progress would let an agent that crashes once per turn resume
+   * without limit, which is the loop the bound exists to stop.
+   */
+  countAgentResumeAttempt(id: string): number {
+    const row = this.ctx.db
+      .prepare(`UPDATE agents SET resume_attempts=COALESCE(resume_attempts,0)+1 WHERE id=? RETURNING resume_attempts`)
+      .get(id) as { resume_attempts: number } | undefined;
+    if (!row) throw new Error(`Agent ${id} not found`);
+    return row.resume_attempts;
   }
 
   getAgent(id: string): Agent | null {
@@ -288,6 +307,7 @@ interface AgentRow {
   note: string | null;
   noted_at: string | null;
   resumed_at: string | null;
+  resume_attempts: number | null;
 }
 interface AgentFlagRow {
   id: string;
@@ -324,6 +344,8 @@ function rowToAgent(r: AgentRow): Agent {
     note: r.note,
     notedAt: r.noted_at,
     resumedAt: r.resumed_at,
+    // Null on every row written before the column existed — read as "never resumed".
+    resumeAttempts: r.resume_attempts ?? 0,
   };
 }
 function rowToFlag(r: AgentFlagRow): AgentFlag {

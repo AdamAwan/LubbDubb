@@ -393,6 +393,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     promptDelayMs: agentSetup.promptDelayMs,
     waitingPatterns: config.agentWaitingPatterns,
     resumable: agentSetup.resumable,
+    resumeAttempts: config.agentResumeAttempts,
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,

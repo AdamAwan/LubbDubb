@@ -123,7 +123,15 @@ CREATE TABLE IF NOT EXISTS agents (
   -- status: the escalate tool returns immediately and only *asks* the agent to
   -- wait, so a model that carries on leaves the row saying waiting while it is
   -- plainly working. Deliberately does not un-park -- see AgentManager.noteResumed.
-  resumed_at     TEXT
+  resumed_at     TEXT,
+  -- How many times the harness has re-attached to this agent after its process
+  -- died mid-run (issue #318). A budget, not an observation: it bounds the
+  -- automatic resume so a claude that dies on every launch settles as failed
+  -- instead of relaunching forever. On the row rather than in memory because
+  -- spawn/resume reuse one row across restarts, and an in-memory counter would
+  -- refill on every boot. Distinct from resumed_at above, which is about a park
+  -- and is cleared whenever one is answered.
+  resume_attempts INTEGER
 );
 
 -- Timestamped per-report cost deltas (not cumulative), so account-level rolling

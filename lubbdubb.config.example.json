@@ -45,6 +45,9 @@
   "// agentWaitingPatterns": "Extra literal substrings that mean 'the CLI is waiting for input' (backup escalation heuristic, PTY). Default [].",
   "agentWaitingPatterns": [],
 
+  "// agentResumeAttempts": "How many times an agent whose process dies mid-run is re-attached to its own conversation before the harness settles it as failed. Counted on the agent row, so it survives a restart and bounds the agent's whole life, not one launch. 0 disables. Default 3.",
+  "agentResumeAttempts": 3,
+
   "// whitelistedApprovals": "PTY waiting prompts the harness may auto-answer instead of escalating. Each rule: { match: <substring of the waiting prompt>, response: <text typed back> }. Default [].",
   "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
 

@@ -42,6 +42,7 @@ function agent(id: string, status: AgentStatus, over: Partial<Agent> = {}): Agen
     note: null,
     notedAt: null,
     resumedAt: null,
+    resumeAttempts: 0,
     ...over,
   };
 }

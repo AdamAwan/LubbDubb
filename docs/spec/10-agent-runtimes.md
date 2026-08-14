@@ -382,7 +382,9 @@ held `handleWaiting` early-returns, so an agent whose alert was dismissed could 
 
 ### Terminal, exit and reap
 
-`exit(code)` records the code and marks the process exited. `done`/`failed` call `handleTerminal`,
+`exit(code)` records the code and marks the process exited. `done` calls `handleTerminal` directly;
+`failed` goes through the auto-resume gate below first, and only reaches it if the agent is not being
+re-attached. `handleTerminal`
 which drains file events one last time, clears the park, flushes the transcript, marks agent and task,
 drops the session, records a `failed` agent to the error log with its exit code and an output tail,
 emits `done`, and then calls `maybeReap`.
@@ -391,6 +393,41 @@ emits `done`, and then calls `maybeReap`.
 exit observed. The two arrive in either order (PTY: sentinel first, exit later; stream: exit first).
 On reap the file-events spool is disposed and the MCP credential is released. Only then is it safe to
 touch resources the process pinned, which is why worktree removal hangs off this event.
+
+### Auto-resume on a mid-run crash
+
+`failed` is gated before it reaches `handleTerminal`. When the runtime is resumable, the row carries a
+session id, its worktree is still on disk and the agent has spent fewer than `agentResumeAttempts`
+(default 3), the death is **not** terminal: the agent is re-attached to its own conversation with
+`AgentManager.resume`, on the same row, in the same worktree, and — if it was mid-work rather than
+parked — handed the `buildResumeMessage()` nudge. The task stays `running` and nothing reaches the
+error log.
+
+The death of the process is not the death of the session: the transcript is on disk and `--resume`
+picks it up with everything the agent had learned, so settling the task throws away a recoverable run.
+`requeue` exists and starts over, which is a different and worse answer.
+
+What keeps that from being a crash loop is the budget. It is counted on **`agents.resume_attempts`**,
+not in memory, because `spawn`/`resume` reuse one agent row across restarts — an in-memory counter
+refills on every boot and an agent whose `claude` dies at launch would relaunch forever. It is never
+cleared, so it bounds the agent's whole life rather than its current launch, and it is deliberately
+_not_ `resumed_at`: that column records an observation about a **park** and is cleared whenever an
+escalation is answered, so a budget riding on it would refill every time somebody replied. The
+`agentResumeAttempts + 1`-th death settles as `failed` with an error naming how many resumes were
+tried, so a loop reads as a loop. `agentResumeAttempts: 0` restores the pre-#318 behaviour.
+
+**The teardown before the re-attach is the sharp edge.** `resume` was written for boot, where the
+in-memory maps are empty: it `set`s the spool key and the MCP token rather than replacing them, and
+its own `sessions.has` guard returns a silent success for an agent still in the map. Called mid-run
+without first dropping the dead session, disposing its spool and releasing its credential, it leaks a
+spool directory and leaves a **bearer credential bound and live** with nothing left to revoke it —
+and the agent visibly comes back either way, which is why `test/streamResume.test.ts` asserts the
+revocation rather than reasoning about it. The recorded exit code and the exited marker are cleared
+too: they belong to the launch that died, not to the one replacing it.
+
+A decided ending is never re-opened. `kill` and `complete` drop the session from the map first, so the
+process exit that follows finds a session that is no longer the agent's and the gate declines it — the
+same reason `ORPHAN_STATUSES` excludes `killed`/`done`/`failed`.
 
 ### Kill vs interrupt vs interruptAll
 

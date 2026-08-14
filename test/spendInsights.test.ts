@@ -31,6 +31,7 @@ function agent(id: string, over: Partial<Agent> = {}): Agent {
     note: null,
     notedAt: null,
     resumedAt: null,
+    resumeAttempts: 0,
     ...over,
   };
 }

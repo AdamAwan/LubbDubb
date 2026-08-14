@@ -1548,6 +1548,7 @@ export function buildDemoState(): DemoSeed {
         note: 'Cutting the ranked list to the budget before the prompt is built, not after',
         notedAt: ago(3),
         resumedAt: null,
+        resumeAttempts: 0,
       },
       {
         id: 'agent-a2',
@@ -1568,6 +1569,7 @@ export function buildDemoState(): DemoSeed {
         // Asked, then carried on regardless: the demo's one stale alert, so the
         // "agent resumed" chip and Dismiss have something to act on.
         resumedAt: ago(2),
+        resumeAttempts: 0,
       },
       {
         id: 'agent-a0',
@@ -1587,6 +1589,7 @@ export function buildDemoState(): DemoSeed {
         note: 'Suite green, PR opened',
         notedAt: ago(100),
         resumedAt: null,
+        resumeAttempts: 0,
       },
     ],
     // The act behind the drafted-reply escalation below. It is what turns that

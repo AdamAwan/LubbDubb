@@ -297,6 +297,24 @@ export interface Config {
   agentIdleWaitMs: number;
   /** Extra literal substrings that mean "the CLI is waiting for input" (backup escalation). */
   agentWaitingPatterns: string[];
+  /**
+   * How many times a *live* agent whose process dies mid-run is re-attached to
+   * its own session before the harness settles it as failed (issue #318).
+   *
+   * A crash mid-run used to end the task outright, which on a resumable runtime
+   * throws away a conversation the CLI can re-open in the same worktree. The
+   * bound is what separates that recovery from a crash loop: an agent whose
+   * `claude` dies three seconds into every launch would otherwise relaunch
+   * forever, each launch costing tokens. On the `(N+1)`th death the agent fails
+   * with an error naming how many resumes were tried, so the loop is visible
+   * rather than silent.
+   *
+   * Counted on the agent row (`agents.resume_attempts`), so it survives a harness
+   * restart and covers the agent's whole life rather than its current launch. 0
+   * disables automatic resume, restoring the pre-#318 behaviour. Ignored by
+   * runtimes that cannot resume (mock, raw), which have no session to re-open.
+   */
+  agentResumeAttempts: number;
   /** Command used to launch an agent session (overridable for tests). */
   claudeCommand: string;
   /** Extra args passed to the agent command. */
@@ -546,6 +564,7 @@ const DEFAULTS: Config = {
   agentSubmitDelayMs: 60,
   agentIdleWaitMs: 90_000,
   agentWaitingPatterns: [],
+  agentResumeAttempts: 3,
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',

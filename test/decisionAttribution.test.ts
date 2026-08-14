@@ -161,6 +161,7 @@ test('a branch note records no proposer at all, and says so through the admissio
     note: null,
     notedAt: null,
     resumedAt: null,
+    resumeAttempts: 0,
   };
   const d = new RuleDispatcher({}, {}, undefined, 'main');
   const { actions } = await d.decide(

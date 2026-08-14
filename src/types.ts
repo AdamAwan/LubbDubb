@@ -739,6 +739,21 @@ export interface Agent {
    * with confidence, which is the whole job.
    */
   resumedAt: string | null;
+  /**
+   * How many times the harness has re-attached to this agent after its process
+   * died mid-run (issue #318), bounded by `agentResumeAttempts`. Zero for an
+   * agent that has never crashed, and for every row written before the column
+   * existed.
+   *
+   * A budget rather than an observation, which is what keeps it off
+   * {@link Agent.resumedAt}: that one is about a *park* and is cleared the moment
+   * an escalation is answered, so a crash budget riding on it would refill every
+   * time somebody replied to a question. Never cleared, and persisted rather than
+   * counted in memory, because `spawn`/`resume` reuse one row across restarts —
+   * an in-memory counter would reset on every boot and a crash-looping agent
+   * would relaunch forever.
+   */
+  resumeAttempts: number;
 }
 
 /**
