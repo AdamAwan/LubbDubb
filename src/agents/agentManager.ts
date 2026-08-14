@@ -60,6 +60,7 @@ import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
+import type { RateLimitPark } from './streamJsonSession.js';
 import { debugEnabled, debugLog } from '../debug.js';
 
 /**
@@ -82,9 +83,15 @@ interface AgentManagerOptions {
    * Builds the argv for a launch. `sessionId` is the id the agent runs under and
    * `resume` re-attaches to it (`claude --resume`) instead of starting fresh.
    * `mcpConfigPath` wires that launch's tool channel, or is null for none.
+   * `model` is the task's resolved `--model` value, or null to pass no flag.
    * Runtimes that don't support session ids (mock/stream) ignore the first two.
    */
-  buildArgs: (opts: { sessionId: string; resume: boolean; mcpConfigPath: string | null }) => string[];
+  buildArgs: (opts: {
+    sessionId: string;
+    resume: boolean;
+    mcpConfigPath: string | null;
+    model: string | null;
+  }) => string[];
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -220,6 +227,13 @@ interface AgentManagerEvents {
    * as `Agent.resumedAt`; emitted so the cockpit learns now rather than next poll.
    */
   resumed: [{ agentId: string; taskId: string; resumedAt: string }];
+  /**
+   * The account's usage limit ran out under this agent, so it is parked rather than
+   * failed (issue #318). Already persisted as `waiting` with `reason` on the row;
+   * emitted so a listener hears the *cause*, which the row alone only spells out in
+   * prose. `resetsAt` is null when `claude` did not say when the window turns over.
+   */
+  limited: [{ agentId: string; taskId: string; reason: string; resetsAt: string | null }];
 }
 
 /**
@@ -259,6 +273,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // detectors, and for the same reason — two detectors that quietly disagree is a
   // bug this codebase has already paid for once.
   private readonly parked = new Set<string>();
+  // agentId → the reason it is parked on a *spent account limit* rather than on a
+  // question (issue #318). A subset of `parked` with a different ending: nobody can
+  // answer it, so the way out is {@link resumeParked}, not a reply. In memory
+  // because it describes a park this process is holding — a restart hands the same
+  // rows to the recovery desk, which asks the operator the wider question.
+  private readonly limited = new Map<string, string>();
 
   constructor(
     private readonly store: Store,
@@ -286,6 +306,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         sessionId: sessionId ?? '',
         resume: false,
         mcpConfigPath: mcp?.configPath ?? null,
+        // Decided at dispatch and stored on the row, so this forwards a string and
+        // never re-derives one from config.
+        model: task.model ?? null,
       }),
       cwd,
       env: {
@@ -337,8 +360,13 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * agent row, session id and cwd — no new agent is created. Best-effort: returns
    * false (caller falls back to interrupting) if the runtime can't resume or the
    * agent has no session id. Idempotent: a no-op if the agent is already live.
+   *
+   * `nudge` overrides the message a mid-work agent is restarted with. Boot passes
+   * nothing and gets `resumeInput`'s "you were resumed after a server restart",
+   * which is the truth there and a lie to an agent resumed off a usage-limit park
+   * — see {@link resumeParked}.
    */
-  resume(agent: Agent, task: Task): boolean {
+  resume(agent: Agent, task: Task, nudge?: string): boolean {
     if (!this.opts.resumable || !agent.sessionId) return false;
     if (this.sessions.has(agent.id)) return true;
 
@@ -356,6 +384,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         sessionId: agent.sessionId,
         resume: true,
         mcpConfigPath: mcp?.configPath ?? null,
+        // The stored value, which is why a restart cannot move a half-finished
+        // conversation onto a different model.
+        model: task.model ?? null,
       }),
       cwd: agent.cwd,
       env: {
@@ -393,9 +424,66 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     }
 
     if (wasWaiting) this.restoreWaiting(agent, task);
-    else this.deliverAfterBoot(agent.id, session, this.opts.resumeInput?.() ?? null);
+    else this.deliverAfterBoot(agent.id, session, nudge ?? this.opts.resumeInput?.() ?? null);
 
     return true;
+  }
+
+  /**
+   * End a usage-limit park: the operator saying the account can work again
+   * (issue #318).
+   *
+   * Two shapes of the same park, because exhaustion does not always kill the
+   * process. If the session is still up, this is one message down the stdin that
+   * is already open. If `claude` exited with the limit — the common case — the
+   * conversation is re-opened through {@link resume}, which is why the park keeps
+   * the row's `session_id` and its worktree rather than settling anything.
+   *
+   * Only an agent *this process* parked on a limit is a candidate. A park held
+   * across a restart is the recovery desk's question, not this one: the desk
+   * offers restore/requeue/remove over a wider choice than "carry on", and two
+   * surfaces resuming one row would race for its session id.
+   *
+   * The park is put back on any failure, so a refused resume leaves the operator
+   * where they were rather than with an agent that is neither parked nor running.
+   */
+  resumeParked(agentId: string): { ok: true } | { ok: false; error: string } {
+    const reason = this.limited.get(agentId);
+    if (reason === undefined) return { ok: false, error: 'this agent is not parked on a usage limit' };
+    return this.withCaller(agentId, ({ agent, task }) => {
+      const session = this.sessions.get(agentId);
+      if (!session && (!this.opts.resumable || !agent.sessionId)) {
+        return { ok: false, error: 'this agent runtime cannot re-open its session, so the park cannot be ended' };
+      }
+      this.limited.delete(agentId);
+      this.parked.delete(agentId);
+      this.store.setAgentResumed(agentId, null);
+      // Cleared before either arm: `resume` reads the row to decide whether the agent
+      // was parked on a *question* (which it re-establishes), and this park is
+      // precisely the one it must not put back.
+      this.store.updateAgent(agentId, { status: 'running', waitingReason: null });
+      this.store.updateTask(task.id, { status: 'running' });
+
+      if (session) {
+        session.send(LIMIT_RESUME_MESSAGE);
+        this.reflectStatus(agentId, task.id, 'running');
+        return { ok: true };
+      }
+
+      const row = this.store.getAgent(agentId);
+      try {
+        if (!row || !this.resume(row, task, LIMIT_RESUME_MESSAGE)) throw new Error('the runtime declined the resume');
+      } catch (err) {
+        this.reinstateLimitPark(agentId, task, reason);
+        return { ok: false, error: `could not re-open the session: ${(err as Error).message}` };
+      }
+      return { ok: true };
+    });
+  }
+
+  /** Every agent this process is holding parked on a spent account limit. */
+  limitedAgentIds(): string[] {
+    return [...this.limited.keys()];
   }
 
   /** Type text into a live agent (a human response or a follow-up prompt). */
@@ -404,6 +492,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     if (!session) return false;
     session.send(text);
     this.parked.delete(agentId); // the park is over; the next ask is a new one
+    this.limited.delete(agentId); // ...including a limit park an operator typed straight past
     this.store.setAgentResumed(agentId, null); // answered, so "it carried on anyway" is spent
     this.store.updateAgent(agentId, { status: 'running', waitingReason: null });
     return true;
@@ -988,11 +1077,16 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
   kill(agentId: string): boolean {
     const session = this.sessions.get(agentId);
-    if (!session) return false;
-    session.kill();
+    // A usage-limit park is the one state with no live session and no ending: the
+    // process went with the limit and the row is deliberately still unsettled. The
+    // operator must be able to abandon one — "resume" cannot be the only verdict on
+    // a park that could otherwise sit there until the next restart offers recovery.
+    if (!session && !this.limited.has(agentId)) return false;
+    session?.kill();
     this.disposeFileEvents(agentId); // fold any last writes in, then drop the spool
     this.releaseMcp(agentId); // the credential dies with the agent, not with the process
     this.parked.delete(agentId);
+    this.limited.delete(agentId); // a killed agent's park is over, and nothing may resume it
     this.store.flushTranscript(agentId); // make the killed agent's transcript durable
     const agent = this.store.getAgent(agentId);
     this.store.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
@@ -1089,6 +1183,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       // Not `parked`: `waitingReason` is preserved as the resume signal, and
       // `restoreWaiting` re-establishes the latch when the agent comes back.
       this.parked.delete(id);
+      // The row keeps its reason, so the desk still says why it was parked; what
+      // does not survive is this process's offer to resume it.
+      this.limited.delete(id);
     }
   }
 
@@ -1266,11 +1363,16 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     session.on('activity', () => this.noteResumed(agentId, task.id));
 
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
+    session.on('limited', (park: RateLimitPark) => this.handleLimited(agentId, task, park));
     // Both runtimes emit `exit` (with the process exit code) before `failed`, so
     // the code is in hand by the time the terminal transition is recorded.
     session.on('exit', (code: number) => {
       this.exitCodes.set(agentId, code);
       this.exited.add(agentId);
+      // A limit park usually outlives its process: `claude` exits with the exhausted
+      // account and no terminal transition follows, so the resources the launch held
+      // have to be given back here or they are held for as long as the park is.
+      if (this.limited.has(agentId)) this.shedLimitedSession(agentId);
       this.maybeReap(agentId, task.id);
     });
     session.on('done', () => this.handleTerminal(agentId, task.id, 'done'));
@@ -1410,6 +1512,74 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
+   * Park an agent because the *account* ran out, not because the agent asked
+   * anything (issue #318).
+   *
+   * It is the same latch and the same three store writes as {@link handleWaiting},
+   * and deliberately **not** the same event. `waiting` is what raises an escalation,
+   * and an escalation is a question put to a human: this one has no answer, so an
+   * inbox row carrying it would be a message nobody can reply to holding a slot in
+   * the queue that means "somebody must answer this". What the operator does instead
+   * is wait for the window to turn over and resume, which is why the park is
+   * announced on its own event and drawn on the agent rather than in the inbox.
+   *
+   * Nothing is settled: the row keeps its session id, the task stays `waiting`
+   * (outstanding, so the work is neither lost nor re-dispatched on top), and the
+   * worktree stays on disk — all three are what {@link resumeParked} needs, and all
+   * three are what recording this as `failed` used to throw away.
+   */
+  private handleLimited(agentId: string, task: Task, park: RateLimitPark): void {
+    if (this.limited.has(agentId)) return;
+    const reason = rateLimitParkReason(park);
+    // Same reason as a question park: whatever the agent wrote before the limit bit
+    // is part of the record an operator reads before deciding to resume.
+    this.drainFileEvents(agentId);
+    this.store.flushTranscript(agentId);
+    const asked = this.parked.has(agentId);
+    this.limited.set(agentId, reason);
+    this.parked.add(agentId);
+    this.store.setAgentResumed(agentId, null);
+    // An agent that asked a question and *then* ran the account out keeps its
+    // question on the row: the escalation it raised is still open and still the
+    // thing a human must answer, and overwriting the reason with this one would
+    // leave that inbox row pointing at a sentence about a limit. The limit is drawn
+    // on the agent either way, from the park this registers.
+    this.store.updateAgent(agentId, asked ? { status: 'waiting' } : { status: 'waiting', waitingReason: reason });
+    this.store.updateTask(task.id, { status: 'waiting' });
+    this.reflectStatus(agentId, task.id, 'waiting');
+    this.emit('limited', { agentId, taskId: task.id, reason, resetsAt: park.resetsAt });
+  }
+
+  /**
+   * Give back what the dead launch held while keeping the park itself — the
+   * teardown a terminal transition would have done, minus the terminal.
+   *
+   * The spool and the MCP credential die with the process either way; leaving them
+   * bound would leak a live bearer token for the length of a park, which can be
+   * hours. `exited`/`exitCodes` are dropped for {@link kill}'s reason: no reap is
+   * owed for a process whose work is unfinished, and a stale `exited` entry would
+   * make the *resumed* run's first terminal reap a worktree out from under a live
+   * agent.
+   */
+  private shedLimitedSession(agentId: string): void {
+    this.disposeFileEvents(agentId);
+    this.releaseMcp(agentId);
+    this.sessions.delete(agentId);
+    this.exitCodes.delete(agentId);
+    this.exited.delete(agentId);
+    this.store.updateAgent(agentId, { pid: null });
+  }
+
+  /** Put a limit park back after a resume that could not be carried out. */
+  private reinstateLimitPark(agentId: string, task: Task, reason: string): void {
+    this.limited.set(agentId, reason);
+    this.parked.add(agentId);
+    this.store.updateAgent(agentId, { status: 'waiting', waitingReason: reason });
+    this.store.updateTask(task.id, { status: 'waiting' });
+    this.reflectStatus(agentId, task.id, 'waiting');
+  }
+
+  /**
    * Record that a *parked* agent made a tool call — it is working, not waiting.
    *
    * Deliberately does **not** un-park it. The park is a latch (see {@link parked})
@@ -1464,6 +1634,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   ): void {
     this.drainFileEvents(agentId); // catch a report written just before finishing
     this.parked.delete(agentId);
+    this.limited.delete(agentId);
     this.store.flushTranscript(agentId); // make the finished agent's transcript durable
     this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status });
@@ -1518,6 +1689,44 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   override on<K extends keyof AgentManagerEvents>(event: K, listener: (...args: AgentManagerEvents[K]) => void): this {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
+}
+
+/**
+ * What a resumed agent is told. Deliberately not `buildResumeMessage`'s "you were
+ * resumed after a server restart": nothing restarted, and an agent that believes
+ * otherwise re-reads its branch looking for work it did itself minutes ago.
+ */
+const LIMIT_RESUME_MESSAGE =
+  'This account hit its usage limit mid-turn, so the harness parked you and an operator has just ' +
+  'resumed you. Nothing else changed — the worktree and the conversation are the ones you left. ' +
+  'Continue the task from where you stopped.';
+
+/** How `claude` names each usage window, in words an operator reads. */
+const LIMIT_WINDOWS: Record<string, string> = {
+  five_hour: 'five-hour',
+  seven_day: 'seven-day',
+  seven_day_opus: 'seven-day Opus',
+  seven_day_sonnet: 'seven-day Sonnet',
+  seven_day_overage_included: 'seven-day (overage included)',
+  overage: 'overage',
+};
+
+/**
+ * The sentence that goes on the row — and so onto every surface that draws a
+ * parked agent. It has one job the status cannot do: say that the *account* ran
+ * out rather than the agent, since "waiting" on its own reads as a question
+ * somebody has failed to answer.
+ *
+ * An unknown window name is printed verbatim rather than dropped: `claude` may
+ * add one, and a park that names no limit is the failure this exists to prevent.
+ */
+function rateLimitParkReason(park: RateLimitPark): string {
+  const window = park.limitType ? (LIMIT_WINDOWS[park.limitType] ?? park.limitType) : null;
+  const what = park.overage
+    ? `this account's overage allowance is spent${window ? ` (${window})` : ''}`
+    : `this account's ${window ? `${window} ` : ''}usage limit is spent`;
+  const when = park.resetsAt ? `, and it resets at ${park.resetsAt}` : '';
+  return `Parked on a usage limit: ${what}${when}. Nothing is wrong with the run — resume it once the limit clears.`;
 }
 
 /**

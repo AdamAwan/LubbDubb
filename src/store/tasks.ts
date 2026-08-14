@@ -13,6 +13,8 @@ export const TASK_COLUMNS: ColumnMigrations = {
     rule: 'TEXT',
     /** A JSON array of check names — see {@link Task.ciChecks}. */
     ci_checks: 'TEXT',
+    /** The resolved `claude --model` value for this run — see {@link Task.model}. */
+    model: 'TEXT',
   },
 };
 
@@ -41,6 +43,7 @@ export class TaskStore {
       | 'dispatchReason'
       | 'rule'
       | 'ciChecks'
+      | 'model'
     > & {
       status?: Task['status'];
       // Origin context is optional at creation (issue #17): the rule dispatcher
@@ -52,6 +55,9 @@ export class TaskStore {
       // same reason: a dispatch composed outside a rule has neither.
       rule?: string | null;
       ciChecks?: string[] | null;
+      // The model this run launches on, resolved from `agentModels` at dispatch.
+      // Optional for the same reason: a caller with no policy to consult has none.
+      model?: string | null;
     },
   ): Task {
     const ts = this.ctx.now();
@@ -71,11 +77,12 @@ export class TaskStore {
       dispatchReason: input.dispatchReason ?? null,
       rule: input.rule ?? null,
       ciChecks: input.ciChecks ?? null,
+      model: input.model ?? null,
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, status, agent_id, created_at, updated_at)
-         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @status, @agentId, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, model, status, agent_id, created_at, updated_at)
+         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @model, @status, @agentId, @createdAt, @updatedAt)`,
       )
       // The array is the only field the row shape and the domain shape disagree
       // about, so it is serialised here rather than the whole task being mapped.
@@ -153,6 +160,7 @@ interface TaskRow {
   dispatch_reason: string | null;
   rule: string | null;
   ci_checks: string | null;
+  model: string | null;
   status: string;
   agent_id: string | null;
   created_at: string;
@@ -250,6 +258,7 @@ function rowToTask(r: TaskRow): Task {
     dispatchReason: r.dispatch_reason,
     rule: r.rule,
     ciChecks: parseChecks(r.ci_checks),
+    model: r.model,
     status: r.status as Task['status'],
     agentId: r.agent_id,
     createdAt: r.created_at,

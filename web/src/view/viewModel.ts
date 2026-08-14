@@ -90,6 +90,16 @@ export interface CockpitView {
    * row, and the next snapshot clears both with nothing kept in step by hand.
    */
   escalationByAgent: ReadonlyMap<string, Escalation>;
+  /**
+   * The agents parked because the account's usage limit is spent — a set rather
+   * than a list because every surface asks the same question of it, "is *this*
+   * agent one", and a list would have each of them answering it its own way.
+   *
+   * It is the wire's `parkedOnLimit` and nothing derived: the park is a fact the
+   * harness holds, and a cockpit that inferred it from the waiting reason would
+   * offer the resume button off a sentence.
+   */
+  limitParked: ReadonlySet<string>;
   /** Artifacts agents flagged mid-run, grouped for the card and drawer. */
   flagsByAgent: ReadonlyMap<string, AgentFlag[]>;
   /** Every file agents wrote, grouped for the drawer's "files changed" list. */
@@ -260,6 +270,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     escalationByAgent: new Map(
       openEscalations.flatMap((e) => (e.agentId ? ([[e.agentId, e]] as [string, Escalation][]) : [])),
     ),
+    limitParked: new Set(state.parkedOnLimit),
     flagsByAgent: groupByAgent(state.flags),
     filesByAgent: groupByAgent(state.files),
     tailByAgent: input.tails,

@@ -227,20 +227,30 @@ single spelling, an unknown value reading as the overview, and an ask id survivi
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
-permission requests, bench tasks, close-outs and the recovery hold. `buildNeedsYou`
+permission requests, usage-limit parks, bench tasks, close-outs and the recovery hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
-**Six kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
+**Seven kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
 underneath, named apart because the verdict differs — a permission goes to `/permission`, a proposal
 carries accept/reject, a plain question takes free text. Drawing them as one kind is how a surface ends
 up offering the wrong control. `bench` and `close_out` are human tasks, likewise split, since a
 close-out is the step after a launch and reads as one ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
 
+**`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
+`state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
+there is no question in it to answer ([10](10-agent-runtimes.md#the-limit-park)). Its verdict is
+`Resume`, and its second control is the transcript, which is where an operator decides whether carrying
+on is worth it. It draws no reply box anywhere, because the agent's process is usually gone with the
+limit and a box that cannot send is worse than no box.
+
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. That is the
-whole of the colour rule: **red means an agent is parked on a question only you can answer, and
-nothing else.** A bench task genuinely blocks no agent, so it is amber, and the merge of six surfaces
-into one list preserves the distinction rather than flattening it.
+whole of the colour rule: **red means an agent is parked and only you can un-park it, and nothing
+else.** A bench task genuinely blocks no agent, so it is amber, and the merge of seven surfaces into
+one list preserves the distinction rather than flattening it. A limit park is red for the rule's own
+reason and not by analogy: the agent is stopped, its worktree and its slot are held, and the harness
+will not resume it on its own — all that differs from a question is what the operator does, which is
+wait for the window to turn over.
 
 **The order is the derivation's, and the rail never re-sorts.** `buildNeedsYou` sorts:
 
@@ -597,6 +607,12 @@ vanishes when quiet is indistinguishable from one that broke.
   question, and the count stays in the header at zero, muted, so the way in does not move.
   The card also draws a **keyboard entry** per live desktop claim — see
   [the keyboard entry](#the-keyboard-entry).
+  A row parked on a **usage limit** (`view.limitParked`, from the wire's `parkedOnLimit`) says
+  _Out of account limit_ in place of its progress note — which on a parked row otherwise reads as
+  though it still is — and carries a **Resume** control beside the name, not inside it, for the
+  refs' reason. The control is drawn here as well as in the drawer and the rail because it is the
+  answer to the question the row raises where the row is: an operator who can see the park and has to
+  go looking for the way out of it is one who leaves the slot held.
   **The name is the row's control and the refs sit beside it** (`cn-refs`), the backlog row's shape and
   for its reason: a link inside a button is a second destination for one click. A row draws **two**
   refs where there are two — the origin it was dispatched at (`pr:412`, `issue:212:part:x`), and, when
@@ -945,12 +961,12 @@ hide a useful value while implying the invariant is not real.
 
 The one **writable** thing on the settings tab, which is not the inconsistency it looks like: the
 running config is read-only because its honest answer to "when does this take effect" is "at the next
-restart", and this answers "now". It is a preference of the *browser*, not of the harness.
+restart", and this answers "now". It is a preference of the _browser_, not of the harness.
 
 Everything the harness asks of a person lands in the queue rail, and the queue rail is only visible in
 an open tab, on loopback, on the machine the harness runs on. Nothing carried it further — so a parked
 agent held its slot and its worktree for as long as it took somebody to happen to look, and the
-recovery queue holds *every* pulse while it is up ([10](10-agent-runtimes.md#crash-recovery)), which
+recovery queue holds _every_ pulse while it is up ([10](10-agent-runtimes.md#crash-recovery)), which
 makes an unnoticed restart a stopped fleet.
 
 **The Notification API, not Web Push.** Web Push survives a closed tab and costs a service worker,
@@ -960,12 +976,12 @@ a 0600 file and sends nothing off the box, and a notification channel is a poor 
 first exception. The cost is stated rather than hidden — **the tab must still be open**. Backgrounded,
 buried behind another window, on another desktop all still notify; closed does not.
 
-| | |
-| --- | --- |
-| Stored | `localStorage` under `lubbdubb.notify`, beside the token — a property of this browser, so two people on one deployment can want different things. Not `Place`: the address bar holds where you are, and this is not somewhere you can be. |
-| Categories | `needsYou`, `errors`, `agents`, each independently switchable. `agents` is described in the panel as frequent rather than quietly defaulted off — switchable is the answer to noise, not a default nobody finds. |
-| Permission | Requested only from the button, never a mount effect: every engine requires a user gesture and some refuse silently. `enabled` is written only once the browser has actually granted, so a switch can never read on and do nothing. |
-| Suppressed | While `document.visibilityState === 'visible'`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere. |
+|            |                                                                                                                                                                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stored     | `localStorage` under `lubbdubb.notify`, beside the token — a property of this browser, so two people on one deployment can want different things. Not `Place`: the address bar holds where you are, and this is not somewhere you can be. |
+| Categories | `needsYou`, `errors`, `agents`, each independently switchable. `agents` is described in the panel as frequent rather than quietly defaulted off — switchable is the answer to noise, not a default nobody finds.                          |
+| Permission | Requested only from the button, never a mount effect: every engine requires a user gesture and some refuse silently. `enabled` is written only once the browser has actually granted, so a switch can never read on and do nothing.       |
+| Suppressed | While `document.visibilityState === 'visible'`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere.                                                                               |
 
 **Decided from state, not from websocket frames.** `notifiableChanges` (`web/src/cockpit/notify.ts`)
 is a pure diff of two reduced snapshots, and the needs-you half diffs the **rendered** queue —
@@ -1209,8 +1225,23 @@ half-parse — and rendered separately so streaming text is still shown while it
 **No xterm remains anywhere.** The browser-side `@xterm/xterm` and `@xterm/addon-fit` went first, and
 `@xterm/headless` went with the server-side screen-scraping it existed to do.
 
+Under the origin block, the drawer shows **why this run was dispatched** and, when the operator
+configured a model policy, **what it was launched on** — the `agentModels` profile the run's rule
+resolved to at dispatch, read off `task.model` rather than re-derived from config, so what is shown is
+what argv actually carried (issue #321). Drawn quieter than the dispatch reason, because it is context
+rather than the thing the drawer was opened to read, and absent entirely on a deployment that assigns
+no models. The policy itself is visible in the running-config panel, under **Agents** —
+[02](02-configuration.md#model-assignment-by-rule).
+
 The drawer also shows the artifact chips, the **files changed** list from `files`, and offers respond,
 interrupt and kill.
+
+**A usage-limit park replaces the reply box rather than sitting behind it.** An agent in
+`parkedOnLimit` draws an amber notice above the transcript — the row's own reason, naming the window
+and its reset — with **Resume** in it, and the reply box is gone for as long as the park is: the
+process usually went with the limit, so typing there would reach nothing, and there is no question at
+the other end of it to answer. Amber rather than red, because nothing failed. Kill stays where it is:
+resume must not be the only thing an operator can ever say to a park.
 
 ## The plan sheet
 
@@ -1421,6 +1452,20 @@ shares the number. The tracker's page answers either.
 It was written three times over, and the fourth surface that wrote it printed the label with no link on
 it — which is the bug exactly: shortening a ref by hand is how a surface ends up naming a thing instead
 of pointing at it. `test/refLinks.test.ts` pins that nothing else strips a ref down to a number.
+
+**A reference is underlined at rest** — solid for a destination inside the cockpit, dotted for one that
+leaves it — in `--link-line`, a token of its own in `web/src/styles.css` with a `#print-sheet`
+counterpart so paper does not get a dark-theme line on white. Both classes carried that line already and
+drew it `transparent` until `:hover`, which left the whole affordance under the mouse: at rest a `#412`
+differed from the label beside it by `--blue` alone, in rows that also carry coloured dots and chips.
+Hover keeps its meaning by strengthening — the line goes to full `--blue` / `currentColor` — and both
+classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal` is a `<button>` reset
+to look like text and had no ring of its own. Colour is still not the distinction, and the treatment
+lives in the two shared classes, so every `<Ref>`, `ExtLink`, `refLink` and `linkify` site has it
+without knowing. Controls that already read as controls — `.esc-open`, `.pm-jump`, `.cn-tgl`, the chip
+anchors — are deliberately untouched: the failure this fixes is text that looks like text.
+`test/refLinks.test.ts` pins the resting line and the focus rule, because nothing in a render test can
+see a stylesheet.
 
 **One rule a call site still has to keep: a reference never goes inside a button.** A link nested in a
 control is a second destination for one click, so a row that carries both draws its name as the control

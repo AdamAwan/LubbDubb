@@ -270,6 +270,7 @@ reading the file is not the same as knowing the policy.
 | `claudeCommand`         | `string`                        | `'claude'`              | The command spawned for an agent.                                                                                                                                                                                                                                                                                                                                                                                                |
 | `claudeArgs`            | `string[]`                      | `[]`                    | Extra args, appended **after** the harness's own, so an explicit flag there has the last word.                                                                                                                                                                                                                                                                                                                                   |
 | `agentPermissionMode`   | `string`                        | `'acceptEdits'`         | Passed to `--permission-mode`. `acceptEdits` auto-accepts file edits only. `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root.                                                                                                                                                                                                                                                      |
+| `agentModels`           | `AgentModels` (optional)        | unset                   | Which model each kind of work runs on, keyed on the dispatch rule that proposed it (issue #321). Named profiles, a `default` and per-rule assignments; resolved once at dispatch and stored on the task. Omitted, no launch carries `--model`. See [Model assignment](#model-assignment-by-rule) below and [10](10-agent-runtimes.md#launch-arguments).                                                                             |
 | `agentAllowedTools`     | `string[]`                      | JS toolchain + git + gh | Tool allow rules merged into `--settings` as `permissions.allow` (Claude Code syntax, e.g. `Bash(npm:*)`). Pre-approves the mechanical validate/commit/push commands so the default config completes a task unattended without `bypassPermissions`. Never on `--allowedTools` (that carries the MCP grants). Default: `Bash(npm:*)`, `Bash(npx:*)`, `Bash(pnpm:*)`, `Bash(yarn:*)`, `Bash(node:*)`, `Bash(git:*)`, `Bash(gh:*)`. |
 | `agentPromptDelayMs`    | `number`                        | `1200`                  | Delay before the first message is delivered, giving an interactive REPL time to boot. Stream mode uses `0`.                                                                                                                                                                                                                                                                                                                      |
 | `agentSubmitDelayMs`    | `number`                        | `60`                    | PTY only: gap between writing message text and writing the submitting carriage return.                                                                                                                                                                                                                                                                                                                                           |
@@ -279,6 +280,54 @@ reading the file is not the same as knowing the policy.
 | `whitelistedApprovals`  | `{match, response}[]`           | `[]`                    | Waiting prompts containing `match` are auto-answered with `response` instead of escalating.                                                                                                                                                                                                                                                                                                                                      |
 | `sessionTranscriptRoot` | `string` (optional)             | `~/.claude/projects`    | Where Claude Code writes session transcripts, which PTY mode tails. Override only if the agent runs under a different HOME.                                                                                                                                                                                                                                                                                                      |
 | `docsFolderPrefix`      | `string \| string[]` (optional) | unset                   | Folder(s) whose files are promoted to artifact chips regardless of extension. Absolute entries also widen the artifact-serving boundary.                                                                                                                                                                                                                                                                                         |
+
+### Model assignment by rule
+
+Planning an issue and triaging a red CI check are not the same problem, and before issue #321 the
+only lever that could say so was `claudeArgs` — fleet-wide and all-or-nothing. `agentModels` assigns
+a model per _kind_ of work:
+
+```json
+{
+  "agentModels": {
+    "profiles": { "fast": "haiku", "standard": "sonnet", "deep": "opus" },
+    "default": "standard",
+    "byRule": { "issue-plan": "deep", "issue-assay": "fast", "pr-ci-failing": "standard" }
+  }
+}
+```
+
+- **The key is a `DISPATCH_RULES` id.** That id is already persisted on `Task.rule` and is already the
+  axis `src/taskTypeSpend.ts` prices work by, so config, spend and the decision log share one
+  vocabulary rather than growing a second. → [05](05-dispatcher.md#the-rule-book)
+- **A rule points at a named profile, and a profile is a model string and nothing else.** The
+  indirection buys a name (`deep`, `fast`) that survives a model being replaced: when a new model
+  ships, one profile value changes and every rule pointing at it follows. A profile deliberately
+  carries no permission mode and no extra args — `claudeArgs` stays the single global escape hatch,
+  which structurally removes the risk of a profile's args clobbering the `--allowedTools` MCP grants.
+- **`default` covers every rule with no `byRule` entry, and every run dispatched outside a rule.** An
+  operator who sets only this has moved the whole fleet with one line. Omitted, an unassigned rule
+  carries no `--model` at all.
+- **The whole block is optional.** Omitted, no `--model` flag is ever passed and argv is exactly what
+  it was before the key existed.
+- **The model string itself is never validated.** Only the installed `claude` knows the valid set, so
+  a profile holding a bad alias fails at _spawn_ — as a failed agent — rather than at boot.
+- **It merges whole**, not field by field like the policy blocks: an override that sets `agentModels`
+  replaces it, which is what lets one _remove_ an assignment rather than only add to it.
+
+Two things are refused at load, both by `validateAgentModels` in `src/agents/modelPolicy.ts` — a pure
+function called from `loadConfig` (not only `loadDeploymentConfig`, or no test could reach it):
+
+- a `default` or `byRule` value naming a profile that is not in `profiles`, which would otherwise
+  launch with no flag and read as working;
+- a `byRule` key that is not a **pipeline** rule id. Validated against `DISPATCH_PIPELINE` rather than
+  the whole registry: the `admission` and `terminal` entries (`cooldown-escalate`, `idle`) never reach
+  `action.rule`, so accepting one as a key would make the typo check weaker than it looks. A key that
+  can never match is the failure class the config rejections exist to prevent.
+
+Resolution happens **once, at dispatch** (`ActionExecutor.recordDispatchTask`), and the resolved model
+_string_ is stored on the task — see [10](10-agent-runtimes.md#launch-arguments) and
+[14](14-persistence.md).
 
 ### Provider targets
 

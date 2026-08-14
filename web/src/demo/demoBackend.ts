@@ -763,6 +763,26 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * End a usage-limit park (issue #318): the agent leaves `parkedOnLimit` and goes
+   * back to work, which is what the real route does once it has re-opened the
+   * session. No escalation is touched — a limit park never raised one.
+   */
+  async resumeAgent(id: string): Promise<{ ok: true }> {
+    if (!this.state.parkedOnLimit.includes(id)) return { ok: true };
+    this.state.parkedOnLimit = this.state.parkedOnLimit.filter((a) => a !== id);
+    const agent = this.state.agents.find((a) => a.id === id);
+    if (agent) {
+      agent.status = 'running';
+      agent.waitingReason = null;
+      const task = this.state.tasks.find((t) => t.id === agent.taskId);
+      if (task && isLiveTask(task)) task.status = 'running';
+    }
+    this.append(id, '\nResumed after the account usage limit cleared.');
+    this.dirty();
+    return { ok: true };
+  }
+
   // --- WS surface ---------------------------------------------------------
   connect(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
     const conn: Conn = { onEvent, subs: new Set() };
@@ -1936,6 +1956,7 @@ export const demoApi = {
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
+  resumeAgent: (id: string) => getServer().resumeAgent(id),
 };
 
 export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {

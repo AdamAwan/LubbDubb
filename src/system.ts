@@ -273,14 +273,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // `mcpConfigPath` is per-launch (minted by AgentManager) and MUST be threaded
   // through — without it neither `--mcp-config` nor `--permission-prompt-tool` is
   // ever added, and the tool channel is dead in production.
-  type ArgsBuilder = (opts: { sessionId: string; resume: boolean; mcpConfigPath: string | null }) => string[];
+  // `model` is per-launch for the same reason and with the same trap: it is the
+  // task's own resolved model (issue #321), so a builder that accepts it and
+  // forgets to forward it type-checks clean and silently drops the flag.
+  type ArgsBuilder = (opts: {
+    sessionId: string;
+    resume: boolean;
+    mcpConfigPath: string | null;
+    model: string | null;
+  }) => string[];
   const agentSetup = {
     stream: {
       // Resumable like the PTY runtime, and for the same reason: the id is pinned up
       // front so a restart can re-open *this* conversation. Headless `claude` honours
       // both flags (issue #318) — which is what puts `restore` on the recovery desk
       // for the default deployment instead of requeue-or-remove.
-      buildArgs: (({ sessionId, resume, mcpConfigPath }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, model }) =>
         buildClaudeStreamArgs({
           permissionMode: perm,
           extraArgs,
@@ -291,6 +299,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           fileEvents: true,
           mcpConfigPath,
           permissionPromptTool,
+          model: model ?? undefined,
         })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
@@ -300,7 +309,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
     pty: {
       // Pin the session id up front, `--resume` it later.
-      buildArgs: (({ sessionId, resume, mcpConfigPath }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, model }) =>
         buildClaudeArgs({
           permissionMode: perm,
           extraArgs,
@@ -312,6 +321,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           fileEvents: true,
           mcpConfigPath,
           permissionPromptTool,
+          model: model ?? undefined,
         })) as ArgsBuilder,
       factory: ptyFactory(true),
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
@@ -320,6 +330,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       resumable: true,
     },
     raw: {
+      // Deliberately ignores `model`: running the operator's argv verbatim is this
+      // mode's whole contract, and it speaks no protocol to assign work by.
       buildArgs: (() => config.claudeArgs) as ArgsBuilder,
       factory: ptyFactory(false),
       initialInput: undefined,
@@ -444,6 +456,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     escalations,
     sink: opts.sink ?? connector,
     autoSend: config.autoSend,
+    agentModels: config.agentModels,
     deskRoot: config.deskRoot,
     defaultBranch: config.defaultBranch,
     runtime: runtimeControl,
