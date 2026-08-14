@@ -12,13 +12,12 @@ import type {
   Proposal,
   QueueItem,
   ValidationCheck,
-  ValidationResourceView,
 } from '../types.js';
 import { api } from '../api.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
-import { ValidationSection } from './ValidationSection.js';
+import { ValidationDigest } from './ValidationSection.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 
 /**
@@ -50,7 +49,6 @@ export function PlanModal({
   plan,
   parts,
   checks,
-  resources,
   upcoming,
   proposal,
   agent,
@@ -65,16 +63,14 @@ export function PlanModal({
   onEndDiscussion,
   onDecide,
   onOpenAgent,
+  onOpenGoal,
   onRespond,
   onAcceptance,
-  onValidation,
 }: {
   plan: Plan;
   parts: PlanPartView[];
-  /** This plan's validation checks, superseded ones included. */
+  /** This plan's validation checks, superseded ones included. Drawn read-only. */
   checks: ValidationCheck[];
-  /** Its declared resources, each already resolved to a path and a present/missing fact. */
-  resources: ValidationResourceView[];
   /** The last pulse's ranked plan, joined per part by origin — the dispatch cut. */
   upcoming: QueueItem[];
   /** The pending approval this plan is waiting on, when it is waiting on one. */
@@ -94,18 +90,10 @@ export function PlanModal({
   onEndDiscussion: (planId: string) => Promise<unknown> | unknown;
   onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
   onOpenAgent: (agentId: string) => void;
+  /** Open the goal this plan hangs off — where its checks are now recorded. */
+  onOpenGoal: (issueRef: string) => void;
   onRespond: (agentId: string, text: string) => Promise<unknown> | unknown;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
-  onValidation: (
-    issueNumber: number,
-    checkId: string,
-    act:
-      | { kind: 'result'; result: 'passed' | 'failed'; note: string }
-      | { kind: 'defer'; reason: string }
-      | { kind: 'waive'; reason: string }
-      | { kind: 'reset' }
-      | { kind: 'handover'; to: 'fleet' | 'human' },
-  ) => Promise<unknown> | unknown;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
   const [note, setNote] = useState('');
@@ -371,27 +359,23 @@ export function PlanModal({
                   sections.current.validation = el;
                 }}
               >
-                {/* Every control here writes against the *goal* — that is what a
-                    check belongs to now — so a plan whose origin is not an issue
-                    ref has nothing to write against and draws the record alone. */}
-                {issueNumber === null ? (
-                  <p className="empty">
-                    This plan does not hang off a goal, so its checks cannot be recorded against one.
-                  </p>
-                ) : (
-                  <ValidationSection
-                    checks={checks}
-                    resources={resources}
-                    refUrls={refUrls}
-                    onResult={(checkId, result, note) =>
-                      onValidation(issueNumber, checkId, { kind: 'result', result, note })
-                    }
-                    onDefer={(checkId, reason) => onValidation(issueNumber, checkId, { kind: 'defer', reason })}
-                    onWaive={(checkId, reason) => onValidation(issueNumber, checkId, { kind: 'waive', reason })}
-                    onReset={(checkId) => onValidation(issueNumber, checkId, { kind: 'reset' })}
-                    onHandover={(checkId, to) => onValidation(issueNumber, checkId, { kind: 'handover', to })}
-                  />
-                )}
+                {/* Read-only, because the sheet defines the checks and the goal
+                    page runs them. A plan under review still has to show what it
+                    proposes to check — that is part of judging it — but a reading
+                    is recorded against the *goal*, and offering the verbs in two
+                    places is two wirings of one set of refusals. */}
+                <ValidationDigest
+                  checks={checks}
+                  refUrls={refUrls}
+                  onOpenGoal={
+                    issueNumber === null
+                      ? null
+                      : () => {
+                          onOpenGoal(`issue:${issueNumber}`);
+                          onClose();
+                        }
+                  }
+                />
               </section>
 
               <section

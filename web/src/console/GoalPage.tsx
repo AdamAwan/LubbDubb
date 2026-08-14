@@ -6,8 +6,12 @@ import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js'
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { renderRichText } from '../components/richText.js';
 import { fmtUsd, refLink, relTime } from '../components/util.js';
+import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { NeedsBand } from './NeedsBand.js';
+
+/** Where the header's validation chip jumps to. Anchors, not refs — one element. */
+const VALIDATION_ANCHOR = 'cn-validation';
 
 /**
  * One goal, with what it wants from you pinned above everything it is doing.
@@ -46,6 +50,7 @@ export function GoalPage({
       {page.needs.map((row) => (
         <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
+      <Validation page={page} actions={actions} refUrls={view.state.refUrls} />
       <div className="cn-gcols">
         <div className="cn-stack">
           <PlanWaves page={page} />
@@ -124,18 +129,25 @@ function Header({
           {/* Whether the goal's validation plan is settled, beside the other
               verdicts and inside none of them. Absent when there are no checks —
               a goal nobody wrote a plan for is not "clear", and a chip claiming
-              it was would be the one lie this whole surface exists to prevent. */}
+              it was would be the one lie this whole surface exists to prevent.
+              A button rather than the bare chip its neighbours are: the checks are
+              now on this page, so the reading has somewhere to go, and a verdict
+              you can act on should not be the one chip that does nothing. */}
           {issue.validation !== null && (
-            <i
-              className={`cn-chip ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
+            <button
+              type="button"
+              className={`cn-chip cn-jump ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
+              onClick={() =>
+                document.getElementById(VALIDATION_ANCHOR)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+              }
               title={
                 issue.validation.state === 'clear'
-                  ? `All ${issue.validation.total} validation checks are settled`
-                  : `${issue.validation.failed} failed, ${issue.validation.unrun} never run, ${issue.validation.deferred} deferred`
+                  ? `All ${issue.validation.total} validation checks are settled — go to them`
+                  : `${issue.validation.failed} failed, ${issue.validation.unrun} never run, ${issue.validation.deferred} deferred — go to them`
               }
             >
               Validation: {issue.validation.passed + issue.validation.waived}/{issue.validation.total}
-            </i>
+            </button>
           )}
           {issue.run !== undefined && <span>started {relTime(issue.run.startedAt, view.now)}</span>}
           <span>
@@ -223,6 +235,80 @@ function Header({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * How anyone checks this goal was met — the checks, and what anybody concluded
+ * from running each one.
+ *
+ * **Full width, above the two columns.** Not in either stack: a check draws its
+ * steps and what to expect side by side and carries a row of five verbs, and both
+ * are cramped in a column. Sitting directly under the header also puts it above
+ * the plan, which is the order the page already reads in — what is being asked of
+ * you, then the work. Running a check is the one thing on this page that is
+ * *owed*, and the bands above it are the only thing that outranks that.
+ *
+ * The card draws even when the goal has no checks, the rule every card on this
+ * page follows: a surface that vanishes when quiet is indistinguishable from one
+ * that broke, and "nobody wrote a validation plan" is the reading most worth
+ * having.
+ *
+ * {@link ValidationSection} is *embedded*, never redrawn — the same rule the needs
+ * bands follow with `EscalationCard`. It owns the five verbs and their refusals;
+ * this passes `cn-btn` so they wear the console's chrome, the seam
+ * `HumanTaskActions` already takes.
+ */
+function Validation({
+  page,
+  actions,
+  refUrls,
+}: {
+  page: GoalPageView;
+  actions: CockpitActions;
+  refUrls: Record<string, string>;
+}): JSX.Element {
+  const { issue, plan, checks } = page;
+  const live = checks.filter((c) => c.supersededReason === null);
+  const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
+
+  return (
+    <section className="cn-card cn-val" id={VALIDATION_ANCHOR}>
+      <h3>
+        Validation
+        {live.length > 0 && (
+          <i className="cn-n">
+            {settled}/{live.length} settled
+          </i>
+        )}
+        {/* Where the checks come from, said on the card that manages them: an
+            operator who wants the wording changed has to know it is the plan that
+            writes it, and this is the only place that connection is drawn. */}
+        <span className="cn-more">
+          written by the plan
+          {plan !== null && (
+            <button type="button" className="cn-linkish" onClick={() => actions.viewPlan(plan.id)}>
+              amend it there ↗
+            </button>
+          )}
+        </span>
+      </h3>
+      <div className="cn-vin">
+        <ValidationSection
+          checks={checks}
+          resources={page.checkResources}
+          refUrls={refUrls}
+          buttonClass="cn-btn"
+          onResult={(checkId, result, note) =>
+            actions.setValidation(issue.number, checkId, { kind: 'result', result, note })
+          }
+          onDefer={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'defer', reason })}
+          onWaive={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'waive', reason })}
+          onReset={(checkId) => actions.setValidation(issue.number, checkId, { kind: 'reset' })}
+          onHandover={(checkId, to) => actions.setValidation(issue.number, checkId, { kind: 'handover', to })}
+        />
+      </div>
+    </section>
   );
 }
 

@@ -2452,11 +2452,51 @@ body {
   flex-shrink: 0;
   text-align: right;
 }
+/* The head is the whole row's control: six checks at full height is most of a
+   screen, so the steps fold away and this keeps what a glance is for. Styled as a
+   row rather than a button — it carries chips, and button chrome around them would
+   read as one more thing to press. */
 .pm-vhead {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pm-vcar {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  transition: transform 0.12s ease;
+}
+.pm-vrow.open .pm-vcar {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-vcar {
+    transition: none;
+  }
+}
+/* The plan sheet's way out to the goal, where a reading is recorded. Quiet: it is
+   a signpost, not the section's own business. */
+.pm-vout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
 }
 .pm-vtitle {
   font-weight: 600;

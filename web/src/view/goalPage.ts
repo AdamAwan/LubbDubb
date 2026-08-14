@@ -7,6 +7,8 @@ import type {
   Plan,
   PlanPart,
   PullRequest,
+  ValidationCheck,
+  ValidationResourceView,
 } from '../types.js';
 import type { NeedRow } from './needsYou.js';
 
@@ -57,6 +59,19 @@ export interface GoalPageView {
   agents: Agent[];
   /** This goal's own slice of the decision log, newest first as the server ordered it. */
   decisions: CockpitDecision[];
+  /**
+   * How anyone checks this goal was met, superseded checks included — drawing what
+   * an amended plan withdrew is half of what the record is for.
+   *
+   * They reach the page directly off the goal ref rather than through `plan`,
+   * because that is what a check now hangs from: a verdict is keyed on the goal,
+   * not on the plan that proposed it ([20](../../../docs/spec/20-validation.md)).
+   * Routing them through the plan would lose every check on a goal whose plan was
+   * abandoned — the case where an operator most needs to know what was never run.
+   */
+  checks: ValidationCheck[];
+  /** The checks' declared resources, each already resolved to a path and a present/missing fact. */
+  checkResources: ValidationResourceView[];
 }
 
 /**
@@ -199,6 +214,10 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => ownsPr(pr, issue, partPrs)),
     agents: state.agents.filter((a) => belongsToGoal(state.tasks.find((t) => t.id === a.taskId)?.originRef, ref)),
     decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
+    // Equality, not `belongsToGoal`: a check is keyed on the goal itself, and
+    // matching descendants would pull a part's ref in as though it were one.
+    checks: (state.validationChecks ?? []).filter((c) => c.originRef === ref),
+    checkResources: (state.validationResources ?? []).filter((r) => r.originRef === ref),
   };
 }
 

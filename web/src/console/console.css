@@ -483,6 +483,40 @@
   font-size: 14px;
   line-height: 1.55;
 }
+/* The validation card — full width, above the two columns, because a check draws
+   its steps and what to expect side by side and carries a row of five verbs, and
+   both are cramped in a column.
+
+   The rules here stop at the card and its padding. What is inside is
+   `ValidationSection`, a *shared* component, and this sheet does not reach into
+   one — it dresses its buttons through the `buttonClass` seam instead, the way the
+   needs bands dress `EscalationCard`. */
+.cn-val {
+  margin-bottom: 12px;
+}
+.cn-vin {
+  padding: 4px 13px 13px;
+}
+/* A reading that goes somewhere. Not `.cn-btn` — it sits in a header among chips
+   and would read as a control of its own rather than as the chip it is. */
+.cn-jump {
+  cursor: pointer;
+  font: inherit;
+}
+.cn-jump:hover {
+  border-color: currentColor;
+}
+.cn-card > h3 .cn-linkish {
+  margin-left: 6px;
+  font: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--cn-accent);
+}
+.cn-card > h3 .cn-linkish:hover {
+  text-decoration: underline;
+}
+
 .cn-gcols {
   display: grid;
   gap: 12px;

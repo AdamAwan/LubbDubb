@@ -317,6 +317,61 @@ test('a PR the provider linked is the goal’s, whatever its branch is called', 
  * not what the goal is made of. They are still carried, because "the plan has no
  * live parts" without them is a sentence about a plan the operator cannot read.
  */
+test('a goal’s validation checks reach its own page, and only its own', () => {
+  const state = buildDemoState().state;
+  const checks = state.validationChecks ?? [];
+  assert.ok(checks.length > 0, 'the demo writes a validation plan, which this test reads');
+
+  const ref = checks[0]!.originRef;
+  const page = buildGoalPage(state, ref, []);
+
+  assert.deepEqual(
+    page?.checks.map((c) => c.id),
+    checks.filter((c) => c.originRef === ref).map((c) => c.id),
+    'every check the goal owns, superseded ones included — the card draws what an amendment withdrew',
+  );
+
+  // The other goals draw none of them. The page reads checks off the goal ref, so
+  // the failure worth pinning is a filter loose enough to pull another goal's in.
+  const elsewhere = state.world.issues.filter((i) => `issue:${i.number}` !== ref);
+  for (const issue of elsewhere) {
+    assert.deepEqual(buildGoalPage(state, `issue:${issue.number}`, [])?.checks, [], `#${issue.number} owns no check`);
+  }
+});
+
+test('the header’s validation chip agrees with the checks the card under it draws', () => {
+  // The chip is the way in to the card, so the two disagreeing is the one thing
+  // this surface exists to prevent. The server folds the verdict; the demo states
+  // it by hand, which is exactly where it can drift.
+  const state = buildDemoState().state;
+  const ref = (state.validationChecks ?? [])[0]!.originRef;
+  const page = buildGoalPage(state, ref, []);
+  const verdict = page?.issue.validation;
+  assert.ok(verdict, 'a goal with checks carries a verdict — null is "no plan", a third reading');
+
+  const live = (page?.checks ?? []).filter((c) => c.supersededReason === null);
+  assert.equal(verdict.total, live.length, 'live checks only — a superseded one is out of the count');
+  for (const state_ of ['passed', 'failed', 'unrun', 'deferred', 'waived'] as const) {
+    assert.equal(verdict[state_], live.filter((c) => c.state === state_).length, `${state_} agrees with the rows`);
+  }
+});
+
+test('a check on a goal does not reach the page through a part ref that starts the same way', () => {
+  const state = buildDemoState().state;
+  const ref = (state.validationChecks ?? [])[0]!.originRef;
+  // `belongsToGoal` matches descendants, which is right for agents and decisions
+  // and wrong here: a check is keyed on the goal itself, so a row filed against
+  // something *under* it is not one of the goal's checks.
+  const strayed = { ...(state.validationChecks ?? [])[0]!, id: 'strayed', originRef: `${ref}:part:signer` };
+  const page = buildGoalPage({ ...state, validationChecks: [...(state.validationChecks ?? []), strayed] }, ref, []);
+
+  assert.equal(
+    page?.checks.some((c) => c.id === 'strayed'),
+    false,
+    'a part-scoped ref is not the goal’s check',
+  );
+});
+
 test('a plan with no live parts still carries what it proposed', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
