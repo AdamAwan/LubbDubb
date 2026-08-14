@@ -195,6 +195,33 @@ test('a part row links the pull request that carries it', () => {
  * is exactly the bug: shortening a ref by hand is how a surface ends up *naming*
  * something instead of pointing at it.
  */
+/**
+ * The affordance, which no render test can see: both link classes drew their
+ * underline in `transparent` and coloured it only on `:hover`, so at rest a
+ * reference and the label beside it differed by hue alone — the complaint. Read
+ * the stylesheet, because that is where the resting state lives.
+ */
+test('a reference is underlined at rest, and shows a ring when it takes focus', () => {
+  const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
+  const rule = (selector: string): string => {
+    const at = css.indexOf(`\n${selector} {`);
+    assert.notEqual(at, -1, `${selector} must still be a rule in styles.css`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+
+  for (const selector of ['.ext-ref', '.ref-goal']) {
+    const body = rule(selector);
+    assert.match(body, /border-bottom: 1px (dotted|solid) var\(--link-line\)/, `${selector} rests underlined`);
+    assert.doesNotMatch(body, /border-bottom:[^;]*transparent/, `${selector} must not hide its line until hover`);
+  }
+  assert.match(css, /--link-line:/, 'the resting line is one token, not a literal at each class');
+  assert.match(
+    css,
+    /\.ext-ref:focus-visible,\s*\.ref-goal:focus-visible \{[^}]*outline: 1px solid var\(--blue\)/,
+    '`.ref-goal` is a reset <button> — without this, tab moves the ring nowhere visible',
+  );
+});
+
 test('nothing outside refs.tsx strips a ref down to a number', () => {
   const root = fileURLToPath(new URL('../web/src/', import.meta.url));
   const walk = (dir: string): string[] =>
