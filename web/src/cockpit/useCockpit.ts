@@ -6,6 +6,7 @@ import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
 import type { CockpitActions } from './actions.js';
+import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
 
 /**
  * How long a refetch waits so a burst of live signals collapses into one request.
@@ -131,6 +132,21 @@ export function useCockpit(): CockpitStatus {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
   }, [refresh, scheduleRefresh]);
+
+  // What the last snapshot held, for the notification diff. A ref rather than
+  // state: it must not itself cause a render, and the comparison has to survive
+  // the renders the snapshot does cause.
+  const notified = useRef<ReturnType<typeof notifySnapshot> | null>(null);
+
+  useEffect(() => {
+    if (!state) return;
+    const next = notifySnapshot(state);
+    // Read the preference per fire rather than holding it: Settings writes it to
+    // `localStorage` directly, and a copy captured at mount would go on notifying
+    // for the rest of the session after the operator switched it off.
+    fireNotifications(notifiableChanges(notified.current, next), loadNotifyPrefs());
+    notified.current = next;
+  }, [state]);
 
   // Subscribe to full output only while a drawer is open; unsubscribe on close/switch.
   useEffect(() => {

@@ -2910,6 +2910,19 @@ body {
   gap: 10px;
   align-items: baseline;
 }
+.settings-toggle {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+/* The categories read as belonging to the switch above them, so they are indented
+   under it rather than separated by a heading nobody needs. */
+.settings-toggle-child {
+  margin-left: 18px;
+}
 .settings-group {
   margin-bottom: 10px;
 }
