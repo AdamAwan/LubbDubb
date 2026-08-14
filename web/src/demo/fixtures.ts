@@ -196,6 +196,9 @@ export function buildDemoState(): DemoSeed {
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
       ignoreLabel: 'lubbdubb-ignore',
+      // Two hours rather than the real two days, so the demo's waiting PR below
+      // actually draws its age — the mechanism is what the demo is showing.
+      reviewReminderMs: 2 * 60 * 60 * 1000,
       // The demo world is all-fake, so the inject panel stays available — and by
       // the same token there is no tracker to file a ticket into, so that button
       // is hidden exactly as it would be on a `fake` deployment.
@@ -272,6 +275,28 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['behind base branch'] },
           attention: { status: 'harness', reasons: ['queued for a base update'] },
+        }),
+        // Green, clean, unapproved and nobody's turn but a reviewer's — the one
+        // shape the review-wait age exists for. Dated three days back so it is
+        // past the demo's threshold and actually draws.
+        demoPr({
+          id: 'pr-408',
+          number: 408,
+          title: 'Cache the tokenizer between index runs',
+          branch: 'feature/tokenizer-cache',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'main',
+          mergeableState: 'clean',
+          merged: false,
+          health: { blocked: true, reasons: ['not approved'] },
+          attention: {
+            status: 'elsewhere',
+            reasons: ['waiting on review'],
+            reviewWaitingSince: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          },
         }),
         demoPr({
           id: 'pr-413',

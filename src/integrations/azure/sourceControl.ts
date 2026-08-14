@@ -145,7 +145,7 @@ export class AzureDevOpsSourceControlIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      return { pullRequests: this.lastGood, closedPullRequests: this.lastGoodClosed };
+      return { pullRequests: this.lastGood, closedPullRequests: this.lastGoodClosed, stale: true };
     }
   }
 

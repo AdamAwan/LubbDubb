@@ -92,8 +92,9 @@ flowchart TD
     QG -- all satisfied --> M([Merge])
 ```
 
-The self-review step runs on **every** pull request, before any gate is consulted. It is the
-cheapest place to catch the things a reviewer would otherwise spend their attention on.
+The self-review step is drawn on **every** pull request, before any gate is consulted, because it is
+the cheapest place to catch the things a reviewer would otherwise spend their attention on. It is the
+one stage in this document the harness has no mechanism for — see [below](#where-this-stands-today).
 
 **The gates are a set, not a list.** Tests, static analysis, pipeline health and human review are
 four instances of one shape: something reports a verdict on the pull request, and each verdict is
@@ -200,7 +201,7 @@ Checked against [`spec/`](README.md), which describes what the code does now.
 
 **Runs today, as drawn:** intake from a ticket, the watch gate, the information check, planning and
 plan approval, the plan's dependency-chained parts, per-check CI classification and its hold arm,
-the self-review step, the reply/fix-or-defend loop, stacked-PR attribution and the bottom-up merge
+the reply/fix-or-defend loop, stacked-PR attribution and the bottom-up merge
 rule, non-code terminals for a part, the "did this deliver the goal" check, and the tracker state
 update on the way into review. The prompt arm's convergence too: an injected **code blueprint** with
 a tracker configured is filed as a *watched* ticket at route time (a desk agent creates it with
@@ -209,6 +210,15 @@ rather than being coded straight off the prompt.
 
 The environment-readiness stage needs no mechanism of its own: it is a check like any other, and the
 rule that holds on it is the same rule that holds on any red check nobody here can fix.
+
+**Not built:**
+
+- **Agent reviews its own work.** The code arm draws it on every pull request; nothing runs it. There
+  is no `pr-self-review` rule, no stage in `DISPATCH_PIPELINE`, and no built-in prompt asks for it —
+  `issue-pickup` and `plan-part` tell an agent to implement the work and open a pull request, and the
+  next thing to read the diff is a quality gate. An operator who wants it today appends the
+  instruction to those two prompt templates, which is a prompt change rather than a stage: it runs in
+  the same agent on the same attempt, and nothing records that it happened.
 
 **Narrower than drawn:**
 
@@ -226,4 +236,5 @@ rule that holds on it is the same rule that holds on any red check nobody here c
   itself once the tracker stops listing the item open
   ([13](spec/13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
 
-Nothing in this document describes a stage the harness has no mechanism for.
+One stage in this document — the self-review step — the harness has no mechanism for, and it is named
+as such above. Everything else is built, in full or in the narrower form stated.

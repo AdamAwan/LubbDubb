@@ -2910,6 +2910,19 @@ body {
   gap: 10px;
   align-items: baseline;
 }
+.settings-toggle {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+/* The categories read as belonging to the switch above them, so they are indented
+   under it rather than separated by a heading nobody needs. */
+.settings-toggle-child {
+  margin-left: 18px;
+}
 .settings-group {
   margin-bottom: 10px;
 }
@@ -3423,4 +3436,13 @@ body {
 .rl-still {
   color: var(--red);
   font-weight: 600;
+}
+
+/* The age on a court chip whose pull request has been waiting on a reviewer past
+   `reviewReminderMs`. Dimmer than the status beside it on purpose: the chip's
+   claim is still *whose court this is*, and the age is a qualifier on it rather
+   than a second reading competing for the same glance. */
+.cn-chip-age {
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
 }

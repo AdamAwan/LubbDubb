@@ -56,7 +56,7 @@ export function GoalPage({
         <div className="cn-stack">
           <PlanWaves page={page} />
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
-          <PullRequests page={page} />
+          <PullRequests page={page} view={view} />
         </div>
         <div className="cn-stack">
           <OnThisGoal page={page} view={view} actions={actions} />
@@ -444,7 +444,7 @@ function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, stri
  * re-read here: a client-side second opinion about a merge is the drift that
  * outlives the change that introduces it.
  */
-function PullRequests({ page }: { page: GoalPageView }): JSX.Element {
+function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView }): JSX.Element {
   const open = page.openPullRequests;
   const closed = page.closedPullRequests;
   return (
@@ -469,9 +469,7 @@ function PullRequests({ page }: { page: GoalPageView }): JSX.Element {
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <CiLadder pr={pr} />
-            <i className={`cn-chip ${courtTone(pr)}`} title={pr.attention.reasons.join(' · ')}>
-              {pr.attention.status}
-            </i>
+            <CourtChip pr={pr} reminderMs={view.state.config.reviewReminderMs} now={view.now} />
           </div>
         ))}
         {closed.map((pr) => (
@@ -497,13 +495,56 @@ const COURT_TONE: Record<string, string> = {
   done: 'cn-ok',
 };
 
-/**
- * Exported for the overview's rack, which draws the same rows: whose court a PR
- * is in must read identically on both surfaces, and two lookups of one map is
- * how they come to differ by a tone nobody chose.
- */
-export function courtTone(pr: OpenPullRequest): string {
+function courtTone(pr: OpenPullRequest): string {
   return COURT_TONE[pr.attention.status] ?? '';
+}
+
+/** A wait in the units it is read in: days past a day, hours below. */
+function waitedFor(sinceIso: string, now: number): string {
+  const hours = Math.floor(Math.max(0, now - Date.parse(sinceIso)) / 3_600_000);
+  return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
+}
+
+/**
+ * Whose court a pull request is in, and — on the one arm that means it — how long
+ * it has been in somebody else's.
+ *
+ * Exported for the overview's rack, which draws the same rows: this must read
+ * identically on both surfaces, and the same chip written twice is how they come
+ * to differ by a tone or a threshold nobody chose.
+ *
+ * **The age appears only past `reviewReminderMs`.** Every open pull request is
+ * waiting on somebody, so an age on all of them says nothing about any; the
+ * threshold is what turns it from a decoration into a reading. And it stays a
+ * *chip*, never a row in "Needs you": the reviewer here is somebody else, and a
+ * queue of other people's obligations is precisely what makes an inbox stop being
+ * read. Nothing is dispatched, escalated or filed at the threshold — the harness
+ * has no more idea than you do how to make a colleague review faster.
+ */
+export function CourtChip({
+  pr,
+  reminderMs,
+  now,
+}: {
+  pr: OpenPullRequest;
+  reminderMs: number;
+  now: number;
+}): JSX.Element {
+  const since = pr.attention.reviewWaitingSince;
+  const waited = since !== undefined && now - Date.parse(since) >= reminderMs ? waitedFor(since, now) : null;
+  return (
+    <i
+      className={`cn-chip ${courtTone(pr)}`}
+      title={
+        waited
+          ? [...pr.attention.reasons, `waiting since ${new Date(since!).toLocaleString()}`].join(' · ')
+          : pr.attention.reasons.join(' · ')
+      }
+    >
+      {pr.attention.status}
+      {waited && <span className="cn-chip-age"> · {waited}</span>}
+    </i>
+  );
 }
 
 /**

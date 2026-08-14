@@ -475,6 +475,20 @@ test('snapshot returns the last-good slice and records an error event on failure
   await sc2.snapshot(); // cold + failing → empty, and it must not throw
   const slice = await sc2.snapshot();
   assert.deepEqual(slice.pullRequests, []);
+  // The fallback says so. Without this the cycle cannot tell a world that did not
+  // change from one it was refused a read of.
+  assert.equal(slice.stale, true);
+  store.close();
+});
+
+test('a slice served fresh is not marked stale', async () => {
+  const store = new Store(':memory:');
+  const { api } = fakeApi({
+    pulls: [pull({ number: 7 })],
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
+  });
+  const slice = await new GitHubSourceControlIntegration({ api }).snapshot();
+  assert.equal(slice.stale, undefined);
   store.close();
 });
 

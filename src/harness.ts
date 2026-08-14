@@ -8,7 +8,8 @@ import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor
 import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
-import { isPrExcluded } from './prHealth.js';
+import { awaitingReview, isPrExcluded } from './prHealth.js';
+
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
 import { assaySignalQuery } from './intake/assay.js';
@@ -215,6 +216,21 @@ export class Harness extends EventEmitter {
       // `closedPrWindowMs` and the graph must not.
       this.deps.graph?.record(world);
       const tasks = store.listTasks();
+      // How long each open PR has been sitting on a reviewer. Folded here rather
+      // than derived on read because it is the one reading about a *span*: the
+      // moment a pull request becomes reviewable is observable only as it
+      // happens, and no provider reports it afterwards. Cheap — one short row per
+      // PR currently waiting, and none once it stops.
+      store.foldReviewWaits(
+        world.pullRequests
+          .filter((pr) =>
+            awaitingReview(
+              pr,
+              tasks.some((t) => isActiveTask(t) && t.branch === pr.branch),
+            ),
+          )
+          .map((pr) => pr.number),
+      );
       const agents = store.listAgents();
       const openEscalations = store.listOpenEscalations();
       const queuedJobs = store.listQueuedJobs();
@@ -380,12 +396,19 @@ export class Harness extends EventEmitter {
       for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
       store.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
 
-      // The dispatcher's reasoning is itself an audit record.
+      // The dispatcher's reasoning is itself an audit record — prefixed, when any
+      // provider served a fallback slice, with the fact that it was reasoning about
+      // a world that is partly old. The caveat rides on the rationale rather than
+      // only in the error log because this row is what an operator reads to work
+      // out why a cycle decided what it did, and a stale input is the first thing
+      // that would explain a decision that looks wrong.
+      const stale = world.staleSources ?? [];
+      const caveat = stale.length > 0 ? `[stale: ${stale.join(', ')}] ` : '';
       store.recordDecision({
         cycleId,
         action: { type: 'no_op', reason: 'cycle rationale' } as Action,
         outcome: 'skipped',
-        detail: `[${source}] ${plan.rationale}`,
+        detail: `[${source}] ${caveat}${plan.rationale}`,
       });
 
       const summary = await this.deps.executor.execute(cycleId, plan);

@@ -47,12 +47,18 @@ export class CompositeConnector implements Connector, ActionSink {
   ) {}
 
   async getState(): Promise<WorldSnapshot> {
-    const slices = await Promise.all(this.integrations.map((i) => i.snapshot()));
+    const slices = await Promise.all(this.integrations.map(async (i) => ({ id: i.id, slice: await i.snapshot() })));
+    // Named per integration rather than counted, because which half of the world
+    // is old changes what a decision made against it is worth: a stale issue list
+    // with fresh pull requests is a fleet that will not pick up new work, and the
+    // reverse is one that may act on a pull request that has since merged.
+    const staleSources = slices.filter(({ slice }) => slice.stale === true).map(({ id }) => id);
     return {
       takenAt: this.now(),
-      pullRequests: slices.flatMap((s) => s.pullRequests ?? []),
-      closedPullRequests: slices.flatMap((s) => s.closedPullRequests ?? []),
-      issues: slices.flatMap((s) => s.issues ?? []),
+      pullRequests: slices.flatMap(({ slice }) => slice.pullRequests ?? []),
+      closedPullRequests: slices.flatMap(({ slice }) => slice.closedPullRequests ?? []),
+      issues: slices.flatMap(({ slice }) => slice.issues ?? []),
+      ...(staleSources.length > 0 ? { staleSources } : {}),
     };
   }
 

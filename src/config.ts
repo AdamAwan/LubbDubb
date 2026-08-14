@@ -225,6 +225,21 @@ export interface Config {
    */
   upNextOverrideTtlMs: number;
   /**
+   * How long a pull request may sit on a reviewer before the cockpit puts an age
+   * on its row. Below this it draws nothing, because every open pull request is
+   * waiting on somebody and a number on all of them says nothing about any.
+   *
+   * It changes **display only**: nothing dispatches, escalates, files a task or
+   * enters the "Needs you" queue at this or any other threshold. On a team the
+   * reviewer is somebody else, and a queue of other people's obligations is what
+   * makes an inbox stop being read.
+   *
+   * Defaults to 2 days; `0` shows the age from the first pulse a pull request is
+   * observed waiting, which is the setting for watching the mechanism rather than
+   * the reviews.
+   */
+  reviewReminderMs: number;
+  /**
    * How agents are launched.
    * - `stream`: real Claude Code over headless stream-JSON (`-p --output-format
    *   stream-json`). No TUI, runs unattended, supports the waiting/answer loop.
@@ -511,6 +526,7 @@ const DEFAULTS: Config = {
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
+  reviewReminderMs: 2 * 24 * 60 * 60 * 1000,
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
   // The mechanical validate/commit/push commands a coding agent must run to take

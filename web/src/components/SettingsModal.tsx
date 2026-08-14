@@ -3,6 +3,14 @@ import { api } from '../api.js';
 import type { RunningConfigGroup } from '../types.js';
 import { CiPolicyTab } from './CiPolicyTab.js';
 import { PromptsTab } from './PromptsTab.js';
+import {
+  loadNotifyPrefs,
+  notifyPermission,
+  NOTIFY_CATEGORIES,
+  requestNotifyPermission,
+  saveNotifyPrefs,
+  type NotifyPrefs,
+} from '../cockpit/notify.js';
 
 /**
  * Settings: what this harness is running on.
@@ -136,6 +144,8 @@ export function SettingsModal({
             </div>
           </div>
 
+          <NotificationSettings />
+
           <div className="settings-section">
             <div className="pm-head">
               <span className="pm-section-label">Running config</span>
@@ -174,6 +184,94 @@ export function SettingsModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Desktop notifications: the switch, the browser's grant, and the categories.
+ *
+ * **The only place permission is requested**, because every engine requires a
+ * user gesture and refuses a mount-effect ask — silently, on some. So the grant
+ * is asked for by a button an operator pressed, and never on load.
+ *
+ * Unlike everything else on this tab it is *writable*, which is not the
+ * inconsistency it looks like: the running config is read-only because its honest
+ * answer to "when does this take effect" is "at the next restart", and this
+ * answers "now". It is a preference of this browser rather than of the harness —
+ * held in `localStorage` beside the token, never sent anywhere — so two people on
+ * one deployment can want different things without one of them being wrong.
+ */
+function NotificationSettings() {
+  const [prefs, setPrefs] = useState<NotifyPrefs>(() => loadNotifyPrefs());
+  const [permission, setPermission] = useState(() => notifyPermission());
+
+  const write = (next: NotifyPrefs) => {
+    setPrefs(next);
+    saveNotifyPrefs(next);
+  };
+
+  const turnOn = async () => {
+    const granted = await requestNotifyPermission();
+    setPermission(granted);
+    // Only claim to be on if the browser actually said yes. Storing `enabled`
+    // against a denied grant would leave a switch that reads on and does nothing.
+    if (granted === 'granted') write({ ...prefs, enabled: true });
+  };
+
+  if (permission === 'unsupported') {
+    return (
+      <div className="settings-section">
+        <span className="pm-section-label">Notifications</span>
+        <p className="muted settings-hint">This browser has no Notification API, so the cockpit cannot raise one.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-section">
+      <span className="pm-section-label">Notifications</span>
+      <p className="muted settings-hint">
+        Raised while the cockpit is open but not in front of you — a backgrounded tab or another window counts, a closed
+        one does not. Nothing leaves this machine.
+      </p>
+
+      {permission === 'denied' && (
+        <p className="muted settings-hint">
+          This browser is blocking notifications for the cockpit. Allow them in its site settings; the harness cannot
+          ask again once refused.
+        </p>
+      )}
+
+      {permission === 'granted' ? (
+        <>
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={prefs.enabled}
+              onChange={(e) => write({ ...prefs, enabled: e.target.checked })}
+            />
+            <span>Notify me</span>
+          </label>
+          {prefs.enabled &&
+            NOTIFY_CATEGORIES.map((cat) => (
+              <label className="settings-toggle settings-toggle-child" key={cat.id}>
+                <input
+                  type="checkbox"
+                  checked={prefs.categories[cat.id]}
+                  onChange={(e) => write({ ...prefs, categories: { ...prefs.categories, [cat.id]: e.target.checked } })}
+                />
+                <span>
+                  {cat.label} <span className="muted">— {cat.blurb}</span>
+                </span>
+              </label>
+            ))}
+        </>
+      ) : (
+        <button className="btn small" disabled={permission === 'denied'} onClick={() => void turnOn()}>
+          Enable notifications
+        </button>
+      )}
     </div>
   );
 }

@@ -87,6 +87,10 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'autoSend',
       'ci',
       'reapMergedBranches',
+      // A feature's threshold rather than a dispatch one, and grouped by what it
+      // belongs to rather than by its units: it is the only `*Ms` key here, and
+      // sitting it beside the dispatch timings would imply it holds something.
+      'reviewReminderMs',
     ],
   },
   {

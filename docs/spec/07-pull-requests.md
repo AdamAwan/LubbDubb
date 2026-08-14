@@ -366,6 +366,36 @@ Because the first matching arm wins, the ones below it are moot — a PR with an
 reads `an agent is working this branch` whatever its CI says, which is the answer prose about health
 cannot give.
 
+### How long it has been waiting on a reviewer
+
+The `waiting on review` arm carries `reviewWaitingSince` — the instant this pull request started
+waiting — and it is the only arm that ever does. Every other reading here is about an instant; this
+one is about a **span**, and a span is not recoverable from a snapshot: no provider payload says
+"reviewable since", GitHub's `updated_at` moves for a label change, and the creation date is not the
+answer either, since a pull request that spent two days red was not waiting on anybody for those two
+days.
+
+So it is observed as it happens. `awaitingReview(pr, staffed)` (`src/prHealth.ts`, pure) is folded
+once per pulse into `pr_review_waits` ([14](14-persistence.md)) as a **watermark**: one row per
+waiting pull request, written only when absent and deleted the moment it stops waiting. A plain
+upsert would set it to now on every pulse and read as "waiting five minutes" forever.
+
+`awaitingReview` is **deliberately a superset of the arm**, and this is the one place two readings of
+one thing are allowed to differ. The arm is reached only after seven earlier ones decline the pull
+request; reproducing all seven in the predicate would be a second copy of the verdict, free to drift.
+The predicate lives in `prHealth` rather than beside the arm because nothing outside the state
+snapshot may import the lens and the pulse has to fold it. So the clock runs more eagerly and the
+*arm* decides whether an age is ever shown — a pull request whose clock is running but whose court is
+the harness's shows nothing, which is the safe direction. Red CI, an unhandled comment and a staffed
+branch each stop the clock, because a reviewer cannot be late for work that is not ready.
+
+**It changes no court and gates nothing.** `waiting on review` stays `elsewhere` however long it has
+been: on a team the reviewer is somebody else, and an obligation that is not yours does not belong in
+"Needs you" — a queue of other people's obligations is what makes an inbox stop being read. Nothing
+dispatches, escalates or files a task at any threshold, because the harness has no more idea than the
+operator does how to make a colleague review faster. The whole of its effect is an age on the court
+chip past `reviewReminderMs` ([17](17-cockpit.md#the-overview), [02](02-configuration.md)).
+
 ### The CI policy decides the court, not `ciStatus`
 
 `ciStatus` is a fold, and this verdict is about courts, so reading the aggregate alone was wrong in

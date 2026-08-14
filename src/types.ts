@@ -273,6 +273,26 @@ export interface WorldSnapshot {
    */
   closedPullRequests?: PullRequest[];
   issues: Issue[];
+  /**
+   * The ids of the integrations whose slice of this snapshot is **last known
+   * good** rather than freshly read — a provider read that failed and fell back
+   * (`sourceControl:github` and friends). Absent or empty means every slice is
+   * current.
+   *
+   * The fallback itself is the right behaviour: a rate limit or a 5xx must not
+   * empty the world and make every open pull request look closed. What was
+   * missing is that it left no mark, so a cycle deciding against a world hours
+   * old was indistinguishable from one deciding against a world that had not
+   * changed — including in the decision log, which is the record an operator
+   * reads to understand why the harness did something odd. Recorded on the
+   * snapshot rather than only in the error log because the *decision* is what
+   * needs the caveat, and a reader of one is not looking at the other.
+   *
+   * Nothing gates on it. A stale world is still the best available world, and a
+   * pulse that refused to decide on one would turn a provider blip into a stalled
+   * fleet — the failure mode the fallback exists to prevent.
+   */
+  staleSources?: string[];
 }
 
 // ---------------------------------------------------------------------------
