@@ -1,13 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { Store } from '../src/store/store.js';
+import { AgentManager } from '../src/agents/agentManager.js';
+import type { AgentSession, AgentSessionStatus } from '../src/agents/session.js';
+import { FileEventsSpool } from '../src/agents/fileEvents.js';
 import { planAsSingle } from './support/plans.js';
 
 /**
@@ -42,14 +46,33 @@ class FakeChild extends EventEmitter implements StreamChild {
   override on(event: 'exit', cb: (code: number | null) => void): this {
     return super.on(event, cb);
   }
+  /** The process dies mid-run with nobody having asked it to — the crash path. */
+  crash(code = 137): void {
+    this.emit('exit', code);
+  }
   /**
    * Deliberately silent. A real signalled `claude` exits *later*, by which time
    * `StreamJsonSession` has already recorded the kill — a fake that exits
    * synchronously inside `kill()` is instead seen dying mid-turn, which settles
-   * the task `failed` and takes the orphan out of recovery's reach. That is the
-   * mid-run crash path, and it belongs to a different part of #318.
+   * the task `failed` and takes the orphan out of recovery's reach. Use
+   * {@link crash} when that is what the test is about.
    */
   kill(): void {}
+}
+
+/** A session that does nothing but let a test drive its events. */
+class FakeSession extends EventEmitter implements AgentSession {
+  status: AgentSessionStatus = 'starting';
+  pid: number | null = 42;
+  start(): void {}
+  send(): void {}
+  sendRaw(): void {}
+  kill(): void {}
+  /** The runtime contract for a crash: the exit code lands before the terminal. */
+  die(code = 137): void {
+    this.emit('exit', code);
+    this.emit('failed');
+  }
 }
 
 interface Launch {
@@ -71,8 +94,9 @@ function recordingSpawner(): { spawner: Spawner; launches: Launch[] } {
 
 // A file-backed db so a second buildSystem on the same path sees the first run's
 // state — i.e. a real server restart, not a fresh in-memory store.
-function streamConfig(dir: string): Config {
+function streamConfig(dir: string, extra: Partial<Config> = {}): Config {
   return loadConfig({
+    ...extra,
     labelPrefix: '',
     dbPath: join(dir, 'db.sqlite'),
     agentMode: 'stream',
@@ -93,9 +117,9 @@ function tmp(): string {
 }
 
 /** Bring up a stream-mode system, dispatch one agent, and return its live handle. */
-async function spawnAgent(dir: string, issue = 901) {
+async function spawnAgent(dir: string, issue = 901, extra: Partial<Config> = {}) {
   const { spawner, launches } = recordingSpawner();
-  const system = buildSystem(streamConfig(dir), {
+  const system = buildSystem(streamConfig(dir, extra), {
     worktrees: new FakeWorktreeManager(),
     streamSpawner: spawner,
     errorMirror: () => {},
@@ -108,9 +132,9 @@ async function spawnAgent(dir: string, issue = 901) {
 }
 
 /** A server restart: a fresh system on the same db, then boot detection. */
-function reboot(dir: string) {
+function reboot(dir: string, extra: Partial<Config> = {}) {
   const { spawner, launches } = recordingSpawner();
-  const system = buildSystem(streamConfig(dir), {
+  const system = buildSystem(streamConfig(dir, extra), {
     worktrees: new FakeWorktreeManager(),
     streamSpawner: spawner,
     errorMirror: () => {},
@@ -230,4 +254,192 @@ test('a parked stream agent is restored still parked, and its escalation is answ
   assert.match(child.writes.at(-1)!, /Postgres/);
   assert.equal(s2.store.getAgent(agent.id)!.status, 'running');
   s2.store.close();
+});
+
+// -- A crash while the harness is up (issue #318, phase 2) -------------------
+//
+// The tests above are about a crash the *harness* did not outlive. These are the
+// other half: the harness is up, watching, and the agent's own process dies. That
+// used to settle the row and the task `failed`, throwing away a conversation
+// `--resume` can re-open in the same worktree. Now it is re-attached, bounded by
+// `agentResumeAttempts`, and only the death past the bound is a failure.
+
+test('an agent whose process dies mid-run is re-attached to the same session', async () => {
+  const dir = tmp();
+  const { launches, system, agent } = await spawnAgent(dir);
+  const eventsDir = system.agents.fileEventsDir(agent.id);
+
+  launches[0]!.child.speak('Read the router. Adding the login route now.');
+  launches[0]!.child.crash();
+
+  // Same row, live again — not settled, and not a new agent.
+  assert.equal(system.store.listAgents().length, 1, 'the crash does not mint a second agent row');
+  const after = system.store.getAgent(agent.id)!;
+  assert.equal(after.status, 'running');
+  assert.equal(after.sessionId, agent.sessionId, 'the same conversation, not a new one');
+  assert.equal(after.endedAt, null);
+  assert.equal(after.resumeAttempts, 1, 'the death is counted against the budget');
+  assert.ok(system.agents.isLive(agent.id));
+  assert.equal(system.store.getTask(agent.taskId)!.status, 'running', 'the task is not settled');
+  assert.deepEqual(system.store.listErrors(), [], 'a recovered crash is not an error the operator must read');
+
+  // Relaunched onto its own transcript, in its own worktree, and nudged on.
+  const relaunch = launches[1]!;
+  assert.equal(relaunch.args[relaunch.args.indexOf('--resume') + 1], agent.sessionId);
+  assert.equal(relaunch.args.includes('--session-id'), false, 'never both flags on one launch');
+  assert.equal(relaunch.cwd, agent.cwd);
+  assert.ok(relaunch.child.writes.some((w) => w.includes('Continue the task')));
+
+  // The dead launch's spool is disposed rather than written over: the resumed
+  // session drains a fresh dir, and the old one is not left behind.
+  assert.notEqual(system.agents.fileEventsDir(agent.id), eventsDir);
+
+  // And the transcript is one conversation, continued.
+  relaunch.child.speak('Route added; running the tests.');
+  const transcript = system.store.getTranscript(agent.id);
+  assert.ok(transcript.includes('Adding the login route') && transcript.includes('running the tests'));
+  system.store.close();
+});
+
+test('an agent that crashes past agentResumeAttempts fails, naming how many resumes were tried', async () => {
+  const dir = tmp();
+  const { launches, system, agent } = await spawnAgent(dir, 902, { agentResumeAttempts: 2 });
+
+  // Two deaths are absorbed...
+  launches[0]!.child.crash();
+  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
+  launches[1]!.child.crash();
+  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
+  assert.equal(system.store.getAgent(agent.id)!.resumeAttempts, 2);
+  assert.equal(launches.length, 3, 'one launch, then one per resume');
+
+  // ...the third is not.
+  launches[2]!.child.crash();
+  const dead = system.store.getAgent(agent.id)!;
+  assert.equal(dead.status, 'failed');
+  assert.notEqual(dead.endedAt, null);
+  assert.equal(system.agents.isLive(agent.id), false);
+  assert.equal(system.store.getTask(agent.taskId)!.status, 'failed');
+  assert.equal(launches.length, 3, 'and nothing relaunches past the bound');
+
+  // Exactly one error, and it says the loop was a loop.
+  const errors = system.store.listErrors().filter((e) => e.message.includes(agent.id));
+  assert.equal(errors.length, 1);
+  assert.match(errors[0]!.message, /failed .*after 2 automatic resumes/);
+  system.store.close();
+});
+
+test('the resume budget is read off the row, so a harness restart does not refill it', async () => {
+  const dir = tmp();
+  const { launches: l1, system: s1, agent } = await spawnAgent(dir, 903, { agentResumeAttempts: 1 });
+
+  l1[0]!.child.crash();
+  assert.equal(s1.store.getAgent(agent.id)!.resumeAttempts, 1, 'the budget is spent');
+  s1.agents.interruptAll();
+  s1.store.close();
+
+  // A whole new process against the same file-backed db: nothing is in memory.
+  const { launches, system: s2, crashed } = reboot(dir, { agentResumeAttempts: 1 });
+  assert.equal(s2.store.getAgent(agent.id)!.resumeAttempts, 1, 'the count survived the restart');
+  assert.equal(s2.recovery.decide(crashed[0]!.taskId, 'restore').ok, true);
+
+  // An operator's `restore` is their call and spends nothing — but the crash budget
+  // it comes back with is the one it left with, so the next death is terminal.
+  launches[0]!.child.crash();
+  assert.equal(s2.store.getAgent(agent.id)!.status, 'failed');
+  assert.equal(launches.length, 1, 'no automatic resume: the budget was spent before the restart');
+  s2.store.close();
+});
+
+test('agentResumeAttempts 0 keeps a mid-run crash terminal', async () => {
+  const dir = tmp();
+  const { launches, system, agent } = await spawnAgent(dir, 904, { agentResumeAttempts: 0 });
+
+  launches[0]!.child.crash();
+  assert.equal(system.store.getAgent(agent.id)!.status, 'failed');
+  assert.equal(launches.length, 1);
+  const errors = system.store.listErrors().filter((e) => e.message.includes(agent.id));
+  assert.equal(errors.length, 1);
+  assert.doesNotMatch(errors[0]!.message, /automatic resume/, 'nothing was tried, so nothing is claimed');
+  system.store.close();
+});
+
+test('a cockpit kill and a clean done stay terminal, whatever the budget says', async () => {
+  const dir = tmp();
+  const { launches, system, agent } = await spawnAgent(dir, 905);
+
+  // A killed agent's process exits *after* the kill. That exit must not resurrect it.
+  assert.equal(system.agents.kill(agent.id), true);
+  launches[0]!.child.crash();
+  assert.equal(system.store.getAgent(agent.id)!.status, 'killed');
+  assert.equal(system.store.getAgent(agent.id)!.resumeAttempts, 0);
+  assert.equal(launches.length, 1, 'a decided ending is not re-opened');
+
+  // And a clean finish is a clean finish.
+  const { launches: l2, system: s2, agent: a2 } = await spawnAgent(tmp(), 906);
+  l2[0]!.child.say('All done. @@LUBBDUBB_DONE@@');
+  assert.equal(s2.store.getAgent(a2.id)!.status, 'done');
+  assert.equal(l2.length, 1);
+  system.store.close();
+  s2.store.close();
+});
+
+/**
+ * The teardown a mid-run resume must do, at the seam where it is observable.
+ *
+ * `AgentManager.resume` was written for boot, where its in-memory maps are empty:
+ * it `set`s the spool key and the MCP token rather than replacing them. Called
+ * mid-run without dropping what the dead process held, it leaks a spool directory
+ * and — the one that matters — leaves a bearer credential bound and live with
+ * nothing left to revoke it. Everything compiles and the agent visibly comes back,
+ * which is why this is asserted rather than reasoned about.
+ */
+test('a mid-run resume revokes the dead launch credential and drops its spool', () => {
+  const store = new Store(':memory:');
+  const opened: string[] = [];
+  const released: string[] = [];
+  const sessions: FakeSession[] = [];
+  const spool = new FileEventsSpool(join(tmp(), 'events'));
+  const agents = new AgentManager(store, {
+    command: 'claude',
+    buildArgs: () => [],
+    whitelistedApprovals: [],
+    createSession: () => {
+      const s = new FakeSession();
+      sessions.push(s);
+      return s;
+    },
+    resumable: true,
+    resumeAttempts: 1,
+    fileEvents: spool,
+    mcp: {
+      open: () => {
+        const token = `tok${opened.length}`;
+        opened.push(token);
+        return { token, configPath: null };
+      },
+      bind: () => {},
+      release: (token: string) => released.push(token),
+    },
+  });
+
+  const task = store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: 'b', originRef: null });
+  const agent = agents.spawn(task, tmpdir()); // an existing cwd: a resume needs its worktree
+  const firstSpool = agents.fileEventsDir(agent.id);
+
+  sessions[0]!.die();
+
+  assert.equal(store.getAgent(agent.id)!.status, 'running', 're-attached rather than settled');
+  assert.deepEqual(opened, ['tok0', 'tok1'], 'the resume mints its own credential');
+  assert.deepEqual(released, ['tok0'], "the dead launch's credential is revoked, not written over");
+  assert.equal(existsSync(firstSpool!), false, 'and its spool dir is disposed, not orphaned');
+  assert.notEqual(agents.fileEventsDir(agent.id), firstSpool);
+
+  // The budget is spent, so the next death settles — and takes both down with it.
+  const secondSpool = agents.fileEventsDir(agent.id);
+  sessions[1]!.die();
+  assert.equal(store.getAgent(agent.id)!.status, 'failed');
+  assert.deepEqual(released, ['tok0', 'tok1']);
+  assert.equal(existsSync(secondSpool!), false);
+  store.close();
 });

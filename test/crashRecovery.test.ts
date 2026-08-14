@@ -429,6 +429,7 @@ const agentRow = (patch: Partial<Agent> = {}): Agent => ({
   note: null,
   notedAt: null,
   resumedAt: null,
+  resumeAttempts: 0,
   ...patch,
 });
 

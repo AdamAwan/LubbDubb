@@ -935,6 +935,7 @@ class DemoServer {
         note: null,
         notedAt: null,
         resumedAt: null,
+        resumeAttempts: 0,
       },
       ...this.state.agents,
     ];

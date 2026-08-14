@@ -136,6 +136,14 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   harness as a process that died for no reason.
   → [10](docs/spec/10-agent-runtimes.md#launch-arguments)
 
+- **A mid-run crash re-attaches through `AgentManager.resume`, which must be handed a torn-down
+  agent.** `resume` was written for boot, where the in-memory maps are empty: it returns a silent
+  success for an agent still in `sessions`, and `set`s the spool key and MCP token over the dead
+  launch's rather than replacing them — leaking a spool dir and leaving a **bearer credential bound
+  and live** with nothing to revoke it. Drop the session, `disposeFileEvents` and `releaseMcp` first;
+  the agent comes back either way, so nothing is red.
+  → [10](docs/spec/10-agent-runtimes.md#auto-resume-on-a-mid-run-crash)
+
 The **default `agentMode` is `stream`, not a PTY.** Do not assume terminal semantics on the default
 path. Everything below is PTY-only, and every one of them is a silent failure — the agent keeps
 running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-edges)
