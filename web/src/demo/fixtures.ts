@@ -582,6 +582,12 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'planning', reasons: ['0/3 parts merged'] },
+          // The goal the demo's validation plan hangs off, so it is the one issue
+          // that carries a verdict. It has to agree with `validationChecks` below —
+          // three passed of six live — because the header chip is the way in to the
+          // card that draws them, and a chip disagreeing with the rows under it is
+          // the one thing this whole surface exists to prevent.
+          validation: { state: 'flagged', total: 6, passed: 3, failed: 0, unrun: 3, deferred: 0, waived: 0 },
         }),
       ],
     },

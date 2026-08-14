@@ -4,24 +4,30 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 
 /**
- * The validation plan on the plan sheet: how anyone checks the *goal* was met,
- * and what anybody concluded from running each check.
+ * The validation plan: how anyone checks the *goal* was met, and what anybody
+ * concluded from running each check.
  *
- * A section rather than a tab, for the sheet's own reason — a tab is a thing you
- * have to know to click — and it sits after the parts because the reading order
- * is answer, then work, then how anyone knows it worked.
+ * **It is drawn on the goal page, not on the plan sheet.** The plan writes the
+ * checks and amends them, so the sheet still renders them — as {@link
+ * ValidationDigest}, read-only. But running one is not reading a plan: it is work
+ * against the delivered goal, done days after the plan was approved and usually by
+ * somebody who has no reason to open it. A control reachable only from inside the
+ * document that proposed it is a control nobody finds. Defining and managing are
+ * two jobs, and this component is the second one.
  *
  * **Every control writes an operator's reading and derives nothing.** The section
  * has no opinion about whether a check passed; there is no "mark all", and no
  * state is inferred from a merged part or a green build. That is the same refusal
- * the acceptance checklist above it makes, one layer up: a positive terminal
- * inferred from incidental evidence is a check nobody ran, recorded as one that
- * passed.
+ * the acceptance checklist makes, one layer up: a positive terminal inferred from
+ * incidental evidence is a check nobody ran, recorded as one that passed.
+ *
+ * @public embedded by the goal page, which owns its card and its chrome
  */
 export function ValidationSection({
   checks,
   resources,
   refUrls,
+  buttonClass = 'ghost small',
   onResult,
   onDefer,
   onWaive,
@@ -32,6 +38,12 @@ export function ValidationSection({
   checks: ValidationCheck[];
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
+  /**
+   * The station's own button chrome, the seam `HumanTaskActions` and
+   * `EscalationCard` already take. One component, two faces — the alternative is a
+   * second wiring of five verbs, and five more places for the refusals to drift.
+   */
+  buttonClass?: string;
   onResult: (checkId: string, result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (checkId: string, reason: string) => Promise<unknown> | unknown;
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
@@ -58,25 +70,28 @@ export function ValidationSection({
 
   return (
     <>
-      <span className="pm-section-label">
-        Validation <i className="k">{live.length > 0 ? `${settled}/${live.length} settled` : 'withdrawn'}</i>
-      </span>
-      {/* The flag, stated once at the top rather than left to be counted off the
-          rows. `unrun` sits beside `failed` on purpose: with every check a
+      {/* One amber line, not two. The unsettled count and the amendment count were
+          separate bands on the plan sheet; on a card this size they are the same
+          sentence, and two stacked warnings only invite a reader to rank them.
+          `unrun` sits inside the unsettled count on purpose: with every check a
           person's by default, the set nobody got to is the realistic failure. */}
-      {live.length > 0 && settled < live.length && (
+      {(settled < live.length || amended.length > 0) && (
         <div className="pm-vflag">
-          {live.length - settled} of {live.length} not settled — closing this goal will ask you to say why.
-        </div>
-      )}
-      {/* The amendments, counted once at the top as well as banded per row: a
-          sheet of nine checks with one rewritten is exactly where a per-row band
-          gets scrolled past, and this is the change an operator most needs not to
-          miss. */}
-      {amended.length > 0 && (
-        <div className="pm-vamend">
-          {amended.length === 1 ? 'One check has' : `${amended.length} checks have`} changed since the plan was written
-          — {amended.map((c) => c.letter).join(', ')}.
+          {live.length > settled && (
+            <b>
+              {live.length - settled} of {live.length} not settled
+            </b>
+          )}
+          {live.length > settled && ' — closing this goal will ask you to say why. '}
+          {/* Counted here as well as banded per row: a sheet of nine checks with
+              one rewritten is exactly where a per-row band gets scrolled past, and
+              this is the change an operator most needs not to miss. */}
+          {amended.length > 0 && (
+            <>
+              {amended.length === 1 ? 'One check has' : `${amended.length} checks have`} changed since the plan was
+              written — {amended.map((c) => c.letter).join(', ')}.
+            </>
+          )}
         </div>
       )}
       {resources.length > 0 && (
@@ -103,6 +118,7 @@ export function ValidationSection({
             return found ? [found] : [];
           })}
           refUrls={refUrls}
+          buttonClass={buttonClass}
           onResult={(result, note) => onResult(check.id, result, note)}
           onDefer={(reason) => onDefer(check.id, reason)}
           onWaive={(reason) => onWaive(check.id, reason)}
@@ -130,6 +146,105 @@ export function ValidationSection({
   );
 }
 
+/**
+ * The same checks, read-only, on the plan sheet that wrote them.
+ *
+ * A plan under review has to show what it proposes to check — that is part of
+ * judging it — but the sheet is not where a reading is recorded any more, so it
+ * offers no verb at all. What it draws instead is the way to the place that does.
+ *
+ * It shares this file with {@link ValidationSection} rather than sitting beside it,
+ * because the two say the same things about a check — its letter, its state, its
+ * wording, what an amendment withdrew — and the failure worth designing against is
+ * the two drifting into describing one check differently on two surfaces.
+ *
+ * @public embedded by the plan sheet, where the checks are defined rather than run
+ */
+export function ValidationDigest({
+  checks,
+  refUrls,
+  onOpenGoal,
+}: {
+  checks: ValidationCheck[];
+  refUrls: Record<string, string>;
+  /** Null when the plan hangs off no goal — then there is nowhere to send anyone. */
+  onOpenGoal: (() => void) | null;
+}) {
+  const live = checks.filter((c) => c.supersededReason === null);
+  const withdrawn = checks.filter((c) => c.supersededReason !== null);
+  const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
+
+  if (checks.length === 0) {
+    return (
+      <p className="empty">
+        No validation plan. Nothing checks that this goal actually works beyond what the parts merged, so closing it is
+        a judgement call rather than a verdict.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <span className="pm-section-label">
+        Validation <i className="k">{live.length > 0 ? `${settled}/${live.length} settled` : 'withdrawn'}</i>
+      </span>
+      {live.map((check) => (
+        <div className={`pm-vrow ${check.state}`} key={check.id}>
+          <span className="pm-vletter">{check.letter}</span>
+          <div>
+            <div className="pm-vhead">
+              <span className="pm-vtitle">{check.title}</span>
+              <span className={`chip small${stateTone(check.state)}`}>{check.state}</span>
+              {check.covers.map((slug) => (
+                <span key={slug} className="chip small mono" title="A part this check exercises">
+                  {slug}
+                </span>
+              ))}
+            </div>
+            <div className="pm-vbody">
+              <div>
+                <b>Do</b>
+                {renderMarkdown(check.do, refUrls)}
+              </div>
+              <div>
+                <b>Expect</b>
+                {renderMarkdown(check.expect, refUrls)}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+      {withdrawn.length > 0 && (
+        // The withdrawn checks stay on the sheet rather than moving with the
+        // controls: what an amendment dropped is a fact about *this plan*, and the
+        // goal's card lists what is still to be checked.
+        <details className="pm-vgone">
+          <summary>
+            {withdrawn.length} check{withdrawn.length === 1 ? '' : 's'} an amended plan withdrew
+          </summary>
+          {withdrawn.map((check) => (
+            <div key={check.id} className="pm-vrow gone">
+              <span className="pm-vletter">{check.letter}</span>
+              <div>
+                <div className="pm-vtitle">{check.title}</div>
+                <div className="muted small">{check.supersededReason}</div>
+              </div>
+            </div>
+          ))}
+        </details>
+      )}
+      <div className="pm-vout">
+        This plan proposes the checks. What anyone saw when they ran one is recorded on the goal.
+        {onOpenGoal !== null && (
+          <button className="btn ghost small" onClick={onOpenGoal}>
+            Open the goal →
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 /** Which verb an operator has open on a check, or none. */
 type Verb = 'passed' | 'failed' | 'deferred' | 'waived';
 
@@ -140,10 +255,23 @@ const VERB_PROMPT: Record<Verb, string> = {
   waived: 'Why is this one not being checked?',
 };
 
+/**
+ * One check, collapsed to its head until somebody opens it.
+ *
+ * Six checks at full height is most of a screen, and the card sits above the plan —
+ * so the steps fold away and the head keeps what a glance is for: the letter, the
+ * title, the state, and who is on it.
+ *
+ * **The bands draw whether the row is open or shut.** An amendment and a hand-back
+ * are the two things a reader must not be able to scroll past without seeing, and a
+ * collapsed row that hid them would do exactly that. Folding away the steps costs a
+ * click; folding away "the check you already ran was rewritten" costs the reading.
+ */
 function CheckBlock({
   check,
   resources,
   refUrls,
+  buttonClass,
   onResult,
   onDefer,
   onWaive,
@@ -153,12 +281,14 @@ function CheckBlock({
   check: ValidationCheck;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
+  buttonClass: string;
   onResult: (result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (reason: string) => Promise<unknown> | unknown;
   onWaive: (reason: string) => Promise<unknown> | unknown;
   onReset: () => Promise<unknown> | unknown;
   onHandover: (to: 'fleet' | 'human') => Promise<unknown> | unknown;
 }) {
+  const [open, setOpen] = useState(false);
   const [verb, setVerb] = useState<Verb | null>(null);
   const [note, setNote] = useState('');
   const send = useAsyncAction();
@@ -178,12 +308,12 @@ function CheckBlock({
   };
 
   return (
-    <div className={`pm-vrow ${check.state}`}>
+    <div className={`pm-vrow ${check.state}${open ? ' open' : ''}`}>
       {/* The letter, not the position: it is the handle that stays put across an
           amendment, so it is what a person writes down. */}
       <span className="pm-vletter">{check.letter}</span>
       <div>
-        <div className="pm-vhead">
+        <button className="pm-vhead" aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className="pm-vtitle">{check.title}</span>
           <span className="chip small mono">{check.id}</span>
           <span className={`chip small${stateTone(check.state)}`}>{check.state}</span>
@@ -220,7 +350,10 @@ function CheckBlock({
               {slug}
             </span>
           ))}
-        </div>
+          <i className="pm-vcar" aria-hidden>
+            ▸
+          </i>
+        </button>
         {check.amendedAt !== null && <AmendBand check={check} refUrls={refUrls} />}
         {/* The fleet tried and could not. Drawn as loudly as an amendment because
             it is the same kind of news — this check is not going to happen unless
@@ -231,30 +364,37 @@ function CheckBlock({
             <b>Back with you</b> <span className="muted">{check.handbackNote}</span>
           </div>
         )}
-        <div className="pm-vbody">
-          <div>
-            <b>Do</b>
-            {renderMarkdown(check.do, refUrls)}
-          </div>
-          <div>
-            <b>Expect</b>
-            {renderMarkdown(check.expect, refUrls)}
-          </div>
-        </div>
-        {resources.length > 0 && (
-          <div className="pm-vres">
-            {resources.map((resource) => (
-              <span
-                key={resource.name}
-                className={`chip small${resource.present ? '' : ' warn'}`}
-                title={resource.path}
-              >
-                {resource.name}
-                {!resource.present && <i className="k">missing</i>}
-              </span>
-            ))}
-          </div>
+        {open && (
+          <>
+            <div className="pm-vbody">
+              <div>
+                <b>Do</b>
+                {renderMarkdown(check.do, refUrls)}
+              </div>
+              <div>
+                <b>Expect</b>
+                {renderMarkdown(check.expect, refUrls)}
+              </div>
+            </div>
+            {resources.length > 0 && (
+              <div className="pm-vres">
+                {resources.map((resource) => (
+                  <span
+                    key={resource.name}
+                    className={`chip small${resource.present ? '' : ' warn'}`}
+                    title={resource.path}
+                  >
+                    {resource.name}
+                    {!resource.present && <i className="k">missing</i>}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
         )}
+        {/* The reading stays on the closed row. It is the answer to the question
+            the row asks, and a state chip without the sentence behind it is the
+            half a reader cannot act on. */}
         {check.resultNote !== null && (
           <div className="pm-vnote">
             {check.resultNote}
@@ -272,84 +412,85 @@ function CheckBlock({
             {check.deferUntil !== null && <i className="k">until {check.deferUntil}</i>}
           </div>
         )}
-        {verb === null ? (
-          <div className="pm-vacts">
-            {check.state === 'unrun' ? (
-              <>
-                <button className="btn ghost small" onClick={() => setVerb('passed')}>
-                  Passed
-                </button>
-                <button className="btn ghost small" onClick={() => setVerb('failed')}>
-                  Failed
-                </button>
-                <button className="btn ghost small" onClick={() => setVerb('deferred')}>
-                  Defer
-                </button>
-                <button className="btn ghost small" onClick={() => setVerb('waived')}>
-                  Waive
-                </button>
-                {/* The hand-over, beside the four readings and deliberately not
-                    among them: it says who runs the check, not what it said. It
-                    is offered on every unrun check rather than only on a
-                    nominated one — the planner's nomination is an argument, and
-                    an operator who knows their own deployment does not need the
-                    planner's permission to use it. */}
-                {check.actor === 'fleet' ? (
-                  <AsyncButton
-                    className="ghost small"
-                    title="Stop waiting for an agent and take this check back"
-                    onClick={() => onHandover('human')}
-                  >
-                    Take it back
-                  </AsyncButton>
-                ) : (
-                  <AsyncButton
-                    className="ghost small"
-                    title="Let the harness put an agent on this check once the goal is delivered"
-                    onClick={() => onHandover('fleet')}
-                  >
-                    Hand to the fleet
-                  </AsyncButton>
-                )}
-              </>
-            ) : (
-              // One way back from every settled state, and it takes no note for a
-              // dismissal's reason: it says nothing about the work, only that what
-              // was recorded no longer holds.
-              <AsyncButton
-                className="ghost small"
-                title="Withdraw what was recorded and put it back to unrun"
-                onClick={onReset}
-              >
-                Back to unrun
-              </AsyncButton>
-            )}
-          </div>
-        ) : (
-          <form
-            className="pm-vsay"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-          >
-            <input
-              autoFocus
-              placeholder={VERB_PROMPT[verb]}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setVerb(null);
+        {open &&
+          (verb === null ? (
+            <div className="pm-vacts">
+              {check.state === 'unrun' ? (
+                <>
+                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('passed')}>
+                    Passed
+                  </button>
+                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('failed')}>
+                    Failed
+                  </button>
+                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('deferred')}>
+                    Defer
+                  </button>
+                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('waived')}>
+                    Waive
+                  </button>
+                  {/* The hand-over, beside the four readings and deliberately not
+                      among them: it says who runs the check, not what it said. It
+                      is offered on every unrun check rather than only on a
+                      nominated one — the planner's nomination is an argument, and
+                      an operator who knows their own deployment does not need the
+                      planner's permission to use it. */}
+                  {check.actor === 'fleet' ? (
+                    <AsyncButton
+                      className={buttonClass}
+                      title="Stop waiting for an agent and take this check back"
+                      onClick={() => onHandover('human')}
+                    >
+                      Take it back
+                    </AsyncButton>
+                  ) : (
+                    <AsyncButton
+                      className={buttonClass}
+                      title="Let the harness put an agent on this check once the goal is delivered"
+                      onClick={() => onHandover('fleet')}
+                    >
+                      Hand to the fleet
+                    </AsyncButton>
+                  )}
+                </>
+              ) : (
+                // One way back from every settled state, and it takes no note for a
+                // dismissal's reason: it says nothing about the work, only that what
+                // was recorded no longer holds.
+                <AsyncButton
+                  className={buttonClass}
+                  title="Withdraw what was recorded and put it back to unrun"
+                  onClick={onReset}
+                >
+                  Back to unrun
+                </AsyncButton>
+              )}
+            </div>
+          ) : (
+            <form
+              className="pm-vsay"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
               }}
-            />
-            <SubmitButton phase={send.phase} className="primary small">
-              {verb === 'deferred' ? 'Defer' : verb === 'waived' ? 'Waive' : verb === 'passed' ? 'Passed' : 'Failed'}
-            </SubmitButton>
-            <button type="button" className="btn ghost small" onClick={() => setVerb(null)}>
-              Cancel
-            </button>
-          </form>
-        )}
+            >
+              <input
+                autoFocus
+                placeholder={VERB_PROMPT[verb]}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setVerb(null);
+                }}
+              />
+              <SubmitButton phase={send.phase} className="primary small">
+                {verb === 'deferred' ? 'Defer' : verb === 'waived' ? 'Waive' : verb === 'passed' ? 'Passed' : 'Failed'}
+              </SubmitButton>
+              <button type="button" className={`btn ${buttonClass}`} onClick={() => setVerb(null)}>
+                Cancel
+              </button>
+            </form>
+          ))}
       </div>
     </div>
   );

@@ -81,7 +81,6 @@ export function App() {
       plan={viewedPlan}
       parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
-      resources={(state.validationResources ?? []).filter((r) => r.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
       agent={state.agents.find(
@@ -103,9 +102,9 @@ export function App() {
       onEndDiscussion={(id) => status.actions.endPlanDiscussion(id)}
       onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}
       onOpenAgent={(id) => status.actions.select(id)}
+      onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onRespond={(id, text) => status.actions.respondAgent(id, text)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
-      onValidation={(number, checkId, act) => status.actions.setValidation(number, checkId, act)}
     />
   ) : null;
 

@@ -594,10 +594,23 @@ column becoming a hand-over would dispatch an agent nobody asked for.
 
 ## The cockpit
 
-The plan sheet gains a **Validation** section (`web/src/components/ValidationSection.tsx`) between the
-parts and the caveats, with a rail entry carrying the settled count — the reading order is answer,
-then work, then how anyone knows it worked. Each row draws its letter in the gutter where a part's
-sequence number sits, because it is the same kind of handle.
+**The plan defines the checks; the goal manages them.** Those are two jobs, and they are drawn on two
+surfaces.
+
+The **goal page** carries the `ValidationSection`
+(`web/src/components/ValidationSection.tsx`) — a full-width card above the plan, and the only place a
+reading is recorded. That is where a check is keyed anyway: a verdict hangs off the goal, not off the
+plan that proposed it, and running one is work against the delivered goal, done days after the plan
+was approved and usually by somebody with no reason to open it. A control reachable only from inside
+the document that proposed it is a control nobody finds. Each row draws its letter in the gutter where
+a part's sequence number sits, because it is the same kind of handle, and collapses to its head — with
+the amendment band, the hand-back band and the result note staying visible on a closed row, because
+those are what a reader must not scroll past. → [17](17-cockpit.md#validation-on-the-goal)
+
+The **plan sheet** keeps a read-only `ValidationDigest` between the parts and the caveats, with a rail
+entry carrying the settled count — the reading order is answer, then work, then how anyone knows it
+worked. A plan under review has to show what it proposes to check; it just offers no verb, and points
+at the goal instead. → [17](17-cockpit.md#the-validation-digest)
 
 Three markers say who, and each exists because its absence would be read as something else: **with
 the fleet** on a handed-over check, **running at ‹label›** while a desktop session holds a **live**
@@ -608,9 +621,13 @@ means.
 
 Every control writes an operator's reading and derives nothing: there is no "mark all", and no state
 is inferred from a merged part or a green build. Superseded checks are drawn folded, as the record of
-what a plan withdrew — a section that filtered them would leave a reader unable to tell a check that
-was dropped from one that was never written. The goal page carries the verdict as a chip beside the
-assay and the conclusion, inside neither.
+what a plan withdrew — a surface that filtered them would leave a reader unable to tell a check that
+was dropped from one that was never written. They stay on the **sheet**: what an amendment dropped is
+a fact about that plan, while the goal's card lists what is still to be checked.
+
+The goal page also carries the verdict as a chip beside the assay and the conclusion, inside neither —
+and that chip is a button, because the checks are now on the same page and a verdict you can act on
+should not be the one reading that goes nowhere.
 
 ## Tests
 

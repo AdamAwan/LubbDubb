@@ -313,7 +313,9 @@ Order on the page, top to bottom:
    what it has cost, and how many parts have merged. Every chip quotes a reading the server already
    made; nothing here is a second opinion. A `null` spend draws no reading at all, because nothing
    was ever measured and `$0.00` would report a goal that cost nothing
-   ([18](18-observability.md#per-goal-spend)).
+   ([18](18-observability.md#per-goal-spend)). The validation chip is the one that is a **button**:
+   the checks are on this page now, so the reading has somewhere to go, and a verdict you can act on
+   should not be the only chip that does nothing.
 2. **The "Needs you" bands** — every open ask on this goal, stacked, answerable in place. Red for
    asks blocking an agent, amber for the operator's own, the rail's own split carried over so a row
    and the band it opens read the same. **A goal with no ask draws no band at all** — a band that is
@@ -322,11 +324,13 @@ Order on the page, top to bottom:
    goal page's private component, because the goal page is not the only place an ask is read: the ask
    panel draws the same band for a row with no goal page. One band, two placements — a second wiring
    is a second set of verdicts to keep in step.
-3. **The plan**, left to right in dispatch order.
-4. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against, drawn
+3. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
+   check. Full width, above the two columns ([Validation](#validation-on-the-goal)).
+4. **The plan**, left to right in dispatch order.
+5. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against, drawn
    through `renderRichText` because the body is the _tracker's_ prose and Azure DevOps writes it as
    HTML ([Tracker-authored prose](#tracker-authored-prose)).
-5. **Pull requests for this goal**, open and closed, with the court chip and the CI ladder.
+6. **Pull requests for this goal**, open and closed, with the court chip and the CI ladder.
 
 At ≥1500px a right-hand column carries **On this goal** (who is working it now), **Spend** and **The
 tail**. Below that, the two stacks are one column.
@@ -362,6 +366,82 @@ the console reaching into their class.
 
 **A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
 claim something is waiting while offering no way to answer it.
+
+### Validation on the goal
+
+`ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, and what anybody
+concluded from running each check. **The plan defines the checks; the goal manages them**, and those
+are two jobs. The plan sheet writes them and amends them and still renders them
+([the digest](#the-validation-digest)); running one is work against the *delivered* goal, done days
+after the plan was approved and usually by somebody with no reason to open it. A control reachable
+only from inside the document that proposed it is a control nobody finds.
+
+The card is **full width, above the two columns and above the plan**. Not in either stack: a check
+draws its `do` and `expect` side by side and carries a row of five verbs, and both are cramped in a
+column. Above the plan because that is the order the page already reads in — what is being asked of
+you, then the work — and running a check is the one thing on the page that is _owed_. Only the needs
+bands outrank it. **The card draws even when the goal has no checks**, the rule every card on this
+page follows: a surface that vanishes when quiet is indistinguishable from one that broke, and
+"nobody wrote a validation plan" is the reading most worth having.
+
+The section is **embedded, never redrawn** — the bands' rule, for the bands' reason. It owns the five
+verbs and their refusals, and the console passes `buttonClass="cn-btn"` so they wear the console's
+face without the console reaching into their class.
+
+The checks reach the page off the **goal ref**, by equality and not by `belongsToGoal`. A verdict is
+keyed on the goal rather than the plan that proposed it ([20](20-validation.md)), so routing them
+through `plan` would lose every check on a goal whose plan was abandoned — the case where an operator
+most needs to know what was never run — and matching descendants would pull a part's ref in as though
+it were one of the goal's. `test/goalPage.test.ts` pins both sides.
+
+Each row draws its **letter** in the gutter where a part's sequence number sits: it is the same kind
+of handle, and it is the one that stays put across an amendment. **A row is collapsed to its head** —
+letter, title, state, and who is on it — because six checks at full height is most of a screen and
+the card sits above the plan. Opening one reveals the `do` and `expect` side by side, the resources it
+names with a present/missing fact resolved server-side, and the controls: Passed / Failed / Defer /
+Waive, each opening a one-line note the server also requires, the hand-over, and one way back to
+`unrun` from any settled state.
+
+**Two things stay on a closed row.** The bands — an amendment, and a hand-back — because they are
+what a reader must not be able to scroll past without seeing, and a collapsed row that hid them would
+do exactly that. Folding away the steps costs a click; folding away "the check you already ran was
+rewritten" costs the reading. And the **result note**, because it is the answer to the question the
+row asks, and a state chip without the sentence behind it is the half nobody can act on.
+
+**Every control writes an operator's reading and derives nothing** — there is no "mark all", and no
+state is inferred from a merged part or a green build, which is the acceptance checklist's rule one
+layer up. Checks an amendment withdrew are drawn folded, as the record of what the plan stopped
+asking for: filtering them would leave a reader unable to tell a dropped check from one nobody wrote.
+
+**One amber line at the top, not two.** What is not settled, what closing the goal will ask for, and
+the amendment count with its letters, in one sentence — amber and not red, because it blocks nothing.
+The plan sheet drew these as two stacked bands; on a card this size two warnings only invite a reader
+to rank them. The amendments are counted there as well as banded per row because a plan of nine checks
+with one rewritten is exactly where a per-row band gets scrolled past.
+
+A check an amendment changed carries a **band** in that amber, above its body: what the amendment
+said, and — when it reworded a check somebody had already run — that their reading was withdrawn,
+with the previous wording folded behind _What it used to say_. The band clears when the operator
+records a reading against the new wording and by nothing else: a dismiss button would clear it for
+somebody who had merely seen it.
+
+A check the fleet **handed back** draws a band of the same weight and the same amber, carrying the
+agent's reason. Same weight because it is the same kind of news — nothing is going to happen to this
+check unless a person does it — and the reason is quoted rather than summarised because it is usually
+the one sentence saying what a person can do that an agent could not.
+→ [20](20-validation.md#the-hand-over)
+
+Three chips and two markers say **who**, and each is there because its absence would be read as
+something else. **with the fleet** on a handed-over check, ahead of the planner's nomination about it
+— one is what will happen, the other is an argument. **running at ‹label›** while a desktop session
+holds the check, with the timestamp on the hover rather than the chip. Only a **live** claim gets
+here — the snapshot projects every check through `withLiveClaim` — so this chip and the fleet list's
+[keyboard entry](#the-keyboard-entry) appear and go together, and neither outlives what
+`validate-check` reads. And beside a reading,
+**recorded by an agent** or **recorded from a desktop session**. A reading a person took draws
+nothing at all, because that is already what a validation checklist means — the markers are the
+exceptions, which is exactly what a reader deciding how much a tick is worth needs.
+→ [20](20-validation.md#the-desktop-channel)
 
 ### The plan
 
@@ -1041,50 +1121,31 @@ the stack edge spelled out as a sentence — a rejoin says _both_ out loud, whic
 wrote outside what it declared — the plan disagreeing with reality, which is the thing the surface
 exists to surface.
 
-### Validation
+### The validation digest
 
-`ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, between the parts
-and the caveats, because the reading order is answer, then work, then how anyone knows it worked. Each
-row draws its **letter** in the gutter where a part's sequence number sits: it is the same kind of
-handle, and it is the one that stays put across an amendment.
+`ValidationDigest` (`web/src/components/ValidationSection.tsx`) — the checks this plan proposes,
+**read-only**, between the parts and the caveats, because the reading order is answer, then work, then
+how anyone knows it worked.
 
-A row carries its `do` and `expect` side by side, the resources it names with a present/missing fact
-resolved server-side, the parts it `covers`, and the planner's "an agent could run this" nomination
-where there is one. The controls are Passed / Failed / Defer / Waive, each opening a one-line note the
-server also requires, and one way back to `unrun` from any settled state.
+A plan under review has to show what it intends to check; that is part of judging it. But a reading is
+recorded against the _goal_, on [its own card](#validation-on-the-goal), so the sheet offers no verb
+at all — no note field, no hand-over, no way back to `unrun`. Offering the verbs in two places is two
+wirings of one set of refusals, and the surface that ends up wrong is the one nobody is looking at.
+What the sheet draws instead is the way to the place that does: **Open the goal**, absent on a plan
+that hangs off no goal ref, because then there is nowhere to send anyone.
 
-**Every control writes an operator's reading and derives nothing** — there is no "mark all", and no
-state is inferred from a merged part or a green build, which is the acceptance checklist's rule one
-layer up. Checks an amendment withdrew are drawn folded, as the record of what the plan stopped asking
-for: filtering them would leave a reader unable to tell a dropped check from one nobody wrote. The
-count of what is not settled is stated once at the top in amber, with what closing the goal will ask
-for — amber and not red, because it blocks nothing. A plan with no checks says so rather than drawing
-nothing, the write-up section's rule.
+Each row is the letter, the title, the state, the parts it `covers`, and the `do`/`expect` wording. A
+plan with no checks says so rather than drawing nothing, the write-up section's rule.
 
-A check an amendment changed carries a **band** in the same amber, above its body: what the amendment
-said, and — when it reworded a check somebody had already run — that their reading was withdrawn,
-with the previous wording folded behind _What it used to say_. The amendments are also counted once
-at the top with their letters, because a sheet of nine checks with one rewritten is exactly where a
-per-row band gets scrolled past. The band clears when the operator records a reading against the new
-wording and by nothing else: a dismiss button would clear it for somebody who had merely seen it.
+**Checks an amendment withdrew stay here** rather than moving with the controls. What a plan dropped
+is a fact about _this plan_; the goal's card lists what is still to be checked. They are drawn folded,
+for the reason they always were: filtering them would leave a reader unable to tell a dropped check
+from one nobody wrote.
 
-A check the fleet **handed back** draws a band of the same weight and the same amber, carrying the
-agent's reason. Same weight because it is the same kind of news — nothing is going to happen to this
-check unless a person does it — and the reason is quoted rather than summarised because it is usually
-the one sentence saying what a person can do that an agent could not.
-→ [20](20-validation.md#the-hand-over)
-
-Three chips and two markers say **who**, and each is there because its absence would be read as
-something else. **with the fleet** on a handed-over check, ahead of the planner's nomination about it
-— one is what will happen, the other is an argument. **running at ‹label›** while a desktop session
-holds the check, with the timestamp on the hover rather than the chip. Only a **live** claim gets
-here — the snapshot projects every check through `withLiveClaim` — so this chip and the fleet list's
-[keyboard entry](#the-keyboard-entry) appear and go together, and neither outlives what
-`validate-check` reads. And beside a reading,
-**recorded by an agent** or **recorded from a desktop session**. A reading a person took draws
-nothing at all, because that is already what a validation checklist means — the markers are the
-exceptions, which is exactly what a reader deciding how much a tick is worth needs.
-→ [20](20-validation.md#the-desktop-channel)
+The digest shares a file with `ValidationSection` rather than sitting beside it, because the two say
+the same things about a check — its letter, its state, its wording, what an amendment withdrew — and
+the failure worth designing against is the two drifting into describing one check differently on two
+surfaces.
 
 ### The caveats
 
