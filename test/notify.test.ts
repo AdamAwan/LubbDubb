@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AppState } from '../web/src/types.js';
-import { notifiableChanges, notifySnapshot } from '../web/src/cockpit/notify.js';
+import { fireNotifications, notifiableChanges, notifySnapshot } from '../web/src/cockpit/notify.js';
 
 // The demo seed is a whole, coherent snapshot — the same one `needsYou.test.ts`
 // builds on — so these read against a state with real escalations and agents in
@@ -86,6 +86,103 @@ test('an unhappy ending says which', () => {
     snap({ agents: [{ id: 'a1', status: 'crashed' }] }),
   );
   assert.equal(items[0]!.title, 'Agent crashed');
+});
+
+/**
+ * The browser half, under a stubbed engine.
+ *
+ * `notifiableChanges` decides *what* is worth saying and is covered above; this
+ * covers *whether it gets said*, which is the half that reaches nobody when it
+ * is wrong — and does it silently, since a notification that never fires looks
+ * exactly like a fleet with nothing to report.
+ *
+ * `defineProperty` rather than assignment: `Notification` and `document` are
+ * read off the global by `fireNotifications` at call time, and this is the way
+ * to stand one up in node without restating the DOM's constructor type.
+ */
+function withEngine(
+  engine: { permission: NotificationPermission; visibility: DocumentVisibilityState; focused: boolean },
+  body: () => void,
+): { title: string; tag: string | undefined }[] {
+  const raised: { title: string; tag: string | undefined }[] = [];
+  class StubNotification {
+    static permission = engine.permission;
+    constructor(title: string, opts?: { tag?: string }) {
+      raised.push({ title, tag: opts?.tag });
+    }
+  }
+  const before = { notification: globalThis.Notification, document: globalThis.document };
+  Object.defineProperty(globalThis, 'Notification', { value: StubNotification, configurable: true });
+  Object.defineProperty(globalThis, 'document', {
+    value: { visibilityState: engine.visibility, hasFocus: () => engine.focused },
+    configurable: true,
+  });
+  try {
+    body();
+  } finally {
+    Object.defineProperty(globalThis, 'Notification', { value: before.notification, configurable: true });
+    Object.defineProperty(globalThis, 'document', { value: before.document, configurable: true });
+  }
+  return raised;
+}
+
+const ON = { enabled: true, categories: { needsYou: true, errors: true, agents: true } };
+const ONE_ITEM = [{ id: 'esc_1', kind: 'escalation' as const, title: 'Which database?' }];
+const oneChange = () => notifiableChanges(snap(), snap({ needsYou: ONE_ITEM }));
+
+test('a cockpit sitting behind another window still notifies', () => {
+  // The regression. A document is `hidden` only when its tab is not the selected
+  // one or its window is minimized — a window merely behind another, or on
+  // another virtual desktop, reads `visible` in every engine. Gating on
+  // visibility alone therefore suppressed exactly the case the feature exists
+  // for: the operator who is working in their editor with the cockpit open
+  // behind it.
+  const raised = withEngine({ permission: 'granted', visibility: 'visible', focused: false }, () => {
+    fireNotifications(oneChange(), ON);
+  });
+  assert.equal(raised.length, 1);
+  assert.equal(raised[0]!.tag, 'need:esc_1');
+});
+
+test('a backgrounded tab notifies', () => {
+  const raised = withEngine({ permission: 'granted', visibility: 'hidden', focused: false }, () => {
+    fireNotifications(oneChange(), ON);
+  });
+  assert.equal(raised.length, 1);
+});
+
+test('the cockpit in front of the operator stays quiet', () => {
+  // Both halves. A notification for a row on the screen you are reading is noise.
+  const raised = withEngine({ permission: 'granted', visibility: 'visible', focused: true }, () => {
+    fireNotifications(oneChange(), ON);
+  });
+  assert.deepEqual(raised, []);
+});
+
+test('nothing fires without the switch or the grant', () => {
+  const off = withEngine({ permission: 'granted', visibility: 'hidden', focused: false }, () => {
+    fireNotifications(oneChange(), { ...ON, enabled: false });
+  });
+  assert.deepEqual(off, []);
+
+  const ungranted = withEngine({ permission: 'default', visibility: 'hidden', focused: false }, () => {
+    fireNotifications(oneChange(), ON);
+  });
+  assert.deepEqual(ungranted, []);
+});
+
+test('a switched-off category is dropped and its siblings are not', () => {
+  const changes = notifiableChanges(
+    snap({ agents: [{ id: 'a1', status: 'running' }] }),
+    snap({ needsYou: ONE_ITEM, agents: [{ id: 'a1', status: 'done' }] }),
+  );
+  const raised = withEngine({ permission: 'granted', visibility: 'visible', focused: false }, () => {
+    fireNotifications(changes, { ...ON, categories: { ...ON.categories, agents: false } });
+  });
+  assert.deepEqual(
+    raised.map((r) => r.tag),
+    ['need:esc_1'],
+  );
 });
 
 test('notifySnapshot reduces a whole AppState to the three lists', () => {

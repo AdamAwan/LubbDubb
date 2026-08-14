@@ -960,12 +960,19 @@ a 0600 file and sends nothing off the box, and a notification channel is a poor 
 first exception. The cost is stated rather than hidden — **the tab must still be open**. Backgrounded,
 buried behind another window, on another desktop all still notify; closed does not.
 
+Two of those three take **`hasFocus()`, not visibility**, and the first cut of this got it wrong.
+`document.visibilityState` is `hidden` only when the tab is not the selected one in its window or that
+window is minimized — a window merely *behind* another, or on another virtual desktop, reads `visible`
+in every engine. Gating on visibility alone therefore suppressed the case the feature exists for, and
+suppressed it silently: a notification that never fires is indistinguishable from a fleet with nothing
+to say. Both halves are asserted in `test/notify.test.ts` against a stubbed engine.
+
 | | |
 | --- | --- |
 | Stored | `localStorage` under `lubbdubb.notify`, beside the token — a property of this browser, so two people on one deployment can want different things. Not `Place`: the address bar holds where you are, and this is not somewhere you can be. |
 | Categories | `needsYou`, `errors`, `agents`, each independently switchable. `agents` is described in the panel as frequent rather than quietly defaulted off — switchable is the answer to noise, not a default nobody finds. |
 | Permission | Requested only from the button, never a mount effect: every engine requires a user gesture and some refuse silently. `enabled` is written only once the browser has actually granted, so a switch can never read on and do nothing. |
-| Suppressed | While `document.visibilityState === 'visible'`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere. |
+| Suppressed | Only while the cockpit is **both** `document.visibilityState === 'visible'` **and** `document.hasFocus()`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere. |
 
 **Decided from state, not from websocket frames.** `notifiableChanges` (`web/src/cockpit/notify.ts`)
 is a pure diff of two reduced snapshots, and the needs-you half diffs the **rendered** queue —
