@@ -165,6 +165,15 @@ Three decisions worth stating, because none of them is the only defensible one:
   all held. Both would be rules that quietly do nothing. `passing` is refused as a
   state for the same reason: a check that passed asks nothing of anyone.
 
+**One waiting check needs no rule at all.** A check the provider reports as `expired` — an Azure
+build-validation policy whose last run predates the branch's commits, so nothing is in flight and
+nothing starts on its own — is watched with nothing in `ci.checks` naming it, exactly as an unclaimed
+_failing_ check dispatches. Writing `{ "match": "<build>", "states": ["pending"] }` for that case is
+the wrong lever and is not needed: it fires equally on a build that is genuinely running, sending an
+agent to release a gate that was about to release itself. A rule claiming the check in `pending` with
+a non-dispatch action shadows the default, which is how an operator turns it off.
+→ [07](07-pull-requests.md#ci-checks)
+
 The dispatch itself, its own origin, and what stops it looping are rule `pr-ci-gate`'s
 — [05](05-dispatcher.md#the-rule-book).
 

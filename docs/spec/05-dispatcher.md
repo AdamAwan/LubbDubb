@@ -71,26 +71,26 @@ pipeline is the ordered subset that runs.
 `enabled` is the predicate that switches an optional rule into the pipeline; a rule with none is
 unconditional.
 
-| Id                         | Name                                 | `enabled`        | Fires when                                                                                                                                                    |
-| -------------------------- | ------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `manual-job`               | Operator-launched job                | —                | A queued job exists. Drained ahead of every world-driven rule.                                                                                                |
-| `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                           |
-| `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.     |
-| `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                             |
-| `pr-ci-gate`               | Check waiting on an action           | —                | A `ci.checks` rule watches a check in a non-failing state (`states`) and the check is in it — a blocking gate sitting `pending`. Own origin `pr:<n>:ci-gate`. |
-| `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base or conflicts with it.                                                                                                               |
-| `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                |
-| `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                              |
-| `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                      |
-| `issue-assay`              | Issue goal needs checking            | `assay`          | A watched open issue nothing has been started for has no verdict on its goal text.                                                                            |
-| `issue-plan`               | Issue needs a plan                   | `planning`       | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                     |
-| `issue-assess`             | Issue may be finished                | `assessment`     | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                           |
-| `issue-shortfall`          | Assessment says the goal was missed  | —                | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                            |
-| `issue-retro`              | Delivered goal needs a retrospective | `retrospective`  | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included. |
-| `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                      |
-| `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                    |
-| `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                            |
-| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`. Never a retained run.                                               |
+| Id                         | Name                                 | `enabled`        | Fires when                                                                                                                                                                  |
+| -------------------------- | ------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `manual-job`               | Operator-launched job                | —                | A queued job exists. Drained ahead of every world-driven rule.                                                                                                              |
+| `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                                         |
+| `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.                   |
+| `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                                           |
+| `pr-ci-gate`               | Check waiting on an action           | —                | A check is waiting rather than failing: a `ci.checks` rule watches it in a non-failing state (`states`), or the provider reports it `expired`. Own origin `pr:<n>:ci-gate`. |
+| `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base or conflicts with it.                                                                                                                             |
+| `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                              |
+| `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                                            |
+| `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                    |
+| `issue-assay`              | Issue goal needs checking            | `assay`          | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                          |
+| `issue-plan`               | Issue needs a plan                   | `planning`       | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                   |
+| `issue-assess`             | Issue may be finished                | `assessment`     | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                         |
+| `issue-shortfall`          | Assessment says the goal was missed  | —                | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                          |
+| `issue-retro`              | Delivered goal needs a retrospective | `retrospective`  | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.               |
+| `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                    |
+| `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                                  |
+| `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                                          |
+| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`. Never a retained run.                                                             |
 
 `workItemStates` is the one condition that is not a feature flag: it is true when the operator has
 configured **both** `issueInReviewState` and a non-empty `issuePickupStates`.
@@ -141,11 +141,24 @@ before `states` there was no way to say so. Three choices carry this rule:
   is evaluated per pull request, so each rung of an otherwise-healthy stack genuinely has its own gate
   to clear, and suppressing those would park the whole stack on the bottom one.
 
+**Two things reach the rule, and only one of them is configured.** The first is the `states` walk
+above. The second is a check the provider reports as `expired` — an Azure build-validation policy
+whose last run predates the branch's commits, so it is `queued` with nothing in flight and never
+resolves until a build is queued. `classifyWatchedChecks` watches one with no `ci.checks` rule naming
+it, the same way an unclaimed _failing_ check dispatches: expiry is the provider stating that no run
+is coming, which is not an opinion an operator improves on, and the config-only alternative
+(`states: ["pending"]` on the build checks) fires equally on builds that are merely mid-flight. A rule
+claiming the check in `pending` with a non-dispatch action still shadows it. Everything else about the
+rule is shared — one origin, one cap, the same stack guard, and the same escalation when the agent
+cannot queue the build. → [07](07-pull-requests.md#ci-checks),
+[15](15-integrations.md#the-azure-provider)
+
 The prompt is `pr-ci-gate`, written for a gate rather than a red build — `pr-ci-fix` tells an agent to
 investigate a failure, which here is an instruction to go looking for a bug that does not exist. The
-waiting check names and the rule's `guidance` are **appended** to the rendered template, never
-interpolated: an operator override that predates this feature would silently drop a new `{token}`, and
-the check names are the half the agent cannot act without.
+waiting check names, the rule's `guidance` and the expiry note (what an expired check needs, since no
+operator wrote guidance for a check nobody had to name) are **appended** to the rendered template,
+never interpolated: an operator override that predates this feature would silently drop a new
+`{token}`, and the check names are the half the agent cannot act without.
 
 ### Where a rule's body lives
 

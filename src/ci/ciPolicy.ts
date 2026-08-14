@@ -110,6 +110,13 @@ interface CiMatch {
   rule: CiCheckRule | null;
   /** False when the provider says this failure does not hold the merge. */
   blocking?: boolean;
+  /**
+   * The check is waiting on a run nobody has started ({@link CiCheck.expired}).
+   * Only ever set in {@link CiWatchVerdict}, and the one entry there that may
+   * carry a null {@link rule} — it is watched by the provider's own report rather
+   * than by an operator naming it.
+   */
+  expired?: boolean;
 }
 
 export interface CiVerdict {
@@ -273,9 +280,10 @@ export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPoli
 /** The checks a rule is watching in a state that is not `failing`. */
 export interface CiWatchVerdict {
   /**
-   * Watched checks an agent should be sent for. Every entry's rule dispatches —
-   * {@link validateCiPolicy} refuses the alternatives, so there is no held or
-   * muted list here to mirror {@link CiVerdict}'s.
+   * Watched checks an agent should be sent for. Every entry either has a rule
+   * that dispatches — {@link validateCiPolicy} refuses the alternatives, so there
+   * is no held or muted list here to mirror {@link CiVerdict}'s — or is an
+   * **expired** check no rule claimed, which is watched on the provider's word.
    */
   watched: CiMatch[];
   /** Any watched check's rule asked to jump the queue. */
@@ -296,6 +304,20 @@ export interface CiWatchVerdict {
  *
  * Advisory checks are dropped first, exactly as they are there: no rule, not even
  * `match: '*'`, may claim one, in any state.
+ *
+ * An **expired** check ({@link CiCheck.expired}) is watched with no rule naming
+ * it — the one place this walk has a default, and it mirrors the failing side's:
+ * a check nobody configured is the harness's to act on. It is not a widening of
+ * `states`, which asks *whether an operator wants this watched*; expiry is the
+ * provider stating as fact that no run is in flight and none will start on its
+ * own, which is not an opinion config can improve on. Without it the case needs
+ * `states: ['pending']` on the build checks, and that same rule then fires on
+ * every build that is merely mid-flight — an agent sent to release a gate that
+ * was about to release itself.
+ *
+ * An operator can still take it back: a rule claiming the check in `pending`
+ * with a non-dispatch action shadows the default, exactly as first-match-wins
+ * shadows the failing side's.
  */
 export function classifyWatchedChecks(checks: CiCheck[] | undefined, policy: CiPolicy): CiWatchVerdict {
   const watched: CiMatch[] = [];
@@ -306,10 +328,14 @@ export function classifyWatchedChecks(checks: CiCheck[] | undefined, policy: CiP
     const rule = policy.checks.find((r) => ruleClaims(r, check));
     // An earlier rule claiming the check with a non-dispatch action shadows a
     // later one, exactly as first-match-wins does on the failing side. That is
-    // the operator's lever for exempting one check from a broad watch glob.
-    if (!rule || (rule.onFailure ?? 'ignore') !== 'dispatch') continue;
-    watched.push({ name: check.name, rule, blocking: check.blocking });
-    if (rule.urgent) urgent = true;
+    // the operator's lever for exempting one check from a broad watch glob — and,
+    // for an expired check, from the default below.
+    if (rule && (rule.onFailure ?? 'ignore') !== 'dispatch') continue;
+    if (!rule && !check.expired) continue;
+    const match: CiMatch = { name: check.name, rule: rule ?? null, blocking: check.blocking };
+    if (check.expired) match.expired = true;
+    watched.push(match);
+    if (rule?.urgent) urgent = true;
   }
 
   return { watched, urgent };
@@ -329,6 +355,21 @@ export function ciWatchNote(verdict: CiWatchVerdict): string {
   for (const m of verdict.watched) {
     const guidance = m.rule?.guidance?.trim();
     lines.push(`- ${m.name}${guidance ? `: ${guidance}` : ''}`);
+  }
+
+  // An expired check is the one waiting state whose cause is known, so it is
+  // named: the prompt tells the agent to do what the guidance says and nothing
+  // else, and an expired check reached here precisely because no operator wrote
+  // any. Without this it has a check name and no idea what would release it.
+  const expired = verdict.watched.filter((m) => m.expired).map((m) => m.name);
+  if (expired.length > 0) {
+    lines.push(
+      `These are expired, not running — ${expired.join(', ')}. Their last run was against older commits on this ` +
+        'branch, so nothing is in flight and nothing will start on its own: a new run has to be queued against the ' +
+        'current head. Queue it the way this project queues one — the branch policy names the build definition. ' +
+        'Do not change code, tests or pipeline configuration to provoke a run, and if you cannot queue one, ' +
+        'escalate saying so.',
+    );
   }
 
   // Same warning as on the failing side, for the same reason: without it an agent

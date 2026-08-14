@@ -29,7 +29,7 @@ wall-clock at decision time, so a cycle is evaluated against when its world was 
 
 ### What is in the dispatcher's world, and what puts it there
 
-The snapshot above is the connector's answer and stays that way — everything that *reports* the world
+The snapshot above is the connector's answer and stays that way — everything that _reports_ the world
 (the cockpit's world panels, the work graph, `world_read`, the assay desk) reads it verbatim. What
 `decide` is given is a **derived** view, built in `Harness.runCycle`, and two things shape it:
 
@@ -43,7 +43,7 @@ The snapshot above is the connector's answer and stays that way — everything t
 
 The second exists because a run's life is not the tracker's answer. `listOpenIssues` fetches open
 issues only, so a PR carrying `closes #N` takes the goal out of the world at the exact moment
-`issue-assess` and `issue-retro` — the two rules that run *after* a merge — become due. The union is
+`issue-assess` and `issue-retro` — the two rules that run _after_ a merge — become due. The union is
 what lets them finish; `issue_runs` is where the goal's title, body and labels survive the close, so a
 retained issue is one an assessor can actually read.
 
@@ -56,24 +56,24 @@ through `StageContext.liveIssue`, which returns null for one. See
 
 ## `PullRequest`
 
-| Field                | Meaning                                                                                                                                                                                                                                                         |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`, `number`       | Provider id and PR number.                                                                                                                                                                                                                                      |
-| `title`, `branch`    | Title and head branch.                                                                                                                                                                                                                                          |
-| `baseBranch?`        | The branch this PR targets. Absent means the provider did not report one.                                                                                                                                                                                       |
-| `ciStatus`           | `passing` \| `failing` \| `pending` \| `unknown`. The fold of `ciChecks`, and the field every gate reads.                                                                                                                                                       |
-| `ciChecks?`          | `CiCheck[]` — the individual checks behind `ciStatus`, each `{name, status, blocking?, advisory?}` where status is `passing`/`failing`/`pending`. Absent means the provider reported no per-check detail, which per-check CI policy reads as "act generically". |
-| `unresolvedComments` | `PrComment[]` — review comments waiting on the author, each with `handled`.                                                                                                                                                                                     |
-| `approved?`          | Approval folded from reviews/votes.                                                                                                                                                                                                                             |
-| `mergeable?`         | Tri-state: `true`, `false`, or absent for unknown.                                                                                                                                                                                                              |
-| `mergeableState?`    | `dirty` \| `behind` \| `blocked` \| `clean` \| `unknown` — GitHub's `mergeable_state`, normalised.                                                                                                                                                              |
-| `merged?`            | Already merged. Once true, no rule acts on it.                                                                                                                                                                                                                  |
-| `state?`             | `open` \| `merged` \| `closed`. Set by providers that report closed PRs. Read it via `prState`, never directly.                                                                                                                                                 |
-| `closedAt?`          | ISO instant the PR left the open set. Only set on a closed/merged PR.                                                                                                                                                                                           |
-| `labels?`            | Drives the provider-agnostic exclusion gate. Absent means no labels.                                                                                                                                                                                            |
-| `url?`               | The provider's canonical web URL, when it supplies one.                                                                                                                                                                                                         |
+| Field                | Meaning                                                                                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `number`       | Provider id and PR number.                                                                                                                                                                                                                                                |
+| `title`, `branch`    | Title and head branch.                                                                                                                                                                                                                                                    |
+| `baseBranch?`        | The branch this PR targets. Absent means the provider did not report one.                                                                                                                                                                                                 |
+| `ciStatus`           | `passing` \| `failing` \| `pending` \| `unknown`. The fold of `ciChecks`, and the field every gate reads.                                                                                                                                                                 |
+| `ciChecks?`          | `CiCheck[]` — the individual checks behind `ciStatus`, each `{name, status, blocking?, advisory?, expired?}` where status is `passing`/`failing`/`pending`. Absent means the provider reported no per-check detail, which per-check CI policy reads as "act generically". |
+| `unresolvedComments` | `PrComment[]` — review comments waiting on the author, each with `handled`.                                                                                                                                                                                               |
+| `approved?`          | Approval folded from reviews/votes.                                                                                                                                                                                                                                       |
+| `mergeable?`         | Tri-state: `true`, `false`, or absent for unknown.                                                                                                                                                                                                                        |
+| `mergeableState?`    | `dirty` \| `behind` \| `blocked` \| `clean` \| `unknown` — GitHub's `mergeable_state`, normalised.                                                                                                                                                                        |
+| `merged?`            | Already merged. Once true, no rule acts on it.                                                                                                                                                                                                                            |
+| `state?`             | `open` \| `merged` \| `closed`. Set by providers that report closed PRs. Read it via `prState`, never directly.                                                                                                                                                           |
+| `closedAt?`          | ISO instant the PR left the open set. Only set on a closed/merged PR.                                                                                                                                                                                                     |
+| `labels?`            | Drives the provider-agnostic exclusion gate. Absent means no labels.                                                                                                                                                                                                      |
+| `url?`               | The provider's canonical web URL, when it supplies one.                                                                                                                                                                                                                   |
 
-A `CiCheck` carries two optional flags, both absent-means-the-long-standing-behaviour so every
+A `CiCheck` carries three optional flags, each absent-means-the-long-standing-behaviour so every
 provider and persisted row that predates them reads unchanged:
 
 - **`blocking`** — false when the provider says the check does not block completion (an Azure
@@ -84,6 +84,13 @@ provider and persisted row that predates them reads unchanged:
   it, so it can neither dispatch an agent nor escalate. It is how a policy that merely _restates_ a
   signal something else already owns at higher fidelity — the Azure comment policy against rule `pr-review-comment` —
   is made visible without outranking the rule that owns it.
+- **`expired`** — the check is `pending` with nothing in flight: its last run is stale against the
+  branch's current commits, so it resolves only when somebody queues a new one. Only ever set
+  alongside `pending`, and only by a provider that reports the distinction (Azure's build-validation
+  policies, from `context.isExpired`); absent reads as "pending, and possibly still running".
+  `ciStatus` is untouched by it. It moves one thing: `classifyWatchedChecks` watches an expired check
+  with no `ci.checks` rule naming it, so rule `pr-ci-gate` sends an agent to queue the run
+  ([07](07-pull-requests.md#ci-checks)).
 
 `prState(pr)` (`src/prHealth.ts`) is the only correct way to read a PR's state. It returns `state`
 when present and otherwise folds back onto `merged`. It **never invents `closed`** — a PR nobody told
@@ -117,13 +124,13 @@ full issue invites code to treat context as something to act on.
 
 `parent` has **three** states and all three are read:
 
-| Value       | Means                          | Read as                                                     |
-| ----------- | ------------------------------ | ----------------------------------------------------------- |
-| `undefined` | The tracker has no hierarchy.  | GitHub and the fake. Every relation-based rule is off.      |
-| `null`      | Tracked, and there is none.    | An **orphan** — reported, never invented (see [06](06-issue-pickup.md#hierarchy)). |
-| An object   | The parent, with its body.     | The feature's goal, appended to the prompts below.          |
+| Value       | Means                         | Read as                                                                            |
+| ----------- | ----------------------------- | ---------------------------------------------------------------------------------- |
+| `undefined` | The tracker has no hierarchy. | GitHub and the fake. Every relation-based rule is off.                             |
+| `null`      | Tracked, and there is none.   | An **orphan** — reported, never invented (see [06](06-issue-pickup.md#hierarchy)). |
+| An object   | The parent, with its body.    | The feature's goal, appended to the prompts below.                                 |
 
-A parent the harness could not *read* — deleted, or in a project this identity cannot see — leaves
+A parent the harness could not _read_ — deleted, or in a project this identity cannot see — leaves
 `parent` `undefined`, not `null`. Reporting an unreadable link as a missing one would tell the orphan
 check the item belongs to no feature, which is a different and wrong thing to say.
 
@@ -139,17 +146,17 @@ Refs are the strings that tie a piece of work to the world item it exists for. T
 `originRef`s, as world-event refs, as `world_read`/`report_finding` arguments, and as keys in the
 cockpit's link map.
 
-| Ref shape                    | Names                                     | Branch the dispatcher uses |
-| ---------------------------- | ----------------------------------------- | -------------------------- |
-| `pr:<n>`                     | A pull request (world events, link map)   | —                          |
-| `pr:<n>:ci`                  | A PR's failing-CI concern                 | the PR's own `branch`      |
-| `pr:<n>:mergeable`           | A PR's base-update / conflict concern     | the PR's own `branch`      |
-| `pr:<n>:comments`            | A PR's unhandled review threads, together | the PR's own `branch`      |
-| `pr:<n>:comment:<commentId>` | One review thread (a signal, not a dispatch origin) | the PR's own `branch` |
-| `issue:<n>`                  | An issue, and its plan row's `origin_ref` | `issue/<n>`                |
-| `issue:<n>:plan`             | A planning agent for that issue           | `plan/issue/<n>`           |
-| `issue:<n>:part:<slug>`      | One part of a decomposed issue            | `issue/<n>/<slug>`         |
-| `job:<id>`                   | An operator-launched job                  | `job.branch` or `job/<id>` |
+| Ref shape                    | Names                                               | Branch the dispatcher uses |
+| ---------------------------- | --------------------------------------------------- | -------------------------- |
+| `pr:<n>`                     | A pull request (world events, link map)             | —                          |
+| `pr:<n>:ci`                  | A PR's failing-CI concern                           | the PR's own `branch`      |
+| `pr:<n>:mergeable`           | A PR's base-update / conflict concern               | the PR's own `branch`      |
+| `pr:<n>:comments`            | A PR's unhandled review threads, together           | the PR's own `branch`      |
+| `pr:<n>:comment:<commentId>` | One review thread (a signal, not a dispatch origin) | the PR's own `branch`      |
+| `issue:<n>`                  | An issue, and its plan row's `origin_ref`           | `issue/<n>`                |
+| `issue:<n>:plan`             | A planning agent for that issue                     | `plan/issue/<n>`           |
+| `issue:<n>:part:<slug>`      | One part of a decomposed issue                      | `issue/<n>/<slug>`         |
+| `job:<id>`                   | An operator-launched job                            | `job.branch` or `job/<id>` |
 
 **Origin and branch are 1:1 for every world-driven rule.** That is why the origin de-duplication gate
 already functions as a branch gate. Rule `manual-job` (`job:<id>`) is the one dispatch path where the property
