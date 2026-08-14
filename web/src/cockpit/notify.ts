@@ -222,16 +222,22 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
 /**
  * Fire the items the operator has switched on.
  *
- * **Suppressed while the document is visible**, which is the one piece of
- * judgement here: a notification for a row you are looking at is noise, and the
- * whole point is to reach you when you are somewhere else. Backgrounded, behind
- * another window and on another desktop all count as hidden, so the cases that
- * matter still fire.
+ * **Suppressed only while the cockpit is actually in front of the operator**,
+ * which is the one piece of judgement here: a notification for a row you are
+ * looking at is noise, and the whole point is to reach you when you are
+ * somewhere else.
+ *
+ * That takes **both** halves, and visibility alone is not it. A document is
+ * `hidden` only when its tab is not the selected one or its window is minimized;
+ * a window merely *behind* another, or on another virtual desktop, still reads
+ * `visible` in every engine — so a visibility-only gate suppressed precisely the
+ * case this feature exists for, and did it silently. `hasFocus()` is the half
+ * that answers "is this the window you are in", and it is false for both.
  */
 export function fireNotifications(items: readonly NotifyItem[], prefs: NotifyPrefs): void {
   if (!prefs.enabled) return;
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()) return;
   for (const item of items) {
     if (!prefs.categories[item.category]) continue;
     try {
