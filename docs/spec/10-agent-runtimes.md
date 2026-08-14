@@ -76,6 +76,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 ```
 -p --input-format stream-json --output-format stream-json --verbose
 --append-system-prompt <protocol>
+(--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
@@ -97,7 +98,23 @@ Points that are load-bearing:
 
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
-- `--session-id` and `--resume` are mutually exclusive; a resume must not also mint the id.
+- `--session-id` and `--resume` are mutually exclusive, and both runtimes carry the pair (issue #318 —
+  before it, the stream launch pinned no id at all and the recovery desk could never offer `restore`
+  on the default deployment). Exclusivity is not house style: `claude` **refuses** `--session-id` on an
+  id that already has a transcript, exiting 1 with a plain-stderr `Session ID … is already in use.`
+  and no stream event — so a relaunch that carried the stored id down the mint arm would look to the
+  harness like a process that died for no reason. `appendSessionFlags` is the one place either flag is
+  written, and `test/agentProtocol.test.ts` asserts both builders emit exactly one of them.
+- **Headless resume is a verified property, not an assumption** (probed against `claude` 2.1.223 for
+  #318): a pinned id is honoured under `-p` and echoed on every event, its transcript lands at
+  `~/.claude/projects/<slugified-cwd>/<id>.jsonl`, `--resume` re-opens *that* file and appends rather
+  than forking, the resumed session stays alive across turns exactly as a fresh one does, and a
+  SIGKILL mid-assistant-turn still resumes off the half-written transcript. It also **replays
+  nothing** — a resume emits `system`/`init`, the assistant turn for the new input, then `result` —
+  so `StreamJsonSession` needs no swallow and the drawer's transcript continues instead of doubling.
+  (`system`/`init` is emitted at the start of *every* turn, fresh or resumed, so nothing may key off
+  it as a resume marker.) `--resume` on an id with no transcript fails cleanly: exit 1, and a
+  well-formed `result` of subtype `error_during_execution` on stdout.
 - `--settings` has no array form, so the status-line, file-events and `permissions` fragments
   are **merged into one JSON object** (`collectSettings`) — disjoint top-level keys, so the merge is
   lossless. The two halves of `permissions` (`allow` and `additionalDirectories`) are built into one
@@ -304,8 +321,9 @@ re-emits them for the server to broadcast.
 
 ### Spawn
 
-1. Mint a session id (`randomUUID`) **only** when the runtime is resumable (PTY).
-2. Mint a file-events spool key — independent of the session id, so stream agents get one too.
+1. Mint a session id (`randomUUID`) **only** when the runtime is resumable — both real runtimes are,
+   leaving only `raw`, which speaks no protocol and pins nothing.
+2. Mint a file-events spool key — independent of the session id, and minted per spawn either way.
 3. Mint an MCP credential (`mcp.open()`), before the session, so the launch config exists to point
    `--mcp-config` at.
 4. Build the session with env `LUBBDUBB_PROMPT`, `LUBBDUBB_TASK_ID`, plus `LUBBDUBB_STATUS_FILE` and
@@ -526,8 +544,9 @@ has: `interrupted` is what releases the origin and branch the `queued` row was h
 orphan has no escalations by construction — an escalation is raised by a process, and none ever ran.
 
 `restorability` (pure) decides whether restore is on offer and carries the reason when it is not — no
-agent having existed at all, a runtime that cannot resume (anything but PTY; stream-JSON resume does not
-exist), a row with no `sessionId`, or a worktree no longer on disk. The agentless arm answers **first**,
+agent having existed at all, a runtime that cannot resume (only `raw`, which keeps no session id —
+stream and PTY both do, since #318), a row with no `sessionId`, or a worktree no longer on disk. The
+agentless arm answers **first**,
 because it makes the other three moot: there is no runtime that could resume a conversation nobody ever
 had. The cockpit shows that reason rather than hiding the button, and the card reads `never started`,
 saying outright that no work was done and that the item is what is holding the origin. A refused or
@@ -580,8 +599,12 @@ belongs.
 
 Every verdict, and the hold itself, is recorded in the decision log under cycle id `crash-recovery`.
 
-`spawn` and `resume` share their listener wiring — change one, change both. Tests:
-`test/crashRecovery.test.ts`, `test/resume.test.ts`.
+`spawn` and `resume` share their listener wiring — change one, change both. None of the restore path is
+runtime-specific: it re-uses the row, mints fresh per-launch resources and branches on `waitingReason`,
+which is why teaching the stream launch the two flags was the whole of making the default deployment
+restorable. Tests: `test/crashRecovery.test.ts`, `test/resume.test.ts` (PTY),
+`test/streamResume.test.ts` (stream — the same restart, restore, nudged-vs-parked and
+transcript-continues assertions on the default runtime).
 
 ## Usage capture
 
