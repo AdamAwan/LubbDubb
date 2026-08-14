@@ -699,9 +699,27 @@ create with a git error nobody can act on. The reconciler checks `git presence(i
 flat branch exists locally or remotely, every uncut part is parked `blocked` and **one** clear error is
 recorded naming the branch to delete or rename.
 
-The wording is `refCollisionReason(issueNumber)` (`src/plans/planReconciler.ts`, pure) and it is
-written in **two places from that one function**: the error above, and `plan_parts.blocked_reason` on
-each part it parks. This is the only thing that blocks a part — the readiness pass answers `pending`
+The wording is `refCollisionReason(issueNumber, presence)` (`src/plans/planReconciler.ts`, pure) and
+it is written in **two places from that one function**: the error above, and
+`plan_parts.blocked_reason` on each part it parks.
+
+**It takes the `BranchPresence`, not the boolean the reconciler acts on**, because _where_ the branch
+is decides which action works and the two are not interchangeable:
+
+- **Local only** — delete or rename the local ref, and the parts start on the next pulse.
+- **Remote, with or without a local ref** — it has to be deleted on the remote. The reason says that,
+  and says that a local delete does nothing here, because `maybeFetch` runs `git fetch --prune` every
+  pulse (floored by `planning.gitFetchIntervalMs`, which may be `0`) and restores the remote-tracking
+  ref straight away. A remote-only collision is therefore untouchable by any local command — and that
+  sentence is the whole reason the presence is threaded through. Told only "delete or rename the
+  branch", an operator deletes the local ref, watches nothing change, and repeats it: a reason that
+  reads correctly and is useless is the failure mode a standing explanation exists to avoid.
+
+Still **one function with one rendering** — the goal page quotes the stored string verbatim, so a
+second rendering anywhere would be the drift this shape prevents. The stored reason is compared for
+`differs`, so a branch moving from local-only to remote rewrites the row (and posts the news) on that
+pulse, which is wanted: the operator stops being told to do the local thing the moment it stops being
+the answer. This is the only thing that blocks a part — the readiness pass answers `pending`
 or `ready` and never `blocked` — so the stored string is a complete account of the status, and it is
 cleared with the status when the branch goes away, so a part never claims a collision that has been
 resolved.
@@ -728,7 +746,12 @@ three different jobs (`src/plans/planWedge.ts`):
   together or not at all, so a mixture is a plan still making progress. [Rule `plan-blocked`](05-dispatcher.md#the-rules-in-evaluation-order) escalates it once, deduped on an open
   escalation for `issue:<n>:plan` **and** a recent executed one, exactly as rule `pr-ci-blocked` is. No agent is
   dispatched, because none could help. Only `active` plans: an unapproved one is already in front of
-  a human, with the same fact in the ask.
+  a human, with the same fact in the ask. `wedgedPlanPrompt(issueNumber, issue, parts, openPrs)`
+  quotes the parts' stored reason and **names any open PR for the issue that no part claims** — its
+  number, title and branch, and that it must be merged or abandoned before the branch can go. It is
+  the same `unclaimedIssuePrs` the approval warning uses, private to the module with two callers,
+  because approval can be days behind the moment the operator is standing in front of the wedge, and
+  "clear what is blocking the parts" is unfollowable while a PR holds the branch open.
 - **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule `plan-approval`'s ask
   (never interpolated, for `ciFailureNote`'s reason) and names both the blocked parts and any open PR
   for the issue that no part claims. It **warns and does not block**: refusing to approve would put a

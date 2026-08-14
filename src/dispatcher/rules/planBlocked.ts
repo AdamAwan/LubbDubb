@@ -33,7 +33,7 @@ export function planBlocked(s: StageContext): void {
     s.raw.push({
       type: 'escalate_to_human',
       escalationType: 'resolve_ambiguity',
-      prompt: wedgedPlanPrompt(issueNumber, issue, parts),
+      prompt: wedgedPlanPrompt(issueNumber, issue, parts, s.openPrs),
       context: { originRef: wedgeOrigin, taskTitle: issue.title },
       rule: 'plan-blocked',
       reason: `Every part of issue #${issueNumber}'s approved plan is blocked, so nothing will be dispatched for it.`,

@@ -1,5 +1,5 @@
 import type { ErrorRecorder } from '../errorLog.js';
-import type { GitObserver } from '../git/gitObserver.js';
+import type { BranchPresence, GitObserver } from '../git/gitObserver.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { Plan, PlanPart, PullRequest, Task, WorldSnapshot } from '../types.js';
@@ -176,7 +176,7 @@ export class PlanReconciler {
       // blocked stops claiming a collision that has been resolved. `differs` keeps
       // both writes to real transitions.
       const blockedReason = collision
-        ? refCollisionReason(issueNumber)
+        ? refCollisionReason(issueNumber, flat)
         : refused
           ? declinedStepReason(part.title)
           : null;
@@ -197,7 +197,7 @@ export class PlanReconciler {
     if (changed && collision) {
       this.deps.errors?.record({
         source: 'cycle',
-        message: `Plan for issue #${issueNumber} is blocked: ${refCollisionReason(issueNumber)}`,
+        message: `Plan for issue #${issueNumber} is blocked: ${refCollisionReason(issueNumber, flat)}`,
       });
     }
 
@@ -362,12 +362,25 @@ function declinedStepReason(title: string): string {
  * restart. So the feed keeps the news and the *reason* moves onto the row beside
  * the status it explains, where it stands for exactly as long as the block does.
  * The floor draws a stopped machine's plate from it verbatim, composing nothing.
+ *
+ * It takes the {@link BranchPresence} rather than the boolean the reconciler acts
+ * on, because *where* the branch is decides which action works, and the two are
+ * not interchangeable: a remote branch cannot be cleared by any local command, and
+ * `maybeFetch`'s own `git fetch --prune` restores its remote-tracking ref on the
+ * next pulse. An operator told only "delete or rename the branch" deletes the local
+ * ref, watches nothing change, and repeats it — the reason read correctly and was
+ * useless, which is the failure mode a standing explanation has to avoid.
  */
-export function refCollisionReason(issueNumber: number): string {
+export function refCollisionReason(issueNumber: number, presence: BranchPresence): string {
+  const flat = issueBranch(issueNumber);
+  const head =
+    `The branch ${flat} exists ${presence.remote ? 'on origin' : 'locally'}, and git cannot create ` +
+    `${partBranch(issueNumber, '<part>')} while it does (refs are files, not directories).`;
+  if (!presence.remote) return `${head} Delete or rename the local ${flat} (\`git branch -m\`) to unblock the parts.`;
   return (
-    `The branch ${issueBranch(issueNumber)} exists, and git cannot create ` +
-    `${partBranch(issueNumber, '<part>')} while it does (refs are files, not directories). ` +
-    `Delete or rename ${issueBranch(issueNumber)} to unblock the parts.`
+    `${head} It has to go on the remote — \`git push origin --delete ${flat}\`. Deleting it locally does ` +
+    `nothing here: plan reconciliation fetches with \`--prune\` every pulse, which restores the ` +
+    `remote-tracking ref straight away.`
   );
 }
 
