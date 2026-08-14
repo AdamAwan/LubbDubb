@@ -1422,6 +1422,20 @@ It was written three times over, and the fourth surface that wrote it printed th
 it — which is the bug exactly: shortening a ref by hand is how a surface ends up naming a thing instead
 of pointing at it. `test/refLinks.test.ts` pins that nothing else strips a ref down to a number.
 
+**A reference is underlined at rest** — solid for a destination inside the cockpit, dotted for one that
+leaves it — in `--link-line`, a token of its own in `web/src/styles.css` with a `#print-sheet`
+counterpart so paper does not get a dark-theme line on white. Both classes carried that line already and
+drew it `transparent` until `:hover`, which left the whole affordance under the mouse: at rest a `#412`
+differed from the label beside it by `--blue` alone, in rows that also carry coloured dots and chips.
+Hover keeps its meaning by strengthening — the line goes to full `--blue` / `currentColor` — and both
+classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal` is a `<button>` reset
+to look like text and had no ring of its own. Colour is still not the distinction, and the treatment
+lives in the two shared classes, so every `<Ref>`, `ExtLink`, `refLink` and `linkify` site has it
+without knowing. Controls that already read as controls — `.esc-open`, `.pm-jump`, `.cn-tgl`, the chip
+anchors — are deliberately untouched: the failure this fixes is text that looks like text.
+`test/refLinks.test.ts` pins the resting line and the focus rule, because nothing in a render test can
+see a stylesheet.
+
 **One rule a call site still has to keep: a reference never goes inside a button.** A link nested in a
 control is a second destination for one click, so a row that carries both draws its name as the control
 and the refs beside it, in a `cn-refs` group — the fleet card, the rack and the backlog row all take

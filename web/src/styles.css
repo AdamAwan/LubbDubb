@@ -35,6 +35,11 @@
   --accent-fill: #33230d;
   --blue-line: #2a4a5e;
   --blue-line-2: #37607a;
+  /* The line under every reference, at rest. Its own token rather than a reuse of
+     `--blue-line-2` — that one means "tinted border of a blue-filled surface" and
+     is dim on `--panel`; this one has to be legible under 12px text without the
+     rows reading as ruled, and is the one value to argue about if it lands wrong. */
+  --link-line: #4a7794;
   --blue-fill: #17242c;
   --green-fill: #16240f;
   /* Ink on a light or warm fill: the ground colour, not near-black — a panel's
@@ -509,11 +514,14 @@ body {
   color: var(--muted);
 }
 
-/* External references (issues, PRs, branches) — clickable, subtle until hovered. */
+/* External references (issues, PRs, branches) — underlined at rest, so a reference
+   is clickable at a glance and not only under the mouse. The line was here already
+   and was `transparent` until hover; a hue shift alone, on a token as short as
+   `#412` in a row that also carries coloured chips, is not a signal. */
 .ext-ref {
   color: var(--blue);
   text-decoration: none;
-  border-bottom: 1px dotted transparent;
+  border-bottom: 1px dotted var(--link-line);
 }
 .ext-ref:hover {
   border-bottom-color: var(--blue);
@@ -530,10 +538,18 @@ body {
   font: inherit;
   color: var(--blue);
   cursor: pointer;
-  border-bottom: 1px solid transparent;
+  border-bottom: 1px solid var(--link-line);
 }
 .ref-goal:hover {
   border-bottom-color: currentColor;
+}
+/* `.ref-goal` is a `<button>` stripped of border and background, so the UA ring it
+   would otherwise draw is largely gone — tabbing a row landed nowhere visible.
+   Shaped like `.pm-jump`'s, offset outward so the ring clears the underline. */
+.ext-ref:focus-visible,
+.ref-goal:focus-visible {
+  outline: 1px solid var(--blue);
+  outline-offset: 2px;
 }
 .small {
   font-size: 12px;
@@ -798,6 +814,8 @@ body {
     --cn-fg-faint: #7c8085;
     --cn-line: #dcdee0;
     --cn-line-soft: #eceef0;
+    /* A dark-theme line on white prints as a smudge under the text it belongs to. */
+    --link-line: #7ba3bf;
     background: #fff;
     color: #16181a;
     /* The bars and the plot lines *are* the reading. A browser dropping them to
