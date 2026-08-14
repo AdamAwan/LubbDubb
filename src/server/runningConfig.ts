@@ -49,6 +49,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
     keys: [
       'agentMode',
       'agentPermissionMode',
+      'agentModels',
       'agentAllowedTools',
       'agentPromptDelayMs',
       'agentSubmitDelayMs',

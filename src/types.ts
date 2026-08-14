@@ -420,6 +420,22 @@ export interface Task {
    * absent and null both mean "this run named no check".
    */
   ciChecks?: string[] | null;
+  /**
+   * The model this run launches on (`claude --model`), resolved from the
+   * operator's `agentModels` policy at dispatch — the rule's profile, or the
+   * policy default, or `null` for "pass no `--model`", which is every task on a
+   * deployment that configures none (issue #321).
+   *
+   * The resolved **string**, not the profile name, and resolved at dispatch
+   * rather than at spawn: an agent resumed after a restart re-launches on the
+   * model it started on rather than whatever config now says, and the run stays
+   * auditable after the fact. It also keeps `AgentManager` ignorant of both rules
+   * and profiles — it forwards this value.
+   *
+   * Optional for {@link rule}'s reason: absent means "not recorded", so every row
+   * written before the column existed reads unchanged.
+   */
+  model?: string | null;
   status: TaskStatus;
   agentId: string | null;
   createdAt: string;

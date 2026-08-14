@@ -1284,6 +1284,13 @@ body {
   color: var(--amber);
   font-size: 12px;
 }
+/* Quieter than the reason above it: what the run launched on is context, not the
+   thing an operator opened the drawer to read. */
+.dispatch-model {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
 .dispatch-reason-label {
   text-transform: uppercase;
   letter-spacing: 0.5px;

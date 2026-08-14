@@ -7,6 +7,7 @@ import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { StackLandingDesk } from '../stacks/landingDesk.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { AutoSendConfig } from '../config.js';
+import { resolveAgentModel, type AgentModels } from '../agents/modelPolicy.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
@@ -47,6 +48,13 @@ interface ExecutorDeps {
   sink: ActionSink;
   /** Confidence-gated auto-send policy. */
   autoSend: AutoSendConfig;
+  /**
+   * Which model each kind of work runs on (issue #321), or undefined for a
+   * deployment that configures none. Consulted here, at dispatch, because this is
+   * where the rule that proposed the run is in hand and where the row that
+   * records what it launched on is written.
+   */
+  agentModels?: AgentModels;
   deskRoot: string;
   /**
    * Base a *new* agent branch is cut from. Passed on every `ensure` so the base is
@@ -663,6 +671,10 @@ export class ActionExecutor {
     // exact origin — see `attachmentsFor`.
     const attachments = attachmentsFor(action.originRef, store);
     const prompt = [action.prompt, guidance, outstanding, prior, briefing, attachments].filter(Boolean).join('\n\n');
+    // The model this kind of work runs on, resolved once and stored — so a resumed
+    // agent re-launches on what it started on rather than on whatever config says
+    // by then, and so the run's cost is readable against what it ran on.
+    const model = resolveAgentModel(this.deps.agentModels, action.rule);
     if (action.type === 'dispatch_code_agent')
       return store.createTask({
         kind: 'code',
@@ -678,6 +690,7 @@ export class ActionExecutor {
         // to the agent, so it can say a rule fired and never what that cost.
         rule: action.rule,
         ciChecks: action.ciChecks ?? null,
+        model,
       });
     return store.createTask({
       kind: 'desk',
@@ -689,6 +702,7 @@ export class ActionExecutor {
       originSummary: action.originSummary,
       dispatchReason: action.reason,
       rule: action.rule,
+      model,
     });
   }
 

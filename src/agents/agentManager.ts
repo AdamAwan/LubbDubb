@@ -82,9 +82,15 @@ interface AgentManagerOptions {
    * Builds the argv for a launch. `sessionId` is the id the agent runs under and
    * `resume` re-attaches to it (`claude --resume`) instead of starting fresh.
    * `mcpConfigPath` wires that launch's tool channel, or is null for none.
+   * `model` is the task's resolved `--model` value, or null to pass no flag.
    * Runtimes that don't support session ids (mock/stream) ignore the first two.
    */
-  buildArgs: (opts: { sessionId: string; resume: boolean; mcpConfigPath: string | null }) => string[];
+  buildArgs: (opts: {
+    sessionId: string;
+    resume: boolean;
+    mcpConfigPath: string | null;
+    model: string | null;
+  }) => string[];
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -280,6 +286,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         sessionId: sessionId ?? '',
         resume: false,
         mcpConfigPath: mcp?.configPath ?? null,
+        // Decided at dispatch and stored on the row, so this forwards a string and
+        // never re-derives one from config.
+        model: task.model ?? null,
       }),
       cwd,
       env: {
@@ -350,6 +359,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         sessionId: agent.sessionId,
         resume: true,
         mcpConfigPath: mcp?.configPath ?? null,
+        // The stored value, which is why a restart cannot move a half-finished
+        // conversation onto a different model.
+        model: task.model ?? null,
       }),
       cwd: agent.cwd,
       env: {

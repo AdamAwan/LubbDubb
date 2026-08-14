@@ -80,6 +80,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
+[--model <model>]
 [...claudeArgs]
 ```
 
@@ -91,6 +92,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 [--settings <merged status-line + file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
 [--permission-mode <mode>]
+[--model <model>]
 [...claudeArgs]
 ```
 
@@ -125,6 +127,16 @@ Points that are load-bearing:
 - `mcpConfigPath` is **per-launch** (minted by `AgentManager`, not fixed at wiring time) and is
   threaded through the `ArgsBuilder` in `src/system.ts` — without that, `--mcp-config` (and the
   permission-prompt tool that lives on that server) never reach the agent.
+- `--model` is per-launch for the same reason and carries the same trap (issue #321). It is the
+  **task's own** model: resolved from the operator's `agentModels` policy at *dispatch* — not here —
+  and stored on the row, so `AgentManager` forwards a string and knows nothing about rules or
+  profiles. That is what makes a boot-`resume` re-launch on the model the conversation started on
+  rather than on whatever config says by then. Absent (no policy, or a rule the policy does not
+  cover), the flag is omitted entirely and argv is byte-identical to a build without the feature.
+  Pushed **before** `claudeArgs`, so an operator's own `--model` there still wins. The value is never
+  validated by the harness — only the installed `claude` knows the valid set, so a bad alias surfaces
+  as a failed agent at spawn. **`raw` mode ignores it**: running the operator's argv verbatim is that
+  mode's whole contract. → [02](02-configuration.md#model-assignment-by-rule)
 - When a launch carries the tool channel, `MCP_PROTOCOL_ADDENDUM` is appended too — see
   [11](11-mcp-tools.md).
 
