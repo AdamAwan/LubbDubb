@@ -133,6 +133,14 @@ export class WorktreeManager implements Worktrees {
    * Reclaiming discards whatever the dead orphan still held. That is acceptable:
    * with no admin entry there is no branch or commit behind those files and no
    * workflow that could recover them — they are unreachable either way.
+   *
+   * **A lock is transient; `force` does not cover one.** `force` suppresses "it
+   * isn't there", which is the opposite failure — a directory some *other live
+   * process* holds open still throws `EBUSY`, and on Windows merely being a running
+   * process's cwd is enough to hold it. So the removal retries (see
+   * {@link RMDIR_RETRIES}), and what it throws when the retries run out names the
+   * cause rather than the errno: the operator's next move is to go find the process,
+   * and `EBUSY: resource busy or locked` does not tell them that is what to do.
    */
   private async reclaim(dir: string): Promise<void> {
     await this.git(['worktree', 'prune']).catch(() => {});
@@ -142,7 +150,11 @@ export class WorktreeManager implements Worktrees {
     // git may still half-track it; the removal below is the real reclaim, so a
     // refusal here ("not a working tree") is expected rather than a failure.
     await this.git(['worktree', 'remove', '--force', dir]).catch(() => {});
-    rmSync(dir, { recursive: true, force: true });
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: RMDIR_RETRIES, retryDelay: RMDIR_RETRY_DELAY_MS });
+    } catch (err) {
+      throw new Error(reclaimFailure(dir, err as NodeJS.ErrnoException));
+    }
   }
 
   /**
@@ -167,6 +179,42 @@ export class WorktreeManager implements Worktrees {
   private git(args: string[]): Promise<{ stdout: string; stderr: string }> {
     return runGit(this.repoRoot, args);
   }
+}
+
+/**
+ * How many times the reclaim's `rmSync` retries, and how long it waits between
+ * attempts — roughly a second in total. Node retries internally on exactly the
+ * errors a *transient* holder produces (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
+ * `EPERM`), which is the distinction being drawn: a file still closing loses its
+ * grip inside a second, and a process that has the directory as its cwd never
+ * does. Sized to tell those apart rather than to outwait the second one — a
+ * dispatch that hung on for a minute would be worse than the honest failure below.
+ */
+const RMDIR_RETRIES = 5;
+const RMDIR_RETRY_DELAY_MS = 200;
+
+/**
+ * What a reclaim that lost says, in the operator's terms.
+ *
+ * The errno alone (`EBUSY: resource busy or locked, rmdir '<dir>'`) is a true
+ * statement of the syscall and a dead end as a report: it is the same text whether
+ * a virus scanner had the folder open for a moment or a shell an agent left behind
+ * two days ago is sitting in it, and only the second one is going to still be there
+ * next cycle. Since the retries have already ruled the first out by the time this
+ * is built, it can say the thing that is actually true and name the next move.
+ */
+function reclaimFailure(dir: string, err: NodeJS.ErrnoException): string {
+  const held = err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'ENOTEMPTY';
+  if (!held) return `Cannot reclaim the worktree directory ${dir}: ${err.message}`;
+  return (
+    `Cannot reclaim the worktree directory ${dir}: it is held open by another process (${err.code}), ` +
+    `and was still held after ${RMDIR_RETRIES} retries over ` +
+    `${(RMDIR_RETRIES * RMDIR_RETRY_DELAY_MS) / 1000}s. That is almost always a process an earlier agent ` +
+    `started and left running — a shell, a watcher, a test runner — whose working directory is still ` +
+    `inside it; on Windows being a live process's cwd is by itself enough to refuse the removal. ` +
+    `Stop that process and the branch dispatches again on the next cycle; until then every dispatch ` +
+    `onto it will fail here.`
+  );
 }
 
 interface WorktreeEntry {

@@ -3,7 +3,7 @@ import type { Store } from '../store/store.js';
 import type { AgentManager } from './agentManager.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ErrorRecorder } from '../errorLog.js';
-import type { Job } from '../types.js';
+import type { Job, Task } from '../types.js';
 import {
   describeOrphan,
   isAgentlessCandidate,
@@ -257,6 +257,20 @@ export class RecoveryDesk {
           : `Dropped task ${task.id}, which no agent ever started; its origin and branch are free again`,
       });
 
+    // A requeue of work that came from a job **still sitting in the queue** files
+    // nothing: that job *is* the requeue. See {@link stillQueuedJobBehind}.
+    const standing = stillQueuedJobBehind(task, this.deps.store);
+    if (standing)
+      return this.settled({
+        verdict,
+        agentId,
+        taskId: task.id,
+        detail:
+          `Requeued task ${task.id} by releasing job ${standing.id}, which never left the queue — ` +
+          'its dispatch failed before any agent started, so there is nothing to redo',
+        job: standing,
+      });
+
     const request = requeueJobRequest(task, agent ? { note: agent.note } : null);
     const job = this.deps.store.createJob({
       title: request.title,
@@ -289,6 +303,42 @@ export class RecoveryDesk {
     });
     return { ok: true, outcome };
   }
+}
+
+/**
+ * The job this task was dispatched for, if that job is **still queued** — the one
+ * case where a requeue must file nothing and hand the existing job back instead.
+ *
+ * **A job leaves the queue only through `markJobDispatched`, which runs after the
+ * spawn succeeds.** So a job still `queued` behind a task means no agent ever ran:
+ * the dispatch died between `createTask` and `spawn` (a failed `worktrees.ensure`,
+ * a restart in that window), and the job it came from is sitting in the queue
+ * exactly as it was. There is nothing to redo, and the queue already holds the
+ * request — filing a second job for it is not a requeue, it is a duplicate.
+ *
+ * **A duplicate that then locks the queue shut.** The new job's `originRef` is the
+ * task's, which is `job:<predecessor>`, and `STANDING_SQL` folds every *queued*
+ * job's `origin_ref` into the standing set — so job N+1 stands in for job N, and
+ * rule `manual-job`'s `activeOrigins` check skips N for as long as N+1 is queued.
+ * Only the newest of such a chain is ever tried; each failure adds another link
+ * ("Requeued: Requeued: Requeued: …"), and no link older than the newest can ever
+ * run or expire. The gate is right — it is what stops a requeue and the rule that
+ * produced the original both dispatching (#249) — so the fix is upstream of it: do
+ * not create the second job, and no chain can form.
+ *
+ * The `dispatched` case is deliberately left to file a real job: there an agent
+ * *did* run, its work may be on the branch, and the predecessor is no longer
+ * standing (not queued, and its task is settled by the verdict being applied), so
+ * nothing is wedged.
+ *
+ * Note what this does **not** repair: a chain already in a database predates the
+ * collapse and stays locked until its newest link is cancelled.
+ */
+function stillQueuedJobBehind(task: Task, store: Store): Job | null {
+  const id = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
+  if (!id) return null;
+  const job = store.getJob(id);
+  return job && job.status === 'queued' ? job : null;
 }
 
 /**

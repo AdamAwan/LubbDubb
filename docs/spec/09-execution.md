@@ -428,6 +428,29 @@ cruft) and then, if the target path exists on disk and is **not** in the porcela
 - Porcelain paths are forward-slashed even on Windows, so they are `resolve`d before comparison —
   an unresolved path would never compare equal to the resolved target.
 
+**A lock is transient; `force` is not the flag for it.** `rmSync`'s `force` suppresses "it isn't
+there" — the opposite failure. A directory another **live process** holds open still throws `EBUSY`,
+and on Windows merely being a running process's cwd is enough. So the removal retries (5 × 200ms,
+Node's own retry set being exactly the transient errors: `EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
+`EPERM`), which is sized to tell a file still closing apart from a process that is going to be there
+all day — not to outwait the second, since a dispatch that hung on for a minute would be worse than
+failing.
+
+What it throws when the retries run out **names the cause, not the errno**.
+`EBUSY: resource busy or locked, rmdir '<dir>'` is a true statement of the syscall and a dead end as a
+report: it reads the same whether a scanner had the folder open for a moment or a shell an agent left
+behind two days ago is sitting in it, and the operator's next move — go find that process and stop it
+— is in neither reading. The retries have already ruled the transient case out by then, so the message
+says the directory is held open by another process, that it is usually one an earlier agent started
+and left running, and that every dispatch onto the branch will fail here until it is stopped. The
+executor's `catch` puts that text in the decision log as a rejected dispatch.
+
+This is the residue of [10](10-agent-runtimes.md#reaping-the-process-subtree): stopping an agent now
+takes its whole subtree down, so the common case no longer arises — but an agent that exits by itself
+leaves descendants nothing can walk to, and `reclaim` is where that shows up. Tests:
+`test/worktreeManager.test.ts` (Windows-only for the lock itself — POSIX permits removing a live
+process's cwd, so there is nothing there to reproduce).
+
 ### Removal
 
 `src/system.ts` listens for `agents.on('reaped')` and removes the worktree only when:

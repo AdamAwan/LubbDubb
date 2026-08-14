@@ -3,6 +3,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from './session.js';
 import { DONE_SENTINEL, extractFlags, extractWaitingReason } from './sentinels.js';
 import { resolveExecutable } from './resolveCommand.js';
+import type { ProcessReaper } from './processTree.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
 import type { AgentUsage } from '../types.js';
 
@@ -29,6 +30,12 @@ const defaultSpawner: Spawner = (command, args, opts) => {
     cwd: opts.cwd,
     env: opts.env,
     stdio: ['pipe', 'pipe', 'pipe'],
+    // Head of its own process group, so {@link killProcessTree} has a group to
+    // signal — the only way to reach a Bash-tool shell the agent left behind on
+    // POSIX. Windows is excluded deliberately: `detached` there means "own
+    // console", which buys nothing (the reap is `taskkill /T`) and would give a
+    // piped child a console it never uses.
+    detached: process.platform !== 'win32',
   }) as unknown as StreamChild;
 };
 
@@ -55,6 +62,16 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   constructor(
     private readonly spec: AgentSessionSpec,
     private readonly spawn: Spawner = defaultSpawner,
+    /**
+     * How a kill reaches the agent's *descendants* (see {@link ProcessReaper}).
+     *
+     * Defaults to doing nothing rather than to {@link killProcessTree}, and that
+     * pairing is deliberate: the default `spawn` and the default reap must match,
+     * and a session built with an injected {@link Spawner} has a fake child whose
+     * pid names some unrelated process on the host. The composition root wires the
+     * real reaper alongside the real spawner; nothing else constructs this.
+     */
+    private readonly reap: ProcessReaper = () => {},
   ) {
     super();
   }
@@ -95,6 +112,15 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     /* intentionally empty — no raw byte channel on the JSON transport */
   }
 
+  /**
+   * Stop the agent — **and everything it started**. A Bash-tool shell the agent
+   * left running holds the worktree cwd open long after `claude` is gone, which on
+   * Windows wedges the branch for good; see {@link ProcessReaper}.
+   *
+   * The reap goes **before** `child.kill`, because it resolves descendants through
+   * the root pid and a dead root has none to find. It cannot throw, so nothing
+   * below it is skipped.
+   */
   kill(signal: NodeJS.Signals = 'SIGTERM'): void {
     if (this.child && ['starting', 'running', 'waiting'].includes(this._status)) {
       try {
@@ -102,6 +128,8 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       } catch {
         /* ignore */
       }
+      const pid = this.child.pid;
+      if (pid !== undefined) this.reap(pid);
       this.child.kill(signal);
       this.setStatus('killed');
     }
