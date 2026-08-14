@@ -302,7 +302,7 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
   // The reason is on the rows, which is what makes the once-only error safe: the
   // Errors panel carries the news, the part carries the standing condition. Same
   // string in both, so the floor and the panel cannot word it differently.
-  const reason = refCollisionReason(12);
+  const reason = refCollisionReason(12, { local: true, remote: false });
   assert.ok(h.errors[0]?.message.includes(reason), 'the feed quotes the row');
   assert.deepEqual(
     h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
@@ -327,6 +327,57 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
     [null, null],
     'and stops claiming a collision that has been resolved',
   );
+});
+
+test('the reason names where the branch is, and which delete actually works', () => {
+  // The bug this closes: a remote-only collision told the operator to "delete or
+  // rename issue/12", they deleted the local ref, and `maybeFetch`'s own
+  // `git fetch --prune` put the remote-tracking ref back on the next pulse. The
+  // sentence read correctly and cost an afternoon.
+  const local = refCollisionReason(12, { local: true, remote: false });
+  assert.match(local, /exists locally/);
+  assert.match(local, /Delete or rename the local issue\/12/);
+  assert.doesNotMatch(local, /origin/, 'nothing about a remote the branch is not on');
+
+  const remote = refCollisionReason(12, { local: false, remote: true });
+  assert.match(remote, /exists on origin/);
+  assert.match(remote, /git push origin --delete issue\/12/);
+  assert.match(remote, /Deleting it locally does nothing here/, 'the sentence the afternoon was spent without');
+  assert.match(remote, /--prune/);
+
+  // Both is the remote reading: a local delete is still undone by the fetch, so
+  // the remote is the action that ends it either way.
+  assert.equal(refCollisionReason(12, { local: true, remote: true }), remote);
+  // Every case names the branch git cannot cut, which is the part the operator
+  // matches against the row.
+  for (const r of [local, remote]) assert.ok(r.includes('issue/12/<part>'));
+});
+
+test('a remote-only collision blocks the parts and says the remote delete', async () => {
+  const h = setup();
+  h.git.setPresence('issue/12', { remote: true });
+  await h.reconciler.reconcile(world());
+  assert.deepEqual(statuses(h), [
+    ['schema', 'blocked'],
+    ['api', 'blocked'],
+  ]);
+  const reason = refCollisionReason(12, { local: false, remote: true });
+  assert.deepEqual(
+    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    [reason, reason],
+  );
+  assert.ok(h.errors[0]?.message.includes(reason), 'one string in the feed and on the row');
+
+  // A branch that turns out to be on the remote as well rewrites the row on that
+  // pulse: the stored reason is compared for `differs`, so the operator stops
+  // being told to do the local thing the moment it stops being the answer.
+  h.git.setPresence('issue/12', { local: true, remote: false });
+  await h.reconciler.reconcile(world());
+  assert.deepEqual(
+    h.store.listPlanParts(h.planId).map((p) => p.blockedReason),
+    [refCollisionReason(12, { local: true, remote: false }), refCollisionReason(12, { local: true, remote: false })],
+  );
+  assert.equal(h.errors.length, 2, 'and the feed carries the change, since the row moved');
 });
 
 test('the rendered comment reports progress and the PR numbers', () => {

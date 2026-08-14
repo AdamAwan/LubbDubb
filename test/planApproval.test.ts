@@ -18,7 +18,7 @@ import {
   planApprovalDetail,
   planApprovalNote,
 } from '../src/plans/planApproval.js';
-import { planApprovalWarnings, planIsWedged } from '../src/plans/planWedge.js';
+import { planApprovalWarnings, planIsWedged, wedgedPlanPrompt } from '../src/plans/planWedge.js';
 import { refCollisionReason } from '../src/plans/planReconciler.js';
 import { planProposalHold, planProposalRef } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
@@ -715,7 +715,7 @@ test('planIsWedged needs every live part blocked, and ignores retired ones', () 
   const blocked = (slug: string, seq: number): PlanPart => ({
     ...partRow(slug, seq),
     status: 'blocked',
-    blockedReason: refCollisionReason(12),
+    blockedReason: refCollisionReason(12, { local: true, remote: false }),
   });
   assert.equal(planIsWedged([blocked('a', 1), blocked('b', 2)]), true);
   // One part still moving is a plan still making progress. The collision blocks
@@ -771,12 +771,56 @@ test('a blocked decomposition warns before it is approved, quoting the stored re
     state: 'open' as const,
     linkedPrNumber: null,
   };
-  const parts = [{ ...partRow('a', 1), status: 'blocked' as const, blockedReason: refCollisionReason(12) }];
+  const parts = [
+    {
+      ...partRow('a', 1),
+      status: 'blocked' as const,
+      blockedReason: refCollisionReason(12, { local: true, remote: false }),
+    },
+  ];
   const warning = planApprovalWarnings(issue, parts, []);
   // Quoted off the row rather than recomposed, so the ask, the plate and the
   // Errors panel are one sentence.
-  assert.ok(warning.includes(refCollisionReason(12)));
+  assert.ok(warning.includes(refCollisionReason(12, { local: true, remote: false })));
   assert.match(warning, /cannot be cut/);
+});
+
+test('the wedge escalation names the PR holding the branch', () => {
+  // Approval was days ago, so `planApprovalWarnings` having said it once is not
+  // the same as saying it at the moment the operator is stuck on it.
+  const issue = {
+    id: 'i12',
+    number: 12,
+    title: 'Big thing',
+    body: '',
+    labels: [],
+    state: 'open' as const,
+    linkedPrNumber: null,
+  };
+  const pr = {
+    id: 'pr31783',
+    number: 31783,
+    title: 'Fix the thing',
+    branch: 'issue/12',
+    ciStatus: 'passing' as const,
+    unresolvedComments: [],
+  };
+  const reason = refCollisionReason(12, { local: false, remote: true });
+  const parts = [
+    { ...partRow('a', 1), status: 'blocked' as const, blockedReason: reason },
+    { ...partRow('b', 2), status: 'blocked' as const, blockedReason: reason },
+  ];
+
+  const prompt = wedgedPlanPrompt(12, issue, parts, [pr]);
+  assert.ok(prompt.includes(reason), 'the stored reason verbatim, not a second rendering');
+  assert.match(prompt, /PR #31783 \("Fix the thing"\) is open on issue\/12/);
+  assert.match(prompt, /merged or abandoned/);
+  // Still refused: nothing claims the PR for a part.
+  assert.match(prompt, /nothing here knows which part, if any, it satisfies/);
+
+  // A plan with nothing unclaimed open against its issue says nothing about a PR.
+  assert.doesNotMatch(wedgedPlanPrompt(12, issue, parts, []), /PR #/);
+  assert.doesNotMatch(wedgedPlanPrompt(12, issue, [{ ...parts[0]!, prNumber: 31783 }, parts[1]!], [pr]), /PR #/);
 });
 
 test('abandoning a released decomposition falls the issue back to a single PR', () => {

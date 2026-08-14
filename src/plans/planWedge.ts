@@ -118,14 +118,30 @@ export function planApprovalWarnings(issue: Issue, parts: PlanPart[], openPrs: P
   return lines.length === 0 ? '' : `\n\nBefore you decide:\n\n${lines.join('\n')}`;
 }
 
-/** The question put to a human once a released plan turns out to be going nowhere. */
-export function wedgedPlanPrompt(issueNumber: number, issue: Issue, parts: PlanPart[]): string {
+/**
+ * The question put to a human once a released plan turns out to be going nowhere.
+ *
+ * It names the unclaimed pull request too, and for the reason the whole escalation
+ * exists: {@link planApprovalWarnings} already said it, but approval can be days
+ * behind the moment the operator is standing in front of the wedge, and "clear
+ * what is blocking the parts" is unfollowable while a PR holds the branch open.
+ * The one thing that is not said is which part the PR belongs to — see the header:
+ * nothing here knows, and it is named and left alone.
+ */
+export function wedgedPlanPrompt(issueNumber: number, issue: Issue, parts: PlanPart[], openPrs: PullRequest[]): string {
   const live = liveParts(parts);
   const reason = wedgeReason(parts);
+  const prs = unclaimedIssuePrs(issue, parts, openPrs).map(
+    (pr) =>
+      `\n\nPR #${pr.number} ("${pr.title}") is open on ${pr.branch} and belongs to no part of this plan. While it ` +
+      `is open the branch cannot be deleted, so it has to be merged or abandoned first — and nothing here knows ` +
+      `which part, if any, it satisfies.`,
+  );
   return (
     `The approved ${live.length}-part plan for issue #${issueNumber} ("${issue.title}") is not running: every one ` +
     `of its parts is blocked, so no agent has been dispatched and none will be.` +
     (reason ? ` ${reason}` : '') +
+    prs.join('') +
     `\n\nTwo ways out, and the harness will not choose between them: clear what is blocking the parts and they ` +
     `start on the next pulse, or abandon the decomposition and work the issue as a single pull request ` +
     `(the plan panel's control, available while no part has started).`
