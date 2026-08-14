@@ -137,6 +137,75 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
           required: ['slug', 'title', 'scope'],
         },
       },
+      validation: {
+        type: 'object',
+        description:
+          'How anyone checks the goal was met, as steps rather than as a paragraph — "verification" is the ' +
+          'sentence, this is the procedure. Declare it whenever there is something a person or an agent could ' +
+          'actually run against the delivered goal, on either verdict: one pull request needs validating as much ' +
+          'as a decomposed one.',
+        properties: {
+          resources: {
+            type: 'array',
+            description:
+              'Things a check needs that are not in the repository: a seeded fixture, a reference screenshot, ' +
+              'an account. Name them; never write paths. "provided": false says you need something you cannot ' +
+              'produce, and files an ask for it.',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'A file name, not a path.' },
+                kind: { type: 'string', enum: ['fixture', 'access', 'reference', 'data'] },
+                note: { type: 'string', description: 'What it is, and what a check does with it.' },
+                provided: { type: 'boolean', description: 'False is "I need this and cannot produce it".' },
+              },
+              required: ['name'],
+            },
+          },
+          checks: {
+            type: 'array',
+            description:
+              'The checks themselves. Who runs each one is not yours to say — the fleet has no browser, no ' +
+              'interactive login and no account on whatever environment this deployment tests against, and you ' +
+              'cannot know that from the repository. A check carrying an "actor" is refused.',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Stable lowercase kebab-case id, and the merge key on a replan.' },
+                title: { type: 'string', description: 'One line, the headline.' },
+                do: {
+                  type: 'string',
+                  description: 'The procedure, in markdown, for somebody who has not read your plan.',
+                },
+                expect: {
+                  type: 'string',
+                  description: 'What a pass looks like. A check that cannot say this is not a check.',
+                },
+                uses: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Names of resources declared above that this check needs. Names, never paths.',
+                },
+                covers: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'Part slugs this check exercises, so the sheet can show which parts nothing checks. ' +
+                    'Validation is per goal, so a check spanning several parts is normal.',
+                },
+                fleetCandidate: {
+                  type: 'boolean',
+                  description:
+                    'Your nomination that an agent could run this rather than a person. A suggestion for ' +
+                    'whoever decides — it dispatches nothing.',
+                },
+                why: { type: 'string', description: 'Why an agent could run it. Kept only with the nomination.' },
+              },
+              required: ['id', 'title', 'do', 'expect'],
+            },
+          },
+        },
+      },
     },
     required: ['verdict', 'reason'],
   },
@@ -160,6 +229,11 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       evidence: args.evidence ?? [],
       document: args.document,
       parts: args.parts ?? [],
+      // Passed through rather than defaulted to an empty block: `ValidationSchema`
+      // is optional precisely so that *absent* means "leave the existing checks
+      // alone", and `{checks: []}` would read to `ingestPlanDocument` as a planner
+      // withdrawing every check somebody is halfway through running.
+      validation: args.validation,
     });
     if (!parsed.ok) {
       // Nothing is written on a rejection: the caller retries against an

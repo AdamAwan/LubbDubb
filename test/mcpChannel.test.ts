@@ -642,6 +642,90 @@ test('plan_submit accepts and persists the widened document', async () => {
   system.store.close();
 });
 
+test('plan_submit carries the validation block, on the verdict as well as the parts', async () => {
+  const system = build({ planning: { requireApproval: false } });
+  const agent = spawnAgent(system, 'issue:284:plan');
+
+  // The prompt teaches the block and the file path has always accepted it, but the
+  // tool advertised no `validation` property and dropped one sent anyway — so every
+  // plan submitted the way the prompt tells a planner to submit it landed with no
+  // checks at all, and an absent block is a legal document that nothing reports.
+  const schema = advertisedSchema(system, agent, 'plan_submit');
+  assert.ok(schema.properties.validation, 'the tool offers the block the file path accepts');
+
+  const res = await callTool(system, agent, 'plan_submit', {
+    verdict: 'parts',
+    reason: 'the reap writer must land before anything reads it',
+    verification: 'no stale refs survive a squash merge',
+    parts: [{ slug: 'reap-writer', title: 'Delete the branch', scope: 'src/git', touches: [] }],
+    validation: {
+      resources: [
+        { name: 'fixture-repo.tar.gz', kind: 'fixture', note: 'seeded repo, one PR by another author' },
+        { name: 'test-env login', kind: 'access', provided: false },
+      ],
+      checks: [
+        {
+          id: 'merged-branch-gone',
+          title: 'A squash-merged part branch is gone on both sides',
+          do: 'Run the harness against the fixture repo and merge the seeded PR.',
+          expect: 'No issue/284/reap ref, locally or on the remote.',
+          uses: ['fixture-repo.tar.gz', 'never-declared'],
+          covers: ['reap-writer', 'no-such-part'],
+          fleetCandidate: true,
+          why: 'it is a git assertion and nothing else',
+        },
+      ],
+    },
+  });
+  assert.equal(res.isError, false);
+
+  const checks = system.store.listValidationChecks('issue:284');
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0]!.letter, 'A');
+  assert.equal(checks[0]!.expect, 'No issue/284/reap ref, locally or on the remote.');
+  // The bibliographies are pruned entry by entry rather than sinking the document:
+  // a check whose author named a resource it forgot to declare is still runnable.
+  assert.deepEqual(checks[0]!.uses, ['fixture-repo.tar.gz']);
+  assert.deepEqual(checks[0]!.covers, ['reap-writer']);
+  assert.equal(checks[0]!.candidateWhy, 'it is a git assertion and nothing else');
+
+  const resources = system.store.listValidationResources('issue:284');
+  assert.deepEqual(
+    resources.map((r) => r.name),
+    ['fixture-repo.tar.gz', 'test-env login'],
+  );
+  // The one it cannot produce is an ask, not a check that mysteriously never runs.
+  assert.ok(resources.find((r) => r.name === 'test-env login')!.humanTaskId);
+  system.store.close();
+});
+
+test('plan_submit hands back the reason for a malformed check, and writes nothing', async () => {
+  const system = build({ planning: { requireApproval: false } });
+  const agent = spawnAgent(system, 'issue:285:plan');
+
+  // `actor` is refused rather than ignored: whether an agent can run a check is a
+  // property of the deployment, and dropping the field silently would let a planner
+  // believe it had assigned work. The tool's whole advantage over the file is that
+  // the planner hears this in the same turn.
+  const res = await callTool(system, agent, 'plan_submit', {
+    verdict: 'single',
+    reason: 'one PR',
+    validation: {
+      checks: [{ id: 'a-check', title: 'T', do: 'D', expect: 'E', actor: 'fleet' }],
+    },
+  });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /who runs it is not yours to say/);
+  assert.equal(system.store.getPlanByOrigin('issue:285'), null);
+
+  // And an omitted block is not an empty one: it leaves whatever is there alone,
+  // which is what makes a replan that says nothing about validation safe.
+  const fixed = await callTool(system, agent, 'plan_submit', { verdict: 'single', reason: 'one PR' });
+  assert.equal(fixed.isError, false);
+  assert.deepEqual(system.store.listValidationChecks('issue:285'), []);
+  system.store.close();
+});
+
 test('identity is structural: an agent cannot submit a plan for work it was not dispatched to', async () => {
   const system = build();
   // An ordinary pickup agent, not a planner. It takes no origin argument — there

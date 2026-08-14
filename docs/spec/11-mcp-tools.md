@@ -57,11 +57,23 @@ plan is progressing.
 
 ### `plan_submit`
 
-Arguments `{verdict: 'single'|'parts', reason, parts?}`. Refused unless the caller's origin is a
-planning origin (`planOriginIssue(task.originRef)`). Validated with the **same** `PlanDocumentSchema`
-the file path uses; on rejection the reason is returned and **nothing is written**, so the caller
-retries against an unchanged plan graph. On success it routes through the shared `ingestPlanDocument`,
-and reports `{accepted, status, retired}` plus a `warning` when a `single` verdict was overridden.
+Arguments `{verdict: 'single'|'parts', reason, parts?, validation?}` plus the narrative fields.
+Refused unless the caller's origin is a planning origin (`planOriginIssue(task.originRef)`). Validated
+with the **same** `PlanDocumentSchema` the file path uses; on rejection the reason is returned and
+**nothing is written**, so the caller retries against an unchanged plan graph. On success it routes
+through the shared `ingestPlanDocument`, and reports `{accepted, status, retired}` plus a `warning`
+when a `single` verdict was overridden.
+
+**Every field of the document is on the schema, and the handler passes each one through.** The
+handler builds the document field by field rather than forwarding `args`, which is what keeps the
+version literal and the origin out of the agent's hands — and it is why a field added to
+`PlanDocumentSchema` and to the prompt but not to _both_ halves of this module is invisible. That is
+the shape the `validation` block was in: the prompt taught it, the file path accepted it, the tool
+advertised no such property and dropped one sent anyway — so every plan submitted the way the prompt
+tells a planner to submit one landed with no checks, and an absent block is a legal document
+(`ingestPlanDocument` reads absence as "leave the existing checks alone") that nothing reports.
+`validation` is passed through **undefined-preserving** for that reason: an empty block is a planner
+withdrawing every check, which is not what silence means. → [20](20-validation.md#the-document-block)
 
 ### `escalate`
 
