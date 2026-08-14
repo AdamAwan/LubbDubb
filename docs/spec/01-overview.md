@@ -125,7 +125,8 @@ owns it.
    restore / requeue / remove verdict. It resumes nothing and discards nothing, and while any verdict
    is outstanding the harness holds every pulse, so nothing new is queued in front of work that was
    already in flight. See [10](10-agent-runtimes.md#crash-recovery).
-5. `buildApp(system)` and `app.listen({ port, host: '0.0.0.0' })`.
+5. `buildApp(system)` and `app.listen({ port: config.port, host: config.host })` — loopback
+   (`127.0.0.1`) unless the operator overrode it ([16](16-http-api.md#authentication)).
 6. `harness.start()` (the heartbeat) and one immediate `harness.runCycle('boot')`.
 
 Shutdown on `SIGINT`/`SIGTERM`: stop the heartbeat, `agents.interruptAll()` (interrupt, not kill, so

@@ -229,8 +229,10 @@ you try to work around them:
 
 **Transfer:**
 
-- Reviewing a diff properly. You still do this — but on PRs an agent has already self-reviewed, so
-  spend your attention on the design, not the typos.
+- Reviewing a diff properly. You still do this, and nothing has read the diff before you — the
+  self-review step is drawn in the workflow but not built
+  ([workflow.md](workflow.md#where-this-stands-today)), so the first reader of an agent's code is a
+  quality gate or you.
 - Knowing your codebase. Every judgement above is better for it.
 - Writing a good issue. It is now the highest-leverage thing you do all day.
 
